@@ -1,0 +1,45 @@
+[requires]
+poco/1.13.2@simplito
+pson/1.0.4
+openssl/[>=3.0 <3.1]@simplito
+gmp/6.2.1
+
+[options]
+*:shared = True
+pson*:fPIC=False
+poco*:shared = True
+poco*:enable_jwt=False
+poco*:enable_net=True
+poco*:enable_pdf=False
+poco*:enable_xml=True
+poco*:enable_zip=False
+poco*:enable_data=False
+poco*:enable_fork=True
+poco*:enable_json=True
+poco*:enable_util=True
+poco*:enable_redis=False
+poco*:enable_crypto=True
+poco*:enable_netssl=True
+poco*:enable_mongodb=False
+poco*:enable_pocodoc=False
+poco*:enable_sevenzip=False
+poco*:with_sql_parser=False
+poco*:enable_cppparser=False
+poco*:enable_data_odbc=False
+poco*:enable_encodings=True
+poco*:enable_data_mysql=False
+poco*:enable_prometheus=False
+poco*:enable_data_sqlite=False
+poco*:enable_activerecord=False
+poco*:enable_pagecompiler=False
+poco*:enable_apacheconnector=False
+poco*:enable_data_postgresql=False
+poco*:enable_activerecord_compiler=False
+poco*:enable_pagecompiler_file2page=False
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[layout]
+cmake_layout

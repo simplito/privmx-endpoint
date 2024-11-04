@@ -1,0 +1,16 @@
+*build*
+.vscode/
+.VSCodeCounter/
+.idea/
+doc/html
+doc/latex
+doc/xml
+doc/json
+doc/pocket/**
+*.ini
+*.tar.gz
+*.dump
+CMakeUserPresets.json
+
+endpoint/tests_e2e/test_env/create_docker/*.json
+endpoint/tests_e2e/test_env/create_docker/volumes*
