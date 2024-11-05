@@ -1,0 +1,23 @@
+name: empty_server_and_mongo
+
+services:
+  mongodb:
+    image: dev.privmx.com:5050/teamserverdev/privmx-server-ee/mongo-with-rs2:7
+
+  teamserver:
+    image: dev.privmx.com:5050/teamserverdev/privmx-server-ee:${TEAMSERVER_VERSION}
+    ports:
+      - ${DOCKER_PORT}:8080
+    environment:
+      PRIVMX_PORT: 8080
+      PRIVMX_MONGO_URL: mongodb://mongodb:27017
+      PRIVMX_CORS_ENABLED: "true"
+    depends_on:
+      - mongodb
+    healthcheck:
+      test: pmxbridge_up
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
