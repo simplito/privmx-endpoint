@@ -16,9 +16,9 @@
 #include "privmx/crypto/Crypto.hpp"
 #include "privmx/utils/Utils.hpp"
 #include "privmx/utils/PrivmxException.hpp"
-#include "privmx/endpoint/endpoint/EndpointApiJSON.hpp"
 
 #include "privmx/endpoint/programs/privmxcli/DataProcesor.hpp"
+#include "privmx/endpoint/programs/privmxcli/colors/Colors.h"
 #include "privmx/endpoint/programs/privmxcli/colors/Colors.hpp"
 
 using namespace std;
@@ -39,7 +39,11 @@ char* completion_generator(const char* text, int state) {
             keywords.push_back(item.first);
         }
         for(auto &item : functions){
-            keywords.push_back(item.first);
+            if(use_path.empty()) {
+                keywords.push_back(item.first);
+            } else if(item.first.substr(0, use_path.size()) == use_path) {
+                keywords.push_back(item.first.substr(use_path.size()));
+            }
         }
         for(auto &item : func_aliases){
             keywords.push_back(item.first);
@@ -233,9 +237,19 @@ int main(int argc, char *argv[]){
         std::string prev_input = "";
         while(1){
             //temporary solution - wait for all thread to stop writing
+            // without colors
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             reset_c();
-            char *input = readline("privmxcli>> ");
+            std::string msg = "privmxcli >> ";
+            if(use_path.size() > 0) {
+                msg.append(use_path.substr(0,use_path.size()-1)+ " >> ");
+            }
+            // without colors
+            // std::string msg = (std::string)get_reset_c() + "privmxcli >> ";
+            // if(use_path.size() > 0) {
+            //     msg.append((std::string)get_setcolor_c(Color::AQUA) + use_path.substr(0,use_path.size()-1)+ get_reset_c() +" >> ");
+            // }
+            char *input = readline(msg.c_str());
             if(!input) break;
             std::string str_input = input;
             missing_data = data_procesor.processLine(input);

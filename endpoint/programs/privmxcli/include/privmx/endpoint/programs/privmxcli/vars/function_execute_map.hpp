@@ -15,214 +15,317 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 #include <Poco/JSON/Array.h>
 
-#include <privmx/endpoint/endpoint/EndpointApiJSON.hpp>
+#include "privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp"
+#include "privmx/endpoint/core/varinterface/EventQueueVarInterface.hpp"
+#include "privmx/endpoint/core/varinterface/BackendRequesterVarInterface.hpp"
+#include "privmx/endpoint/crypto/varinterface/CryptoApiVarInterface.hpp"
+#include "privmx/endpoint/thread/varinterface/ThreadApiVarInterface.hpp"
+#include "privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp"
+#include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
 #include "privmx/endpoint/programs/privmxcli/vars/function_enum.hpp"
 
-using namespace privmx::endpoint;
 
-const std::unordered_map<func_enum, std::function<Poco::Dynamic::Var(privmx::endpoint::EndpointApiJSON* , const Poco::JSON::Array::Ptr&)>> functions_execute = {
-    {waitEvent, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->waitEvent(args);
-    }},
-    {getEvent, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->getEvent(args);
-    }},
-    {platformConnect, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->platformConnect(args);
-    }},
-    {platformDisconnect, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->platformDisconnect(args);
-    }},
-    {contextList, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->contextList(args);
-    }},
-    {threadCreate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadCreate(args);
-    }},
-    {threadGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadGet(args);
-    }},
-    {threadList, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadList(args);
-    }},
-    {threadMessageSend, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadMessageSend(args);
-    }},
-    {threadMessagesGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadMessagesGet(args);
-    }},
-    {storeList, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeList(args);
-    }},
-    {storeGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeGet(args);
-    }},
-    {storeCreate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeCreate(args);
-    }},
-    {storeFileGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileGet(args);
-    }},
-    {storeFileList, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileList(args);
-    }},
-    {storeFileCreate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileCreate(args);
-    }},
-    {storeFileUpdate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileUpdate(args);
-    }},
-    {storeFileOpen, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileOpen(args);
-    }},
-    {storeFileRead, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileRead(args);
-    }},
-    {storeFileWrite, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileWrite(args);
-    }},
-    {storeFileSeek, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileSeek(args);
-    }},
-    {storeFileClose, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileClose(args);
-    }},
-    {storeFileDelete, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeFileDelete(args);
-    }},
-    {cryptoPrivKeyNew, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->cryptoPrivKeyNew(args);
-    }},
-    {cryptoPubKeyNew, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->cryptoPubKeyNew(args);
-    }},
-    {cryptoEncrypt, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->cryptoEncrypt(args);
-    }},
-    {cryptoDecrypt, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->cryptoDecrypt(args);
-    }},
-    {cryptoSign, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->cryptoSign(args);
-    }},
-    {setCertsPath, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->setCertsPath(args);
-    }},
-    {cryptoKeyConvertPEMToWIF, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->cryptoKeyConvertPEMToWIF(args);
-    }},
-    {backendRequest, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->backendRequest(args);
-    }},
-    {threadDelete, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadDelete(args);
-    }},
-    {threadMessageDelete, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadMessageDelete(args);
-    }},
-    {threadMessageGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadMessageGet(args);
-    }},
-    {storeDelete, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeDelete(args);
-    }},
-    {messageGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->messageGet(args);
-    }},
-    {messagesGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->messagesGet(args);
-    }},
-    {messageSend, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->messageSend(args);
-    }},
-    {inboxCreate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxCreate(args);
-    }},
-    {inboxUpdate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxUpdate(args);
-    }},
-    {inboxGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxGet(args);
-    }},
-    {inboxList, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxList(args);
-    }},
-    {inboxPublicViewGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxPublicViewGet(args);
-    }},
-    {inboxCreateFileHandle, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxCreateFileHandle(args);
-    }},
-    {inboxSendPrepare, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxSendPrepare(args);
-    }},
-    {inboxSendFileDataChunk, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxSendFileDataChunk(args);
-    }},
-    {inboxSendCommit, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxSendCommit(args);
-    }},
-    {threadUpdate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->threadUpdate(args);
-    }},
-    {storeUpdate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->storeUpdate(args);
-    }},
-    {storeUpdate, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->cryptoPrivKeyNewPbkdf2(args);
-    }},
-    {subscribeToChannel, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->subscribeToChannel(args);
-    }},
-    {unsubscribeFromChannel, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->unsubscribeFromChannel(args);
-    }},
-    {fileGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->fileGet(args);
-    }},
-    {fileList, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->fileList(args);
-    }},
-    {fileOpen, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->fileOpen(args);
-    }},
-    {fileSeek, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->fileSeek(args);
-    }},
-    {fileRead, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->fileRead(args);
-    }},
-    {fileClose, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->fileClose(args);
-    }},
-    {inboxFileGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxFileGet(args);
-    }},
-    {inboxFileList, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxFileList(args);
-    }},
-    {inboxFileOpen, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxFileOpen(args);
-    }},
-    {inboxFileSeek, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxFileSeek(args);
-    }},
-    {inboxFileRead, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxFileRead(args);
-    }},
-    {inboxFileClose, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxFileClose(args);
-    }},
-    {inboxMessageGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxMessageGet(args);
-    }},
-    {inboxMessagesGet, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxMessagesGet(args);
-    }},
-    {messageDelete, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->messageDelete(args);
-    }},
-    {inboxDelete, [](privmx::endpoint::EndpointApiJSON* api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-        return api->inboxDelete(args);
-    }}
+#include "privmx/endpoint/core/Config.hpp"
+#include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/core/CoreException.hpp"
+
+namespace privmx {
+namespace endpoint {
+namespace privmxcli {
+
+struct ApiVar {
+    ApiVar(
+        privmx::endpoint::core::EventQueueVarInterface _event,
+        privmx::endpoint::core::ConnectionVarInterface _connection,
+        privmx::endpoint::core::BackendRequesterVarInterface _backendRequester,
+        privmx::endpoint::crypto::CryptoApiVarInterface _crypto,
+        privmx::endpoint::thread::ThreadApiVarInterface _thread,
+        privmx::endpoint::store::StoreApiVarInterface _store,
+        privmx::endpoint::inbox::InboxApiVarInterface _inbox
+
+    ) : event(_event), connection(_connection), backendRequester(_backendRequester), crypto(_crypto), thread(_thread), store(_store), inbox(_inbox) {}
+    privmx::endpoint::core::EventQueueVarInterface event;
+    privmx::endpoint::core::ConnectionVarInterface connection;
+    privmx::endpoint::core::BackendRequesterVarInterface backendRequester;
+    privmx::endpoint::crypto::CryptoApiVarInterface crypto;
+    privmx::endpoint::thread::ThreadApiVarInterface thread;
+    privmx::endpoint::store::StoreApiVarInterface store;
+    privmx::endpoint::inbox::InboxApiVarInterface inbox;
 };
+
+
+const std::unordered_map<func_enum, std::function<Poco::Dynamic::Var(std::shared_ptr<ApiVar> , const Poco::JSON::Array::Ptr&)>> functions_execute = {
+    {config_setCertsPath, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        auto argsArr = privmx::endpoint::core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+        Poco::Dynamic::Var certsPath = argsArr->get(0);
+        if (!certsPath.isString()) {
+            throw privmx::endpoint::core::InvalidArgumentTypeException("certsPath | Expected string, value has type " + (std::string)(certsPath.type().name()));
+        }
+        privmx::endpoint::core::Config::setCertsPath(certsPath.convert<std::string>());
+        return Poco::Dynamic::Var();
+    }},
+    {core_waitEvent, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->event.waitEvent(args);
+    }},
+    {core_getEvent, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->event.getEvent(args);
+    }},
+    {core_emitBreakEvent, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->event.emitBreakEvent(args);
+    }},
+    {core_connect, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->connection.connect(args);
+    }},
+    {core_connectPublic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->connection.connectPublic(args);
+    }},
+    {core_disconnect, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->connection.disconnect(args);
+    }},
+    {core_getConnectionId, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->connection.getConnectionId(args);
+    }},
+    {core_listContexts, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->connection.listContexts(args);
+    }},
+    {core_backendRequest, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->backendRequester.backendRequest(args);
+    }},
+    {crypto_signData, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.signData(args);
+    }},
+    {crypto_verifySignature, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.verifySignature(args);
+    }},
+    {crypto_generatePrivateKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.generatePrivateKey(args);
+    }},
+    {crypto_derivePrivateKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.derivePrivateKey(args);
+    }},
+    {crypto_derivePublicKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.derivePublicKey(args);
+    }},
+    {crypto_generateKeySymmetric, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.generateKeySymmetric(args);
+    }},
+    {crypto_encryptDataSymmetric, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.encryptDataSymmetric(args);
+    }},
+    {crypto_decryptDataSymmetric, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.decryptDataSymmetric(args);
+    }},
+    {crypto_convertPEMKeytoWIFKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->crypto.convertPEMKeytoWIFKey(args);
+    }},
+    {thread_createThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.createThread(args);
+    }},
+    {thread_updateThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.updateThread(args);
+    }},
+    {thread_getThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.getThread(args);
+    }},
+    {thread_listThreads, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.listThreads(args);
+    }},
+    {thread_deleteThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.deleteThread(args);
+    }},
+    {thread_sendMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.sendMessage(args);
+    }},
+    {thread_updateMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.updateMessage(args);
+    }},
+    {thread_getMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.getMessage(args);
+    }},
+    {thread_listMessages, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.listMessages(args);
+    }},
+    {thread_deleteMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.deleteMessage(args);
+    }},
+    {thread_subscribeForThreadEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.subscribeForThreadEvents(args);
+    }},
+    {thread_unsubscribeFromThreadEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.unsubscribeFromThreadEvents(args);
+    }},
+    {thread_subscribeForMessageEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.subscribeForMessageEvents(args);
+    }},
+    {thread_unsubscribeFromMessageEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->thread.unsubscribeFromMessageEvents(args);
+    }},
+    {store_createStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.createStore(args);
+    }},
+    {store_updateStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.updateStore(args);
+    }},
+    {store_getStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.getStore(args);
+    }},
+    {store_listStores, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.listStores(args);
+    }},
+    {store_deleteStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.deleteStore(args);
+    }},
+    {store_createFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.createFile(args);
+    }},
+    {store_updateFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.updateFile(args);
+    }},
+    {store_updateFileMeta, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.updateFileMeta(args);
+    }},
+    {store_getFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.getFile(args);
+    }},
+    {store_listFiles, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.listFiles(args);
+    }},
+    {store_deleteFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.deleteFile(args);
+    }},
+    {store_openFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.openFile(args);
+    }},
+    {store_readFromFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.readFromFile(args);
+    }},
+    {store_writeToFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.writeToFile(args);
+    }},
+    {store_seekInFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.seekInFile(args);
+    }},
+    {store_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.closeFile(args);
+    }},
+    {store_subscribeForStoreEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.subscribeForStoreEvents(args);
+    }},
+    {store_unsubscribeFromStoreEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.unsubscribeFromStoreEvents(args);
+    }},
+    {store_subscribeForFileEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.subscribeForFileEvents(args);
+    }},
+    {store_unsubscribeFromFileEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->store.unsubscribeFromFileEvents(args);
+    }},
+    {inbox_createInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.createInbox(args);
+    }},
+    {inbox_updateInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.updateInbox(args);
+    }},
+    {inbox_getInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.getInbox(args);
+    }},
+    {inbox_listInboxes, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.listInboxes(args);
+    }},
+    {inbox_deleteInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.deleteInbox(args);
+    }},
+    {inbox_getInboxPublicView, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.getInboxPublicView(args);
+    }},
+    {inbox_getInboxPublicView, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.deleteInbox(args);
+    }},
+    {inbox_prepareEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.prepareEntry(args);
+    }},
+    {inbox_sendEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.sendEntry(args);
+    }},
+    {inbox_readEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.readEntry(args);
+    }},
+    {inbox_listEntries, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.listEntries(args);
+    }},
+    {inbox_deleteEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.deleteEntry(args);
+    }},
+    {inbox_createFileHandle, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.createFileHandle(args);
+    }},
+    {inbox_writeToFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.writeToFile(args);
+    }},
+    {inbox_openFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.openFile(args);
+    }},
+    {inbox_readFromFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.readFromFile(args);
+    }},
+    {inbox_seekInFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.seekInFile(args);
+    }},
+    {inbox_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.closeFile(args);
+    }},
+
+    {inbox_subscribeForInboxEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.subscribeForInboxEvents(args);
+    }},
+    {inbox_unsubscribeFromInboxEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.unsubscribeFromInboxEvents(args);
+    }},
+    {inbox_subscribeForEntryEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.subscribeForEntryEvents(args);
+    }},
+    {inbox_unsubscribeFromEntryEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+        return api->inbox.unsubscribeFromEntryEvents(args);
+    }},
+
+    // {inboxCreateFileHandle, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxCreateFileHandle(args);
+    // }},
+    // {inboxSendPrepare, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxSendPrepare(args);
+    // }},
+    // {inboxSendFileDataChunk, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxSendFileDataChunk(args);
+    // }},
+    // {inboxSendCommit, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxSendCommit(args);
+    // }},
+    // {inboxFileGet, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxFileGet(args);
+    // }},
+    // {inboxFileList, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxFileList(args);
+    // }},
+    // {inboxFileOpen, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxFileOpen(args);
+    // }},
+    // {inboxFileSeek, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxFileSeek(args);
+    // }},
+    // {inboxFileRead, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxFileRead(args);
+    // }},
+    // {inboxFileClose, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxFileClose(args);
+    // }},
+    // {inboxMessageGet, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxMessageGet(args);
+    // }},
+    // {inboxMessagesGet, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+    //     return api->inboxMessagesGet(args);
+    // }}
+};
+
+} // privmxcli
+} // endpoint
+} // privmx

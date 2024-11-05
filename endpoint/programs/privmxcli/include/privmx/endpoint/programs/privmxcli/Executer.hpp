@@ -33,8 +33,6 @@ limitations under the License.
 #include "privmx/utils/Utils.hpp"
 #include "privmx/utils/PrivmxException.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
-#include "privmx/endpoint/endpoint/EndpointApi.hpp"
-#include "privmx/endpoint/endpoint/EndpointApiJSON.hpp"
 
 #include "privmx/endpoint/programs/privmxcli/GlobalVariables.hpp"
 #include "privmx/endpoint/programs/privmxcli/LoadingAnimation.hpp"
@@ -66,6 +64,8 @@ return;                                                                         
 #define ARGS0()
 #define ARGS1(arg1) ARG1(arg1),
 #define ARGS2(arg1, arg2) ARG1(arg1), ARG2(arg2),
+
+
 
 namespace privmx {
 namespace endpoint {
@@ -110,7 +110,7 @@ private:
     std::thread::id _main_thread_id;
     CliConfig _config;
     LoadingAnimation _loading_animation;
-    privmx::endpoint::EndpointApiJSON _endpoint;
+    std::shared_ptr<ApiVar> _endpoint;
     
 
     std::chrono::_V2::system_clock::time_point _timer_start = std::chrono::system_clock::now();

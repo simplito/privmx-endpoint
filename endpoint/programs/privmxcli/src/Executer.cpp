@@ -16,14 +16,29 @@ limitations under the License.
 #include <sstream>
 #include <iomanip>
 
+
+#include "privmx/endpoint/core/VarSerializer.hpp"
+#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
+#include "privmx/endpoint/store/StoreVarSerializer.hpp"
+#include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
+
 using namespace std;
+using namespace privmx::endpoint;
 using namespace privmx::endpoint::privmxcli;
 
 
 
-Executer::Executer(std::thread::id main_thread_id, CliConfig config) : 
-    _main_thread_id(main_thread_id), _config(config), _loading_animation(LoadingAnimation()),
-    _endpoint(privmx::endpoint::EndpointApiJSON(std::make_shared<privmx::endpoint::EndpointApi>())) {}
+Executer::Executer(std::thread::id main_thread_id, CliConfig config) : _main_thread_id(main_thread_id), _config(config), _loading_animation(LoadingAnimation()) {
+    core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::STD_STRING_AS_BASE64});
+    core::EventQueueVarInterface event = core::EventQueueVarInterface(core::EventQueue::getInstance(), serializer);
+    core::ConnectionVarInterface connection = core::ConnectionVarInterface(serializer);
+    core::BackendRequesterVarInterface backendRequester = core::BackendRequesterVarInterface(serializer);
+    crypto::CryptoApiVarInterface crypto = crypto::CryptoApiVarInterface(serializer);
+    thread::ThreadApiVarInterface thread = thread::ThreadApiVarInterface(connection.getApi(),serializer);
+    store::StoreApiVarInterface store = store::StoreApiVarInterface(connection.getApi(),serializer);
+    inbox::InboxApiVarInterface inbox = inbox::InboxApiVarInterface(connection.getApi(),thread.getApi(), store.getApi(),serializer);
+    _endpoint = std::make_shared<ApiVar>(event, connection, backendRequester, crypto, thread, store, inbox);
+}
 
 void Executer::updateCliConfig(CliConfig config) {
     _config = config;
@@ -57,7 +72,7 @@ func_enum Executer::getFunc(string func_name){
     }
     auto it = functions_internal.find(func_name);
     if(it == functions_internal.end()){
-        auto it2 = functions.find(func_name);
+        auto it2 = functions.find(use_path+func_name);
         if(it2 == functions.end()){
             return nonfunc;
         }
@@ -192,12 +207,12 @@ void Executer::execute(const Tokens &st) {
             break;
         case sset:
             executePrePrintInfo("setting variable");
+            CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
                 executePrePrintOutput(true);
                 cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
                 break;
             }
-            CHECK_ST_ARGS(2);
             setS(st[1], st[2]);
             executePrePrintOutput();
             executePostPrint();
@@ -317,10 +332,27 @@ void Executer::execute(const Tokens &st) {
             break;
         case help:
             exec_help(st);
-            break;   
+            break;
+        case use:
+            executePrePrintInfo("using");
+            CHECK_ST_ARGS_2(0,1);
+            if(st.size() == 1) {
+                use_path.clear();
+            } else {
+                use_path = st[1] + ".";
+            }
+            executePrePrintOutput();
+            executePostPrint();
+            break;  
         default:
-            CHECK_ST_ARGS(1);
-            if(fun_code == func_enum::waitEvent) {
+            if(st.size() != (2)) {
+                executePrePrintInfo("Running " + st[0]);
+                executePrePrintOutput(true);
+                std::cerr << ConsoleStatusColor::error << "Invalid args count" << std::endl;
+                executePostPrint();
+                return;
+            }
+            if(fun_code == func_enum::core_waitEvent) {
                 auto t = std::thread([&](func_enum function_code, std::string fun_name, std::string arg){executeApiFunction(function_code, fun_name, arg);}, fun_code, st[0], st[1]);
                 t.detach();
             } else {
@@ -351,19 +383,19 @@ void Executer::executeApiFunction(const func_enum& fun_code, const std::string& 
             }
         } else {
             if(this_thread::get_id() == _main_thread_id) {
-                executePrePrintInfo("Running "+ (*it_2).second);
+                executePrePrintInfo((*it_2).second);
             } else {
-                executePrePrintInfo("Running in thread "+ (*it_2).second);
+                executePrePrintInfo((*it_2).second + " in thread ");
             }
         }
-        std::function<Poco::Dynamic::Var (privmx::endpoint::EndpointApiJSON *, const Poco::JSON::Array::Ptr &)> exec = (*it).second;
+        std::function<Poco::Dynamic::Var (std::shared_ptr<ApiVar>, const Poco::JSON::Array::Ptr &)> exec = (*it).second;
         Poco::JSON::Object::Ptr result = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
         try {
             auto raw_JSON_arg = st;
             auto evaluated_JSON_arg_var = getS_var(raw_JSON_arg);
             auto evaluated_JSON_arg_string = evaluated_JSON_arg_var.convert<std::string>();
             Poco::JSON::Array::Ptr args = privmx::utils::Utils::parseJson(evaluated_JSON_arg_string).extract<Poco::JSON::Array::Ptr>();
-            auto value = exec(&_endpoint, args);            
+            auto value = exec(_endpoint, args);            
             if(this_thread::get_id() == _main_thread_id) {
                 executePrePrintOutput(false);
                 if(!value.isEmpty()) {
@@ -393,7 +425,7 @@ void Executer::executeApiFunction(const func_enum& fun_code, const std::string& 
             std::cout << ConsoleStatusColor::error << privmx::utils::Utils::stringify(result, true) << std::endl;
             executePostPrint();
             if(_config.stop_on_error) exit(EXIT_FAILURE);
-        } catch (const privmx::endpoint::core::Exception& e) {
+        } catch (const core::Exception& e) {
             std::ostringstream ss;
             ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << e.getCode();
             result->set("ErrorMsg", e.what());
@@ -402,7 +434,7 @@ void Executer::executeApiFunction(const func_enum& fun_code, const std::string& 
             result->set("ErrorCodeHex", ss.str());
             result->set("ErrorCode", e.getCode());
             result->set("ErrorDescription", e.getDescription());
-            result->set("ErrorType", "privmx::endpoint::core::Exception");
+            result->set("ErrorType", "core::Exception");
             // result->set("ErrorData", e.getData());
             executePrePrintOutput(true);
             std::cout << ConsoleStatusColor::error << privmx::utils::Utils::stringify(result, true) << std::endl;
@@ -434,13 +466,17 @@ void Executer::exec_help(const Tokens &st){
         return;
     }
     auto fun_code = getFunc(st[1]);
+    if(fun_code == func_enum::nonfunc) {
+        cout << ConsoleStatusColor::error << "Invalid function name " << st[1] << endl;
+        return;
+    }
     auto it_internal = functions_internal_help_description.find(fun_code);
     auto it_internal_short = functions_internal_help_short_description.find(fun_code);
     if(it_internal == functions_internal_help_description.end() && it_internal_short == functions_internal_help_short_description.end()) {
         auto it = functions_help_description.find(fun_code);
         auto it_short = functions_help_short_description.find(fun_code);
         if(it == functions_help_description.end() && it_short == functions_help_short_description.end()){
-            cout << ConsoleStatusColor::error << "Invalid function name " << st[1] << endl;
+            cout << ConsoleStatusColor::error << "Function description not found " << st[1] << endl;
             if(_config.stop_on_error) exit(EXIT_FAILURE);
             return;
         }
@@ -473,7 +509,7 @@ void Executer::executePrePrintInfo(const std::string& info_name) {
     if(_config.is_rl_input && this_thread::get_id() != _main_thread_id){
         rl_clear_visible_line();
     }
-    if(_config.add_timestamps && this_thread::get_id() == _main_thread_id) {
+    if(_config.add_timestamps) {
         _timer_start = std::chrono::system_clock::now();
     }
     cout << ConsoleStatusColor::normal << "-> " << colors::ConsoleColor::blue << info_name << colors::ConsoleColor::reset;
@@ -485,7 +521,6 @@ void Executer::executePrePrintInfo(const std::string& info_name) {
     if (_config.is_rl_input && this_thread::get_id() == _main_thread_id) {
         _loading_animation.start();
     }
-    
 }
 
 

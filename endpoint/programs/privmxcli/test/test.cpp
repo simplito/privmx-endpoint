@@ -130,7 +130,7 @@ TEST_F(CLITest, StringFormater_toPython_2) {
 TEST_F(CLITest, Executer_set) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    executer.execute({"s", "a", "b"});
+    executer.execute({"set", "a", "b"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n");
     EXPECT_EQ("b", session["a"]->convert<std::string>());
@@ -139,7 +139,7 @@ TEST_F(CLITest, Executer_set) {
 TEST_F(CLITest, Executer_set_2) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    executer.execute({"s", "a", "b"});
+    executer.execute({"set", "a", "b"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n");
     EXPECT_EQ("b", session["a"]->convert<std::string>());
@@ -148,7 +148,7 @@ TEST_F(CLITest, Executer_set_2) {
 TEST_F(CLITest, Executer_get) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: a\n");
 }
@@ -156,8 +156,8 @@ TEST_F(CLITest, Executer_get) {
 TEST_F(CLITest, Executer_set_get) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    executer.execute({"s", "a", "b"});
-    executer.execute({"g", "a"});
+    executer.execute({"set", "a", "b"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n-> getting variable ... OK \n-> RESULT:\na: b\n");
 }
@@ -165,9 +165,9 @@ TEST_F(CLITest, Executer_set_get) {
 TEST_F(CLITest, Executer_set_get_$) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    executer.execute({"s", "a", "b"});
-    executer.execute({"s", "b", "c"});
-    executer.execute({"g", "${a}"});
+    executer.execute({"set", "a", "b"});
+    executer.execute({"set", "b", "c"});
+    executer.execute({"get", "${a}"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n-> setting variable ... OK \n-> RESULT:\n-> getting variable ... OK \n-> RESULT:\n${a}: ${a}\n");
 }
@@ -175,11 +175,11 @@ TEST_F(CLITest, Executer_set_get_$) {
 TEST_F(CLITest, Executer_alias) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    executer.execute({"s", "a", "a"});
-    executer.execute({"a", "b", "a"});
-    executer.execute({"g", "b"});
-    executer.execute({"s", "a", "b"});
-    executer.execute({"g", "b"});
+    executer.execute({"set", "a", "a"});
+    executer.execute({"alias", "b", "a"});
+    executer.execute({"get", "b"});
+    executer.execute({"set", "a", "b"});
+    executer.execute({"get", "b"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n-> setting variable alias ... OK \n-> RESULT:\n-> getting variable ... OK \n-> RESULT:\nb: a\n-> setting variable ... OK \n-> RESULT:\n-> getting variable ... OK \n-> RESULT:\nb: b\n");
 }
@@ -187,7 +187,7 @@ TEST_F(CLITest, Executer_alias) {
 TEST_F(CLITest, Executer_falias) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    executer.execute({"fa", "gg", "get"});
+    executer.execute({"falias", "gg", "get"});
     executer.execute({"gg", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting function alias ... OK \n-> RESULT:\n-> getting variable ... OK \n-> RESULT:\na: a\n");
@@ -197,7 +197,7 @@ TEST_F(CLITest, Executer_get_format_cpp_string) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::cpp});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: \"value_\\\"'_\"\n");
 }
@@ -206,7 +206,7 @@ TEST_F(CLITest, Executer_get_format_cpp_number) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::cpp});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: 1357\n");
 }
@@ -215,7 +215,7 @@ TEST_F(CLITest, Executer_get_format_python_string) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::python});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: 'value_\"\\'_'\n");
 }
@@ -224,7 +224,7 @@ TEST_F(CLITest, Executer_get_format_python_number) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::python});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: 1357\n");
 }
@@ -233,7 +233,7 @@ TEST_F(CLITest, Executer_get_format_bash_string) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: value_\"'_\n");
 }
@@ -242,7 +242,7 @@ TEST_F(CLITest, Executer_get_format_bash_number) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: 1357\n");
 }
@@ -251,7 +251,7 @@ TEST_F(CLITest, Executer_get_format_std_string) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::default_std});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na (string): value_\"'_\n");
 }
@@ -260,7 +260,7 @@ TEST_F(CLITest, Executer_get_format_std_number) {
     Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::default_std});
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
-    executer.execute({"g", "a"});
+    executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na (number): 1357\n");
 }
@@ -268,7 +268,7 @@ TEST_F(CLITest, Executer_get_format_std_number) {
 TEST_F(CLITest, DataProcesor_double_separator_set) {
     DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    data_procesor.processLine("s  a b");
+    data_procesor.processLine("set  a b");
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n");
     EXPECT_EQ("b", session["a"]->convert<std::string>());
@@ -277,7 +277,7 @@ TEST_F(CLITest, DataProcesor_double_separator_set) {
 TEST_F(CLITest, DataProcesor_set) {
     DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    data_procesor.processLine("s a b");
+    data_procesor.processLine("set a b");
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n");
     EXPECT_EQ("b", session["a"]->convert<std::string>());
@@ -286,7 +286,7 @@ TEST_F(CLITest, DataProcesor_set) {
 TEST_F(CLITest, DataProcesor_get) {
     DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    data_procesor.processLine("g a");
+    data_procesor.processLine("get a");
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\na: a\n");
 }
@@ -294,9 +294,9 @@ TEST_F(CLITest, DataProcesor_get) {
 TEST_F(CLITest, DataProcesor_set_get_$) {
     DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
     testing::internal::CaptureStdout();
-    data_procesor.processLine("s a b");
-    data_procesor.processLine("s b c");
-    data_procesor.processLine("g ${a}");
+    data_procesor.processLine("set a b");
+    data_procesor.processLine("set b c");
+    data_procesor.processLine("get ${a}");
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> setting variable ... OK \n-> RESULT:\n-> setting variable ... OK \n-> RESULT:\n-> getting variable ... OK \n-> RESULT:\nb: c\n");
 }
@@ -308,7 +308,7 @@ TEST_F(CLITest, DataProcesor_eval_$_val) {
     session["b"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("{c}"));
     session["c"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("d"));
     session["d"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_d"));
-    data_procesor.processLine("g ${a}${b}");
+    data_procesor.processLine("get ${a}${b}");
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\nd: value_d\n");
 }
