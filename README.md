@@ -210,10 +210,10 @@ A complete project that uses the above code example can be found [here](https://
 
 ## Available APIs:
 
-1. [Threads](reference/cpp/endpoint/inbox/thread-api) - text message sending
-2. [Stores](reference/cpp/endpoint/inbox/store-api) - file storage
-3. [Inboxes](reference/cpp/endpoint/inbox/inbox-api) - i.e: public forms
-4. [Crypto](reference/cpp/endpoint/inbox/crypto-api) - helper class with methods to manage keys etc.
+1. [Threads](https://docs.privmx.dev/reference/cpp/endpoint/inbox/thread-api) - text message sending
+2. [Stores](https://docs.privmx.dev/reference/cpp/endpoint/inbox/store-api) - file storage
+3. [Inboxes](https://docs.privmx.dev/reference/cpp/endpoint/inbox/inbox-api) - i.e: public forms
+4. [Crypto](https://docs.privmx.dev/reference/cpp/endpoint/inbox/crypto-api) - helper class with methods to manage keys etc.
 
 
 For more detailed information about API functions, visit https://docs.privmx.dev.
