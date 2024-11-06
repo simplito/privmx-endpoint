@@ -10,7 +10,7 @@ else
     dockerName=$1
 fi
 #extractiong mongo data
-docker exec ${dockerName} tar -czf /storage.tar.gz /work/privmx-server-js/storage
+docker exec ${dockerName} tar -czf /storage.tar.gz /work/privmx-bridge/storage
 docker cp ${dockerName}:/storage.tar.gz ./teamserver/storage.tar.gz
 #tworznie obrazu
 cd teamserver
