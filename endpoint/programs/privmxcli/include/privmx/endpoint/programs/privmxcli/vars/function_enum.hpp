@@ -37,6 +37,9 @@ enum func_enum {
     addFrontString,
     addBackString,
     use,
+    //server bridge
+    bridge_setBridgeApiCreds,
+    bridge_request,
     //endpoint
     //  config
     config_setCertsPath,

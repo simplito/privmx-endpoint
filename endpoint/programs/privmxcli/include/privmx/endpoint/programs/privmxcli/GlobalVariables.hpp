@@ -57,28 +57,6 @@ struct CliConfig {
 
 using TokensInfo = std::vector<std::tuple<std::string, token_type>>;
 
-inline std::unordered_map<std::string, func_enum> functions_internal = {
-    {"quit", quit},
-    {"exit", quit},
-    {"falias", falias},
-    {"alias", salias},
-    {"copy", scopy},
-    {"set", sset},
-    // {"setArray", ssetArray},
-    {"get", sget},
-    {"setFromFile", sreadFile},
-    {"saveToFile", swriteFile},
-    {"help", help},
-    {"loopStart", loopStart},
-    {"loopStop", loopStop},
-    {"sleep", a_sleep},
-    {"addFront", addFront},
-    {"addBack", addBack},
-    {"addFrontString", addFrontString},
-    {"addBackString", addBackString},
-    {"use", use}
-};
-
 inline std::unordered_map<std::string, std::string> func_aliases = {
     {"c", "copy"},
     {"fa", "falias"},

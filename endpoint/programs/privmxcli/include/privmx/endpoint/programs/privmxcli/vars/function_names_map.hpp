@@ -21,6 +21,33 @@ namespace privmx {
 namespace endpoint {
 namespace privmxcli {
 
+inline std::unordered_map<std::string, func_enum> functions_internal = {
+    {"quit", quit},
+    {"exit", quit},
+    {"falias", falias},
+    {"alias", salias},
+    {"copy", scopy},
+    {"set", sset},
+    // {"setArray", ssetArray},
+    {"get", sget},
+    {"setFromFile", sreadFile},
+    {"saveToFile", swriteFile},
+    {"help", help},
+    {"loopStart", loopStart},
+    {"loopStop", loopStop},
+    {"sleep", a_sleep},
+    {"addFront", addFront},
+    {"addBack", addBack},
+    {"addFrontString", addFrontString},
+    {"addBackString", addBackString},
+    {"use", use}
+};
+
+inline std::unordered_map<std::string, func_enum> functions_bridge = {
+    {"bridge_setBridgeApiCreds", bridge_setBridgeApiCreds},
+    {"bridge_request", bridge_request},
+};
+
 inline const std::unordered_map<std::string, func_enum> functions = {
     //endpoint
     {"config.setCertsPath", config_setCertsPath},

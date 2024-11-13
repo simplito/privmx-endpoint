@@ -184,7 +184,7 @@ int main(int argc, char *argv[]){
     if(pre_filename != ""){
         cli_args_data.filenames.push_back(pre_filename);
     }
-    CliConfig config = cli_args_data.config;
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(cli_args_data.config);
     int missing_data = 0;
     DataProcesor data_procesor = DataProcesor(main_thread_id, config);
 
@@ -200,7 +200,7 @@ int main(int argc, char *argv[]){
         ifstream f_stream(filename);
         if(!f_stream.good()){
             cerr << ConsoleStatusColor::warning << "File error " << filename << endl;
-            if(config.stop_on_error) exit(EXIT_FAILURE);
+            if(config->stop_on_error) exit(EXIT_FAILURE);
         }
         std::string line;
         while(getline(f_stream, line)){
@@ -214,7 +214,7 @@ int main(int argc, char *argv[]){
     }
     if(missing_data == -1) {
         
-        if(config.stop_on_error) {
+        if(config->stop_on_error) {
             cout << ConsoleStatusColor::error << "incorrect JSON format - skipping command" << endl;
             exit(EXIT_FAILURE);
         } else {
@@ -224,7 +224,7 @@ int main(int argc, char *argv[]){
     
 
     //executing data form interactive mode
-    if(config.std_input){
+    if(config->std_input){
         rl_attempted_completion_function = completer;
         rl_basic_word_break_characters = " ";
 
@@ -232,8 +232,7 @@ int main(int argc, char *argv[]){
 
         read_history(history_file_path.data());
         std::atexit(exiting);
-        cli_args_data.config.is_rl_input = true;
-        data_procesor.updateCliConfig(config);
+        config->is_rl_input = true;
         std::string prev_input = "";
         while(1){
             //temporary solution - wait for all thread to stop writing
@@ -253,7 +252,7 @@ int main(int argc, char *argv[]){
             if(!input) break;
             std::string str_input = input;
             missing_data = data_procesor.processLine(input);
-            if(!missing_data && config.update_history && prev_input != str_input) {
+            if(!missing_data && config->update_history && prev_input != str_input) {
                 prev_input = str_input;
                 add_history(input);
                 write_history(history_file_path.data());
@@ -263,7 +262,7 @@ int main(int argc, char *argv[]){
                 char *input_missing_data = readline("?> ");
                 str_input += std::string(input_missing_data);
                 missing_data = data_procesor.processLine(input_missing_data);
-                if(!missing_data && config.update_history && prev_input != str_input) {
+                if(!missing_data && config->update_history && prev_input != str_input) {
                     prev_input = str_input;
                     add_history(str_input.data());
                     write_history(history_file_path.data());
@@ -275,8 +274,7 @@ int main(int argc, char *argv[]){
             }
             
         }
-        cli_args_data.config.is_rl_input = false;
-        data_procesor.updateCliConfig(config);
+        config->is_rl_input = false;
     }
     
     return EXIT_SUCCESS;

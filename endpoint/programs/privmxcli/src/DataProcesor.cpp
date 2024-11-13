@@ -15,15 +15,10 @@ limitations under the License.
 using namespace std;
 using namespace privmx::endpoint::privmxcli;
 
-DataProcesor::DataProcesor(std::thread::id main_thread_id, CliConfig config) :
+DataProcesor::DataProcesor(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config) :
     _executer(Executer(main_thread_id, config)), _config(config), _working_command(""),
     _working_command_braces(0), _working_command_square_brackets(0),
     _working_command_reading_string(0), _working_command_string_char('\0'), _loops({}) {}
-
-void DataProcesor::updateCliConfig(CliConfig config) {
-    _config = config;
-    _executer.updateCliConfig(config);
-}
 
 void DataProcesor::clean() {
     _working_command = "";
@@ -179,14 +174,14 @@ void DataProcesor::ExecuteCommand(const Tokens& command) {
         for(std::size_t i = 0; i < _loops.size(); i++) _loops[i].commands.push_back(command);
         if(command.size() != 2 && command.size() != 3){ 
             cout << ConsoleStatusColor::error << "Invalid args count" << endl;
-            if(_config.stop_on_error) {
+            if(_config->stop_on_error) {
                 exit(EXIT_FAILURE);
             }
         }
         string id = "loop_" + to_string(_loops_id_gen++);
         if(command.size() == 3) id = command[2];
         print_msg("loop_start", id + ": Initialized");
-        if(_config.add_timestamps) std::cout << ConsoleStatusColor::info << id << " initialized" << ConsoleStatusColor::normal << endl;
+        if(_config->add_timestamps) std::cout << ConsoleStatusColor::info << id << " initialized" << ConsoleStatusColor::normal << endl;
         _loops.push_back({.commands={}, .number_of_times=stoi(command[1]), .id=id, .start=chrono::system_clock::now(), .diffs={}});
     } else if (function_name == loopStop) {
         if(command.size() != 1){ 
@@ -207,7 +202,7 @@ void DataProcesor::ExecuteCommand(const Tokens& command) {
             }
             loop.diffs.push_back(getTimestamp(start));
         }
-        if(_config.add_timestamps) {
+        if(_config->add_timestamps) {
             auto stop = chrono::system_clock::now();
             auto total_time = getTimestamp(loop.start);
             std::string output_data = loop.id + ": Run total - " + to_string(total_time.count()*1000)+"ms";

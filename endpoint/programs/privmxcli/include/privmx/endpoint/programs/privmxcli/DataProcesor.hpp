@@ -37,8 +37,7 @@ struct Loop {
 
 class DataProcesor {
 public:
-    DataProcesor(std::thread::id main_thread_id, CliConfig config);
-    void updateCliConfig(CliConfig config);
+    DataProcesor(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config);
 
     int processLine(const std::string &input_line); 
     // jeżeli 1 to brakuje danych by mieć komendę
@@ -58,7 +57,7 @@ private:
 
     Executer _executer;
     std::string _working_command;
-    CliConfig _config;
+    std::shared_ptr<CliConfig> _config;
     int _working_command_braces;
     int _working_command_square_brackets;
     bool _working_command_reading_string;

@@ -28,7 +28,7 @@ using namespace privmx::endpoint::privmxcli;
 
 
 
-Executer::Executer(std::thread::id main_thread_id, CliConfig config) : _main_thread_id(main_thread_id), _config(config), _loading_animation(LoadingAnimation()) {
+Executer::Executer(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config) : _main_thread_id(main_thread_id), _config(config), _console_writer(ConsoleWriter(main_thread_id, config)), _loading_animation(LoadingAnimation()) {
     core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::STD_STRING_AS_BASE64});
     core::EventQueueVarInterface event = core::EventQueueVarInterface(core::EventQueue::getInstance(), serializer);
     core::ConnectionVarInterface connection = core::ConnectionVarInterface(serializer);
@@ -38,10 +38,6 @@ Executer::Executer(std::thread::id main_thread_id, CliConfig config) : _main_thr
     store::StoreApiVarInterface store = store::StoreApiVarInterface(connection.getApi(),serializer);
     inbox::InboxApiVarInterface inbox = inbox::InboxApiVarInterface(connection.getApi(),thread.getApi(), store.getApi(),serializer);
     _endpoint = std::make_shared<ApiVar>(event, connection, backendRequester, crypto, thread, store, inbox);
-}
-
-void Executer::updateCliConfig(CliConfig config) {
-    _config = config;
 }
 
 void Executer::setFA(const std::string &key, const std::string &value){
@@ -107,7 +103,6 @@ void Executer::addF(const std::string &key, const Poco::Dynamic::Var &value) {
         return;
     }
     cout << ConsoleStatusColor::error_critical << key << ": Unknown Data" << endl;
-    if(_config.stop_on_error) exit(EXIT_FAILURE);
 }
 
 void Executer::addB(const std::string &key, const Poco::Dynamic::Var &value) {
@@ -119,8 +114,7 @@ void Executer::addB(const std::string &key, const Poco::Dynamic::Var &value) {
         session[key] = std::make_shared<Poco::Dynamic::Var>(value);
         return;
     }
-    cout << ConsoleStatusColor::error_critical << key << ": Unknown Data" << endl;
-    if(_config.stop_on_error) exit(EXIT_FAILURE);
+    cout << ConsoleStatusColor::error_critical << key << ": Unknown Data" << endl;    
 }
 
 string Executer::readFileToString(const string& path) {
@@ -135,141 +129,129 @@ void Executer::writeFileFromString(const string& content, const string& path) {
     f_stream << content;
 }
 
+void Executer::set_bridge_api_creds(const std::string &bridge_api_key_id, const std::string &bridge_api_key_secret, const std::string &bridge_url) {
+    _bridge_api_key_id = bridge_api_key_id;
+    _bridge_api_key_secret = bridge_api_key_secret;
+    _bridge_url = bridge_url;
+}
+
 void Executer::execute(const Tokens &st) {
     if(st.size() == 0) return;
 
     std::thread t;
+    _timer_start = std::chrono::system_clock::now();
     auto fun_code = getFunc(st[0]);
     switch(fun_code){
         case nonfunc:
-            executePrePrintInfo(st[0]);
-            executePrePrintOutput(true);
-            cout << ConsoleStatusColor::error << "Invalid function name "  << st[0] << endl;
-            executePostPrint();
+            _console_writer.print_info(st[0]);
+            _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid function name "  + st[0]);
             break;
         case quit:
             exit(EXIT_SUCCESS);
             break;
         case falias:
             {
-                executePrePrintInfo("setting function alias");
+                _console_writer.print_info("setting function alias");
                 CHECK_ST_ARGS(2)
                 if(!isValidVarName(st[1])) {
-                    executePrePrintOutput(true);
-                    cout << ConsoleStatusColor::error << "Invalid alias name "  << st[1] << endl;
+                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid alias name "  + st[1]);
                     break;
                 }
                 int tmp = getFunc(st[2]);
                 if(tmp == nonfunc){
-                    executePrePrintOutput(true);
-                    cout << ConsoleStatusColor::error << "Invalid function name "  << st[2] << endl;
-                    if(_config.stop_on_error) exit(EXIT_FAILURE);
+                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid function name "  + st[2]);
                     break;
                 }
                 setFA(st[1], st[2]);
-                executePrePrintOutput();
-                executePostPrint();
+                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
             break;
         case salias:
-            executePrePrintInfo("setting variable alias");
+            _console_writer.print_info("setting variable alias");
             CHECK_ST_ARGS(2)
             if(!isValidVarName(st[1])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid alias name "  << st[1] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid alias name "  + st[1]);
                 break;
             }
             if(!isValidVarName(st[2])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[2] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[2]);
+                
                 break;
             }
             setSA(st[1], st[2]);
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;
         case scopy:
-            executePrePrintInfo("copping variable");
+            _console_writer.print_info("copping variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                 break;
             }
             if(!isValidVarName(st[2])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[2] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[2]);
                 break;
             }
             copyS(st[1], st[2]);
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;
         case sset:
-            executePrePrintInfo("setting variable");
+            _console_writer.print_info("setting variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                 break;
             }
             setS(st[1], st[2]);
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;
-        // case ssetArray:
-            // setS(st[1], StringArray(vector<string>(st.begin() + 2, st.end())));
-            // setS(st[1] + "_size", st.size() - 2);
-            // break;
         case sget:
-            executePrePrintInfo("getting variable");
+            _console_writer.print_info("getting variable");
             CHECK_ST_ARGS_2(0,1);
             if(st.size() == 1){
-                executePrePrintOutput();
-                cout << ConsoleStatusColor::info << "Usage: get VAR_NAME" << endl << endl;
-                cout << ConsoleStatusColor::info << "Vars: " << endl;
-                printAllVars();
-                cout << ConsoleStatusColor::normal << endl;
+                std::ostringstream ss;
+                vector<string> vars_names = getAllVars();
+                ss << ConsoleStatusColor::info << "Usage: get VAR_NAME" << endl << endl;
+                ss << ConsoleStatusColor::info << "Vars: " << endl;
+                for(auto var_name : vars_names) {
+                    ss << ConsoleStatusColor::normal << var_name << endl;
+                }
+                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
             } else {
-                getS_print_value(st[1]);
+                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, getS_printable(st[1]));
             }
-            executePostPrint();
             break;
         case sreadFile:
             CHECK_ST_ARGS(2);
             {
-                executePrePrintInfo("reading file");
+                _console_writer.print_info("reading file");
                 if(!isValidVarName(st[1])) {
-                    executePrePrintOutput(true);
-                    cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                     break;
                 }
                 string tmp = readFileToString(st[2]);
                 setS(st[1], tmp);
                 setS(st[1] + "_size", tmp.size());
-                executePrePrintOutput();
-                executePostPrint();
+                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
             break;
         case swriteFile:
             CHECK_ST_ARGS(2);
             {   
                 if(!isValidVarName(st[1])) {
-                    executePrePrintOutput(true);
-                    cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                     break;
                 }
                 auto data = getS_ptr(st[1]);
                 if(data->type() == typeid(std::string)) {
                     writeFileFromString(data->convert<std::string>(), st[2]);
                 }
-                executePrePrintOutput();
-                executePostPrint();
+                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
             break;
         case a_sleep:
             {
-                executePrePrintInfo("sleeping");
+                _console_writer.print_info("sleeping");
                 CHECK_ST_ARGS_2(1,2);
                 unsigned int T = 0;
                 if(st.size() == (2)) {
@@ -277,143 +259,129 @@ void Executer::execute(const Tokens &st) {
                 } else if(st.size() == (3)) {
                     T = sleep_for_random(std::stoi(st[1]), std::stoi(st[2]));
                 }
-                executePrePrintOutput();
-                cout << ConsoleStatusColor::info << "slept for " << T << "ms" << endl;
-                executePostPrint();
+                
+                std::ostringstream ss;
+                ss << ConsoleStatusColor::info << "slept for " << T << "ms";
+                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
+                
             }
             break;
         case addFront:
-            executePrePrintInfo("adding to front of variable");
+            _console_writer.print_info("adding to front of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                 break;
             }
             addF(st[1], getS_var(st[2]));
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;
         case addBack:
-            executePrePrintInfo("adding to back of variable");
+            _console_writer.print_info("adding to back of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                 break;
             }
             addB(st[1], getS_var(st[2]));
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;
         case addFrontString:
-            executePrePrintInfo("adding to front of variable");
+            _console_writer.print_info("adding to front of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                 break;
             }
             addF(st[1], st[2]);
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;
         case addBackString:
-            executePrePrintInfo("adding to back of variable");
+            _console_writer.print_info("adding to back of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                executePrePrintOutput(true);
-                cout << ConsoleStatusColor::error << "Invalid var name "  << st[1] << endl;
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                 break;
             }
             addB(st[1], st[2]);
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;
         case help:
             exec_help(st);
             break;
         case use:
-            executePrePrintInfo("using");
+            _console_writer.print_info("using");
             CHECK_ST_ARGS_2(0,1);
             if(st.size() == 1) {
                 use_path.clear();
             } else {
                 use_path = st[1] + ".";
             }
-            executePrePrintOutput();
-            executePostPrint();
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             break;  
+        case bridge_setBridgeApiCreds:
+            _console_writer.print_info("setting bridge api credentials");
+            CHECK_ST_ARGS(3);
+            set_bridge_api_creds(st[1], st[2], st[3]);
+            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            break;
         default:
-            if(st.size() != (2)) {
-                executePrePrintInfo("Running " + st[0]);
-                executePrePrintOutput(true);
-                std::cerr << ConsoleStatusColor::error << "Invalid args count" << std::endl;
-                executePostPrint();
-                return;
-            }
-            if(fun_code == func_enum::core_waitEvent) {
-                auto t = std::thread([&](func_enum function_code, std::string fun_name, std::string arg){executeApiFunction(function_code, fun_name, arg);}, fun_code, st[0], st[1]);
-                t.detach();
-            } else {
-                executeApiFunction(fun_code, st[0], st[1]);
+            {
+                bool fun_found = false;
+                if(fun_code == func_enum::core_waitEvent) {
+                    auto t = std::thread([&](func_enum function_code, const Tokens &st){executeApiFunction(function_code, st);}, fun_code, st);
+                    t.detach();
+                    fun_found = true;
+                } else {
+                    fun_found = executeApiFunction(fun_code, st);
+                }
+
+                if(!fun_found) {
+                    _console_writer.print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function execute not found -" + st[0]);
+                }
             }
     }
 }
 
-void Executer::executeApiFunction(const func_enum& fun_code, const std::string& fun_name, const std::string& st) {
+bool Executer::executeApiFunction(const func_enum& fun_code, const Tokens &st) {
+    const std::string fun_name = st[0];
     auto it = functions_execute.find(fun_code);
-    if(it == functions_execute.end()){
-        if(this_thread::get_id() == _main_thread_id) {
-            executePrePrintInfo("Running " + fun_name);
-        } else {
-            executePrePrintInfo("Running in thread " + fun_name);
-        }
-        executePrePrintOutput(true);
-        cout << ConsoleStatusColor::error << "no Api function found for - " << fun_name << endl;
-        executePostPrint();
-        if(_config.stop_on_error) exit(EXIT_FAILURE);
-    } else {
+    if(it != functions_execute.end()) {
         auto it_2 = functions_action_description.find(fun_code);
         if(it_2 == functions_action_description.end()){
             if(this_thread::get_id() == _main_thread_id) {
-                executePrePrintInfo("Running "+ fun_name);
+                _console_writer.print_info("Running "+ fun_name);
             } else {
-                executePrePrintInfo("Running in thread "+ fun_name);
+                _console_writer.print_info("Running in thread "+ fun_name);
             }
         } else {
             if(this_thread::get_id() == _main_thread_id) {
-                executePrePrintInfo((*it_2).second);
+                _console_writer.print_info((*it_2).second);
             } else {
-                executePrePrintInfo((*it_2).second + " in thread ");
+                _console_writer.print_info((*it_2).second + " in thread ");
             }
         }
         std::function<Poco::Dynamic::Var (std::shared_ptr<ApiVar>, const Poco::JSON::Array::Ptr &)> exec = (*it).second;
         Poco::JSON::Object::Ptr result = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
+        _timer_start = std::chrono::system_clock::now();
         try {
-            auto raw_JSON_arg = st;
+            if(st.size() != (1 + 1)) {
+                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid args count" );
+                return true; 
+            }
+            auto raw_JSON_arg = st[1];
             auto evaluated_JSON_arg_var = getS_var(raw_JSON_arg);
             auto evaluated_JSON_arg_string = evaluated_JSON_arg_var.convert<std::string>();
             Poco::JSON::Array::Ptr args = privmx::utils::Utils::parseJson(evaluated_JSON_arg_string).extract<Poco::JSON::Array::Ptr>();
-            auto value = exec(_endpoint, args);            
-            if(this_thread::get_id() == _main_thread_id) {
-                executePrePrintOutput(false);
-                if(!value.isEmpty()) {
-                    std::cout << privmx::utils::Utils::stringifyVar(value, true) << std::endl;
-                } else {
-                    std::cout << "null" << std::endl;
-                }
-                executePostPrint();
-            } else {
-                executePrePrintOutput(false, fun_name+"-");
-                if(!value.isEmpty()) {
-                    std::cout << privmx::utils::Utils::stringifyVar(value, true) << std::endl;
-                } else {
-                    std::cout << "null" << std::endl;
-                }
-                executePostPrint();
+            auto value = exec(_endpoint, args);    
+            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
+            std::string output = "null";
+            if(!value.isEmpty()) {
+                output = privmx::utils::Utils::stringifyVar(value, true);
             }
+            _console_writer.print_result(Status::Success, time, output, this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const privmx::utils::PrivmxException& e) {
+            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             std::ostringstream ss;
             ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << e.getCode();
             result->set("Error", e.what());
@@ -421,11 +389,9 @@ void Executer::executeApiFunction(const func_enum& fun_code, const std::string& 
             result->set("ErrorCode", e.getCode());
             result->set("ErrorData", e.getData());
             result->set("ErrorType", "privmx::utils::PrivmxException");
-            executePrePrintOutput(true);
-            std::cout << ConsoleStatusColor::error << privmx::utils::Utils::stringify(result, true) << std::endl;
-            executePostPrint();
-            if(_config.stop_on_error) exit(EXIT_FAILURE);
+            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const core::Exception& e) {
+            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             std::ostringstream ss;
             ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << e.getCode();
             result->set("ErrorMsg", e.what());
@@ -435,192 +401,110 @@ void Executer::executeApiFunction(const func_enum& fun_code, const std::string& 
             result->set("ErrorCode", e.getCode());
             result->set("ErrorDescription", e.getDescription());
             result->set("ErrorType", "core::Exception");
-            // result->set("ErrorData", e.getData());
-            executePrePrintOutput(true);
-            std::cout << ConsoleStatusColor::error << privmx::utils::Utils::stringify(result, true) << std::endl;
-            executePostPrint();
-            if(_config.stop_on_error) exit(EXIT_FAILURE);
+            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const std::exception& e) {
+            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             result->set("Error", e.what());
             result->set("Type", "std::exception");
-            executePrePrintOutput(true);
-            std::cout << ConsoleStatusColor::error << privmx::utils::Utils::stringify(result, true) << std::endl;
-            executePostPrint();
-            if(_config.stop_on_error) exit(EXIT_FAILURE);
+            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (...) {
+            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             result->set("Error", "unknown");
             result->set("Type", "unknown");
-            executePrePrintOutput(true);
-            std::cout << ConsoleStatusColor::error << privmx::utils::Utils::stringify(result, true) << std::endl;
-            executePostPrint();
-            if(_config.stop_on_error) exit(EXIT_FAILURE);
+            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         }
+        return true;
     }
+    return false;
 }
 
 void Executer::exec_help(const Tokens &st){
     if(st.size() == 1 || getFunc(st[1]) == help){
-        cout << ConsoleStatusColor::help << "Usage: help FUNCTION_NAME" << endl << endl;
-        printAllFunctions();
-        cout << ConsoleStatusColor::normal << endl << endl;
+        std::ostringstream ss;
+        ss << ConsoleStatusColor::help << "Usage: help FUNCTION_NAME" << endl << endl;
+        vector<std::string> tmp;
+        for(auto &item : functions_internal){
+            tmp.push_back(item.first);
+        }
+        sort(tmp.begin(), tmp.end());
+        ss << ConsoleStatusColor::help << "All Cli Functions: " << endl;
+        for(auto &item : tmp){
+            ss << ConsoleStatusColor::info << item << " - " << functions_internal_help_short_description.at(functions_internal.at(item)) << endl;
+        }
+        tmp.clear();
+        for(auto &item : functions){
+            tmp.push_back(item.first);
+        }
+        sort(tmp.begin(), tmp.end());
+        ss << ConsoleStatusColor::help << "All Api Functions: " << endl;
+        for(auto &item : tmp){
+            ss << ConsoleStatusColor::info << item << " - " << functions_help_short_description.at(functions.at(item)) << endl;
+        }
+        tmp.clear();
+        for(auto &item : func_aliases){
+            tmp.push_back(item.first);
+        }
+        sort(tmp.begin(), tmp.end());
+        ss << ConsoleStatusColor::help << "All Functions Aliases: " << endl;
+        for(auto &item : tmp){
+            ss << ConsoleStatusColor::info << item << " for " << func_aliases.at(item) << endl;
+        }
+        ss << endl << endl;
+        _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
         return;
     }
     auto fun_code = getFunc(st[1]);
     if(fun_code == func_enum::nonfunc) {
-        cout << ConsoleStatusColor::error << "Invalid function name " << st[1] << endl;
+        _console_writer.print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Invalid function name " + st[1]);
         return;
     }
     auto it_internal = functions_internal_help_description.find(fun_code);
     auto it_internal_short = functions_internal_help_short_description.find(fun_code);
+    std::ostringstream ss;
     if(it_internal == functions_internal_help_description.end() && it_internal_short == functions_internal_help_short_description.end()) {
         auto it = functions_help_description.find(fun_code);
         auto it_short = functions_help_short_description.find(fun_code);
         if(it == functions_help_description.end() && it_short == functions_help_short_description.end()){
-            cout << ConsoleStatusColor::error << "Function description not found " << st[1] << endl;
-            if(_config.stop_on_error) exit(EXIT_FAILURE);
+            _console_writer.print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function description not found " + st[1]);
             return;
         }
         if(it_short == functions_help_short_description.end()) {
-            cout << ConsoleStatusColor::warning << st[1] << " - Short description not found" << endl;
+            ss << ConsoleStatusColor::warning << st[1] << " - Short description not found" << endl;
         } else {
-            cout << ConsoleStatusColor::info << (*it_short).second << endl;
+            ss << ConsoleStatusColor::info << (*it_short).second << endl;
         }
         if(it == functions_help_description.end()) {
-            cout << ConsoleStatusColor::warning << st[1] << " - Extended description not found" << endl;
+            ss << ConsoleStatusColor::warning << st[1] << " - Extended description not found" << endl;
         } else {
-            cout << ConsoleStatusColor::help << (*it).second << endl;
+            ss << ConsoleStatusColor::help << (*it).second << endl;
         }
+        _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
         return;
     }
     if(it_internal_short == functions_internal_help_short_description.end()) {
-        cout << ConsoleStatusColor::warning << st[1] << " - Short description not found" << endl;
+        ss << ConsoleStatusColor::warning << st[1] << " - Short description not found" << endl;
     } else {
-        cout << ConsoleStatusColor::info << (*it_internal_short).second << endl;
+        ss << ConsoleStatusColor::info << (*it_internal_short).second << endl;
     }
     if(it_internal == functions_internal_help_description.end()) {
-        cout << ConsoleStatusColor::warning << st[1] << " - Extended description not found" << endl;
+        ss << ConsoleStatusColor::warning << st[1] << " - Extended description not found" << endl;
     } else {
-        cout << ConsoleStatusColor::help << (*it_internal).second << endl;
+        ss << ConsoleStatusColor::help << (*it_internal).second << endl;
     }  
+    _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
 }
 
-
-void Executer::executePrePrintInfo(const std::string& info_name) {
-    if(_config.is_rl_input && this_thread::get_id() != _main_thread_id){
-        rl_clear_visible_line();
-    }
-    if(_config.add_timestamps) {
-        _timer_start = std::chrono::system_clock::now();
-    }
-    cout << ConsoleStatusColor::normal << "-> " << colors::ConsoleColor::blue << info_name << colors::ConsoleColor::reset;
-    if (this_thread::get_id() == _main_thread_id) {
-        cout << " ... ";
-    } else {
-        cout << endl;
-    }
-    if (_config.is_rl_input && this_thread::get_id() == _main_thread_id) {
-        _loading_animation.start();
-    }
-}
-
-
-
-void Executer::executePrePrintOutput(bool is_error, const std::string& extra_info){
-    if(_config.add_timestamps && this_thread::get_id() == _main_thread_id) {
-        _timer_stop = std::chrono::system_clock::now();
-    }
-    if(_config.is_rl_input && this_thread::get_id() == _main_thread_id){
-        _loading_animation.stop();
-    }
-    executePrePrintOutputStatus(is_error, extra_info);
-    executePrePrintOutputResult(is_error, extra_info);
-}
-
-void Executer::executePrePrintOutputStatus(bool is_error, const std::string& extra_info) {
-    if(this_thread::get_id() == _main_thread_id) {
-        if(is_error) {
-            cout << ConsoleStatusColor::error << "ERR" << ConsoleStatusColor::normal << " ";;
-        } else {
-            cout  << ConsoleStatusColor::ok << "OK" << ConsoleStatusColor::normal << " ";;
-        }
-        if(_config.add_timestamps && this_thread::get_id() == _main_thread_id) {
-            printTimestamp(_timer_start, _timer_stop);
-        }
-        cout << endl;
-    }
-}
-
-
-void Executer::executePrePrintOutputResult(bool is_error, const std::string& extra_info) {
-    if(this_thread::get_id() != _main_thread_id) {
-        cout << endl;
-    }
-    if(is_error) {
-        cout << ConsoleStatusColor::normal << "-> " << ConsoleStatusColor::error << extra_info << "RESULT" << ConsoleStatusColor::normal << ":" << endl;
-    } else {
-        cout << ConsoleStatusColor::normal << "-> " << ConsoleStatusColor::ok << extra_info << "RESULT" << ConsoleStatusColor::normal << ":" << endl;
-    }
-}
-
-
-
-
-void Executer::executePostPrint(){
-    if(_config.is_rl_input && this_thread::get_id() != _main_thread_id){
-        rl_on_new_line();
-        rl_redisplay();
-    }
-
-}
-
-void Executer::printAllFunctions(){
-    vector<std::string> tmp;
-    for(auto &item : functions_internal){
-        tmp.push_back(item.first);
-    }
-    sort(tmp.begin(), tmp.end());
-    cout << ConsoleStatusColor::help << "All Cli Functions: " << endl;
-    for(auto &item : tmp){
-        cout << ConsoleStatusColor::info << item << " - " << functions_internal_help_short_description.at(functions_internal.at(item)) << endl;
-    }
-
-    tmp.clear();
-    for(auto &item : functions){
-        tmp.push_back(item.first);
-    }
-    sort(tmp.begin(), tmp.end());
-    cout << ConsoleStatusColor::help << "All Api Functions: " << endl;
-    for(auto &item : tmp){
-        cout << ConsoleStatusColor::info << item << " - " << functions_help_short_description.at(functions.at(item)) << endl;
-    }
-
-    tmp.clear();
-    for(auto &item : func_aliases){
-        tmp.push_back(item.first);
-    }
-    sort(tmp.begin(), tmp.end());
-    cout << ConsoleStatusColor::help << "All Functions Aliases: " << endl;
-    for(auto &item : tmp){
-        cout << ConsoleStatusColor::info << item << " for " << func_aliases.at(item) << endl;
-    }
-}
-
-void Executer::printAllVars(){
+vector<string> Executer::getAllVars(){
     vector<string> tmp;
-
     for(auto &item : session){
         tmp.push_back(item.first);
     }
-
     sort(tmp.begin(), tmp.end());
-
-    for(auto &item : tmp){
-        cout << ConsoleStatusColor::info << item << "\t";
-    }
+    return tmp;
 }
 
 void Executer::printTimestamp(std::chrono::_V2::system_clock::time_point start, std::chrono::_V2::system_clock::time_point stop) {
-    if (_config.add_timestamps) {
+    if (_config->add_timestamps) {
         chrono::duration<double> diff(stop - start);
         std::cout << ConsoleStatusColor::info << to_string(diff.count()*1000) << "ms" << ConsoleStatusColor::normal;
     }
@@ -652,50 +536,36 @@ bool Executer::isNumber(const std::string &val) {
 
 }
 
-void Executer::getS_print_value(const std::string &key) {
-    executePrePrintOutput();
+string Executer::getS_printable(const std::string &key) {
     auto var = getS_ptr(key);
     if(var->type() == typeid(std::string)) {
         std::string val = var->convert<std::string>();
-
         if(isNumber(val)) {
-            switch (_config.get_format) {
+            switch (_config->get_format) {
                 case get_format_type::bash:
-                    std::cout << ConsoleStatusColor::normal << key << ": " << val << std::endl;
-                    break;
                 case get_format_type::cpp:
-                    std::cout << ConsoleStatusColor::normal << key << ": " << val << std::endl;
-                    break;
                 case get_format_type::python:
-                    std::cout << ConsoleStatusColor::normal << key << ": " << val << std::endl;
-                    break;
+                    return key + ": " + val;
                 default:
-                    std::cout << ConsoleStatusColor::normal << key << " (number): " << val << std::endl;
-                    break;
+                    return key + " (number): " + val;
             }
         } else {
-            switch (_config.get_format) {
+            std::ostringstream ss;
+            switch (_config->get_format) {
                 case get_format_type::bash:
-                    std::cout << ConsoleStatusColor::normal << key << ": " << val << std::endl;
-                    break;
+                    return key + ": " + val;
                 case get_format_type::cpp:
-                    std::cout << ConsoleStatusColor::normal << key << ": ";
-                    StringFormater::toCPP(std::cout, val);
-                    std::cout << std::endl;
-                    break;
+                    StringFormater::toCPP(ss, val);
+                    return key + ": " + ss.str();
                 case get_format_type::python:
-                    std::cout << ConsoleStatusColor::normal << key << ": ";
-                    StringFormater::toPython(std::cout, val);
-                    std::cout << std::endl;
-                    break;
+                    StringFormater::toPython(ss, val);
+                    return key + ": " + ss.str();
                 default:
-                    std::cout << ConsoleStatusColor::normal << key << " (string): " << val << std::endl;
-                    break;
+                    return key + " (string): " + val;
             }
         }
 
     } else {
-        executePrePrintOutput(true);
-        cout << ConsoleStatusColor::error << key << ": Unknown Data" << endl;
+        return key + ": Unknown Data";
     }
 }

@@ -128,7 +128,7 @@ TEST_F(CLITest, StringFormater_toPython_2) {
 }
 
 TEST_F(CLITest, Executer_set) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     executer.execute({"set", "a", "b"});
     std::string output = testing::internal::GetCapturedStdout();
@@ -137,7 +137,7 @@ TEST_F(CLITest, Executer_set) {
 }
 
 TEST_F(CLITest, Executer_set_2) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     executer.execute({"set", "a", "b"});
     std::string output = testing::internal::GetCapturedStdout();
@@ -146,7 +146,7 @@ TEST_F(CLITest, Executer_set_2) {
 }
 
 TEST_F(CLITest, Executer_get) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     executer.execute({"get", "a"});
     std::string output = testing::internal::GetCapturedStdout();
@@ -154,7 +154,7 @@ TEST_F(CLITest, Executer_get) {
 }
 
 TEST_F(CLITest, Executer_set_get) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     executer.execute({"set", "a", "b"});
     executer.execute({"get", "a"});
@@ -163,7 +163,7 @@ TEST_F(CLITest, Executer_set_get) {
 }
 
 TEST_F(CLITest, Executer_set_get_$) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     executer.execute({"set", "a", "b"});
     executer.execute({"set", "b", "c"});
@@ -173,7 +173,7 @@ TEST_F(CLITest, Executer_set_get_$) {
 }
 
 TEST_F(CLITest, Executer_alias) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     executer.execute({"set", "a", "a"});
     executer.execute({"alias", "b", "a"});
@@ -185,7 +185,7 @@ TEST_F(CLITest, Executer_alias) {
 }
 
 TEST_F(CLITest, Executer_falias) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     executer.execute({"falias", "gg", "get"});
     executer.execute({"gg", "a"});
@@ -194,7 +194,7 @@ TEST_F(CLITest, Executer_falias) {
 }
 
 TEST_F(CLITest, Executer_get_format_cpp_string) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::cpp});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::cpp}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
     executer.execute({"get", "a"});
@@ -203,7 +203,7 @@ TEST_F(CLITest, Executer_get_format_cpp_string) {
 }
 
 TEST_F(CLITest, Executer_get_format_cpp_number) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::cpp});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::cpp}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
     executer.execute({"get", "a"});
@@ -212,7 +212,7 @@ TEST_F(CLITest, Executer_get_format_cpp_number) {
 }
 
 TEST_F(CLITest, Executer_get_format_python_string) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::python});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::python}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
     executer.execute({"get", "a"});
@@ -221,7 +221,7 @@ TEST_F(CLITest, Executer_get_format_python_string) {
 }
 
 TEST_F(CLITest, Executer_get_format_python_number) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::python});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::python}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
     executer.execute({"get", "a"});
@@ -230,7 +230,7 @@ TEST_F(CLITest, Executer_get_format_python_number) {
 }
 
 TEST_F(CLITest, Executer_get_format_bash_string) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
     executer.execute({"get", "a"});
@@ -239,7 +239,7 @@ TEST_F(CLITest, Executer_get_format_bash_string) {
 }
 
 TEST_F(CLITest, Executer_get_format_bash_number) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::bash});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
     executer.execute({"get", "a"});
@@ -248,7 +248,7 @@ TEST_F(CLITest, Executer_get_format_bash_number) {
 }
 
 TEST_F(CLITest, Executer_get_format_std_string) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::default_std});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::default_std}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("value_\"'_"));
     executer.execute({"get", "a"});
@@ -257,7 +257,7 @@ TEST_F(CLITest, Executer_get_format_std_string) {
 }
 
 TEST_F(CLITest, Executer_get_format_std_number) {
-    Executer executer = Executer(this_thread::get_id(), {.get_format=get_format_type::default_std});
+    Executer executer = Executer(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::default_std}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("1357"));
     executer.execute({"get", "a"});
@@ -266,7 +266,7 @@ TEST_F(CLITest, Executer_get_format_std_number) {
 }
 
 TEST_F(CLITest, DataProcesor_double_separator_set) {
-    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
+    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     data_procesor.processLine("set  a b");
     std::string output = testing::internal::GetCapturedStdout();
@@ -275,7 +275,7 @@ TEST_F(CLITest, DataProcesor_double_separator_set) {
 }
 
 TEST_F(CLITest, DataProcesor_set) {
-    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
+    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     data_procesor.processLine("set a b");
     std::string output = testing::internal::GetCapturedStdout();
@@ -284,7 +284,7 @@ TEST_F(CLITest, DataProcesor_set) {
 }
 
 TEST_F(CLITest, DataProcesor_get) {
-    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
+    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     data_procesor.processLine("get a");
     std::string output = testing::internal::GetCapturedStdout();
@@ -292,7 +292,7 @@ TEST_F(CLITest, DataProcesor_get) {
 }
 
 TEST_F(CLITest, DataProcesor_set_get_$) {
-    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
+    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     data_procesor.processLine("set a b");
     data_procesor.processLine("set b c");
@@ -302,7 +302,7 @@ TEST_F(CLITest, DataProcesor_set_get_$) {
 }
 
 TEST_F(CLITest, DataProcesor_eval_$_val) {
-    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), {.get_format=get_format_type::bash});
+    DataProcesor data_procesor = DataProcesor(this_thread::get_id(), std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash}));
     testing::internal::CaptureStdout();
     session["a"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("$"));
     session["b"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var("{c}"));
