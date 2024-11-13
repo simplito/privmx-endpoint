@@ -22,22 +22,22 @@ public:
      *
      * @param userPrivKey user's private key
      * @param solutionId ID of the Solution
-     * @param platformUrl Platform's Endpoint URL
+     * @param bridgeUrl Bridge Server URL
      * 
      * @return Connection object
      */
     static Connection connect(const std::string& userPrivKey, const std::string& solutionId,
-                                      const std::string& platformUrl);
+                                      const std::string& bridgeUrl);
 
     /**
      * Connects to the PrivMX Bridge Server as a guest user.
      *
      * @param solutionId ID of the Solution
-     * @param platformUrl Platform's Endpoint URL
+     * @param bridgeUrl Bridge Server URL
      * 
      * @return Connection object
      */                                     
-    static Connection connectPublic(const std::string& solutionId, const std::string& platformUrl);
+    static Connection connectPublic(const std::string& solutionId, const std::string& bridgeUrl);
     
     /**
      * //doc-gen:ignore
