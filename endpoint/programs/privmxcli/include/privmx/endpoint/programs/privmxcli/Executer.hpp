@@ -93,7 +93,6 @@ private:
     bool executeApiFunction(const func_enum& fun_code, const Tokens &st);
     void printAllFunctions();
     std::vector<std::string> getAllVars();
-    void printTimestamp(std::chrono::_V2::system_clock::time_point start, std::chrono::_V2::system_clock::time_point stop = std::chrono::system_clock::now());
     unsigned int sleep_for(const int& T);
     unsigned int sleep_for_random(const int& T1, const int& T2);
     bool isValidVarName(const std::string &key);

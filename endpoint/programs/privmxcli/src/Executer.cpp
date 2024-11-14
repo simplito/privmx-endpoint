@@ -503,13 +503,6 @@ vector<string> Executer::getAllVars(){
     return tmp;
 }
 
-void Executer::printTimestamp(std::chrono::_V2::system_clock::time_point start, std::chrono::_V2::system_clock::time_point stop) {
-    if (_config->add_timestamps) {
-        chrono::duration<double> diff(stop - start);
-        std::cout << ConsoleStatusColor::info << to_string(diff.count()*1000) << "ms" << ConsoleStatusColor::normal;
-    }
-}
-
 unsigned int Executer::sleep_for(const int& T) {
     std::this_thread::sleep_for(std::chrono::milliseconds(T));
     return T;
