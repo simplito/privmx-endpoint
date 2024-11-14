@@ -91,7 +91,7 @@ int main() {
 ### Build project
 
 ```bash
-conan install . --output-folder=build -r privmx --build-missing
+conan install . --output-folder=build -r privmx --build=missing
 cd build
 cmake .. -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
         -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_BUILD_TYPE=Release
@@ -206,7 +206,7 @@ Endpoint connection starts by calling Connection factory method: `core::Connecti
 ```
 After building and running the program above, you will get the output showing messages that were sent to the provided Thread.
 
-A complete project that uses the above code example can be found [here](https://github.com/simplito/privmx-webendpoint/examples/minimal).
+A complete project that uses the above code example can be found [here](https://github.com/simplito/privmx-endpoint/tree/main/examples).
 
 ## Available APIs:
 
