@@ -1,11 +1,13 @@
 [requires]
-openssl/[>=3.0 <3.1]
 poco/1.13.2
 pson/1.0.7
+openssl/[>=3.0 <3.1]
 gmp/6.2.1
 privmxdrvcrypto/1.0.2
 privmxdrvecc/1.0.2
-privmxdrvnet/1.0.2
+privmxdrvnet/1.0.3
+gtest/[^1.15.0]
+readline/[^8.2.0]
 
 [options]
 *:shared = True
