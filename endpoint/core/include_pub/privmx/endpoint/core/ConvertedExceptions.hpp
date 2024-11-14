@@ -1,13 +1,12 @@
 #ifndef _PRIVMXLIB_ENDPOINT_CONVERTED_EXT_EXCEPTION_HPP_
 #define _PRIVMXLIB_ENDPOINT_CONVERTED_EXT_EXCEPTION_HPP_
 
-#include "privmx/endpoint/core/CoreExceptionDiscriptions.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
 
 #define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                            \
     class NAME : public privmx::endpoint::core::Exception {                                                      \
     public:                                                                                                      \
-        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16) __VA_OPT__(, __VA_ARGS__)) {} \
+        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                           \
         NAME(const std::string& description)                                                                     \
             : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16), description) {}                 \
         NAME(const std::string& msg, const std::string& name, unsigned int code)                                 \
@@ -23,7 +22,7 @@
 #define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                            \
     class NAME : public BASE_SCOPED {                                                                            \
     public:                                                                                                      \
-        NAME() : BASE_SCOPED(MSG, #NAME, CODE __VA_OPT__(, __VA_ARGS__)) {}                                      \
+        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                \
         NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}       \
         void rethrow() const override;                                                                           \
     };                                                                                                           \
