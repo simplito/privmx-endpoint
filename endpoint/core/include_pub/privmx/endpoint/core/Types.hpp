@@ -81,6 +81,93 @@ struct UserWithPubKey {
     std::string pubKey;
 };
 
+/**
+ * Contains container's policies
+ */
+struct ContainerPolicyWithoutItem {
+    /** 
+     * Determine who can get a container 
+     */
+    std::optional<std::string> get;
+    /** 
+     * Determine who can list containers created by me
+     */
+    std::optional<std::string> listMy;
+    /**
+     * Determine who can list all containers 
+     */
+    std::optional<std::string> listAll;
+    /** 
+     * Determine who can create a container 
+     */
+    std::optional<std::string> create;
+    /** 
+     * Determine who can update a container 
+     */
+    std::optional<std::string> update;
+    /** 
+     * Determine who can delete a container 
+     */
+    std::optional<std::string> delete_;
+    /** 
+     * Determine who can update policy 
+     */
+    std::optional<std::string> updatePolicy;
+    /** 
+     * Determine whether the creator has to be added to the list of managers 
+     */
+    std::optional<std::string> creatorHasToBeManager;
+    /** 
+     * Determine whether the updater can be removed from the list of managers 
+     */
+    std::optional<std::string> updaterCanBeRemovedFromManagers;
+    /** 
+     * Determine whether the owner can be removed from the list of managers 
+     */
+    std::optional<std::string> ownerCanBeRemovedFromManagers;
+    /**
+     * Determine whether the policy can be overwritten in container 
+     */
+    std::optional<std::string> canOverwriteContextPolicy;
+};
+
+/**
+ * Contains container items policies
+ */
+struct ItemPolicy {
+    /** 
+     * Determine who can get an item
+     */
+    std::optional<std::string> get;
+    /** 
+     * Determine who can list items created by me 
+     */
+    std::optional<std::string> listMy;
+    /** 
+     * Determine who can list all items *
+     */
+    std::optional<std::string> listAll;
+    /** 
+     * Determine who can create an item 
+     */
+    std::optional<std::string> create;
+    /**
+     *  Determine who can update an item
+     */
+    std::optional<std::string> update;
+    /** 
+     * Determine who can delete an item 
+     */
+    std::optional<std::string> delete_;    
+};
+
+/**
+ * Contains container and its items policies
+ */
+struct ContainerPolicy : public ContainerPolicyWithoutItem {
+    std::optional<ItemPolicy> item;
+};
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

@@ -52,11 +52,13 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param filesConfig struct to override default file configuration
+     * @param policies Inbox policies
      * @return ID of the created Inbox
      */
     std::string createInbox(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                            const std::optional<inbox::FilesConfig>& filesConfig);
+                            const std::optional<inbox::FilesConfig>& filesConfig,
+                            const std::optional<core::ContainerPolicy>& policies = std::nullopt);
 
     
     /**
@@ -72,12 +74,14 @@ public:
      * @param version current version of the updated Inbox
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the Inbox
+     * @param policies Inbox policies
      */
     void updateInbox(const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
                      const std::vector<core::UserWithPubKey>& managers,
                      const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                      const std::optional<inbox::FilesConfig>& filesConfig, const int64_t version, const bool force,
-                     const bool forceGenerateNewKey);
+                     const bool forceGenerateNewKey,
+                     const std::optional<core::ContainerPolicy>& policies = std::nullopt);
 
     /**
      * Gets a single Inbox by given Inbox ID.

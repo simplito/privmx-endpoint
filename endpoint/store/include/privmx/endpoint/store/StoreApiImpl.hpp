@@ -37,6 +37,7 @@ limitations under the License.
 #include "privmx/endpoint/store/FileMetaEncryptorV4.hpp"
 #include "privmx/endpoint/store/StoreDataEncryptorV4.hpp"
 #include "privmx/endpoint/store/Events.hpp"
+#include "privmx/endpoint/core/Factory.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -59,8 +60,12 @@ public:
         size_t serverRequestChunkSize
     );
     ~StoreApiImpl();
-    std::string createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
-    std::string createStoreEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type);
+    std::string createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
+                const core::Buffer& publicMeta, const core::Buffer& privateMeta,
+                const std::optional<core::ContainerPolicy>& policies);
+    std::string createStoreEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
+                const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
+                const std::optional<core::ContainerPolicy>& policies);
     void updateStore(
         const std::string& storeId, 
         const std::vector<core::UserWithPubKey>& users, 
@@ -69,7 +74,8 @@ public:
         const core::Buffer& privateMeta,
         const int64_t version, 
         const bool force, 
-        const bool forceGenerateNewKey
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicy>& policies
     );
     void deleteStore(const std::string& storeId);
     Store getStore(const std::string& storeId);
@@ -103,7 +109,9 @@ private:
         std::string hmac;
         int64_t version;
     };
-    std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type);
+    std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
+                const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
+                const std::optional<core::ContainerPolicy>& policies);
     Store _storeGetEx(const std::string& storeId, const std::string& type);
     core::PagingList<Store> _storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
 

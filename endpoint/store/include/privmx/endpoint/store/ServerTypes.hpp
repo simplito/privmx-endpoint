@@ -74,6 +74,7 @@ ENDPOINT_SERVER_TYPE(Store)
     INT64_FIELD(lastFileDate)
     INT64_FIELD(files)
     STRING_FIELD(type)
+    VAR_FIELD(policy)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreCreateModel)
@@ -84,6 +85,7 @@ ENDPOINT_SERVER_TYPE(StoreCreateModel)
     STRING_FIELD(keyId)
     LIST_FIELD(keys, core::server::KeyEntrySet)
     STRING_FIELD(type)
+    VAR_FIELD(policy)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreUpdateModel)
@@ -95,6 +97,7 @@ ENDPOINT_SERVER_TYPE(StoreUpdateModel)
     LIST_FIELD(keys, core::server::KeyEntrySet)
     INT64_FIELD(version)
     BOOL_FIELD(force)
+    VAR_FIELD(policy)
 TYPE_END
 
 //-----------------------------------------------------

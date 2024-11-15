@@ -136,6 +136,11 @@ struct Thread {
     core::Buffer privateMeta;
 
     /**
+     * Thread's policies
+     */
+    core::ContainerPolicy policy;
+
+    /**
      * total number of messages in the Thread
      */
     int64_t messagesCount;

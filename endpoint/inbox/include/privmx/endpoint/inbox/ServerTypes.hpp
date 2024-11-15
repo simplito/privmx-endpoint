@@ -106,6 +106,7 @@ namespace server {
         LIST_FIELD(managers, std::string)
         LIST_FIELD(keys, privmx::endpoint::core::server::KeyEntry)
         INT64_FIELD(version)
+        VAR_FIELD(policy)
     };
 
 
@@ -128,6 +129,7 @@ namespace server {
         OBJECT_FIELD(data, InboxData)
         STRING_FIELD(keyId)
         LIST_FIELD(keys, privmx::endpoint::core::server::KeyEntrySet)
+        VAR_FIELD(policy)
     };
 
     class InboxCreateResult : public utils::TypedObject
@@ -158,6 +160,7 @@ namespace server {
         LIST_FIELD(keys, privmx::endpoint::core::server::KeyEntrySet)
         INT64_FIELD(version)
         BOOL_FIELD(force)
+        VAR_FIELD(policy)
     };
 
     class InboxGetModel : public utils::TypedObject

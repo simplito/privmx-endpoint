@@ -32,6 +32,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/MessageDataEncryptorV4.hpp"
 #include "privmx/endpoint/thread/ThreadDataEncryptorV4.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
+#include "privmx/endpoint/core/Factory.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -51,13 +52,13 @@ public:
     );
     ~ThreadApiImpl();
     std::string createThread(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
+                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::optional<core::ContainerPolicy>& policies);
     std::string createThreadEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type);
+                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type, const std::optional<core::ContainerPolicy>& policies);
 
     void updateThread(const std::string& threadId, const std::vector<core::UserWithPubKey>& users,
                       const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                      const int64_t version, const bool force, const bool forceGenerateNewKey);
+                      const int64_t version, const bool force, const bool forceGenerateNewKey, const std::optional<core::ContainerPolicy>& policies);
     void deleteThread(const std::string& threadId);
 
     Thread getThread(const std::string& threadId);
@@ -84,7 +85,8 @@ private:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::string& type
+        const std::string& type,
+        const std::optional<core::ContainerPolicy>& policies
     );
     Thread _getThreadEx(const std::string& threadId, const std::string& type);
     core::PagingList<Thread> _listThreadsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);

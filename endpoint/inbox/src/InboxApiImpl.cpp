@@ -82,7 +82,8 @@ InboxApiImpl::~InboxApiImpl() {
 std::string InboxApiImpl::createInbox(
     const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-    const std::optional<inbox::FilesConfig>& fileConfig) {
+    const std::optional<inbox::FilesConfig>& fileConfig,
+    const std::optional<core::ContainerPolicy>& policies) {
 
     // prep keys
     auto inboxKey = _keyProvider->generateKey();
@@ -94,8 +95,8 @@ std::string InboxApiImpl::createInbox(
     auto randName {InboxDataHelper::getRandomName()};
     auto randNameAsBuf {privmx::endpoint::core::Buffer::from(randName)};
     auto emptyBuf {privmx::endpoint::core::Buffer::from(std::string())};
-    auto storeId = (_storeApi.getImpl())->createStoreEx(contextId, users, managers, emptyBuf, randNameAsBuf,  INBOX_TYPE_FILTER_FLAG);
-    auto threadId = (_threadApi.getImpl())->createThreadEx(contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG);
+    auto storeId = (_storeApi.getImpl())->createStoreEx(contextId, users, managers, emptyBuf, randNameAsBuf,  INBOX_TYPE_FILTER_FLAG, policies);
+    auto threadId = (_threadApi.getImpl())->createThreadEx(contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policies);
 
     InboxDataProcessorModel inboxDataIn {
         .storeId = storeId,
@@ -123,6 +124,9 @@ std::string InboxApiImpl::createInbox(
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     auto keysList = _keyProvider->prepareKeysList(all_users, inboxKey);
     createInboxModel.keys(keysList);
+    if (policies.has_value()) {
+        createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
+    }
 
     auto inboxId = _serverApi->inboxCreate(createInboxModel).inboxId();
     return inboxId;
@@ -134,7 +138,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
                      const std::vector<core::UserWithPubKey>& managers,
                      const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                      const std::optional<inbox::FilesConfig>& fileConfig, const int64_t version, const bool force,
-                     const bool forceGenerateNewKey
+                     const bool forceGenerateNewKey, const std::optional<core::ContainerPolicy>& policies
 ) {
     // get current inbox
     auto currentInbox = getInboxFromServerOrCache(inboxId);
@@ -187,6 +191,13 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     inboxUpdateModel.force(force);
     inboxUpdateModel.version(version);
 
+    if (policies.has_value()) {
+        // strip policies item field for Inbox container itself
+        auto policiesStripped = policies.value();
+        policiesStripped.item = std::nullopt;
+        inboxUpdateModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesStripped));
+    }
+
     _serverApi->inboxUpdate(inboxUpdateModel);
 
     auto store = (_storeApi.getImpl())->getStoreEx(currentInboxReadable.storeId, INBOX_TYPE_FILTER_FLAG);
@@ -198,7 +209,8 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         store.privateMeta,
         store.version,
         force,
-        forceGenerateNewKey
+        forceGenerateNewKey,
+        policies
     );
     auto thread = (_threadApi.getImpl())->getThreadEx(currentInboxReadable.threadId, INBOX_TYPE_FILTER_FLAG);
     (_threadApi.getImpl())->updateThread(
@@ -209,7 +221,8 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         thread.privateMeta,
         thread.version,
         force,
-        forceGenerateNewKey
+        forceGenerateNewKey,
+        policies
     );
 }
 
@@ -544,6 +557,7 @@ Inbox InboxApiImpl::convertInbox(const inbox::server::Inbox& inboxRaw) {
         .publicMeta = inboxData.publicData.publicMeta,
         .privateMeta = inboxData.privateData.privateMeta,
         .filesConfig = inboxData.filesConfig,
+        .policy = core::Factory::parsePolicyServerObject(inboxRaw.policy()),
         .statusCode = inboxData.statusCode
     };
     return ret;
