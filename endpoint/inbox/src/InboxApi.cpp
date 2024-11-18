@@ -61,7 +61,7 @@ std::string InboxApi::createInbox(
 const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                             const std::optional<inbox::FilesConfig>& filesConfig,
-                            const std::optional<core::ContainerPolicy>& policies) {
+                            const std::optional<core::ContainerPolicyWithoutItem>& policies) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
     try {
@@ -78,7 +78,7 @@ void InboxApi::updateInbox(
                      const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                      const std::optional<inbox::FilesConfig>& filesConfig, const int64_t version, const bool force,
                      const bool forceGenerateNewKey,
-                     const std::optional<core::ContainerPolicy>& policies
+                     const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
     validateEndpoint();
     core::Validator::validateId(inboxId, "field:inboxId ");

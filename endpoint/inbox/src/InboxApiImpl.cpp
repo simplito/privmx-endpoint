@@ -83,7 +83,7 @@ std::string InboxApiImpl::createInbox(
     const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
     const std::optional<inbox::FilesConfig>& fileConfig,
-    const std::optional<core::ContainerPolicy>& policies) {
+    const std::optional<core::ContainerPolicyWithoutItem>& policies) {
 
     // prep keys
     auto inboxKey = _keyProvider->generateKey();
@@ -138,7 +138,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
                      const std::vector<core::UserWithPubKey>& managers,
                      const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                      const std::optional<inbox::FilesConfig>& fileConfig, const int64_t version, const bool force,
-                     const bool forceGenerateNewKey, const std::optional<core::ContainerPolicy>& policies
+                     const bool forceGenerateNewKey, const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
     // get current inbox
     auto currentInbox = getInboxFromServerOrCache(inboxId);
