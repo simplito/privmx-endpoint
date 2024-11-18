@@ -35,6 +35,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::Thread>(const thread::Thread
     obj->set("lastMsgDate", serialize(val.lastMsgDate));
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("publicMeta", serialize(val.publicMeta));
+    obj->set("policy", serialize(val.policy));
     obj->set("messagesCount", serialize(val.messagesCount));
     obj->set("statusCode", serialize(val.statusCode));
     return obj;

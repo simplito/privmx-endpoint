@@ -55,7 +55,8 @@ Poco::Dynamic::Var InboxApiVarInterface::createInbox(const Poco::Dynamic::Var& a
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto filesConfig = _deserializer.deserializeOptional<inbox::FilesConfig>(argsArr->get(5), "filesConfig");
-    auto result = _inboxApi.createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig);
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr.get(6), "policies");
+    auto result = _inboxApi.createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
     return _serializer.serialize(result);
 }
 
@@ -69,9 +70,10 @@ Poco::Dynamic::Var InboxApiVarInterface::updateInbox(const Poco::Dynamic::Var& a
     auto filesConfig = _deserializer.deserializeOptional<inbox::FilesConfig>(argsArr->get(5), "filesConfig");
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(6), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(7), "force");
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr.get(8), "policies");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(8), "forceGenerateNewKey");
     _inboxApi.updateInbox(inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force,
-                          forceGenerateNewKey);
+                          forceGenerateNewKey, policies);
     return {};
 }
 

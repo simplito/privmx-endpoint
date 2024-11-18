@@ -53,7 +53,8 @@ Poco::Dynamic::Var StoreApiVarInterface::createStore(const Poco::Dynamic::Var& a
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto result = _storeApi.createStore(contextId, users, managers, publicMeta, privateMeta);
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr.get(5), "policies");
+    auto result = _storeApi.createStore(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
 
@@ -67,7 +68,8 @@ Poco::Dynamic::Var StoreApiVarInterface::updateStore(const Poco::Dynamic::Var& a
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
-    _storeApi.updateStore(storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey);
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr.get(8), "policies");
+    _storeApi.updateStore(storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     return {};
 }
 
