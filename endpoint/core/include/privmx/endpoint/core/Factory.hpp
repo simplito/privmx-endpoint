@@ -25,6 +25,7 @@ namespace core {
 class Factory {
 public:
     static Poco::Dynamic::Var createPolicyServerObject(const ContainerPolicy& policy);
+    static Poco::Dynamic::Var createPolicyServerObject(const ContainerPolicyWithoutItem& policy);
     static ContainerPolicy parsePolicyServerObject(const Poco::Dynamic::Var& serverPolicyObject);
 };
 
