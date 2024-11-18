@@ -82,7 +82,7 @@ struct UserWithPubKey {
 };
 
 /**
- * Contains container's policies
+ * Contains container's policies.
  */
 struct ContainerPolicyWithoutItem {
     /** 
@@ -132,7 +132,7 @@ struct ContainerPolicyWithoutItem {
 };
 
 /**
- * Contains container items policies
+ * Contains container items policies.
  */
 struct ItemPolicy {
     /** 
@@ -144,7 +144,7 @@ struct ItemPolicy {
      */
     std::optional<std::string> listMy;
     /** 
-     * Determine who can list all items *
+     * Determine who can list all items
      */
     std::optional<std::string> listAll;
     /** 
@@ -162,7 +162,7 @@ struct ItemPolicy {
 };
 
 /**
- * Contains container and its items policies
+ * Contains container and its items policies.
  */
 struct ContainerPolicy : public ContainerPolicyWithoutItem {
     std::optional<ItemPolicy> item;
