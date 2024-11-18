@@ -58,7 +58,7 @@ public:
     std::string createInbox(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                             const std::optional<inbox::FilesConfig>& filesConfig,
-                            const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+                            const std::optional<core::ContainerPolicyWithoutItem>& policies = std::nullopt);
 
     
     /**
@@ -81,7 +81,7 @@ public:
                      const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                      const std::optional<inbox::FilesConfig>& filesConfig, const int64_t version, const bool force,
                      const bool forceGenerateNewKey,
-                     const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+                     const std::optional<core::ContainerPolicyWithoutItem>& policies = std::nullopt);
 
     /**
      * Gets a single Inbox by given Inbox ID.
