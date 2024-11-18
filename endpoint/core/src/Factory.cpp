@@ -81,7 +81,7 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     return model;
 }
 
-ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var serverPolicyObject) {
+ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var& serverPolicyObject) {
     if (serverPolicyObject.isEmpty()) {
         return {};
     }
