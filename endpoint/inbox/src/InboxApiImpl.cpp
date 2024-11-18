@@ -95,8 +95,13 @@ std::string InboxApiImpl::createInbox(
     auto randName {InboxDataHelper::getRandomName()};
     auto randNameAsBuf {privmx::endpoint::core::Buffer::from(randName)};
     auto emptyBuf {privmx::endpoint::core::Buffer::from(std::string())};
-    auto storeId = (_storeApi.getImpl())->createStoreEx(contextId, users, managers, emptyBuf, randNameAsBuf,  INBOX_TYPE_FILTER_FLAG, policies);
-    auto threadId = (_threadApi.getImpl())->createThreadEx(contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policies);
+
+    core::ContainerPolicy policiesWithItems {
+        policies.value(), std::nullopt
+    };
+
+    auto storeId = (_storeApi.getImpl())->createStoreEx(contextId, users, managers, emptyBuf, randNameAsBuf,  INBOX_TYPE_FILTER_FLAG, policiesWithItems);
+    auto threadId = (_threadApi.getImpl())->createThreadEx(contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policiesWithItems);
 
     InboxDataProcessorModel inboxDataIn {
         .storeId = storeId,
@@ -125,7 +130,8 @@ std::string InboxApiImpl::createInbox(
     auto keysList = _keyProvider->prepareKeysList(all_users, inboxKey);
     createInboxModel.keys(keysList);
     if (policies.has_value()) {
-        createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
+        core::ContainerPolicy policiesWithItems {policies.value(), std::nullopt};
+        createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems));
     }
 
     auto inboxId = _serverApi->inboxCreate(createInboxModel).inboxId();
@@ -191,11 +197,10 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     inboxUpdateModel.force(force);
     inboxUpdateModel.version(version);
 
+    std::optional<core::ContainerPolicy> policiesWithItems { policies.has_value() ? std::make_optional<core::ContainerPolicy>({policies.value(), std::nullopt}) : std::nullopt};
+
     if (policies.has_value()) {
-        // strip policies item field for Inbox container itself
-        auto policiesStripped = policies.value();
-        policiesStripped.item = std::nullopt;
-        inboxUpdateModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesStripped));
+        inboxUpdateModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
 
     _serverApi->inboxUpdate(inboxUpdateModel);
@@ -210,7 +215,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         store.version,
         force,
         forceGenerateNewKey,
-        policies
+        policiesWithItems
     );
     auto thread = (_threadApi.getImpl())->getThreadEx(currentInboxReadable.threadId, INBOX_TYPE_FILTER_FLAG);
     (_threadApi.getImpl())->updateThread(
@@ -222,7 +227,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         thread.version,
         force,
         forceGenerateNewKey,
-        policies
+        policiesWithItems
     );
 }
 
