@@ -70,3 +70,58 @@ PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& 
             .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
             .lastId = deserializeOptional<std::string>(obj->get("lastId"), name + ".lastId")};
 }
+
+
+template<>
+ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutItem>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .get = deserializeOptional<std::string>(obj->get("get"), name + ".get"),
+        .listMy = deserializeOptional<std::string>(obj->get("listMy"), name + ".listMy"),
+        .listAll = deserializeOptional<std::string>(obj->get("listAll"), name + ".listAll"),
+        .create = deserializeOptional<std::string>(obj->get("create"), name + ".create"),
+        .update = deserializeOptional<std::string>(obj->get("update"), name + ".update"),
+        .delete_ = deserializeOptional<std::string>(obj->get("delete_"), name + ".delete_"),
+        .updatePolicy = deserializeOptional<std::string>(obj->get("updatePolicy"), name + ".updatePolicy"),
+        .creatorHasToBeManager = deserializeOptional<std::string>(obj->get("creatorHasToBeManager"), name + ".creatorHasToBeManager"),
+        .updaterCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("updaterCanBeRemovedFromManagers"), name + ".updaterCanBeRemovedFromManagers"),
+        .ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"),
+        .canOverwriteContextPolicy = deserializeOptional<std::string>(obj->get("canOverwriteContextPolicy"), name + ".canOverwriteContextPolicy"),
+    };
+}
+
+template<>
+ItemPolicy VarDeserializer::deserialize<ItemPolicy>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .get = deserialize<std::string>(obj->get("get"), name + ".get"),
+        .listMy = deserialize<std::string>(obj->get("listMy"), name + ".listMy"),
+        .listAll = deserialize<std::string>(obj->get("listAll"), name + ".listAll"),
+        .create = deserialize<std::string>(obj->get("create"), name + ".create"),
+        .update = deserialize<std::string>(obj->get("update"), name + ".update"),
+        .delete_ = deserialize<std::string>(obj->get("delete_"), name + ".delete_"),
+    };
+}
+
+template<>
+ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    ContainerPolicy result {};
+    result.get = deserializeOptional<std::string>(obj->get("get"), name + ".get");
+    result.listMy = deserializeOptional<std::string>(obj->get("listMy"), name + ".listMy");
+    result.listAll = deserializeOptional<std::string>(obj->get("listAll"), name + ".listAll");
+    result.create = deserializeOptional<std::string>(obj->get("create"), name + ".create");
+    result.update = deserializeOptional<std::string>(obj->get("update"), name + ".update");
+    result.delete_ = deserializeOptional<std::string>(obj->get("delete_"), name + ".delete_");
+    result.updatePolicy = deserializeOptional<std::string>(obj->get("updatePolicy"), name + ".updatePolicy");
+    result.creatorHasToBeManager = deserializeOptional<std::string>(obj->get("creatorHasToBeManager"), name + ".creatorHasToBeManager");
+    result.updaterCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("updaterCanBeRemovedFromManagers"), name + ".updaterCanBeRemovedFromManagers");
+    result.ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers");
+    result.canOverwriteContextPolicy = deserializeOptional<std::string>(obj->get("canOverwriteContextPolicy"), name + ".canOverwriteContextPolicy");
+    result.item = deserializeOptional<ItemPolicy>(obj->get("item"), name + ".item");
+    return result;
+}
+

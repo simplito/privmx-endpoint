@@ -75,6 +75,13 @@ UserWithPubKey VarDeserializer::deserialize<UserWithPubKey>(const Poco::Dynamic:
 template<>
 PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name);
 
+template<>
+ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutItem>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynamic::Var& val, const std::string& name);
+
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
