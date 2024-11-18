@@ -41,18 +41,19 @@ Poco::Dynamic::Var ThreadApiVarInterface::create(const Poco::Dynamic::Var& args)
 }
 
 Poco::Dynamic::Var ThreadApiVarInterface::createThread(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 5);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto result = _threadApi.createThread(contextId, users, managers, publicMeta, privateMeta);
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
+    auto result = _threadApi.createThread(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var ThreadApiVarInterface::updateThread(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 8);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
     auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -61,7 +62,8 @@ Poco::Dynamic::Var ThreadApiVarInterface::updateThread(const Poco::Dynamic::Var&
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
-    _threadApi.updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey);
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    _threadApi.updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     return {};
 }
 
