@@ -137,6 +137,11 @@ struct Store {
     core::Buffer privateMeta;
 
     /**
+     * Store's policies
+     */
+    core::ContainerPolicy policy;
+
+    /**
      * total number of files in the Store
      */
     int64_t filesCount;

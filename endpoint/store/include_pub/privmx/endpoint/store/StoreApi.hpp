@@ -47,7 +47,8 @@ public:
      * @return created Store ID
      */
     std::string createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                            const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
+                            const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
+                            const std::optional<core::ContainerPolicy>& policies = std::nullopt);
 
     /**
      * Updates an existing Store.
@@ -64,7 +65,8 @@ public:
     */
     void updateStore(const std::string& storeId, const std::vector<core::UserWithPubKey>& users,
                      const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t version,
-                     const bool force, const bool forceGenerateNewKey);
+                     const bool force, const bool forceGenerateNewKey,
+                     const std::optional<core::ContainerPolicy>& policies = std::nullopt);
 
     /**
      * Deletes a Store by given Store ID.

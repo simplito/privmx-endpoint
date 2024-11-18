@@ -69,9 +69,10 @@ std::string ThreadApiImpl::createThread(
     const std::vector<core::UserWithPubKey>& users, 
     const std::vector<core::UserWithPubKey>& managers, 
     const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
 ) {
-    return _createThreadEx(contextId, users, managers, publicMeta, privateMeta, THREAD_TYPE_FILTER_FLAG);
+    return _createThreadEx(contextId, users, managers, publicMeta, privateMeta, THREAD_TYPE_FILTER_FLAG, policies);
 }
 
 std::string ThreadApiImpl::createThreadEx(
@@ -80,9 +81,10 @@ std::string ThreadApiImpl::createThreadEx(
     const std::vector<core::UserWithPubKey>& managers, 
     const core::Buffer& publicMeta, 
     const core::Buffer& privateMeta, 
-    const std::string& type
+    const std::string& type,
+    const std::optional<core::ContainerPolicy>& policies
 ) {
-    return _createThreadEx(contextId, users, managers, publicMeta, privateMeta, type);
+    return _createThreadEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
 }
 
 std::string ThreadApiImpl::_createThreadEx(
@@ -91,7 +93,8 @@ std::string ThreadApiImpl::_createThreadEx(
     const std::vector<core::UserWithPubKey>& managers, 
     const core::Buffer& publicMeta, 
     const core::Buffer& privateMeta, 
-    const std::string& type
+    const std::string& type,
+    const std::optional<core::ContainerPolicy>& policies
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, _createThreadEx)
     auto threadKey = _keyProvider->generateKey();
@@ -111,6 +114,9 @@ std::string ThreadApiImpl::_createThreadEx(
     if (type.length() > 0) {
         create_thread_model.type(type);
     }
+    if (policies.has_value()) {
+        create_thread_model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
+    }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _createThreadEx, data encrypted)
     auto result = _serverApi.threadCreate(create_thread_model);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _createThreadEx, data send)
@@ -125,7 +131,8 @@ void ThreadApiImpl::updateThread(
     const core::Buffer& privateMeta, 
     const int64_t version, 
     const bool force, 
-    const bool forceGenerateNewKey
+    const bool forceGenerateNewKey,
+    const std::optional<core::ContainerPolicy>& policies
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, updateThread)
 
@@ -168,7 +175,9 @@ void ThreadApiImpl::updateThread(
     model.managers(managersList);
     model.version(version);
     model.force(force);
-
+    if (policies.has_value()) {
+        model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
+    }
     ThreadDataToEncrypt threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
@@ -526,6 +535,7 @@ Thread ThreadApiImpl::convertThreadDataV1ToThread(const server::ThreadInfo& thre
         .lastMsgDate = threadInfo.lastMsgDate(),
         .publicMeta = core::Buffer::from(""),
         .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
+        .policy = {},
         .messagesCount = threadInfo.messages(),
         .statusCode = statusCode
     };
@@ -554,6 +564,7 @@ Thread ThreadApiImpl::convertDecryptedThreadDataToThread(const server::ThreadInf
         .lastMsgDate = threadInfo.lastMsgDate(),
         .publicMeta = threadData.publicMeta,
         .privateMeta = threadData.privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
         .messagesCount = threadInfo.messages(),
         .statusCode = threadData.statusCode
     };
@@ -568,7 +579,7 @@ Thread ThreadApiImpl::decryptAndConvertThreadDataToThread(const server::ThreadIn
         }
         auto e = UnknowThreadFormatException();
         return Thread{
-            {},{},{},{},{},{},{},{},{},{},{},{},{},
+            {},{},{},{},{},{},{},{},{},{},{},{},{},{},
             .statusCode = e.getCode()};
     }
     return convertThreadDataV1ToThread(thread, decryptThreadV1(thread));

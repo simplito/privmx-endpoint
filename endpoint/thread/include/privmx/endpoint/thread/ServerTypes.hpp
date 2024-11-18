@@ -30,6 +30,7 @@ ENDPOINT_SERVER_TYPE(ThreadCreateModel)
     STRING_FIELD(keyId)
     LIST_FIELD(keys, core::server::KeyEntrySet)
     STRING_FIELD(type)
+    VAR_FIELD(policy)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadUpdateModel)
@@ -41,6 +42,7 @@ ENDPOINT_SERVER_TYPE(ThreadUpdateModel)
     LIST_FIELD(keys, core::server::KeyEntrySet)
     INT64_FIELD(version)
     BOOL_FIELD(force)
+    VAR_FIELD(policy)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(Thread2DataEntry)
@@ -64,6 +66,7 @@ ENDPOINT_SERVER_TYPE(ThreadInfo)
     INT64_FIELD(lastMsgDate)
     INT64_FIELD(messages)
     STRING_FIELD(type)
+    VAR_FIELD(policy)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadCreateResult)
