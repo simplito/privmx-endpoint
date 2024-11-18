@@ -79,11 +79,22 @@ bool ExecuterBridge::execute(const func_enum& fun_code, const Tokens &st) {
             
             auto value = exec(_bridge, evaluated_JSON_object_string, _api_key_id.value(), _api_key_secret.value(), _url.value());    
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
+            Status exec_status = Status::Success;
             std::string output = "null";
             if(!value.isEmpty()) {
-                output = privmx::utils::Utils::stringifyVar(value, true);
+                Poco::JSON::Object::Ptr output_JSON = privmx::utils::Utils::parseJsonObject(value.extract<std::string>());
+                if(output_JSON->has("result")) {
+                    exec_status = Status::Success;
+                    output = privmx::utils::Utils::stringify(output_JSON->getObject("result"), true);
+                } else if (output_JSON->has("error")) {
+                    exec_status = Status::Error;
+                    output = privmx::utils::Utils::stringify(output_JSON->getObject("error"), true);
+                } else {
+                    exec_status = Status::Error;
+                    output = privmx::utils::Utils::stringifyVar(output_JSON, true);
+                }
             }
-            _console_writer->print_result(Status::Success, time, output, this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
+            _console_writer->print_result(exec_status, time, output, this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const privmx::utils::PrivmxException& e) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             std::ostringstream ss;
