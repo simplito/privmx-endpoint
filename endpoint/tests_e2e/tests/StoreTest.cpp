@@ -1860,3 +1860,160 @@ TEST_F(StoreTest, openFile_readFromFile_updateFile_closeFile_FileVersionMismatch
         );
     }, store::InvalidFileHandleException);
 }
+
+
+TEST_F(StoreTest, createStore_policy) {
+    std::string storeId;
+    privmx::endpoint::store::Store store;
+    core::ContainerPolicy policies;
+    policies.item=core::ItemPolicy{
+            .get="owner",
+            .listMy="owner",
+            .listAll="owner",
+            .create="owner",
+            .update="owner",
+            .delete_="owner",
+        };
+    policies.get="owner";
+    policies.update="owner";
+    policies.delete_="owner";
+    policies.updatePolicy="owner";
+    policies.updaterCanBeRemovedFromManagers="no";
+    policies.ownerCanBeRemovedFromManagers="no";
+    EXPECT_NO_THROW({
+        storeId = storeApi->createStore(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            policies
+        );
+    });
+    if(storeId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        store = storeApi->getStore(
+            storeId
+        );
+    });
+    EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(store.publicMeta.stdString(), "public");
+    EXPECT_EQ(store.privateMeta.stdString(), "private");
+    EXPECT_EQ(store.users.size(), 2);
+    if(store.users.size() == 2) {
+        EXPECT_EQ(store.users[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.users[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(store.managers.size(), 2);
+    if(store.managers.size() == 2) {
+        EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.managers[1], reader->getString("Login.user_2_id"));
+    }
+    disconnect();
+    connectAs(ConnectionType::User2);
+    EXPECT_THROW({
+        store = storeApi->getStore(
+            storeId
+        );
+    }, core::Exception);
+}
+
+TEST_F(StoreTest, updateStore_policy) {
+    // same users and managers
+    std::string storeId = reader->getString("Store_1.storeId");
+    privmx::endpoint::store::Store store;
+    core::ContainerPolicy policies;
+    policies.item=core::ItemPolicy{
+            .get="owner",
+            .listMy="owner",
+            .listAll="owner",
+            .create="owner",
+            .update="owner",
+            .delete_="owner",
+        };
+    policies.get="owner";
+    policies.update="owner";
+    policies.delete_="owner";
+    policies.updatePolicy="owner";
+    policies.updaterCanBeRemovedFromManagers="no";
+    policies.ownerCanBeRemovedFromManagers="no";
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            storeId,
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true,
+            policies
+        );
+    });
+    if(storeId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        store = storeApi->getStore(
+            storeId
+        );
+    });
+    EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(store.publicMeta.stdString(), "public");
+    EXPECT_EQ(store.privateMeta.stdString(), "private");
+    EXPECT_EQ(store.users.size(), 2);
+    if(store.users.size() == 2) {
+        EXPECT_EQ(store.users[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.users[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(store.managers.size(), 2);
+    if(store.managers.size() == 2) {
+        EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.managers[1], reader->getString("Login.user_2_id"));
+    }
+    disconnect();
+    connectAs(ConnectionType::User2);
+    EXPECT_THROW({
+        storeApi->getFile(
+            reader->getString("File_1.info_fileId")
+        );
+    }, core::Exception);
+}

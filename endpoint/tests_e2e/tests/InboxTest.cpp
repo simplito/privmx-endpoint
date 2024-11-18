@@ -1763,3 +1763,145 @@ TEST_F(InboxTest, Access_denaid_Public) {
         );
     }, core::Exception);
 }
+
+TEST_F(InboxTest, createInbox_policy) {
+    std::string inboxId;
+    privmx::endpoint::inbox::Inbox inbox;
+    core::ContainerPolicy policies;
+    policies.get="owner";
+    policies.update="owner";
+    policies.delete_="owner";
+    policies.updatePolicy="owner";
+    policies.updaterCanBeRemovedFromManagers="no";
+    policies.ownerCanBeRemovedFromManagers="no";
+    EXPECT_NO_THROW({
+        inboxId = inboxApi->createInbox(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            policies
+        );
+    });
+    if(inboxId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        inbox = inboxApi->getInbox(
+            inboxId
+        );
+    });
+    EXPECT_EQ(inbox.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(inbox.publicMeta.stdString(), "public");
+    EXPECT_EQ(inbox.privateMeta.stdString(), "private");
+    EXPECT_EQ(inbox.users.size(), 2);
+    if(inbox.users.size() == 2) {
+        EXPECT_EQ(inbox.users[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(inbox.users[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(inbox.managers.size(), 2);
+    if(inbox.managers.size() == 2) {
+        EXPECT_EQ(inbox.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(inbox.managers[1], reader->getString("Login.user_2_id"));
+    }
+    disconnect();
+    connectAs(ConnectionType::User2);
+    EXPECT_THROW({
+        inbox = inboxApi->getInbox(
+            inboxId
+        );
+    }, core::Exception);
+}
+
+TEST_F(InboxTest, updateInbox_policy) {
+    // same users and managers
+    std::string inboxId = reader->getString("Inbox_1.inboxId");
+    privmx::endpoint::inbox::Inbox inbox;
+    core::ContainerPolicy policies;
+    policies.get="owner";
+    policies.update="owner";
+    policies.delete_="owner";
+    policies.updatePolicy="owner";
+    policies.updaterCanBeRemovedFromManagers="no";
+    policies.ownerCanBeRemovedFromManagers="no";
+    EXPECT_NO_THROW({
+        inboxApi->updateInbox(
+            inboxId,
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            1,
+            true,
+            true,
+            policies
+        );
+    });
+    if(inboxId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        inbox = inboxApi->getInbox(
+            inboxId
+        );
+    });
+    EXPECT_EQ(inbox.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(inbox.publicMeta.stdString(), "public");
+    EXPECT_EQ(inbox.privateMeta.stdString(), "private");
+    EXPECT_EQ(inbox.users.size(), 2);
+    if(inbox.users.size() == 2) {
+        EXPECT_EQ(inbox.users[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(inbox.users[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(inbox.managers.size(), 2);
+    if(inbox.managers.size() == 2) {
+        EXPECT_EQ(inbox.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(inbox.managers[1], reader->getString("Login.user_2_id"));
+    }
+    disconnect();
+    connectAs(ConnectionType::User2);
+    EXPECT_THROW({
+        inboxApi->getInbox(
+            inboxId
+        );
+    }, core::Exception);
+}
