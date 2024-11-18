@@ -12,59 +12,16 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_PRIVMXCLI_EXECUTER_HPP_
 #define _PRIVMXLIB_ENDPOINT_PRIVMXCLI_EXECUTER_HPP_
 
-#include <algorithm>
 #include <chrono>
-#include <iostream>
-#include <fstream>
 #include <thread>
-#include <unordered_map>
 #include <readline/readline.h>
-
-#include <Poco/Environment.h>
-#include <Poco/Dynamic/Var.h>
-#include <Poco/JSON/Array.h>
-#include <Poco/JSON/Object.h>
-#include <Poco/StringTokenizer.h>
-#include <Poco/String.h>
-
-#include <Pson/BinaryString.hpp>
-#include "privmx/crypto/Crypto.hpp"
-#include "privmx/utils/Utils.hpp"
-#include "privmx/utils/PrivmxException.hpp"
-#include "privmx/endpoint/core/Exception.hpp"
 
 #include "privmx/endpoint/programs/privmxcli/GlobalVariables.hpp"
 #include "privmx/endpoint/programs/privmxcli/LoadingAnimation.hpp"
 #include "privmx/endpoint/programs/privmxcli/ConsoleWriter.hpp"
-
-
-#define ARG1(x) getS(st[1])x
-#define ARG2(x) getS(st[2])x
-
-#define ARG_INT .convert<int>()
-#define ARG_STR .convert<string>().data()
-#define ARG_ARR .extract<StringArray>().data()
-
-#define CHECK_ST_ARGS(n) if(st.size() != (n + 1)) {                                                     \
-    ERROR_CLI_INVALID_ARG_COUNT()                                                                       \
-}                                                                                                       \
-
-#define CHECK_ST_ARGS_2(n1, n2) if(st.size() < (n1 + 1) || st.size() > (n2 + 1)) {                      \
-    ERROR_CLI_INVALID_ARG_COUNT()                                                                       \
-}
-
-#define ERROR_CLI_INVALID_ARG_COUNT() ERROR_CLI("Invalid args count")
-
-#define ERROR_CLI(ERROR_TEXT)                                                                           \
-_console_writer.print_result(Status::Error, chrono::system_clock::now() - _timer_start, ERROR_TEXT );   \
-return;                                                                                                 
-
-
-#define ARGS0()
-#define ARGS1(arg1) ARG1(arg1),
-#define ARGS2(arg1, arg2) ARG1(arg1), ARG2(arg2),
-
-
+#include "privmx/endpoint/programs/privmxcli/ExecuterEndpoint.hpp"
+#include "privmx/endpoint/programs/privmxcli/ExecuterBridge.hpp"
+#include "privmx/endpoint/programs/privmxcli/vars/function_enum.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -72,7 +29,7 @@ namespace privmxcli {
 
 class Executer {
 public:
-    Executer(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config);
+    Executer(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config, std::shared_ptr<ConsoleWriter> console_writer);
     void execute(const Tokens &st);
     func_enum getFunc(std::string func_name);
     std::shared_ptr<Poco::Dynamic::Var> getS_ptr(const std::string &key);
@@ -86,12 +43,9 @@ private:
     void addF(const std::string &key, const Poco::Dynamic::Var &value);
     void addB(const std::string &key, const Poco::Dynamic::Var &value);
     std::string getS_printable(const std::string &key);
-    void set_bridge_api_creds(const std::string &bridge_api_key_id, const std::string &bridge_api_key_secret, const std::string &bridge_url);
     std::string evalS(const std::string &value_string);
     std::string readFileToString(const std::string& path);
     void writeFileFromString(const std::string& content, const std::string& path);
-    bool executeApiFunction(const func_enum& fun_code, const Tokens &st);
-    void printAllFunctions();
     std::vector<std::string> getAllVars();
     unsigned int sleep_for(const int& T);
     unsigned int sleep_for_random(const int& T1, const int& T2);
@@ -100,16 +54,94 @@ private:
 
     std::thread::id _main_thread_id;
     std::shared_ptr<CliConfig> _config;
-    ConsoleWriter _console_writer;
-    LoadingAnimation _loading_animation;
-    std::shared_ptr<ApiVar> _endpoint;
-    
-    std::optional<std::string> _bridge_api_key_id;
-    std::optional<std::string> _bridge_api_key_secret;
-    std::optional<std::string> _bridge_url;
+    std::shared_ptr<ConsoleWriter> _console_writer;
+    ExecuterEndpoint _endpoint;
+    ExecuterBridge _bridge;
 
     std::chrono::_V2::system_clock::time_point _timer_start = std::chrono::system_clock::now();
-    std::chrono::_V2::system_clock::time_point _timer_stop = std::chrono::system_clock::now();
+
+    const std::unordered_map<func_enum, std::string> functions_internal_help_description = {
+        {quit, "quit"},
+        {falias, 
+            "falias NEW_ALIAS FUNCTION_NAME\n"
+            "\tFunction  alias"
+        },
+        {salias, 
+            "alias NEW_ALIAS, VAR_NAME\n"
+            "\tVar alias"
+        },
+        {scopy, 
+            "copy NEW_VAR, VAR_NAME\n"
+            "\tVar copy"
+        },
+        {sset, 
+            "set VAR_NAME, VAR_VALUE\n"
+            "\tSet new var"
+        },
+        // {ssetArray, "setArray ARRAY_NAME VAR_VALUE ..."},
+        {sget, 
+            "get VAR_NAME"
+        },
+        {sreadFile, 
+            "setFromFile VAR_NAME path"
+        },
+        {swriteFile, 
+            "saveToFile VAR_NAME path"
+        },
+        {help, 
+            "help FUNCTION_NAME\n"
+            "\talso you can use ? afer function name to get help"
+        },
+        {loopStart, 
+            "loopStart N OPTIONAL<ID>\n"
+            "\tloops everything N times to loopStop\n"
+            "\tId is optional"
+        },
+        {loopStop, 
+            "loopStop"
+        },
+        {a_sleep, 
+            "sleep T\n"
+            "\tsleep for T ms\n"
+            "sleep(T1,T2)\n"
+            "\tsleep for random time between T1 T2ms"
+        },
+        {addFront, 
+            "addFront VAR_NAME_1 VAR_NAME_2)\n"
+            "\tadd second var on the front of the first var"
+        },
+        {addBack, 
+            "addBack VAR_NAME_1 VAR_NAME_2\n"
+            "\tadd second var on the back of the first var"
+        },
+        {addFrontString, 
+            "addFront VAR_NAME, DATA_STRING)\n"
+            "\tadd DATA_STRING on the front of var"
+        },
+        {addBackString, 
+            "addBack VAR_NAME, DATA_STRING)\n"
+            "\tadd DATA_STRING on the back of var"
+        }
+    };
+    const std::unordered_map<func_enum, std::string> functions_internal_help_short_description = {
+        {quit, "quit"},
+        {falias, "create function alias"},
+        {salias, "create var alias"},
+        {scopy, "copy var"},
+        {sset, "Set new var"},
+        // {ssetArray, "setArray ARRAY_NAME VAR_VALUE ..."},
+        {sget, "gets var"},
+        {sreadFile, "reads from file"},
+        {swriteFile, "write to file"},
+        {help, "help"},
+        {loopStart, "marker to start loop"},
+        {loopStop, "marker to stop loop"},
+        {a_sleep, "sleep for"},
+        {addFront, "add var on the front of the other"},
+        {addBack, "add var on the back of the other"},
+        {addFrontString, "add string on the front of var"},
+        {addBackString, "add string on the front of var"}
+    };
 };
 
 } // privmxcli

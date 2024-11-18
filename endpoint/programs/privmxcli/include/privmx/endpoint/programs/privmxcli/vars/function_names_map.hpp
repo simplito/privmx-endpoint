@@ -44,11 +44,36 @@ inline std::unordered_map<std::string, func_enum> functions_internal = {
 };
 
 inline std::unordered_map<std::string, func_enum> functions_bridge = {
-    {"bridge_setBridgeApiCreds", bridge_setBridgeApiCreds},
-    {"bridge_request", bridge_request},
+    {"bridge.setBridgeApiCreds", bridge_setBridgeApiCreds},
+    {"bridge.manager.auth", bridge_manager_auth},
+    {"bridge.manager.createApiKey", bridge_manager_createApiKey},
+    {"bridge.manager.getApiKey", bridge_manager_getApiKey},
+    {"bridge.manager.listApiKeys", bridge_manager_listApiKeys},
+    {"bridge.manager.updateApiKey", bridge_manager_updateApiKey},
+    {"bridge.manager.deleteApiKey", bridge_manager_deleteApiKey},
+    {"bridge.solution.getSolution", bridge_solution_getSolution},
+    {"bridge.solution.listSolutions", bridge_solution_listSolutions},
+    {"bridge.solution.createSolution", bridge_solution_createSolution},
+    {"bridge.solution.updateSolution", bridge_solution_updateSolution},
+    {"bridge.solution.deleteSolution", bridge_solution_deleteSolution},
+    {"bridge.context.getContext", bridge_context_getContext},
+    {"bridge.context.listContexts", bridge_context_listContexts},
+    {"bridge.context.listContextsOfSolution", bridge_context_listContextsOfSolution},
+    {"bridge.context.createContext", bridge_context_createContext},
+    {"bridge.context.updateContext", bridge_context_updateContext},
+    {"bridge.context.deleteContext", bridge_context_deleteContext},
+    {"bridge.context.addSolutionToContext", bridge_context_addSolutionToContext},
+    {"bridge.context.removeSolutionFromContext", bridge_context_removeSolutionFromContext},
+    {"bridge.context.addUserToContext", bridge_context_addUserToContext},
+    {"bridge.context.removeUserFromContext", bridge_context_removeUserFromContext},
+    {"bridge.context.removeUserFromContextByPubKey", bridge_context_removeUserFromContextByPubKey},
+    {"bridge.context.getUserFromContext", bridge_context_getUserFromContext},
+    {"bridge.context.getUserFromContextByPubKey", bridge_context_getUserFromContextByPubKey},
+    {"bridge.context.listUsersFromContext", bridge_context_listUsersFromContext},
+    {"bridge.context.setUserAcl", bridge_context_setUserAcl},
 };
 
-inline const std::unordered_map<std::string, func_enum> functions = {
+inline const std::unordered_map<std::string, func_enum> functions_endpoint = {
     //endpoint
     {"config.setCertsPath", config_setCertsPath},
     {"core.waitEvent", core_waitEvent},

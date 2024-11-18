@@ -38,7 +38,14 @@ char* completion_generator(const char* text, int state) {
         for(auto &item : functions_internal){
             keywords.push_back(item.first);
         }
-        for(auto &item : functions){
+        for(auto &item : functions_endpoint){
+            if(use_path.empty()) {
+                keywords.push_back(item.first);
+            } else if(item.first.substr(0, use_path.size()) == use_path) {
+                keywords.push_back(item.first.substr(use_path.size()));
+            }
+        }
+        for(auto &item : functions_bridge){
             if(use_path.empty()) {
                 keywords.push_back(item.first);
             } else if(item.first.substr(0, use_path.size()) == use_path) {
@@ -185,8 +192,10 @@ int main(int argc, char *argv[]){
         cli_args_data.filenames.push_back(pre_filename);
     }
     std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(cli_args_data.config);
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(main_thread_id, config);
     int missing_data = 0;
-    DataProcesor data_procesor = DataProcesor(main_thread_id, config);
+    
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(main_thread_id, config, console_writer), main_thread_id, config);
 
     //executing data form args
     for(auto line : cli_args_data.lines_to_process) {

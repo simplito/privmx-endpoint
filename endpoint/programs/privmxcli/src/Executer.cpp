@@ -14,9 +14,10 @@ limitations under the License.
 #include "privmx/endpoint/programs/privmxcli/colors/Colors.hpp"
 #include "privmx/endpoint/programs/privmxcli/StringFormater.hpp"
 #include <sstream>
+#include <fstream>
 #include <iomanip>
 
-
+#include "privmx/utils/PrivmxException.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
 #include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
 #include "privmx/endpoint/store/StoreVarSerializer.hpp"
@@ -27,18 +28,23 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::privmxcli;
 
 
+#define CHECK_ST_ARGS(n) if(st.size() != (n + 1)) {                                                     \
+    ERROR_CLI_INVALID_ARG_COUNT()                                                                       \
+}                                                                                                       \
 
-Executer::Executer(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config) : _main_thread_id(main_thread_id), _config(config), _console_writer(ConsoleWriter(main_thread_id, config)), _loading_animation(LoadingAnimation()) {
-    core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::STD_STRING_AS_BASE64});
-    core::EventQueueVarInterface event = core::EventQueueVarInterface(core::EventQueue::getInstance(), serializer);
-    core::ConnectionVarInterface connection = core::ConnectionVarInterface(serializer);
-    core::BackendRequesterVarInterface backendRequester = core::BackendRequesterVarInterface(serializer);
-    crypto::CryptoApiVarInterface crypto = crypto::CryptoApiVarInterface(serializer);
-    thread::ThreadApiVarInterface thread = thread::ThreadApiVarInterface(connection.getApi(),serializer);
-    store::StoreApiVarInterface store = store::StoreApiVarInterface(connection.getApi(),serializer);
-    inbox::InboxApiVarInterface inbox = inbox::InboxApiVarInterface(connection.getApi(),thread.getApi(), store.getApi(),serializer);
-    _endpoint = std::make_shared<ApiVar>(event, connection, backendRequester, crypto, thread, store, inbox);
+#define CHECK_ST_ARGS_2(n1, n2) if(st.size() < (n1 + 1) || st.size() > (n2 + 1)) {                      \
+    ERROR_CLI_INVALID_ARG_COUNT()                                                                       \
 }
+
+#define ERROR_CLI_INVALID_ARG_COUNT() ERROR_CLI("Invalid args count")
+
+#define ERROR_CLI(ERROR_TEXT)                                                                           \
+_console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, ERROR_TEXT );   \
+return;                                                                                                 
+
+Executer::Executer(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config, std::shared_ptr<ConsoleWriter> console_writer) : 
+    _main_thread_id(main_thread_id), _config(config), _console_writer(console_writer),
+    _endpoint(ExecuterEndpoint(_main_thread_id, _config, _console_writer)), _bridge(ExecuterBridge(_main_thread_id, _config, _console_writer)) {}
 
 void Executer::setFA(const std::string &key, const std::string &value){
     func_aliases[key] = value;
@@ -68,11 +74,15 @@ func_enum Executer::getFunc(string func_name){
     }
     auto it = functions_internal.find(func_name);
     if(it == functions_internal.end()){
-        auto it2 = functions.find(use_path+func_name);
-        if(it2 == functions.end()){
-            return nonfunc;
+        auto it2 = functions_endpoint.find(use_path+func_name);
+        if(it2 != functions_endpoint.end()){
+            return (*it2).second;
         }
-        return (*it2).second;
+        auto it3 = functions_bridge.find(use_path+func_name);
+        if(it3 != functions_bridge.end()){
+            return (*it3).second;
+        }
+        return nonfunc;
     }
     return (*it).second;
 }
@@ -129,12 +139,6 @@ void Executer::writeFileFromString(const string& content, const string& path) {
     f_stream << content;
 }
 
-void Executer::set_bridge_api_creds(const std::string &bridge_api_key_id, const std::string &bridge_api_key_secret, const std::string &bridge_url) {
-    _bridge_api_key_id = bridge_api_key_id;
-    _bridge_api_key_secret = bridge_api_key_secret;
-    _bridge_url = bridge_url;
-}
-
 void Executer::execute(const Tokens &st) {
     if(st.size() == 0) return;
 
@@ -143,70 +147,70 @@ void Executer::execute(const Tokens &st) {
     auto fun_code = getFunc(st[0]);
     switch(fun_code){
         case nonfunc:
-            _console_writer.print_info(st[0]);
-            _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid function name "  + st[0]);
-            break;
+            _console_writer->print_info(st[0]);
+            _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid function name "  + st[0]);
+            return;
         case quit:
             exit(EXIT_SUCCESS);
-            break;
+            return;
         case falias:
             {
-                _console_writer.print_info("setting function alias");
+                _console_writer->print_info("setting function alias");
                 CHECK_ST_ARGS(2)
                 if(!isValidVarName(st[1])) {
-                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid alias name "  + st[1]);
-                    break;
+                    _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid alias name "  + st[1]);
+                    return;
                 }
                 int tmp = getFunc(st[2]);
                 if(tmp == nonfunc){
-                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid function name "  + st[2]);
-                    break;
+                    _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid function name "  + st[2]);
+                    return;
                 }
                 setFA(st[1], st[2]);
-                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+                _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
-            break;
+            return;
         case salias:
-            _console_writer.print_info("setting variable alias");
+            _console_writer->print_info("setting variable alias");
             CHECK_ST_ARGS(2)
             if(!isValidVarName(st[1])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid alias name "  + st[1]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid alias name "  + st[1]);
+                return;
             }
             if(!isValidVarName(st[2])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[2]);
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[2]);
                 
-                break;
+                return;
             }
             setSA(st[1], st[2]);
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         case scopy:
-            _console_writer.print_info("copping variable");
+            _console_writer->print_info("copping variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                return;
             }
             if(!isValidVarName(st[2])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[2]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[2]);
+                return;
             }
             copyS(st[1], st[2]);
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         case sset:
-            _console_writer.print_info("setting variable");
+            _console_writer->print_info("setting variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                return;
             }
             setS(st[1], st[2]);
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         case sget:
-            _console_writer.print_info("getting variable");
+            _console_writer->print_info("getting variable");
             CHECK_ST_ARGS_2(0,1);
             if(st.size() == 1){
                 std::ostringstream ss;
@@ -216,42 +220,42 @@ void Executer::execute(const Tokens &st) {
                 for(auto var_name : vars_names) {
                     ss << ConsoleStatusColor::normal << var_name << endl;
                 }
-                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
+                _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
             } else {
-                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, getS_printable(st[1]));
+                _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, getS_printable(st[1]));
             }
-            break;
+            return;
         case sreadFile:
             CHECK_ST_ARGS(2);
             {
-                _console_writer.print_info("reading file");
+                _console_writer->print_info("reading file");
                 if(!isValidVarName(st[1])) {
-                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                    break;
+                    _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                    return;
                 }
                 string tmp = readFileToString(st[2]);
                 setS(st[1], tmp);
                 setS(st[1] + "_size", tmp.size());
-                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+                _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
-            break;
+            return;
         case swriteFile:
             CHECK_ST_ARGS(2);
             {   
                 if(!isValidVarName(st[1])) {
-                    _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                    break;
+                    _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                    return;
                 }
                 auto data = getS_ptr(st[1]);
                 if(data->type() == typeid(std::string)) {
                     writeFileFromString(data->convert<std::string>(), st[2]);
                 }
-                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+                _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
-            break;
+            return;
         case a_sleep:
             {
-                _console_writer.print_info("sleeping");
+                _console_writer->print_info("sleeping");
                 CHECK_ST_ARGS_2(1,2);
                 unsigned int T = 0;
                 if(st.size() == (2)) {
@@ -262,223 +266,122 @@ void Executer::execute(const Tokens &st) {
                 
                 std::ostringstream ss;
                 ss << ConsoleStatusColor::info << "slept for " << T << "ms";
-                _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
+                _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
                 
             }
-            break;
+            return;
         case addFront:
-            _console_writer.print_info("adding to front of variable");
+            _console_writer->print_info("adding to front of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                return;
             }
             addF(st[1], getS_var(st[2]));
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         case addBack:
-            _console_writer.print_info("adding to back of variable");
+            _console_writer->print_info("adding to back of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                return;
             }
             addB(st[1], getS_var(st[2]));
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         case addFrontString:
-            _console_writer.print_info("adding to front of variable");
+            _console_writer->print_info("adding to front of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                return;
             }
             addF(st[1], st[2]);
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         case addBackString:
-            _console_writer.print_info("adding to back of variable");
+            _console_writer->print_info("adding to back of variable");
             CHECK_ST_ARGS(2);
             if(!isValidVarName(st[1])) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
-                break;
+                _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
+                return;
             }
             addB(st[1], st[2]);
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         case help:
             exec_help(st);
-            break;
+            return;
         case use:
-            _console_writer.print_info("using");
+            _console_writer->print_info("using");
             CHECK_ST_ARGS_2(0,1);
             if(st.size() == 1) {
                 use_path.clear();
             } else {
                 use_path = st[1] + ".";
             }
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;  
-        case bridge_setBridgeApiCreds:
-            _console_writer.print_info("setting bridge api credentials");
-            CHECK_ST_ARGS(3);
-            set_bridge_api_creds(st[1], st[2], st[3]);
-            _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start);
-            break;
+            _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
+            return;
         default:
             {
-                bool fun_found = false;
                 if(fun_code == func_enum::core_waitEvent) {
-                    auto t = std::thread([&](func_enum function_code, const Tokens &st){executeApiFunction(function_code, st);}, fun_code, st);
+                    auto t = std::thread([&](func_enum function_code, const Tokens &st){_endpoint.execute(function_code, st);}, fun_code, st);
                     t.detach();
-                    fun_found = true;
-                } else {
-                    fun_found = executeApiFunction(fun_code, st);
-                }
-
-                if(!fun_found) {
-                    _console_writer.print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function execute not found -" + st[0]);
-                }
+                    return;
+                } else if (_endpoint.execute(fun_code, st)) {
+                    return;
+                } 
+                if(_bridge.execute(fun_code, st)) return;
+                _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function execute not found -" + st[0]);
             }
     }
-}
-
-bool Executer::executeApiFunction(const func_enum& fun_code, const Tokens &st) {
-    const std::string fun_name = st[0];
-    auto it = functions_execute.find(fun_code);
-    if(it != functions_execute.end()) {
-        auto it_2 = functions_action_description.find(fun_code);
-        if(it_2 == functions_action_description.end()){
-            if(this_thread::get_id() == _main_thread_id) {
-                _console_writer.print_info("Running "+ fun_name);
-            } else {
-                _console_writer.print_info("Running in thread "+ fun_name);
-            }
-        } else {
-            if(this_thread::get_id() == _main_thread_id) {
-                _console_writer.print_info((*it_2).second);
-            } else {
-                _console_writer.print_info((*it_2).second + " in thread ");
-            }
-        }
-        std::function<Poco::Dynamic::Var (std::shared_ptr<ApiVar>, const Poco::JSON::Array::Ptr &)> exec = (*it).second;
-        Poco::JSON::Object::Ptr result = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        _timer_start = std::chrono::system_clock::now();
-        try {
-            if(st.size() != (1 + 1)) {
-                _console_writer.print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid args count" );
-                return true; 
-            }
-            auto raw_JSON_arg = st[1];
-            auto evaluated_JSON_arg_var = getS_var(raw_JSON_arg);
-            auto evaluated_JSON_arg_string = evaluated_JSON_arg_var.convert<std::string>();
-            Poco::JSON::Array::Ptr args = privmx::utils::Utils::parseJson(evaluated_JSON_arg_string).extract<Poco::JSON::Array::Ptr>();
-            auto value = exec(_endpoint, args);    
-            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            std::string output = "null";
-            if(!value.isEmpty()) {
-                output = privmx::utils::Utils::stringifyVar(value, true);
-            }
-            _console_writer.print_result(Status::Success, time, output, this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
-        } catch (const privmx::utils::PrivmxException& e) {
-            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            std::ostringstream ss;
-            ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << e.getCode();
-            result->set("Error", e.what());
-            result->set("ErrorCodeHex", ss.str());
-            result->set("ErrorCode", e.getCode());
-            result->set("ErrorData", e.getData());
-            result->set("ErrorType", "privmx::utils::PrivmxException");
-            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
-        } catch (const core::Exception& e) {
-            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            std::ostringstream ss;
-            ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << e.getCode();
-            result->set("ErrorMsg", e.what());
-            result->set("ErrorName", e.getName());
-            result->set("ErrorScope", e.getScope());
-            result->set("ErrorCodeHex", ss.str());
-            result->set("ErrorCode", e.getCode());
-            result->set("ErrorDescription", e.getDescription());
-            result->set("ErrorType", "core::Exception");
-            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
-        } catch (const std::exception& e) {
-            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            result->set("Error", e.what());
-            result->set("Type", "std::exception");
-            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
-        } catch (...) {
-            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            result->set("Error", "unknown");
-            result->set("Type", "unknown");
-            _console_writer.print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
-        }
-        return true;
-    }
-    return false;
 }
 
 void Executer::exec_help(const Tokens &st){
     if(st.size() == 1 || getFunc(st[1]) == help){
         std::ostringstream ss;
         ss << ConsoleStatusColor::help << "Usage: help FUNCTION_NAME" << endl << endl;
-        vector<std::string> tmp;
+        vector<std::string> cli_functions_names;
         for(auto &item : functions_internal){
-            tmp.push_back(item.first);
+            cli_functions_names.push_back(item.first);
         }
-        sort(tmp.begin(), tmp.end());
+        sort(cli_functions_names.begin(), cli_functions_names.end());
         ss << ConsoleStatusColor::help << "All Cli Functions: " << endl;
-        for(auto &item : tmp){
+        for(auto &item : cli_functions_names){
             ss << ConsoleStatusColor::info << item << " - " << functions_internal_help_short_description.at(functions_internal.at(item)) << endl;
         }
-        tmp.clear();
-        for(auto &item : functions){
-            tmp.push_back(item.first);
-        }
-        sort(tmp.begin(), tmp.end());
-        ss << ConsoleStatusColor::help << "All Api Functions: " << endl;
-        for(auto &item : tmp){
-            ss << ConsoleStatusColor::info << item << " - " << functions_help_short_description.at(functions.at(item)) << endl;
-        }
-        tmp.clear();
+        // All Endpoint Functions:
+        ss << _endpoint.get_all_function_help_printable_string() << endl;
+        ss << _bridge.get_all_function_help_printable_string() << endl;
+
+
+        vector<std::string> functions_aliases;
         for(auto &item : func_aliases){
-            tmp.push_back(item.first);
+            functions_aliases.push_back(item.first);
         }
-        sort(tmp.begin(), tmp.end());
+        sort(functions_aliases.begin(), functions_aliases.end());
         ss << ConsoleStatusColor::help << "All Functions Aliases: " << endl;
-        for(auto &item : tmp){
+        for(auto &item : functions_aliases){
             ss << ConsoleStatusColor::info << item << " for " << func_aliases.at(item) << endl;
         }
         ss << endl << endl;
-        _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
+        _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
         return;
     }
     auto fun_code = getFunc(st[1]);
     if(fun_code == func_enum::nonfunc) {
-        _console_writer.print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Invalid function name " + st[1]);
+        _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Invalid function name " + st[1]);
         return;
     }
     auto it_internal = functions_internal_help_description.find(fun_code);
     auto it_internal_short = functions_internal_help_short_description.find(fun_code);
     std::ostringstream ss;
     if(it_internal == functions_internal_help_description.end() && it_internal_short == functions_internal_help_short_description.end()) {
-        auto it = functions_help_description.find(fun_code);
-        auto it_short = functions_help_short_description.find(fun_code);
-        if(it == functions_help_description.end() && it_short == functions_help_short_description.end()){
-            _console_writer.print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function description not found " + st[1]);
-            return;
+        bool endpoint_function_found = _endpoint.execute_help(fun_code, st[1]);
+        if(!endpoint_function_found){
+            _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function description not found " + st[1]);
         }
-        if(it_short == functions_help_short_description.end()) {
-            ss << ConsoleStatusColor::warning << st[1] << " - Short description not found" << endl;
-        } else {
-            ss << ConsoleStatusColor::info << (*it_short).second << endl;
-        }
-        if(it == functions_help_description.end()) {
-            ss << ConsoleStatusColor::warning << st[1] << " - Extended description not found" << endl;
-        } else {
-            ss << ConsoleStatusColor::help << (*it).second << endl;
-        }
-        _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
         return;
     }
     if(it_internal_short == functions_internal_help_short_description.end()) {
@@ -491,7 +394,7 @@ void Executer::exec_help(const Tokens &st){
     } else {
         ss << ConsoleStatusColor::help << (*it_internal).second << endl;
     }  
-    _console_writer.print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
+    _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
 }
 
 vector<string> Executer::getAllVars(){

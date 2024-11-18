@@ -23,8 +23,6 @@ limitations under the License.
 
 #include "privmx/endpoint/programs/privmxcli/vars/function_enum.hpp"
 #include "privmx/endpoint/programs/privmxcli/vars/function_names_map.hpp"
-#include "privmx/endpoint/programs/privmxcli/vars/function_descriptions_map.hpp"
-#include "privmx/endpoint/programs/privmxcli/vars/function_execute_map.hpp"
 
 namespace privmx {
 namespace endpoint {

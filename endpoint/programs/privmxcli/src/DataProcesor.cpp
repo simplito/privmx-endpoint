@@ -15,8 +15,8 @@ limitations under the License.
 using namespace std;
 using namespace privmx::endpoint::privmxcli;
 
-DataProcesor::DataProcesor(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config) :
-    _executer(Executer(main_thread_id, config)), _config(config), _working_command(""),
+DataProcesor::DataProcesor(std::shared_ptr<Executer> executer, std::thread::id main_thread_id, std::shared_ptr<CliConfig> config) :
+    _executer(executer), _config(config), _working_command(""),
     _working_command_braces(0), _working_command_square_brackets(0),
     _working_command_reading_string(0), _working_command_string_char('\0'), _loops({}) {}
 
@@ -169,7 +169,7 @@ std::optional<std::string> DataProcesor::procesRawToken(const token_type& type, 
 
 void DataProcesor::ExecuteCommand(const Tokens& command) {
     if(command.size() < 1) return;
-    auto function_name = _executer.getFunc(command[0]);
+    auto function_name = _executer->getFunc(command[0]);
     if (function_name == loopStart){
         for(std::size_t i = 0; i < _loops.size(); i++) _loops[i].commands.push_back(command);
         if(command.size() != 2 && command.size() != 3){ 
@@ -216,7 +216,7 @@ void DataProcesor::ExecuteCommand(const Tokens& command) {
         }
     } else {
         for(std::size_t i = 0; i < _loops.size(); i++) _loops[i].commands.push_back(command);
-        _executer.execute(command);
+        _executer->execute(command);
     }   
 }
 
@@ -240,7 +240,7 @@ std::string DataProcesor::evalArg(std::string value) {
         }
         auto S = value.substr(var_pose_start+2, (var_pose_stop) - (var_pose_start+2));
         value.erase(var_pose_start, var_pose_stop-var_pose_start+1);
-        auto var = _executer.getS_var(S);
+        auto var = _executer->getS_var(S);
         if(var.isString()) {
             value.insert(var_pose_start, var.convert<std::string>());
         } else {
