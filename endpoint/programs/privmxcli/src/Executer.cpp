@@ -338,63 +338,76 @@ void Executer::execute(const Tokens &st) {
     }
 }
 
-void Executer::exec_help(const Tokens &st){
-    if(st.size() == 1 || getFunc(st[1]) == help){
-        std::ostringstream ss;
-        ss << ConsoleStatusColor::help << "Usage: help FUNCTION_NAME" << endl << endl;
-        vector<std::string> cli_functions_names;
-        for(auto &item : functions_internal){
-            cli_functions_names.push_back(item.first);
-        }
-        sort(cli_functions_names.begin(), cli_functions_names.end());
-        ss << ConsoleStatusColor::help << "All Cli Functions: " << endl;
-        for(auto &item : cli_functions_names){
-            ss << ConsoleStatusColor::info << item << " - " << functions_internal_help_short_description.at(functions_internal.at(item)) << endl;
-        }
-        // All Endpoint Functions:
-        ss << _endpoint.get_all_function_help_printable_string() << endl;
-        ss << _bridge.get_all_function_help_printable_string() << endl;
+void Executer::exec_help() {
+    std::ostringstream ss;
+    ss << ConsoleStatusColor::help << "Usage: help FUNCTION_NAME" << endl << endl;
+    vector<std::string> cli_functions_names;
+    for(auto &item : functions_internal){
+        cli_functions_names.push_back(item.first);
+    }
+    sort(cli_functions_names.begin(), cli_functions_names.end());
+    ss << ConsoleStatusColor::help << "All Cli Functions: " << endl;
+    for(auto &item : cli_functions_names){
+        ss << ConsoleStatusColor::ok << item << ConsoleStatusColor::normal << " - " << ConsoleStatusColor::info << functions_internal_help_short_description.at(functions_internal.at(item)) << endl;
+    }
+    ss << endl;
+    // All Endpoint Functions:
+    ss << _endpoint.get_all_function_help_printable_string() << endl;
+    ss << _bridge.get_all_function_help_printable_string() << endl;
 
 
-        vector<std::string> functions_aliases;
-        for(auto &item : func_aliases){
-            functions_aliases.push_back(item.first);
-        }
-        sort(functions_aliases.begin(), functions_aliases.end());
-        ss << ConsoleStatusColor::help << "All Functions Aliases: " << endl;
-        for(auto &item : functions_aliases){
-            ss << ConsoleStatusColor::info << item << " for " << func_aliases.at(item) << endl;
-        }
-        ss << endl << endl;
-        _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
-        return;
+    vector<std::string> functions_aliases;
+    for(auto &item : func_aliases){
+        functions_aliases.push_back(item.first);
     }
-    auto fun_code = getFunc(st[1]);
-    if(fun_code == func_enum::nonfunc) {
-        _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Invalid function name " + st[1]);
-        return;
+    sort(functions_aliases.begin(), functions_aliases.end());
+    ss << ConsoleStatusColor::help << "All Functions Aliases: " << endl;
+    for(auto &item : functions_aliases){
+        ss << ConsoleStatusColor::ok << item << ConsoleStatusColor::normal << " for " << ConsoleStatusColor::info << func_aliases.at(item) << endl;
     }
+    ss << endl;
+    _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
+    return;
+}
+
+void Executer::exec_help(func_enum fun_code, const std::string& fun_name) {
     auto it_internal = functions_internal_help_description.find(fun_code);
     auto it_internal_short = functions_internal_help_short_description.find(fun_code);
     std::ostringstream ss;
     if(it_internal == functions_internal_help_description.end() && it_internal_short == functions_internal_help_short_description.end()) {
-        bool endpoint_function_found = _endpoint.execute_help(fun_code, st[1]);
+        bool endpoint_function_found = _endpoint.execute_help(fun_code, fun_name);
         if(!endpoint_function_found){
-            _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function description not found " + st[1]);
+            _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function description not found " + fun_name);
         }
         return;
     }
     if(it_internal_short == functions_internal_help_short_description.end()) {
-        ss << ConsoleStatusColor::warning << st[1] << " - Short description not found" << endl;
+        ss << ConsoleStatusColor::warning << fun_name << " - Short description not found" << endl;
     } else {
         ss << ConsoleStatusColor::info << (*it_internal_short).second << endl;
     }
     if(it_internal == functions_internal_help_description.end()) {
-        ss << ConsoleStatusColor::warning << st[1] << " - Extended description not found" << endl;
+        ss << ConsoleStatusColor::warning << fun_name << " - Extended description not found" << endl;
     } else {
         ss << ConsoleStatusColor::help << (*it_internal).second << endl;
     }  
     _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start, ss.str());
+}
+
+void Executer::exec_help(const Tokens &st){
+    if(st.size() == 1) {
+        exec_help();
+    } else if(st.size() > 1) {
+        auto fun_code = getFunc(st[1]);
+        if(fun_code == func_enum::nonfunc) {
+            _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Invalid function name " + st[1]);
+            return;
+        } else if(fun_code == func_enum::help) {
+            exec_help(fun_code, st[1]);
+        } else {
+            exec_help(fun_code, st[1]);
+        }
+    }
 }
 
 vector<string> Executer::getAllVars(){

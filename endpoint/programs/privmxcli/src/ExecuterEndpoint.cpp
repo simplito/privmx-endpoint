@@ -144,7 +144,7 @@ std::string ExecuterEndpoint::get_all_function_help_printable_string() {
     sort(tmp.begin(), tmp.end());
     ss << ConsoleStatusColor::help << "All Api Functions: " << endl;
     for(auto &item : tmp){
-        ss << ConsoleStatusColor::info << item << " - " << functions_endpoint_help_short_description.at(functions_endpoint.at(item)) << endl;
+        ss << ConsoleStatusColor::ok << item << ConsoleStatusColor::normal << " - " << ConsoleStatusColor::info << functions_endpoint_help_short_description.at(functions_endpoint.at(item)) << endl;
     }
     return ss.str();
 }

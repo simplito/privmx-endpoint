@@ -32,7 +32,7 @@ class ConsoleWriter {
 public:
     ConsoleWriter(std::thread::id main_thread_id, std::shared_ptr<CliConfig>  config);
     void print_info(std::string message, bool disable_animation = false);
-    void print_result(Status status, std::chrono::duration<double> time, std::string result_message = std::string(), std::string status_info = std::string());
+    void print_result(Status status, std::chrono::duration<double> time, const std::string& result_message = std::string(), const std::string& status_info = std::string());
 private:
     std::thread::id _main_thread_id;
     std::shared_ptr<CliConfig> _config;

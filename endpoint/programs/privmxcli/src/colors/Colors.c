@@ -34,7 +34,7 @@ void reset_c() {
     }
 }
 
-const char* get_setcolor_c(enum Color color) {
+const char* get_color_c(enum Color color) {
     switch(color) {
         case BLACK:
             return "\033[30m";
@@ -70,13 +70,14 @@ const char* get_setcolor_c(enum Color color) {
             return "\033[97m";
     }
 }
-void setcolor_c(enum Color color) {
+
+void set_color_c(enum Color color) {
     if(is_terminal_c(stdout)) {
-        fprintf(stdout, "%s", get_setcolor_c(color));
+        fprintf(stdout, "%s", get_color_c(color));
     }
 }
 
-const char* get_setbgcolor_c(enum Color color) {
+const char* get_bgcolor_c(enum Color color) {
     switch(color) {
         case BLACK:
             return "\033[40m";
@@ -112,13 +113,14 @@ const char* get_setbgcolor_c(enum Color color) {
             return "\033[107m";
     }
 }
-void setbgcolor_c(enum Color color) {
+
+void set_bgcolor_c(enum Color color) {
     if(is_terminal_c(stdout)) {
-        fprintf(stdout, "%s", get_setcolor_c(color));
+        fprintf(stdout, "%s", get_color_c(color));
     }
 }
 
-void setcurpos_c(int x, int y) {
+void set_curpos_c(int x, int y) {
     if(is_terminal_c(stdout)) {
         fprintf(stdout, "\033[%d;%dH", y+1, x+1);
     }

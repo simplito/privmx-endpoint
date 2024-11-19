@@ -85,10 +85,10 @@ bool ExecuterBridge::execute(const func_enum& fun_code, const Tokens &st) {
                 Poco::JSON::Object::Ptr output_JSON = privmx::utils::Utils::parseJsonObject(value.extract<std::string>());
                 if(output_JSON->has("result")) {
                     exec_status = Status::Success;
-                    output = privmx::utils::Utils::stringify(output_JSON->getObject("result"), true);
+                    output = privmx::utils::Utils::stringifyVar(output_JSON->get("result"), true);
                 } else if (output_JSON->has("error")) {
                     exec_status = Status::Error;
-                    output = privmx::utils::Utils::stringify(output_JSON->getObject("error"), true);
+                    output = privmx::utils::Utils::stringifyVar(output_JSON->get("error"), true);
                 } else {
                     exec_status = Status::Error;
                     output = privmx::utils::Utils::stringifyVar(output_JSON, true);
@@ -163,7 +163,7 @@ std::string ExecuterBridge::get_all_function_help_printable_string() {
     sort(tmp.begin(), tmp.end());
     ss << ConsoleStatusColor::help << "All Api Functions: " << endl;
     for(auto &item : tmp){
-        ss << ConsoleStatusColor::info << item << " - " << functions_bridge_help_short_description.at(functions_bridge.at(item)) << endl;
+        ss << ConsoleStatusColor::ok << item << ConsoleStatusColor::normal << " - " << ConsoleStatusColor::info << functions_bridge_help_short_description.at(functions_bridge.at(item)) << endl;
     }
     return ss.str();
 }

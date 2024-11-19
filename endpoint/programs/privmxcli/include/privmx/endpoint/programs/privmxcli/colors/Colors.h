@@ -31,13 +31,13 @@ void clear_c();
 const char* get_reset_c();
 void reset_c();
 /* set foreground color */
-const char* get_setcolor_c(enum Color color);
-void setcolor_c(enum Color color);
+const char* get_color_c(enum Color color);
+void set_color_c(enum Color color);
 /* set background color */
-const char* get_setbgcolor_c(enum Color color);
-void setbgcolor_c(enum Color color);
+const char* get_bgcolor_c(enum Color color);
+void set_bgcolor_c(enum Color color);
 /* set cursor position */
-void setcurpos_c(int x, int y);
+void set_curpos_c(int x, int y);
 
 #ifdef __cplusplus
 }

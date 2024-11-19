@@ -37,7 +37,7 @@ void ConsoleWriter::print_info(std::string message, bool disable_animation) {
     }
 }
 
-void ConsoleWriter::print_result(Status status, std::chrono::duration<double> time, std::string result_message, std::string status_info) {
+void ConsoleWriter::print_result(Status status, std::chrono::duration<double> time, const std::string& result_message, const std::string& status_info) {
     if(_config->is_rl_input && std::this_thread::get_id() == _main_thread_id){
         #ifndef PRIVMX_USE_DEBUG
         _loading_animation.stop();
@@ -71,4 +71,3 @@ void ConsoleWriter::print_result(Status status, std::chrono::duration<double> ti
     }
     if(status == Status::Error && _config->stop_on_error) exit(EXIT_FAILURE);
 }
-

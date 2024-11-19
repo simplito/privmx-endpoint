@@ -36,6 +36,8 @@ public:
     Poco::Dynamic::Var getS_var(const std::string &key);
 private:
     void exec_help(const Tokens &st);
+    void exec_help();
+    void exec_help(func_enum fun_code, const std::string& fun_name);
     void setFA(const std::string &key, const std::string &value);
     void setS(const std::string &key, const Poco::Dynamic::Var &value);
     void setSA(const std::string &key, const std::string &value);
@@ -121,6 +123,10 @@ private:
         {addBackString, 
             "addBack VAR_NAME, DATA_STRING)\n"
             "\tadd DATA_STRING on the back of var"
+        },
+        {use, 
+            "addBack PATH)\n"
+            "\tsets path"
         }
     };
     const std::unordered_map<func_enum, std::string> functions_internal_help_short_description = {
@@ -140,7 +146,8 @@ private:
         {addFront, "add var on the front of the other"},
         {addBack, "add var on the back of the other"},
         {addFrontString, "add string on the front of var"},
-        {addBackString, "add string on the front of var"}
+        {addBackString, "add string on the front of var"},
+        {use, "set default path"}
     };
 };
 
