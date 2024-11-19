@@ -119,3 +119,17 @@ ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var& serve
     return result;
 }
 
+ContainerPolicyWithoutItem Factory::parsePolicyServerObjectWithoutItem(const Poco::Dynamic::Var& serverPolicyObject) {
+    if (serverPolicyObject.isEmpty()) {
+        return {};
+    }
+    Poco::JSON::Object::Ptr obj = serverPolicyObject.extract<Poco::JSON::Object::Ptr>();
+    ContainerPolicyWithoutItem result {};
+    result.get = obj->optValue<std::string>("get", std::string());
+    result.update = obj->optValue<std::string>("update", std::string());
+    result.delete_ = obj->optValue<std::string>("delete", std::string());
+    result.updatePolicy = obj->optValue<std::string>("updatePolicy", std::string());
+    result.updaterCanBeRemovedFromManagers = obj->optValue<std::string>("updaterCanBeRemovedFromManagers", std::string());
+    result.ownerCanBeRemovedFromManagers = obj->optValue<std::string>("ownerCanBeRemovedFromManagers", std::string());        
+    return result;
+}

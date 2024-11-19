@@ -559,7 +559,7 @@ Inbox InboxApiImpl::convertInbox(const inbox::server::Inbox& inboxRaw) {
         .publicMeta = inboxData.publicData.publicMeta,
         .privateMeta = inboxData.privateData.privateMeta,
         .filesConfig = inboxData.filesConfig,
-        .policy = core::Factory::parsePolicyServerObject(inboxRaw.policy()),
+        .policy = core::Factory::parsePolicyServerObjectWithoutItem(inboxRaw.policy()),
         .statusCode = inboxData.statusCode
     };
     return ret;

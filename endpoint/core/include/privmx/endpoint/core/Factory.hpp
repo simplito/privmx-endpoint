@@ -27,6 +27,7 @@ public:
     static Poco::Dynamic::Var createPolicyServerObject(const ContainerPolicy& policy);
     static Poco::Dynamic::Var createPolicyServerObject(const ContainerPolicyWithoutItem& policy);
     static ContainerPolicy parsePolicyServerObject(const Poco::Dynamic::Var& serverPolicyObject);
+    static ContainerPolicyWithoutItem parsePolicyServerObjectWithoutItem(const Poco::Dynamic::Var& serverPolicyObject);
 };
 
 
