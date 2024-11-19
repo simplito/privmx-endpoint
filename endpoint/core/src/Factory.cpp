@@ -22,15 +22,6 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.get.has_value()) {
         model->set("get", policy.get.value());
     }
-    if (policy.listMy.has_value()) {
-        model->set("listMy", policy.listMy.value());
-    }
-    if (policy.listAll.has_value()) {
-        model->set("listAll", policy.listAll.value());
-    }
-    if (policy.create.has_value()) {
-        model->set("create", policy.create.value());
-    }
     if (policy.update.has_value()) {
         model->set("update", policy.update.value());
     }
@@ -40,17 +31,11 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.updatePolicy.has_value()) {
         model->set("updatePolicy", policy.updatePolicy.value());
     }
-    if (policy.creatorHasToBeManager.has_value()) {
-        model->set("creatorHasToBeManager", policy.creatorHasToBeManager.value());
-    }
     if (policy.updaterCanBeRemovedFromManagers.has_value()) {
         model->set("updaterCanBeRemovedFromManagers", policy.updaterCanBeRemovedFromManagers.value());
     }
     if (policy.ownerCanBeRemovedFromManagers.has_value()) {
         model->set("ownerCanBeRemovedFromManagers", policy.ownerCanBeRemovedFromManagers.value());
-    }
-    if (policy.canOverwriteContextPolicy.has_value()) {
-        model->set("canOverwriteContextPolicy", policy.canOverwriteContextPolicy.value());
     }
     if (policy.item.has_value()) {
         Poco::JSON::Object::Ptr itemModel = new Poco::JSON::Object();
@@ -87,15 +72,6 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.get.has_value()) {
         model->set("get", policy.get.value());
     }
-    if (policy.listMy.has_value()) {
-        model->set("listMy", policy.listMy.value());
-    }
-    if (policy.listAll.has_value()) {
-        model->set("listAll", policy.listAll.value());
-    }
-    if (policy.create.has_value()) {
-        model->set("create", policy.create.value());
-    }
     if (policy.update.has_value()) {
         model->set("update", policy.update.value());
     }
@@ -105,17 +81,11 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.updatePolicy.has_value()) {
         model->set("updatePolicy", policy.updatePolicy.value());
     }
-    if (policy.creatorHasToBeManager.has_value()) {
-        model->set("creatorHasToBeManager", policy.creatorHasToBeManager.value());
-    }
     if (policy.updaterCanBeRemovedFromManagers.has_value()) {
         model->set("updaterCanBeRemovedFromManagers", policy.updaterCanBeRemovedFromManagers.value());
     }
     if (policy.ownerCanBeRemovedFromManagers.has_value()) {
         model->set("ownerCanBeRemovedFromManagers", policy.ownerCanBeRemovedFromManagers.value());
-    }
-    if (policy.canOverwriteContextPolicy.has_value()) {
-        model->set("canOverwriteContextPolicy", policy.canOverwriteContextPolicy.value());
     }
     return model;
 }
@@ -129,16 +99,11 @@ ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var& serve
     Poco::JSON::Object::Ptr obj = serverPolicyObject.extract<Poco::JSON::Object::Ptr>();
     ContainerPolicy result {};
     result.get = obj->optValue<std::string>("get", std::string());
-    result.listMy = obj->optValue<std::string>("listMy", std::string());
-    result.listAll = obj->optValue<std::string>("listAll", std::string());
-    result.create = obj->optValue<std::string>("create", std::string());
     result.update = obj->optValue<std::string>("update", std::string());
     result.delete_ = obj->optValue<std::string>("delete", std::string());
     result.updatePolicy = obj->optValue<std::string>("updatePolicy", std::string());
-    result.creatorHasToBeManager = obj->optValue<std::string>("creatorHasToBeManager", std::string());
     result.updaterCanBeRemovedFromManagers = obj->optValue<std::string>("updaterCanBeRemovedFromManagers", std::string());
     result.ownerCanBeRemovedFromManagers = obj->optValue<std::string>("ownerCanBeRemovedFromManagers", std::string());
-    result.canOverwriteContextPolicy = obj->optValue<std::string>("canOverwriteContextPolicy", std::string());
 
     if (obj->isObject("item")) {
         auto itemObj = obj->getObject("item");
