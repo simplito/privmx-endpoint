@@ -121,7 +121,7 @@ struct Inbox {
     /**
      * Inbox policies
      */
-    core::ContainerPolicy policy;
+    core::ContainerPolicyWithoutItem policy;
 
     /**
      * status code of retrieval and decryption of the Inbox
