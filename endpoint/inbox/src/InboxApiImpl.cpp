@@ -96,9 +96,7 @@ std::string InboxApiImpl::createInbox(
     auto randNameAsBuf {privmx::endpoint::core::Buffer::from(randName)};
     auto emptyBuf {privmx::endpoint::core::Buffer::from(std::string())};
 
-    core::ContainerPolicy policiesWithItems {
-        policies.value(), std::nullopt
-    };
+    std::optional<core::ContainerPolicy> policiesWithItems { policies.has_value() ? std::make_optional<core::ContainerPolicy>({policies.value(), std::nullopt}) : std::nullopt};
 
     auto storeId = (_storeApi.getImpl())->createStoreEx(contextId, users, managers, emptyBuf, randNameAsBuf,  INBOX_TYPE_FILTER_FLAG, policiesWithItems);
     auto threadId = (_threadApi.getImpl())->createThreadEx(contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policiesWithItems);
@@ -130,8 +128,7 @@ std::string InboxApiImpl::createInbox(
     auto keysList = _keyProvider->prepareKeysList(all_users, inboxKey);
     createInboxModel.keys(keysList);
     if (policies.has_value()) {
-        core::ContainerPolicy policiesWithItems {policies.value(), std::nullopt};
-        createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems));
+        createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems.value()));
     }
 
     auto inboxId = _serverApi->inboxCreate(createInboxModel).inboxId();
