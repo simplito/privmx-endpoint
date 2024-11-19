@@ -90,18 +90,6 @@ struct ContainerPolicyWithoutItem {
      */
     std::optional<std::string> get;
     /** 
-     * Determine who can list containers created by me
-     */
-    std::optional<std::string> listMy;
-    /**
-     * Determine who can list all containers 
-     */
-    std::optional<std::string> listAll;
-    /** 
-     * Determine who can create a container 
-     */
-    std::optional<std::string> create;
-    /** 
      * Determine who can update a container 
      */
     std::optional<std::string> update;
@@ -114,10 +102,6 @@ struct ContainerPolicyWithoutItem {
      */
     std::optional<std::string> updatePolicy;
     /** 
-     * Determine whether the creator has to be added to the list of managers 
-     */
-    std::optional<std::string> creatorHasToBeManager;
-    /** 
      * Determine whether the updater can be removed from the list of managers 
      */
     std::optional<std::string> updaterCanBeRemovedFromManagers;
@@ -125,10 +109,6 @@ struct ContainerPolicyWithoutItem {
      * Determine whether the owner can be removed from the list of managers 
      */
     std::optional<std::string> ownerCanBeRemovedFromManagers;
-    /**
-     * Determine whether the policy can be overwritten in container 
-     */
-    std::optional<std::string> canOverwriteContextPolicy;
 };
 
 /**

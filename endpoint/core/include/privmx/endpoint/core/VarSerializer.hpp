@@ -93,6 +93,15 @@ Poco::Dynamic::Var VarSerializer::serialize<LibDisconnectedEvent>(const LibDisco
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<LibBreakEvent>(const LibBreakEvent& val);
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const ContainerPolicyWithoutItem& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ItemPolicy>(const ItemPolicy& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicy>(const ContainerPolicy& val);
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
