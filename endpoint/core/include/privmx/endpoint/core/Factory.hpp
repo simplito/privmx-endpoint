@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_CORE_TYPEDOBJECTFACTORY_HPP_
-#define _PRIVMXLIB_ENDPOINT_CORE_TYPEDOBJECTFACTORY_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_FACTORY_HPP_
+#define _PRIVMXLIB_ENDPOINT_CORE_FACTORY_HPP_
 
 #include <string>
 #include "privmx/utils/Utils.hpp"
@@ -48,4 +48,4 @@ inline std::optional<T> Factory::getValueOrNullopt(const Poco::JSON::Object::Ptr
 }
 }
 
-#endif // _PRIVMXLIB_ENDPOINT_CORE_TYPEDOBJECTFACTORY_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_FACTORY_HPP_
