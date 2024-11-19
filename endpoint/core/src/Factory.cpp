@@ -98,22 +98,22 @@ ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var& serve
     }
     Poco::JSON::Object::Ptr obj = serverPolicyObject.extract<Poco::JSON::Object::Ptr>();
     ContainerPolicy result {};
-    result.get = obj->optValue<std::string>("get", std::string());
-    result.update = obj->optValue<std::string>("update", std::string());
-    result.delete_ = obj->optValue<std::string>("delete", std::string());
-    result.updatePolicy = obj->optValue<std::string>("updatePolicy", std::string());
-    result.updaterCanBeRemovedFromManagers = obj->optValue<std::string>("updaterCanBeRemovedFromManagers", std::string());
-    result.ownerCanBeRemovedFromManagers = obj->optValue<std::string>("ownerCanBeRemovedFromManagers", std::string());
+    result.get = Factory::getValueOrNullopt<std::string>(obj, "get");
+    result.update = Factory::getValueOrNullopt<std::string>(obj, "update");
+    result.delete_ = Factory::getValueOrNullopt<std::string>(obj, "delete");
+    result.updatePolicy = Factory::getValueOrNullopt<std::string>(obj, "updatePolicy");
+    result.updaterCanBeRemovedFromManagers = Factory::getValueOrNullopt<std::string>(obj, "updaterCanBeRemovedFromManagers");
+    result.ownerCanBeRemovedFromManagers = Factory::getValueOrNullopt<std::string>(obj, "ownerCanBeRemovedFromManagers");
 
     if (obj->isObject("item")) {
         auto itemObj = obj->getObject("item");
         ItemPolicy itemResult {};
-        itemResult.get = itemObj->optValue<std::string>("get", std::string());
-        itemResult.listMy = itemObj->optValue<std::string>("listMy", std::string());
-        itemResult.listAll = itemObj->optValue<std::string>("listAll", std::string());
-        itemResult.create = itemObj->optValue<std::string>("create", std::string());
-        itemResult.update = itemObj->optValue<std::string>("update", std::string());
-        itemResult.delete_ = itemObj->optValue<std::string>("delete", std::string());
+        itemResult.get = Factory::getValueOrNullopt<std::string>(itemObj, "get");
+        itemResult.listMy = Factory::getValueOrNullopt<std::string>(itemObj, "listMy");
+        itemResult.listAll = Factory::getValueOrNullopt<std::string>(itemObj, "listAll");
+        itemResult.create = Factory::getValueOrNullopt<std::string>(itemObj, "create");
+        itemResult.update = Factory::getValueOrNullopt<std::string>(itemObj, "update");
+        itemResult.delete_ = Factory::getValueOrNullopt<std::string>(itemObj, "delete");
         result.item = itemResult;
     }        
     return result;
@@ -125,11 +125,11 @@ ContainerPolicyWithoutItem Factory::parsePolicyServerObjectWithoutItem(const Poc
     }
     Poco::JSON::Object::Ptr obj = serverPolicyObject.extract<Poco::JSON::Object::Ptr>();
     ContainerPolicyWithoutItem result {};
-    result.get = obj->optValue<std::string>("get", std::string());
-    result.update = obj->optValue<std::string>("update", std::string());
-    result.delete_ = obj->optValue<std::string>("delete", std::string());
-    result.updatePolicy = obj->optValue<std::string>("updatePolicy", std::string());
-    result.updaterCanBeRemovedFromManagers = obj->optValue<std::string>("updaterCanBeRemovedFromManagers", std::string());
-    result.ownerCanBeRemovedFromManagers = obj->optValue<std::string>("ownerCanBeRemovedFromManagers", std::string());        
+    result.get = Factory::getValueOrNullopt<std::string>(obj, "get");
+    result.update = Factory::getValueOrNullopt<std::string>(obj, "update");
+    result.delete_ = Factory::getValueOrNullopt<std::string>(obj, "delete");
+    result.updatePolicy = Factory::getValueOrNullopt<std::string>(obj, "updatePolicy");
+    result.updaterCanBeRemovedFromManagers = Factory::getValueOrNullopt<std::string>(obj, "updaterCanBeRemovedFromManagers");
+    result.ownerCanBeRemovedFromManagers = Factory::getValueOrNullopt<std::string>(obj, "ownerCanBeRemovedFromManagers");        
     return result;
 }
