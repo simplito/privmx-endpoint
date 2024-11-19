@@ -130,16 +130,11 @@ Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const Co
         obj->set("__type", "core$ContainerPolicyWithoutItem");
     }
     obj->set("get", serialize(val.get));
-    obj->set("listMy", serialize(val.listMy));
-    obj->set("listAll", serialize(val.listAll));
-    obj->set("create", serialize(val.create));
     obj->set("update", serialize(val.update));
     obj->set("delete_", serialize(val.delete_));
     obj->set("updatePolicy", serialize(val.updatePolicy));
-    obj->set("creatorHasToBeManager", serialize(val.creatorHasToBeManager));
     obj->set("updaterCanBeRemovedFromManagers", serialize(val.updaterCanBeRemovedFromManagers));
     obj->set("ownerCanBeRemovedFromManagers", serialize(val.ownerCanBeRemovedFromManagers));
-    obj->set("canOverwriteContextPolicy", serialize(val.canOverwriteContextPolicy));
     return obj;
 }
 
