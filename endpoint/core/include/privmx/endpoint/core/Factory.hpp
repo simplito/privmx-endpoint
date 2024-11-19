@@ -28,7 +28,20 @@ public:
     static Poco::Dynamic::Var createPolicyServerObject(const ContainerPolicyWithoutItem& policy);
     static ContainerPolicy parsePolicyServerObject(const Poco::Dynamic::Var& serverPolicyObject);
     static ContainerPolicyWithoutItem parsePolicyServerObjectWithoutItem(const Poco::Dynamic::Var& serverPolicyObject);
+private:
+    template<typename T>
+    inline static std::optional<T> getValueOrNullopt(const Poco::JSON::Object::Ptr policyJsonObj, const std::string& key);
 };
+
+
+template<typename T>
+inline std::optional<T> Factory::getValueOrNullopt(const Poco::JSON::Object::Ptr policyJsonObj, const std::string& key) {
+    Poco::Dynamic::Var valueFromKey = policyJsonObj->get(key);
+    if (valueFromKey.isEmpty()) {
+        return std::nullopt;
+    } 
+    return policyJsonObj->getValue<T>(key);
+}
 
 
 }
