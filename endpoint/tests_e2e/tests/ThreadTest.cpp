@@ -1,4 +1,3 @@
-
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
@@ -1424,6 +1423,190 @@ TEST_F(ThreadTest, Access_denaid_Public) {
     // deleteMessage
     EXPECT_THROW({
         threadApi->deleteMessage(
+            reader->getString("Message_1.info_messageId")
+        );
+    }, core::Exception);
+}
+
+TEST_F(ThreadTest, createThread_policy) {
+    std::string threadId;
+    privmx::endpoint::thread::Thread thread;
+    core::ContainerPolicy policy = {};
+    policy.item=core::ItemPolicy{
+        .get="owner",
+        .listMy="owner",
+        .listAll="owner",
+        .create="owner",
+        .update="owner",
+        .delete_="owner",
+    };
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
+    EXPECT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            policy
+        );
+    });
+    if(threadId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        thread = threadApi->getThread(
+            threadId
+        );
+    });
+    EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(thread.publicMeta.stdString(), "public");
+    EXPECT_EQ(thread.privateMeta.stdString(), "private");
+    EXPECT_EQ(thread.users.size(), 2);
+    if(thread.users.size() == 2) {
+        EXPECT_EQ(thread.users[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(thread.users[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(thread.managers.size(), 2);
+    if(thread.managers.size() == 2) {
+        EXPECT_EQ(thread.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(thread.managers[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(thread.policy.item.value().get, policy.item.value().get);
+    EXPECT_EQ(thread.policy.item.value().listMy, policy.item.value().listMy);
+    EXPECT_EQ(thread.policy.item.value().listAll, policy.item.value().listAll);
+    EXPECT_EQ(thread.policy.item.value().create, policy.item.value().create);
+    EXPECT_EQ(thread.policy.item.value().update, policy.item.value().update);
+    EXPECT_EQ(thread.policy.item.value().delete_, policy.item.value().delete_);
+
+    EXPECT_EQ(thread.policy.get, policy.get);
+    EXPECT_EQ(thread.policy.update, policy.update);
+    EXPECT_EQ(thread.policy.delete_, policy.delete_);
+    EXPECT_EQ(thread.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(thread.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(thread.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
+    
+
+
+    disconnect();
+    connectAs(ConnectionType::User2);
+    EXPECT_THROW({
+        thread = threadApi->getThread(
+            threadId
+        );
+    }, core::Exception);
+}
+
+TEST_F(ThreadTest, updateThread_policy) {
+    std::string threadId = reader->getString("Thread_1.threadId");
+    privmx::endpoint::thread::Thread thread;
+    core::ContainerPolicy policy;
+    policy.item=core::ItemPolicy{
+            .get="owner",
+            .listMy="owner",
+            .listAll="owner",
+            .create="owner",
+            .update="owner",
+            .delete_="owner",
+        };
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
+    EXPECT_NO_THROW({
+        threadApi->updateThread(
+            threadId,
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true,
+            policy
+        );
+    });
+    if(threadId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        thread = threadApi->getThread(
+            threadId
+        );
+    });
+    EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(thread.publicMeta.stdString(), "public");
+    EXPECT_EQ(thread.privateMeta.stdString(), "private");
+    EXPECT_EQ(thread.users.size(), 2);
+    if(thread.users.size() == 2) {
+        EXPECT_EQ(thread.users[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(thread.users[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(thread.managers.size(), 2);
+    if(thread.managers.size() == 2) {
+        EXPECT_EQ(thread.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(thread.managers[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(thread.policy.item.value().get, policy.item.value().get);
+    EXPECT_EQ(thread.policy.item.value().listMy, policy.item.value().listMy);
+    EXPECT_EQ(thread.policy.item.value().listAll, policy.item.value().listAll);
+    EXPECT_EQ(thread.policy.item.value().create, policy.item.value().create);
+    EXPECT_EQ(thread.policy.item.value().update, policy.item.value().update);
+    EXPECT_EQ(thread.policy.item.value().delete_, policy.item.value().delete_);
+
+    EXPECT_EQ(thread.policy.get, policy.get);
+    EXPECT_EQ(thread.policy.update, policy.update);
+    EXPECT_EQ(thread.policy.delete_, policy.delete_);
+    EXPECT_EQ(thread.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(thread.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(thread.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
+    disconnect();
+    connectAs(ConnectionType::User2);
+    EXPECT_THROW({
+        threadApi->getMessage(
             reader->getString("Message_1.info_messageId")
         );
     }, core::Exception);

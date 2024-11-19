@@ -48,19 +48,20 @@ Poco::Dynamic::Var InboxApiVarInterface::create(const Poco::Dynamic::Var& args) 
 }
 
 Poco::Dynamic::Var InboxApiVarInterface::createInbox(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto filesConfig = _deserializer.deserializeOptional<inbox::FilesConfig>(argsArr->get(5), "filesConfig");
-    auto result = _inboxApi.createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig);
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(6), "policies");
+    auto result = _inboxApi.createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var InboxApiVarInterface::updateInbox(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 10);
     auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -70,8 +71,9 @@ Poco::Dynamic::Var InboxApiVarInterface::updateInbox(const Poco::Dynamic::Var& a
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(6), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(7), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(8), "forceGenerateNewKey");
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(9), "policies");
     _inboxApi.updateInbox(inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force,
-                          forceGenerateNewKey);
+                          forceGenerateNewKey, policies);
     return {};
 }
 

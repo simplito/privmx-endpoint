@@ -44,10 +44,12 @@ public:
      * the created Thread
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
+     * @param policies additional container access policies
      * @return ID of the created Thread
      */
     std::string createThread(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
+                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, 
+                             const core::Buffer& privateMeta, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
     
     /**
      * Updates an existing Thread.
@@ -61,10 +63,11 @@ public:
      * @param version current version of the updated Thread
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the Thread
+     * @param policies additional container access policies
      */
     void updateThread(const std::string& threadId, const std::vector<core::UserWithPubKey>& users,
                       const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                      const int64_t version, const bool force, const bool forceGenerateNewKey);
+                      const int64_t version, const bool force, const bool forceGenerateNewKey, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
 
     /**
      * Deletes a Thread by given Thread ID.

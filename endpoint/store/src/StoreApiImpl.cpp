@@ -77,15 +77,21 @@ StoreApiImpl::~StoreApiImpl() {
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
 }
 
-std::string StoreApiImpl::createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
-    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, STORE_TYPE_FILTER_FLAG);
+std::string StoreApiImpl::createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
+            const core::Buffer& publicMeta, const core::Buffer& privateMeta,
+            const std::optional<core::ContainerPolicy>& policies) {
+    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, STORE_TYPE_FILTER_FLAG, policies);
 }
 
-std::string StoreApiImpl::createStoreEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type) {
-    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, type);
+std::string StoreApiImpl::createStoreEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
+            const core::Buffer& publicMeta, const core::Buffer& privateMeta,
+            const std::string& type, const std::optional<core::ContainerPolicy>& policies) {
+    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
 }
 
-std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type) {
+std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
+            const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
+            const std::optional<core::ContainerPolicy>& policies) {
     PRIVMX_DEBUG_TIME_START(PlatformStore, _storeCreateEx)
     auto storeKey = _keyProvider->generateKey();
     StoreDataToEncrypt storeDataToEncrypt {
@@ -101,6 +107,9 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
     storeCreateModel.data(_storeDataEncryptorV4.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
     if (type.length() > 0) {
         storeCreateModel.type(type);
+    }
+    if (policies.has_value()) {
+        storeCreateModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     storeCreateModel.keys(_keyProvider->prepareKeysList(all_users, storeKey));
@@ -138,7 +147,8 @@ void StoreApiImpl::updateStore(
         const core::Buffer& privateMeta,
         const int64_t version,
         const bool force,
-        const bool forceGenerateNewKey
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicy>& policies
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformStore, storeUpdate)
 
@@ -184,7 +194,9 @@ void StoreApiImpl::updateStore(
     model.managers(managersList);
     model.version(version);
     model.force(force);
-
+    if (policies.has_value()) {
+        model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
+    }
     StoreDataToEncrypt storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
@@ -678,6 +690,7 @@ Store StoreApiImpl::convertStoreDataV1ToStore(const server::Store& storeRaw, dyn
         .version = storeRaw.version(),
         .publicMeta = core::Buffer::from(""),
         .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
+        .policy = {},
         .filesCount = storeRaw.files(),
         .statusCode = statusCode
     };
@@ -705,6 +718,7 @@ Store StoreApiImpl::convertDecryptedStoreDataToStore(const server::Store& storeR
         .version = storeRaw.version(),
         .publicMeta = storeData.publicMeta,
         .privateMeta = storeData.privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(storeRaw.policy()), 
         .filesCount = storeRaw.files(),
         .statusCode = storeData.statusCode
     };
@@ -721,7 +735,7 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(const server::Store& store
         return convertDecryptedStoreDataToStore(storeRaw, decryptStoreV4(storeRaw));
     }
     auto e = UnknowStoreFormatException();
-    return Store{{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
+    return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
 }
 
 server::Store StoreApiImpl::getStoreFromServerOrCache(const std::string& storeId, const std::string& type) {

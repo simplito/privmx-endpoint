@@ -1,13 +1,13 @@
 #ifndef _PRIVMXLIB_ENDPOINT_THREAD_EXT_EXCEPTION_HPP_
 #define _PRIVMXLIB_ENDPOINT_THREAD_EXT_EXCEPTION_HPP_
 
-#include "privmx/endpoint/thread/ThreadExceptionDiscriptions.hpp"
+
 #include "privmx/endpoint/core/Exception.hpp"
 
 #define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                            \
     class NAME : public privmx::endpoint::core::Exception {                                                      \
     public:                                                                                                      \
-        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16) __VA_OPT__(, __VA_ARGS__)) {} \
+        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                           \
         NAME(const std::string& msg, const std::string& name, unsigned int code)                                 \
             : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}         \
         NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description) \
@@ -21,7 +21,7 @@
 #define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                            \
     class NAME : public BASE_SCOPED {                                                                            \
     public:                                                                                                      \
-        NAME() : BASE_SCOPED(MSG, #NAME, CODE __VA_OPT__(, __VA_ARGS__)) {}                                      \
+        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                \
         NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}       \
         void rethrow() const override;                                                                           \
     };                                                                                                           \
@@ -36,7 +36,7 @@ namespace thread {
 #define ENDPOINT_THREAD_EXCEPTION_CODE 0x00030000
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointThreadException, "Unknown endpoint thread exception", "Thread", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NotInitializedException, "Endpoint not initialized", 0x0001, __ERR_DESC_NotInitializedException)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadCreatedEventException, "Cannot extract ThreadCreatedEvent", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadUpdatedEventException, "Cannot extract ThreadUpdatedEvent", 0x0003)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadNewMessageEventException, "Cannot extract ThreadNewMessageEvent", 0x0004)

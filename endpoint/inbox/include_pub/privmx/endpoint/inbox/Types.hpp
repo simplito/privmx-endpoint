@@ -119,6 +119,11 @@ struct Inbox {
     std::optional<FilesConfig> filesConfig;
 
     /**
+     * Inbox policies
+     */
+    core::ContainerPolicyWithoutItem policy;
+
+    /**
      * status code of retrieval and decryption of the Inbox
      */
     int64_t statusCode;

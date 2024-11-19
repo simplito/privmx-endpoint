@@ -122,3 +122,44 @@ Poco::Dynamic::Var VarSerializer::serialize<LibBreakEvent>(const LibBreakEvent& 
     obj->set("connectionId", serialize(val.connectionId));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const ContainerPolicyWithoutItem& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$ContainerPolicyWithoutItem");
+    }
+    obj->set("get", serialize(val.get));
+    obj->set("update", serialize(val.update));
+    obj->set("delete_", serialize(val.delete_));
+    obj->set("updatePolicy", serialize(val.updatePolicy));
+    obj->set("updaterCanBeRemovedFromManagers", serialize(val.updaterCanBeRemovedFromManagers));
+    obj->set("ownerCanBeRemovedFromManagers", serialize(val.ownerCanBeRemovedFromManagers));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ItemPolicy>(const ItemPolicy& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$ItemPolicy");
+    }
+    obj->set("get", serialize(val.get));
+    obj->set("listMy", serialize(val.listMy));
+    obj->set("listAll", serialize(val.listAll));
+    obj->set("create", serialize(val.create));
+    obj->set("update", serialize(val.update));
+    obj->set("delete_", serialize(val.delete_));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicy>(const ContainerPolicy& val) {
+    auto valN = serialize<ContainerPolicyWithoutItem>(val);
+    Poco::JSON::Object::Ptr obj = valN.extract<Poco::JSON::Object::Ptr>();
+    if (_options.addType) {
+        obj->set("__type", "core$ContainerPolicy");
+    }
+    obj->set("item", serialize(val.item));
+    return obj;
+}

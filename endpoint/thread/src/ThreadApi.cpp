@@ -53,14 +53,15 @@ std::string ThreadApi::createThread(
     const std::vector<core::UserWithPubKey>& users, 
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
 ) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return _impl->createThread(contextId, users, managers, publicMeta, privateMeta);
+        return _impl->createThread(contextId, users, managers, publicMeta, privateMeta, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -75,11 +76,12 @@ void ThreadApi::updateThread(
     const core::Buffer& privateMeta, 
     const int64_t version, 
     const bool force, 
-    const bool forceGenerateNewKey
+    const bool forceGenerateNewKey,
+    const std::optional<core::ContainerPolicy>& policies
 ) {
     validateEndpoint();
     try {
-        _impl->updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey);
+        _impl->updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

@@ -42,7 +42,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Events.hpp"
 #include "privmx/endpoint/inbox/InboxDataProcessorV4.hpp"
 #include "privmx/endpoint/inbox/Factory.hpp"
-
+#include "privmx/endpoint/core/Factory.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -71,13 +71,15 @@ public:
     std::string createInbox(
         const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-        const std::optional<inbox::FilesConfig>& filesConfig);
+        const std::optional<inbox::FilesConfig>& filesConfig,
+        const std::optional<core::ContainerPolicyWithoutItem>& policies);
 
     void updateInbox(const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
                      const std::vector<core::UserWithPubKey>& managers,
                      const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                      const std::optional<inbox::FilesConfig>& filesConfig, const int64_t version, const bool force,
-                     const bool forceGenerateNewKey);
+                     const bool forceGenerateNewKey,
+                     const std::optional<core::ContainerPolicyWithoutItem>& policies);
 
     inbox::Inbox getInbox(const std::string& inboxId);
     core::PagingList<inbox::Inbox> listInboxes(const std::string& contextId, const core::PagingQuery& query);
