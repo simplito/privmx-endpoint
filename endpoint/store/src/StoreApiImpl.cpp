@@ -690,6 +690,7 @@ Store StoreApiImpl::convertStoreDataV1ToStore(const server::Store& storeRaw, dyn
         .version = storeRaw.version(),
         .publicMeta = core::Buffer::from(""),
         .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
+        .policy = {},
         .filesCount = storeRaw.files(),
         .statusCode = statusCode
     };
@@ -734,7 +735,7 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(const server::Store& store
         return convertDecryptedStoreDataToStore(storeRaw, decryptStoreV4(storeRaw));
     }
     auto e = UnknowStoreFormatException();
-    return Store{{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
+    return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
 }
 
 server::Store StoreApiImpl::getStoreFromServerOrCache(const std::string& storeId, const std::string& type) {
