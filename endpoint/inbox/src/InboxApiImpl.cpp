@@ -128,7 +128,7 @@ std::string InboxApiImpl::createInbox(
     auto keysList = _keyProvider->prepareKeysList(all_users, inboxKey);
     createInboxModel.keys(keysList);
     if (policies.has_value()) {
-        createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems));
+        createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems.value()));
     }
 
     auto inboxId = _serverApi->inboxCreate(createInboxModel).inboxId();
