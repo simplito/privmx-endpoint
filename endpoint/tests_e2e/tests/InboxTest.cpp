@@ -1767,13 +1767,13 @@ TEST_F(InboxTest, Access_denaid_Public) {
 TEST_F(InboxTest, createInbox_policy) {
     std::string inboxId;
     privmx::endpoint::inbox::Inbox inbox;
-    core::ContainerPolicy policies;
-    policies.get="owner";
-    policies.update="owner";
-    policies.delete_="owner";
-    policies.updatePolicy="owner";
-    policies.updaterCanBeRemovedFromManagers="no";
-    policies.ownerCanBeRemovedFromManagers="no";
+    core::ContainerPolicy policy;
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
@@ -1800,7 +1800,7 @@ TEST_F(InboxTest, createInbox_policy) {
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             std::nullopt,
-            policies
+            policy
         );
     });
     if(inboxId.empty()) { 
@@ -1824,6 +1824,12 @@ TEST_F(InboxTest, createInbox_policy) {
         EXPECT_EQ(inbox.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(inbox.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(inbox.policy.get, policy.get);
+    EXPECT_EQ(inbox.policy.update, policy.update);
+    EXPECT_EQ(inbox.policy.delete_, policy.delete_);
+    EXPECT_EQ(inbox.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(inbox.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(inbox.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({
@@ -1837,13 +1843,13 @@ TEST_F(InboxTest, updateInbox_policy) {
     // same users and managers
     std::string inboxId = reader->getString("Inbox_1.inboxId");
     privmx::endpoint::inbox::Inbox inbox;
-    core::ContainerPolicy policies;
-    policies.get="owner";
-    policies.update="owner";
-    policies.delete_="owner";
-    policies.updatePolicy="owner";
-    policies.updaterCanBeRemovedFromManagers="no";
-    policies.ownerCanBeRemovedFromManagers="no";
+    core::ContainerPolicyWithoutItem policy;
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             inboxId,
@@ -1873,7 +1879,7 @@ TEST_F(InboxTest, updateInbox_policy) {
             1,
             true,
             true,
-            policies
+            policy
         );
     });
     if(inboxId.empty()) { 
@@ -1897,6 +1903,12 @@ TEST_F(InboxTest, updateInbox_policy) {
         EXPECT_EQ(inbox.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(inbox.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(inbox.policy.get, policy.get);
+    EXPECT_EQ(inbox.policy.update, policy.update);
+    EXPECT_EQ(inbox.policy.delete_, policy.delete_);
+    EXPECT_EQ(inbox.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(inbox.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(inbox.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({

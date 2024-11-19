@@ -1865,8 +1865,8 @@ TEST_F(StoreTest, openFile_readFromFile_updateFile_closeFile_FileVersionMismatch
 TEST_F(StoreTest, createStore_policy) {
     std::string storeId;
     privmx::endpoint::store::Store store;
-    core::ContainerPolicy policies;
-    policies.item=core::ItemPolicy{
+    core::ContainerPolicy policy;
+    policy.item=core::ItemPolicy{
             .get="owner",
             .listMy="owner",
             .listAll="owner",
@@ -1874,12 +1874,12 @@ TEST_F(StoreTest, createStore_policy) {
             .update="owner",
             .delete_="owner",
         };
-    policies.get="owner";
-    policies.update="owner";
-    policies.delete_="owner";
-    policies.updatePolicy="owner";
-    policies.updaterCanBeRemovedFromManagers="no";
-    policies.ownerCanBeRemovedFromManagers="no";
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
     EXPECT_NO_THROW({
         storeId = storeApi->createStore(
             reader->getString("Context_1.contextId"),
@@ -1905,7 +1905,7 @@ TEST_F(StoreTest, createStore_policy) {
             },
             core::Buffer::from("public"),
             core::Buffer::from("private"),
-            policies
+            policy
         );
     });
     if(storeId.empty()) { 
@@ -1929,6 +1929,19 @@ TEST_F(StoreTest, createStore_policy) {
         EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(store.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(store.policy.item.value().get, policy.item.value().get);
+    EXPECT_EQ(store.policy.item.value().listMy, policy.item.value().listMy);
+    EXPECT_EQ(store.policy.item.value().listAll, policy.item.value().listAll);
+    EXPECT_EQ(store.policy.item.value().create, policy.item.value().create);
+    EXPECT_EQ(store.policy.item.value().update, policy.item.value().update);
+    EXPECT_EQ(store.policy.item.value().delete_, policy.item.value().delete_);
+
+    EXPECT_EQ(store.policy.get, policy.get);
+    EXPECT_EQ(store.policy.update, policy.update);
+    EXPECT_EQ(store.policy.delete_, policy.delete_);
+    EXPECT_EQ(store.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(store.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(store.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({
@@ -1942,8 +1955,8 @@ TEST_F(StoreTest, updateStore_policy) {
     // same users and managers
     std::string storeId = reader->getString("Store_1.storeId");
     privmx::endpoint::store::Store store;
-    core::ContainerPolicy policies;
-    policies.item=core::ItemPolicy{
+    core::ContainerPolicy policy;
+    policy.item=core::ItemPolicy{
             .get="owner",
             .listMy="owner",
             .listAll="owner",
@@ -1951,12 +1964,12 @@ TEST_F(StoreTest, updateStore_policy) {
             .update="owner",
             .delete_="owner",
         };
-    policies.get="owner";
-    policies.update="owner";
-    policies.delete_="owner";
-    policies.updatePolicy="owner";
-    policies.updaterCanBeRemovedFromManagers="no";
-    policies.ownerCanBeRemovedFromManagers="no";
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
     EXPECT_NO_THROW({
         storeApi->updateStore(
             storeId,
@@ -1985,7 +1998,7 @@ TEST_F(StoreTest, updateStore_policy) {
             1,
             true,
             true,
-            policies
+            policy
         );
     });
     if(storeId.empty()) { 
@@ -2009,6 +2022,19 @@ TEST_F(StoreTest, updateStore_policy) {
         EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(store.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(store.policy.item.value().get, policy.item.value().get);
+    EXPECT_EQ(store.policy.item.value().listMy, policy.item.value().listMy);
+    EXPECT_EQ(store.policy.item.value().listAll, policy.item.value().listAll);
+    EXPECT_EQ(store.policy.item.value().create, policy.item.value().create);
+    EXPECT_EQ(store.policy.item.value().update, policy.item.value().update);
+    EXPECT_EQ(store.policy.item.value().delete_, policy.item.value().delete_);
+
+    EXPECT_EQ(store.policy.get, policy.get);
+    EXPECT_EQ(store.policy.update, policy.update);
+    EXPECT_EQ(store.policy.delete_, policy.delete_);
+    EXPECT_EQ(store.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(store.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(store.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({

@@ -1,4 +1,3 @@
-
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
@@ -1432,8 +1431,8 @@ TEST_F(ThreadTest, Access_denaid_Public) {
 TEST_F(ThreadTest, createThread_policy) {
     std::string threadId;
     privmx::endpoint::thread::Thread thread;
-    core::ContainerPolicy policies = {};
-    policies.item=core::ItemPolicy{
+    core::ContainerPolicy policy = {};
+    policy.item=core::ItemPolicy{
         .get="owner",
         .listMy="owner",
         .listAll="owner",
@@ -1441,17 +1440,12 @@ TEST_F(ThreadTest, createThread_policy) {
         .update="owner",
         .delete_="owner",
     };
-    policies.get="owner";
-    // policies.listMy=std::nullopt;
-    // policies.listAll=std::nullopt;
-    // policies.create=std::nullopt;
-    policies.update="owner";
-    policies.delete_="owner";
-    policies.updatePolicy="owner";
-    // policies.creatorHasToBeManager=std::nullopt;
-    policies.updaterCanBeRemovedFromManagers="no";
-    policies.ownerCanBeRemovedFromManagers="no";
-    // policies.canOverwriteContextPolicy=std::nullopt;
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
     EXPECT_NO_THROW({
         threadId = threadApi->createThread(
             reader->getString("Context_1.contextId"),
@@ -1477,7 +1471,7 @@ TEST_F(ThreadTest, createThread_policy) {
             },
             core::Buffer::from("public"),
             core::Buffer::from("private"),
-            policies
+            policy
         );
     });
     if(threadId.empty()) { 
@@ -1501,6 +1495,22 @@ TEST_F(ThreadTest, createThread_policy) {
         EXPECT_EQ(thread.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(thread.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(thread.policy.item.value().get, policy.item.value().get);
+    EXPECT_EQ(thread.policy.item.value().listMy, policy.item.value().listMy);
+    EXPECT_EQ(thread.policy.item.value().listAll, policy.item.value().listAll);
+    EXPECT_EQ(thread.policy.item.value().create, policy.item.value().create);
+    EXPECT_EQ(thread.policy.item.value().update, policy.item.value().update);
+    EXPECT_EQ(thread.policy.item.value().delete_, policy.item.value().delete_);
+
+    EXPECT_EQ(thread.policy.get, policy.get);
+    EXPECT_EQ(thread.policy.update, policy.update);
+    EXPECT_EQ(thread.policy.delete_, policy.delete_);
+    EXPECT_EQ(thread.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(thread.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(thread.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
+    
+
+
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({
@@ -1513,8 +1523,8 @@ TEST_F(ThreadTest, createThread_policy) {
 TEST_F(ThreadTest, updateThread_policy) {
     std::string threadId = reader->getString("Thread_1.threadId");
     privmx::endpoint::thread::Thread thread;
-    core::ContainerPolicy policies;
-    policies.item=core::ItemPolicy{
+    core::ContainerPolicy policy;
+    policy.item=core::ItemPolicy{
             .get="owner",
             .listMy="owner",
             .listAll="owner",
@@ -1522,12 +1532,12 @@ TEST_F(ThreadTest, updateThread_policy) {
             .update="owner",
             .delete_="owner",
         };
-    policies.get="owner";
-    policies.update="owner";
-    policies.delete_="owner";
-    policies.updatePolicy="owner";
-    policies.updaterCanBeRemovedFromManagers="no";
-    policies.ownerCanBeRemovedFromManagers="no";
+    policy.get="owner";
+    policy.update="owner";
+    policy.delete_="owner";
+    policy.updatePolicy="owner";
+    policy.updaterCanBeRemovedFromManagers="no";
+    policy.ownerCanBeRemovedFromManagers="no";
     EXPECT_NO_THROW({
         threadApi->updateThread(
             threadId,
@@ -1556,7 +1566,7 @@ TEST_F(ThreadTest, updateThread_policy) {
             1,
             true,
             true,
-            policies
+            policy
         );
     });
     if(threadId.empty()) { 
@@ -1580,6 +1590,19 @@ TEST_F(ThreadTest, updateThread_policy) {
         EXPECT_EQ(thread.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(thread.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(thread.policy.item.value().get, policy.item.value().get);
+    EXPECT_EQ(thread.policy.item.value().listMy, policy.item.value().listMy);
+    EXPECT_EQ(thread.policy.item.value().listAll, policy.item.value().listAll);
+    EXPECT_EQ(thread.policy.item.value().create, policy.item.value().create);
+    EXPECT_EQ(thread.policy.item.value().update, policy.item.value().update);
+    EXPECT_EQ(thread.policy.item.value().delete_, policy.item.value().delete_);
+
+    EXPECT_EQ(thread.policy.get, policy.get);
+    EXPECT_EQ(thread.policy.update, policy.update);
+    EXPECT_EQ(thread.policy.delete_, policy.delete_);
+    EXPECT_EQ(thread.policy.updatePolicy, policy.updatePolicy);
+    EXPECT_EQ(thread.policy.updaterCanBeRemovedFromManagers, policy.updaterCanBeRemovedFromManagers);
+    EXPECT_EQ(thread.policy.ownerCanBeRemovedFromManagers, policy.ownerCanBeRemovedFromManagers);
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({
