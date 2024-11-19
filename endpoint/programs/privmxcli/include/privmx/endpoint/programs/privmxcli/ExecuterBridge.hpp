@@ -375,31 +375,29 @@ private:
 
     const std::unordered_map<func_enum, std::string> functions_bridge_help_description = {
         {bridge_setBridgeApiCreds,
-            "bridge.setBridgeApiCreds APIKEY_ID, APIKEY_SECRET, URL\n"
+            "bridge.setBridgeApiCreds APIKEY_ID, APIKEY_SECRET, URL"
         },
         {bridge_manager_auth,
             "bridge.manager.auth JSON_OBJECT\n"
-            "\tjson format - {grantType: \"api_key_credentials\", apiKeyId: string, apiKeySecret: string, scope?: string[]}"
-            "\t\tapiKeyId [STRING] - Api key id (length in [1,128])"
-            "\t\tapiKeySecret [STRING] - Api key secret (length in [1,128])"
-            "\t\tscope [ARRAY[STRING]] - (optional) Requested token scope (length in [0,128])"
-            "\tjson format - {grantType: \"refresh_token\", refreshToken: string}"
-            "\t\trefreshToken [STRING] - Refresh token from earlier invocation (length in [1,2048]))"
-            "\tjson format - {grantType: \"api_key_signature\", apiKeyId: string, signature: string, timestamp: number, nonce: string, scope?: string[], data?: string}"
-            "\t\tapiKeyId [STRING] - Api key id (length in [1,128])"
-            "\t\tsignature [STRING] - EdDSA signature or Hash"
-            "\t\ttimestamp [NUMBER] - Request timestamp (in range: [-∞,∞])"
-            "\t\tnonce [STRING] - Random value used to generate signature (length in [32,64])"
-            "\t\tscope [ARRAY[STRING]] - (optional) Requested token scope (length in [0,128])"
+            "\tjson format - {grantType: \"api_key_credentials\", apiKeyId: string, apiKeySecret: string, scope?: string[]}\n"
+            "\t\tapiKeyId [STRING] - Api key id (length in [1,128])\n"
+            "\t\tapiKeySecret [STRING] - Api key secret (length in [1,128])\n"
+            "\t\tscope [ARRAY[STRING]] - (optional) Requested token scope (length in [0,128])\n"
+            "\tjson format - {grantType: \"refresh_token\", refreshToken: string}\n"
+            "\t\trefreshToken [STRING] - Refresh token from earlier invocation (length in [1,2048]))\n"
+            "\tjson format - {grantType: \"api_key_signature\", apiKeyId: string, signature: string, timestamp: number, nonce: string, scope?: string[], data?: string}\n"
+            "\t\tapiKeyId [STRING] - Api key id (length in [1,128])\n"
+            "\t\tsignature [STRING] - EdDSA signature or Hash\n"
+            "\t\ttimestamp [NUMBER] - Request timestamp (in range: [-∞,∞])\n"
+            "\t\tnonce [STRING] - Random value used to generate signature (length in [32,64])\n"
+            "\t\tscope [ARRAY[STRING]] - (optional) Requested token scope (length in [0,128])\n"
             "\t\tdata [STRING] - (optional) Optional signed data (length in [0,1024])"
-
-            
         },
         {bridge_manager_createApiKey, 
             "bridge.manager.createApiKey JSON_OBJECT\n"
             "\tjson format - {name: string, scope: string[], publicKey?: string}\n"
-            "\t\tname [STRING] - New api key name (length in [0,128])"
-            "\t\tscope [ARRAY[STRING]] - New api key scope (length in [0,128])"
+            "\t\tname [STRING] - New api key name (length in [0,128])\n"
+            "\t\tscope [ARRAY[STRING]] - New api key scope (length in [0,128])\n"
             "\t\tpublicKey [STRING] - (optional) ED25519 PEM encoded public key"
         },
         {bridge_manager_getApiKey, 
@@ -414,9 +412,9 @@ private:
         {bridge_manager_updateApiKey, 
             "bridge.manager.updateApiKey JSON_OBJECT\n"
             "\tjson format - {id: string, name?: string, scope?: string[], enabled?: boolean}\n"
-            "\t\tid [STRING] - Api key id (length in [1,128])"
-            "\t\tname [STRING] - (optional) Api key name (length in [0,128])"
-            "\t\tscope [ARRAY[STRING]] - (optional) Api key scope (length in [0,128])"
+            "\t\tid [STRING] - Api key id (length in [1,128])\n"
+            "\t\tname [STRING] - (optional) Api key name (length in [0,128])\n"
+            "\t\tscope [ARRAY[STRING]] - (optional) Api key scope (length in [0,128])\n"
             "\t\tenabled [BOOL] - (optional) Api key status"
         },
         {bridge_manager_deleteApiKey, 
@@ -441,7 +439,7 @@ private:
         {bridge_solution_updateSolution, 
             "bridge.solution.updateSolution JSON_OBJECT\n"
             "\tjson format - {id: string, name: string}\n"
-            "\t\tid [STRING] - solution's id (length in [1,128])"
+            "\t\tid [STRING] - solution's id (length in [1,128])\n"
             "\t\tname [STRING] - solution's name (length in [0,256])"
         },
         {bridge_solution_deleteSolution, 
@@ -457,36 +455,36 @@ private:
         {bridge_context_listContexts, 
             "bridge.context.listContexts JSON_OBJECT\n"
             "\tjson format - {skip: number, limit: number, sortOrder: desc|asc, lastId?: string}\n"
-            "\t\tskip [NUMBER] - (in range: [0,∞])"
-            "\t\tlimit [NUMBER] - (in range: [1,100])"
-            "\t\tsortOrder [STRING] - desc|asc"
+            "\t\tskip [NUMBER] - (in range: [0,∞])\n"
+            "\t\tlimit [NUMBER] - (in range: [1,100])\n"
+            "\t\tsortOrder [STRING] - desc|asc\n"
             "\t\tlastId [STRING] - (optional) (length in [1,60])"
         },
         {bridge_context_listContextsOfSolution, 
             "bridge.context.listContextsOfSolution JSON_OBJECT\n"
             "\tjson format - {solutionId: string, skip: number, limit: number, sortOrder: desc|asc, lastId?: string}\n"
-            "\t\tsolutionId [STRING] - solution's id (length in [1,128])"
-            "\t\tskip [NUMBER] - (in range: [0,∞])"
-            "\t\tlimit [NUMBER] - (in range: [1,100])"
-            "\t\tsortOrder [STRING] - desc|asc"
+            "\t\tsolutionId [STRING] - solution's id (length in [1,128])\n"
+            "\t\tskip [NUMBER] - (in range: [0,∞])\n"
+            "\t\tlimit [NUMBER] - (in range: [1,100])\n"
+            "\t\tsortOrder [STRING] - desc|asc\n"
             "\t\tlastId [STRING] - (optional) (length in [1,60])"
         },
         {bridge_context_createContext, 
             "bridge.context.createContext JSON_OBJECT\n"
             "\tjson format - {solution: string, name?: string, description?: string, scope?: private|public, policy?: object}\n"
-            "\t\tsolution [STRING] - solution's id (length in [1,128])"
-            "\t\tname [STRING] - (optional) context's name (length in [0,128])"
-            "\t\tdescription [STRING] - (optional) context's description (length in [0,128])"
-            "\t\tscope [STRING] - (optional) context's scope, public or private"
+            "\t\tsolution [STRING] - solution's id (length in [1,128])\n"
+            "\t\tname [STRING] - (optional) context's name (length in [0,128])\n"
+            "\t\tdescription [STRING] - (optional) context's description (length in [0,128])\n"
+            "\t\tscope [STRING] - (optional) context's scope, public or private\n"
             "\t\tpolicy [OBJECT] - (optional) context's policy"
         },
         {bridge_context_updateContext, 
             "bridge.context.updateContext JSON_OBJECT\n"
             "\tjson format - {contextId: string, name?: string, description?: string, scope?: private|public, policy?: object}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
-            "\t\tname [STRING] - (optional) context's name (length in [0,128])"
-            "\t\tdescription [STRING] - (optional) context's description (length in [0,128])"
-            "\t\tscope [STRING] - (optional) context's scope, public or private"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
+            "\t\tname [STRING] - (optional) context's name (length in [0,128])\n"
+            "\t\tdescription [STRING] - (optional) context's description (length in [0,128])\n"
+            "\t\tscope [STRING] - (optional) context's scope, public or private\n"
             "\t\tpolicy [OBJECT] - (optional) context's policy"
         },
         {bridge_context_deleteContext, 
@@ -497,59 +495,59 @@ private:
         {bridge_context_addSolutionToContext, 
             "bridge.context.addSolutionToContext JSON_OBJECT\n"
             "\tjson format - {contextId: string, solutionId: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
             "\t\tsolutionId [STRING] - solution's id (length in [1,128])"
         },
         {bridge_context_removeSolutionFromContext, 
             "bridge.context.removeSolutionFromContext JSON_OBJECT\n"
             "\tjson format - {contextId: string, solutionId: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
             "\t\tsolutionId [STRING] - solution's id (length in [1,128])"
         },
         {bridge_context_addUserToContext, 
             "bridge.context.getUserFromContextByPubKey JSON_OBJECT\n"
             "\tjson format - {contextId: string, userId: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
             "\t\tuserId [STRING] - user's id (length in [1,128])"
         },
         {bridge_context_removeUserFromContext, 
             "bridge.context.removeUserFromContext JSON_OBJECT\n"
             "\tjson format - {contextId: string, userId: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
             "\t\tuserId [STRING] - user's id (length in [1,128])"
         },
         {bridge_context_removeUserFromContextByPubKey,
             "bridge.context.removeUserFromContextByPubKey JSON_OBJECT\n"
             "\tjson format - {contextId: string, userPubKey: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
             "\t\tuserPubKey [STRING] - context user's public key"
         },
         {bridge_context_getUserFromContext, 
             "bridge.context.getUserFromContext JSON_OBJECT\n"
             "\tjson format - {contextId: string, userId: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
             "\t\tuserId [STRING] - user's id (length in [1,128])"
         },
         {bridge_context_getUserFromContextByPubKey, 
             "bridge.context.getUserFromContextByPubKey JSON_OBJECT\n"
             "\tjson format - {contextId: string, pubKey: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
             "\t\tpubKey [STRING] - context user's public key"
         },
         {bridge_context_listUsersFromContext, 
             "bridge.context.listUsersFromContext JSON_OBJECT\n"
             "\tjson format - {contextId: string, skip: number, limit: number, sortOrder: asc|desc, lastId?: string}\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
-            "\t\tskip [NUMBER] - (in range: [0,∞])"
-            "\t\tlimit [NUMBER] - (in range: [1,100])"
-            "\t\tsortOrder [STRING] - desc|asc"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
+            "\t\tskip [NUMBER] - (in range: [0,∞])\n"
+            "\t\tlimit [NUMBER] - (in range: [1,100])\n"
+            "\t\tsortOrder [STRING] - desc|asc\n"
             "\t\tlastId [STRING] - (optional) (length in [1,60])"
         },
         {bridge_context_setUserAcl,
             "bridge.context.setUserAcl JSON_OBJECT\n"
             "\tjson format - {contextId: string, userId: string, acl: string}]\n"
-            "\t\tcontextId [STRING] - context's id (length in [1,128])"
-            "\t\tuserId [STRING] - user's id (length in [1,128])"
+            "\t\tcontextId [STRING] - context's id (length in [1,128])\n"
+            "\t\tuserId [STRING] - user's id (length in [1,128])\n"
             "\t\tacl [STRING] - user acl (length in [0,4096])"
         },
     };

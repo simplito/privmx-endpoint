@@ -375,10 +375,13 @@ void Executer::exec_help(func_enum fun_code, const std::string& fun_name) {
     auto it_internal_short = functions_internal_help_short_description.find(fun_code);
     std::ostringstream ss;
     if(it_internal == functions_internal_help_description.end() && it_internal_short == functions_internal_help_short_description.end()) {
-        bool endpoint_function_found = _endpoint.execute_help(fun_code, fun_name);
-        if(!endpoint_function_found){
-            _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function description not found " + fun_name);
+        if(_endpoint.execute_help(fun_code, fun_name)) {
+            return;
         }
+        if(_bridge.execute_help(fun_code, fun_name)) {
+            return;
+        }
+        _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function description not found " + fun_name);
         return;
     }
     if(it_internal_short == functions_internal_help_short_description.end()) {
