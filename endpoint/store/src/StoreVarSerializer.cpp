@@ -36,6 +36,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::Store>(const store::Store& va
     obj->set("version", serialize(val.version));
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("publicMeta", serialize(val.publicMeta));
+    obj->set("policy", serialize(val.policy));
     obj->set("filesCount", serialize(val.filesCount));
     obj->set("statusCode", serialize(val.statusCode));
     return obj;
