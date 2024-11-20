@@ -54,7 +54,7 @@ inline std::optional<T> VarDeserializer::deserializeOptional(const Poco::Dynamic
     if (val.isEmpty()) {
         return std::nullopt;
     }
-    return deserialize<T>(val.extract<T>(), name);
+    return deserialize<T>(val, name);
 }
 
 template<>
