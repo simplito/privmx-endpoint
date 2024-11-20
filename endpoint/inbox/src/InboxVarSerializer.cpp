@@ -62,6 +62,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::Inbox>(const inbox::Inbox& va
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("filesConfig", serialize(val.filesConfig));
+    obj->set("policy", serialize(val.policy));
     return obj;
 }
 
