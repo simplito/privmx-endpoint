@@ -221,7 +221,7 @@ void DataProcesor::ExecuteCommand(const Tokens& command) {
 }
 
 std::string DataProcesor::evalArg(std::string value) {
-    size_t n = 10000;
+    size_t n = 1000000;
     while (n-->0) {
         size_t var_pose_start;
         size_t var_pose_stop;

@@ -152,13 +152,16 @@ CliArgsData parseArgs(int argc, char *argv[]) {
             case 'g':
                 {  
                     std::string tmp = optarg;
-                    if(tmp == "cpp" || tmp == "2") {
+                    if(tmp == "default" || tmp == "0") {
+                        config.get_format = get_format_type::default_std;
+                    } else if(tmp == "cpp" || tmp == "2") {
                         config.get_format = get_format_type::cpp;
                     } else if (tmp == "python" || tmp == "3") {
                         config.get_format = get_format_type::python;
                     } else if (tmp == "bash" || tmp == "1") {
                         config.get_format = get_format_type::bash;
                     } else {
+                        cout << ConsoleStatusColor::normal << "-> " << ConsoleStatusColor::warning << "Unknown output format setting, using default setting" << endl;
                         config.get_format = get_format_type::default_std;
                     }
                 }
