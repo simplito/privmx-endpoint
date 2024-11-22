@@ -92,7 +92,7 @@ private:
         },
         {help, 
             "help FUNCTION_NAME\n"
-            "\talso you can use ? afer function name to get help"
+            "\tyou can also use ? after function name to get help"
         },
         {loopStart, 
             "loopStart N OPTIONAL<ID>\n"
@@ -110,19 +110,19 @@ private:
         },
         {addFront, 
             "addFront VAR_NAME_1 VAR_NAME_2)\n"
-            "\tadd second var on the front of the first var"
+            "\tadd second var in front of the first var"
         },
         {addBack, 
             "addBack VAR_NAME_1 VAR_NAME_2\n"
-            "\tadd second var on the back of the first var"
+            "\tadd second var after the first var"
         },
         {addFrontString, 
             "addFront VAR_NAME, DATA_STRING)\n"
-            "\tadd DATA_STRING on the front of var"
+            "\tadd DATA_STRING in front of var"
         },
         {addBackString, 
             "addBack VAR_NAME, DATA_STRING)\n"
-            "\tadd DATA_STRING on the back of var"
+            "\tadd DATA_STRING after var"
         },
         {use, 
             "addBack PATH)\n"
@@ -134,7 +134,7 @@ private:
         {falias, "create function alias"},
         {salias, "create var alias"},
         {scopy, "copy var"},
-        {sset, "Set new var"},
+        {sset, "set new var"},
         // {ssetArray, "setArray ARRAY_NAME VAR_VALUE ..."},
         {sget, "gets var"},
         {sreadFile, "reads from file"},
@@ -143,10 +143,10 @@ private:
         {loopStart, "marker to start loop"},
         {loopStop, "marker to stop loop"},
         {a_sleep, "sleep for"},
-        {addFront, "add var on the front of the other"},
-        {addBack, "add var on the back of the other"},
-        {addFrontString, "add string on the front of var"},
-        {addBackString, "add string on the front of var"},
+        {addFront, "add var in front of the other"},
+        {addBack, "add var after the other"},
+        {addFrontString, "add string in front of var"},
+        {addBackString, "add string in front of var"},
         {use, "set default path"}
     };
 };
