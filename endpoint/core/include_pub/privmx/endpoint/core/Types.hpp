@@ -145,6 +145,9 @@ struct ItemPolicy {
  * Contains container and its items policies.
  */
 struct ContainerPolicy : public ContainerPolicyWithoutItem {
+    /** 
+     * Policy for container's items
+     */
     std::optional<ItemPolicy> item;
 };
 
