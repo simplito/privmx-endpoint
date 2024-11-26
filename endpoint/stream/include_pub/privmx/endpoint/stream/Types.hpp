@@ -55,6 +55,22 @@ struct VideoRoom {
     bool transport_wide_cc_ext;     // <true|false, whether the transport wide cc extension must be negotiated or not for new publishers>
 };
 
+struct StreamRoom {
+    std::string contextId;
+    std::string streamRoomId;
+    int64_t createDate;
+    std::string creator;
+    int64_t lastModificationDate;
+    std::string lastModifier;
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    int64_t version;
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::ContainerPolicy policy;
+    int64_t statusCode;
+};
+
 struct StreamTrackCreateMeta {
     std::optional<std::string> mid;         //"<unique mid of a stream being published>"
     std::optional<std::string> description; //"<text description of the stream (e.g., My front webcam)>"

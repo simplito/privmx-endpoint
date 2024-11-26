@@ -46,9 +46,12 @@ namespace stream {
 
 #define ENDPOINT_STREAM_EXCEPTION_CODE 0x00080000
 
-DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStreamException, "Unknown endpoint stream exception", "Thread", 0x0008)
+DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStreamException, "Unknown endpoint stream exception", "StreamRoom", 0x0008)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotImplementedException, "Not Implemented", 0x0002)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidEncryptedStreamRoomDataVersionException, "Invalid version of encrypted stream room data", 0x0003)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomPublicDataMismatchException, "Stream room public data mismatch", 0x0004)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknowStreamRoomFormatException, "Unknown stream room format", 0x0005)
 
 } // stream
 } // endpoint

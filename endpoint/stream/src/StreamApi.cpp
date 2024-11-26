@@ -43,16 +43,17 @@ StreamApi StreamApi::create(core::Connection& connection) {
 
 StreamApi::StreamApi(const std::shared_ptr<StreamApiImpl>& impl) : _impl(impl) {}
 
-int64_t StreamApi::roomCreate(
+std::string StreamApi::roomCreate(
     const std::string& contextId, 
     const std::vector<core::UserWithPubKey>& users, 
     const std::vector<core::UserWithPubKey>&managers,
     const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
 ) {
     validateEndpoint();
     try {
-        return _impl->roomCreate(contextId, users, managers, publicMeta, privateMeta);
+        return _impl->roomCreate(contextId, users, managers, publicMeta, privateMeta, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -60,22 +61,26 @@ int64_t StreamApi::roomCreate(
 }
 
 void StreamApi::roomUpdate(
-    const int64_t& streamRoomId, 
+    const std::string& streamRoomId, 
     const std::vector<core::UserWithPubKey>& users, 
     const std::vector<core::UserWithPubKey>&managers,
     const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta
+    const core::Buffer& privateMeta, 
+    const int64_t version, 
+    const bool force, 
+    const bool forceGenerateNewKey, 
+    const std::optional<core::ContainerPolicy>& policies
 ) {
     validateEndpoint();
     try {
-        return _impl->roomUpdate(streamRoomId, users, managers, publicMeta, privateMeta);
+        return _impl->roomUpdate(streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-core::PagingList<VideoRoom> StreamApi::streamRoomList(const std::string& contextId, const core::PagingQuery& query) {
+core::PagingList<StreamRoom> StreamApi::streamRoomList(const std::string& contextId, const core::PagingQuery& query) {
     validateEndpoint();
     try {
         return _impl->streamRoomList(contextId, query);
@@ -85,7 +90,7 @@ core::PagingList<VideoRoom> StreamApi::streamRoomList(const std::string& context
     }
 }
 
-VideoRoom StreamApi::streamRoomGet(int64_t streamRoomId) {
+StreamRoom StreamApi::streamRoomGet(const std::string& streamRoomId) {
     validateEndpoint();
     try {
         return _impl->streamRoomGet(streamRoomId);
@@ -95,7 +100,7 @@ VideoRoom StreamApi::streamRoomGet(int64_t streamRoomId) {
     }
 }
 
-void StreamApi::streamRoomDelete(int64_t streamRoomId) {
+void StreamApi::streamRoomDelete(const std::string& streamRoomId) {
     validateEndpoint();
     try {
         return _impl->streamRoomDelete(streamRoomId);
@@ -105,7 +110,7 @@ void StreamApi::streamRoomDelete(int64_t streamRoomId) {
     }
 }
 
-int64_t StreamApi::streamCreate(int64_t streamRoomId, const StreamCreateMeta& meta) {
+int64_t StreamApi::streamCreate(const std::string& streamRoomId, const StreamCreateMeta& meta) {
     validateEndpoint();
     try {
         return _impl->streamCreate(streamRoomId, meta);
@@ -125,7 +130,7 @@ void StreamApi::streamUpdate(int64_t streamId, const StreamCreateMeta& meta) {
     }
 }
 
-core::PagingList<Stream> StreamApi::streamList(int64_t streamRoomId, const core::PagingQuery& query) {
+core::PagingList<Stream> StreamApi::streamList(const std::string& streamRoomId, const core::PagingQuery& query) {
     validateEndpoint();
     try {
         return _impl->streamList(streamRoomId, query);
@@ -135,7 +140,7 @@ core::PagingList<Stream> StreamApi::streamList(int64_t streamRoomId, const core:
     }
 }
 
-Stream StreamApi::streamGet(int64_t streamRoomId, int64_t streamId) {
+Stream StreamApi::streamGet(const std::string& streamRoomId, int64_t streamId) {
     validateEndpoint();
     try {
         return _impl->streamGet(streamRoomId, streamId);
@@ -175,7 +180,7 @@ void StreamApi::streamTrackRemove(const std::string& streamTrackId) {
     }
 }
 
-List<TrackInfo> StreamApi::streamTrackList(int64_t streamRoomId, int64_t streamId) {
+List<TrackInfo> StreamApi::streamTrackList(const std::string& streamRoomId, int64_t streamId) {
     validateEndpoint();
     try {
         return _impl->streamTrackList(streamRoomId, streamId);

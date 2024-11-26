@@ -55,6 +55,28 @@ ENDPOINT_SERVER_TYPE(VideoRoom)
     BOOL_FIELD(transport_wide_cc_ext) 
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamRoomDataEntry)
+    STRING_FIELD(keyId)
+    VAR_FIELD(data)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamRoomInfo)
+    STRING_FIELD(id)
+    STRING_FIELD(contextId)
+    INT64_FIELD(createDate)
+    STRING_FIELD(creator)
+    INT64_FIELD(lastModificationDate)
+    STRING_FIELD(lastModifier)
+    LIST_FIELD(data, StreamRoomDataEntry)
+    STRING_FIELD(keyId)
+    LIST_FIELD(users, std::string)
+    LIST_FIELD(managers, std::string)
+    LIST_FIELD(keys, core::server::KeyEntry)
+    INT64_FIELD(version)
+    STRING_FIELD(type)
+    VAR_FIELD(policy)
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(StreamTrackCreateMeta)
     STRING_FIELD(mid)
     STRING_FIELD(description)
@@ -80,7 +102,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE_INHERIT(TrackInfo, VideoRoomStreamTrack)
     STRING_FIELD(type)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
     OBJECT_FIELD(meta, DataChannelMeta)
     STRING_FIELD(dataTrackId)
@@ -93,7 +115,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(Stream)
     INT64_FIELD(streamId)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     BOOL_FIELD(remote)
     OBJECT_FIELD(createStreamMeta, StreamCreateMeta)
     OBJECT_FIELD(remoteStreamInfo, StreamRemoteInfo)
@@ -111,7 +133,7 @@ ENDPOINT_SERVER_TYPE(StreamTrackMeta)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamAndTracksSelector)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
     LIST_FIELD(tracks, std::string)
 TYPE_END
@@ -119,32 +141,39 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
     STRING_FIELD(contextId)
     STRING_FIELD(keyId)
+    VAR_FIELD(data)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
-    LIST_FIELD(keys, core::server::KeyEntry)
+    LIST_FIELD(keys, core::server::KeyEntrySet)
     STRING_FIELD(privateMeta)
     STRING_FIELD(publicMeta)
+    VAR_FIELD(policy)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomCreateResult)
-    INT64_FIELD(contextId)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomUpdateModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(id)
     STRING_FIELD(keyId)
+    VAR_FIELD(data)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
-    LIST_FIELD(keys, core::server::KeyEntry)
+    LIST_FIELD(keys, core::server::KeyEntrySet)
     STRING_FIELD(privateMeta)
     STRING_FIELD(publicMeta)
+    INT64_FIELD(version)
+    BOOL_FIELD(force)
+    VAR_FIELD(policy)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomGetModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomGetResult)
+    OBJECT_FIELD(streamRoom, StreamRoomInfo)
     OBJECT_FIELD(videoRoom, VideoRoom)
 TYPE_END
 
@@ -158,16 +187,17 @@ ENDPOINT_SERVER_TYPE(StreamRoomListModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomListResult)
+    LIST_FIELD(streamRooms, StreamRoomInfo)
     LIST_FIELD(videoRooms, VideoRoom)
     INT64_FIELD(count)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomDeleteModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamCreateModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     OBJECT_FIELD(meta, StreamCreateMeta)
 TYPE_END
 
@@ -181,7 +211,7 @@ ENDPOINT_SERVER_TYPE(StreamUpdateModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamListModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(sortOrder)
@@ -195,7 +225,7 @@ ENDPOINT_SERVER_TYPE(StreamListResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamGetModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
 TYPE_END
 
@@ -204,12 +234,12 @@ ENDPOINT_SERVER_TYPE(StreamGetResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamDeleteModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamTrackAddModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     STRING_FIELD(streamTrackId)
     INT64_FIELD(streamId)
     OBJECT_FIELD(meta, DataChannelMeta)
@@ -221,13 +251,13 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamTrackRemoveModel)
     INT64_FIELD(streamId)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     STRING_FIELD(streamTrackId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamTrackListModel)
     INT64_FIELD(streamId)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamTrackListResult)
@@ -241,19 +271,19 @@ ENDPOINT_SERVER_TYPE(StreamTrackSendDataModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamPublishModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
     OBJECT_FIELD(streamMeta, StreamCreateMeta)
     VAR_FIELD(peerConnectionOffer)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamJoinModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     OBJECT_FIELD(streamToJoin, StreamAndTracksSelector)
 TYPE_END
 
@@ -262,12 +292,19 @@ ENDPOINT_SERVER_TYPE(StreamLeaveModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamDataChannelSendModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
     STRING_FIELD(data)
 TYPE_END
 
-
+ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
+    INT64_FIELD(version)
+    STRING_FIELD(publicMeta)
+    OBJECT_PTR_FIELD(publicMetaObject)
+    STRING_FIELD(privateMeta)
+    STRING_FIELD(internalMeta)
+    STRING_FIELD(authorPubKey)
+TYPE_END
 
 } // server
 } // stream

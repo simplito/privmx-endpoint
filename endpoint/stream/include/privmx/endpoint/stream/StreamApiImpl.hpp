@@ -25,6 +25,7 @@ limitations under the License.
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
+#include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
 
 
 namespace privmx {
@@ -44,42 +45,47 @@ public:
     );
     ~StreamApiImpl();
 
-    int64_t roomCreate(
+    std::string roomCreate(
         const std::string& contextId, 
         const std::vector<core::UserWithPubKey>& users, 
         const std::vector<core::UserWithPubKey>&managers,
         const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta
+        const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies
     );
 
     void roomUpdate(
-        const int64_t& streamRoomId, 
+        const std::string& streamRoomId, 
         const std::vector<core::UserWithPubKey>& users, 
         const std::vector<core::UserWithPubKey>&managers,
         const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta
+        const core::Buffer& privateMeta, 
+        const int64_t version, 
+        const bool force, 
+        const bool forceGenerateNewKey, 
+        const std::optional<core::ContainerPolicy>& policies
     );
 
-    core::PagingList<VideoRoom> streamRoomList(const std::string& contextId, const core::PagingQuery& query);
+    core::PagingList<StreamRoom> streamRoomList(const std::string& contextId, const core::PagingQuery& query);
 
-    VideoRoom streamRoomGet(int64_t streamRoomId);
+    StreamRoom streamRoomGet(const std::string& streamRoomId);
 
-    void streamRoomDelete(int64_t streamRoomId);
+    void streamRoomDelete(const std::string& streamRoomId);
     // streamCreate
-    int64_t streamCreate(int64_t streamRoomId, const StreamCreateMeta& meta);
+    int64_t streamCreate(const std::string& streamRoomId, const StreamCreateMeta& meta);
 
     void streamUpdate(int64_t streamId, const StreamCreateMeta& meta);
 
-    core::PagingList<Stream> streamList(int64_t streamRoomId, const core::PagingQuery& query);
+    core::PagingList<Stream> streamList(const std::string& streamRoomId, const core::PagingQuery& query);
 
-    Stream streamGet(int64_t streamRoomId, int64_t streamId);
+    Stream streamGet(const std::string& streamRoomId, int64_t streamId);
 
     void streamDelete(int64_t streamId);
 
     // // streamTrackAdd
     std::string streamTrackAdd(int64_t streamId, const StreamTrackMeta& meta);
     void streamTrackRemove(const std::string& streamTrackId);
-    List<TrackInfo> streamTrackList(int64_t streamRoomId, int64_t streamId);
+    List<TrackInfo> streamTrackList(const std::string& streamRoomId, int64_t streamId);
 
     // funkcje specyficzne dla data-channeli
     // streamTrackSendData (odpowiednik dataChannel - zapisac w dokumentacji)
@@ -94,7 +100,7 @@ public:
     // // streamUnpublish
     void streamUnpublish(int64_t streamId);
 
-    void streamJoin(int64_t streamRoomId, const StreamAndTracksSelector& streamToJoin);
+    void streamJoin(const std::string& streamRoomId, const StreamAndTracksSelector& streamToJoin);
     void streamLeave(int64_t streamId);
 
     // ... tymczasowy callback na nowo pojawiajace sie zdalne kanały (które chcielibysmy czytać)
@@ -103,6 +109,11 @@ public:
     // void testSetStreamEncKey(core::EncKey key);
     
 private:
+    privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
+    StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
+    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
+
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -111,6 +122,8 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
 
+
+    StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
 };
 
 }  // namespace stream

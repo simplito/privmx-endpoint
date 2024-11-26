@@ -44,6 +44,19 @@ struct VideoStream {
     std::string id;  // Assuming the 'id' might be optional in your context, using int64_t
 };
 
+struct StreamRoomDataToEncrypt {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    std::optional<core::Buffer> internalMeta;
+};
+
+struct DecryptedStreamRoomData {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    std::optional<core::Buffer> internalMeta;
+    std::string authorPubKey;
+    int64_t statusCode;
+};
 
 } // stream
 } // endpoint
