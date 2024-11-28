@@ -309,12 +309,10 @@ void StoreApiImpl::deleteFile(const std::string& fileId) {
 }
 
 int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
-    int64_t id;
-    std::shared_ptr<FileWriteHandle> handle;
     //check if store exist
     auto store {getStoreFromServerOrCache(storeId)};
 
-    std::tie(id, handle) = _fileHandleManager.createFileWriteHandle(
+    std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         storeId,
         std::string(),
         (uint64_t)size,
@@ -325,18 +323,16 @@ int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer&
         _requestApi
     );
     handle->createRequestData();
-    return id;
+    return handle->getId();
 }
 
 int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
-    int64_t id;
-    std::shared_ptr<FileWriteHandle> handle;
     //check if file exist
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
 
-    std::tie(id, handle) = _fileHandleManager.createFileWriteHandle(
+   std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         std::string(),
         fileId,
         (uint64_t)size,
@@ -347,7 +343,7 @@ int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& 
         _requestApi
     );
     handle->createRequestData();
-    return id;
+    return handle->getId();
 }
 
 int64_t StoreApiImpl::openFile(const std::string& fileId) {
@@ -401,9 +397,7 @@ int64_t StoreApiImpl::createFileReadHandle(const StoreFileDecryptionParams& stor
     if (storeFileDecryptionParams.cipherType != 1) {
         throw UnsupportedCipherTypeException(std::to_string(storeFileDecryptionParams.cipherType) + " expected type: 1");
     }
-    int64_t id;
-    std::shared_ptr<FileReadHandle> handle;
-    std::tie(id, handle) = _fileHandleManager.createFileReadHandle(
+    std::shared_ptr<FileReadHandle> handle = _fileHandleManager.createFileReadHandle(
         storeFileDecryptionParams.fileId, 
         storeFileDecryptionParams.originalSize,
         storeFileDecryptionParams.sizeOnServer,
@@ -414,7 +408,7 @@ int64_t StoreApiImpl::createFileReadHandle(const StoreFileDecryptionParams& stor
         storeFileDecryptionParams.hmac,
         _serverApi
     );
-    return id;
+    return handle->getId();
 }
 
 void StoreApiImpl::writeToFile(const int64_t handleId, const core::Buffer& dataChunk) {
@@ -440,10 +434,14 @@ void StoreApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
 
 std::string StoreApiImpl::closeFile(const int64_t handle) {
     std::shared_ptr<FileHandle> handlePtr = _fileHandleManager.getFileHandle(handle);
-    if (handlePtr->isWriteHandle()) {
-        return storeFileFinalizeWrite(std::dynamic_pointer_cast<FileWriteHandle>(handlePtr));
-    }
     _fileHandleManager.removeHandle(handle);
+    if (handlePtr->isWriteHandle()) {
+        try {
+            return storeFileFinalizeWrite(std::dynamic_pointer_cast<FileWriteHandle>(handlePtr));
+        } catch (const core::DataDifferentThanDeclaredException& e) {
+            throw WritingToFileInteruptedWrittenDataSmallerThenDeclaredException();
+        }
+    }
     return handlePtr->getFileId();
 }
 

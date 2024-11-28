@@ -39,9 +39,10 @@ struct CommitSendInfo {
 };
 
 struct InboxHandle {
+    const int64_t id;
     std::string inboxId;
     std::string data;
-    std::vector<int64_t> inboxFileHandles;
+    std::vector<std::shared_ptr<store::FileWriteHandle>> inboxFileHandles;
     std::optional<std::string> userPrivKey;
 };
 
@@ -50,12 +51,18 @@ class InboxHandleManager
 {
 public:
     InboxHandleManager(std::shared_ptr<core::HandleManager> handleManager);
-    std::tuple<int64_t, std::shared_ptr<InboxHandle>> createInboxHandle();
+    std::shared_ptr<InboxHandle> createInboxHandle(
+        const std::string& inboxId,
+        const std::string& data,
+        const std::vector<int64_t>& inboxFileHandles,
+        std::optional<std::string> userPrivKey
+    );
     std::shared_ptr<InboxHandle> getInboxHandle(const int64_t& id);
     bool hasInboxHandle(const int64_t& id);
     CommitSendInfo commitInboxHandle(const int64_t& id);
+    void abortInboxHandle(const int64_t& id);
 
-    std::tuple<int64_t, std::shared_ptr<store::FileWriteHandle>> createFileWriteHandle(
+    std::shared_ptr<store::FileWriteHandle> createFileWriteHandle(
         const std::string& storeId,
         const std::string& fileId,
         uint64_t size,
@@ -66,7 +73,7 @@ public:
         std::shared_ptr<store::RequestApi> requestApi
     );
     std::shared_ptr<store::FileWriteHandle> getFileWriteHandle(int64_t fileHandleId);
-    std::tuple<int64_t, std::shared_ptr<store::FileReadHandle>> createFileReadHandle(
+    std::shared_ptr<store::FileReadHandle> createFileReadHandle(
         const std::string& fileId,
         uint64_t fileSize,
         uint64_t serverFileSize,
@@ -78,11 +85,12 @@ public:
         std::shared_ptr<store::ServerApi> server
     );
     std::shared_ptr<store::FileReadHandle> getFileReadHandle(int64_t fileHandleId);
-    void removeFileReadHandle(int64_t fileHandleId);
+    void removeFileHandle(int64_t fileHandleId);
 private:
     std::shared_ptr<core::HandleManager> _handleManager;
     store::FileHandleManager _fileHandleManager;
     utils::ThreadSaveMap<int64_t, std::shared_ptr<InboxHandle>> _map;
+    std::vector<int64_t> _fileHandlesUsedByInboxHandles;
 };
 
 } // inbox

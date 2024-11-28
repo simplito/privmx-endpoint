@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/InboxHandleManager.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
+#include "privmx/endpoint/inbox/Factory.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint;
@@ -19,11 +20,28 @@ using namespace privmx::endpoint::inbox;
 InboxHandleManager::InboxHandleManager(std::shared_ptr<core::HandleManager> handleManager) :
    _handleManager(handleManager), _fileHandleManager(store::FileHandleManager(handleManager, "Inbox")) {}
 
-std::tuple<int64_t, std::shared_ptr<InboxHandle>> InboxHandleManager::createInboxHandle() {
-    std::shared_ptr<InboxHandle> result(new InboxHandle());
+std::shared_ptr<InboxHandle> InboxHandleManager::createInboxHandle(
+    const std::string& inboxId,
+    const std::string& data,
+    const std::vector<int64_t>& inboxFileHandles,
+    std::optional<std::string> userPrivKey
+) {
+    std::vector<std::shared_ptr<store::FileWriteHandle>> fileHandles;
+    for(auto inboxFileHandle: inboxFileHandles) {
+        std::shared_ptr<store::FileWriteHandle> handle = _fileHandleManager.getFileWriteHandle(inboxFileHandle);
+        fileHandles.push_back(handle);
+        _fileHandlesUsedByInboxHandles.push_back(inboxFileHandle);
+    }
     int64_t id = _handleManager->createHandle("Inbox:FilesWrite");
+    std::shared_ptr<InboxHandle> result = std::make_shared<InboxHandle>(InboxHandle{
+        .id=id, 
+        .inboxId=inboxId, 
+        .data=data, 
+        .inboxFileHandles=fileHandles, 
+        .userPrivKey=userPrivKey
+    });
     _map.set(id, result);
-    return std::make_tuple(id, result);
+    return result;
 }
 
 std::shared_ptr<InboxHandle> InboxHandleManager::getInboxHandle(const int64_t& id) {
@@ -44,20 +62,18 @@ CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
     CommitSendInfo result; 
     if(!inboxHandle.value()->inboxFileHandles.empty()) {
         for(auto file_handle : inboxHandle.value()->inboxFileHandles) {
-            std::shared_ptr<store::FileWriteHandle> handle = _fileHandleManager.getFileWriteHandle(file_handle);
-            if(!handle->isReadyToFinalize()) {
+            if(!file_handle->isReadyToFinalize()) {
                 throw core::DataDifferentThanDeclaredException();
             }
         }
 
         for(auto file_handle : inboxHandle.value()->inboxFileHandles) {
             CommitFileInfo file_info;
-            std::shared_ptr<store::FileWriteHandle> handle = _fileHandleManager.getFileWriteHandle(file_handle);
-            file_info.fileSendResult = handle->finalize();
-            file_info.fileSize = handle->getEncryptedFileSize();
-            file_info.size = handle->getSize();
-            file_info.publicMeta = handle->getPublicMeta();
-            file_info.privateMeta = handle->getPrivateMeta();
+            file_info.fileSendResult = file_handle->finalize();
+            file_info.fileSize = file_handle->getEncryptedFileSize();
+            file_info.size = file_handle->getSize();
+            file_info.publicMeta = file_handle->getPublicMeta();
+            file_info.privateMeta = file_handle->getPrivateMeta();
             result.filesInfo.push_back(file_info);
         }
     }
@@ -65,7 +81,19 @@ CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
     return result;
 }
 
-std::tuple<int64_t, std::shared_ptr<store::FileWriteHandle>> InboxHandleManager::createFileWriteHandle(
+void InboxHandleManager::abortInboxHandle(const int64_t& id) {
+    auto inboxHandle = _map.get(id);
+    if(!inboxHandle.has_value()) throw UnknownInboxHandleException();
+    _map.erase(id);
+    _handleManager->removeHandle(id);
+    if(!inboxHandle.value()->inboxFileHandles.empty()) {
+        for(auto file_handle : inboxHandle.value()->inboxFileHandles) {;
+            _fileHandleManager.removeHandle(file_handle->getId());
+        }
+    }
+}
+
+std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandle(
         const std::string& storeId,
         const std::string& fileId,
         uint64_t size,
@@ -77,10 +105,12 @@ std::tuple<int64_t, std::shared_ptr<store::FileWriteHandle>> InboxHandleManager:
 ) {
     return _fileHandleManager.createFileWriteHandle(storeId, fileId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
 }
+
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {
     return _fileHandleManager.getFileWriteHandle(fileHandleId);
 }
-std::tuple<int64_t, std::shared_ptr<store::FileReadHandle>> InboxHandleManager::createFileReadHandle(
+
+std::shared_ptr<store::FileReadHandle> InboxHandleManager::createFileReadHandle(
         const std::string& fileId,
         uint64_t fileSize,
         uint64_t serverFileSize,
@@ -96,7 +126,9 @@ std::tuple<int64_t, std::shared_ptr<store::FileReadHandle>> InboxHandleManager::
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::getFileReadHandle(int64_t fileHandleId) {
     return _fileHandleManager.getFileReadHandle(fileHandleId);
 }
-void InboxHandleManager::removeFileReadHandle(int64_t fileHandleId) {
-    _fileHandleManager.getFileReadHandle(fileHandleId); //only read
+void InboxHandleManager::removeFileHandle(int64_t fileHandleId) {
+    if ( std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) != _fileHandlesUsedByInboxHandles.end() ) {
+        throw HandleIsUsedInInboxHandleException();
+    }
     return _fileHandleManager.removeHandle(fileHandleId);
 }
