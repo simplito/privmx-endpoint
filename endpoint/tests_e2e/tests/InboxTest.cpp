@@ -1410,7 +1410,7 @@ TEST_F(InboxTest, createFileHandle_prepareEntry_writeToFile_sendEntry_as_Public)
         if(inboxHandle == 3) {
             std::string total_data_send = "";
             EXPECT_THROW({
-                inboxApi->sendEntry(inboxHandle);
+                inboxApi->closeFile(fileHandle_1);
             }, core::Exception);
             EXPECT_NO_THROW({
                 for(int i = 0; i<64; i++) {
@@ -1423,9 +1423,6 @@ TEST_F(InboxTest, createFileHandle_prepareEntry_writeToFile_sendEntry_as_Public)
                     total_data_send += random_data;
                 }
             });
-            EXPECT_THROW({
-                inboxApi->sendEntry(inboxHandle);
-            }, core::Exception);
             EXPECT_NO_THROW({
                 for(int i = 0; i<64; i++) {
                     std::string random_data = privmx::crypto::Crypto::randomBytes(1024);
@@ -1533,7 +1530,7 @@ TEST_F(InboxTest, createFileHandle_prepareEntry_writeToFile_sendEntry_as_user) {
         if(inboxHandle == 3) {
             std::string total_data_send = "";
             EXPECT_THROW({
-                inboxApi->sendEntry(inboxHandle);
+                inboxApi->closeFile(fileHandle_1);
             }, core::Exception);
             EXPECT_NO_THROW({
                 for(int i = 0; i<64; i++) {
@@ -1546,9 +1543,6 @@ TEST_F(InboxTest, createFileHandle_prepareEntry_writeToFile_sendEntry_as_user) {
                     total_data_send += random_data;
                 }
             });
-            EXPECT_THROW({
-                inboxApi->sendEntry(inboxHandle);
-            }, core::Exception);
             EXPECT_NO_THROW({
                 for(int i = 0; i<64; i++) {
                     std::string random_data = privmx::crypto::Crypto::randomBytes(1024);

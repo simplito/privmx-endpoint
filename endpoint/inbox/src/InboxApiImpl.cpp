@@ -280,12 +280,9 @@ int64_t InboxApiImpl::prepareEntry(
 
     //check if inbox exist
     auto inboxPublicData {getInboxPublicData(inboxId)};
-
-    std::vector<std::shared_ptr<store::FileWriteHandle>> fileHandles;
-    auto requestModel = Factory::createObject<store::server::CreateRequestModel>();
-    auto filesList = Factory::createList<store::server::FileDefinition>();
-    
     if(!inboxFileHandles.empty()) {
+        std::vector<std::shared_ptr<store::FileWriteHandle>> fileHandles;
+        auto filesList = Factory::createList<store::server::FileDefinition>();
         for(auto inboxFileHandle: inboxFileHandles) {
             std::shared_ptr<store::FileWriteHandle> handle = _inboxHandleManager.getFileWriteHandle(inboxFileHandle);
             fileHandles.push_back(handle);
@@ -295,6 +292,7 @@ int64_t InboxApiImpl::prepareEntry(
                 Factory::createStoreFileDefinition(fileSizeInfo.size, fileSizeInfo.checksumSize)
             );
         }
+        auto requestModel = Factory::createObject<store::server::CreateRequestModel>();
         requestModel.files(filesList);
         store::server::CreateRequestResult requestResult = _requestApi->createRequest(requestModel);
         for(size_t i = 0; i < fileHandles.size();i++) {
@@ -302,14 +300,8 @@ int64_t InboxApiImpl::prepareEntry(
             fileHandles[i]->setRequestData(requestResult.id(), key, (i));
         }
     }
-    int64_t id;
-    std::shared_ptr<InboxHandle> handle;
-    std::tie(id, handle) = _inboxHandleManager.createInboxHandle();
-    handle->inboxId = inboxId;
-    handle->data = data.stdString();
-    handle->inboxFileHandles = inboxFileHandles;
-    handle->userPrivKey = userPrivKey;
-    return id;
+    std::shared_ptr<InboxHandle> handle = _inboxHandleManager.createInboxHandle(inboxId, data.stdString(), inboxFileHandles, userPrivKey);
+    return handle->id;
 }
 
 void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
@@ -341,7 +333,13 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
 
     if (hasFiles) {
         int fileIndex = -1;
-        auto commitSentInfo = _inboxHandleManager.commitInboxHandle(inboxHandle);
+        CommitSendInfo commitSentInfo;
+        try {
+            commitSentInfo = _inboxHandleManager.commitInboxHandle(inboxHandle);
+        } catch (const core::DataDifferentThanDeclaredException& e) {
+            _inboxHandleManager.abortInboxHandle(inboxHandle);
+            throw WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException();
+        }
         for (auto fileInfo : commitSentInfo.filesInfo) {
             fileIndex++;
             auto encryptedFileMeta = _fileMetaEncryptorV4.encrypt(prepareMeta(fileInfo), _userPrivKeyECC, filesMetaKey);
@@ -409,9 +407,7 @@ void InboxApiImpl::deleteEntry(const std::string& inboxEntryId) {
 }
 
 int64_t InboxApiImpl::createFileHandle(const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t fileSize) {
-    int64_t id;
-    std::shared_ptr<store::FileWriteHandle> handle;
-    std::tie(id, handle) = _inboxHandleManager.createFileWriteHandle(
+    std::shared_ptr<store::FileWriteHandle> handle = _inboxHandleManager.createFileWriteHandle(
         std::string(),
         std::string(),
         (uint64_t)fileSize,
@@ -421,7 +417,7 @@ int64_t InboxApiImpl::createFileHandle(const core::Buffer& publicMeta, const cor
         _serverRequestChunkSize,
         _requestApi
     );
-    return id;
+    return handle->getId();
 }
 
 int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store::server::File& file) {
@@ -434,12 +430,10 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     auto decryptedFile = decryptInboxFileMetaV4(file, messageData.privateData.filesMetaKey);
     auto internalMeta = Factory::createObject<store::dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(decryptedFile.internalMeta.stdString()));
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, createInboxFileHandleForRead, file_key_extracted)
-    int64_t id;
-    std::shared_ptr<store::FileReadHandle> handle;
     if ((uint64_t)internalMeta.chunkSize() > SIZE_MAX) {
         throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");
     }
-    std::tie(id, handle) = _inboxHandleManager.createFileReadHandle(
+    std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
         file.id(), 
         (uint64_t)internalMeta.size(),
         (uint64_t)file.size(),
@@ -451,7 +445,7 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
         _serverApi
     );
     PRIVMX_DEBUG_TIME_STOP(InboxApi, createInboxFileHandleForRead, handle_created)
-    return id;    
+    return handle->getId();    
 }
 
 void InboxApiImpl::writeToFile(const int64_t inboxHandle, const int64_t inboxFileHandle, const core::Buffer& dataChunk) {
@@ -494,7 +488,7 @@ void InboxApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
 std::string InboxApiImpl::closeFile(const int64_t handle) {
     PRIVMX_DEBUG_TIME_START(InboxApi, closeFile)
     std::shared_ptr<store::FileHandle> handlePtr = _inboxHandleManager.getFileReadHandle(handle);
-    _inboxHandleManager.removeFileReadHandle(handle);
+    _inboxHandleManager.removeFileHandle(handle);
     PRIVMX_DEBUG_TIME_STOP(InboxApi, closeFile)
     return handlePtr->getFileId();
 }
