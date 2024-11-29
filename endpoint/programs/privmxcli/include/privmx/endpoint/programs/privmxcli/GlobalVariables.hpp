@@ -23,8 +23,10 @@ limitations under the License.
 
 #include "privmx/endpoint/programs/privmxcli/vars/function_enum.hpp"
 #include "privmx/endpoint/programs/privmxcli/vars/function_names_map.hpp"
-#include "privmx/endpoint/programs/privmxcli/vars/function_descriptions_map.hpp"
-#include "privmx/endpoint/programs/privmxcli/vars/function_execute_map.hpp"
+
+namespace privmx {
+namespace endpoint {
+namespace privmxcli {
 
 using Tokens = std::vector<std::string>;
 enum token_type {
@@ -53,27 +55,6 @@ struct CliConfig {
 
 using TokensInfo = std::vector<std::tuple<std::string, token_type>>;
 
-inline std::unordered_map<std::string, func_enum> functions_internal = {
-    {"quit", quit},
-    {"exit", quit},
-    {"falias", falias},
-    {"alias", salias},
-    {"copy", scopy},
-    {"set", sset},
-    // {"setArray", ssetArray},
-    {"get", sget},
-    {"setFromFile", sreadFile},
-    {"saveToFile", swriteFile},
-    {"help", help},
-    {"loopStart", loopStart},
-    {"loopStop", loopStop},
-    {"sleep", a_sleep},
-    {"addFront", addFront},
-    {"addBack", addBack},
-    {"addFrontString", addFrontString},
-    {"addBackString", addBackString}
-};
-
 inline std::unordered_map<std::string, std::string> func_aliases = {
     {"c", "copy"},
     {"fa", "falias"},
@@ -90,6 +71,11 @@ inline std::unordered_map<std::string, std::string> func_aliases = {
 
 inline std::unordered_map<std::string, std::shared_ptr<Poco::Dynamic::Var>> session = {};
 inline bool config_auto_completion = false;
+inline std::string use_path = "";
 inline std::string history_file_path = Poco::Path(Poco::Path::cacheHome(), "privmxcli_history").toString();
+
+} // privmxcli
+} // endpoint
+} // privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_PRIVMXCLI_UTILS_C_HPP_
