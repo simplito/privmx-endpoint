@@ -318,7 +318,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
 
     auto inboxPubKeyECC = privmx::crypto::PublicKey::fromBase58DER(publicData.inboxEntriesPubKeyBase58DER);// keys to encrypt message (generated or taken from param)
     auto _userPrivKeyECC = (handle->userPrivKey.has_value() ? privmx::crypto::PrivateKey::fromWIF(handle->userPrivKey.value()) : privmx::crypto::PrivateKey::generateRandom());
-    auto _userPubKeyECC = _userPrivKey.getPublicKey();
+    auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
 
     std::string filesMetaKey;
     bool hasFiles = !handle->inboxFileHandles.empty();
