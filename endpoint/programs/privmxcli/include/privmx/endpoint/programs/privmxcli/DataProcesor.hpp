@@ -37,8 +37,7 @@ struct Loop {
 
 class DataProcesor {
 public:
-    DataProcesor(std::thread::id main_thread_id, CliConfig config);
-    void updateCliConfig(CliConfig config);
+    DataProcesor(std::shared_ptr<Executer> executer, std::thread::id main_thread_id, std::shared_ptr<CliConfig> config);
 
     int processLine(const std::string &input_line); 
     // jeżeli 1 to brakuje danych by mieć komendę
@@ -56,9 +55,9 @@ private:
     void print_msg(const std::string &message, const std::string &data = "", bool is_error = false);
     std::optional<std::string> procesRawToken(const token_type& type, const std::string& val);
 
-    Executer _executer;
+    std::shared_ptr<Executer> _executer;
     std::string _working_command;
-    CliConfig _config;
+    std::shared_ptr<CliConfig> _config;
     int _working_command_braces;
     int _working_command_square_brackets;
     bool _working_command_reading_string;
