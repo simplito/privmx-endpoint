@@ -78,6 +78,12 @@ CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
         }
     }
     _map.erase(id);
+    _handleManager->removeHandle(id);
+    if(!inboxHandle.value()->inboxFileHandles.empty()) {
+        for(auto file_handle : inboxHandle.value()->inboxFileHandles) {;
+            removeFileHandle(file_handle->getId(), true);
+        }
+    }
     return result;
 }
 
@@ -88,7 +94,7 @@ void InboxHandleManager::abortInboxHandle(const int64_t& id) {
     _handleManager->removeHandle(id);
     if(!inboxHandle.value()->inboxFileHandles.empty()) {
         for(auto file_handle : inboxHandle.value()->inboxFileHandles) {;
-            _fileHandleManager.removeHandle(file_handle->getId());
+           removeFileHandle(file_handle->getId(), true);
         }
     }
 }
@@ -126,8 +132,10 @@ std::shared_ptr<store::FileReadHandle> InboxHandleManager::createFileReadHandle(
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::getFileReadHandle(int64_t fileHandleId) {
     return _fileHandleManager.getFileReadHandle(fileHandleId);
 }
-void InboxHandleManager::removeFileHandle(int64_t fileHandleId) {
-    if ( std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) != _fileHandlesUsedByInboxHandles.end() ) {
+void InboxHandleManager::removeFileHandle(int64_t fileHandleId, bool force) {
+    if(force) {
+        _fileHandlesUsedByInboxHandles.erase(std::find(_fileHandlesUsedByInboxHandles.begin(),_fileHandlesUsedByInboxHandles.end(),fileHandleId));
+    } else if ( std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) != _fileHandlesUsedByInboxHandles.end() ) {
         throw HandleIsUsedInInboxHandleException();
     }
     return _fileHandleManager.removeHandle(fileHandleId);

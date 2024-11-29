@@ -85,7 +85,7 @@ public:
         std::shared_ptr<store::ServerApi> server
     );
     std::shared_ptr<store::FileReadHandle> getFileReadHandle(int64_t fileHandleId);
-    void removeFileHandle(int64_t fileHandleId);
+    void removeFileHandle(int64_t fileHandleId, bool force = false);
 private:
     std::shared_ptr<core::HandleManager> _handleManager;
     store::FileHandleManager _fileHandleManager;
