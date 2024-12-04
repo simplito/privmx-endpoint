@@ -55,6 +55,16 @@ std::vector<std::string> PrepareInitDataInbox(
     uint64_t fun_number
 );
 
+std::vector<std::string> PrepareInitDataCrypto(
+    std::shared_ptr<privmx::endpoint::core::Connection> connection, 
+    std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi, 
+    std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi, 
+    std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::string userId,
+    std::string userPubKey,
+    uint64_t fun_number
+);
+
 std::vector<std::string> PrepareInitData(
     std::shared_ptr<privmx::endpoint::core::Connection> connection, 
     std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi, 

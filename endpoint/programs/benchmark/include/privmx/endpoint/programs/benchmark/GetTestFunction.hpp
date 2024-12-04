@@ -54,6 +54,15 @@ std::function<
     )
 > GetTestFunctionInbox(uint64_t fun_number);
 
+std::function<
+    void(
+        std::shared_ptr<privmx::endpoint::core::Connection>, 
+        std::shared_ptr<privmx::endpoint::thread::ThreadApi>, 
+        std::shared_ptr<privmx::endpoint::store::StoreApi>, 
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>, 
+        const std::vector<std::string>&
+    )
+> GetTestFunctionCrypto(uint64_t fun_number);
 
 std::function<
     void(

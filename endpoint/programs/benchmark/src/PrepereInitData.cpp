@@ -38,6 +38,54 @@ std::vector<std::string> PrepareInitDataThread(
             );
             return result;
         }
+        case 0x00010005 : {
+            auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
+            result.push_back(
+                threadApi->createThread(
+                    contextId,
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private")
+                )
+            );
+            std::string msg_data = "t";
+            for(int i = 0; i < 10; i++) {
+                msg_data.append(msg_data);
+            }
+            result.push_back(msg_data);
+            return result;
+        }
+        case 0x00010006 : {
+            auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
+            result.push_back(
+                threadApi->createThread(
+                    contextId,
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private")
+                )
+            );
+            std::string msg_data = "t";
+            for(int i = 0; i < 12; i++) {
+                msg_data.append(msg_data);
+            }
+            result.push_back(msg_data);
+            return result;
+        }
         case 0x00020000 : {
             auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
             auto threadId = threadApi->createThread(
@@ -87,7 +135,7 @@ std::vector<std::string> PrepareInitDataThread(
                     threadId,
                     core::Buffer::from("public"),
                     core::Buffer::from("private"),
-                    core::Buffer::from("data")
+                    core::Buffer::from(data)
                 )
             );
             return result;
@@ -168,6 +216,54 @@ std::vector<std::string> PrepareInitDataStore(
                     core::Buffer::from("private")
                 )
             );
+            return result;
+        }
+        case 0x00010005 : {
+            auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
+            result.push_back(
+                storeApi->createStore(
+                    contextId,
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private")
+                )
+            );
+            std::string file_data = "s";
+            for(int i = 0; i < 20; i++) {
+                file_data.append(file_data);
+            }
+            result.push_back(file_data);
+            return result;
+        }
+        case 0x00010006 : {
+            auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
+            result.push_back(
+                storeApi->createStore(
+                    contextId,
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private")
+                )
+            );
+            std::string file_data = "s";
+            for(int i = 0; i < 24; i++) {
+                file_data.append(file_data);
+            }
+            result.push_back(file_data);
             return result;
         }
         case 0x00020000 : {
@@ -294,7 +390,8 @@ std::vector<std::string> PrepareInitDataInbox(
         case 0x00010001 :
         case 0x00010002 :
         case 0x00010003 :
-        case 0x00010004 : {
+        case 0x00010004 :
+        case 0x00010005 : {
             auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
             result.push_back(
                 inboxApi->createInbox(
@@ -312,6 +409,31 @@ std::vector<std::string> PrepareInitDataInbox(
                     std::nullopt
                 )
             );
+            return result;
+        }
+        case 0x00010006 : {
+            auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
+            result.push_back(
+                inboxApi->createInbox(
+                    contextId,
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                        .userId=userId,
+                        .pubKey=userPubKey
+                    }},
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    std::nullopt
+                )
+            );
+            std::string file_data = "s";
+            for(int i = 0; i < 20; i++) {
+                file_data.append(file_data);
+            }
+            result.push_back(file_data);
             return result;
         }
         case 0x00020000 : {
@@ -513,6 +635,49 @@ std::vector<std::string> PrepareInitDataInbox(
     return result;
 }
 
+
+std::vector<std::string> PrepareInitDataCrypto(
+    std::shared_ptr<core::Connection> connection, 
+    std::shared_ptr<thread::ThreadApi> threadApi, 
+    std::shared_ptr<store::StoreApi> storeApi, 
+    std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::string userId,
+    std::string userPubKey,
+    uint64_t fun_number
+) {
+    std::vector<std::string> result;
+    switch(fun_number) {
+        case 0x00000000:
+        case 0x00000001: {
+                std::string data = "c";
+                for(int i = 0; i < 10; i++) {
+                    data.append(data);
+                }
+                result.push_back(data);
+            }
+            break;
+        case 0x00000002:
+        case 0x00000003: {
+                std::string data = "c";
+                for(int i = 0; i < 15; i++) {
+                    data.append(data);
+                }
+                result.push_back(data);
+            }
+            break;
+        case 0x00000004: 
+        case 0x00000005: {
+                std::string data = "c";
+                for(int i = 0; i < 20; i++) {
+                    data.append(data);
+                }
+                result.push_back(data);
+            }
+            break; 
+    }
+    return result;
+}
+
 std::vector<std::string> PrepareInitData(
     std::shared_ptr<core::Connection> connection, 
     std::shared_ptr<thread::ThreadApi> threadApi, 
@@ -530,7 +695,10 @@ std::vector<std::string> PrepareInitData(
             return PrepareInitDataStore(connection, threadApi, storeApi, inboxApi, userId, userPubKey, fun_number);
         case Module::inbox:
             return PrepareInitDataInbox(connection, threadApi, storeApi, inboxApi, userId, userPubKey, fun_number);
+        case Module::crypto:
+            return PrepareInitDataCrypto(connection, threadApi, storeApi, inboxApi, userId, userPubKey, fun_number);
     }
-    throw "not found";
+    std::cout << "Module not found" << std::endl;
+    throw "Module not found";
      
 }

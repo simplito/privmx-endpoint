@@ -34,7 +34,8 @@ inline std::unordered_map<std::string, Mode> mode_names = {
 enum Module {
     thread,
     store,
-    inbox
+    inbox,
+    crypto
 };
 
 inline std::unordered_map<std::string, Module> module_names = {
@@ -43,7 +44,9 @@ inline std::unordered_map<std::string, Module> module_names = {
     {"Store", Module::store},
     {"store", Module::store},
     {"Inbox", Module::inbox},
-    {"inbox", Module::inbox}
+    {"inbox", Module::inbox},
+    {"Crypto", Module::crypto},
+    {"crypto", Module::crypto}
 };
 
 #endif // _PRIVMXLIB_ENDPOINT_BENCHMARK_TYPES_

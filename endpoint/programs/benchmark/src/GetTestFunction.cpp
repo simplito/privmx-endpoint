@@ -1,4 +1,7 @@
 #include "privmx/endpoint/programs/benchmark/GetTestFunction.hpp"
+#include <privmx/endpoint/crypto/CryptoApi.hpp>
+#include <privmx/utils/Utils.hpp>
+#include <iostream>
 
 using namespace privmx::endpoint;
 
@@ -193,6 +196,28 @@ std::function<
                 );
                 threadApi->getMessage(messageId);
             });
+        case 0x00010005:
+            // sendMessage 1KB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto threadId = data[2];
+                threadApi->sendMessage(
+                    threadId,
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    core::Buffer::from(data[3])
+                );
+            });
+        case 0x00010006:
+            // sendMessage 4KB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto threadId = data[2];
+                threadApi->sendMessage(
+                    threadId,
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    core::Buffer::from(data[3])
+                );
+            });
         case 0x00020000:
         case 0x00020001:
         case 0x00020002:
@@ -204,7 +229,8 @@ std::function<
             });
         
     }
-    throw "not found";
+    std::cout << "ID not found" << std::endl;
+    throw "ID not found";
 }
 
 std::function<
@@ -412,6 +438,38 @@ std::function<
 
                 storeApi->getFile(fileId);
             });
+        case 0x00010005:
+            // create 1 MB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto storeId = data[2];
+                auto handle = storeApi->createFile(
+                    storeId,
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    1024*1024
+                );
+                storeApi->writeToFile(
+                    handle,
+                    core::Buffer::from(data[3])
+                );
+                storeApi->closeFile(handle);
+            });
+        case 0x00010006:
+            // create 8 MB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto storeId = data[2];
+                auto handle = storeApi->createFile(
+                    storeId,
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    1024*1024*8
+                );
+                storeApi->writeToFile(
+                    handle,
+                    core::Buffer::from(data[3])
+                );
+                storeApi->closeFile(handle);
+            });
         case 0x00020000:
         case 0x00020001:
         case 0x00020002:
@@ -422,7 +480,8 @@ std::function<
                 );
             });
     }
-    throw "not found";
+    std::cout << "ID not found" << std::endl;
+    throw "ID not found";
 }
 
 std::function<
@@ -643,6 +702,105 @@ std::function<
                 );
                 inboxApi->readEntry(entries.readItems[0].entryId);
             });
+        case 0x00010005:
+            // send entry with 5 empty files
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto inboxId = data[2];
+                auto filehandle_0 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    0
+                );
+                auto filehandle_1 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    0
+                );
+                auto filehandle_2 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    0
+                );
+                auto filehandle_3 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    0
+                );
+                auto filehandle_4 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    0
+                );
+                auto handle = inboxApi->prepareEntry(
+                    inboxId,
+                    core::Buffer::from("data"),
+                    {filehandle_0, filehandle_1, filehandle_2, filehandle_3, filehandle_4},
+                    std::nullopt
+                );
+                inboxApi->sendEntry(handle);
+            });
+        case 0x00010006:
+            // send entry with 5 empty files
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto inboxId = data[2];
+                auto filehandle_0 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    1024*1024
+                );
+                auto filehandle_1 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    1024*1024
+                );
+                auto filehandle_2 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    1024*1024
+                );
+                auto filehandle_3 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    1024*1024
+                );
+                auto filehandle_4 = inboxApi->createFileHandle(
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private"),
+                    1024*1024
+                );
+                auto handle = inboxApi->prepareEntry(
+                    inboxId,
+                    core::Buffer::from("data"),
+                    {filehandle_0, filehandle_1, filehandle_2, filehandle_3, filehandle_4},
+                    std::nullopt
+                );
+                inboxApi->writeToFile(
+                    handle,
+                    filehandle_0,
+                    core::Buffer::from(data[3])
+                );
+                inboxApi->writeToFile(
+                    handle,
+                    filehandle_1,
+                    core::Buffer::from(data[3])
+                );
+                inboxApi->writeToFile(
+                    handle,
+                    filehandle_2,
+                    core::Buffer::from(data[3])
+                );
+                inboxApi->writeToFile(
+                    handle,
+                    filehandle_3,
+                    core::Buffer::from(data[3])
+                );
+                inboxApi->writeToFile(
+                    handle,
+                    filehandle_4,
+                    core::Buffer::from(data[3])
+                );
+                inboxApi->sendEntry(handle);
+            });
         case 0x00020000:
         case 0x00020001:
         case 0x00020002:
@@ -653,9 +811,64 @@ std::function<
                 );
             });
     }
-    throw "not found";
+    std::cout << "ID not found" << std::endl;
+    throw "ID not found";
 }
 
+std::function<
+    void(
+        std::shared_ptr<core::Connection>, 
+        std::shared_ptr<thread::ThreadApi>, 
+        std::shared_ptr<store::StoreApi>, 
+        std::shared_ptr<inbox::InboxApi>, 
+        const std::vector<std::string>&
+    )
+> GetTestFunctionCrypto(uint64_t fun_number) {
+    switch(fun_number) {
+        case 0x00000000:
+            // encrypt 1 KB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto key = core::Buffer::from(privmx::utils::Hex::toString(("3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62")));
+                auto encrypted = crypto::CryptoApi::create().encryptDataSymmetric(core::Buffer::from(data[0]), key);
+            });
+        case 0x00000001:
+            // encrypt decrypt 1 KB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto key = core::Buffer::from(privmx::utils::Hex::toString(("3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62")));
+                auto encrypted = crypto::CryptoApi::create().encryptDataSymmetric(core::Buffer::from(data[0]), key);
+                auto decrypted = crypto::CryptoApi::create().encryptDataSymmetric(encrypted, key);
+            });
+        case 0x00000002:
+            // encrypt 32 KB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto key = core::Buffer::from(privmx::utils::Hex::toString(("3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62")));
+                auto encrypted = crypto::CryptoApi::create().encryptDataSymmetric(core::Buffer::from(data[0]), key);
+            });
+        case 0x00000003:
+            // encrypt decrypt 32 KB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto key = core::Buffer::from(privmx::utils::Hex::toString(("3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62")));
+                auto encrypted = crypto::CryptoApi::create().encryptDataSymmetric(core::Buffer::from(data[0]), key);
+                auto decrypted = crypto::CryptoApi::create().encryptDataSymmetric(encrypted, key);
+            });
+        case 0x00000004:
+            // encrypt 1 MB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto key = core::Buffer::from(privmx::utils::Hex::toString(("3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62")));
+                auto encrypted = crypto::CryptoApi::create().encryptDataSymmetric(core::Buffer::from(data[0]), key);
+            });
+        case 0x00000005:
+            // encrypt decrypt 1 MB
+            return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
+                auto key = core::Buffer::from(privmx::utils::Hex::toString(("3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62")));
+                auto encrypted = crypto::CryptoApi::create().encryptDataSymmetric(core::Buffer::from(data[0]), key);
+                auto decrypted = crypto::CryptoApi::create().encryptDataSymmetric(encrypted, key);
+            });
+            
+    }
+    std::cout << "ID not found" << std::endl;
+    throw "ID not found";
+}
 std::function<
     void(
         std::shared_ptr<privmx::endpoint::core::Connection>, 
@@ -672,6 +885,9 @@ std::function<
             return GetTestFunctionStore(fun_number);
         case Module::inbox:
             return GetTestFunctionInbox(fun_number);
+        case Module::crypto:
+            return GetTestFunctionCrypto(fun_number);
     }
-    throw "not found";
+    std::cout << "Module not found" << std::endl;
+    throw "Module not found";
 }

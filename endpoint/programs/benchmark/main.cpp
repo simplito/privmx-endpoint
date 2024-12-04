@@ -47,22 +47,25 @@ int main(int argc, char** argv) {
     const uint64_t benchmark_grup = std::stoull(std::string(params[3]));
 
     //form INI
-    // auto iniFile = std::getenv("INI_FILE_PATH");
-    Poco::Util::IniFileConfiguration::Ptr reader = new Poco::Util::IniFileConfiguration("ServerData.ini");
+    auto iniFile = std::getenv("INI_FILE_PATH");
+    Poco::Util::IniFileConfiguration::Ptr reader = new Poco::Util::IniFileConfiguration(iniFile);
     const std::string userPrivKey = reader->getString("Login.user_1_privKey");
     const std::string userPubKey = reader->getString("Login.user_1_pubKey");
     const std::string userId = reader->getString("Login.user_1_id");
     const std::string solution = reader->getString("Login.solutionId");
-    const std::string platformUrl = reader->getString("Login.instanceUrl");
-    const std::string certsPath = reader->getString("Login.certsPath");
+    auto env_platformUrl = std::getenv("PLATFORM_URL");
+    const std::string platformUrl = env_platformUrl == NULL ? reader->getString("Login.instanceUrl") : ("http://" + std::string(env_platformUrl) + "/");
+    std::cout << platformUrl << std::endl;
     // initialising connection
-    core::Config::setCertsPath(certsPath);
     std::shared_ptr<core::Connection> connection = std::make_shared<core::Connection>(core::Connection::connect(userPrivKey, solution, platformUrl));
     std::shared_ptr<thread::ThreadApi> threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection));
     std::shared_ptr<store::StoreApi> storeApi = std::make_shared<store::StoreApi>(store::StoreApi::create(*connection));
     std::shared_ptr<inbox::InboxApi> inboxApi = std::make_shared<inbox::InboxApi>(inbox::InboxApi::create(*connection, *threadApi, *storeApi));
     //contextId
     auto contextsList = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"});
+    if(contextsList.totalAvailable == 0) {
+        throw;
+    }
     auto contexts = contextsList.readItems;
     const auto context = contextsList.readItems[0];
     const std::string contextId = contexts[0].contextId;
@@ -75,32 +78,29 @@ int main(int argc, char** argv) {
     std::mutex m;
     std::condition_variable cv;
     bool stop = false;
-    std::vector<std::chrono::_V2::system_clock::time_point> run_timestamps = {std::chrono::system_clock::now()};
+    std::vector<std::chrono::_V2::system_clock::time_point> run_timestamps = {};
     std::thread t([&]() {
+        run_timestamps.push_back(std::chrono::system_clock::now());
         while (benchmark_mode == Mode::Timeout ? !stop : N < benchmark_duration) {
             exec(connection, threadApi, storeApi, inboxApi, initLoopData);
             if(!stop) {
                 N++;
                 run_timestamps.push_back(std::chrono::system_clock::now());
-                std::cout << N << ": time - " << std::chrono::duration<double>{(run_timestamps[run_timestamps.size()-1] - run_timestamps[run_timestamps.size()-2])}.count()*1000 << "ms" << std::endl;
+                // std::cout << N << ": time - " << std::chrono::duration<double>{(run_timestamps[run_timestamps.size()-1] - run_timestamps[run_timestamps.size()-2])}.count()*1000 << "ms" << std::endl;
             }
         }
-        N--;
         cv.notify_all();
     }); 
     t.detach();
-    std::chrono::_V2::system_clock::time_point stop_timestamp;
     if(benchmark_mode == Mode::Timeout) {
         std::unique_lock<std::mutex> lock(m);
         if(cv.wait_for(lock, std::chrono::seconds(benchmark_duration)) == std::cv_status::timeout) {
-            stop_timestamp = std::chrono::system_clock::now();
             stop = true;
         }
         cv.wait(lock);
     } else {
         std::unique_lock<std::mutex> lock(m);
         cv.wait(lock);
-        stop_timestamp = std::chrono::system_clock::now();
     }
     connection->disconnect();
     std::cout << "Total time - " << std::chrono::duration<double>{(run_timestamps[run_timestamps.size()-1] - run_timestamps[0])}.count() << "s" << std::endl;
