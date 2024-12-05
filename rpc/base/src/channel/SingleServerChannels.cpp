@@ -12,6 +12,7 @@ limitations under the License.
 #include <privmx/rpc/channel/SingleServerChannels.hpp>
 #include <privmx/rpc/RpcException.hpp>
 #include <privmx/rpc/channel/ChannelEnv.hpp>
+#include <privmx/utils/Debug.hpp>
 
 using namespace privmx;
 using namespace privmx::rpc;
@@ -22,6 +23,7 @@ using namespace Poco;
 SingleServerChannels::SingleServerChannels(const URI& uri) : _uri(uri) {}
 
 future<string> SingleServerChannels::send(const string& data, bool web_socket, const string& path, const std::vector<std::pair<std::string, std::string>>& headers, privmx::utils::CancellationToken::Ptr token, const string& content_type, bool get, bool keepAlive) {
+    PRIVMX_DEBUG_TIME_START(SingleServerChannels, send)
     if (web_socket) {
         return getWebSocket()->send(data, path);
     }
@@ -31,6 +33,8 @@ future<string> SingleServerChannels::send(const string& data, bool web_socket, c
     auto result = _http_channels[index]->send(data, path, headers, token, content_type, get, keepAlive);
 
     token->validate();
+
+    PRIVMX_DEBUG_TIME_STOP(SingleServerChannels, send)
     return result;
 }
 

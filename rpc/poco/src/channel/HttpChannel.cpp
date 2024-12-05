@@ -17,6 +17,7 @@ limitations under the License.
 #include <privmx/rpc/poco/channel/HttpChannel.hpp>
 #include <privmx/rpc/poco/utils/HTTPClientSessionFactory.hpp>
 #include <privmx/utils/PrivmxExtExceptions.hpp>
+#include <privmx/utils/Debug.hpp>
 
 using namespace privmx;
 using namespace privmx::rpc::pocoimpl;
@@ -45,14 +46,17 @@ future<string> HttpChannel::send(const string& data, const string& path, const s
     try {
         Lock lock(_mutex);
         CancellationToken::Task cancel_task(token, [&]{ _http_client->abort(); });
+        PRIVMX_DEBUG_TIME_START(HttpChannel, sendRequest)
         ostream& out = _http_client->sendRequest(request);
         out << data << flush;
         HTTPResponse response;
         istream& stream = _http_client->receiveResponse(response);
         if (response.getStatus() != HTTPResponse::HTTP_OK) {
             _http_client->reset();
+            PRIVMX_DEBUG_TIME_STOP(HttpChannel, sendRequest)
             throw InvalidHttpStatusException();
         }
+        PRIVMX_DEBUG_TIME_STOP(HttpChannel, sendRequest)
         result = string{istreambuf_iterator<char>(stream), istreambuf_iterator<char>()};
         promise.set_value(result);
     } catch (const NetException& e) {

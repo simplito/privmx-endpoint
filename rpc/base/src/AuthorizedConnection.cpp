@@ -71,6 +71,7 @@ const ConnectionOptionsFull& AuthorizedConnection::getOptions() {
 Var AuthorizedConnection::call(const std::string& method, Poco::JSON::Object::Ptr params, const MessageSendOptionsEx& options, privmx::utils::CancellationToken::Ptr token, bool force_plain) {
     ClientEndpoint endpoint(_tickets_manager, _options);
     try {
+        PRIVMX_DEBUG_TIME_START(AuthorizedConnection, call)
         auto result = endpoint.call(method, params, force_plain);
         bool web_socket = options.channel_type.value_or(_options.main_channel) == ChannelType::WEBSOCKET;
         
@@ -82,6 +83,7 @@ Var AuthorizedConnection::call(const std::string& method, Poco::JSON::Object::Pt
             emscripten_sleep(10);
         } while(status == std::future_status::timeout);
         #endif
+        PRIVMX_DEBUG_TIME_STOP(AuthorizedConnection, call)
         return result.get();
     } catch (const TicketsCountIsEqualZeroException& e) {
         _session_established = false;
@@ -164,6 +166,7 @@ void AuthorizedConnection::checkSessionEstablished() {
 }
 
 void AuthorizedConnection::sendRequest(ClientEndpoint& endpoint, bool web_socket, privmx::utils::CancellationToken::Ptr token) {
+    PRIVMX_DEBUG_TIME_START(AuthorizedConnection, sendRequest)
     string request_buff_str = endpoint.request_buff.str();
     endpoint.flush();
     if (request_buff_str.length() <= 0) return;
@@ -177,6 +180,7 @@ void AuthorizedConnection::sendRequest(ClientEndpoint& endpoint, bool web_socket
     #endif
     std::string response = future_response.get();
     stringstream stream(response);
+    PRIVMX_DEBUG_TIME_STOP(AuthorizedConnection, sendRequest)
     endpoint.connection.process(stream);
 }
 

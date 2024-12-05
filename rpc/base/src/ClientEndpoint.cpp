@@ -11,6 +11,7 @@ limitations under the License.
 
 #include <privmx/rpc/ClientEndpoint.hpp>
 #include <privmx/rpc/RpcException.hpp>
+#include <privmx/utils/Debug.hpp>
 
 using namespace privmx;
 using namespace privmx::rpc;
@@ -29,6 +30,7 @@ ClientEndpoint::ClientEndpoint(TicketsManager& tickets_manager, const Connection
 }
 
 future<Var> ClientEndpoint::call(const std::string& method, const Var& params, bool force_plain) {
+    PRIVMX_DEBUG_TIME_START(ClientEndpoint, call)
     if (!force_plain && !_ticket_handshake) {
         _request_lock.lock();
         try {
@@ -55,6 +57,7 @@ future<Var> ClientEndpoint::call(const std::string& method, const Var& params, b
     request_json->set("params", params);
     connection.send(_pson_encoder.encode(request_json));
     _promises.emplace(make_pair(_id, promise<Var>()));
+    PRIVMX_DEBUG_TIME_STOP(ClientEndpoint, call)
     return _promises[_id++].get_future();
 }
 

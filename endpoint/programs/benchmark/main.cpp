@@ -14,6 +14,7 @@
 #include "privmx/endpoint/programs/benchmark/Types.hpp"
 #include "privmx/endpoint/programs/benchmark/GetTestFunction.hpp"
 #include "privmx/endpoint/programs/benchmark/PrepereInitData.hpp"
+#include <privmx/utils/Debug.hpp>
 
 using namespace std::chrono_literals;
 using namespace privmx::endpoint;
@@ -55,12 +56,12 @@ int main(int argc, char** argv) {
     const std::string solution = reader->getString("Login.solutionId");
     auto env_platformUrl = std::getenv("PLATFORM_URL");
     const std::string platformUrl = env_platformUrl == NULL ? reader->getString("Login.instanceUrl") : ("http://" + std::string(env_platformUrl) + "/");
-    std::cout << platformUrl << std::endl;
     // initialising connection
     std::shared_ptr<core::Connection> connection = std::make_shared<core::Connection>(core::Connection::connect(userPrivKey, solution, platformUrl));
     std::shared_ptr<thread::ThreadApi> threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection));
     std::shared_ptr<store::StoreApi> storeApi = std::make_shared<store::StoreApi>(store::StoreApi::create(*connection));
     std::shared_ptr<inbox::InboxApi> inboxApi = std::make_shared<inbox::InboxApi>(inbox::InboxApi::create(*connection, *threadApi, *storeApi));
+    PRIVMX_DEBUG("Benchmark", "init", "Connected")
     //contextId
     auto contextsList = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"});
     if(contextsList.totalAvailable == 0) {
@@ -73,7 +74,9 @@ int main(int argc, char** argv) {
     auto exec = GetTestFunction(benchmark_module, benchmark_grup);
     // prepare init data
     auto initLoopData = PrepareInitData(connection, threadApi, storeApi, inboxApi, userId, userPubKey, benchmark_module, benchmark_grup);
+    PRIVMX_DEBUG("Benchmark", "init", "PrepareInitData")
     // Main
+
     uint64_t N = 0;
     std::mutex m;
     std::condition_variable cv;

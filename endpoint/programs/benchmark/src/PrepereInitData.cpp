@@ -260,7 +260,7 @@ std::vector<std::string> PrepareInitDataStore(
                 )
             );
             std::string file_data = "s";
-            for(int i = 0; i < 24; i++) {
+            for(int i = 0; i < 23; i++) {
                 file_data.append(file_data);
             }
             result.push_back(file_data);

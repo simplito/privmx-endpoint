@@ -20,6 +20,7 @@ limitations under the License.
 #include <privmx/utils/PrivmxExtExceptions.hpp>
 #include <privmx/rpc/RpcException.hpp>
 #include <privmx/utils/Utils.hpp>
+#include <privmx/utils/Debug.hpp>
 
 using namespace privmx;
 using namespace privmx::crypto;
@@ -37,6 +38,7 @@ ConnectionBase::ConnectionBase(std::ostream& output) : _output(output) {
 }
 
 void ConnectionBase::send(const string& packet, UInt8 content_type, bool force_plaintext) {
+    PRIVMX_DEBUG_TIME_START(ConnectionBase, send)
     BinaryBuffer frame_header;
     BinaryBuffer frame_data;
     BinaryBuffer frame_mac;
@@ -57,14 +59,20 @@ void ConnectionBase::send(const string& packet, UInt8 content_type, bool force_p
         string frame_seed = seq_bin.str() + frame_header_body.str();
         string frame_header_tag = Crypto::hmacSha256(_write_state.mac_key, frame_seed);
         string frame_header2 = frame_header_body.str() + frame_header_tag.substr(0, 8);
+        PRIVMX_DEBUG_TIME_CHECKPOINT(ConnectionBase, send, aes256EcbEncrypt)
         frame_header2 = Crypto::aes256EcbEncrypt(frame_header2, _write_state.key);
+        PRIVMX_DEBUG_TIME_CHECKPOINT(ConnectionBase, send, aes256EcbEncrypt done)
         frame_header.writeRaw(frame_header2);
         if (frame_length > 0) {
             string iv = frame_header2;
+            PRIVMX_DEBUG_TIME_CHECKPOINT(ConnectionBase, send, aes256CbcPkcs7Encrypt)
             string frame_data2 = Crypto::aes256CbcPkcs7Encrypt(packet, _write_state.key, iv);
+            PRIVMX_DEBUG_TIME_CHECKPOINT(ConnectionBase, send, aes256CbcPkcs7Encrypt done)
             frame_data.writeRaw(frame_data2);
             string frame_mac_tohmac = frame_seed + iv + frame_data2;
+            PRIVMX_DEBUG_TIME_CHECKPOINT(ConnectionBase, send, hmacSha256)
             string frame_mac_str = Crypto::hmacSha256(_write_state.mac_key, frame_mac_tohmac);
+            PRIVMX_DEBUG_TIME_CHECKPOINT(ConnectionBase, send, hmacSha256 done)
             frame_mac_str = frame_mac_str.substr(0, 16);
             frame_mac.writeRaw(frame_mac_str);
         }
@@ -76,9 +84,11 @@ void ConnectionBase::send(const string& packet, UInt8 content_type, bool force_p
         frame_header.writeRaw("\0\0", 2);
         frame_data.writeRaw(packet);
     }
+    PRIVMX_DEBUG_TIME_STOP(ConnectionBase, send, copyToStream)
     frame_header.copyToStream(_output);
     frame_data.copyToStream(_output);
     frame_mac.copyToStream(_output);
+    PRIVMX_DEBUG_TIME_STOP(ConnectionBase, send)
 }
 
 void ConnectionBase::process(istream& input) {

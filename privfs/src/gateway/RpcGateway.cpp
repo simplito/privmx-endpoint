@@ -26,6 +26,7 @@ limitations under the License.
 #include <privmx/crypto/BIP39.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/privfs/PrivFsException.hpp>
+#include <privmx/utils/Debug.hpp>
 #include <optional>
 
 using namespace privmx;
@@ -72,9 +73,15 @@ RpcGateway::RpcGateway(rpc::AuthorizedConnection::Ptr rpc, std::optional<rpc::Ad
 }
 
 Var RpcGateway::request(const string& method, Object::Ptr params, MessageSendOptionsEx settings, utils::CancellationToken::Ptr token) {
+    PRIVMX_DEBUG_TIME_START(RpcGateway, request)
+    PRIVMX_DEBUG("RpcGateway", "request", "method : " + method)
     if(isConnected()) {
-        return _rpc->call(method, params, settings, token);
+        auto result = _rpc->call(method, params, settings, token);
+        PRIVMX_DEBUG_TIME_STOP(RpcGateway, request)
+        return result;
+
     }
+    PRIVMX_DEBUG_TIME_STOP(RpcGateway, request)
     throw NotConnectedException();
     return Var();
 }
