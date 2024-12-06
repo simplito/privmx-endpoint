@@ -473,11 +473,11 @@ std::function<
         case 0x00020000:
         case 0x00020001:
         case 0x00020002:
-            // get
+            // get 
             return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
-                storeApi->getFile(
-                    data[2]
-                );
+                auto file = storeApi->getFile(data[2]);
+                auto handle = storeApi->openFile(data[2]);
+                storeApi->readFromFile(handle, file.publicMeta.size());
             });
     }
     std::cout << "ID not found" << std::endl;
@@ -806,9 +806,13 @@ std::function<
         case 0x00020002:
             // read
             return ([](std::shared_ptr<core::Connection> connection, std::shared_ptr<thread::ThreadApi> threadApi, std::shared_ptr<store::StoreApi> storeApi, std::shared_ptr<inbox::InboxApi> inboxApi, const std::vector<std::string>& data) {
-                inboxApi->readEntry(
+                auto entry = inboxApi->readEntry(
                     data[2]
                 );
+                for(auto file: entry.files) {
+                    auto handle = inboxApi->openFile(file.info.fileId);
+                    inboxApi->readFromFile(handle, file.publicMeta.size());
+                }
             });
     }
     std::cout << "ID not found" << std::endl;
