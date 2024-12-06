@@ -8,6 +8,7 @@
 #include <privmx/endpoint/inbox/InboxApi.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <functional>
+#include <Poco/Util/IniFileConfiguration.h>
 
 using namespace privmx::endpoint;
 using namespace std::chrono;
@@ -54,13 +55,16 @@ struct Times {
 
 int main() {
 	// the values below should be replaced by the ones corresponding to your Brigde Server instance.
-	auto solutionId {"a03639a4-86ba-4aa0-a88c-91486f0a2635"};
-	auto contextId {"3e0e23f4-c4db-4ce2-8fdc-b03cc234aede"};
-	auto userPubKey {"51WPnnGwztNPWUDEbhncYDxZCZWAFS4M9Yqv94N2335nL92fEn"};
-	auto userPrivKey {"L3ycXibEzJm9t9swoJ4KtSmJsenHmmgRnYY79Q2TqfJMwTGaWfA7"};
-	auto userId {"user1"};
 	
-	auto platformUrl {"http://localhost:9111"};
+	//form INI
+    auto iniFile = std::getenv("INI_FILE_PATH");
+    Poco::Util::IniFileConfiguration::Ptr reader = new Poco::Util::IniFileConfiguration(iniFile);
+    const std::string userPrivKey = reader->getString("Login.user_1_privKey");
+    const std::string userPubKey = reader->getString("Login.user_1_pubKey");
+    const std::string userId = reader->getString("Login.user_1_id");
+    const std::string solutionId = reader->getString("Login.solutionId");
+    auto env_platformUrl = std::getenv("PLATFORM_URL");
+    const std::string platformUrl = env_platformUrl == NULL ? reader->getString("Login.instanceUrl") : ("http://" + std::string(env_platformUrl) + "/");
 	int repeats = 100;
 	bool printToMd = true;
 	
@@ -78,6 +82,13 @@ int main() {
 	auto threadApi {thread::ThreadApi::create(connection)};
 	auto storeApi {store::StoreApi::create(connection)};
 	auto inboxApi {inbox::InboxApi::create(connection, threadApi, storeApi)};
+	auto contextsList = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"});
+    if(contextsList.totalAvailable == 0) {
+        throw;
+    }
+    auto contexts = contextsList.readItems;
+    const auto context = contextsList.readItems[0];
+    const std::string contextId = contexts[0].contextId;
 
 	// setup for test
 	auto threadId {threadApi.createThread(contextId, users, users, emptyData, emptyData)};
