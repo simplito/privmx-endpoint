@@ -75,6 +75,7 @@ Var AuthorizedConnection::call(const std::string& method, Poco::JSON::Object::Pt
         auto result = endpoint.call(method, params, force_plain);
         bool web_socket = options.channel_type.value_or(_options.main_channel) == ChannelType::WEBSOCKET;
         
+        PRIVMX_DEBUG_TIME_CHECKPOINT(AuthorizedConnection, call, sendRequest)
         sendRequest(endpoint, web_socket, token);        
         #ifdef PRIVMX_ENABLE_NET_EMSCRIPTEN
         std::future_status status;
@@ -83,8 +84,10 @@ Var AuthorizedConnection::call(const std::string& method, Poco::JSON::Object::Pt
             emscripten_sleep(10);
         } while(status == std::future_status::timeout);
         #endif
+        PRIVMX_DEBUG_TIME_CHECKPOINT(AuthorizedConnection, call, result.get())
+        auto tmp = result.get();
         PRIVMX_DEBUG_TIME_STOP(AuthorizedConnection, call)
-        return result.get();
+        return tmp;
     } catch (const TicketsCountIsEqualZeroException& e) {
         _session_established = false;
         e.rethrow();

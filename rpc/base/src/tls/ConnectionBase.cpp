@@ -84,7 +84,7 @@ void ConnectionBase::send(const string& packet, UInt8 content_type, bool force_p
         frame_header.writeRaw("\0\0", 2);
         frame_data.writeRaw(packet);
     }
-    PRIVMX_DEBUG_TIME_STOP(ConnectionBase, send, copyToStream)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(ConnectionBase, send, copyToStream)
     frame_header.copyToStream(_output);
     frame_data.copyToStream(_output);
     frame_mac.copyToStream(_output);
@@ -177,6 +177,7 @@ void ConnectionBase::process(istream& input) {
 }
 
 void ConnectionBase::restoreState(const string& ticket_id, const string& master_secret, const string& client_random) {
+    PRIVMX_DEBUG_TIME_START(ConnectionClient, restoreState)
     _client_random = client_random;
     _server_random = ticket_id;
     _master_secret = master_secret;
@@ -184,18 +185,22 @@ void ConnectionBase::restoreState(const string& ticket_id, const string& master_
     _next_read_state = rwstates.read_state;
     _next_write_state = rwstates.write_state;
     changeCipherSpec();
+    PRIVMX_DEBUG_TIME_STOP(ConnectionClient, restoreState)
 }
 
 void ConnectionBase::changeCipherSpec() {
+    PRIVMX_DEBUG_TIME_STOP(ConnectionClient, changeCipherSpec)
     if (!_next_write_state.initialized()) {
         throw WriteStateIsNotInitializedException();
     }
     send("", ContentType::CHANGE_CIPHER_SPEC);
     _write_state = _next_write_state;
     _next_write_state = RWState();
+    PRIVMX_DEBUG_TIME_STOP(ConnectionClient, changeCipherSpec)
 }
 
 ConnectionBase::StatePair ConnectionBase::getFreshRWStates(const string& master_secret, const string& client_random, const string& server_random) {
+    PRIVMX_DEBUG_TIME_START(ConnectionClient, getFreshRWStates)
     string key_block;
     key_block = Crypto::prf_tls12(master_secret, string("key expansion") + server_random + client_random, 4 * 32);
     string client_mac_key = key_block.substr(0, 32);
@@ -205,6 +210,8 @@ ConnectionBase::StatePair ConnectionBase::getFreshRWStates(const string& master_
     StatePairCS pair_cs;
     pair_cs.client_state = RWState(client_key, client_mac_key);
     pair_cs.server_state = RWState(server_key, server_mac_key);
+
+    PRIVMX_DEBUG_TIME_STOP(ConnectionClient, getFreshRWStates)
     return getFreshRWStatesFromParams(pair_cs);
 }
 

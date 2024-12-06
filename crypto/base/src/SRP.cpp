@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/crypto/SRP.hpp>
 #include <privmx/crypto/SrpLogic.hpp>
 #include <privmx/utils/Utils.hpp>
+#include <privmx/utils/Debug.hpp>
 
 using namespace privmx;
 using namespace privmx::crypto;
@@ -87,6 +88,7 @@ string SRP::validateSrpExchange(const Var& packet) {
 }
 
 void SRP::clear() {
+    PRIVMX_DEBUG_TIME_START(SRP, clear)
     _is_initialized = false;
     _I = string();
     _password = string();
@@ -94,6 +96,7 @@ void SRP::clear() {
     _M2 = 0;
     _K = string();
     _srp_data = SrpData();
+    PRIVMX_DEBUG_TIME_STOP(SRP, clear)
 }
 
 string SRP::addPadding(const string& x) {

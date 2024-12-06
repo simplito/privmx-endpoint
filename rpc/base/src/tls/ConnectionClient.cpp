@@ -24,6 +24,7 @@ limitations under the License.
 #include <privmx/utils/Base58.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
+#include <privmx/utils/Debug.hpp>
 #include<optional>
 
 using namespace privmx;
@@ -203,25 +204,31 @@ void ConnectionClient::sessionHandshake(const string& session_id, const PrivateK
 }
 
 void ConnectionClient::reset(bool keepSession) {
+    PRIVMX_DEBUG_TIME_START(ClientEndpoint, reset)
     _read_state = RWState();
     _write_state = RWState();
     _next_read_state = RWState();
     _next_write_state = RWState();
+    PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, reset, objects done)
     _client_random = string();
     _server_random = string();
     _master_secret = string();
     if (keepSession == true) return;
     //session reset
-    _ecdhe_private_key = PrivateKey();
+    PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, reset, session)
+    // _ecdhe_private_key = PrivateKey();
     _ecdhe_is_initialized = false;
-    _ecdhex_private_key = PrivateKey();
+    // _ecdhex_private_key = PrivateKey();
     _ecdhex_is_initialized = false;
-    _private_key = PrivateKey();
+    // _private_key = PrivateKey();
+    PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, reset, session done)
     _srp.clear();
     _K = string();
+    PRIVMX_DEBUG_TIME_STOP(ClientEndpoint, reset)
 }
 
 void ConnectionClient::ticketHandshake() {
+    PRIVMX_DEBUG_TIME_START(ConnectionClient, ticketHandshake)
     SessionTicket ticket = _tickets_manager.useTicket();
     string client_random = Crypto::randomBytes(12);
     Object::Ptr packet = new Object();
@@ -230,6 +237,7 @@ void ConnectionClient::ticketHandshake() {
     packet->set("client_random", BinaryString(client_random));
     send(_pson_encoder.encode(packet), ContentType::HANDSHAKE);
     restore(ticket, client_random);
+    PRIVMX_DEBUG_TIME_STOP(ConnectionClient, ticketHandshake)
 }
 
 void ConnectionClient::ticketRequest(Int32 n) {
@@ -240,7 +248,9 @@ void ConnectionClient::ticketRequest(Int32 n) {
 }
 
 void ConnectionClient::restore(const SessionTicket& ticket, const string& client_random) {
+    PRIVMX_DEBUG_TIME_START(ConnectionClient, restore)
     restoreState(ticket.id, ticket.master_secret, client_random);
+    PRIVMX_DEBUG_TIME_STOP(ConnectionClient, restore)
 }
 
 ConnectionClient::StatePair ConnectionClient::getFreshRWStatesFromParams(const StatePairCS& state_pair_cs) {

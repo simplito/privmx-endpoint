@@ -67,8 +67,8 @@ run_benchmark store 65542
 # echo "Inbox create entry 5 files"
 # run_benchmark inbox 65541
 
-echo "Inbox create entry 5 files 1MB"
-run_benchmark inbox 65542
+# echo "Inbox create entry 5 files 1MB"
+# run_benchmark inbox 65542
 
 
 

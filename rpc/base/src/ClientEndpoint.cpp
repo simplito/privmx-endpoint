@@ -34,11 +34,16 @@ future<Var> ClientEndpoint::call(const std::string& method, const Var& params, b
     if (!force_plain && !_ticket_handshake) {
         _request_lock.lock();
         try {
+            PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, reset)
             connection.reset();
+            PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, ticketHandshake)
             connection.ticketHandshake();
+            PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, ticketHandshake done)
             _ticket_handshake = true;
             if (tickets_manager.shouldAskForNewTickets(TICKETS_MIN_COUNT)) {
+                PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, ticketRequest)
                 connection.ticketRequest(TICKETS_MAX_COUNT);
+                PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, ticketRequest done)
             } else {
                 _request_lock.unlock();
             }
@@ -50,12 +55,15 @@ future<Var> ClientEndpoint::call(const std::string& method, const Var& params, b
             throw TicketHandshakeErrorException();
         }
     }
+    PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, force_plain && !_ticket_handshake done) 
     Object::Ptr request_json = new Object();
     request_json->set("jsonrpc", "2.0");
     request_json->set("id", _id);
     request_json->set("method", method);
     request_json->set("params", params);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, connection.send) 
     connection.send(_pson_encoder.encode(request_json));
+    PRIVMX_DEBUG_TIME_CHECKPOINT(ClientEndpoint, call, connection.send done) 
     _promises.emplace(make_pair(_id, promise<Var>()));
     PRIVMX_DEBUG_TIME_STOP(ClientEndpoint, call)
     return _promises[_id++].get_future();
