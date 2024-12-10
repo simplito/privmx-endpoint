@@ -42,27 +42,27 @@ ConnectionClient::ConnectionClient(std::ostream& output, TicketsManager& tickets
 void ConnectionClient::processHandshakePacket(const Var& packet) {
     string type = packet.extract<Object::Ptr>()->getValue<string>("type");
     if (type == "ecdhe") {
-        if (!_ecdhe_is_initialized) {
+        if (!_ecdhe_private_key.has_value()) {
             throw UnexpectedEcdhePacketFromServerException();
         }
         string key = packet.extract<Object::Ptr>()->getValue<BinaryString>("key");
         PublicKey public_key = PublicKey::fromDER(key);
-        ECDHE ecdhe(_ecdhe_private_key, public_key);
+        ECDHE ecdhe(_ecdhe_private_key.value(), public_key);
         string secret = ecdhe.getSecret();
         extractServerConfig(packet);
-        _ecdhe_is_initialized = false;
+        _ecdhe_private_key = nullopt;
         setPreMasterSecret(secret);
     } else if (type == "ecdhex") {
-        if (!_ecdhex_is_initialized) {
+        if (!_ecdhex_private_key.has_value()) {
             throw UnexpectedEcdhexPacketFromServerException();
         }
         string key = packet.extract<Object::Ptr>()->getValue<BinaryString>("key");
         _host = packet.extract<Object::Ptr>()->getValue<std::string>("host");
         extractServerConfig(packet);
         PublicKey public_key = PublicKey::fromDER(key);
-        ECDHE ecdhe(_ecdhex_private_key, public_key);
+        ECDHE ecdhe(_ecdhex_private_key.value(), public_key);
         string secret = ecdhe.getSecret();
-        _ecdhex_is_initialized = false;
+        _ecdhex_private_key = nullopt;
         setPreMasterSecret(secret);
     } else if (type == "ticket_response") {
         Object::Ptr ticket_response = packet.extract<Object::Ptr>();
@@ -96,8 +96,7 @@ inline string ConnectionClient::getClientAgent() {
 
 void ConnectionClient::ecdheHandshake(const PrivateKey& key) {
     _ecdhe_private_key = key;
-    _ecdhe_is_initialized = true;
-    string public_key = _ecdhe_private_key.getPublicKey().toDER();
+    string public_key = _ecdhe_private_key.value().getPublicKey().toDER();
     Object::Ptr packet = new Object();
     packet->set("type", "ecdhe");
     packet->set("key", BinaryString(public_key));
@@ -107,7 +106,6 @@ void ConnectionClient::ecdheHandshake(const PrivateKey& key) {
 
 void ConnectionClient::ecdhexHandshake(const PrivateKey& key, const std::optional<std::string>& solution) {
     _ecdhex_private_key = key;
-    _ecdhex_is_initialized = true;
     string timestamp = Utils::getNowTimestampStr();
     string nonce = Base64::from(Crypto::randomBytes(32));
     string msg = string("ecdhexlogin ").append(nonce).append(" ").append(timestamp);
@@ -160,7 +158,7 @@ void ConnectionClient::srpHandshake2(const string& username, const std::string& 
 
 void ConnectionClient::keyHandshake(const string& private_key_buf, Int32 tickets, const Var& properties) {
     _private_key = PrivateKey(ECC::fromPrivateKey(private_key_buf));
-    string pub = _private_key.getPublicKey().toBase58DER();
+    string pub = _private_key.value().getPublicKey().toBase58DER();
     _tickets_count = tickets;
     Object::Ptr packet = new Object();
     packet->set("type", "key_init");
@@ -174,7 +172,7 @@ void ConnectionClient::keyHandshake(const string& private_key_buf, Int32 tickets
 
 void ConnectionClient::keyHandshake2(const PrivateKey& private_key, Int32 tickets, GatewayProperties::Ptr properties) {
     _private_key = private_key;
-    string pub = _private_key.getPublicKey().toBase58DER();
+    string pub = _private_key.value().getPublicKey().toBase58DER();
     _tickets_count = tickets;
     Object::Ptr packet = new Object();
     packet->set("type", "key_init");
@@ -212,11 +210,9 @@ void ConnectionClient::reset(bool keepSession) {
     _master_secret = string();
     if (keepSession == true) return;
     //session reset
-    _ecdhe_private_key = PrivateKey();
-    _ecdhe_is_initialized = false;
-    _ecdhex_private_key = PrivateKey();
-    _ecdhex_is_initialized = false;
-    _private_key = PrivateKey();
+    _ecdhe_private_key = nullopt;
+    _ecdhex_private_key = nullopt;
+    _private_key = nullopt;
     _srp.clear();
     _K = string();
 }
@@ -288,11 +284,11 @@ Var ConnectionClient::validateKeyInit(const Var& packet) {
     string nonce = Crypto::randomBytes(32);
     nonce = Base64::from(nonce);
     _K = Crypto::randomBytes(32);
-    ECIES ecies(_private_key, PublicKey::fromBase58DER(key_init->getValue<string>("pub")));
+    ECIES ecies(_private_key.value(), PublicKey::fromBase58DER(key_init->getValue<string>("pub")));
     string K_base64 = Base64::from(ecies.encrypt(_K));
     string signature = "login" + K_base64 + " " + nonce + " " + to_string(timestamp);
     signature = Crypto::sha256(signature);
-    signature = _private_key.signToCompactSignature(signature);
+    signature = _private_key.value().signToCompactSignature(signature);
     Object::Ptr result = new Object();
     result->set("type", "key_exchange");
     result->set("sessionId", session_id);

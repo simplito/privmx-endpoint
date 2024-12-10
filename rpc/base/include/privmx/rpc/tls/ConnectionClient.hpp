@@ -67,12 +67,10 @@ private:
 
     TicketsManager& _tickets_manager;
     Pson::Encoder _pson_encoder;
-    crypto::PrivateKey _ecdhe_private_key;
-    bool _ecdhe_is_initialized = false;
-    crypto::PrivateKey _ecdhex_private_key;
-    bool _ecdhex_is_initialized = false;
+    std::optional<crypto::PrivateKey> _ecdhe_private_key;
+    std::optional<crypto::PrivateKey> _ecdhex_private_key;
     crypto::SRP _srp;
-    crypto::PrivateKey _private_key;
+    std::optional<crypto::PrivateKey> _private_key;
     std::string _K;
     Poco::Int32 _tickets_count;
     Poco::JSON::Object::Ptr _additional_login_step;
