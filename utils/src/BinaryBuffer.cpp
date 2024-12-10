@@ -23,11 +23,11 @@ string BinaryBuffer::str() {
 }
 
 streamsize BinaryBuffer::copyFromStream(istream& istream) {
-    return StreamCopier::copyStreamUnbuffered(istream, stream);
+    return StreamCopier::copyStream(istream, stream);
 }
 
 streamsize BinaryBuffer::copyToStream(ostream& ostream) {
-    return StreamCopier::copyStreamUnbuffered(stream, ostream);
+    return StreamCopier::copyStream(stream, ostream);
 }
 
 std::streamsize BinaryBuffer::copyFrom(BinaryBuffer& buffer) {
