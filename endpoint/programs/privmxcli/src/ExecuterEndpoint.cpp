@@ -27,7 +27,7 @@ using namespace privmx::endpoint::privmxcli;
 ExecuterEndpoint::ExecuterEndpoint(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config, std::shared_ptr<ConsoleWriter> console_writer) : 
     _main_thread_id(main_thread_id), _config(config), _console_writer(console_writer) 
 {
-    core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::STD_STRING_AS_BASE64});
+    core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::STD_STRING});
     core::EventQueueVarInterface event = core::EventQueueVarInterface(core::EventQueue::getInstance(), serializer);
     core::ConnectionVarInterface connection = core::ConnectionVarInterface(serializer);
     core::BackendRequesterVarInterface backendRequester = core::BackendRequesterVarInterface(serializer);
@@ -69,7 +69,28 @@ bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {
             auto evaluated_JSON_arg_var = getS_var(raw_JSON_arg);
             auto evaluated_JSON_arg_string = evaluated_JSON_arg_var.convert<std::string>();
             Poco::JSON::Array::Ptr args = privmx::utils::Utils::parseJson(evaluated_JSON_arg_string).extract<Poco::JSON::Array::Ptr>();
-            auto value = exec(_endpoint, args);    
+            Poco::Dynamic::Var value;
+            if(fun_code == core_connect || fun_code == core_connectPublic)  {
+                core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::STD_STRING});
+                core::EventQueueVarInterface event = core::EventQueueVarInterface(core::EventQueue::getInstance(), serializer);
+                core::BackendRequesterVarInterface backendRequester = core::BackendRequesterVarInterface(serializer);
+                crypto::CryptoApiVarInterface crypto = crypto::CryptoApiVarInterface(serializer);
+                core::ConnectionVarInterface connection = core::ConnectionVarInterface(serializer);
+                if(fun_code == core_connect) {
+                    value = connection.connect(args);
+                } else {
+                    value = connection.connectPublic(args);
+                }
+                thread::ThreadApiVarInterface thread = thread::ThreadApiVarInterface(connection.getApi(),serializer);
+                thread.create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+                store::StoreApiVarInterface store = store::StoreApiVarInterface(connection.getApi(),serializer);
+                store.create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+                inbox::InboxApiVarInterface inbox = inbox::InboxApiVarInterface(connection.getApi(),thread.getApi(), store.getApi(),serializer);
+                inbox.create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+                _endpoint = std::make_shared<ApiVar>(event, connection, backendRequester, crypto, thread, store, inbox);
+            } else {
+                value = exec(_endpoint, args);
+            }
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             std::string output = "null";
             if(!value.isEmpty()) {
