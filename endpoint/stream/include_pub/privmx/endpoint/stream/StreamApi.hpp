@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <vector>
+#include <functional>
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>

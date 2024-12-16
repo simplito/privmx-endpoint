@@ -52,6 +52,10 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotImplementedException, "No
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidEncryptedStreamRoomDataVersionException, "Invalid version of encrypted stream room data", 0x0003)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomPublicDataMismatchException, "Stream room public data mismatch", 0x0004)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknowStreamRoomFormatException, "Unknown stream room format", 0x0005)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidStreamWebSocketRequestIdException, "Invalid stream web socket request id", 0x0006)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamWebsocketDisconnectedException, "Stream websocket disconnected", 0x0007)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NetConnectionException, "Network connection error", 0x0008);
+
 
 } // stream
 } // endpoint

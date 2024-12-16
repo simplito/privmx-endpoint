@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/stream/ServerApi.hpp"
+#include "privmx/endpoint/stream/StreamException.hpp"
 
 using namespace privmx::endpoint::stream;
 using namespace privmx::endpoint;
@@ -73,9 +74,17 @@ void ServerApi::streamLeave(server::StreamLeaveModel model)  {
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("thread." + method, params));
+    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params));
 }
 
 Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
-    return _gateway->request("thread." + method, params);
+    return _gateway->request("stream." + method, params);
+}
+
+template<class T> T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
+    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET}));
+}
+
+Poco::Dynamic::Var ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+    return _gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET});
 }

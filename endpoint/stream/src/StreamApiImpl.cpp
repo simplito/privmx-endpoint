@@ -174,7 +174,10 @@ void StreamApiImpl::streamRoomDelete(const std::string& streamRoomId) {
 }
 
 int64_t StreamApiImpl::streamCreate(const std::string& streamRoomId, const StreamCreateMeta& meta) {
-    throw NotImplementedException();
+    auto streamId = generateNumericId();
+    auto key = std::to_string(streamId);
+    _streams.insert(std::make_pair(key, Stream{streamId, streamRoomId, remote: false, createStreamMeta: meta, remoteStreamInfo: StreamRemoteInfo{}}));
+    return streamId;
 }
 
 void StreamApiImpl::streamUpdate(int64_t streamId, const StreamCreateMeta& meta) {
@@ -214,6 +217,7 @@ void StreamApiImpl::streamTrackRecvData(const std::string& streamTrackId, std::f
 }
 
 void StreamApiImpl::streamPublish(int64_t streamId) {
+    
     throw NotImplementedException();
 }
 
@@ -279,4 +283,8 @@ StreamRoom StreamApiImpl::decryptAndConvertStreamRoomDataToStreamRoom(const serv
     }
     auto e = UnknowStreamRoomFormatException();
     return StreamRoom{{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
+}
+
+int64_t StreamApiImpl::generateNumericId() {
+    return std::rand();
 }

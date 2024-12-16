@@ -17,6 +17,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
 
 #include "privmx/endpoint/stream/StreamApi.hpp"
+#include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 
 using namespace privmx::endpoint;
@@ -228,4 +229,8 @@ void StreamApi::streamUnpublish(int64_t streamId) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
+}
+
+void StreamApi::validateEndpoint() {
+    if(!_impl) throw NotInitializedException();
 }

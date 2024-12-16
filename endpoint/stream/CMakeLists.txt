@@ -2,6 +2,10 @@ file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(INCLUDE_PUB_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include_pub)
 
+link_directories(/home/j23cz/repo/webrtc/src/out-debug/Linux-x64/)
+include_directories(/home/j23cz/repo/webrtc/src/libwebrtc/include/)
+
+
 if(BUILD_SHARED_LIBS)
     add_library(privmxendpointstream SHARED ${SOURCES})
 else()

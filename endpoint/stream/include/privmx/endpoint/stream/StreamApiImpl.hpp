@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -26,7 +27,8 @@ limitations under the License.
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
-
+#include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include <libwebrtc.h>
 
 namespace privmx {
 namespace endpoint {
@@ -43,7 +45,7 @@ public:
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
-    ~StreamApiImpl();
+    // ~StreamApiImpl();
 
     std::string roomCreate(
         const std::string& contextId, 
@@ -113,6 +115,7 @@ private:
     DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
     StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
     StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
+    int64_t generateNumericId();
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -121,9 +124,14 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
-
+    std::unordered_map<std::string, Stream> _streams;
 
     StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
+
+    //web rtc
+    PmxPeerConnectionObserver observer;
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory;
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;
 };
 
 }  // namespace stream

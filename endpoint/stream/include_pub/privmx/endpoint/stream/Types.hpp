@@ -109,7 +109,7 @@ struct StreamRemoteInfo {
 
 struct Stream {
     int64_t streamId;
-    int64_t streamRoomId;
+    std::string streamRoomId;
     bool remote;
     std::optional<StreamCreateMeta> createStreamMeta;
     std::optional<StreamRemoteInfo> remoteStreamInfo;
