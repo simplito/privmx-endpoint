@@ -17,6 +17,7 @@ limitations under the License.
 #include <privmx/rpc/poco/channel/HttpChannel.hpp>
 #include <privmx/rpc/poco/utils/HTTPClientSessionFactory.hpp>
 #include <privmx/utils/PrivmxExtExceptions.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx;
 using namespace privmx::rpc::pocoimpl;
@@ -53,8 +54,11 @@ future<string> HttpChannel::send(const string& data, const string& path, const s
             _http_client->reset();
             throw InvalidHttpStatusException();
         }
+        updateKeepAlive(response);
         result = string{istreambuf_iterator<char>(stream), istreambuf_iterator<char>()};
         promise.set_value(result);
+    } catch (const Poco::Net::NoMessageException& e) {
+        promise.set_exception(make_exception_ptr(NoMessageReceivedException()));
     } catch (const NetException& e) {
         promise.set_exception(make_exception_ptr(NetConnectionException(e.what())));
     } catch (const TimeoutException& e) {
@@ -65,4 +69,17 @@ future<string> HttpChannel::send(const string& data, const string& path, const s
         promise.set_exception(make_exception_ptr(current_exception()));
     }
     return promise.get_future();
+}
+
+#include <iostream>
+void HttpChannel::updateKeepAlive(const HTTPResponse& response) {
+    std::string keepAliveRaw = response.get("Keep-Alive");
+    std::vector<std::string> keepAliveValues = Utils::split(keepAliveRaw, ",");
+    for(auto v: keepAliveValues) {
+        std::vector<std::string> tmp = Utils::split(Utils::trim(v), "=");
+        if(tmp.size() != 2) continue;
+        if(tmp[0] == "timeout") {
+            _http_client->setKeepAliveTimeout(Timespan(std::stoi(tmp[1]), 0));
+        }
+    }
 }

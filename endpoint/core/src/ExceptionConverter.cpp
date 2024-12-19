@@ -81,6 +81,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw network::NotConnectedException(e.what());
                 case 0x0002:
                     throw network::WebsocketDisconnectedException(e.what());
+                case 0x0003:
+                    throw network::NoMessageReceivedException(e.what());
                 default:
                     throw network::EndpointNotConnectedException(e.what());
             }
