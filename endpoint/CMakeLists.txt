@@ -31,3 +31,7 @@ endif(PRIVMX_BUILD_ENDPOINT_INTERFACE)
 if(PRIVMX_BUILD_CLI AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(programs/privmxcli)
 endif()
+
+if(PRIVMX_BUILD_BENCHMARK AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
+    add_subdirectory(programs/benchmark)
+endif()

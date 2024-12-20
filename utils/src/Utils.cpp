@@ -236,3 +236,17 @@ void Utils::rtrim(std::string &s) {
         return !std::isspace(ch);
     }).base(), s.end());
 }
+
+std::vector<std::string> Utils::split(std::string data, const std::string& delimiter) {
+    std::vector<std::string> tokens;
+    size_t pos = 0;
+    std::string token;
+    while ((pos = data.find(delimiter)) != std::string::npos) {
+        token = data.substr(0, pos);
+        tokens.push_back(token);
+        data.erase(0, pos + delimiter.length());
+    }
+    tokens.push_back(data);
+
+    return tokens;
+}

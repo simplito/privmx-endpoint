@@ -44,7 +44,7 @@ After installing Conan - create a Conan config file in the root dir of your proj
 #### **`conanfile.txt`**
 ```
 [requires]
-privmx-endpoint/2.0.1
+privmx-endpoint/2.1.1
 
 [generators]
 CMakeDeps
@@ -68,7 +68,7 @@ add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 target_link_libraries(test_program PUBLIC 
 		privmxendpoint::privmxendpointcore 
 		privmxendpoint::privmxendpointthread 
-		privmxendpoint::crypto
+		privmxendpoint::privmxendpointcrypto
 )
 ```
 
@@ -91,7 +91,7 @@ int main() {
 ### Build project
 
 ```bash
-conan install . --output-folder=build -r privmx --build=missing
+conan install . --output-folder=build --build=missing
 cd build
 cmake .. -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
         -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_BUILD_TYPE=Release

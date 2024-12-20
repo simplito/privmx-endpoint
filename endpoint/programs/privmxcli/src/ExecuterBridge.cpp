@@ -104,7 +104,7 @@ bool ExecuterBridge::execute(const func_enum& fun_code, const Tokens &st) {
             result->set("ErrorCode", e.getCode());
             result->set("ErrorData", e.getData());
             result->set("ErrorType", "privmx::utils::PrivmxException");
-            _console_writer->print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
+            _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const core::Exception& e) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             std::ostringstream ss;
@@ -116,17 +116,17 @@ bool ExecuterBridge::execute(const func_enum& fun_code, const Tokens &st) {
             result->set("ErrorCode", e.getCode());
             result->set("ErrorDescription", e.getDescription());
             result->set("ErrorType", "core::Exception");
-            _console_writer->print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
+            _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const std::exception& e) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             result->set("Error", e.what());
             result->set("Type", "std::exception");
-            _console_writer->print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
+            _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (...) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             result->set("Error", "unknown");
             result->set("Type", "unknown");
-            _console_writer->print_result(Status::Success, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
+            _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         }
         return true;
     }

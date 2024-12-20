@@ -61,6 +61,7 @@ namespace network {
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointNotConnectedException, "Unknown Network Exception", "NetConnection", 0xE001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointNotConnectedException, NotConnectedException, "RpcGateway is not connected", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointNotConnectedException, WebsocketDisconnectedException, "Websocket disconnected", 0x0002)
+DECLARE_ENDPOINT_EXCEPTION(EndpointNotConnectedException, NoMessageReceivedException, "No message received, http session lost", 0x0003)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointServerException, "Unknown Server Exception", "Server", 0xE002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, InvalidHttpStatusException, "Unexpected server data", 0x0001)

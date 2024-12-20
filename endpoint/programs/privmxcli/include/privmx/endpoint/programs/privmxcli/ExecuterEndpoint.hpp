@@ -43,22 +43,23 @@ namespace privmxcli {
 
 struct ApiVar {
     ApiVar(
-        privmx::endpoint::core::EventQueueVarInterface _event,
-        privmx::endpoint::core::ConnectionVarInterface _connection,
-        privmx::endpoint::core::BackendRequesterVarInterface _backendRequester,
-        privmx::endpoint::crypto::CryptoApiVarInterface _crypto,
-        privmx::endpoint::thread::ThreadApiVarInterface _thread,
-        privmx::endpoint::store::StoreApiVarInterface _store,
-        privmx::endpoint::inbox::InboxApiVarInterface _inbox
-
-    ) : event(_event), connection(_connection), backendRequester(_backendRequester), crypto(_crypto), thread(_thread), store(_store), inbox(_inbox) {}
-    privmx::endpoint::core::EventQueueVarInterface event;
-    privmx::endpoint::core::ConnectionVarInterface connection;
-    privmx::endpoint::core::BackendRequesterVarInterface backendRequester;
-    privmx::endpoint::crypto::CryptoApiVarInterface crypto;
-    privmx::endpoint::thread::ThreadApiVarInterface thread;
-    privmx::endpoint::store::StoreApiVarInterface store;
-    privmx::endpoint::inbox::InboxApiVarInterface inbox;
+        core::VarSerializer _serializer,
+        std::shared_ptr<privmx::endpoint::core::EventQueueVarInterface> _event,
+        std::shared_ptr<privmx::endpoint::core::ConnectionVarInterface> _connection,
+        std::shared_ptr<privmx::endpoint::core::BackendRequesterVarInterface> _backendRequester,
+        std::shared_ptr<privmx::endpoint::crypto::CryptoApiVarInterface> _crypto,
+        std::shared_ptr<privmx::endpoint::thread::ThreadApiVarInterface> _thread,
+        std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> _store,
+        std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> _inbox
+    ) : serializer(_serializer), event(_event), connection(_connection), backendRequester(_backendRequester), crypto(_crypto), thread(_thread), store(_store), inbox(_inbox) {}
+    core::VarSerializer serializer;
+    std::shared_ptr<privmx::endpoint::core::EventQueueVarInterface> event;
+    std::shared_ptr<privmx::endpoint::core::ConnectionVarInterface> connection;
+    std::shared_ptr<privmx::endpoint::core::BackendRequesterVarInterface> backendRequester;
+    std::shared_ptr<privmx::endpoint::crypto::CryptoApiVarInterface> crypto;
+    std::shared_ptr<privmx::endpoint::thread::ThreadApiVarInterface> thread;
+    std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> store;
+    std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> inbox;
 };
 
 class ExecuterEndpoint {
@@ -89,227 +90,247 @@ private:
             return Poco::Dynamic::Var();
         }},
         {core_waitEvent, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->event.waitEvent(args);
+            return api->event->waitEvent(args);
         }},
         {core_getEvent, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->event.getEvent(args);
+            return api->event->getEvent(args);
         }},
         {core_emitBreakEvent, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->event.emitBreakEvent(args);
+            return api->event->emitBreakEvent(args);
         }},
         {core_connect, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->connection.connect(args);
+            api->connection->connect(args);
+            std::shared_ptr<thread::ThreadApiVarInterface> thread = std::make_shared<thread::ThreadApiVarInterface>(api->connection->getApi(), api->serializer);
+            thread->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->thread = thread;
+            std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(api->connection->getApi(), api->serializer);
+            store->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->store = store;
+            std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer);
+            inbox->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->inbox = inbox;
+            return Poco::Dynamic::Var();
         }},
         {core_connectPublic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->connection.connectPublic(args);
+            api->connection->connectPublic(args);
+            std::shared_ptr<thread::ThreadApiVarInterface> thread = std::make_shared<thread::ThreadApiVarInterface>(api->connection->getApi(), api->serializer);
+            thread->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->thread = thread;
+            std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(api->connection->getApi(), api->serializer);
+            store->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->store = store;
+            std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer);
+            inbox->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->inbox = inbox;
+            return Poco::Dynamic::Var();
         }},
         {core_disconnect, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->connection.disconnect(args);
+            return api->connection->disconnect(args);
         }},
         {core_getConnectionId, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->connection.getConnectionId(args);
+            return api->connection->getConnectionId(args);
         }},
         {core_listContexts, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->connection.listContexts(args);
+            return api->connection->listContexts(args);
         }},
         {core_backendRequest, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->backendRequester.backendRequest(args);
+            return api->backendRequester->backendRequest(args);
         }},
         {crypto_signData, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.signData(args);
+            return api->crypto->signData(args);
         }},
         {crypto_verifySignature, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.verifySignature(args);
+            return api->crypto->verifySignature(args);
         }},
         {crypto_generatePrivateKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.generatePrivateKey(args);
+            return api->crypto->generatePrivateKey(args);
         }},
         {crypto_derivePrivateKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.derivePrivateKey(args);
+            return api->crypto->derivePrivateKey(args);
         }},
         {crypto_derivePublicKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.derivePublicKey(args);
+            return api->crypto->derivePublicKey(args);
         }},
         {crypto_generateKeySymmetric, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.generateKeySymmetric(args);
+            return api->crypto->generateKeySymmetric(args);
         }},
         {crypto_encryptDataSymmetric, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.encryptDataSymmetric(args);
+            return api->crypto->encryptDataSymmetric(args);
         }},
         {crypto_decryptDataSymmetric, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.decryptDataSymmetric(args);
+            return api->crypto->decryptDataSymmetric(args);
         }},
         {crypto_convertPEMKeytoWIFKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto.convertPEMKeytoWIFKey(args);
+            return api->crypto->convertPEMKeytoWIFKey(args);
         }},
         {thread_createThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.createThread(args);
+            return api->thread->createThread(args);
         }},
         {thread_updateThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.updateThread(args);
+            return api->thread->updateThread(args);
         }},
         {thread_getThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.getThread(args);
+            return api->thread->getThread(args);
         }},
         {thread_listThreads, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.listThreads(args);
+            return api->thread->listThreads(args);
         }},
         {thread_deleteThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.deleteThread(args);
+            return api->thread->deleteThread(args);
         }},
         {thread_sendMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.sendMessage(args);
+            return api->thread->sendMessage(args);
         }},
         {thread_updateMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.updateMessage(args);
+            return api->thread->updateMessage(args);
         }},
         {thread_getMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.getMessage(args);
+            return api->thread->getMessage(args);
         }},
         {thread_listMessages, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.listMessages(args);
+            return api->thread->listMessages(args);
         }},
         {thread_deleteMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.deleteMessage(args);
+            return api->thread->deleteMessage(args);
         }},
         {thread_subscribeForThreadEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.subscribeForThreadEvents(args);
+            return api->thread->subscribeForThreadEvents(args);
         }},
         {thread_unsubscribeFromThreadEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.unsubscribeFromThreadEvents(args);
+            return api->thread->unsubscribeFromThreadEvents(args);
         }},
         {thread_subscribeForMessageEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.subscribeForMessageEvents(args);
+            return api->thread->subscribeForMessageEvents(args);
         }},
         {thread_unsubscribeFromMessageEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread.unsubscribeFromMessageEvents(args);
+            return api->thread->unsubscribeFromMessageEvents(args);
         }},
         {store_createStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.createStore(args);
+            return api->store->createStore(args);
         }},
         {store_updateStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.updateStore(args);
+            return api->store->updateStore(args);
         }},
         {store_getStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.getStore(args);
+            return api->store->getStore(args);
         }},
         {store_listStores, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.listStores(args);
+            return api->store->listStores(args);
         }},
         {store_deleteStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.deleteStore(args);
+            return api->store->deleteStore(args);
         }},
         {store_createFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.createFile(args);
+            return api->store->createFile(args);
         }},
         {store_updateFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.updateFile(args);
+            return api->store->updateFile(args);
         }},
         {store_updateFileMeta, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.updateFileMeta(args);
+            return api->store->updateFileMeta(args);
         }},
         {store_getFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.getFile(args);
+            return api->store->getFile(args);
         }},
         {store_listFiles, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.listFiles(args);
+            return api->store->listFiles(args);
         }},
         {store_deleteFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.deleteFile(args);
+            return api->store->deleteFile(args);
         }},
         {store_openFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.openFile(args);
+            return api->store->openFile(args);
         }},
         {store_readFromFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.readFromFile(args);
+            return api->store->readFromFile(args);
         }},
         {store_writeToFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.writeToFile(args);
+            return api->store->writeToFile(args);
         }},
         {store_seekInFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.seekInFile(args);
+            return api->store->seekInFile(args);
         }},
         {store_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.closeFile(args);
+            return api->store->closeFile(args);
         }},
         {store_subscribeForStoreEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.subscribeForStoreEvents(args);
+            return api->store->subscribeForStoreEvents(args);
         }},
         {store_unsubscribeFromStoreEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.unsubscribeFromStoreEvents(args);
+            return api->store->unsubscribeFromStoreEvents(args);
         }},
         {store_subscribeForFileEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.subscribeForFileEvents(args);
+            return api->store->subscribeForFileEvents(args);
         }},
         {store_unsubscribeFromFileEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store.unsubscribeFromFileEvents(args);
+            return api->store->unsubscribeFromFileEvents(args);
         }},
         {inbox_createInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.createInbox(args);
+            return api->inbox->createInbox(args);
         }},
         {inbox_updateInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.updateInbox(args);
+            return api->inbox->updateInbox(args);
         }},
         {inbox_getInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.getInbox(args);
+            return api->inbox->getInbox(args);
         }},
         {inbox_listInboxes, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.listInboxes(args);
+            return api->inbox->listInboxes(args);
         }},
         {inbox_deleteInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.deleteInbox(args);
+            return api->inbox->deleteInbox(args);
         }},
         {inbox_getInboxPublicView, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.getInboxPublicView(args);
+            return api->inbox->getInboxPublicView(args);
         }},
         {inbox_getInboxPublicView, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.deleteInbox(args);
+            return api->inbox->deleteInbox(args);
         }},
         {inbox_prepareEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.prepareEntry(args);
+            return api->inbox->prepareEntry(args);
         }},
         {inbox_sendEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.sendEntry(args);
+            return api->inbox->sendEntry(args);
         }},
         {inbox_readEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.readEntry(args);
+            return api->inbox->readEntry(args);
         }},
         {inbox_listEntries, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.listEntries(args);
+            return api->inbox->listEntries(args);
         }},
         {inbox_deleteEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.deleteEntry(args);
+            return api->inbox->deleteEntry(args);
         }},
         {inbox_createFileHandle, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.createFileHandle(args);
+            return api->inbox->createFileHandle(args);
         }},
         {inbox_writeToFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.writeToFile(args);
+            return api->inbox->writeToFile(args);
         }},
         {inbox_openFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.openFile(args);
+            return api->inbox->openFile(args);
         }},
         {inbox_readFromFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.readFromFile(args);
+            return api->inbox->readFromFile(args);
         }},
         {inbox_seekInFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.seekInFile(args);
+            return api->inbox->seekInFile(args);
         }},
         {inbox_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.closeFile(args);
+            return api->inbox->closeFile(args);
         }},
 
         {inbox_subscribeForInboxEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.subscribeForInboxEvents(args);
+            return api->inbox->subscribeForInboxEvents(args);
         }},
         {inbox_unsubscribeFromInboxEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.unsubscribeFromInboxEvents(args);
+            return api->inbox->unsubscribeFromInboxEvents(args);
         }},
         {inbox_subscribeForEntryEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.subscribeForEntryEvents(args);
+            return api->inbox->subscribeForEntryEvents(args);
         }},
         {inbox_unsubscribeFromEntryEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox.unsubscribeFromEntryEvents(args);
+            return api->inbox->unsubscribeFromEntryEvents(args);
         }},
     };
 

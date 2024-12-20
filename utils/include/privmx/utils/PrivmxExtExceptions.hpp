@@ -62,6 +62,7 @@ inline void NAME::rethrow() const {                                             
 DECLARE_PRIVMX_EXCEPTION(NetConnectionException, BaseException, "Network connection error", 0x0001);
 DECLARE_PRIVMX_EXCEPTION_CHILD(NotConnectedException, NetConnectionException, "RpcGateway is not connected", 0x0001);
 DECLARE_PRIVMX_EXCEPTION_CHILD(WebsocketDisconnectedException, NetConnectionException, "Websocket disconnected", 0x0002);
+DECLARE_PRIVMX_EXCEPTION_CHILD(NoMessageReceivedException, NetConnectionException, "No message received, http session lost", 0x0003);
 
 DECLARE_PRIVMX_EXCEPTION(ServerException, BaseException, "Server error", 0x0002);
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidHttpStatusException, ServerException, "Invalid server HTTP status", 0x0001);
