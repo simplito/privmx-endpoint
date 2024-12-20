@@ -8,7 +8,8 @@ include(FindOpenSSL)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
-option(PRIVMX_BUILD_CLI "Building privmxcli example client" OFF)
+option(PRIVMX_BUILD_CLI "Building privmxcli client" OFF)
+option(PRIVMX_BUILD_BENCHMARK "Building privmxBenchmark client" OFF)
 option(PRIVMX_CLI_IMPORTED_LIBRARIES "Using CLI imported libraries" OFF)
 option(PRIVMX_IMPORTED_LIBRARIES "Using imported libraries" OFF)
 option(PRIVMX_ENABLE_TESTS "Enable tests" OFF)
@@ -69,7 +70,8 @@ if(PRIVMX_ENABLE_TESTS_E2E)
 endif()
 
 message(STATUS "Using CLI imported libraries - PRIVMX_CLI_IMPORTED_LIBRARIES=${PRIVMX_CLI_IMPORTED_LIBRARIES}")
-message(STATUS "Building privmxcli example client - PRIVMX_BUILD_CLI=${PRIVMX_BUILD_CLI}")
+message(STATUS "Building privmxcli client - PRIVMX_BUILD_CLI=${PRIVMX_BUILD_CLI}")
+message(STATUS "Building privmxBenchmark client - PRIVMX_BUILD_BENCHMARK=${PRIVMX_BUILD_BENCHMARK}")
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -154,7 +156,6 @@ if(PRIVMX_CONAN)
     endif()
     if(PRIVMX_BUILD_CLI)
         find_package(readline REQUIRED)
-        find_package(GTest REQUIRED)
     endif()
     if(PRIVMX_ENABLE_TESTS) 
         find_package(GTest REQUIRED)

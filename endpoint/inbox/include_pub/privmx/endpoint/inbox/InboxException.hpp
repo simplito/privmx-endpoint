@@ -54,6 +54,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, CannotExtractInboxEntryCreate
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, CannotExtractInboxEntryDeletedException, "Cannot extract InboxEntryDeleted", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, FileFetchFailedException, "File fetch failed", 0x0012)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxPublicDataMismatchException, "Inbox public data mismatch", 0x0013)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException, "Writing to entry interupted. Written data smaller then declared", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, HandleIsUsedInInboxHandleException, "Handle is used in inbox handle", 0x0015)
 
 } // store
 } // endpoint

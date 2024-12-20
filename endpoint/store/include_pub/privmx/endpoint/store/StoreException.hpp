@@ -68,6 +68,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileFetchFailedException, "Fi
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileVersionMismatchException, "File version mismatch", 0x001F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StorePublicDataMismatchException, "Store public data mismatch", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FilePublicDataMismatchException, "File public data mismatch", 0x0021)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, WritingToFileInteruptedWrittenDataSmallerThenDeclaredException, "Writing to file interupted. Written data smaller then declared", 0x0022)
 
 } // store
 } // endpoint

@@ -44,6 +44,7 @@ public:
      * created Store
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
+     * @param policies Store's policies
      * @return created Store ID
      */
     std::string createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
@@ -62,6 +63,7 @@ public:
      * @param version current version of the updated Store
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the Store
+     * @param policies Store's policies
     */
     void updateStore(const std::string& storeId, const std::vector<core::UserWithPubKey>& users,
                      const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t version,

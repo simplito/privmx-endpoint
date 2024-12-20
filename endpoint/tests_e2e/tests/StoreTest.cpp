@@ -1363,11 +1363,6 @@ TEST_F(StoreTest, createFile_writeToFile_closeFile) {
                 total_data_send += random_data;
             }
         });
-        // closeFile size < declared size
-        EXPECT_THROW({
-            storeApi->closeFile(handle);
-        }, core::Exception);
-
         // writeToFile total.size == declared
         EXPECT_NO_THROW({
             for(int i = 0; i < 64; i++) {
@@ -1394,6 +1389,10 @@ TEST_F(StoreTest, createFile_writeToFile_closeFile) {
         EXPECT_NO_THROW({
             fileId = storeApi->closeFile(handle);
         });
+        // closeFile again
+        EXPECT_THROW({
+            storeApi->closeFile(handle);
+        }, core::Exception);
         // validate uploaded data
         if(!fileId.empty()) {
             store::File file;
@@ -1434,7 +1433,7 @@ TEST_F(StoreTest, createFile_writeToFile_closeFile) {
 }
 
 TEST_F(StoreTest, updateFile_writeToFile_closeFile) {
-    // createFile with size = 128*1024*1024
+    // updateFile with size = 128*1024*1024
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->updateFile(
@@ -1459,11 +1458,6 @@ TEST_F(StoreTest, updateFile_writeToFile_closeFile) {
                 total_data_send += random_data;
             }
         });
-        // closeFile size < declared size
-        EXPECT_THROW({
-            storeApi->closeFile(handle);
-        }, core::Exception);
-
         // writeToFile total.size == declared
         EXPECT_NO_THROW({
             for(int i = 0; i < 64; i++) {
@@ -1490,6 +1484,10 @@ TEST_F(StoreTest, updateFile_writeToFile_closeFile) {
         EXPECT_NO_THROW({
             fileId = storeApi->closeFile(handle);
         });
+        // closeFile again
+        EXPECT_THROW({
+            storeApi->closeFile(handle);
+        }, core::Exception);
         // validate uploaded data
         if(!fileId.empty()) {
             store::File file;
@@ -1860,7 +1858,6 @@ TEST_F(StoreTest, openFile_readFromFile_updateFile_closeFile_FileVersionMismatch
         );
     }, store::InvalidFileHandleException);
 }
-
 
 TEST_F(StoreTest, createStore_policy) {
     std::string storeId;

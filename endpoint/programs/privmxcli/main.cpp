@@ -16,9 +16,9 @@
 #include "privmx/crypto/Crypto.hpp"
 #include "privmx/utils/Utils.hpp"
 #include "privmx/utils/PrivmxException.hpp"
-#include "privmx/endpoint/endpoint/EndpointApiJSON.hpp"
 
 #include "privmx/endpoint/programs/privmxcli/DataProcesor.hpp"
+#include "privmx/endpoint/programs/privmxcli/colors/Colors.h"
 #include "privmx/endpoint/programs/privmxcli/colors/Colors.hpp"
 
 using namespace std;
@@ -38,8 +38,19 @@ char* completion_generator(const char* text, int state) {
         for(auto &item : functions_internal){
             keywords.push_back(item.first);
         }
-        for(auto &item : functions){
-            keywords.push_back(item.first);
+        for(auto &item : functions_endpoint){
+            if(use_path.empty()) {
+                keywords.push_back(item.first);
+            } else if(item.first.substr(0, use_path.size()) == use_path) {
+                keywords.push_back(item.first.substr(use_path.size()));
+            }
+        }
+        for(auto &item : functions_bridge){
+            if(use_path.empty()) {
+                keywords.push_back(item.first);
+            } else if(item.first.substr(0, use_path.size()) == use_path) {
+                keywords.push_back(item.first.substr(use_path.size()));
+            }
         }
         for(auto &item : func_aliases){
             keywords.push_back(item.first);
@@ -141,13 +152,16 @@ CliArgsData parseArgs(int argc, char *argv[]) {
             case 'g':
                 {  
                     std::string tmp = optarg;
-                    if(tmp == "cpp" || tmp == "2") {
+                    if(tmp == "default" || tmp == "0") {
+                        config.get_format = get_format_type::default_std;
+                    } else if(tmp == "cpp" || tmp == "2") {
                         config.get_format = get_format_type::cpp;
                     } else if (tmp == "python" || tmp == "3") {
                         config.get_format = get_format_type::python;
                     } else if (tmp == "bash" || tmp == "1") {
                         config.get_format = get_format_type::bash;
                     } else {
+                        cout << ConsoleStatusColor::normal << "-> " << ConsoleStatusColor::warning << "Unknown output format setting, using default setting" << endl;
                         config.get_format = get_format_type::default_std;
                     }
                 }
@@ -180,9 +194,11 @@ int main(int argc, char *argv[]){
     if(pre_filename != ""){
         cli_args_data.filenames.push_back(pre_filename);
     }
-    CliConfig config = cli_args_data.config;
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(cli_args_data.config);
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(main_thread_id, config);
     int missing_data = 0;
-    DataProcesor data_procesor = DataProcesor(main_thread_id, config);
+    
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(main_thread_id, config, console_writer), main_thread_id, config);
 
     //executing data form args
     for(auto line : cli_args_data.lines_to_process) {
@@ -196,7 +212,7 @@ int main(int argc, char *argv[]){
         ifstream f_stream(filename);
         if(!f_stream.good()){
             cerr << ConsoleStatusColor::warning << "File error " << filename << endl;
-            if(config.stop_on_error) exit(EXIT_FAILURE);
+            if(config->stop_on_error) exit(EXIT_FAILURE);
         }
         std::string line;
         while(getline(f_stream, line)){
@@ -210,7 +226,7 @@ int main(int argc, char *argv[]){
     }
     if(missing_data == -1) {
         
-        if(config.stop_on_error) {
+        if(config->stop_on_error) {
             cout << ConsoleStatusColor::error << "incorrect JSON format - skipping command" << endl;
             exit(EXIT_FAILURE);
         } else {
@@ -220,7 +236,7 @@ int main(int argc, char *argv[]){
     
 
     //executing data form interactive mode
-    if(config.std_input){
+    if(config->std_input){
         rl_attempted_completion_function = completer;
         rl_basic_word_break_characters = " ";
 
@@ -228,18 +244,27 @@ int main(int argc, char *argv[]){
 
         read_history(history_file_path.data());
         std::atexit(exiting);
-        cli_args_data.config.is_rl_input = true;
-        data_procesor.updateCliConfig(config);
+        config->is_rl_input = true;
         std::string prev_input = "";
         while(1){
             //temporary solution - wait for all thread to stop writing
+            // without colors
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             reset_c();
-            char *input = readline("privmxcli>> ");
+            std::string msg = "privmxcli >> ";
+            if(use_path.size() > 0) {
+                msg.append(use_path.substr(0,use_path.size()-1)+ " >> ");
+            }
+            // without colors
+            // std::string msg = (std::string)get_reset_c() + "privmxcli >> ";
+            // if(use_path.size() > 0) {
+            //     msg.append((std::string)get_setcolor_c(Color::AQUA) + use_path.substr(0,use_path.size()-1)+ get_reset_c() +" >> ");
+            // }
+            char *input = readline(msg.c_str());
             if(!input) break;
             std::string str_input = input;
             missing_data = data_procesor.processLine(input);
-            if(!missing_data && config.update_history && prev_input != str_input) {
+            if(!missing_data && config->update_history && prev_input != str_input) {
                 prev_input = str_input;
                 add_history(input);
                 write_history(history_file_path.data());
@@ -249,7 +274,7 @@ int main(int argc, char *argv[]){
                 char *input_missing_data = readline("?> ");
                 str_input += std::string(input_missing_data);
                 missing_data = data_procesor.processLine(input_missing_data);
-                if(!missing_data && config.update_history && prev_input != str_input) {
+                if(!missing_data && config->update_history && prev_input != str_input) {
                     prev_input = str_input;
                     add_history(str_input.data());
                     write_history(history_file_path.data());
@@ -261,8 +286,7 @@ int main(int argc, char *argv[]){
             }
             
         }
-        cli_args_data.config.is_rl_input = false;
-        data_procesor.updateCliConfig(config);
+        config->is_rl_input = false;
     }
     
     return EXIT_SUCCESS;

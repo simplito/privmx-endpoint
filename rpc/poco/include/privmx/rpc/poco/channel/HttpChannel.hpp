@@ -33,6 +33,7 @@ public:
     std::future<std::string> send(const std::string& data, const std::string& path = "", const std::vector<std::pair<std::string, std::string>>& headers = {}, privmx::utils::CancellationToken::Ptr token = privmx::utils::CancellationToken::create(), const std::string& content_type = "application/octet-stream", bool get = false, bool keepAlive = true) override;
 
 private:
+    void updateKeepAlive(const Poco::Net::HTTPResponse& response);
     Poco::SharedPtr<Poco::Net::HTTPClientSession> _http_client;
     utils::Mutex _mutex;
 };

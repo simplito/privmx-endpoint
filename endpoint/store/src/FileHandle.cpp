@@ -20,8 +20,8 @@ limitations under the License.
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
 
-FileHandle::FileHandle(const std::string& storeId, const std::string& fileId, uint64_t fileSize): 
-    _storeId(storeId), _fileId(fileId), _size(fileSize) {}
+FileHandle::FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, uint64_t fileSize): 
+    _id(id), _storeId(storeId), _fileId(fileId), _size(fileSize) {}
 
 std::string FileHandle::getStoreId() {
     return _storeId;
@@ -35,7 +35,12 @@ uint64_t FileHandle::getSize() {
     return _size;
 }
 
+int64_t FileHandle::getId() {
+    return _id;
+}
+
 FileReadHandle::FileReadHandle(
+    int64_t id, 
     const std::string& fileId,
     uint64_t fileSize,
     uint64_t serverFileSize,
@@ -46,7 +51,7 @@ FileReadHandle::FileReadHandle(
     const std::string& fileHmac,
     std::shared_ptr<ServerApi> server
 ) 
-    : FileHandle(std::string(), fileId, fileSize) 
+    : FileHandle(id, std::string(), fileId, fileSize) 
 {
     std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(server, ChunkReader::getEncryptedChunkSize(chunkSize), serverChunkSize, fileId, serverFileSize, fileVersion);
     std::shared_ptr<ChunkReader> chunkReader = std::make_shared<ChunkReader>(chunkDataProvider, chunkSize, fileKey, fileHmac);
@@ -80,6 +85,7 @@ void FileReadHandle::seek(uint64_t pos) {
 }
 
 FileWriteHandle::FileWriteHandle(
+    int64_t id, 
     const std::string& storeId,
     const std::string& fileId,
     uint64_t size,
@@ -89,7 +95,7 @@ FileWriteHandle::FileWriteHandle(
     uint64_t serverRequestChunkSize,
     std::shared_ptr<RequestApi> requestApi
 )
-    : FileHandle(storeId, fileId, size),
+    : FileHandle(id, storeId, fileId, size),
     _publicMeta(publicMeta),
     _privateMeta(privateMeta),
     _stream(ChunkBufferedStream(chunkSize, size)),
@@ -139,7 +145,7 @@ void FileWriteHandle::setRequestData(const std::string& requestId, const std::st
 FileHandleManager::FileHandleManager(std::shared_ptr<core::HandleManager> handleManager, const std::string& labelPrefix) : 
     _handleManager(handleManager), _labelPrefix(labelPrefix) {}
 
-std::tuple<int64_t, std::shared_ptr<FileReadHandle>> FileHandleManager::createFileReadHandle(
+std::shared_ptr<FileReadHandle> FileHandleManager::createFileReadHandle(
     const std::string& fileId,
     uint64_t fileSize,
     uint64_t serverFileSize,
@@ -151,12 +157,12 @@ std::tuple<int64_t, std::shared_ptr<FileReadHandle>> FileHandleManager::createFi
     std::shared_ptr<ServerApi> server
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileRead");
-    std::shared_ptr<FileReadHandle> result = std::make_shared<FileReadHandle>(fileId, fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
+    std::shared_ptr<FileReadHandle> result = std::make_shared<FileReadHandle>(id, fileId, fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
     _map.set(id, result);
-    return std::make_tuple(id, result);
+    return result;
 }
 
-std::tuple<int64_t, std::shared_ptr<FileWriteHandle>> FileHandleManager::createFileWriteHandle(
+std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
     const std::string& storeId,
     const std::string& fileId,
     uint64_t size,
@@ -167,9 +173,9 @@ std::tuple<int64_t, std::shared_ptr<FileWriteHandle>> FileHandleManager::createF
     std::shared_ptr<RequestApi> requestApi
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileWrite");
-    std::shared_ptr<FileWriteHandle> result = std::make_shared<FileWriteHandle>(storeId, fileId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
+    std::shared_ptr<FileWriteHandle> result = std::make_shared<FileWriteHandle>(id, storeId, fileId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
     _map.set(id, result);
-    return std::make_tuple(id, result);
+    return result;
 }
 
 std::shared_ptr<FileReadHandle> FileHandleManager::getFileReadHandle(int64_t id) {
@@ -198,6 +204,10 @@ std::shared_ptr<FileHandle> FileHandleManager::getFileHandle(int64_t id) {
 }
 
 void FileHandleManager::removeHandle(int64_t id) {
+    auto handle = _map.get(id);
+    if (!handle.has_value()) {
+        throw InvalidFileHandleException();
+    }
     _map.erase(id);
     _handleManager->removeHandle(id);
 }
