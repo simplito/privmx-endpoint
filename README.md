@@ -44,7 +44,7 @@ After installing Conan - create a Conan config file in the root dir of your proj
 #### **`conanfile.txt`**
 ```
 [requires]
-privmx-endpoint/2.1.2
+privmx-endpoint/2.1.3
 
 [generators]
 CMakeDeps
