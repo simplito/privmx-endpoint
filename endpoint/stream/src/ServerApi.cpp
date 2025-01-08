@@ -61,10 +61,10 @@ void ServerApi::streamTrackSendData(server::StreamTrackSendDataModel model)  {
     request("streamTrackSendData", model);
 }
 Poco::Dynamic::Var ServerApi::streamPublish(server::StreamPublishModel model)  {
-    return request("streamPublish", model);
+    return requestWS("streamPublish", model);
 }
 Poco::Dynamic::Var ServerApi::streamUnpublish(server::StreamUnpublishModel model)  {
-    return request("streamUnpublish", model);
+    return requestWS("streamUnpublish", model);
 }
 void ServerApi::streamJoin(server::StreamJoinModel model)  {
     request("streamJoin", model);
