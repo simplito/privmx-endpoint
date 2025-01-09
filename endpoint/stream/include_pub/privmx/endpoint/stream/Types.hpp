@@ -20,10 +20,23 @@ namespace privmx {
 namespace endpoint {
 namespace stream {
 
-template<typename T>
-struct List {    
-    std::vector<T> list;
+class Frame {
+public:
+    virtual int ConvertToARGB(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
 };
+
+struct streamJoinSettings {
+    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame;
+
+};
+
+enum DeviceType {
+    Audio,
+    Video,
+    Desktop
+};
+
+//Old data
 
 struct VideoRoom {
     int64_t room;                   // <unique numeric ID, optional, chosen by plugin if missing>

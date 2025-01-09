@@ -33,19 +33,21 @@ public:
     server::StreamRoomListResult streamRoomList(server::StreamRoomListModel model);
     server::StreamRoomGetResult streamRoomGet(server::StreamRoomGetModel model);
     void streamRoomDelete(server::StreamRoomDeleteModel model);
-    server::StreamCreateResult streamCreate(server::StreamCreateModel model);
-    void streamUpdate(server::StreamUpdateModel model);
-    server::StreamListResult streamList(server::StreamListModel model);
-    server::StreamGetResult streamGet(server::StreamGetModel model);
-    void streamDelete(server::StreamDeleteModel model);
-    server::StreamTrackAddResult streamTrackAdd(server::StreamTrackAddModel model);
-    void streamTrackRemove(server::StreamTrackRemoveModel model);
-    server::StreamTrackListResult streamTrackList(server::StreamTrackListModel model);
-    void streamTrackSendData(server::StreamTrackSendDataModel model);
-    Poco::Dynamic::Var streamPublish(server::StreamPublishModel model); // ???
-    Poco::Dynamic::Var streamUnpublish(server::StreamUnpublishModel model); // ???
-    void streamJoin(server::StreamJoinModel model);
-    void streamLeave(server::StreamLeaveModel model);
+
+    server::StreamGetTurnCredentialsResult streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model);
+    // server::StreamCreateResult streamCreate(server::StreamCreateModel model);
+    // void streamUpdate(server::StreamUpdateModel model);
+    // server::StreamListResult streamList(server::StreamListModel model);
+    // server::StreamGetResult streamGet(server::StreamGetModel model);
+    // void streamDelete(server::StreamDeleteModel model);
+    // server::StreamTrackAddResult streamTrackAdd(server::StreamTrackAddModel model);
+    // void streamTrackRemove(server::StreamTrackRemoveModel model);
+    // server::StreamTrackListResult streamTrackList(server::StreamTrackListModel model);
+    // void streamTrackSendData(server::StreamTrackSendDataModel model);
+    server::StreamPublishResult streamPublish(server::StreamPublishModel model);
+    // Poco::Dynamic::Var streamUnpublish(server::StreamUnpublishModel model); // ???
+    server::StreamJoinResult streamJoin(server::StreamJoinModel model);
+    // void streamLeave(server::StreamLeaveModel model);
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object

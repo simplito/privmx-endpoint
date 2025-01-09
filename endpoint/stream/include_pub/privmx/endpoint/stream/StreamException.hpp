@@ -55,6 +55,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknowStreamRoomFormatExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidStreamWebSocketRequestIdException, "Invalid stream web socket request id", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamWebsocketDisconnectedException, "Stream websocket disconnected", 0x0007)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NetConnectionException, "Network connection error", 0x0008);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, WebRTCException, "WebRTC error", 0x0009);
 
 
 } // stream

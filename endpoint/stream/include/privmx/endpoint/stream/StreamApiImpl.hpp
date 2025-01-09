@@ -29,6 +29,11 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include <libwebrtc.h>
+#include <rtc_audio_device.h>
+#include <rtc_peerconnection.h>
+#include <base/portable.h>
+#include <rtc_mediaconstraints.h>
+#include <rtc_peerconnection.h>
 
 namespace privmx {
 namespace endpoint {
@@ -73,42 +78,21 @@ public:
     StreamRoom streamRoomGet(const std::string& streamRoomId);
 
     void streamRoomDelete(const std::string& streamRoomId);
-    // streamCreate
-    int64_t streamCreate(const std::string& streamRoomId, const StreamCreateMeta& meta);
+    // Stream
+    int64_t createStream(const std::string& streamRoomId);
 
-    void streamUpdate(int64_t streamId, const StreamCreateMeta& meta);
+    // Adding track
+    std::vector<std::pair<int64_t, std::string>> listAudioRecordingDevices();
+    std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
+    std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
 
-    core::PagingList<Stream> streamList(const std::string& streamRoomId, const core::PagingQuery& query);
+    void trackAdd(int64_t streamId, int64_t id, DeviceType type, const std::string& params_JSON);
+    
+    // Publishing stream
+    void publishStream(int64_t streamId);
 
-    Stream streamGet(const std::string& streamRoomId, int64_t streamId);
-
-    void streamDelete(int64_t streamId);
-
-    // // streamTrackAdd
-    std::string streamTrackAdd(int64_t streamId, const StreamTrackMeta& meta);
-    void streamTrackRemove(const std::string& streamTrackId);
-    List<TrackInfo> streamTrackList(const std::string& streamRoomId, int64_t streamId);
-
-    // funkcje specyficzne dla data-channeli
-    // streamTrackSendData (odpowiednik dataChannel - zapisac w dokumentacji)
-    void streamTrackSendData(const std::string& streamTrackId, const core::Buffer& data);
-    // funkcja powinna byc blokujaca - zeby nie bylo callbackow / wewnetrznie moze byc dowolnie
-    // streamTrackRecvData
-    void streamTrackRecvData(const std::string& streamTrackId, std::function<void(const core::Buffer& type)> onData);
-
-    // streamPublish
-    void streamPublish(int64_t streamId);
-
-    // // streamUnpublish
-    void streamUnpublish(int64_t streamId);
-
-    void streamJoin(const std::string& streamRoomId, const StreamAndTracksSelector& streamToJoin);
-    void streamLeave(int64_t streamId);
-
-    // ... tymczasowy callback na nowo pojawiajace sie zdalne kanały (które chcielibysmy czytać)
-    // to zostanie ostatecznie zmergowane do waitEvent
-    // void testAddRemoteStreamListener(RemoteStreamListener listener);
-    // void testSetStreamEncKey(core::EncKey key);
+    // Joining to Stream
+    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamIds, const streamJoinSettings& settings);
     
 private:
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
@@ -116,6 +100,10 @@ private:
     StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
     StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
     int64_t generateNumericId();
+
+    void trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON);
+    void trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON);
+    void trackAddDesktop(int64_t streamId, int64_t id, const std::string& params_JSON);
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -129,9 +117,14 @@ private:
     StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
 
     //web rtc
-    PmxPeerConnectionObserver observer;
-    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory;
-    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
+    std::map<uint64_t, libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection>> _peerConnectionMap;
+    std::map<uint64_t, PmxPeerConnectionObserver> _pmxPeerConnectionObserverMap;
+
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
+    libwebrtc::RTCConfiguration _configuration;
+    libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> _audioDevice;
+
 };
 
 }  // namespace stream

@@ -99,7 +99,7 @@ public:
             }
             std::cout << "STREAM TRACKS SIZE: " << stream->tracks().size() << "video: " << stream->video_tracks().size() << " audio: " << stream->audio_tracks().size() << std::endl;
         }
-    };
+    }; 
     void OnRemoveStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) override {
         std::cout << "ON REMOTE STREM " << id << std::endl;
         if (id == 1) {

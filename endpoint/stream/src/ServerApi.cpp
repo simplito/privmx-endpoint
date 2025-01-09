@@ -21,57 +21,65 @@ ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway
 server::StreamRoomCreateResult ServerApi::streamRoomCreate(server::StreamRoomCreateModel model)  {
     return request<server::StreamRoomCreateResult>("streamRoomCreate", model);
 }
+
 void ServerApi::streamRoomUpdate(server::StreamRoomUpdateModel model) {
     request("streamRoomUpdate", model);
 }
+
 server::StreamRoomListResult ServerApi::streamRoomList(server::StreamRoomListModel model)  {
     return request<server::StreamRoomListResult>("streamRoomList", model);
 }
+
 server::StreamRoomGetResult ServerApi::streamRoomGet(server::StreamRoomGetModel model)  {
     return request<server::StreamRoomGetResult>("streamRoomGet", model);
 }
+
 void ServerApi::streamRoomDelete(server::StreamRoomDeleteModel model) {
     request("streamRoomDelete", model);
 }
-server::StreamCreateResult ServerApi::streamCreate(server::StreamCreateModel model)  {
-    return request<server::StreamCreateResult>("streamCreate", model);
+
+server::StreamGetTurnCredentialsResult ServerApi::streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model) {
+    return requestWS<server::StreamGetTurnCredentialsResult>("streamGetTurnCredentials", model);
 }
-void ServerApi::streamUpdate(server::StreamUpdateModel model)  {
-    request("streamUpdate", model);
+// server::StreamCreateResult ServerApi::streamCreate(server::StreamCreateModel model)  {
+//     return request<server::StreamCreateResult>("streamCreate", model);
+// }
+// void ServerApi::streamUpdate(server::StreamUpdateModel model)  {
+//     request("streamUpdate", model);
+// }
+// server::StreamListResult ServerApi::streamList(server::StreamListModel model)  {
+//     return request<server::StreamListResult>("streamList", model);
+// }
+// server::StreamGetResult ServerApi::streamGet(server::StreamGetModel model)  {
+//     return request<server::StreamGetResult>("streamGet", model);
+// }
+// void ServerApi::streamDelete(server::StreamDeleteModel model)  {
+//     request("streamDelete", model);
+// }
+// server::StreamTrackAddResult ServerApi::streamTrackAdd(server::StreamTrackAddModel model)  {
+//     return request<server::StreamTrackAddResult>("streamTrackAdd", model);
+// }
+// void ServerApi::streamTrackRemove(server::StreamTrackRemoveModel model)  {
+//     request("streamTrackRemove", model);
+// }
+// server::StreamTrackListResult ServerApi::streamTrackList(server::StreamTrackListModel model)  {
+//     return request<server::StreamTrackListResult>("streamTrackList", model);
+// }
+// void ServerApi::streamTrackSendData(server::StreamTrackSendDataModel model)  {
+//     request("streamTrackSendData", model);
+// }
+server::StreamPublishResult ServerApi::streamPublish(server::StreamPublishModel model)  {
+    return requestWS<server::StreamPublishResult>("streamPublish", model);
 }
-server::StreamListResult ServerApi::streamList(server::StreamListModel model)  {
-    return request<server::StreamListResult>("streamList", model);
+// Poco::Dynamic::Var ServerApi::streamUnpublish(server::StreamUnpublishModel model)  {
+//     return requestWS("streamUnpublish", model);
+// }
+server::StreamJoinResult ServerApi::streamJoin(server::StreamJoinModel model)  {
+    return requestWS<server::StreamJoinResult>("streamJoin", model);
 }
-server::StreamGetResult ServerApi::streamGet(server::StreamGetModel model)  {
-    return request<server::StreamGetResult>("streamGet", model);
-}
-void ServerApi::streamDelete(server::StreamDeleteModel model)  {
-    request("streamDelete", model);
-}
-server::StreamTrackAddResult ServerApi::streamTrackAdd(server::StreamTrackAddModel model)  {
-    return request<server::StreamTrackAddResult>("streamTrackAdd", model);
-}
-void ServerApi::streamTrackRemove(server::StreamTrackRemoveModel model)  {
-    request("streamTrackRemove", model);
-}
-server::StreamTrackListResult ServerApi::streamTrackList(server::StreamTrackListModel model)  {
-    return request<server::StreamTrackListResult>("streamTrackList", model);
-}
-void ServerApi::streamTrackSendData(server::StreamTrackSendDataModel model)  {
-    request("streamTrackSendData", model);
-}
-Poco::Dynamic::Var ServerApi::streamPublish(server::StreamPublishModel model)  {
-    return requestWS("streamPublish", model);
-}
-Poco::Dynamic::Var ServerApi::streamUnpublish(server::StreamUnpublishModel model)  {
-    return requestWS("streamUnpublish", model);
-}
-void ServerApi::streamJoin(server::StreamJoinModel model)  {
-    request("streamJoin", model);
-}
-void ServerApi::streamLeave(server::StreamLeaveModel model)  {
-    request("streamLeave", model);
-}
+// void ServerApi::streamLeave(server::StreamLeaveModel model)  {
+//     request("streamLeave", model);
+// }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params));

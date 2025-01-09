@@ -196,106 +196,140 @@ ENDPOINT_SERVER_TYPE(StreamRoomDeleteModel)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamCreateModel)
-    STRING_FIELD(streamRoomId)
-    OBJECT_FIELD(meta, StreamCreateMeta)
+ENDPOINT_SERVER_TYPE(StreamGetTurnCredentialsModel)
+    STRING_FIELD(clientId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamCreateResult)
-    INT64_FIELD(streamId)
+ENDPOINT_SERVER_TYPE(StreamGetTurnCredentialsResult)
+    STRING_FIELD(username)
+    STRING_FIELD(password)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamUpdateModel)
-    INT64_FIELD(streamId)
-    OBJECT_FIELD(meta, StreamCreateMeta)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamListModel)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
+ENDPOINT_SERVER_TYPE(SessionDescription)
+    STRING_FIELD(sdp)
     STRING_FIELD(type)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamListResult)
-    LIST_FIELD(streams, Stream)
-    INT64_FIELD(count)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamGetModel)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamGetResult)
-    OBJECT_FIELD(stream, Stream)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamDeleteModel)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamTrackAddModel)
-    STRING_FIELD(streamRoomId)
-    STRING_FIELD(streamTrackId)
-    INT64_FIELD(streamId)
-    OBJECT_FIELD(meta, DataChannelMeta)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamTrackAddResult)
-    INT64_FIELD(streamId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamTrackRemoveModel)
-    INT64_FIELD(streamId)
-    STRING_FIELD(streamRoomId)
-    STRING_FIELD(streamTrackId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamTrackListModel)
-    INT64_FIELD(streamId)
-    STRING_FIELD(streamRoomId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamTrackListResult)
-    LIST_FIELD(tracks, TrackInfo)
-    INT64_FIELD(count)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamTrackSendDataModel)
-    STRING_FIELD(streamTrackId)
-    VAR_FIELD(data)
-TYPE_END
-
 ENDPOINT_SERVER_TYPE(StreamPublishModel)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
-    OBJECT_FIELD(streamMeta, StreamCreateMeta)
-    VAR_FIELD(peerConnectionOffer)
+    OBJECT_FIELD(offer, SessionDescription)
+    INT64_FIELD(streamRoomId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
+ENDPOINT_SERVER_TYPE(StreamPublishResult)
+    OBJECT_FIELD(answer, SessionDescription)
+    INT64_FIELD(sessionId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamJoinModel)
-    STRING_FIELD(streamRoomId)
-    OBJECT_FIELD(streamToJoin, StreamAndTracksSelector)
+    LIST_FIELD(streamIds, int64_t)
+    INT64_FIELD(streamRoomId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamLeaveModel)
-    OBJECT_FIELD(streamToLeave, StreamAndTracksSelector)
+ENDPOINT_SERVER_TYPE(StreamJoinResult)
+    OBJECT_FIELD(offer, SessionDescription)
+    INT64_FIELD(sessionId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamDataChannelSendModel)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
-    STRING_FIELD(data)
-TYPE_END
+// ENDPOINT_SERVER_TYPE(StreamCreateModel)
+//     STRING_FIELD(streamRoomId)
+//     OBJECT_FIELD(meta, StreamCreateMeta)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamCreateResult)
+//     INT64_FIELD(streamId)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamUpdateModel)
+//     INT64_FIELD(streamId)
+//     OBJECT_FIELD(meta, StreamCreateMeta)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamListModel)
+//     STRING_FIELD(streamRoomId)
+//     INT64_FIELD(skip)
+//     INT64_FIELD(limit)
+//     STRING_FIELD(sortOrder)
+//     STRING_FIELD(lastId)
+//     STRING_FIELD(type)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamListResult)
+//     LIST_FIELD(streams, Stream)
+//     INT64_FIELD(count)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamGetModel)
+//     STRING_FIELD(streamRoomId)
+//     INT64_FIELD(streamId)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamGetResult)
+//     OBJECT_FIELD(stream, Stream)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamDeleteModel)
+//     STRING_FIELD(streamRoomId)
+//     INT64_FIELD(streamId)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamTrackAddModel)
+//     STRING_FIELD(streamRoomId)
+//     STRING_FIELD(streamTrackId)
+//     INT64_FIELD(streamId)
+//     OBJECT_FIELD(meta, DataChannelMeta)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamTrackAddResult)
+//     INT64_FIELD(streamId)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamTrackRemoveModel)
+//     INT64_FIELD(streamId)
+//     STRING_FIELD(streamRoomId)
+//     STRING_FIELD(streamTrackId)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamTrackListModel)
+//     INT64_FIELD(streamId)
+//     STRING_FIELD(streamRoomId)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamTrackListResult)
+//     LIST_FIELD(tracks, TrackInfo)
+//     INT64_FIELD(count)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamTrackSendDataModel)
+//     STRING_FIELD(streamTrackId)
+//     VAR_FIELD(data)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamPublishModel)
+//     STRING_FIELD(streamRoomId)
+//     INT64_FIELD(streamId)
+//     OBJECT_FIELD(streamMeta, StreamCreateMeta)
+//     VAR_FIELD(peerConnectionOffer)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
+//     STRING_FIELD(streamRoomId)
+//     INT64_FIELD(streamId)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamJoinModel)
+//     STRING_FIELD(streamRoomId)
+//     OBJECT_FIELD(streamToJoin, StreamAndTracksSelector)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamLeaveModel)
+//     OBJECT_FIELD(streamToLeave, StreamAndTracksSelector)
+// TYPE_END
+
+// ENDPOINT_SERVER_TYPE(StreamDataChannelSendModel)
+//     STRING_FIELD(streamRoomId)
+//     INT64_FIELD(streamId)
+//     STRING_FIELD(data)
+// TYPE_END
 
 ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     INT64_FIELD(version)

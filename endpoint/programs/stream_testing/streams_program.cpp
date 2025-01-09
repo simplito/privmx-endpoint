@@ -133,13 +133,21 @@ public:
         senderPeerConnection->RegisterRTCPeerConnectionObserver(&senderObserver);
 
         // Create audio track
-        // std::string name, deviceId;
-        // auto audioDevice = peerConnectionFactory->GetAudioDevice();
-        // uint32_t num = audioDevice->RecordingDevices();
-        // for (uint32_t i = 0; i < num; ++i) {
-        //     audioDevice->RecordingDeviceName(i, (char*)name.data(), (char*)deviceId.data());
-        //     std::cerr << "Device audio " << i << ": " << name << " " << deviceId << std::endl;
-        // }
+        //List audio device
+        std::string name, deviceId;
+        name.resize(255);
+        deviceId.resize(255);
+        auto audioDevice = peerConnectionFactory->GetAudioDevice();
+        uint32_t num = audioDevice->RecordingDevices();
+        for (uint32_t i = 0; i < num; ++i) {
+            audioDevice->RecordingDeviceName(i, (char*)name.data(), (char*)deviceId.data());
+            std::cout << "==========================" << std::endl;
+            std::cout << "Device audio - " << i << ": " << name  << std::endl;
+            std::cout << "Device audio - " << deviceId << std::endl;
+            std::cout << "==========================" << std::endl;
+        }
+
+
         // audioDevice->SetRecordingDevice(0);
         // audioDevice->SetMicrophoneVolume(100);
         auto audioSource = peerConnectionFactory->CreateAudioSource("audio_source");
@@ -197,6 +205,10 @@ public:
     */
     void onRemoteIceCandidate(libwebrtc::string mid, int mid_mline_index, libwebrtc::string candiate) {
         senderPeerConnection->AddCandidate(mid, mid_mline_index, candiate);
+    }
+
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> getPeerConnectionFactory() {
+        return peerConnectionFactory;
     }
 
 private:
@@ -267,6 +279,8 @@ int main(int argc, char** argv) {
         libwebrtc::RTCConfiguration configuration;
         configuration.ice_servers[0] = iceServer;
         pmxWebRtc.initialize();
+
+        
         auto sdp_publish = pmxWebRtc.createStream(configuration);
         // cout <<"[Sdp" << endl << sdp << endl << "]" << endl;
         auto sessionDescription = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
@@ -277,17 +291,16 @@ int main(int argc, char** argv) {
         tmp->set("streamRoomId", 1234);
         tmp->set("offer", sessionDescription);
         result = gateway->request("stream.streamPublish", tmp, settings).extract<Poco::JSON::Object::Ptr>();
-        std::cout << "stream.streamPublish" << std::endl;
-        std::cout << privmx::utils::Utils::stringifyVar(result, true) << std::endl;
+        // std::cout << "stream.streamPublish" << std::endl;
+        // std::cout << privmx::utils::Utils::stringifyVar(result, true) << std::endl;
         pmxWebRtc.onRemoteAnswer(result->getObject("answer")->getValue<std::string>("sdp"), result->getObject("answer")->getValue<std::string>("type"));
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         tmp = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
         tmp->set("streamRoomId", 1234);
         settings.channel_type = privmx::rpc::ChannelType::WEBSOCKET;
         result = gateway->request("stream.streamList", tmp, settings).extract<Poco::JSON::Object::Ptr>();
-        std::cout << "stream.streamList" << std::endl;
-        std::cout << privmx::utils::Utils::stringifyVar(result, true) << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        // std::cout << "stream.streamList" << std::endl;
+        // std::cout << privmx::utils::Utils::stringifyVar(result, true) << std::endl;
 
         tmp = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
         auto streamIds = Poco::JSON::Array::Ptr(new Poco::JSON::Array());
@@ -311,12 +324,12 @@ int main(int argc, char** argv) {
         sessionAnswer->set("type", "answer");
         tmp->set("answer", sessionAnswer);
         auto t_result = gateway->request("stream.streamAcceptOffer", tmp, settings);
-        std::cout << "stream.streamAcceptOffer" << std::endl;
-        std::cout << privmx::utils::Utils::stringifyVar(t_result, true) << std::endl;
+        // std::cout << "stream.streamAcceptOffer" << std::endl;
+        // std::cout << privmx::utils::Utils::stringifyVar(t_result, true) << std::endl;
 
 
 
-        std::this_thread::sleep_for(std::chrono::seconds(100));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         // tmp = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
         // tmp->set("sessionId", result->getValue<int64_t>("sessionId"));
         // settings.channel_type = privmx::rpc::ChannelType::WEBSOCKET;

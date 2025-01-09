@@ -16,14 +16,36 @@ limitations under the License.
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
+#include "privmx/endpoint/stream/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
 
+class FrameImpl : public Frame {
+public:
+    FrameImpl(libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame> frame);
+    virtual int ConvertToARGB(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) override;
+private:
+    libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame> _frame;
+};
+
+
+template <typename VideoFrameT>
+class RTCVideoRendererImpl : public libwebrtc::RTCVideoRenderer<VideoFrameT> {
+public:
+    inline RTCVideoRendererImpl(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback, const std::string& id) : _onFrameCallback(onFrameCallback), _id(id) {}
+    virtual void OnFrame(VideoFrameT frame) override {
+        _onFrameCallback(frame->width(), frame->height(), std::make_shared<FrameImpl>(frame), _id);
+    }
+private:
+    std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
+    std::string _id;
+};
+
 class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
 public:
-    PmxPeerConnectionObserver();
+    PmxPeerConnectionObserver(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback, uint64_t streamId);
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
     void OnIceGatheringState(libwebrtc::RTCIceGatheringState state) override;
@@ -36,6 +58,9 @@ public:
     void OnTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) override;
     void OnAddTrack(libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
     void OnRemoveTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
+private:
+    std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
+    uint64_t _streamId; 
 };
 
 } // stream
