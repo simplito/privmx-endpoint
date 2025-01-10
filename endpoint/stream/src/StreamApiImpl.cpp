@@ -55,6 +55,11 @@ StreamApiImpl::StreamApiImpl(
         auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
         model.clientId("user1");
         auto result = _serverApi.streamGetTurnCredentials(model);
+
+        libwebrtc::LibWebRTC::Initialize();
+        _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
+
+        _configuration = libwebrtc::RTCConfiguration();
         libwebrtc::IceServer iceServer = {
             .uri="turn:webrtc2.s24.simplito:3478", 
             .username=portable::string(result.username()), 
@@ -63,8 +68,6 @@ StreamApiImpl::StreamApiImpl(
         _configuration.ice_servers[0] = iceServer;
         _constraints = libwebrtc::RTCMediaConstraints::Create();
 
-        libwebrtc::LibWebRTC::Initialize();
-        _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
     }
 
 
@@ -130,7 +133,7 @@ void StreamApiImpl::trackAdd(int64_t streamId, int64_t id, DeviceType type, cons
 
 void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON) {
     if(_audioDevice == nullptr) _audioDevice = _peerConnectionFactory->GetAudioDevice();
-    _audioDevice->SetRecordingDevice(id);
+    // _audioDevice->SetRecordingDevice(id);
     auto audioSource = _peerConnectionFactory->CreateAudioSource("audio_source");
     auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
     audioTrack->SetVolume(10);
@@ -150,9 +153,6 @@ void StreamApiImpl::publishStream(int64_t streamId) {
     std::promise<std::string> t_spd = std::promise<std::string>();
     peerConnection->CreateOffer(
         [&](const libwebrtc::string sdp, const libwebrtc::string type) {
-            std::cout << "h1" << std::endl;
-            std::cout << peerConnection->ice_gathering_state() << std::endl;
-            // Set local description
             t_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {
@@ -189,7 +189,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
 }
 
 // // Joining to Stream
-void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamIds, const streamJoinSettings& settings) {
+void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
     int64_t streamId = generateNumericId();
     _peerConnectionMap.emplace(
         std::make_pair(
@@ -213,8 +213,9 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     peerConnection->RegisterRTCPeerConnectionObserver(&_pmxPeerConnectionObserverMap.at(streamId));
     // Get data from bridge
     auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
-    for(auto id : streamIds) {
-        streamJoinModel.streamIds().add(id);
+    streamJoinModel.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
+    for(size_t i = 0; i < streamsId.size(); i++) {
+        streamJoinModel.streamIds().add(streamsId[i]);
     }
     streamJoinModel.streamRoomId(1234);
     auto streamJoinResult = _serverApi.streamJoin(streamJoinModel);
@@ -228,22 +229,24 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
         }
     );
     // Create answer
+    std::promise<std::string> t_spd = std::promise<std::string>();
     peerConnection->CreateAnswer(
         [&](const libwebrtc::string sdp, const libwebrtc::string type) {
-            // Accept offer using bridgee
-            auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
-            sessionDescription.sdp(sdp.std_string());
-            sessionDescription.type("offer");
-            auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
-            model.streamRoomId(1234);
-            model.offer(sessionDescription);
-            auto result = _serverApi.streamPublish(model);
+            t_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {
             throw stream::WebRTCException("SdpCreateFailure" + std::string(error));
         }, 
         _constraints
     );
+    std::string sdp = t_spd.get_future().get();
+    auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+    sessionDescription.sdp(sdp);
+    sessionDescription.type("answer");
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
+    model.sessionId(streamJoinResult.sessionId());
+    model.answer(sessionDescription);
+    _serverApi.streamAcceptOffer(model);
 }
 
 

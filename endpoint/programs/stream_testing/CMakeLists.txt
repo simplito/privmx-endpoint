@@ -16,6 +16,10 @@ set_target_properties(libwebrtc PROPERTIES
 # # MODULES
 add_executable(streamsProgram ${CMAKE_CURRENT_SOURCE_DIR}/streams_program.cpp)
 target_link_libraries(streamsProgram privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+# # MODULES
+add_executable(streamsProgram2 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_2.cpp)
+target_link_libraries(streamsProgram2 privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+
 
 # # for debuging
 # valgrind

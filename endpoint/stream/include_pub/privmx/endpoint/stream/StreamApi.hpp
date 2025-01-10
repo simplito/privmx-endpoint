@@ -74,7 +74,7 @@ public:
     void publishStream(int64_t streamId);
 
     // Joining to Stream
-    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamIds, const streamJoinSettings& settings);
+    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
 
 
 

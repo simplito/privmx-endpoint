@@ -92,13 +92,13 @@ public:
     void publishStream(int64_t streamId);
 
     // Joining to Stream
-    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamIds, const streamJoinSettings& settings);
+    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
     
 private:
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
-    StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
-    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
+    // DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
+    // StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
+    // StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
     int64_t generateNumericId();
 
     void trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON);

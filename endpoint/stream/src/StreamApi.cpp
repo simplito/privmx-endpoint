@@ -107,10 +107,10 @@ void StreamApi::publishStream(int64_t streamId) {
 }
 
 // // Joining to Stream
-void StreamApi::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamIds, const streamJoinSettings& settings) {
+void StreamApi::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
     validateEndpoint();
     try {
-        return _impl->joinStream(streamRoomId, streamIds, settings);
+        return _impl->joinStream(streamRoomId, streamsId, settings);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
