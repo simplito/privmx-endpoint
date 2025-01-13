@@ -2,9 +2,11 @@ file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(INCLUDE_PUB_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include_pub)
 
-link_directories(/home/j23cz/repo/webrtc/src/out-debug/Linux-x64/)
-include_directories(/home/j23cz/repo/webrtc/src/libwebrtc/include/)
-
+add_library(libwebrtc SHARED IMPORTED)
+set_target_properties(libwebrtc PROPERTIES
+  IMPORTED_LOCATION "<path_to_libwebrtc>"
+  INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
+)
 
 if(BUILD_SHARED_LIBS)
     add_library(privmxendpointstream SHARED ${SOURCES})
@@ -13,7 +15,7 @@ else()
 endif()
 target_include_directories(privmxendpointstream PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointstream PRIVATE -fPIC -Wall -Wextra)
-target_link_libraries(privmxendpointstream PRIVATE Poco::Foundation privmx privmxendpointcore)
+target_link_libraries(privmxendpointstream PRIVATE Poco::Foundation privmx privmxendpointcore libwebrtc)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxendpointstream PROPERTIES POSITION_INDEPENDENT_CODE True)
 endif()

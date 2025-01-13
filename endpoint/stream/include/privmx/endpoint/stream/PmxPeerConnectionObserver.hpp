@@ -17,6 +17,7 @@ limitations under the License.
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
 #include "privmx/endpoint/stream/Types.hpp"
+#include <pmx_frame_cryptor.h>
 
 namespace privmx {
 namespace endpoint {
@@ -45,7 +46,11 @@ private:
 
 class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
 public:
-    PmxPeerConnectionObserver(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback, uint64_t streamId);
+    PmxPeerConnectionObserver(
+        uint64_t streamId, 
+        std::shared_ptr<privmx::webrtc::KeyProvider> webrtcKeyProvider, 
+        std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback
+    );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
     void OnIceGatheringState(libwebrtc::RTCIceGatheringState state) override;
@@ -59,8 +64,9 @@ public:
     void OnAddTrack(libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
     void OnRemoveTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
 private:
-    std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
     uint64_t _streamId; 
+    std::shared_ptr<privmx::webrtc::KeyProvider> _webrtcKeyProvider;
+    std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
 };
 
 } // stream

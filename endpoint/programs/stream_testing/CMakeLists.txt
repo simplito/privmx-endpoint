@@ -9,8 +9,8 @@ target_include_directories(privmxendpointstream PRIVATE ${INCLUDE_DIRS})
 
 add_library(libwebrtc SHARED IMPORTED) # or STATIC instead of SHARED
 set_target_properties(libwebrtc PROPERTIES
-  IMPORTED_LOCATION "/home/j23cz/repo/webrtc/src/out-debug/Linux-x64/libwebrtc.so"
-  INTERFACE_INCLUDE_DIRECTORIES "/home/j23cz/repo/webrtc/src/libwebrtc/include/"
+  IMPORTED_LOCATION "<path_to_libwebrtc>"
+  INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
 )
 
 # # MODULES

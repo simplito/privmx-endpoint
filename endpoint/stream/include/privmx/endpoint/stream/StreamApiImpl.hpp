@@ -34,6 +34,7 @@ limitations under the License.
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
 #include <rtc_peerconnection.h>
+#include <pmx_frame_cryptor.h>
 
 namespace privmx {
 namespace endpoint {
@@ -86,7 +87,7 @@ public:
     std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
     std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
 
-    void trackAdd(int64_t streamId, int64_t id, DeviceType type, const std::string& params_JSON);
+    void trackAdd(int64_t streamId, DeviceType type, int64_t id = 0, const std::string& params_JSON = "{}");
     
     // Publishing stream
     void publishStream(int64_t streamId);
@@ -101,9 +102,9 @@ private:
     // StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
     int64_t generateNumericId();
 
-    void trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON);
-    void trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON);
-    void trackAddDesktop(int64_t streamId, int64_t id, const std::string& params_JSON);
+    void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
+    void trackAddVideo(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
+    void trackAddDesktop(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -120,11 +121,12 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     std::map<uint64_t, libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection>> _peerConnectionMap;
     std::map<uint64_t, PmxPeerConnectionObserver> _pmxPeerConnectionObserverMap;
+    std::shared_ptr<privmx::webrtc::KeyProvider> _webrtcKeyProvider;
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
     libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> _audioDevice;
-
+    libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> _videoDevice;
 };
 
 }  // namespace stream

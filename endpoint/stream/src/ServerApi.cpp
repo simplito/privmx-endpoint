@@ -90,7 +90,9 @@ server::StreamJoinResult ServerApi::streamJoin(server::StreamJoinModel model)  {
 }
 
 void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
-    requestWS("streamAcceptOffer", model);
+    auto a = requestWS("streamAcceptOffer", model);
+    std::cout << privmx::utils::Utils::stringifyVar(a, true) << std::endl;
+    return;
 }
 
 // void ServerApi::streamLeave(server::StreamLeaveModel model)  {

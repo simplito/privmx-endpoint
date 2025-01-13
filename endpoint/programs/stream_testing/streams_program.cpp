@@ -155,15 +155,14 @@ public:
         audioTrack->SetVolume(10);
 
         senderPeerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{"stream1"}});
+        // // Create video track
+        // libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> videoDevice = peerConnectionFactory->GetVideoDevice();
+        // libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> videoCapturer = videoDevice->Create("video_capturer", 0, 1280, 720, 30);
+        // libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", constraints);
+        // libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
 
-        // Create video track
-        libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> videoDevice = peerConnectionFactory->GetVideoDevice();
-        libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> videoCapturer = videoDevice->Create("video_capturer", 0, 1280, 720, 30);
-        libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", constraints);
-        libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
-
-        // Add tracks to the peer connection
-        senderPeerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{"stream1"}});
+        // // Add tracks to the peer connection
+        // senderPeerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{"stream1"}});
 
         // Start capture video
         // videoCapturer->StartCapture();
