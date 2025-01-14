@@ -48,6 +48,9 @@ public:
     server::StreamJoinResult streamJoin(server::StreamJoinModel model);
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
     // void streamLeave(server::StreamLeaveModel model);
+    // TO DO
+    void streamBroadcastNewKey(server::StreamBroadcastNewKey model);
+
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object

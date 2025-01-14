@@ -51,8 +51,7 @@ StreamApiImpl::StreamApiImpl(
     _host(host),
     _eventMiddleware(eventMiddleware),
     _connection(connection),
-    _serverApi(ServerApi(gateway)),
-    _webrtcKeyProvider(privmx::webrtc::KeyProvider::Create()) {
+    _serverApi(ServerApi(gateway)) {
         // streamGetTurnCredentials
         auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
         model.clientId("user1");
@@ -71,33 +70,60 @@ StreamApiImpl::StreamApiImpl(
 
     }
 
+StreamApiImpl::~StreamApiImpl() {
+    for(auto streamRoom: _streamRoomMap) {
+        for(auto stream: streamRoom.second->streamMap) {
+            stream.second->peerConnection->Close();
+        }
+        streamRoom.second->streamMap.clear();
+    }
+    _streamRoomMap.clear();
+}
 
 // V3 code 
 
 int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
-    int64_t streamId = generateNumericId();
+    auto it = _streamRoomMap.find(streamRoomId);
+    if(it == _streamRoomMap.end()) {
+        _streamRoomMap.emplace(
+            std::make_pair(
+                streamRoomId,
+                std::make_shared<StreamRoomData>(
+                    StreamRoomData{
+                        .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
+                        .keyProvider=privmx::webrtc::KeyProvider::Create()
+                    }
+                )
+            )
+        );
+    }
+    auto room = _streamRoomMap.at(streamRoomId);
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) ": STREAM Sender")
-    
-    _peerConnectionMap.emplace(
+    int64_t streamId = generateNumericId();
+    auto key = _keyProvider->generateKey();
+    // 
+    room->keyProvider->setKey(1, key.key);
+    _streamIdToRoomId.emplace(std::make_pair(streamId, streamRoomId));
+    room->streamMap.emplace(
         std::make_pair(
             streamId, 
-            _peerConnectionFactory->Create(
-                _configuration, 
-                _constraints
+            std::make_shared<Stream>(
+                Stream{
+                    .peerConnection=_peerConnectionFactory->Create(
+                        _configuration, 
+                        _constraints
+                    ),
+                    .peerConnectionObserver=std::make_shared<PmxPeerConnectionObserver>(
+                        streamId,
+                        room->keyProvider,
+                        []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
+                    )
+                }
             )
         )
     );
-    _pmxPeerConnectionObserverMap.emplace(
-        std::make_pair(
-            streamId, 
-            PmxPeerConnectionObserver(
-                streamId,
-                _webrtcKeyProvider,
-                []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
-            )
-        )
-    );
-    _peerConnectionMap.at(streamId)->RegisterRTCPeerConnectionObserver(&_pmxPeerConnectionObserverMap.at(streamId));
+    auto stream = room->streamMap.at(streamId);
+    stream->peerConnection->RegisterRTCPeerConnectionObserver(stream->peerConnectionObserver.get());
     return streamId;
 }
 
@@ -147,12 +173,14 @@ void StreamApiImpl::trackAdd(int64_t streamId, DeviceType type, int64_t id, cons
 
 void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON) {
     if(_audioDevice == nullptr) _audioDevice = _peerConnectionFactory->GetAudioDevice();
-    // _audioDevice->SetRecordingDevice(id);
+    _audioDevice->SetRecordingDevice(id);
     auto audioSource = _peerConnectionFactory->CreateAudioSource("audio_source");
     auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
     audioTrack->SetVolume(10);
-    auto sender = _peerConnectionMap.at(streamId)->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, _webrtcKeyProvider);
+    // Add tracks to the peer connection
+    auto room = _streamRoomMap.at(_streamIdToRoomId.at(streamId));
+    auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->keyProvider);
 }
 
 void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
@@ -164,8 +192,9 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
 
     // Add tracks to the peer connection
-    auto sender = _peerConnectionMap.at(streamId)->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, _webrtcKeyProvider);
+    auto room = _streamRoomMap.at(_streamIdToRoomId.at(streamId));
+    auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->keyProvider);
     // Start capture video
     videoCapturer->StartCapture();
 }
@@ -176,10 +205,10 @@ void StreamApiImpl::trackAddDesktop(int64_t streamId, int64_t id, const std::str
 
 // Publishing stream
 void StreamApiImpl::publishStream(int64_t streamId) {
-    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection = _peerConnectionMap.at(streamId);
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection = _streamRoomMap.at(_streamIdToRoomId.at(streamId))->streamMap.at(streamId)->peerConnection;
     std::promise<std::string> t_spd = std::promise<std::string>();
     peerConnection->CreateOffer(
-        [&](const libwebrtc::string sdp, const libwebrtc::string type) {
+        [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
             t_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {
@@ -193,7 +222,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
         "offer", 
         []() {}, 
         [](const char* error) {
-            // throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
+            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
         }
     );
     // Publish data on bridge
@@ -201,7 +230,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
     sessionDescription.sdp(sdp);
     sessionDescription.type("offer");
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
-    model.streamRoomId(1234);
+    model.streamRoomId(std::stoull(_streamIdToRoomId.at(streamId)));
     model.offer(sessionDescription);
     auto result = _serverApi.streamPublish(model);
     // Set remote description
@@ -217,40 +246,56 @@ void StreamApiImpl::publishStream(int64_t streamId) {
 
 // // Joining to Stream
 void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
-    int64_t streamId = generateNumericId();
+    auto it = _streamRoomMap.find(streamRoomId);
+    if(it == _streamRoomMap.end()) {
+        _streamRoomMap.emplace(
+            std::make_pair(
+                streamRoomId,
+                std::make_shared<StreamRoomData>(
+                    StreamRoomData{
+                        .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
+                        .keyProvider=privmx::webrtc::KeyProvider::Create()
+                    }
+                )
+            )
+        );
+    }
+    auto room = _streamRoomMap.at(streamRoomId);
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) ": STREAM Receiver")
+    int64_t streamId = generateNumericId();
+    _streamIdToRoomId.emplace(std::make_pair(streamId, streamRoomId));
     // Get data from bridge
     auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
     streamJoinModel.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
     for(size_t i = 0; i < streamsId.size(); i++) {
         streamJoinModel.streamIds().add(streamsId[i]);
     }
-    streamJoinModel.streamRoomId(1234);
+    streamJoinModel.streamRoomId(std::stoull(streamRoomId));
     auto streamJoinResult = _serverApi.streamJoin(streamJoinModel);
     // creating peerConnectio
-    _peerConnectionMap.emplace(
+    room->streamMap.emplace(
         std::make_pair(
             streamId, 
-            _peerConnectionFactory->Create(
-                _configuration, 
-                _constraints
+            std::make_shared<Stream>(
+                Stream{
+                    .peerConnection=_peerConnectionFactory->Create(
+                        _configuration,
+                        _constraints
+                    ),
+                    .peerConnectionObserver=std::make_shared<PmxPeerConnectionObserver>(
+                        streamId,
+                        room->keyProvider,
+                        settings.OnFrame.has_value() ? 
+                            settings.OnFrame.value() : 
+                            []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
+                    )
+                }
             )
         )
     );
-    _pmxPeerConnectionObserverMap.emplace(
-        std::make_pair(
-            streamId, 
-            PmxPeerConnectionObserver(
-                streamId,
-                _webrtcKeyProvider,
-                settings.OnFrame.has_value() ? 
-                    settings.OnFrame.value() : 
-                    []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
-            )
-        )
-    );
-    auto peerConnection = _peerConnectionMap.at(streamId);
-    peerConnection->RegisterRTCPeerConnectionObserver(&_pmxPeerConnectionObserverMap.at(streamId));
+    auto stream = room->streamMap.at(streamId);
+    auto peerConnection = stream->peerConnection;
+    peerConnection->RegisterRTCPeerConnectionObserver(stream->peerConnectionObserver.get());
     // Set remote description
     peerConnection->SetRemoteDescription(
         streamJoinResult.offer().sdp(), 
@@ -263,7 +308,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     // Create answer
     std::promise<std::string> t_spd = std::promise<std::string>();
     peerConnection->CreateAnswer(
-        [&](const libwebrtc::string sdp, const libwebrtc::string type) {
+        [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
             t_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {

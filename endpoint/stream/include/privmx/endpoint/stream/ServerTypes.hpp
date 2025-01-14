@@ -247,6 +247,17 @@ ENDPOINT_SERVER_TYPE(StreamAcceptOfferModel)
     INT64_FIELD(sessionId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamKey)
+    
+    INT64_FIELD(TTL)
+    LIST_FIELD(keys, core::server::KeyEntrySet)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamBroadcastNewKey)
+    INT64_FIELD(streamRoomId)
+    OBJECT_FIELD(answer, StreamKey)
+TYPE_END
+
 // ENDPOINT_SERVER_TYPE(StreamCreateModel)
 //     STRING_FIELD(streamRoomId)
 //     OBJECT_FIELD(meta, StreamCreateMeta)

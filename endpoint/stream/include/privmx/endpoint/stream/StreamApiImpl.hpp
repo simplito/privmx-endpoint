@@ -51,34 +51,34 @@ public:
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
-    // ~StreamApiImpl();
+    ~StreamApiImpl();
 
-    std::string roomCreate(
-        const std::string& contextId, 
-        const std::vector<core::UserWithPubKey>& users, 
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
-    );
+    // std::string roomCreate(
+    //     const std::string& contextId, 
+    //     const std::vector<core::UserWithPubKey>& users, 
+    //     const std::vector<core::UserWithPubKey>&managers,
+    //     const core::Buffer& publicMeta, 
+    //     const core::Buffer& privateMeta,
+    //     const std::optional<core::ContainerPolicy>& policies
+    // );
 
-    void roomUpdate(
-        const std::string& streamRoomId, 
-        const std::vector<core::UserWithPubKey>& users, 
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
-        const int64_t version, 
-        const bool force, 
-        const bool forceGenerateNewKey, 
-        const std::optional<core::ContainerPolicy>& policies
-    );
+    // void roomUpdate(
+    //     const std::string& streamRoomId, 
+    //     const std::vector<core::UserWithPubKey>& users, 
+    //     const std::vector<core::UserWithPubKey>&managers,
+    //     const core::Buffer& publicMeta, 
+    //     const core::Buffer& privateMeta, 
+    //     const int64_t version, 
+    //     const bool force, 
+    //     const bool forceGenerateNewKey, 
+    //     const std::optional<core::ContainerPolicy>& policies
+    // );
 
-    core::PagingList<StreamRoom> streamRoomList(const std::string& contextId, const core::PagingQuery& query);
+    // core::PagingList<StreamRoom> streamRoomList(const std::string& contextId, const core::PagingQuery& query);
 
-    StreamRoom streamRoomGet(const std::string& streamRoomId);
+    // StreamRoom streamRoomGet(const std::string& streamRoomId);
 
-    void streamRoomDelete(const std::string& streamRoomId);
+    // void streamRoomDelete(const std::string& streamRoomId);
     // Stream
     int64_t createStream(const std::string& streamRoomId);
 
@@ -96,6 +96,18 @@ public:
     void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
     
 private:
+    struct Stream {
+        libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;
+        std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver;
+        // privmx::webrtc::KeyProvider,
+
+    };
+    struct StreamRoomData {
+        std::map<uint64_t, std::shared_ptr<Stream>> streamMap;
+        std::shared_ptr<privmx::webrtc::KeyProvider> keyProvider;
+    };
+    
+
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     // DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
     // StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
@@ -113,15 +125,14 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
-    std::unordered_map<std::string, Stream> _streams;
+    // v2
+    // std::unordered_map<std::string, Stream> _streams;
+    // StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
 
-    StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
-
-    //web rtc
+    // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
-    std::map<uint64_t, libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection>> _peerConnectionMap;
-    std::map<uint64_t, PmxPeerConnectionObserver> _pmxPeerConnectionObserverMap;
-    std::shared_ptr<privmx::webrtc::KeyProvider> _webrtcKeyProvider;
+    std::map<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
+    std::map<uint64_t, std::string> _streamIdToRoomId;
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
