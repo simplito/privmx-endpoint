@@ -41,7 +41,7 @@ std::string CryptoApiImpl::generatePrivateKey(const std::optional<std::string>& 
 }
 
 std::string CryptoApiImpl::derivePrivateKey(const std::string& password, const std::string& salt) {
-    auto pbkdf2 {privmx::crypto::Crypto::pbkdf2(password, salt, 1000, 32, "SHA512")};
+    auto pbkdf2 {privmx::crypto::Crypto::pbkdf2(password, salt, 200000, 32, "SHA512")};
     auto extKey {privmx::crypto::ExtKey::fromSeed(pbkdf2)};
     return extKey.getPrivateKey().toWIF();
 }
@@ -71,7 +71,7 @@ core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const
 
 privmx::crypto::PrivateKey CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed) {
     auto salt {privmx::crypto::Crypto::randomBytes(16)};
-    auto pbkdf2 {privmx::crypto::Crypto::pbkdf2(seed, salt, 1000, 32, "SHA512")};
+    auto pbkdf2 {privmx::crypto::Crypto::pbkdf2(seed, salt, 200000, 32, "SHA512")};
     auto extKey {privmx::crypto::ExtKey::fromSeed(pbkdf2)};
     return extKey.getPrivateKey();
 }
