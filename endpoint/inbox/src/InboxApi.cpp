@@ -64,6 +64,8 @@ const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
                             const std::optional<core::ContainerPolicyWithoutItem>& policies) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
         return _impl->createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -82,6 +84,8 @@ void InboxApi::updateInbox(
 ) {
     validateEndpoint();
     core::Validator::validateId(inboxId, "field:inboxId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
         return _impl->updateInbox(inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {

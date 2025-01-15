@@ -80,6 +80,9 @@ void ThreadApi::updateThread(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     validateEndpoint();
+    core::Validator::validateId(threadId, "field:threadId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
         _impl->updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {
