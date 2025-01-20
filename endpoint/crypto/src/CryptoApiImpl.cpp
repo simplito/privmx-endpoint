@@ -31,13 +31,28 @@ bool CryptoApiImpl::verifySignature(const core::Buffer& data, const core::Buffer
     return pubKey.verifyCompactSignatureWithHash(data.stdString(), signature.stdString());
 }
 
-std::string CryptoApiImpl::generatePrivateKey(const std::optional<std::string>& basestring) {
+std::string CryptoApiImpl::generatePrivateKey_deprecated(const std::optional<std::string>& basestring) {
     if (basestring.has_value()) {
-        auto privWIF {getPrivKeyFromSeed(basestring.value()).toWIF()};
+        auto privWIF {getPrivKeyFromSeed(basestring.value(), 1000).toWIF()};
         return privWIF;
     }
     auto privKey = privmx::crypto::PrivateKey::generateRandom();
     return privKey.toWIF();
+}
+
+std::string CryptoApiImpl::generatePrivateKey(const std::optional<std::string>& basestring) {
+    if (basestring.has_value()) {
+        auto privWIF {getPrivKeyFromSeed(basestring.value(), 1000).toWIF()};
+        return privWIF;
+    }
+    auto privKey = privmx::crypto::PrivateKey::generateRandom();
+    return privKey.toWIF();
+}
+
+std::string CryptoApiImpl::derivePrivateKey_deprecated(const std::string& password, const std::string& salt) {
+    auto pbkdf2 {privmx::crypto::Crypto::pbkdf2(password, salt, 1000, 32, "SHA512")};
+    auto extKey {privmx::crypto::ExtKey::fromSeed(pbkdf2)};
+    return extKey.getPrivateKey().toWIF();
 }
 
 std::string CryptoApiImpl::derivePrivateKey(const std::string& password, const std::string& salt) {
@@ -69,9 +84,9 @@ core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const
     return core::Buffer::from(decrypted);
 }
 
-privmx::crypto::PrivateKey CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed) {
+privmx::crypto::PrivateKey CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed, size_t rounds) {
     auto salt {privmx::crypto::Crypto::randomBytes(16)};
-    auto pbkdf2 {privmx::crypto::Crypto::pbkdf2(seed, salt, 200000, 32, "SHA512")};
+    auto pbkdf2 {privmx::crypto::Crypto::pbkdf2(seed, salt, rounds, 32, "SHA512")};
     auto extKey {privmx::crypto::ExtKey::fromSeed(pbkdf2)};
     return extKey.getPrivateKey();
 }
