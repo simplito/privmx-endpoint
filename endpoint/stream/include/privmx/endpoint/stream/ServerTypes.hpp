@@ -368,6 +368,34 @@ ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(StreamEncKey)
+    STRING_FIELD(keyId)
+    STRING_FIELD(key)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(RequestKey)
+    STRING_FIELD(userId)
+    STRING_FIELD(pubKey)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(RequestKeyResult)
+    OBJECT_FIELD(encKey, StreamEncKey)
+    STRING_FIELD(userId)
+    STRING_FIELD(pubKey)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UpdateKey)
+    BINARYSTRING_FIELD(EncryptedKey)
+    STRING_FIELD(UserId)
+    STRING_FIELD(PubKey)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UpdateKeyACK)
+    BINARYSTRING_FIELD(signedKeyId)
+    STRING_FIELD(UserId)
+    STRING_FIELD(PubKey)
+TYPE_END
+
 } // server
 } // stream
 } // endpoint

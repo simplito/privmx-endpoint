@@ -49,7 +49,8 @@ public:
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-        const core::Connection& connection
+        const core::Connection& connection,
+        const std::string userId
     );
     ~StreamApiImpl();
 
@@ -125,6 +126,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
+    std::string _
     // v2
     // std::unordered_map<std::string, Stream> _streams;
     // StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
