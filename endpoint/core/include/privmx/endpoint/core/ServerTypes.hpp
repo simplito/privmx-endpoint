@@ -49,6 +49,26 @@ ENDPOINT_SERVER_TYPE(ContextListResult)
     INT64_FIELD(count)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(UserIdentity)
+    STRING_FIELD(id)
+    STRING_FIELD(pub)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UserKey)
+    STRING_FIELD(id)  // userId
+    STRING_FIELD(key) // encKey encrypted with user pubkey;
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(CustomEventModel)
+    STRING_FIELD(contextId)
+    STRING_FIELD(keyId);
+    STRING_FIELD(eventData) // encrypted
+    LIST_FIELD(users, UserKey)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(CustomEventData)
+    STRING_FIELD(type)
+TYPE_END
 
 } // server
 } // core

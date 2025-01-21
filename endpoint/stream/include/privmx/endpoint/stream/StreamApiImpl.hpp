@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
@@ -49,8 +50,7 @@ public:
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-        const core::Connection& connection,
-        const std::string userId
+        const core::Connection& connection
     );
     ~StreamApiImpl();
 
@@ -100,11 +100,11 @@ private:
     struct Stream {
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;
         std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver;
-        // privmx::webrtc::KeyProvider,
 
     };
     struct StreamRoomData {
         std::map<uint64_t, std::shared_ptr<Stream>> streamMap;
+        std::shared_ptr<StreamKeyManager> streamKeyManager;
         std::shared_ptr<privmx::webrtc::KeyProvider> keyProvider;
     };
     
@@ -125,8 +125,7 @@ private:
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
-    ServerApi _serverApi;
-    std::string _
+    std::shared_ptr<ServerApi> _serverApi;
     // v2
     // std::unordered_map<std::string, Stream> _streams;
     // StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;

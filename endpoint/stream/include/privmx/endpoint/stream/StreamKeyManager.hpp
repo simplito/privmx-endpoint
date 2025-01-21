@@ -23,6 +23,7 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/DataEncryptorV4.hpp>
 #include "privmx/endpoint/stream/ServerTypes.hpp"
+#include "privmx/endpoint/stream/ServerApi.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -30,28 +31,50 @@ namespace stream {
 
 class StreamKeyManager {
 public:
-    StreamKeyManager(std::shared_ptr<privmx::webrtc::KeyProvider> webRtcKeyProvider, std::shared_ptr<core::KeyProvider> keyProvider, privmx::crypto::PrivateKey userPrivKey);
+    StreamKeyManager(
+        std::shared_ptr<privmx::webrtc::KeyProvider> webRtcKeyProvider, 
+        std::shared_ptr<core::KeyProvider> keyProvider, 
+        std::shared_ptr<ServerApi> serverApi,
+        privmx::crypto::PrivateKey userPrivKey, 
+        const std::string& streamRoomId
+    );
     
     void requestKey(const std::vector<core::UserWithPubKey>& users);
-    void respondToRequestKey(server::RequestKey request);
-    void setRequestKeyResult(server::RequestKeyResult result);
     void updateKey(const std::vector<core::UserWithPubKey>& users);
-    void respondToUpdateRequest(server::UpdateKey request);
-    void respondUpdateKeyConfirmation(server::UpdateKeyACK ack);
+    void respondToEvent(server::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey);
     
 private:
-    
+    struct StreamEncKey {
+        core::EncKey key;
+        std::chrono::_V2::system_clock::time_point creation_time;
+        std::chrono::duration<int64_t, std::milli> TTL;
+    };
+
+    server::NewStreamEncKey prepareCurrenKeyToUpdate();
+
+    void respondToRequestKey(server::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey);
+    void setRequestKeyResult(server::RequestKeyRespondEvent result);
+    void respondToUpdateRequest(server::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey);
+    void respondUpdateKeyConfirmation(server::UpdateKeyACKEvent ack, const std::string& userId, const std::string& userPubKey);
+
+    void sendStreamKeyManagementEvent(server::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
+    privmx::utils::List<core::server::UserKey> createKeySet(const std::vector<core::UserWithPubKey>& users, const privmx::endpoint::core::EncKey& key);
+
     std::shared_ptr<privmx::webrtc::KeyProvider> _webRtcKeyProvider;
     std::shared_ptr<core::KeyProvider> _keyProvider;
+    std::shared_ptr<ServerApi> _serverApi;
     privmx::crypto::PrivateKey _userPrivKey;
     privmx::crypto::PublicKey _userPubKey;
-    std::string _userId;
+    std::string _streamRoomId;
+    std::string _contextId;
     core::DataEncryptorV4 _dataEncryptor;
 
-    std::string updateKeyId;
-    privmx::utils::ThreadSaveMap<std::string, bool> userUpdateKeyConfirmationStatus;
-    std::mutex updateKeyMutex;
-    std::condition_variable updateKeyCV;
+    std::unordered_map<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;
+    std::string _currentKeyId;
+    std::shared_ptr<StreamEncKey> _keyForUpdate;
+    privmx::utils::ThreadSaveMap<std::string, bool> _userUpdateKeyConfirmationStatus;
+    std::mutex _updateKeyMutex;
+    std::condition_variable _updateKeyCV;
     
 
 };

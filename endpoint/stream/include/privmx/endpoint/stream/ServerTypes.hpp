@@ -247,15 +247,9 @@ ENDPOINT_SERVER_TYPE(StreamAcceptOfferModel)
     INT64_FIELD(sessionId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamKey)
-    
-    INT64_FIELD(TTL)
-    LIST_FIELD(keys, core::server::KeyEntrySet)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamBroadcastNewKey)
-    INT64_FIELD(streamRoomId)
-    OBJECT_FIELD(answer, StreamKey)
+ENDPOINT_SERVER_TYPE(StreamSendEventModel)
+    LIST_FIELD(keys, privmx::endpoint::core::server::KeyEntrySet);
+    STRING_FIELD(data)
 TYPE_END
 
 // ENDPOINT_SERVER_TYPE(StreamCreateModel)
@@ -368,32 +362,53 @@ ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(StreamRoomCustomEventModel)
+    STRING_FIELD(streamRoomId)
+    STRING_FIELD(keyId);
+    STRING_FIELD(eventData) // encrypted
+    LIST_FIELD(users, std::string)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(StreamRoomCustomEvent)
+    STRING_FIELD(id)
+    STRING_FIELD(keyId);
+    STRING_FIELD(eventData) // encrypted
+    OBJECT_FIELD(author, core::server::UserIdentity)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(StreamEncKey)
     STRING_FIELD(keyId)
     STRING_FIELD(key)
+    INT64_FIELD(TTL) // time in miliseconds
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(RequestKey)
-    STRING_FIELD(userId)
-    STRING_FIELD(pubKey)
+ENDPOINT_CLIENT_TYPE_INHERIT(NewStreamEncKey, StreamEncKey)
+    STRING_FIELD(oldKeyId)
+    INT64_FIELD(oldKeyTTL) // time in miliseconds
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(RequestKeyResult)
+ENDPOINT_CLIENT_TYPE_INHERIT(StreamCustomEventData, core::server::CustomEventData)
+    STRING_FIELD(streamRoomId)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(StreamKeyManagementEvent, StreamCustomEventData)
+    STRING_FIELD(subtype)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyEvent, StreamKeyManagementEvent)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyRespondEvent, StreamKeyManagementEvent)
+    
     OBJECT_FIELD(encKey, StreamEncKey)
-    STRING_FIELD(userId)
-    STRING_FIELD(pubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(UpdateKey)
-    BINARYSTRING_FIELD(EncryptedKey)
-    STRING_FIELD(UserId)
-    STRING_FIELD(PubKey)
+ENDPOINT_CLIENT_TYPE_INHERIT(UpdateKeyEvent, StreamKeyManagementEvent)
+    OBJECT_FIELD(encKey, NewStreamEncKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(UpdateKeyACK)
-    BINARYSTRING_FIELD(signedKeyId)
-    STRING_FIELD(UserId)
-    STRING_FIELD(PubKey)
+ENDPOINT_CLIENT_TYPE_INHERIT(UpdateKeyACKEvent, StreamKeyManagementEvent)
+    STRING_FIELD(keyId)
 TYPE_END
 
 } // server

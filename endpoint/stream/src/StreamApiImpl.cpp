@@ -51,11 +51,11 @@ StreamApiImpl::StreamApiImpl(
     _host(host),
     _eventMiddleware(eventMiddleware),
     _connection(connection),
-    _serverApi(ServerApi(gateway)) {
+    _serverApi(std::make_shared<ServerApi>(gateway)) {
         // streamGetTurnCredentials
         auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
         model.clientId("user1");
-        auto result = _serverApi.streamGetTurnCredentials(model);
+        auto result = _serverApi->streamGetTurnCredentials(model);
 
         libwebrtc::LibWebRTC::Initialize();
         _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
@@ -102,7 +102,7 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
     int64_t streamId = generateNumericId();
     auto key = _keyProvider->generateKey();
     // 
-    room->keyProvider->setKey(1, key.key);
+    room->keyProvider->setKey(key.id, key.key);
     _streamIdToRoomId.emplace(std::make_pair(streamId, streamRoomId));
     room->streamMap.emplace(
         std::make_pair(
@@ -232,7 +232,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
     model.streamRoomId(std::stoull(_streamIdToRoomId.at(streamId)));
     model.offer(sessionDescription);
-    auto result = _serverApi.streamPublish(model);
+    auto result = _serverApi->streamPublish(model);
     // Set remote description
     peerConnection->SetRemoteDescription(
         result.answer().sdp(), 
@@ -271,7 +271,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
         streamJoinModel.streamIds().add(streamsId[i]);
     }
     streamJoinModel.streamRoomId(std::stoull(streamRoomId));
-    auto streamJoinResult = _serverApi.streamJoin(streamJoinModel);
+    auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
     // creating peerConnectio
     room->streamMap.emplace(
         std::make_pair(
@@ -331,7 +331,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
     model.sessionId(streamJoinResult.sessionId());
     model.answer(sessionDescription);
-    _serverApi.streamAcceptOffer(model);
+    _serverApi->streamAcceptOffer(model);
 }
 
 
