@@ -105,10 +105,11 @@ private:
     struct StreamRoomData {
         std::map<uint64_t, std::shared_ptr<Stream>> streamMap;
         std::shared_ptr<StreamKeyManager> streamKeyManager;
-        std::shared_ptr<privmx::webrtc::KeyProvider> keyProvider;
     };
     
-
+    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processConnectedEvent();
+    void processDisconnectedEvent();
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     // DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
     // StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
@@ -126,6 +127,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     std::shared_ptr<ServerApi> _serverApi;
+    core::SubscriptionHelper _streamSubscriptionHelper;
     // v2
     // std::unordered_map<std::string, Stream> _streams;
     // StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
@@ -139,6 +141,7 @@ private:
     libwebrtc::RTCConfiguration _configuration;
     libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> _audioDevice;
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> _videoDevice;
+    int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 
 }  // namespace stream

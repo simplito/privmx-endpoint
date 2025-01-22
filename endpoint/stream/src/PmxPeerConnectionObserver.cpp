@@ -8,7 +8,7 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include <privmx/endpoint/stream/PmxPeerConnectionObserver.hpp>
+#include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include <rtc_video_frame.h>
 #include <iostream>
 #include <privmx/utils/Debug.hpp>
@@ -24,9 +24,9 @@ int FrameImpl::ConvertToARGB(uint8_t* dst_argb, int dst_stride_argb, int dest_wi
 
 PmxPeerConnectionObserver::PmxPeerConnectionObserver(
     uint64_t streamId, 
-    std::shared_ptr<privmx::webrtc::KeyProvider> webrtcKeyProvider, 
+    std::shared_ptr<StreamKeyManager> streamKeyManager, 
     std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback
-) : _streamId(streamId), _webrtcKeyProvider(webrtcKeyProvider), _onFrameCallback(onFrameCallback) {}
+) : _streamId(streamId), _streamKeyManager(streamKeyManager), _onFrameCallback(onFrameCallback) {}
 
 void PmxPeerConnectionObserver::OnSignalingState([[maybe_unused]] libwebrtc::RTCSignalingState state) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": ON SIGNALING STATE")
@@ -70,10 +70,12 @@ void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refpt
 }
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": TRACK ADDED")
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _webrtcKeyProvider);
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _streamKeyManager->getCurrentWebRtcKeyStore());
+    _frameCryptorsId.set(receiver->id(), _streamKeyManager->addFrameCryptor(frameCryptor));
 }
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
-
+    _streamKeyManager->removeFrameCryptor(_frameCryptorsId.get(receiver->id()).value());
+    _frameCryptorsId.erase(receiver->id());
 }
 
 

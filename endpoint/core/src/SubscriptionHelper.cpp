@@ -15,55 +15,88 @@ using namespace privmx::endpoint::core;
 
 
 SubscriptionHelper::SubscriptionHelper(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string moduleName, const std::string elementName) : 
-    _eventChannelManager(eventChannelManager), _moduleName(moduleName), _elementName(elementName),_moduleFlag(false), _map(utils::ThreadSaveMap<std::string, bool>()) {}
+    _eventChannelManager(eventChannelManager), 
+    _moduleName(moduleName), 
+    _elementName(elementName),
+    _moduleFlag(false), 
+    _map(utils::ThreadSaveMap<std::string, bool>()),
+    _mapCustom(utils::ThreadSaveMap<std::string, bool>()) {}
 
 bool SubscriptionHelper::hasSubscriptionForModule() {
     return _moduleFlag;
 }
 
-bool SubscriptionHelper::hasSubscriptionForElement(std::string elementId) {
+bool SubscriptionHelper::hasSubscriptionForElement(const std::string& elementId) {
     return _map.get(elementId).has_value();
 }
 
-void SubscriptionHelper::subscribeForModule() {
+bool SubscriptionHelper::hasSubscriptionForElementCustom(const std::string& elementId, const std::string&  channelName) {
+    return _mapCustom.get(elementId).has_value();
+}
+
+void SubscriptionHelper::subscribeForModule(bool silent) {
     _eventChannelManager->subscribeFor(_moduleName);
-    _moduleFlag = true;
+    if(!silent) _moduleFlag = true;
 }
 
-void SubscriptionHelper::unsubscribeFromModule() {
+void SubscriptionHelper::unsubscribeFromModule(bool silent) {
     _eventChannelManager->unsubscribeFrom(_moduleName);
-    _moduleFlag = false;
+    if(!silent) _moduleFlag = false;
 }
 
-void SubscriptionHelper::subscribeForElement(std::string elementId) {
+void SubscriptionHelper::subscribeForElement(const std::string& elementId, bool silent) {
     _eventChannelManager->subscribeFor(_moduleName + "/" + elementId + "/" + _elementName);
-    _map.set(elementId, true);
+    if(!silent) _map.set(elementId, true);
 }
 
-void SubscriptionHelper::unsubscribeFromElement(std::string elementId) {
+void SubscriptionHelper::unsubscribeFromElement(const std::string& elementId, bool silent) {
     _eventChannelManager->unsubscribeFrom(_moduleName + "/" + elementId + "/" + _elementName);
-    _map.erase(elementId);
+    if(!silent) _map.erase(elementId);
+}
+
+void SubscriptionHelper::subscribeForElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
+    _eventChannelManager->subscribeFor(_moduleName + "/" + elementId + "/Custom");
+    if(!silent) _mapCustom.set(elementId, true);
+}
+
+void SubscriptionHelper::unsubscribeFromElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
+    _eventChannelManager->unsubscribeFrom(_moduleName + "/" + elementId + "/Custom");
+    if(!silent) _mapCustom.erase(elementId);
 }
 
 
 SubscriptionHelperExt::SubscriptionHelperExt(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string moduleName, const std::string elementName) : 
     _subscriptionHelper(eventChannelManager, moduleName, elementName), _map(utils::ThreadSaveMap<std::string, std::string>()) {}
 
-bool SubscriptionHelperExt::hasSubscriptionForElement(std::string elementId) {
+bool SubscriptionHelperExt::hasSubscriptionForElement(const std::string& elementId) {
     return _map.get(elementId).has_value();
 }
 
-void SubscriptionHelperExt::subscribeForElement(std::string elementId, std::string parentModuleId) {
+bool SubscriptionHelperExt::hasSubscriptionForElement(const std::string& elementId) {
+    return _mapCustom.get(elementId).has_value();
+}
+
+void SubscriptionHelperExt::subscribeForElement(const std::string& elementId, const std::string& parentModuleId,  bool silent) {
     _subscriptionHelper.subscribeForElement(elementId);
-    _map.set(elementId, parentModuleId);
+    if(!silent) _map.set(elementId, parentModuleId);
 }
 
-void SubscriptionHelperExt::unsubscribeFromElement(std::string elementId) {
+void SubscriptionHelperExt::unsubscribeFromElement(const std::string& elementId, bool silent) {
     _subscriptionHelper.unsubscribeFromElement(elementId);
-    _map.erase(elementId);
+    if(!silent) _map.erase(elementId);
 }
 
-std::string SubscriptionHelperExt::getParentModuleId(std::string elementId) {
+void SubscriptionHelperExt::subscribeForElementCustom(const std::string& elementId, const std::string& parentModuleId, const std::string&  channelName,  bool silent) {
+    _subscriptionHelper.subscribeForElementCustom(elementId, channelName);
+    if(!silent) _mapCustom.set(elementId, parentModuleId);
+}
+
+void SubscriptionHelperExt::unsubscribeFromElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
+    _subscriptionHelper.unsubscribeFromElementCustom(elementId, channelName);
+    if(!silent) _mapCustom.erase(elementId);
+}
+
+std::string SubscriptionHelperExt::getParentModuleId(const std::string& elementId) {
     auto tmp = _map.get(elementId);
     return tmp.has_value() ? tmp.value() : std::string();
 }

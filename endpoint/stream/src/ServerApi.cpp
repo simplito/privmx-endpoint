@@ -99,6 +99,14 @@ void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
 //     request("streamLeave", model);
 // }
 
+void ServerApi::streamRoomCustomEvent(server::StreamRoomCustomEventModel model) {
+    throw stream::NotImplementedException();
+}
+
+void ServerApi::streamCustomEvent(core::server::CustomEventModel model) {
+    throw stream::NotImplementedException();
+}
+
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params));
 }

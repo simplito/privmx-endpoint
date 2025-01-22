@@ -17,12 +17,12 @@ limitations under the License.
 using namespace privmx::endpoint::stream; 
 
 StreamKeyManager::StreamKeyManager(
-    std::shared_ptr<privmx::webrtc::KeyProvider> webRtcKeyProvider, 
     std::shared_ptr<core::KeyProvider> keyProvider, 
     std::shared_ptr<ServerApi> serverApi,
     privmx::crypto::PrivateKey userPrivKey, 
-    const std::string& streamRoomId
-) : _webRtcKeyProvider(webRtcKeyProvider), _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId) {
+    const std::string& streamRoomId,
+    const std::string& contextId
+) : _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId) {
     _userPubKey = _userPrivKey.getPublicKey();
     // generate curren key
     auto currentKey = _keyProvider->generateKey();
@@ -31,8 +31,47 @@ StreamKeyManager::StreamKeyManager(
         .creation_time=std::chrono::system_clock::now(), 
         .TTL=std::chrono::milliseconds(MAX_STD_KEY_TTL)
     });
-    _webRtcKeyProvider->setKey(currentKey.id, currentKey.key);
+    _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
+    // ->setKey(currentKey.id, currentKey.key);
+    _cancellationToken = privmx::utils::CancellationToken::create();
     //create thread to remove old keys
+    _keyCollector = std::thread([&]() {
+        while (true) {
+            _cancellationToken->sleep(std::chrono::seconds(1));
+            std::vector<std::string> keysToDelete;
+            _keysStrage.forAll([&](std::string key, std::shared_ptr<StreamEncKey> value) {
+                if(value->creation_time + value->TTL > std::chrono::system_clock::now()) {
+                    keysToDelete.push_back(key);
+                }
+            });
+            for(auto keyToDelete: keysToDelete) {
+                _keysStrage.erase(keyToDelete);
+            }
+            if(keysToDelete.size() > 0) {
+                updateWebRtcKeyStore();
+            }
+        }
+    }); 
+    _keyCollector.detach();
+}
+
+StreamKeyManager::~StreamKeyManager() {
+    _cancellationToken->cancel();
+}
+
+std::shared_ptr<privmx::webrtc::KeyStore> StreamKeyManager::getCurrentWebRtcKeyStore() {
+    return _currentWebRtcKeyStore;
+}
+
+int64_t StreamKeyManager::addFrameCryptor(std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor) {
+    int64_t id = ++_nextFrameCryptorId;
+    _webRtcFrameCryptors.set(id, frameCryptor);
+    frameCryptor->setKeyStore(_currentWebRtcKeyStore);
+    return id;
+}
+
+void StreamKeyManager::removeFrameCryptor(int64_t frameCryptorId) {
+    _webRtcFrameCryptors.erase(frameCryptorId);
 }
 
 void StreamKeyManager::respondToEvent(server::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey) {
@@ -57,7 +96,7 @@ void StreamKeyManager::requestKey(const std::vector<privmx::endpoint::core::User
 
 void StreamKeyManager::respondToRequestKey(server::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey) {
     // data
-    auto currentKey = _keysStrage.at(_currentKeyId);
+    auto currentKey = _keyForUpdate;
 
     server::StreamEncKey streamEncKey = privmx::utils::TypedObjectFactory::createNewObject<server::StreamEncKey>();
     streamEncKey.keyId(currentKey->key.id);
@@ -70,32 +109,41 @@ void StreamKeyManager::respondToRequestKey(server::RequestKeyEvent request, cons
     respond.encKey(streamEncKey);
     // send data by event
     sendStreamKeyManagementEvent(respond, {privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}});
+    _connectedUsers.push_back(privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey});
 }
 
 void StreamKeyManager::setRequestKeyResult(server::RequestKeyRespondEvent result) {
     //validate data
     auto newKey = result.encKey();
     // add new key
-    _keysStrage.insert(
-        std::make_pair(
-            newKey.keyId(),
-            std::make_shared<StreamEncKey>(
-                StreamEncKey{
-                    .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=newKey.key()},
-                    .creation_time=std::chrono::system_clock::now(), 
-                    .TTL=std::chrono::milliseconds(newKey.TTL())
-                }
-            )
+    _keysStrage.set(
+        newKey.keyId(),
+        std::make_shared<StreamEncKey>(
+            StreamEncKey{
+                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=newKey.key()},
+                .creation_time=std::chrono::system_clock::now(), 
+                .TTL=std::chrono::milliseconds(newKey.TTL())
+            }
         )
     );
-    _webRtcKeyProvider->setKey(newKey.keyId(), newKey.key());
+    updateWebRtcKeyStore();
 }
 
-void StreamKeyManager::updateKey(const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
+void StreamKeyManager::removeUser(core::UserWithPubKey user) {
+    _connectedUsers.erase(
+        std::find_if(
+            _connectedUsers.begin(), 
+            _connectedUsers.end(), 
+            [user](const core::UserWithPubKey& u) {return user.userId == u.userId && user.pubKey == u.pubKey;}
+        )
+    );
+}
+
+void StreamKeyManager::updateKey() {
     // create date
     auto newKey = prepareCurrenKeyToUpdate();
     _userUpdateKeyConfirmationStatus.clear();
-    for(auto user : users) {
+    for(auto user : _connectedUsers) {
         _userUpdateKeyConfirmationStatus.set(user.pubKey, false);
     }
     // prepare data to send
@@ -103,34 +151,33 @@ void StreamKeyManager::updateKey(const std::vector<privmx::endpoint::core::UserW
     respond.subtype("UpdateKeyEvent");
     respond.encKey(newKey);
     // send to users
-    sendStreamKeyManagementEvent(respond, users);
+    sendStreamKeyManagementEvent(respond, _connectedUsers);
     //thread for timeout and update
     std::thread t([&]() {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
         std::cv_status status = _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
-        if (status == std::cv_status::timeout) {
-
-        }
+        _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
+        _keysStrage.erase(_currentKeyId);
+        _currentKeyId = _keyForUpdate->key.id;
     }); 
+    t.detach();
 }
 //
 void StreamKeyManager::respondToUpdateRequest(server::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey) {
     //extract key
     auto newKey = request.encKey();
     // add new key
-    _keysStrage.insert(
-        std::make_pair(
-            newKey.keyId(),
-            std::make_shared<StreamEncKey>(
-                StreamEncKey{
-                    .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=newKey.key()},
-                    .creation_time=std::chrono::system_clock::now(), 
-                    .TTL=std::chrono::milliseconds(newKey.TTL())
-                }
-            )
+    _keysStrage.set(
+        newKey.keyId(),
+        std::make_shared<StreamEncKey>(
+            StreamEncKey{
+                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=newKey.key()},
+                .creation_time=std::chrono::system_clock::now(), 
+                .TTL=std::chrono::milliseconds(newKey.TTL())
+            }
         )
     );
-    _webRtcKeyProvider->setKey(newKey.keyId(), newKey.key());
+    updateWebRtcKeyStore();
     // prepare ack data
     server::UpdateKeyACKEvent ack = privmx::utils::TypedObjectFactory::createNewObject<server::UpdateKeyACKEvent>();
     ack.subtype("UpdateKeyACKEvent");
@@ -148,13 +195,18 @@ void StreamKeyManager::respondUpdateKeyConfirmation(server::UpdateKeyACKEvent ac
     }
 }
 
-server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
-    _keyForUpdate = std::make_shared<StreamEncKey>(StreamEncKey{
-        .key=_keyProvider->generateKey(), 
-        .creation_time=std::chrono::system_clock::now(), 
-        .TTL=std::chrono::milliseconds(MAX_STD_KEY_TTL)
-    });
-    auto currentKey = _keysStrage.at(_currentKeyId);
+server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {    
+    {
+        std::unique_lock<std::mutex> lock(_updateKeyMutex);
+        _keyForUpdate = std::make_shared<StreamEncKey>(StreamEncKey{
+            .key=_keyProvider->generateKey(), 
+            .creation_time=std::chrono::system_clock::now(), 
+            .TTL=std::chrono::milliseconds(MAX_STD_KEY_TTL)
+        });
+    }
+
+    auto currentKeyOpt = _keysStrage.get(_currentKeyId);
+    auto currentKey = currentKeyOpt.value();
     server::NewStreamEncKey result = privmx::utils::TypedObjectFactory::createNewObject<server::NewStreamEncKey>();
     result.oldKeyId(currentKey->key.id);
     
@@ -181,8 +233,7 @@ void StreamKeyManager::sendStreamKeyManagementEvent(server::StreamCustomEventDat
     std::string encryptedData = _dataEncryptor.signAndEncryptAndEncode(privmx::endpoint::core::Buffer::from(privmx::utils::Utils::stringifyVar(data)), _userPrivKey, key.key);
     core::server::CustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventModel>();
     model.contextId(_contextId);
-    model.keyId();
-    model.eventData(encryptedData);
+    model.data(encryptedData);
     model.users(createKeySet(users, key));
     _serverApi->streamCustomEvent(model);
 }
@@ -197,4 +248,20 @@ privmx::utils::List<privmx::endpoint::core::server::UserKey> StreamKeyManager::c
         result.add(el);
     }
     return result;
+}
+
+void StreamKeyManager::updateWebRtcKeyStore() {
+    std::vector<privmx::webrtc::Key> webRtcKeys;
+    _keysStrage.forAll([&](std::string key, std::shared_ptr<StreamEncKey> value) {
+        privmx::webrtc::Key webRtcKey {
+            .keyId = value->key.id,
+            .key =  value->key.key,
+            .type = value->key.id == _currentKeyId ? privmx::webrtc::KeyType::LOCAL : privmx::webrtc::KeyType::REMOTE
+        };
+        webRtcKeys.push_back(webRtcKey);
+    });
+    _currentWebRtcKeyStore = privmx::webrtc::KeyStore::Create(webRtcKeys);
+    _webRtcFrameCryptors.forAll([&](int64_t key, std::shared_ptr<privmx::webrtc::FrameCryptor> value) {
+        value->setKeyStore(_currentWebRtcKeyStore);
+    });
 }

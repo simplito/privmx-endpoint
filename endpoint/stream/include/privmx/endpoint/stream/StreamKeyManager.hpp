@@ -24,6 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/DataEncryptorV4.hpp>
 #include "privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
+#include "privmx/utils/CancellationToken.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -31,18 +32,22 @@ namespace stream {
 
 class StreamKeyManager {
 public:
-    StreamKeyManager(
-        std::shared_ptr<privmx::webrtc::KeyProvider> webRtcKeyProvider, 
+    StreamKeyManager( 
         std::shared_ptr<core::KeyProvider> keyProvider, 
         std::shared_ptr<ServerApi> serverApi,
         privmx::crypto::PrivateKey userPrivKey, 
-        const std::string& streamRoomId
+        const std::string& streamRoomId, 
+        const std::string& contextId
     );
+    ~StreamKeyManager();
     
     void requestKey(const std::vector<core::UserWithPubKey>& users);
-    void updateKey(const std::vector<core::UserWithPubKey>& users);
+    void updateKey();
     void respondToEvent(server::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey);
-    
+    void removeUser(core::UserWithPubKey);
+    int64_t addFrameCryptor(std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor);
+    void removeFrameCryptor(int64_t frameCryptorId);
+    std::shared_ptr<privmx::webrtc::KeyStore> getCurrentWebRtcKeyStore();
 private:
     struct StreamEncKey {
         core::EncKey key;
@@ -59,8 +64,8 @@ private:
 
     void sendStreamKeyManagementEvent(server::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
     privmx::utils::List<core::server::UserKey> createKeySet(const std::vector<core::UserWithPubKey>& users, const privmx::endpoint::core::EncKey& key);
+    void updateWebRtcKeyStore();
 
-    std::shared_ptr<privmx::webrtc::KeyProvider> _webRtcKeyProvider;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::shared_ptr<ServerApi> _serverApi;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -68,15 +73,19 @@ private:
     std::string _streamRoomId;
     std::string _contextId;
     core::DataEncryptorV4 _dataEncryptor;
+    privmx::utils::CancellationToken::Ptr _cancellationToken;
+    std::thread _keyCollector;
+    privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<privmx::webrtc::FrameCryptor>> _webRtcFrameCryptors; 
 
-    std::unordered_map<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;
+    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;
+    std::vector<privmx::endpoint::core::UserWithPubKey> _connectedUsers;
     std::string _currentKeyId;
     std::shared_ptr<StreamEncKey> _keyForUpdate;
     privmx::utils::ThreadSaveMap<std::string, bool> _userUpdateKeyConfirmationStatus;
     std::mutex _updateKeyMutex;
     std::condition_variable _updateKeyCV;
-    
-
+    std::shared_ptr<privmx::webrtc::KeyStore> _currentWebRtcKeyStore;
+    std::atomic_int64_t _nextFrameCryptorId = 0;
 };
 
 } // stream

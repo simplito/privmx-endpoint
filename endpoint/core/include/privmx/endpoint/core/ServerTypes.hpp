@@ -61,8 +61,7 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE(CustomEventModel)
     STRING_FIELD(contextId)
-    STRING_FIELD(keyId);
-    STRING_FIELD(eventData) // encrypted
+    STRING_FIELD(data) // encrypted
     LIST_FIELD(users, UserKey)
 TYPE_END
 
