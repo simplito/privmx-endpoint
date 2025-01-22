@@ -84,6 +84,9 @@ void StoreApi::updateStore(
 )
 {
     validateEndpoint();
+    core::Validator::validateId(storeId, "field:storeId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
         _impl->updateStore(storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {

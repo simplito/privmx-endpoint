@@ -28,7 +28,9 @@ class CryptoApiImpl
 public:
     core::Buffer signData(const core::Buffer& data, const std::string& key);
     bool verifySignature(const core::Buffer& data, const core::Buffer& signature, const std::string& key);
+    std::string generatePrivateKey_deprecated(const std::optional<std::string>& basestring);
     std::string generatePrivateKey(const std::optional<std::string>& basestring);
+    std::string derivePrivateKey_deprecated(const std::string& password, const std::string& salt);
     std::string derivePrivateKey(const std::string& password, const std::string& salt);
     std::string derivePublicKey(const std::string& privkey);
     core::Buffer generateKeySymmetric();
@@ -37,7 +39,7 @@ public:
     std::string convertPEMKeytoWIFKey(const std::string& keyPEM);
 
 private:
-    privmx::crypto::PrivateKey getPrivKeyFromSeed(const std::string& seed);
+    privmx::crypto::PrivateKey getPrivKeyFromSeed(const std::string& seed, size_t rounds);
 };
 
 } // crypto
