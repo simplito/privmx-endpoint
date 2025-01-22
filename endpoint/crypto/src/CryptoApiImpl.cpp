@@ -42,7 +42,7 @@ std::string CryptoApiImpl::generatePrivateKey_deprecated(const std::optional<std
 
 std::string CryptoApiImpl::generatePrivateKey(const std::optional<std::string>& basestring) {
     if (basestring.has_value()) {
-        auto privWIF {getPrivKeyFromSeed(basestring.value(), 1000).toWIF()};
+        auto privWIF {getPrivKeyFromSeed(basestring.value(), 200000).toWIF()};
         return privWIF;
     }
     auto privKey = privmx::crypto::PrivateKey::generateRandom();
