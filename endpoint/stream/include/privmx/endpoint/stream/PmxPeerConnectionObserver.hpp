@@ -17,6 +17,7 @@ limitations under the License.
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
 #include "privmx/endpoint/stream/Types.hpp"
+#include <privmx/utils/ThreadSaveMap.hpp>
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include <pmx_frame_cryptor.h>
 
@@ -67,7 +68,7 @@ public:
 private:
     uint64_t _streamId; 
     std::shared_ptr<StreamKeyManager> _streamKeyManager;
-    privmx::utils::ThreadSaveMap<libwebrtc::string, int64_t> _frameCryptorsId;
+    privmx::utils::ThreadSaveMap<std::string, int64_t> _frameCryptorsId;
 
     std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
 };

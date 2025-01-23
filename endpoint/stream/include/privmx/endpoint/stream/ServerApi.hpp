@@ -28,11 +28,11 @@ public:
 
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
-    // server::StreamRoomCreateResult streamRoomCreate(server::StreamRoomCreateModel model);
-    // void streamRoomUpdate(server::StreamRoomUpdateModel model);
-    // server::StreamRoomListResult streamRoomList(server::StreamRoomListModel model);
-    // server::StreamRoomGetResult streamRoomGet(server::StreamRoomGetModel model);
-    // void streamRoomDelete(server::StreamRoomDeleteModel model);
+    server::StreamRoomCreateResult streamRoomCreate(server::StreamRoomCreateModel model);
+    void streamRoomUpdate(server::StreamRoomUpdateModel model);
+    server::StreamRoomListResult streamRoomList(server::StreamRoomListModel model);
+    server::StreamRoomGetResult streamRoomGet(server::StreamRoomGetModel model);
+    void streamRoomDelete(server::StreamRoomDeleteModel model);
     server::StreamGetTurnCredentialsResult streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model);
     // server::StreamCreateResult streamCreate(server::StreamCreateModel model);
     // void streamUpdate(server::StreamUpdateModel model);

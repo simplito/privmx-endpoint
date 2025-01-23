@@ -15,10 +15,12 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
+#include <privmx/endpoint/core/Validator.hpp>
 
 #include "privmx/endpoint/stream/StreamApi.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
+
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -33,7 +35,7 @@ StreamApi StreamApi::create(core::Connection& connection) {
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
             connectionImpl->getEventChannelManager(),
-            connection
+            connectionImpl->getContextSubscriptionHelper()
         ));
         return StreamApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -43,6 +45,80 @@ StreamApi StreamApi::create(core::Connection& connection) {
 }
 
 StreamApi::StreamApi(const std::shared_ptr<StreamApiImpl>& impl) : _impl(impl) {}
+
+std::string StreamApi::createStreamRoom(
+    const std::string& contextId, 
+    const std::vector<core::UserWithPubKey>& users, 
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta, 
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    validateEndpoint();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    try {
+        return _impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::updateStreamRoom(
+    const std::string& streamRoomId, 
+    const std::vector<core::UserWithPubKey>& users, 
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta, 
+    const core::Buffer& privateMeta, 
+    const int64_t version, 
+    const bool force, 
+    const bool forceGenerateNewKey, 
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    try {
+        return _impl->updateStreamRoom(streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::PagingList<StreamRoom> StreamApi::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
+    validateEndpoint();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateClass<core::PagingQuery>(query, "field:query ");
+    try {
+        return _impl->listStreamRooms(contextId, query);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}   
+
+StreamRoom StreamApi::getStreamRoom(const std::string& streamRoomId) {
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->getStreamRoom(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::deleteStreamRoom(const std::string& streamRoomId) {
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->deleteStreamRoom(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
 
 int64_t StreamApi::createStream(const std::string& streamRoomId) {
     validateEndpoint();

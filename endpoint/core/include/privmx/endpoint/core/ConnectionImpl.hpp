@@ -29,6 +29,7 @@ limitations under the License.
 #include "privmx/endpoint/core/HandleManager.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/SubscriptionHelper.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -49,6 +50,7 @@ public:
     const std::shared_ptr<EventMiddleware>& getEventMiddleware() const { return _eventMiddleware; }
     const std::shared_ptr<EventChannelManager>& getEventChannelManager() const { return _eventChannelManager; }
     const std::shared_ptr<HandleManager>& getHandleManager() const { return _handleManager; }
+    const std::shared_ptr<SubscriptionHelper>& getContextSubscriptionHelper() const { return _contextSubscriptionHelper; }
 
     const rpc::ServerConfig& getServerConfig() const { return _serverConfig; }
 
@@ -64,6 +66,7 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
+    std::shared_ptr<SubscriptionHelper> _contextSubscriptionHelper;
 };
 
 }  // namespace core

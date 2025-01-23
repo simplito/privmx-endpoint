@@ -61,11 +61,20 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE(CustomEventModel)
     STRING_FIELD(contextId)
+    STRING_FIELD(channel)
     STRING_FIELD(data) // encrypted
     LIST_FIELD(users, UserKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(CustomEventData)
+ENDPOINT_CLIENT_TYPE(ContextCustomEventData)
+    STRING_FIELD(id)
+    VAR_FIELD(eventData)
+    STRING_FIELD(key) // encrypted Key
+    OBJECT_FIELD(author, UserIdentity)
+TYPE_END
+
+
+ENDPOINT_CLIENT_TYPE(CustomEventData) //Internal
     STRING_FIELD(type)
 TYPE_END
 

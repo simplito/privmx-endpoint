@@ -71,11 +71,14 @@ void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refpt
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": TRACK ADDED")
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _streamKeyManager->getCurrentWebRtcKeyStore());
-    _frameCryptorsId.set(receiver->id(), _streamKeyManager->addFrameCryptor(frameCryptor));
+    _frameCryptorsId.set(receiver->id().std_string(), _streamKeyManager->addFrameCryptor(frameCryptor));
 }
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
-    _streamKeyManager->removeFrameCryptor(_frameCryptorsId.get(receiver->id()).value());
-    _frameCryptorsId.erase(receiver->id());
+    auto frameCryptorId = _frameCryptorsId.get(receiver->id().std_string());
+    if(frameCryptorId.has_value()) {
+        _streamKeyManager->removeFrameCryptor(frameCryptorId.value());
+    }
+    _frameCryptorsId.erase(receiver->id().std_string());
 }
 
 

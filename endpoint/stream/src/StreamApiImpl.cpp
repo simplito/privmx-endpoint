@@ -44,14 +44,15 @@ StreamApiImpl::StreamApiImpl(
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-    const core::Connection& connection
+    const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
 ) : _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
     _eventMiddleware(eventMiddleware),
-    _connection(connection),
-    _serverApi(std::make_shared<ServerApi>(gateway)) {
+    _contextSubscriptionHelper(contextSubscriptionHelper),
+    _serverApi(std::make_shared<ServerApi>(gateway)),
+    _streamSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "stream", "streams")) {
         // streamGetTurnCredentials
         auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
         model.clientId("user1");
@@ -74,12 +75,12 @@ StreamApiImpl::StreamApiImpl(
     }
 
 StreamApiImpl::~StreamApiImpl() {
-    for(auto streamRoom: _streamRoomMap) {
-        for(auto stream: streamRoom.second->streamMap) {
+    _streamRoomMap.forAll([&](std::string key, std::shared_ptr<privmx::endpoint::stream::StreamApiImpl::StreamRoomData> value) {
+        for(auto stream: value->streamMap) {
             stream.second->peerConnection->Close();
         }
-        streamRoom.second->streamMap.clear();
-    }
+        value->streamMap.clear();
+    });
     _streamRoomMap.clear();
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
@@ -88,8 +89,18 @@ StreamApiImpl::~StreamApiImpl() {
 
 
 void StreamApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    
-    if(_streamSubscriptionHelper.hasSubscriptionForModule()) {
+    if(channel == "internal" && type == "custom"/*TMP*/) {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
+        if(_contextSubscriptionHelper->hasSubscriptionForElementCustom(raw.id(), "internal")) {
+            auto eventData = utils::TypedObjectFactory::createObjectFromVar<server::StreamCustomEventData>(raw.eventData());
+            if(!eventData.typeEmpty() && eventData.type() == "StreamKeyManagementEvent") {
+                auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<server::StreamKeyManagementEvent>(eventData);
+                auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
+                if(roomOpt.has_value()) {
+                    roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
+                }
+            }
+        }
     }
 }
 
@@ -103,25 +114,27 @@ void StreamApiImpl::processDisconnectedEvent() {
 // V3 code 
 
 int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
-    auto it = _streamRoomMap.find(streamRoomId);
-    if(it == _streamRoomMap.end()) {
+    auto roomOpt = _streamRoomMap.get(streamRoomId);
+    if(!roomOpt.has_value()) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+        model.id(streamRoomId);
+        auto streamRoom = _serverApi->streamRoomGet(model).streamRoom(); 
         auto webRtcKeyStore = privmx::webrtc::KeyStore::Create({});
-        _streamRoomMap.emplace(
-            std::make_pair(
-                streamRoomId,
-                std::make_shared<StreamRoomData>(
-                    StreamRoomData{
-                        .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
-                        .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId),
-                    }
-                )
+        _streamRoomMap.set(
+            streamRoomId,
+            std::make_shared<StreamRoomData>(
+                StreamRoomData{
+                    .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
+                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId()),
+                }
             )
         );
+        roomOpt = _streamRoomMap.get(streamRoomId);
     }
-    auto room = _streamRoomMap.at(streamRoomId);
+    auto room = roomOpt.value();
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) ": STREAM Sender")
     int64_t streamId = generateNumericId();
-    _streamIdToRoomId.emplace(std::make_pair(streamId, streamRoomId));
+    _streamIdToRoomId.set(streamId, streamRoomId);
     room->streamMap.emplace(
         std::make_pair(
             streamId, 
@@ -196,7 +209,11 @@ void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::strin
     auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
     audioTrack->SetVolume(10);
     // Add tracks to the peer connection
-    auto room = _streamRoomMap.at(_streamIdToRoomId.at(streamId));
+    auto streamRoomId = _streamIdToRoomId.get(streamId);
+    if(!streamRoomId.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    auto room = _streamRoomMap.get(streamRoomId.value()).value();
     auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->streamKeyManager->getCurrentWebRtcKeyStore());
 }
@@ -210,7 +227,11 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
 
     // Add tracks to the peer connection
-    auto room = _streamRoomMap.at(_streamIdToRoomId.at(streamId));
+    auto streamRoomId = _streamIdToRoomId.get(streamId);
+    if(!streamRoomId.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    auto room = _streamRoomMap.get(streamRoomId.value()).value();
     auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->streamKeyManager->getCurrentWebRtcKeyStore());
     // Start capture video
@@ -223,7 +244,12 @@ void StreamApiImpl::trackAddDesktop(int64_t streamId, int64_t id, const std::str
 
 // Publishing stream
 void StreamApiImpl::publishStream(int64_t streamId) {
-    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection = _streamRoomMap.at(_streamIdToRoomId.at(streamId))->streamMap.at(streamId)->peerConnection;
+    auto streamRoomId = _streamIdToRoomId.get(streamId);
+    if(!streamRoomId.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    auto room = _streamRoomMap.get(streamRoomId.value()).value();
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection = room->streamMap.at(streamId)->peerConnection;
     std::promise<std::string> t_spd = std::promise<std::string>();
     peerConnection->CreateOffer(
         [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
@@ -248,7 +274,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
     sessionDescription.sdp(sdp);
     sessionDescription.type("offer");
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
-    model.streamRoomId(std::stoull(_streamIdToRoomId.at(streamId)));
+    model.streamRoomId(1234); //TODO
     model.offer(sessionDescription);
     auto result = _serverApi->streamPublish(model);
     // Set remote description
@@ -264,32 +290,34 @@ void StreamApiImpl::publishStream(int64_t streamId) {
 
 // // Joining to Stream
 void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
-    auto it = _streamRoomMap.find(streamRoomId);
-    if(it == _streamRoomMap.end()) {
+    auto roomOpt = _streamRoomMap.get(streamRoomId);
+    if(!roomOpt.has_value()) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+        model.id(streamRoomId);
+        auto streamRoom = _serverApi->streamRoomGet(model).streamRoom(); 
         auto webRtcKeyStore = privmx::webrtc::KeyStore::Create({});
-        _streamRoomMap.emplace(
-            std::make_pair(
-                streamRoomId,
-                std::make_shared<StreamRoomData>(
-                    StreamRoomData{
-                        .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
-                        .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId)
-                    }
-                )
+        _streamRoomMap.set(
+            streamRoomId,
+            std::make_shared<StreamRoomData>(
+                StreamRoomData{
+                    .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
+                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId()),
+                }
             )
         );
+        roomOpt = _streamRoomMap.get(streamRoomId);
     }
-    auto room = _streamRoomMap.at(streamRoomId);
+    auto room = roomOpt.value();
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) ": STREAM Receiver")
     int64_t streamId = generateNumericId();
-    _streamIdToRoomId.emplace(std::make_pair(streamId, streamRoomId));
+    _streamIdToRoomId.set(streamId, streamRoomId);
     // Get data from bridge
     auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
     streamJoinModel.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
     for(size_t i = 0; i < streamsId.size(); i++) {
         streamJoinModel.streamIds().add(streamsId[i]);
     }
-    streamJoinModel.streamRoomId(std::stoull(streamRoomId));
+    streamJoinModel.streamRoomId(1234); //TODO
     auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
     // creating peerConnectio
     room->streamMap.emplace(
@@ -355,190 +383,197 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     room->streamKeyManager->requestKey({});
 }
 
+std::string StreamApiImpl::createStreamRoom(
+    const std::string& contextId, 
+    const std::vector<core::UserWithPubKey>& users, 
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta, 
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    PRIVMX_DEBUG_TIME_START(PlatformStream, createStreamRoom)
+    auto streamRoomKey = _keyProvider->generateKey();
+    StreamRoomDataToEncrypt streamRoomDataToEncrypt {
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .internalMeta = std::nullopt
+    };
+    auto create_stream_room_model = utils::TypedObjectFactory::createNewObject<server::StreamRoomCreateModel>();
+    create_stream_room_model.contextId(contextId);
+    create_stream_room_model.keyId(streamRoomKey.id);
+    create_stream_room_model.data(_streamRoomDataEncryptorV4.encrypt(streamRoomDataToEncrypt, _userPrivKey, streamRoomKey.key).asVar());
+    auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    privmx::utils::List<core::server::KeyEntrySet> keys = _keyProvider->prepareKeysList(allUsers, streamRoomKey);
+    create_stream_room_model.keys(keys);
+    create_stream_room_model.users(mapUsers(users));
+    create_stream_room_model.managers(mapUsers(managers));
+    if (policies.has_value()) {
+        create_stream_room_model.policy(core::Factory::createPolicyServerObject(policies.value()));
+    }
 
-// // V2 code
+    auto result = _serverApi->streamRoomCreate(create_stream_room_model);
+    PRIVMX_DEBUG_TIME_STOP(PlatformStream, createStreamRoom, data send)
+    return result.streamRoomId();
+}
 
-// std::string StreamApiImpl::roomCreate(
-//     const std::string& contextId, 
-//     const std::vector<core::UserWithPubKey>& users, 
-//     const std::vector<core::UserWithPubKey>&managers,
-//     const core::Buffer& publicMeta, 
-//     const core::Buffer& privateMeta,
-//     const std::optional<core::ContainerPolicy>& policies
-// ) {
-//     PRIVMX_DEBUG_TIME_START(PlatformStream, roomCreate)
-//     auto streamRoomKey = _keyProvider->generateKey();
-//     StreamRoomDataToEncrypt streamRoomDataToEncrypt {
-//         .publicMeta = publicMeta,
-//         .privateMeta = privateMeta,
-//         .internalMeta = std::nullopt
-//     };
-//     auto create_stream_room_model = utils::TypedObjectFactory::createNewObject<server::StreamRoomCreateModel>();
-//     create_stream_room_model.contextId(contextId);
-//     create_stream_room_model.keyId(streamRoomKey.id);
-//     create_stream_room_model.data(_streamRoomDataEncryptorV4.encrypt(streamRoomDataToEncrypt, _userPrivKey, streamRoomKey.key).asVar());
-//     auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-//     privmx::utils::List<core::server::KeyEntrySet> keys = _keyProvider->prepareKeysList(allUsers, streamRoomKey);
-//     create_stream_room_model.keys(keys);
-//     create_stream_room_model.users(mapUsers(users));
-//     create_stream_room_model.managers(mapUsers(managers));
-//     if (policies.has_value()) {
-//         create_stream_room_model.policy(core::Factory::createPolicyServerObject(policies.value()));
-//     }
+void StreamApiImpl::updateStreamRoom(
+    const std::string& streamRoomId, 
+    const std::vector<core::UserWithPubKey>& users, 
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta, 
+    const core::Buffer& privateMeta, 
+    const int64_t version, 
+    const bool force, 
+    const bool forceGenerateNewKey, 
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    PRIVMX_DEBUG_TIME_START(PlatformStream, updateStreamRoom)
+    // get current streamRoom
+    auto getModel = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+    getModel.id(streamRoomId);
+    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom();
+    // extract current users info
+    auto usersVec {core::EndpointUtils::listToVector<std::string>(currentStreamRoom.users())};
+    auto managersVec {core::EndpointUtils::listToVector<std::string>(currentStreamRoom.managers())};
+    auto oldUsersAll {core::EndpointUtils::uniqueList(usersVec, managersVec)};
+    auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    // adjust key
+    std::vector<std::string> usersDiff {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
+    bool needNewKey = usersDiff.size() > 0;
 
-//     auto result = _serverApi.streamRoomCreate(create_stream_room_model);
-//     PRIVMX_DEBUG_TIME_STOP(PlatformStream, roomCreate, data send)
-//     return result.streamRoomId();
-// }
+    auto currentKey {_keyProvider->getKey(currentStreamRoom.keys(), currentStreamRoom.keyId())};
+    auto streamRoomKey = forceGenerateNewKey || needNewKey ? _keyProvider->generateKey() : currentKey; 
 
-// void StreamApiImpl::roomUpdate(
-//     const std::string& streamRoomId, 
-//     const std::vector<core::UserWithPubKey>& users, 
-//     const std::vector<core::UserWithPubKey>&managers,
-//     const core::Buffer& publicMeta, 
-//     const core::Buffer& privateMeta, 
-//     const int64_t version, 
-//     const bool force, 
-//     const bool forceGenerateNewKey, 
-//     const std::optional<core::ContainerPolicy>& policies
-// ) {
-//     PRIVMX_DEBUG_TIME_START(PlatformStream, roomUpdate)
-//     // get current streamRoom
-//     auto getModel = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
-//     getModel.streamRoomId(streamRoomId);
-//     auto currentStreamRoom = _serverApi.streamRoomGet(getModel).streamRoom();
-//     // extract current users info
-//     auto usersVec {core::EndpointUtils::listToVector<std::string>(currentStreamRoom.users())};
-//     auto managersVec {core::EndpointUtils::listToVector<std::string>(currentStreamRoom.managers())};
-//     auto oldUsersAll {core::EndpointUtils::uniqueList(usersVec, managersVec)};
-//     auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-//     // adjust key
-//     std::vector<std::string> usersDiff {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
-//     bool needNewKey = usersDiff.size() > 0;
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomUpdateModel>();
+    model.id(streamRoomId);
+    model.keyId(streamRoomKey.id);
+    model.keys(_keyProvider->prepareKeysList(new_users, streamRoomKey));
+    auto usersList = utils::TypedObjectFactory::createNewList<std::string>();
+    for (auto user: users) {
+        usersList.add(user.userId);
+    }
+    auto managersList = utils::TypedObjectFactory::createNewList<std::string>();
+    for (auto x: managers) {
+        managersList.add(x.userId);
+    }
+    model.users(usersList);
+    model.managers(managersList);
+    model.version(version);
+    model.force(force);
+    if (policies.has_value()) {
+        model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
+    }
+    StreamRoomDataToEncrypt streamRoomDataToEncrypt {
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .internalMeta = std::nullopt
+    };
+    model.data(_streamRoomDataEncryptorV4.encrypt(streamRoomDataToEncrypt, _userPrivKey, streamRoomKey.key).asVar());
 
-//     auto currentKey {_keyProvider->getKey(currentStreamRoom.keys(), currentStreamRoom.keyId())};
-//     auto streamRoomKey = forceGenerateNewKey || needNewKey ? _keyProvider->generateKey() : currentKey; 
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, updateStreamRoom, data encrypted)
+    _serverApi->streamRoomUpdate(model);
+    PRIVMX_DEBUG_TIME_STOP(PlatformStream, updateStreamRoom, data send)
+}
 
-//     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomUpdateModel>();
-//     model.id(streamRoomId);
-//     model.keyId(streamRoomKey.id);
-//     model.keys(_keyProvider->prepareKeysList(new_users, streamRoomKey));
-//     auto usersList = utils::TypedObjectFactory::createNewList<std::string>();
-//     for (auto user: users) {
-//         usersList.add(user.userId);
-//     }
-//     auto managersList = utils::TypedObjectFactory::createNewList<std::string>();
-//     for (auto x: managers) {
-//         managersList.add(x.userId);
-//     }
-//     model.users(usersList);
-//     model.managers(managersList);
-//     model.version(version);
-//     model.force(force);
-//     if (policies.has_value()) {
-//         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
-//     }
-//     StreamRoomDataToEncrypt streamRoomDataToEncrypt {
-//         .publicMeta = publicMeta,
-//         .privateMeta = privateMeta,
-//         .internalMeta = std::nullopt
-//     };
-//     model.data(_streamRoomDataEncryptorV4.encrypt(streamRoomDataToEncrypt, _userPrivKey, streamRoomKey.key).asVar());
+core::PagingList<StreamRoom> StreamApiImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
+    PRIVMX_DEBUG_TIME_START(PlatformStream, listStreamRooms)
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomListModel>();
+    model.contextId(contextId);
+    core::ListQueryMapper::map(model, query);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, listStreamRooms, getting listStreamRooms)
+    auto streamRoomsList = _serverApi->streamRoomList(model);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, listStreamRooms, data send)
+    std::vector<StreamRoom> streamRooms;
+    for (auto streamRoom : streamRoomsList.list()) {
+        streamRooms.push_back(decryptAndConvertStreamRoomDataToStreamRoom(streamRoom));
+    }
+    PRIVMX_DEBUG_TIME_STOP(PlatformStream, listStreamRooms, data decrypted)
+    return core::PagingList<StreamRoom>({
+        .totalAvailable = streamRoomsList.count(),
+        .readItems = streamRooms
+    });
+}
 
-//     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, roomUpdate, data encrypted)
-//     _serverApi.streamRoomUpdate(model);
-//     PRIVMX_DEBUG_TIME_STOP(PlatformStream, roomUpdate, data send)
-// }
+StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
+    PRIVMX_DEBUG_TIME_START(PlatformStream, getStreamRoom)
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+    model.id(streamRoomId);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, getStreamRoom, getting streamRoom)
+    auto streamRoom = _serverApi->streamRoomGet(model);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, getStreamRoom, data send)
+    auto result = decryptAndConvertStreamRoomDataToStreamRoom(streamRoom.streamRoom());
+    PRIVMX_DEBUG_TIME_STOP(PlatformStream, getStreamRoom, data decrypted)
+    return result;
+}
 
-// core::PagingList<StreamRoom> StreamApiImpl::streamRoomList(const std::string& contextId, const core::PagingQuery& query) {
-//     PRIVMX_DEBUG_TIME_START(PlatformStream, streamRoomList)
-//     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomListModel>();
-//     model.contextId(contextId);
-//     core::ListQueryMapper::map(model, query);
-//     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, streamRoomList, getting streamRoomList)
-//     auto streamRoomsList = _serverApi.streamRoomList(model);
-//     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, streamRoomList, data send)
-//     std::vector<StreamRoom> streamRooms;
-//     for (auto streamRoom : streamRoomsList.streamRooms()) {
-//         streamRooms.push_back(decryptAndConvertStreamRoomDataToStreamRoom(streamRoom));
-//     }
-//     PRIVMX_DEBUG_TIME_STOP(PlatformStream, streamRoomList, data decrypted)
-//     return core::PagingList<StreamRoom>({
-//         .totalAvailable = streamRoomsList.count(),
-//         .readItems = streamRooms
-//     });
-// }
+void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {
+    PRIVMX_DEBUG_TIME_START(PlatformStream, deleteStreamRoom)
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomDeleteModel>();
+    model.streamRoomId(streamRoomId);
+    _serverApi->streamRoomDelete(model);
+    PRIVMX_DEBUG_TIME_STOP(PlatformStream, deleteStreamRoom)
+}
 
-// StreamRoom StreamApiImpl::streamRoomGet(const std::string& streamRoomId) {
-//     PRIVMX_DEBUG_TIME_START(PlatformStream, streamRoomGet)
-//     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
-//     model.streamRoomId(streamRoomId);
-//     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, streamRoomGet, getting streamRoom)
-//     auto streamRoom = _serverApi.streamRoomGet(model);
-//     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, streamRoomGet, data send)
-//     auto result = decryptAndConvertStreamRoomDataToStreamRoom(streamRoom.streamRoom());
-//     PRIVMX_DEBUG_TIME_STOP(PlatformStream, streamRoomGet, data decrypted)
-//     return result;
-// }
+DecryptedStreamRoomData StreamApiImpl::decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom) {
+    try {
+        auto streamRoomDataEntry = streamRoom.data().get(streamRoom.data().size()-1);
+        auto key = _keyProvider->getKey(streamRoom.keys(), streamRoomDataEntry.keyId());
+        auto encryptedStreamRoomData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStreamRoomDataV4>(streamRoomDataEntry.data());
+        return _streamRoomDataEncryptorV4.decrypt(encryptedStreamRoomData, key.key);
+    } catch (const core::Exception& e) {
+        return DecryptedStreamRoomData({{},{},{},{},.statusCode = e.getCode()});
+    } catch (const privmx::utils::PrivmxException& e) {
+        return DecryptedStreamRoomData({{},{},{},{},.statusCode = core::ExceptionConverter::convert(e).getCode()});
+    } catch (...) {
+        return DecryptedStreamRoomData({{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE});
+    }
+}
 
-// void StreamApiImpl::streamRoomDelete(const std::string& streamRoomId) {
-//     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomDeleteModel>();
-//     model.streamRoomId(streamRoomId);
-//     _serverApi.streamRoomDelete(model);
-// }
+StreamRoom StreamApiImpl::convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData) {
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    for (auto x : streamRoomInfo.users()) {
+        users.push_back(x);
+    }
+    for (auto x : streamRoomInfo.managers()) {
+        managers.push_back(x);
+    }
 
-// DecryptedStreamRoomData StreamApiImpl::decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom) {
-//     try {
-//         auto streamRoomDataEntry = streamRoom.data().get(streamRoom.data().size()-1);
-//         auto key = _keyProvider->getKey(streamRoom.keys(), streamRoomDataEntry.keyId());
-//         auto encryptedStreamRoomData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStreamRoomDataV4>(streamRoomDataEntry.data());
-//         return _streamRoomDataEncryptorV4.decrypt(encryptedStreamRoomData, key.key);
-//     } catch (const core::Exception& e) {
-//         return DecryptedStreamRoomData({{},{},{},{},.statusCode = e.getCode()});
-//     } catch (const privmx::utils::PrivmxException& e) {
-//         return DecryptedStreamRoomData({{},{},{},{},.statusCode = core::ExceptionConverter::convert(e).getCode()});
-//     } catch (...) {
-//         return DecryptedStreamRoomData({{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE});
-//     }
-// }
+    return {
+        .contextId = streamRoomInfo.contextId(),
+        .streamRoomId = streamRoomInfo.id(),
+        .createDate = streamRoomInfo.createDate(),
+        .creator = streamRoomInfo.creator(),
+        .lastModificationDate = streamRoomInfo.lastModificationDate(),
+        .lastModifier = streamRoomInfo.lastModifier(),
+        .users = users,
+        .managers = managers,
+        .version = streamRoomInfo.version(),
+        .publicMeta = streamRoomData.publicMeta,
+        .privateMeta = streamRoomData.privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(streamRoomInfo.policy()), 
+        .statusCode = streamRoomData.statusCode
+    };
+}
 
-// StreamRoom StreamApiImpl::convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData) {
-//     std::vector<std::string> users;
-//     std::vector<std::string> managers;
-//     for (auto x : streamRoomInfo.users()) {
-//         users.push_back(x);
-//     }
-//     for (auto x : streamRoomInfo.managers()) {
-//         managers.push_back(x);
-//     }
-
-//     return {
-//         .contextId = streamRoomInfo.contextId(),
-//         .streamRoomId = streamRoomInfo.id(),
-//         .createDate = streamRoomInfo.createDate(),
-//         .creator = streamRoomInfo.creator(),
-//         .lastModificationDate = streamRoomInfo.lastModificationDate(),
-//         .lastModifier = streamRoomInfo.lastModifier(),
-//         .users = users,
-//         .managers = managers,
-//         .version = streamRoomInfo.version(),
-//         .publicMeta = streamRoomData.publicMeta,
-//         .privateMeta = streamRoomData.privateMeta,
-//         .policy = core::Factory::parsePolicyServerObject(streamRoomInfo.policy()), 
-//         .statusCode = streamRoomData.statusCode
-//     };
-// }
-
-// StreamRoom StreamApiImpl::decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom) {
-//     auto storDdataEntry = streamRoom.data().get(streamRoom.data().size()-1);
-//     auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(storDdataEntry.data());
-//     if (!versioned.versionEmpty() && versioned.version() == 4) {
-//         return convertDecryptedStreamRoomDataToStreamRoom(streamRoom, decryptStreamRoomV4(streamRoom));
-//     }
-//     auto e = UnknowStreamRoomFormatException();
-//     return StreamRoom{{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
-// }
+StreamRoom StreamApiImpl::decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom) {
+    auto storDdataEntry = streamRoom.data().get(streamRoom.data().size()-1);
+    auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(storDdataEntry.data());
+    if (!versioned.versionEmpty() && versioned.version() == 4) {
+        return convertDecryptedStreamRoomDataToStreamRoom(streamRoom, decryptStreamRoomV4(streamRoom));
+    }
+    auto e = UnknowStreamRoomFormatException();
+    return StreamRoom{{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
+}
 
 int64_t StreamApiImpl::generateNumericId() {
     return std::rand();
+}
+
+privmx::utils::List<std::string> StreamApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
+    auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    for (auto user : users) {
+        result.add(user.userId);
+    }
+    return result;
 }

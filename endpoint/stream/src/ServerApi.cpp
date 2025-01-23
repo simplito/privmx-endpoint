@@ -18,25 +18,25 @@ using namespace privmx::endpoint;
 ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
 
-// server::StreamRoomCreateResult ServerApi::streamRoomCreate(server::StreamRoomCreateModel model)  {
-//     return request<server::StreamRoomCreateResult>("streamRoomCreate", model);
-// }
+server::StreamRoomCreateResult ServerApi::streamRoomCreate(server::StreamRoomCreateModel model)  {
+    return request<server::StreamRoomCreateResult>("streamRoomCreate", model);
+}
 
-// void ServerApi::streamRoomUpdate(server::StreamRoomUpdateModel model) {
-//     request("streamRoomUpdate", model);
-// }
+void ServerApi::streamRoomUpdate(server::StreamRoomUpdateModel model) {
+    request("streamRoomUpdate", model);
+}
 
-// server::StreamRoomListResult ServerApi::streamRoomList(server::StreamRoomListModel model)  {
-//     return request<server::StreamRoomListResult>("streamRoomList", model);
-// }
+server::StreamRoomListResult ServerApi::streamRoomList(server::StreamRoomListModel model)  {
+    return request<server::StreamRoomListResult>("streamRoomList", model);
+}
 
-// server::StreamRoomGetResult ServerApi::streamRoomGet(server::StreamRoomGetModel model)  {
-//     return request<server::StreamRoomGetResult>("streamRoomGet", model);
-// }
+server::StreamRoomGetResult ServerApi::streamRoomGet(server::StreamRoomGetModel model)  {
+    return request<server::StreamRoomGetResult>("streamRoomGet", model);
+}
 
-// void ServerApi::streamRoomDelete(server::StreamRoomDeleteModel model) {
-//     request("streamRoomDelete", model);
-// }
+void ServerApi::streamRoomDelete(server::StreamRoomDeleteModel model) {
+    request("streamRoomDelete", model);
+}
 
 server::StreamGetTurnCredentialsResult ServerApi::streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model) {
     return requestWS<server::StreamGetTurnCredentialsResult>("streamGetTurnCredentials", model);

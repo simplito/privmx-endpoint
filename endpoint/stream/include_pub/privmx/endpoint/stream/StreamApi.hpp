@@ -34,32 +34,32 @@ public:
     static StreamApi create(core::Connection& connetion);
     StreamApi() = default;
 
-    // std::string roomCreate(
-    //     const std::string& contextId, 
-    //     const std::vector<core::UserWithPubKey>& users, 
-    //     const std::vector<core::UserWithPubKey>&managers,
-    //     const core::Buffer& publicMeta, 
-    //     const core::Buffer& privateMeta,
-    //     const std::optional<core::ContainerPolicy>& policies
-    // );
+    std::string createStreamRoom(
+        const std::string& contextId, 
+        const std::vector<core::UserWithPubKey>& users, 
+        const std::vector<core::UserWithPubKey>&managers,
+        const core::Buffer& publicMeta, 
+        const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies
+    );
 
-    // void roomUpdate(
-    //     const std::string& streamRoomId, 
-    //     const std::vector<core::UserWithPubKey>& users, 
-    //     const std::vector<core::UserWithPubKey>&managers,
-    //     const core::Buffer& publicMeta, 
-    //     const core::Buffer& privateMeta, 
-    //     const int64_t version, 
-    //     const bool force, 
-    //     const bool forceGenerateNewKey, 
-    //     const std::optional<core::ContainerPolicy>& policies
-    // );
+    void updateStreamRoom(
+        const std::string& streamRoomId, 
+        const std::vector<core::UserWithPubKey>& users, 
+        const std::vector<core::UserWithPubKey>&managers,
+        const core::Buffer& publicMeta, 
+        const core::Buffer& privateMeta, 
+        const int64_t version, 
+        const bool force, 
+        const bool forceGenerateNewKey, 
+        const std::optional<core::ContainerPolicy>& policies
+    );
 
-    // core::PagingList<StreamRoom> streamRoomList(const std::string& contextId, const core::PagingQuery& query);
+    core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
 
-    // StreamRoom streamRoomGet(const std::string& streamRoomId);
+    StreamRoom getStreamRoom(const std::string& streamRoomId);
 
-    // void streamRoomDelete(const std::string& streamRoomId);
+    void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
     int64_t createStream(const std::string& streamRoomId);
 

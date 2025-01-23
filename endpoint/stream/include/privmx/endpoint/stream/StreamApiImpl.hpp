@@ -50,36 +50,36 @@ public:
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-        const core::Connection& connection
+        const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
     );
     ~StreamApiImpl();
 
-    // std::string roomCreate(
-    //     const std::string& contextId, 
-    //     const std::vector<core::UserWithPubKey>& users, 
-    //     const std::vector<core::UserWithPubKey>&managers,
-    //     const core::Buffer& publicMeta, 
-    //     const core::Buffer& privateMeta,
-    //     const std::optional<core::ContainerPolicy>& policies
-    // );
+    std::string createStreamRoom(
+        const std::string& contextId, 
+        const std::vector<core::UserWithPubKey>& users, 
+        const std::vector<core::UserWithPubKey>&managers,
+        const core::Buffer& publicMeta, 
+        const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies
+    );
 
-    // void roomUpdate(
-    //     const std::string& streamRoomId, 
-    //     const std::vector<core::UserWithPubKey>& users, 
-    //     const std::vector<core::UserWithPubKey>&managers,
-    //     const core::Buffer& publicMeta, 
-    //     const core::Buffer& privateMeta, 
-    //     const int64_t version, 
-    //     const bool force, 
-    //     const bool forceGenerateNewKey, 
-    //     const std::optional<core::ContainerPolicy>& policies
-    // );
+    void updateStreamRoom(
+        const std::string& streamRoomId, 
+        const std::vector<core::UserWithPubKey>& users, 
+        const std::vector<core::UserWithPubKey>&managers,
+        const core::Buffer& publicMeta, 
+        const core::Buffer& privateMeta, 
+        const int64_t version, 
+        const bool force, 
+        const bool forceGenerateNewKey, 
+        const std::optional<core::ContainerPolicy>& policies
+    );
 
-    // core::PagingList<StreamRoom> streamRoomList(const std::string& contextId, const core::PagingQuery& query);
+    core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
 
-    // StreamRoom streamRoomGet(const std::string& streamRoomId);
+    StreamRoom getStreamRoom(const std::string& streamRoomId);
 
-    // void streamRoomDelete(const std::string& streamRoomId);
+    void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
     int64_t createStream(const std::string& streamRoomId);
 
@@ -111,9 +111,9 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    // DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
-    // StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
-    // StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
+    DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
+    StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
+    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
     int64_t generateNumericId();
 
     void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
@@ -125,17 +125,15 @@ private:
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
+    std::shared_ptr<core::SubscriptionHelper> _contextSubscriptionHelper;
     std::shared_ptr<ServerApi> _serverApi;
     core::SubscriptionHelper _streamSubscriptionHelper;
-    // v2
-    // std::unordered_map<std::string, Stream> _streams;
-    // StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
+    StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
-    std::map<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
-    std::map<uint64_t, std::string> _streamIdToRoomId;
+    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
+    privmx::utils::ThreadSaveMap<uint64_t, std::string> _streamIdToRoomId;
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;

@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/SubscriptionHelper.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -64,6 +65,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    _contextSubscriptionHelper = std::make_shared<SubscriptionHelper>(_eventChannelManager, "context", "contexts");
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -103,6 +105,7 @@ void ConnectionImpl::connectPublic([[maybe_unused]] const std::string& solutionI
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    _contextSubscriptionHelper = std::make_shared<SubscriptionHelper>(_eventChannelManager, "context", "contexts");
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 

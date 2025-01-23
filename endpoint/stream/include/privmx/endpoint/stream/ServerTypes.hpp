@@ -55,27 +55,27 @@ namespace server {
 //     BOOL_FIELD(transport_wide_cc_ext) 
 // TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomDataEntry)
-//     STRING_FIELD(keyId)
-//     VAR_FIELD(data)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomDataEntry)
+    STRING_FIELD(keyId)
+    VAR_FIELD(data)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomInfo)
-//     STRING_FIELD(id)
-//     STRING_FIELD(contextId)
-//     INT64_FIELD(createDate)
-//     STRING_FIELD(creator)
-//     INT64_FIELD(lastModificationDate)
-//     STRING_FIELD(lastModifier)
-//     LIST_FIELD(data, StreamRoomDataEntry)
-//     STRING_FIELD(keyId)
-//     LIST_FIELD(users, std::string)
-//     LIST_FIELD(managers, std::string)
-//     LIST_FIELD(keys, core::server::KeyEntry)
-//     INT64_FIELD(version)
-//     STRING_FIELD(type)
-//     VAR_FIELD(policy)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomInfo)
+    STRING_FIELD(id)
+    STRING_FIELD(contextId)
+    INT64_FIELD(createDate)
+    STRING_FIELD(creator)
+    INT64_FIELD(lastModificationDate)
+    STRING_FIELD(lastModifier)
+    LIST_FIELD(data, StreamRoomDataEntry)
+    STRING_FIELD(keyId)
+    LIST_FIELD(users, std::string)
+    LIST_FIELD(managers, std::string)
+    LIST_FIELD(keys, core::server::KeyEntry)
+    INT64_FIELD(version)
+    STRING_FIELD(type)
+    VAR_FIELD(policy)
+TYPE_END
 
 // ENDPOINT_SERVER_TYPE(StreamTrackCreateMeta)
 //     STRING_FIELD(mid)
@@ -138,63 +138,62 @@ namespace server {
 //     LIST_FIELD(tracks, std::string)
 // TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
-//     STRING_FIELD(contextId)
-//     STRING_FIELD(keyId)
-//     VAR_FIELD(data)
-//     LIST_FIELD(users, std::string)
-//     LIST_FIELD(managers, std::string)
-//     LIST_FIELD(keys, core::server::KeyEntrySet)
-//     STRING_FIELD(privateMeta)
-//     STRING_FIELD(publicMeta)
-//     VAR_FIELD(policy)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
+    STRING_FIELD(contextId)
+    STRING_FIELD(keyId)
+    VAR_FIELD(data)
+    LIST_FIELD(users, std::string)
+    LIST_FIELD(managers, std::string)
+    LIST_FIELD(keys, core::server::KeyEntrySet)
+    STRING_FIELD(privateMeta)
+    STRING_FIELD(publicMeta)
+    VAR_FIELD(policy)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomCreateResult)
-//     STRING_FIELD(streamRoomId)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomCreateResult)
+    STRING_FIELD(streamRoomId)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomUpdateModel)
-//     STRING_FIELD(id)
-//     STRING_FIELD(keyId)
-//     VAR_FIELD(data)
-//     LIST_FIELD(users, std::string)
-//     LIST_FIELD(managers, std::string)
-//     LIST_FIELD(keys, core::server::KeyEntrySet)
-//     STRING_FIELD(privateMeta)
-//     STRING_FIELD(publicMeta)
-//     INT64_FIELD(version)
-//     BOOL_FIELD(force)
-//     VAR_FIELD(policy)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomUpdateModel)
+    STRING_FIELD(id)
+    STRING_FIELD(keyId)
+    VAR_FIELD(data)
+    LIST_FIELD(users, std::string)
+    LIST_FIELD(managers, std::string)
+    LIST_FIELD(keys, core::server::KeyEntrySet)
+    STRING_FIELD(privateMeta)
+    STRING_FIELD(publicMeta)
+    INT64_FIELD(version)
+    BOOL_FIELD(force)
+    VAR_FIELD(policy)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomGetModel)
-//     STRING_FIELD(streamRoomId)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomGetModel)
+    STRING_FIELD(id)
+    STRING_FIELD(type)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomGetResult)
-//     OBJECT_FIELD(streamRoom, StreamRoomInfo)
-//     OBJECT_FIELD(videoRoom, VideoRoom)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomGetResult)
+    OBJECT_FIELD(streamRoom, StreamRoomInfo)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomListModel)
-//     STRING_FIELD(contextId)
-//     INT64_FIELD(skip)
-//     INT64_FIELD(limit)
-//     STRING_FIELD(sortOrder)
-//     STRING_FIELD(lastId)
-//     STRING_FIELD(type)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomListModel)
+    STRING_FIELD(contextId)
+    INT64_FIELD(skip)
+    INT64_FIELD(limit)
+    STRING_FIELD(sortOrder)
+    STRING_FIELD(lastId)
+    STRING_FIELD(type)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomListResult)
-//     LIST_FIELD(streamRooms, StreamRoomInfo)
-//     LIST_FIELD(videoRooms, VideoRoom)
-//     INT64_FIELD(count)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomListResult)
+    LIST_FIELD(list, StreamRoomInfo)
+    INT64_FIELD(count)
+TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamRoomDeleteModel)
-//     STRING_FIELD(streamRoomId)
-// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamRoomDeleteModel)
+    STRING_FIELD(streamRoomId)
+TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamGetTurnCredentialsModel)
     STRING_FIELD(clientId)
@@ -399,7 +398,6 @@ ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyEvent, StreamKeyManagementEvent)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyRespondEvent, StreamKeyManagementEvent)
-    
     OBJECT_FIELD(encKey, StreamEncKey)
 TYPE_END
 

@@ -32,6 +32,7 @@ StreamKeyManager::StreamKeyManager(
         .TTL=std::chrono::milliseconds(MAX_STD_KEY_TTL)
     });
     _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
+    updateWebRtcKeyStore();
     // ->setKey(currentKey.id, currentKey.key);
     _cancellationToken = privmx::utils::CancellationToken::create();
     //create thread to remove old keys
@@ -58,8 +59,13 @@ StreamKeyManager::StreamKeyManager(
 StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
 }
-
+#include <iostream>
 std::shared_ptr<privmx::webrtc::KeyStore> StreamKeyManager::getCurrentWebRtcKeyStore() {
+    _keysStrage.forAll([&](std::string key, std::shared_ptr<StreamEncKey> value) {
+        std::cout << key << std::endl; 
+        auto tmp = _currentWebRtcKeyStore->getKey(key);
+        std::cout << tmp->keyId << " " << tmp->key << "" << tmp->type << std::endl; 
+    });
     return _currentWebRtcKeyStore;
 }
 
@@ -234,6 +240,7 @@ void StreamKeyManager::sendStreamKeyManagementEvent(server::StreamCustomEventDat
     core::server::CustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventModel>();
     model.contextId(_contextId);
     model.data(encryptedData);
+    model.channel("internal");
     model.users(createKeySet(users, key));
     _serverApi->streamCustomEvent(model);
 }
