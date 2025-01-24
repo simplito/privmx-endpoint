@@ -129,6 +129,7 @@ private:
     std::shared_ptr<ServerApi> _serverApi;
     core::SubscriptionHelper _streamSubscriptionHelper;
     StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
+    core::DataEncryptorV4 _dataEncryptor;
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;

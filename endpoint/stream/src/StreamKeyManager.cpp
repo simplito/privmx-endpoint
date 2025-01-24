@@ -10,9 +10,10 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
+#include <iostream>
 
-#define MAX_UPDATE_TIMEOUT 1000*30
-#define MAX_STD_KEY_TTL 1000*60*5
+#define MAX_UPDATE_TIMEOUT 1000*5
+#define MAX_STD_KEY_TTL 1000*10
 
 using namespace privmx::endpoint::stream; 
 
@@ -21,8 +22,9 @@ StreamKeyManager::StreamKeyManager(
     std::shared_ptr<ServerApi> serverApi,
     privmx::crypto::PrivateKey userPrivKey, 
     const std::string& streamRoomId,
-    const std::string& contextId
-) : _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId) {
+    const std::string& contextId,
+    const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
+) : _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId), _contextSubscriptionHelper(contextSubscriptionHelper) {
     _userPubKey = _userPrivKey.getPublicKey();
     // generate curren key
     auto currentKey = _keyProvider->generateKey();
@@ -32,16 +34,26 @@ StreamKeyManager::StreamKeyManager(
         .TTL=std::chrono::milliseconds(MAX_STD_KEY_TTL)
     });
     _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
+    _currentKeyId = _keyForUpdate->key.id;
     updateWebRtcKeyStore();
     // ->setKey(currentKey.id, currentKey.key);
     _cancellationToken = privmx::utils::CancellationToken::create();
     //create thread to remove old keys
     _keyCollector = std::thread([&]() {
         while (true) {
-            _cancellationToken->sleep(std::chrono::seconds(1));
+            try {
+                _cancellationToken->sleep( std::chrono::milliseconds(1000));
+            } catch (const privmx::utils::OperationCancelledException& e) {
+                break;
+            }
             std::vector<std::string> keysToDelete;
+            auto key = _keysStrage.get(_currentKeyId).value();
+            if(key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+1000) < std::chrono::system_clock::now() && !_keyUpdateInProgress) {
+                updateKey();
+            }
+
             _keysStrage.forAll([&](std::string key, std::shared_ptr<StreamEncKey> value) {
-                if(value->creation_time + value->TTL > std::chrono::system_clock::now()) {
+                if(value->creation_time + value->TTL < std::chrono::system_clock::now()) {
                     keysToDelete.push_back(key);
                 }
             });
@@ -52,20 +64,16 @@ StreamKeyManager::StreamKeyManager(
                 updateWebRtcKeyStore();
             }
         }
+        
     }); 
     _keyCollector.detach();
+    _contextSubscriptionHelper->subscribeForElementCustom(_contextId, "internal");
 }
 
 StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
 }
-#include <iostream>
 std::shared_ptr<privmx::webrtc::KeyStore> StreamKeyManager::getCurrentWebRtcKeyStore() {
-    _keysStrage.forAll([&](std::string key, std::shared_ptr<StreamEncKey> value) {
-        std::cout << key << std::endl; 
-        auto tmp = _currentWebRtcKeyStore->getKey(key);
-        std::cout << tmp->keyId << " " << tmp->key << "" << tmp->type << std::endl; 
-    });
     return _currentWebRtcKeyStore;
 }
 
@@ -106,12 +114,12 @@ void StreamKeyManager::respondToRequestKey(server::RequestKeyEvent request, cons
 
     server::StreamEncKey streamEncKey = privmx::utils::TypedObjectFactory::createNewObject<server::StreamEncKey>();
     streamEncKey.keyId(currentKey->key.id);
-    streamEncKey.key(currentKey->key.key);
+    streamEncKey.key(privmx::utils::Base64::from(currentKey->key.key));
     auto ttl = currentKey->creation_time + currentKey->TTL - std::chrono::system_clock::now();
     std::chrono::milliseconds ttlMilli = std::chrono::duration_cast<std::chrono::milliseconds>(ttl);
     streamEncKey.TTL(ttlMilli.count());
     server::RequestKeyRespondEvent respond = privmx::utils::TypedObjectFactory::createNewObject<server::RequestKeyRespondEvent>();
-    respond.subtype("RequestKeyEvent");
+    respond.subtype("RequestKeyRespondEvent");
     respond.encKey(streamEncKey);
     // send data by event
     sendStreamKeyManagementEvent(respond, {privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}});
@@ -126,7 +134,7 @@ void StreamKeyManager::setRequestKeyResult(server::RequestKeyRespondEvent result
         newKey.keyId(),
         std::make_shared<StreamEncKey>(
             StreamEncKey{
-                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=newKey.key()},
+                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=privmx::utils::Base64::toString(newKey.key())},
                 .creation_time=std::chrono::system_clock::now(), 
                 .TTL=std::chrono::milliseconds(newKey.TTL())
             }
@@ -147,6 +155,7 @@ void StreamKeyManager::removeUser(core::UserWithPubKey user) {
 
 void StreamKeyManager::updateKey() {
     // create date
+    _keyUpdateInProgress = true;
     auto newKey = prepareCurrenKeyToUpdate();
     _userUpdateKeyConfirmationStatus.clear();
     for(auto user : _connectedUsers) {
@@ -163,8 +172,9 @@ void StreamKeyManager::updateKey() {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
         std::cv_status status = _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
         _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
-        _keysStrage.erase(_currentKeyId);
         _currentKeyId = _keyForUpdate->key.id;
+        updateWebRtcKeyStore();
+        _keyUpdateInProgress = false;
     }); 
     t.detach();
 }
@@ -177,7 +187,7 @@ void StreamKeyManager::respondToUpdateRequest(server::UpdateKeyEvent request, co
         newKey.keyId(),
         std::make_shared<StreamEncKey>(
             StreamEncKey{
-                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=newKey.key()},
+                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=privmx::utils::Base64::toString(newKey.key())},
                 .creation_time=std::chrono::system_clock::now(), 
                 .TTL=std::chrono::milliseconds(newKey.TTL())
             }
@@ -224,7 +234,7 @@ server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
         std::chrono::milliseconds ttlMilli = std::chrono::duration_cast<std::chrono::milliseconds>(ttl);
         result.oldKeyTTL(ttlMilli.count());
     }
-    result.key(_keyForUpdate->key.key);
+    result.key(privmx::utils::Base64::from(_keyForUpdate->key.key));
     result.keyId(_keyForUpdate->key.id);
     auto ttl = _keyForUpdate->creation_time + _keyForUpdate->TTL - std::chrono::system_clock::now();
     std::chrono::milliseconds ttlMilli = std::chrono::duration_cast<std::chrono::milliseconds>(ttl);
@@ -233,16 +243,18 @@ server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
 }
 
 void StreamKeyManager::sendStreamKeyManagementEvent(server::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
-    data.type("StreamKeyManagementEvent");
     data.streamRoomId(_streamRoomId);
     auto key = _keyProvider->generateKey();
-    std::string encryptedData = _dataEncryptor.signAndEncryptAndEncode(privmx::endpoint::core::Buffer::from(privmx::utils::Utils::stringifyVar(data)), _userPrivKey, key.key);
+    core::server::CustomEventData eventData = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventData>();
+    eventData.encryptedData(_dataEncryptor.signAndEncryptAndEncode(privmx::endpoint::core::Buffer::from(privmx::utils::Utils::stringifyVar(data)), _userPrivKey, key.key));
+    eventData.type("StreamKeyManagementEvent");
     core::server::CustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventModel>();
     model.contextId(_contextId);
-    model.data(encryptedData);
+    model.data(privmx::utils::Utils::stringify(eventData));
     model.channel("internal");
     model.users(createKeySet(users, key));
     _serverApi->streamCustomEvent(model);
+    std::cout << "h1" << std::endl;
 }
 
 privmx::utils::List<privmx::endpoint::core::server::UserKey> StreamKeyManager::createKeySet(const std::vector<privmx::endpoint::core::UserWithPubKey>& users, const privmx::endpoint::core::EncKey& key) {

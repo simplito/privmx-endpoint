@@ -76,6 +76,7 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE(CustomEventData) //Internal
     STRING_FIELD(type)
+    VAR_FIELD(encryptedData)
 TYPE_END
 
 } // server

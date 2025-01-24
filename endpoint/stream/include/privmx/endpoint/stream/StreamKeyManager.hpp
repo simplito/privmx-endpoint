@@ -22,9 +22,11 @@ limitations under the License.
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include "privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/utils/CancellationToken.hpp"
+
 
 namespace privmx {
 namespace endpoint {
@@ -37,7 +39,8 @@ public:
         std::shared_ptr<ServerApi> serverApi,
         privmx::crypto::PrivateKey userPrivKey, 
         const std::string& streamRoomId, 
-        const std::string& contextId
+        const std::string& contextId,
+        const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
     );
     ~StreamKeyManager();
     
@@ -72,6 +75,7 @@ private:
     privmx::crypto::PublicKey _userPubKey;
     std::string _streamRoomId;
     std::string _contextId;
+    std::shared_ptr<core::SubscriptionHelper> _contextSubscriptionHelper;
     core::DataEncryptorV4 _dataEncryptor;
     privmx::utils::CancellationToken::Ptr _cancellationToken;
     std::thread _keyCollector;
@@ -84,6 +88,7 @@ private:
     privmx::utils::ThreadSaveMap<std::string, bool> _userUpdateKeyConfirmationStatus;
     std::mutex _updateKeyMutex;
     std::condition_variable _updateKeyCV;
+    std::atomic_bool _keyUpdateInProgress = false;
     std::shared_ptr<privmx::webrtc::KeyStore> _currentWebRtcKeyStore;
     std::atomic_int64_t _nextFrameCryptorId = 0;
 };

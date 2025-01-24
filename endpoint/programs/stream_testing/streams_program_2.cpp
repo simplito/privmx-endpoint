@@ -13,10 +13,8 @@
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
-#include <privmx/endpoint/stream/Types.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/utils/PrivmxException.hpp>
-#include <SDL2/SDL.h>
 
 using namespace std;
 using namespace privmx::endpoint;
@@ -45,40 +43,6 @@ static string readFile(const string filePath) {
     return strStream.str();
 }
 
-class RTCVideoRendererImpl {
-public:
-    RTCVideoRendererImpl(int w, int h, const std::string& title) : w(w), h(h), title("PrivMX Stream - " + title) {}
-    void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-        if (renderer == NULL) {
-            window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, 0);
-            renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-            texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, w, h);
-        }
-        uint32_t* pixels = new uint32_t[w * h];
-        frame->ConvertToARGB((uint8_t*)pixels, 4, w, h);
-        SDL_UpdateTexture(texture, NULL, pixels, w * sizeof(uint32_t));
-        SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
-        delete pixels;
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            std::cerr << event.type << std::endl;
-            if (event.type == SDL_QUIT) exit(0);
-            if (event.type == SDL_WINDOWEVENT) {
-                if (event.window.event == SDL_WINDOWEVENT_CLOSE)
-                {
-                    exit(1);
-                }
-            }
-        }
-    }
-private:
-    SDL_Window* window;
-    SDL_Texture* texture;
-    SDL_Renderer* renderer = NULL;
-    int w, h;
-    std::string title;
-};
-
 int main(int argc, char** argv) {
 
     auto params = getParamsList(argc, argv);
@@ -87,7 +51,10 @@ int main(int argc, char** argv) {
         crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
         core::Connection connection = core::Connection::connect("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
         stream::StreamApi streamApi = stream::StreamApi::create(connection);
+        
         auto context = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
+        std::cout << "USERID:" << context.userId << std::endl;
+        std::cout << "PUBKEY:" << cryptoApi.derivePublicKey("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN") << std::endl;
         auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
         std::string streamRoomId;
         if(streamList.readItems.size()>=1) {
@@ -106,6 +73,7 @@ int main(int argc, char** argv) {
                 std::nullopt
             );
         }
+        
         auto streamId = streamApi.createStream(streamRoomId);
         auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
         streamApi.trackAdd(streamId, stream::DeviceType::Audio);
@@ -127,15 +95,11 @@ int main(int argc, char** argv) {
             streamsId.push_back(l->getValue<int64_t>("streamId"));
             std::cout << l->getValue<int64_t>("streamId") << std::endl;
         }
-        RTCVideoRendererImpl r = RTCVideoRendererImpl(768, 432, "Remote");
-        stream::streamJoinSettings ssettings {
-            .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-                r.OnFrame(w, h, frame, id);
-            }
-        };
+
+        stream::streamJoinSettings ssettings;
         streamApi.joinStream(streamRoomId, streamsId, ssettings);
 
-        std::this_thread::sleep_for(std::chrono::seconds(30));
+        std::this_thread::sleep_for(std::chrono::seconds(12));
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;

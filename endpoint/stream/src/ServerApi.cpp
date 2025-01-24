@@ -104,7 +104,7 @@ void ServerApi::streamRoomCustomEvent(server::StreamRoomCustomEventModel model) 
 }
 
 void ServerApi::streamCustomEvent(core::server::CustomEventModel model) {
-    throw stream::NotImplementedException();
+    _gateway->request("context.contextSendCustomEvent", model);
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object

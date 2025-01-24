@@ -29,10 +29,10 @@ PmxPeerConnectionObserver::PmxPeerConnectionObserver(
 ) : _streamId(streamId), _streamKeyManager(streamKeyManager), _onFrameCallback(onFrameCallback) {}
 
 void PmxPeerConnectionObserver::OnSignalingState([[maybe_unused]] libwebrtc::RTCSignalingState state) {
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": ON SIGNALING STATE")
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON SIGNALING STATE")
 }
 void PmxPeerConnectionObserver::OnPeerConnectionState([[maybe_unused]] libwebrtc::RTCPeerConnectionState state) {
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": ON PEER CONNECTION STATE")
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON PEER CONNECTION STATE")
 }
 void PmxPeerConnectionObserver::OnIceGatheringState([[maybe_unused]] libwebrtc::RTCIceGatheringState state) {
 
@@ -44,7 +44,7 @@ void PmxPeerConnectionObserver::OnIceCandidate([[maybe_unused]] libwebrtc::scope
     
 }
 void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": STREAM ADDED")
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": STREAM ADDED")
     PRIVMX_DEBUG("STREAMS", "API", "stream->video_tracks().size() -> " + std::to_string(stream->video_tracks().size()))
     PRIVMX_DEBUG("STREAMS", "API", "stream->audio_tracks().size() -> " + std::to_string(stream->audio_tracks().size()))
     for(size_t i = 0; i < stream->video_tracks().size(); i++) { 
@@ -66,10 +66,10 @@ void PmxPeerConnectionObserver::OnRenegotiationNeeded() {
 
 };
 void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) {
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": ON TRACK")
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON TRACK")
 }
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) ": TRACK ADDED")
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": TRACK ADDED")
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _streamKeyManager->getCurrentWebRtcKeyStore());
     _frameCryptorsId.set(receiver->id().std_string(), _streamKeyManager->addFrameCryptor(frameCryptor));
 }

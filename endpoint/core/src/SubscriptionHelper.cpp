@@ -31,7 +31,7 @@ bool SubscriptionHelper::hasSubscriptionForElement(const std::string& elementId)
 }
 
 bool SubscriptionHelper::hasSubscriptionForElementCustom(const std::string& elementId, const std::string&  channelName) {
-    return _mapCustom.get(elementId).has_value();
+    return _mapCustom.get(elementId + "__" + channelName).has_value();
 }
 
 void SubscriptionHelper::subscribeForModule(bool silent) {
@@ -55,12 +55,12 @@ void SubscriptionHelper::unsubscribeFromElement(const std::string& elementId, bo
 }
 
 void SubscriptionHelper::subscribeForElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
-    _eventChannelManager->subscribeFor(_moduleName + "/" + elementId + "/Custom");
+    _eventChannelManager->subscribeFor(_moduleName + "/" + elementId + "/" + channelName);
     if(!silent) _mapCustom.set(elementId + "__" + channelName, true);
 }
 
 void SubscriptionHelper::unsubscribeFromElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
-    _eventChannelManager->unsubscribeFrom(_moduleName + "/" + elementId + "/Custom");
+    _eventChannelManager->unsubscribeFrom(_moduleName + "/" + elementId + "/" + channelName);
     if(!silent) _mapCustom.erase(elementId + "__" + channelName);
 }
 

@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/ListQueryMapper.hpp>
+#include <privmx/crypto/EciesEncryptor.hpp>
 
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamTypes.hpp"
@@ -71,7 +72,6 @@ StreamApiImpl::StreamApiImpl(
         _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiImpl::processConnectedEvent, this));
         _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiImpl::processDisconnectedEvent, this));
-
     }
 
 StreamApiImpl::~StreamApiImpl() {
@@ -89,12 +89,15 @@ StreamApiImpl::~StreamApiImpl() {
 
 
 void StreamApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if(channel == "internal" && type == "custom"/*TMP*/) {
+    if(type == "custom" && channel.length() >= 8+9 && channel.substr(0, 8) == "context/" && channel.substr(channel.length()-9, 9) == "/internal") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
-        if(_contextSubscriptionHelper->hasSubscriptionForElementCustom(raw.id(), "internal")) {
-            auto eventData = utils::TypedObjectFactory::createObjectFromVar<server::StreamCustomEventData>(raw.eventData());
-            if(!eventData.typeEmpty() && eventData.type() == "StreamKeyManagementEvent") {
-                auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<server::StreamKeyManagementEvent>(eventData);
+        if(_contextSubscriptionHelper->hasSubscriptionForElementCustom(raw.id(), "internal")) { // needs proper class to handle
+            auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<core::server::CustomEventData>(privmx::utils::Utils::parseJson(raw.eventData()));
+            if(!rawEventData.typeEmpty() && rawEventData.type() == "StreamKeyManagementEvent") {
+                auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key());
+                auto decrypted = _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData().convert<std::string>(), _userPrivKey.getPublicKey(), encKey);
+                std::cout << decrypted.stdString() << std::endl;
+                auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<server::StreamKeyManagementEvent>(privmx::utils::Utils::parseJson(decrypted.stdString()));
                 auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
                 if(roomOpt.has_value()) {
                     roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
@@ -118,22 +121,21 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
     if(!roomOpt.has_value()) {
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
         model.id(streamRoomId);
-        auto streamRoom = _serverApi->streamRoomGet(model).streamRoom(); 
-        auto webRtcKeyStore = privmx::webrtc::KeyStore::Create({});
+        auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
         _streamRoomMap.set(
             streamRoomId,
             std::make_shared<StreamRoomData>(
                 StreamRoomData{
                     .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
-                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId()),
+                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _contextSubscriptionHelper),
                 }
             )
         );
         roomOpt = _streamRoomMap.get(streamRoomId);
     }
     auto room = roomOpt.value();
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) ": STREAM Sender")
     int64_t streamId = generateNumericId();
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) + ": STREAM Sender")
     _streamIdToRoomId.set(streamId, streamRoomId);
     room->streamMap.emplace(
         std::make_pair(
@@ -216,6 +218,7 @@ void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::strin
     auto room = _streamRoomMap.get(streamRoomId.value()).value();
     auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->streamKeyManager->getCurrentWebRtcKeyStore());
+    room->streamKeyManager->addFrameCryptor(frameCryptor);
 }
 
 void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
@@ -234,6 +237,7 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
     auto room = _streamRoomMap.get(streamRoomId.value()).value();
     auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->streamKeyManager->getCurrentWebRtcKeyStore());
+    room->streamKeyManager->addFrameCryptor(frameCryptor);
     // Start capture video
     videoCapturer->StartCapture();
 }
@@ -295,21 +299,20 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
         model.id(streamRoomId);
         auto streamRoom = _serverApi->streamRoomGet(model).streamRoom(); 
-        auto webRtcKeyStore = privmx::webrtc::KeyStore::Create({});
         _streamRoomMap.set(
             streamRoomId,
             std::make_shared<StreamRoomData>(
                 StreamRoomData{
                     .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
-                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId()),
+                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _contextSubscriptionHelper),
                 }
             )
         );
         roomOpt = _streamRoomMap.get(streamRoomId);
     }
     auto room = roomOpt.value();
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) ": STREAM Receiver")
     int64_t streamId = generateNumericId();
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) + ": STREAM Receiver")
     _streamIdToRoomId.set(streamId, streamRoomId);
     // Get data from bridge
     auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
@@ -380,7 +383,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     model.answer(sessionDescription);
     _serverApi->streamAcceptOffer(model);
     // get userId
-    room->streamKeyManager->requestKey({});
+    room->streamKeyManager->requestKey({core::UserWithPubKey{.userId="user1", .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}});
 }
 
 std::string StreamApiImpl::createStreamRoom(

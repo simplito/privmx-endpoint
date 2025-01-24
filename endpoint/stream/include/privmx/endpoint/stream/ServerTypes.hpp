@@ -386,7 +386,7 @@ ENDPOINT_CLIENT_TYPE_INHERIT(NewStreamEncKey, StreamEncKey)
     INT64_FIELD(oldKeyTTL) // time in miliseconds
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(StreamCustomEventData, core::server::CustomEventData)
+ENDPOINT_CLIENT_TYPE(StreamCustomEventData)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
