@@ -73,6 +73,9 @@ future<string> HttpChannel::send(const string& data, const string& path, const s
 
 #include <iostream>
 void HttpChannel::updateKeepAlive(const HTTPResponse& response) {
+    if (!response.has("Keep-Alive")) {
+        return;
+    }
     std::string keepAliveRaw = response.get("Keep-Alive");
     std::vector<std::string> keepAliveValues = Utils::split(keepAliveRaw, ",");
     for(auto v: keepAliveValues) {
