@@ -49,7 +49,6 @@ public:
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
     // void streamLeave(server::StreamLeaveModel model);
     // TO DO
-    void streamRoomCustomEvent(server::StreamRoomCustomEventModel model);
     void streamCustomEvent(core::server::CustomEventModel model);
 
 private:

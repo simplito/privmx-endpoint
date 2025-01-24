@@ -361,20 +361,6 @@ ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(StreamRoomCustomEventModel)
-    STRING_FIELD(streamRoomId)
-    STRING_FIELD(keyId);
-    STRING_FIELD(eventData) // encrypted
-    LIST_FIELD(users, std::string)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(StreamRoomCustomEvent)
-    STRING_FIELD(id)
-    STRING_FIELD(keyId);
-    STRING_FIELD(eventData) // encrypted
-    OBJECT_FIELD(author, core::server::UserIdentity)
-TYPE_END
-
 ENDPOINT_CLIENT_TYPE(StreamEncKey)
     STRING_FIELD(keyId)
     STRING_FIELD(key)

@@ -89,22 +89,22 @@ StreamApiImpl::~StreamApiImpl() {
 
 
 void StreamApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if(type == "custom" && channel.length() >= 8+9 && channel.substr(0, 8) == "context/" && channel.substr(channel.length()-9, 9) == "/internal") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
-        if(_contextSubscriptionHelper->hasSubscriptionForElementCustom(raw.id(), "internal")) { // needs proper class to handle
-            auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<core::server::CustomEventData>(privmx::utils::Utils::parseJson(raw.eventData()));
-            if(!rawEventData.typeEmpty() && rawEventData.type() == "StreamKeyManagementEvent") {
-                auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key());
-                auto decrypted = _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData().convert<std::string>(), _userPrivKey.getPublicKey(), encKey);
-                std::cout << decrypted.stdString() << std::endl;
-                auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<server::StreamKeyManagementEvent>(privmx::utils::Utils::parseJson(decrypted.stdString()));
-                auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
-                if(roomOpt.has_value()) {
-                    roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
-                }
-            }
-        }
-    }
+    // if(type == "custom" && channel.length() >= 8+9 && channel.substr(0, 8) == "context/" && channel.substr(channel.length()-9, 9) == "/internal") {
+    //     auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
+    //     if(_contextSubscriptionHelper->hasSubscriptionForElementCustom(raw.id(), "internal")) { // needs proper class to handle
+    //         auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<core::server::CustomEventData>(privmx::utils::Utils::parseJson(raw.eventData()));
+    //         if(!rawEventData.typeEmpty() && rawEventData.type() == "StreamKeyManagementEvent") {
+    //             auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key());
+    //             auto decrypted = _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData().convert<std::string>(), _userPrivKey.getPublicKey(), encKey);
+    //             std::cout << decrypted.stdString() << std::endl;
+    //             auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<server::StreamKeyManagementEvent>(privmx::utils::Utils::parseJson(decrypted.stdString()));
+    //             auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
+    //             if(roomOpt.has_value()) {
+    //                 roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 void StreamApiImpl::processConnectedEvent() {

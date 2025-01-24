@@ -243,18 +243,18 @@ server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
 }
 
 void StreamKeyManager::sendStreamKeyManagementEvent(server::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
-    data.streamRoomId(_streamRoomId);
-    auto key = _keyProvider->generateKey();
-    core::server::CustomEventData eventData = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventData>();
-    eventData.encryptedData(_dataEncryptor.signAndEncryptAndEncode(privmx::endpoint::core::Buffer::from(privmx::utils::Utils::stringifyVar(data)), _userPrivKey, key.key));
-    eventData.type("StreamKeyManagementEvent");
-    core::server::CustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventModel>();
-    model.contextId(_contextId);
-    model.data(privmx::utils::Utils::stringify(eventData));
-    model.channel("internal");
-    model.users(createKeySet(users, key));
-    _serverApi->streamCustomEvent(model);
-    std::cout << "h1" << std::endl;
+    // data.streamRoomId(_streamRoomId);
+    // auto key = _keyProvider->generateKey();
+    // core::server::CustomEventData eventData = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventData>();
+    // eventData.encryptedData(_dataEncryptor.signAndEncryptAndEncode(privmx::endpoint::core::Buffer::from(privmx::utils::Utils::stringifyVar(data)), _userPrivKey, key.key));
+    // eventData.type("StreamKeyManagementEvent");
+    // core::server::CustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventModel>();
+    // model.contextId(_contextId);
+    // model.data(privmx::utils::Utils::stringify(eventData));
+    // model.channel("internal");
+    // model.users(createKeySet(users, key));
+    // _serverApi->streamCustomEvent(model);
+    // std::cout << "h1" << std::endl;
 }
 
 privmx::utils::List<privmx::endpoint::core::server::UserKey> StreamKeyManager::createKeySet(const std::vector<privmx::endpoint::core::UserWithPubKey>& users, const privmx::endpoint::core::EncKey& key) {

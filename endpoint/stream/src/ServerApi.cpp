@@ -99,10 +99,6 @@ void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
 //     request("streamLeave", model);
 // }
 
-void ServerApi::streamRoomCustomEvent(server::StreamRoomCustomEventModel model) {
-    throw stream::NotImplementedException();
-}
-
 void ServerApi::streamCustomEvent(core::server::CustomEventModel model) {
     _gateway->request("context.contextSendCustomEvent", model);
 }
