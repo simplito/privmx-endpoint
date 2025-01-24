@@ -166,6 +166,11 @@ void Validator::validatePrivKeyWIF(const string& value, const string& stack_trac
 
 void Validator::validatePubKeyBase58DER(const string& value, const string& stack_trace) {
     Validator::validateBase58(value, stack_trace);
+    try {
+        privmx::crypto::PublicKey::fromBase58DER(value);
+    } catch (...) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER"));
+    }
 }
 
 void Validator::validateEventType(const Event& value, const std::string& type, const std::string& stack_trace) {
@@ -176,7 +181,7 @@ void Validator::validateEventType(const Event& value, const std::string& type, c
 
 
 void StructValidator<Context>::validate(const Context& value, const std::string& stack_trace) {
-    Validator::validateId(value.userId, stack_trace + ".storeId");
+    Validator::validateId(value.userId, stack_trace + ".userId");
     Validator::validateId(value.contextId, stack_trace + ".contextId");
 }
 
@@ -187,7 +192,7 @@ void StructValidator<PagingList<Context>>::validate(const PagingList<Context>& v
 }
 
 void StructValidator<UserWithPubKey>::validate(const UserWithPubKey& value, const std::string& stack_trace) {
-    Validator::validateId(value.userId, stack_trace + ".storeId");
+    Validator::validateId(value.userId, stack_trace + ".userId");
     Validator::validatePubKeyBase58DER(value.pubKey, stack_trace + ".pubKey");
 }
 

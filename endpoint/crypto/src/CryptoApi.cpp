@@ -31,12 +31,21 @@ bool CryptoApi::verifySignature(const core::Buffer& data, const core::Buffer& si
 }
 
 std::string CryptoApi::generatePrivateKey(const std::optional<std::string>& randomSeed) {
+    return _impl->generatePrivateKey_deprecated(randomSeed);
+}
+
+std::string CryptoApi::generatePrivateKey2(const std::optional<std::string>& randomSeed) {
     return _impl->generatePrivateKey(randomSeed);
 }
 
 std::string CryptoApi::derivePrivateKey(const std::string& password, const std::string& salt) {
+    return _impl->derivePrivateKey_deprecated(password, salt);
+}
+
+std::string CryptoApi::derivePrivateKey2(const std::string& password, const std::string& salt) {
     return _impl->derivePrivateKey(password, salt);
 }
+
 
 std::string CryptoApi::derivePublicKey(const std::string& privateKey) {
     return _impl->derivePublicKey(privateKey);

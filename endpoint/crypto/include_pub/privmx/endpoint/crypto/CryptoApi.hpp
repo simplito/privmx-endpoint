@@ -55,7 +55,16 @@ public:
      * @param randomSeed optional string used as the base to generate the new key
      * @return generated ECC key in WIF format
      */
+    [[deprecated("Use generatePrivateKey2(const std::optional<std::string>& randomSeed).")]]
     std::string generatePrivateKey(const std::optional<std::string>& randomSeed);
+
+    /**
+     * Generates a new private ECC key.
+     *
+     * @param randomSeed optional string used as the base to generate the new key
+     * @return generated ECC key in WIF format
+     */
+    std::string generatePrivateKey2(const std::optional<std::string>& randomSeed);
 
     /**
      * Generates a new private ECC key from a password using pbkdf2.
@@ -65,7 +74,19 @@ public:
 
      * @return generated ECC key in WIF format
      */
+    [[deprecated("Use derivePrivateKey2(const std::string& password, const std::string& salt).")]]
     std::string derivePrivateKey(const std::string& password, const std::string& salt);
+
+    /**
+     * Generates a new private ECC key from a password using pbkdf2. 
+     * This version of the derive function has a rounds count increased to 200k. This makes using this function a safer choice, but it makes the received key different than in the original version.
+     *
+     * @param password the password used to generate the new key
+     * @param salt random string (additional input for the hashing function)
+     * 
+     * @return generated ECC key in WIF format
+     */
+    std::string derivePrivateKey2(const std::string& password, const std::string& salt);
 
     /**
      * Generates a new public ECC key as a pair for an existing private key.
