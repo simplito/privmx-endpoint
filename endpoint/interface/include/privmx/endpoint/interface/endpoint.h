@@ -19,6 +19,12 @@ int privmx_endpoint_newConnection(Connection** outPtr);
 int privmx_endpoint_freeConnection(Connection* ptr);
 int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value* args, pson_value** res);
 
+struct BackendRequester;
+
+int privmx_endpoint_newBackendRequester(BackendRequester** outPtr);
+int privmx_endpoint_freeBackendRequester(BackendRequester* ptr);
+int privmx_endpoint_execBackendRequester(BackendRequester* ptr, int method, const pson_value* args, pson_value** res);
+
 struct ThreadApi;
 
 int privmx_endpoint_newThreadApi(Connection* connectionPtr, ThreadApi** outPtr);
