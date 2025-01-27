@@ -23,8 +23,8 @@ StreamKeyManager::StreamKeyManager(
     privmx::crypto::PrivateKey userPrivKey, 
     const std::string& streamRoomId,
     const std::string& contextId,
-    const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
-) : _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId), _contextSubscriptionHelper(contextSubscriptionHelper) {
+    const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
+) : _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId), _internalContextEventManager(internalContextEventManager) {
     _userPubKey = _userPrivKey.getPublicKey();
     // generate curren key
     auto currentKey = _keyProvider->generateKey();
@@ -67,11 +67,12 @@ StreamKeyManager::StreamKeyManager(
         
     }); 
     _keyCollector.detach();
-    _contextSubscriptionHelper->subscribeForElementCustom(_contextId, "internal");
+    _internalContextEventManager->subscribeFor(_contextId);
 }
 
 StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
+    _internalContextEventManager->unsubscribeFrom(_contextId);
 }
 std::shared_ptr<privmx::webrtc::KeyStore> StreamKeyManager::getCurrentWebRtcKeyStore() {
     return _currentWebRtcKeyStore;
@@ -88,37 +89,38 @@ void StreamKeyManager::removeFrameCryptor(int64_t frameCryptorId) {
     _webRtcFrameCryptors.erase(frameCryptorId);
 }
 
-void StreamKeyManager::respondToEvent(server::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey) {
+void StreamKeyManager::respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey) {
+    std::cout << "event.subtype(): " << event.subtype() << std::endl;
     if(event.subtype() == "RequestKeyEvent") {
-        respondToRequestKey(privmx::utils::TypedObjectFactory::createObjectFromVar<server::RequestKeyEvent>(event), userId, userPubKey);
+        respondToRequestKey(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::RequestKeyEvent>(event), userId, userPubKey);
     } else if(event.subtype() == "RequestKeyRespondEvent") {
-        setRequestKeyResult(privmx::utils::TypedObjectFactory::createObjectFromVar<server::RequestKeyRespondEvent>(event));
+        setRequestKeyResult(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::RequestKeyRespondEvent>(event));
     } else if(event.subtype() == "UpdateKeyEvent") {
-        respondToUpdateRequest(privmx::utils::TypedObjectFactory::createObjectFromVar<server::UpdateKeyEvent>(event), userId, userPubKey);
+        respondToUpdateRequest(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyEvent>(event), userId, userPubKey);
     } else if(event.subtype() == "UpdateKeyACKEvent") {
-        respondUpdateKeyConfirmation(privmx::utils::TypedObjectFactory::createObjectFromVar<server::UpdateKeyACKEvent>(event), userId, userPubKey);
+        respondUpdateKeyConfirmation(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyACKEvent>(event), userId, userPubKey);
     }
 }
 
 void StreamKeyManager::requestKey(const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
     // prepare data to send
-    server::RequestKeyEvent request = privmx::utils::TypedObjectFactory::createNewObject<server::RequestKeyEvent>();
+    dynamic::RequestKeyEvent request = privmx::utils::TypedObjectFactory::createNewObject<dynamic::RequestKeyEvent>();
     request.subtype("RequestKeyEvent");
     // send to users
     sendStreamKeyManagementEvent(request, users);
 }
 
-void StreamKeyManager::respondToRequestKey(server::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey) {
+void StreamKeyManager::respondToRequestKey(dynamic::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey) {
     // data
     auto currentKey = _keyForUpdate;
 
-    server::StreamEncKey streamEncKey = privmx::utils::TypedObjectFactory::createNewObject<server::StreamEncKey>();
+    dynamic::StreamEncKey streamEncKey = privmx::utils::TypedObjectFactory::createNewObject<dynamic::StreamEncKey>();
     streamEncKey.keyId(currentKey->key.id);
     streamEncKey.key(privmx::utils::Base64::from(currentKey->key.key));
     auto ttl = currentKey->creation_time + currentKey->TTL - std::chrono::system_clock::now();
     std::chrono::milliseconds ttlMilli = std::chrono::duration_cast<std::chrono::milliseconds>(ttl);
     streamEncKey.TTL(ttlMilli.count());
-    server::RequestKeyRespondEvent respond = privmx::utils::TypedObjectFactory::createNewObject<server::RequestKeyRespondEvent>();
+    dynamic::RequestKeyRespondEvent respond = privmx::utils::TypedObjectFactory::createNewObject<dynamic::RequestKeyRespondEvent>();
     respond.subtype("RequestKeyRespondEvent");
     respond.encKey(streamEncKey);
     // send data by event
@@ -126,7 +128,7 @@ void StreamKeyManager::respondToRequestKey(server::RequestKeyEvent request, cons
     _connectedUsers.push_back(privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey});
 }
 
-void StreamKeyManager::setRequestKeyResult(server::RequestKeyRespondEvent result) {
+void StreamKeyManager::setRequestKeyResult(dynamic::RequestKeyRespondEvent result) {
     //validate data
     auto newKey = result.encKey();
     // add new key
@@ -162,7 +164,7 @@ void StreamKeyManager::updateKey() {
         _userUpdateKeyConfirmationStatus.set(user.pubKey, false);
     }
     // prepare data to send
-    server::UpdateKeyEvent respond = privmx::utils::TypedObjectFactory::createNewObject<server::UpdateKeyEvent>();
+    dynamic::UpdateKeyEvent respond = privmx::utils::TypedObjectFactory::createNewObject<dynamic::UpdateKeyEvent>();
     respond.subtype("UpdateKeyEvent");
     respond.encKey(newKey);
     // send to users
@@ -179,7 +181,7 @@ void StreamKeyManager::updateKey() {
     t.detach();
 }
 //
-void StreamKeyManager::respondToUpdateRequest(server::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey) {
+void StreamKeyManager::respondToUpdateRequest(dynamic::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey) {
     //extract key
     auto newKey = request.encKey();
     // add new key
@@ -195,14 +197,14 @@ void StreamKeyManager::respondToUpdateRequest(server::UpdateKeyEvent request, co
     );
     updateWebRtcKeyStore();
     // prepare ack data
-    server::UpdateKeyACKEvent ack = privmx::utils::TypedObjectFactory::createNewObject<server::UpdateKeyACKEvent>();
+    dynamic::UpdateKeyACKEvent ack = privmx::utils::TypedObjectFactory::createNewObject<dynamic::UpdateKeyACKEvent>();
     ack.subtype("UpdateKeyACKEvent");
     ack.keyId(newKey.keyId());
     // send confirmation event
     sendStreamKeyManagementEvent(ack, {privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}});
 }
 
-void StreamKeyManager::respondUpdateKeyConfirmation(server::UpdateKeyACKEvent ack, const std::string& userId, const std::string& userPubKey) {
+void StreamKeyManager::respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userId, const std::string& userPubKey) {
     if(_keyForUpdate->key.id == ack.keyId()) {
         _userUpdateKeyConfirmationStatus.erase(userPubKey);
         if (_userUpdateKeyConfirmationStatus.size() == 0) {
@@ -211,7 +213,7 @@ void StreamKeyManager::respondUpdateKeyConfirmation(server::UpdateKeyACKEvent ac
     }
 }
 
-server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {    
+dynamic::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {    
     {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
         _keyForUpdate = std::make_shared<StreamEncKey>(StreamEncKey{
@@ -223,7 +225,7 @@ server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
 
     auto currentKeyOpt = _keysStrage.get(_currentKeyId);
     auto currentKey = currentKeyOpt.value();
-    server::NewStreamEncKey result = privmx::utils::TypedObjectFactory::createNewObject<server::NewStreamEncKey>();
+    dynamic::NewStreamEncKey result = privmx::utils::TypedObjectFactory::createNewObject<dynamic::NewStreamEncKey>();
     result.oldKeyId(currentKey->key.id);
     
     if( currentKey->creation_time + currentKey->TTL >= std::chrono::system_clock::now() - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT)) {
@@ -242,32 +244,13 @@ server::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
     return result;
 }
 
-void StreamKeyManager::sendStreamKeyManagementEvent(server::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
-    // data.streamRoomId(_streamRoomId);
-    // auto key = _keyProvider->generateKey();
-    // core::server::CustomEventData eventData = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventData>();
-    // eventData.encryptedData(_dataEncryptor.signAndEncryptAndEncode(privmx::endpoint::core::Buffer::from(privmx::utils::Utils::stringifyVar(data)), _userPrivKey, key.key));
-    // eventData.type("StreamKeyManagementEvent");
-    // core::server::CustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<core::server::CustomEventModel>();
-    // model.contextId(_contextId);
-    // model.data(privmx::utils::Utils::stringify(eventData));
-    // model.channel("internal");
-    // model.users(createKeySet(users, key));
-    // _serverApi->streamCustomEvent(model);
-    // std::cout << "h1" << std::endl;
+void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
+    data.streamRoomId(_streamRoomId);
+    core::InternalContextEventData eventData = {.type="StreamKeyManagementEvent", .data= privmx::endpoint::core::Buffer::from(utils::Utils::stringifyVar(data))};
+    std::cout << users.size() << std::endl;
+    _internalContextEventManager->sendEvent(_contextId, eventData, users);
 }
 
-privmx::utils::List<privmx::endpoint::core::server::UserKey> StreamKeyManager::createKeySet(const std::vector<privmx::endpoint::core::UserWithPubKey>& users, const privmx::endpoint::core::EncKey& key) {
-    auto usersKeySet = _keyProvider->prepareKeysList(users, key);
-    auto result = privmx::utils::TypedObjectFactory::createNewList<privmx::endpoint::core::server::UserKey>();
-    for (auto userKey : usersKeySet) {
-        auto el = privmx::utils::TypedObjectFactory::createNewObject<privmx::endpoint::core::server::UserKey>();
-        el.id(userKey.user());
-        el.key(userKey.data());
-        result.add(el);
-    }
-    return result;
-}
 
 void StreamKeyManager::updateWebRtcKeyStore() {
     std::vector<privmx::webrtc::Key> webRtcKeys;

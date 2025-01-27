@@ -361,39 +361,6 @@ ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(StreamEncKey)
-    STRING_FIELD(keyId)
-    STRING_FIELD(key)
-    INT64_FIELD(TTL) // time in miliseconds
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(NewStreamEncKey, StreamEncKey)
-    STRING_FIELD(oldKeyId)
-    INT64_FIELD(oldKeyTTL) // time in miliseconds
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(StreamCustomEventData)
-    STRING_FIELD(streamRoomId)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(StreamKeyManagementEvent, StreamCustomEventData)
-    STRING_FIELD(subtype)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyEvent, StreamKeyManagementEvent)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyRespondEvent, StreamKeyManagementEvent)
-    OBJECT_FIELD(encKey, StreamEncKey)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(UpdateKeyEvent, StreamKeyManagementEvent)
-    OBJECT_FIELD(encKey, NewStreamEncKey)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(UpdateKeyACKEvent, StreamKeyManagementEvent)
-    STRING_FIELD(keyId)
-TYPE_END
 
 } // server
 } // stream

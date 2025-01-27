@@ -24,6 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
+#include <privmx/endpoint/core/InternalContextEventManager.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
@@ -50,7 +51,7 @@ public:
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-        const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
+        const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
     );
     ~StreamApiImpl();
 
@@ -125,7 +126,7 @@ private:
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::SubscriptionHelper> _contextSubscriptionHelper;
+    std::shared_ptr<core::InternalContextEventManager> _internalContextEventManager;
     std::shared_ptr<ServerApi> _serverApi;
     core::SubscriptionHelper _streamSubscriptionHelper;
     StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;

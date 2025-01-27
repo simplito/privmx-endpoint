@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
         stream::streamJoinSettings ssettings;
         streamApi.joinStream(streamRoomId, streamsId, ssettings);
 
-        std::this_thread::sleep_for(std::chrono::seconds(12));
+        std::this_thread::sleep_for(std::chrono::seconds(120));
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;

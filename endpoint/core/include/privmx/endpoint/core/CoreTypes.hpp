@@ -26,6 +26,11 @@ struct EncKey {
     std::string key;
 };
 
+struct InternalContextEventData {
+    std::string type;
+    privmx::endpoint::core::Buffer data;
+};
+
 
 }  // namespace core
 }  // namespace endpoint

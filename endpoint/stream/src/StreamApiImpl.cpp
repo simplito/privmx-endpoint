@@ -45,13 +45,13 @@ StreamApiImpl::StreamApiImpl(
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-    const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
+    const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
 ) : _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
     _eventMiddleware(eventMiddleware),
-    _contextSubscriptionHelper(contextSubscriptionHelper),
+    _internalContextEventManager(internalContextEventManager),
     _serverApi(std::make_shared<ServerApi>(gateway)),
     _streamSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "stream", "streams")) {
         // streamGetTurnCredentials
@@ -89,22 +89,18 @@ StreamApiImpl::~StreamApiImpl() {
 
 
 void StreamApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    // if(type == "custom" && channel.length() >= 8+9 && channel.substr(0, 8) == "context/" && channel.substr(channel.length()-9, 9) == "/internal") {
-    //     auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
-    //     if(_contextSubscriptionHelper->hasSubscriptionForElementCustom(raw.id(), "internal")) { // needs proper class to handle
-    //         auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<core::server::CustomEventData>(privmx::utils::Utils::parseJson(raw.eventData()));
-    //         if(!rawEventData.typeEmpty() && rawEventData.type() == "StreamKeyManagementEvent") {
-    //             auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key());
-    //             auto decrypted = _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData().convert<std::string>(), _userPrivKey.getPublicKey(), encKey);
-    //             std::cout << decrypted.stdString() << std::endl;
-    //             auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<server::StreamKeyManagementEvent>(privmx::utils::Utils::parseJson(decrypted.stdString()));
-    //             auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
-    //             if(roomOpt.has_value()) {
-    //                 roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
-    //             }
-    //         }
-    //     }
-    // }
+    if(_internalContextEventManager->isInternalContextEvent(type, channel, data, "StreamKeyManagementEvent")) {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
+        auto decryptedData = _internalContextEventManager->extractEventData(data);
+        auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<dynamic::StreamKeyManagementEvent>(
+            privmx::utils::Utils::parseJson(decryptedData.data.stdString())
+        );
+        auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
+        if(roomOpt.has_value()) {
+            roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
+        }
+    }
+    
 }
 
 void StreamApiImpl::processConnectedEvent() {
@@ -127,7 +123,7 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
             std::make_shared<StreamRoomData>(
                 StreamRoomData{
                     .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
-                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _contextSubscriptionHelper),
+                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
                 }
             )
         );
@@ -304,7 +300,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
             std::make_shared<StreamRoomData>(
                 StreamRoomData{
                     .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
-                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _contextSubscriptionHelper),
+                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
                 }
             )
         );

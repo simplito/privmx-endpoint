@@ -20,12 +20,14 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 #include <pmx_frame_cryptor.h>
 #include <privmx/utils/ThreadSaveMap.hpp>
+#include <privmx/utils/CancellationToken.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
+#include <privmx/endpoint/core/InternalContextEventManager.hpp>
 #include "privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
-#include "privmx/utils/CancellationToken.hpp"
+#include "privmx/endpoint/stream/DynamicTypes.hpp"
 
 
 namespace privmx {
@@ -40,13 +42,13 @@ public:
         privmx::crypto::PrivateKey userPrivKey, 
         const std::string& streamRoomId, 
         const std::string& contextId,
-        const std::shared_ptr<core::SubscriptionHelper>& contextSubscriptionHelper
+        const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
     );
     ~StreamKeyManager();
     
     void requestKey(const std::vector<core::UserWithPubKey>& users);
     void updateKey();
-    void respondToEvent(server::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey);
+    void respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey);
     void removeUser(core::UserWithPubKey);
     int64_t addFrameCryptor(std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor);
     void removeFrameCryptor(int64_t frameCryptorId);
@@ -58,15 +60,14 @@ private:
         std::chrono::duration<int64_t, std::milli> TTL;
     };
 
-    server::NewStreamEncKey prepareCurrenKeyToUpdate();
+    dynamic::NewStreamEncKey prepareCurrenKeyToUpdate();
 
-    void respondToRequestKey(server::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey);
-    void setRequestKeyResult(server::RequestKeyRespondEvent result);
-    void respondToUpdateRequest(server::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey);
-    void respondUpdateKeyConfirmation(server::UpdateKeyACKEvent ack, const std::string& userId, const std::string& userPubKey);
+    void respondToRequestKey(dynamic::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey);
+    void setRequestKeyResult(dynamic::RequestKeyRespondEvent result);
+    void respondToUpdateRequest(dynamic::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey);
+    void respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userId, const std::string& userPubKey);
 
-    void sendStreamKeyManagementEvent(server::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
-    privmx::utils::List<core::server::UserKey> createKeySet(const std::vector<core::UserWithPubKey>& users, const privmx::endpoint::core::EncKey& key);
+    void sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
     void updateWebRtcKeyStore();
 
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -75,7 +76,7 @@ private:
     privmx::crypto::PublicKey _userPubKey;
     std::string _streamRoomId;
     std::string _contextId;
-    std::shared_ptr<core::SubscriptionHelper> _contextSubscriptionHelper;
+    std::shared_ptr<core::InternalContextEventManager> _internalContextEventManager;
     core::DataEncryptorV4 _dataEncryptor;
     privmx::utils::CancellationToken::Ptr _cancellationToken;
     std::thread _keyCollector;

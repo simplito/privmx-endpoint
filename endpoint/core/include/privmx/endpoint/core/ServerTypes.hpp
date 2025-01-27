@@ -73,10 +73,9 @@ ENDPOINT_CLIENT_TYPE(ContextCustomEventData)
     OBJECT_FIELD(author, UserIdentity)
 TYPE_END
 
-
-ENDPOINT_CLIENT_TYPE(InternalContextEventData) //Internal
+ENDPOINT_CLIENT_TYPE(EncryptedInternalContextEventData) //Internal
     STRING_FIELD(type) // public data about event type
-    VAR_FIELD(data)
+    STRING_FIELD(encryptedData)
 TYPE_END
 
 } // server

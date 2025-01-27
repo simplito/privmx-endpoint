@@ -15,6 +15,8 @@ limitations under the License.
 #include "privmx/endpoint/core/SubscriptionHelper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/DataEncryptorV4.hpp"
+#include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/CoreTypes.hpp"
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 
@@ -22,6 +24,7 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+#define INTERNAL_CHANNEL_NAME "internal"
 
 class InternalContextEventManager {
 public:
@@ -30,15 +33,15 @@ public:
         privfs::RpcGateway::Ptr gateway,
         std::shared_ptr<SubscriptionHelper> contextSubscriptionHelper
     );
-    void sendEvent(const std::string& contextId, server::InternalContextEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
+    void sendEvent(const std::string& contextId, InternalContextEventData data, const std::vector<UserWithPubKey>& users);
     bool isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType = std::nullopt);
-    server::InternalContextEventData extractEventData(const Poco::JSON::Object::Ptr& eventData);
+    InternalContextEventData extractEventData(const Poco::JSON::Object::Ptr& eventData);
     void subscribeFor(const std::string& contextId);
     void unsubscribeFrom(const std::string& contextId);
 
 private:
-    privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
+    privfs::RpcGateway::Ptr _gateway;
     std::shared_ptr<SubscriptionHelper> _contextSubscriptionHelper;
     core::DataEncryptorV4 _dataEncryptor;
    

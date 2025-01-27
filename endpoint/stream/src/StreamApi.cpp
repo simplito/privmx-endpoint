@@ -35,7 +35,7 @@ StreamApi StreamApi::create(core::Connection& connection) {
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
             connectionImpl->getEventChannelManager(),
-            connectionImpl->getContextSubscriptionHelper()
+            connectionImpl->getInternalContextEventManager()
         ));
         return StreamApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
