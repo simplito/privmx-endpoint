@@ -22,6 +22,7 @@ limitations under the License.
 #include "privmx/endpoint/interface/CApiExecutor.hpp"
 #include "privmx/endpoint/interface/InterfaceException.hpp"
 
+#include "privmx/endpoint/core/varinterface/BackendRequesterVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/EventQueueVarInterface.hpp"
 #include "privmx/endpoint/thread/varinterface/ThreadApiVarInterface.hpp"
@@ -67,6 +68,25 @@ int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((core::ConnectionVarInterface::METHOD)method, argsVal);
+    });
+}
+
+int privmx_endpoint_newBackendRequester(BackendRequester** outPtr) {
+    core::BackendRequesterVarInterface* ptr = new core::BackendRequesterVarInterface(core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    *outPtr = (BackendRequester*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_freeBackendRequester(BackendRequester* ptr) {
+    delete (core::BackendRequesterVarInterface*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_execBackendRequester(BackendRequester* ptr, int method, const pson_value* args, pson_value** res) {
+    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+        core::BackendRequesterVarInterface* _ptr = (core::BackendRequesterVarInterface*)ptr;
+        const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
+        return _ptr->exec((core::BackendRequesterVarInterface::METHOD)method, argsVal);
     });
 }
 
