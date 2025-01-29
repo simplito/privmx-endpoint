@@ -99,8 +99,8 @@ void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
 //     request("streamLeave", model);
 // }
 
-void ServerApi::streamCustomEvent(core::server::CustomEventModel model) {
-    _gateway->request("context.contextSendCustomEvent", model);
+server::ContextGetUserResult ServerApi::contextGetUsers(server::ContextGetUsersModel model) {
+    return privmx::utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(_gateway->request("context.contextGetUsers", model));
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object

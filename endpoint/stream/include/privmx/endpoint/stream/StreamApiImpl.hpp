@@ -96,7 +96,7 @@ public:
 
     // Joining to Stream
     void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
-    
+
 private:
     struct Stream {
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;

@@ -274,7 +274,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
     sessionDescription.sdp(sdp);
     sessionDescription.type("offer");
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
-    model.streamRoomId(1234); //TODO
+    model.streamRoomId(streamRoomId.value()); //TODO
     model.offer(sessionDescription);
     auto result = _serverApi->streamPublish(model);
     // Set remote description
@@ -316,7 +316,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     for(size_t i = 0; i < streamsId.size(); i++) {
         streamJoinModel.streamIds().add(streamsId[i]);
     }
-    streamJoinModel.streamRoomId(1234); //TODO
+    streamJoinModel.streamRoomId(streamRoomId);
     auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
     // creating peerConnectio
     room->streamMap.emplace(
@@ -379,7 +379,19 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     model.answer(sessionDescription);
     _serverApi->streamAcceptOffer(model);
     // get userId
-    room->streamKeyManager->requestKey({core::UserWithPubKey{.userId="user1", .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}});
+    auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+    modelGetRoom.id(streamRoomId);
+    auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
+    auto modelGetUsersKeys = privmx::utils::TypedObjectFactory::createNewObject<server::ContextGetUsersModel>();
+    modelGetUsersKeys.contextId(streamRoom.contextId());
+    auto allUsersList = _serverApi->contextGetUsers(modelGetUsersKeys).users(); 
+    std::vector<core::UserWithPubKey> toSend;
+    for(auto userWithPubKey: allUsersList) {
+        if(streamRoom.users().has(userWithPubKey.id())) {
+            toSend.push_back(core::UserWithPubKey{.userId=userWithPubKey.id(), .pubKey=userWithPubKey.pub()});
+        }
+    }
+    room->streamKeyManager->requestKey(toSend);
 }
 
 std::string StreamApiImpl::createStreamRoom(
@@ -508,7 +520,7 @@ StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
 void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {
     PRIVMX_DEBUG_TIME_START(PlatformStream, deleteStreamRoom)
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomDeleteModel>();
-    model.streamRoomId(streamRoomId);
+    model.id(streamRoomId);
     _serverApi->streamRoomDelete(model);
     PRIVMX_DEBUG_TIME_STOP(PlatformStream, deleteStreamRoom)
 }

@@ -22,7 +22,7 @@ namespace stream {
 
 class Frame {
 public:
-    virtual int ConvertToARGB(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
+    virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
 };
 
 struct streamJoinSettings {

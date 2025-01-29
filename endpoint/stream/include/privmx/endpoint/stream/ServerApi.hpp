@@ -48,8 +48,8 @@ public:
     server::StreamJoinResult streamJoin(server::StreamJoinModel model);
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
     // void streamLeave(server::StreamLeaveModel model);
-    // TO DO
-    void streamCustomEvent(core::server::CustomEventModel model);
+    // TMP
+    server::ContextGetUserResult contextGetUsers(server::ContextGetUsersModel model);
 
 private:
     template<typename T>

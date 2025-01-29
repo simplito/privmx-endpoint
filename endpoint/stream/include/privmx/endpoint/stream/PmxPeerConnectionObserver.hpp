@@ -28,7 +28,7 @@ namespace stream {
 class FrameImpl : public Frame {
 public:
     FrameImpl(libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame> frame);
-    virtual int ConvertToARGB(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) override;
+    virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) override;
 private:
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame> _frame;
 };

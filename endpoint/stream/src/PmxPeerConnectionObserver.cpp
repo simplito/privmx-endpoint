@@ -18,7 +18,7 @@ using namespace privmx::endpoint::stream;
 
 FrameImpl::FrameImpl(libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame> frame) : _frame(frame) {}
 
-int FrameImpl::ConvertToARGB(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) {
+int FrameImpl::ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) {
     return _frame->ConvertToARGB(libwebrtc::RTCVideoFrame::Type::kRGBA, dst_argb, dst_stride_argb, dest_width, dest_height);
 }
 

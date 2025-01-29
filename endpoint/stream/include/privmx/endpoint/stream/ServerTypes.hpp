@@ -192,7 +192,7 @@ ENDPOINT_SERVER_TYPE(StreamRoomListResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomDeleteModel)
-    STRING_FIELD(streamRoomId)
+    STRING_FIELD(id)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamGetTurnCredentialsModel)
@@ -211,7 +211,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamPublishModel)
     OBJECT_FIELD(offer, SessionDescription)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamPublishResult)
@@ -221,7 +221,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamJoinModel)
     LIST_FIELD(streamIds, int64_t)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamJoinResult)
@@ -230,7 +230,7 @@ ENDPOINT_SERVER_TYPE(StreamJoinResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamListModel)
-    INT64_FIELD(streamRoomId)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(Stream)
@@ -359,6 +359,14 @@ ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     STRING_FIELD(privateMeta)
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
+    STRING_FIELD(contextId)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
+    LIST_FIELD(users, core::server::UserIdentity)
 TYPE_END
 
 
