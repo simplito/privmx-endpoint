@@ -53,11 +53,6 @@ int main(int argc, char** argv) {
         stream::StreamApi streamApi = stream::StreamApi::create(connection);
         auto context = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
         auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
-        if(streamList.readItems.size()>=1) {
-            for(auto a : streamList.readItems) { 
-                streamApi.deleteStreamRoom(a.streamRoomId);
-            }
-        } 
         auto pubKey = cryptoApi.derivePublicKey("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN");
         std::vector<privmx::endpoint::core::UserWithPubKey> users = {
             privmx::endpoint::core::UserWithPubKey{.userId=context.userId, .pubKey=pubKey}
