@@ -76,18 +76,12 @@ public:
     // Joining to Stream
     void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
 
+    std::vector<Stream> listStreams(const std::string& streamRoomId);
 
-
-    // void streamTrackRemove(const std::string& streamTrackId);
-    // List<TrackInfo> streamTrackList(const std::string& streamRoomId, int64_t streamId);
-
-    // // streamPublish
-    // void streamPublish(int64_t streamId);
-
-    // // // streamUnpublish
+    // // streamUnpublish
     // void streamUnpublish(int64_t streamId);
 
-    // void streamJoin(const std::string& streamRoomId, const StreamAndTracksSelector& streamToJoin);
+    // // streamLeave
     // void streamLeave(int64_t streamId);
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }

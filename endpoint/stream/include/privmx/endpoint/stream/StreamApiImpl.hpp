@@ -97,14 +97,16 @@ public:
     // Joining to Stream
     void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
 
+    std::vector<Stream> listStreams(const std::string& streamRoomId);
+
 private:
-    struct Stream {
+    struct StreamData {
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;
         std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver;
 
     };
     struct StreamRoomData {
-        std::map<uint64_t, std::shared_ptr<Stream>> streamMap;
+        std::map<uint64_t, std::shared_ptr<StreamData>> streamMap;
         std::shared_ptr<StreamKeyManager> streamKeyManager;
     };
     

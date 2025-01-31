@@ -262,18 +262,19 @@ int main(int argc, char** argv) {
 
 
         Poco::JSON::Object::Ptr tmp = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        tmp->set("clientId", "user1");
         privmx::rpc::MessageSendOptionsEx settings;
         settings.channel_type = privmx::rpc::ChannelType::WEBSOCKET;
         auto result = gateway->request("stream.streamGetTurnCredentials", tmp, settings).extract<Poco::JSON::Object::Ptr>();
         std::cout << privmx::utils::Utils::stringifyVar(result, true) << std::endl;
+        auto turnCredentials = result->getArray("credentials");
+        auto turnCredential = turnCredentials->getObject(0);
 
         privmx::endpoint::stream::PmxWebRtc pmxWebRtc;
 
         libwebrtc::IceServer iceServer = {
-            .uri="turn:webrtc2.s24.simplito:3478", 
-            .username=portable::string(result->getValue<std::string>("username")), 
-            .password=portable::string(result->getValue<std::string>("password"))
+            .uri=turnCredential->getValue<std::string>("url"), 
+            .username=portable::string(turnCredential->getValue<std::string>("username")), 
+            .password=portable::string(turnCredential->getValue<std::string>("password"))
         };
         libwebrtc::RTCConfiguration configuration;
         configuration.ice_servers[0] = iceServer;

@@ -62,10 +62,10 @@ private:
 
     dynamic::NewStreamEncKey prepareCurrenKeyToUpdate();
 
-    void respondToRequestKey(dynamic::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey);
+    void respondToRequestKey(const std::string& userId, const std::string& userPubKey);
     void setRequestKeyResult(dynamic::RequestKeyRespondEvent result);
     void respondToUpdateRequest(dynamic::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey);
-    void respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userId, const std::string& userPubKey);
+    void respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userPubKey);
 
     void sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
     void updateWebRtcKeyStore();

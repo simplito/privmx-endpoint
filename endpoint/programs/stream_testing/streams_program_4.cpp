@@ -116,8 +116,8 @@ MyFrame::MyFrame()
     m_board->SetBackgroundColour(wxColor(100, 100, 200));
     m_board->Bind(wxEVT_PAINT, &MyFrame::OnPaint, this);
 
-    wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
-     sizer->Add(m_board, 0, wxEXPAND | wxALL);
+    sizer = new wxBoxSizer(wxVERTICAL);
+    sizer->Add(m_board, 0, wxEXPAND | wxALL);
 
     crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
     connection = std::make_shared<core::Connection>(core::Connection::connect("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000"));
@@ -150,18 +150,10 @@ MyFrame::MyFrame()
     streamApi->publishStream(streamId);
     std::this_thread::sleep_for(std::chrono::seconds(1));
     
-    auto tmp = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-    tmp->set("streamRoomId", streamRoomId);
-    privmx::rpc::MessageSendOptionsEx settings;
-    settings.channel_type = privmx::rpc::ChannelType::WEBSOCKET;
-    auto gateway = connection->getImpl()->getGateway();
-    auto result = gateway->request("stream.streamList", tmp, settings).extract<Poco::JSON::Object::Ptr>();
-    std::cout << privmx::utils::Utils::stringifyVar(result, true) << std::endl;
+    auto streamlist = streamApi->listStreams(streamRoomId);
     std::vector<int64_t> streamsId;
-    for(int i = 0; i < result->getArray("list")->size(); i++) {
-        auto l = result->getArray("list")->getObject(i);
-        streamsId.push_back(l->getValue<int64_t>("streamId"));
-        std::cout << l->getValue<int64_t>("streamId") << std::endl;
+    for(int i = 0; i < streamlist.size(); i++) {
+        streamsId.push_back(streamlist[i].streamId);
     }
     stream::streamJoinSettings ssettings {
         .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {

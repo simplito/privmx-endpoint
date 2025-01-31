@@ -126,18 +126,10 @@ int main(int argc, char** argv) {
         streamApi.publishStream(streamId);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         
-        auto tmp = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        tmp->set("streamRoomId", streamRoomId);
-        privmx::rpc::MessageSendOptionsEx settings;
-        settings.channel_type = privmx::rpc::ChannelType::WEBSOCKET;
-        auto gateway = connection.getImpl()->getGateway();
-        auto result = gateway->request("stream.streamList", tmp, settings).extract<Poco::JSON::Object::Ptr>();
-        std::cout << privmx::utils::Utils::stringifyVar(result, true) << std::endl;
+        auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<int64_t> streamsId;
-        for(int i = 0; i < result->getArray("list")->size(); i++) {
-            auto l = result->getArray("list")->getObject(i);
-            streamsId.push_back(l->getValue<int64_t>("streamId"));
-            std::cout << l->getValue<int64_t>("streamId") << std::endl;
+        for(int i = 0; i < streamlist.size(); i++) {
+            streamsId.push_back(streamlist[i].streamId);
         }
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
         stream::streamJoinSettings ssettings {

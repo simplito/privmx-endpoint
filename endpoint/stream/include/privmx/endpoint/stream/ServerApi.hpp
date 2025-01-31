@@ -34,20 +34,11 @@ public:
     server::StreamRoomGetResult streamRoomGet(server::StreamRoomGetModel model);
     void streamRoomDelete(server::StreamRoomDeleteModel model);
     server::StreamGetTurnCredentialsResult streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model);
-    // server::StreamCreateResult streamCreate(server::StreamCreateModel model);
-    // void streamUpdate(server::StreamUpdateModel model);
     server::StreamListResult streamList(server::StreamListModel model);
-    // server::StreamGetResult streamGet(server::StreamGetModel model);
-    // void streamDelete(server::StreamDeleteModel model);
-    // server::StreamTrackAddResult streamTrackAdd(server::StreamTrackAddModel model);
-    // void streamTrackRemove(server::StreamTrackRemoveModel model);
-    // server::StreamTrackListResult streamTrackList(server::StreamTrackListModel model);
-    // void streamTrackSendData(server::StreamTrackSendDataModel model);
     server::StreamPublishResult streamPublish(server::StreamPublishModel model);
-    // Poco::Dynamic::Var streamUnpublish(server::StreamUnpublishModel model); // ???
     server::StreamJoinResult streamJoin(server::StreamJoinModel model);
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
-    // void streamLeave(server::StreamLeaveModel model);
+    void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     // TMP
     server::ContextGetUserResult contextGetUsers(server::ContextGetUsersModel model);
 

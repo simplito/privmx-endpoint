@@ -92,13 +92,13 @@ void StreamKeyManager::removeFrameCryptor(int64_t frameCryptorId) {
 void StreamKeyManager::respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey) {
     std::cout << "event.subtype(): " << event.subtype() << std::endl;
     if(event.subtype() == "RequestKeyEvent") {
-        respondToRequestKey(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::RequestKeyEvent>(event), userId, userPubKey);
+        respondToRequestKey(userId, userPubKey);
     } else if(event.subtype() == "RequestKeyRespondEvent") {
         setRequestKeyResult(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::RequestKeyRespondEvent>(event));
     } else if(event.subtype() == "UpdateKeyEvent") {
         respondToUpdateRequest(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyEvent>(event), userId, userPubKey);
     } else if(event.subtype() == "UpdateKeyACKEvent") {
-        respondUpdateKeyConfirmation(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyACKEvent>(event), userId, userPubKey);
+        respondUpdateKeyConfirmation(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyACKEvent>(event), userPubKey);
     }
 }
 
@@ -110,7 +110,7 @@ void StreamKeyManager::requestKey(const std::vector<privmx::endpoint::core::User
     sendStreamKeyManagementEvent(request, users);
 }
 
-void StreamKeyManager::respondToRequestKey(dynamic::RequestKeyEvent request, const std::string& userId, const std::string& userPubKey) {
+void StreamKeyManager::respondToRequestKey(const std::string& userId, const std::string& userPubKey) {
     // data
     auto currentKey = _keyForUpdate;
 
@@ -172,7 +172,7 @@ void StreamKeyManager::updateKey() {
     //thread for timeout and update
     std::thread t([&]() {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
-        std::cv_status status = _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
+        _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
         _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
         _currentKeyId = _keyForUpdate->key.id;
         updateWebRtcKeyStore();
@@ -204,7 +204,7 @@ void StreamKeyManager::respondToUpdateRequest(dynamic::UpdateKeyEvent request, c
     sendStreamKeyManagementEvent(ack, {privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}});
 }
 
-void StreamKeyManager::respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userId, const std::string& userPubKey) {
+void StreamKeyManager::respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userPubKey) {
     if(_keyForUpdate->key.id == ack.keyId()) {
         _userUpdateKeyConfirmationStatus.erase(userPubKey);
         if (_userUpdateKeyConfirmationStatus.size() == 0) {
@@ -254,7 +254,7 @@ void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventDa
 
 void StreamKeyManager::updateWebRtcKeyStore() {
     std::vector<privmx::webrtc::Key> webRtcKeys;
-    _keysStrage.forAll([&](std::string key, std::shared_ptr<StreamEncKey> value) {
+    _keysStrage.forAll([&]([[maybe_unused]]std::string key, std::shared_ptr<StreamEncKey> value) {
         privmx::webrtc::Key webRtcKey {
             .keyId = value->key.id,
             .key =  value->key.key,
@@ -263,7 +263,7 @@ void StreamKeyManager::updateWebRtcKeyStore() {
         webRtcKeys.push_back(webRtcKey);
     });
     _currentWebRtcKeyStore = privmx::webrtc::KeyStore::Create(webRtcKeys);
-    _webRtcFrameCryptors.forAll([&](int64_t key, std::shared_ptr<privmx::webrtc::FrameCryptor> value) {
+    _webRtcFrameCryptors.forAll([&]([[maybe_unused]]int64_t key, std::shared_ptr<privmx::webrtc::FrameCryptor> value) {
         value->setKeyStore(_currentWebRtcKeyStore);
     });
 }

@@ -56,18 +56,18 @@ StreamApiImpl::StreamApiImpl(
     _streamSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "stream", "streams")) {
         // streamGetTurnCredentials
         auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
-        model.clientId("user1");
-        auto result = _serverApi->streamGetTurnCredentials(model);
-
+        auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
         libwebrtc::LibWebRTC::Initialize();
         _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
         _configuration = libwebrtc::RTCConfiguration();
-        libwebrtc::IceServer iceServer = {
-            .uri="turn:webrtc2.s24.simplito:3478", 
-            .username=portable::string(result.username()), 
-            .password=portable::string(result.password())
-        };
-        _configuration.ice_servers[0] = iceServer;
+        for(size_t i = 0; i < credentials.size(); i++) {
+            libwebrtc::IceServer iceServer = {
+                .uri=credentials.get(i).url(), 
+                .username=portable::string(credentials.get(i).username()), 
+                .password=portable::string(credentials.get(i).password())
+            };
+            _configuration.ice_servers[i] = iceServer;
+        }
         _constraints = libwebrtc::RTCMediaConstraints::Create();
         _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiImpl::processConnectedEvent, this));
@@ -75,7 +75,7 @@ StreamApiImpl::StreamApiImpl(
     }
 
 StreamApiImpl::~StreamApiImpl() {
-    _streamRoomMap.forAll([&](std::string key, std::shared_ptr<privmx::endpoint::stream::StreamApiImpl::StreamRoomData> value) {
+    _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiImpl::StreamRoomData> value) {
         for(auto stream: value->streamMap) {
             stream.second->peerConnection->Close();
         }
@@ -122,7 +122,7 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
             streamRoomId,
             std::make_shared<StreamRoomData>(
                 StreamRoomData{
-                    .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
+                    .streamMap=std::map<uint64_t, std::shared_ptr<StreamData>>(), 
                     .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
                 }
             )
@@ -136,8 +136,8 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
     room->streamMap.emplace(
         std::make_pair(
             streamId, 
-            std::make_shared<Stream>(
-                Stream{
+            std::make_shared<StreamData>(
+                StreamData{
                     .peerConnection=_peerConnectionFactory->Create(
                         _configuration, 
                         _constraints
@@ -288,7 +288,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
     );
 }
 
-// // Joining to Stream
+// Joining to Stream
 void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
     auto roomOpt = _streamRoomMap.get(streamRoomId);
     if(!roomOpt.has_value()) {
@@ -299,7 +299,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
             streamRoomId,
             std::make_shared<StreamRoomData>(
                 StreamRoomData{
-                    .streamMap=std::map<uint64_t, std::shared_ptr<Stream>>(), 
+                    .streamMap=std::map<uint64_t, std::shared_ptr<StreamData>>(), 
                     .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
                 }
             )
@@ -322,8 +322,8 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     room->streamMap.emplace(
         std::make_pair(
             streamId, 
-            std::make_shared<Stream>(
-                Stream{
+            std::make_shared<StreamData>(
+                StreamData{
                     .peerConnection=_peerConnectionFactory->Create(
                         _configuration,
                         _constraints
@@ -378,20 +378,43 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     model.sessionId(streamJoinResult.sessionId());
     model.answer(sessionDescription);
     _serverApi->streamAcceptOffer(model);
-    // get userId
+    
+    // get Room for contextId
     auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     modelGetRoom.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
+    // get Streams for userId
+    auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
+    modelStreams.streamRoomId(streamRoomId);
+    auto streamsList = _serverApi->streamList(modelStreams).list();
+    // get all users for pubKey
     auto modelGetUsersKeys = privmx::utils::TypedObjectFactory::createNewObject<server::ContextGetUsersModel>();
     modelGetUsersKeys.contextId(streamRoom.contextId());
     auto allUsersList = _serverApi->contextGetUsers(modelGetUsersKeys).users(); 
+    std::vector<std::string> usersIds;
+    for(auto s: streamsList) {
+        if ( std::find(streamsId.begin(), streamsId.end(), s.streamId()) != streamsId.end() ) {
+            usersIds.push_back(s.userId());
+        }
+    }
     std::vector<core::UserWithPubKey> toSend;
     for(auto userWithPubKey: allUsersList) {
-        if(streamRoom.users().has(userWithPubKey.id())) {
+        if(std::find(usersIds.begin(), usersIds.end(), userWithPubKey.id()) != usersIds.end() ) {
             toSend.push_back(core::UserWithPubKey{.userId=userWithPubKey.id(), .pubKey=userWithPubKey.pub()});
         }
     }
     room->streamKeyManager->requestKey(toSend);
+}
+
+std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {
+    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
+    model.streamRoomId(streamRoomId);
+    auto streamList = _serverApi->streamList(model).list();
+    std::vector<Stream> result;
+    for(auto stream: streamList) {
+        result.push_back(Stream{.streamId=stream.streamId(),.userId=stream.userId()});
+    }
+    return result;
 }
 
 std::string StreamApiImpl::createStreamRoom(

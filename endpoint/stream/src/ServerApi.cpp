@@ -42,49 +42,13 @@ server::StreamGetTurnCredentialsResult ServerApi::streamGetTurnCredentials(serve
     return requestWS<server::StreamGetTurnCredentialsResult>("streamGetTurnCredentials", model);
 }
 
-// server::StreamCreateResult ServerApi::streamCreate(server::StreamCreateModel model)  {
-//     return request<server::StreamCreateResult>("streamCreate", model);
-// }
-
-// void ServerApi::streamUpdate(server::StreamUpdateModel model)  {
-//     request("streamUpdate", model);
-// }
-
 server::StreamListResult ServerApi::streamList(server::StreamListModel model)  {
     return requestWS<server::StreamListResult>("streamList", model);
 }
 
-// server::StreamGetResult ServerApi::streamGet(server::StreamGetModel model)  {
-//     return request<server::StreamGetResult>("streamGet", model);
-// }
-
-// void ServerApi::streamDelete(server::StreamDeleteModel model)  {
-//     request("streamDelete", model);
-// }
-
-// server::StreamTrackAddResult ServerApi::streamTrackAdd(server::StreamTrackAddModel model)  {
-//     return request<server::StreamTrackAddResult>("streamTrackAdd", model);
-// }
-
-// void ServerApi::streamTrackRemove(server::StreamTrackRemoveModel model)  {
-//     request("streamTrackRemove", model);
-// }
-
-// server::StreamTrackListResult ServerApi::streamTrackList(server::StreamTrackListModel model)  {
-//     return request<server::StreamTrackListResult>("streamTrackList", model);
-// }
-
-// void ServerApi::streamTrackSendData(server::StreamTrackSendDataModel model)  {
-//     request("streamTrackSendData", model);
-// }
-
 server::StreamPublishResult ServerApi::streamPublish(server::StreamPublishModel model)  {
     return requestWS<server::StreamPublishResult>("streamPublish", model);
 }
-// Poco::Dynamic::Var ServerApi::streamUnpublish(server::StreamUnpublishModel model)  {
-//     return requestWS("streamUnpublish", model);
-// }
-
 server::StreamJoinResult ServerApi::streamJoin(server::StreamJoinModel model)  {
     return requestWS<server::StreamJoinResult>("streamJoin", model);
 }
@@ -94,11 +58,6 @@ void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
     std::cout << privmx::utils::Utils::stringifyVar(a, true) << std::endl;
     return;
 }
-
-// void ServerApi::streamLeave(server::StreamLeaveModel model)  {
-//     request("streamLeave", model);
-// }
-
 server::ContextGetUserResult ServerApi::contextGetUsers(server::ContextGetUsersModel model) {
     return privmx::utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(_gateway->request("context.contextGetUsers", model));
 }
