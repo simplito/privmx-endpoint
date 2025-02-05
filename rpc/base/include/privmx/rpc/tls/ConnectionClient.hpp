@@ -35,7 +35,7 @@ class ConnectionClient : public ConnectionBase
 public:
     ConnectionClient(std::ostream& output, TicketsManager& tickets_manager, const ConnectionOptionsFull& options);
     void processHandshakePacket(const Poco::Dynamic::Var& packet) override;
-    void ecdheHandshake(const crypto::PrivateKey& key = crypto::PrivateKey::generateRandom());
+    void ecdheHandshake(const crypto::PrivateKey& key = crypto::PrivateKey::generateRandom(), const std::optional<std::string>& solution = std::nullopt);
     void ecdhexHandshake(const crypto::PrivateKey& key, const std::optional<std::string>& solution);
     void srpHandshake(const std::string& hashmail, const std::string& password, Poco::Int32 tickets = 1);
     void srpHandshake2(const std::string& username, const std::string& host, const std::string& password, Poco::Int32 tickets = 1, GatewayProperties::Ptr properties = nullptr);

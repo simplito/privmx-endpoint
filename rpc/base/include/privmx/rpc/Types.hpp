@@ -467,11 +467,16 @@ struct ConnectionOptionsFull
 struct EcdheOptions
 {
     std::optional<crypto::PrivateKey> key;
+    std::optional<std::string> solution;
+    
     Poco::Dynamic::Var serializeToVar(){
         Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
         auto object= package.extract<Poco::JSON::Object::Ptr>();
         if(this->key.has_value()){
             object->set("key",key.value().toWIF());
+        }
+        if (solution.has_value()) {
+            object->set("solution", solution.value());
         }
         return package;
     }
@@ -486,7 +491,6 @@ struct EcdhexOptions
         if (solution.has_value()) {
             object->set("solution", solution.value());
         }
-        object->set("solution", std::nullopt);
         return package;
     }
 
