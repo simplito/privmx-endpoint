@@ -67,7 +67,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
-void ConnectionImpl::connectPublic([[maybe_unused]] const std::string& solutionId, const std::string& platformUrl) {
+void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl) {
     // TODO: solutionId is reserved for future use
     PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
     rpc::ConnectionOptions options;
@@ -76,7 +76,7 @@ void ConnectionImpl::connectPublic([[maybe_unused]] const std::string& solutionI
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = false;
     auto key = privmx::crypto::PrivateKey::generateRandom();
-    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options);
+    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));

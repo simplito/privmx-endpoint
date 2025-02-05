@@ -180,9 +180,9 @@ void AuthorizedConnection::sendRequest(ClientEndpoint& endpoint, bool web_socket
     endpoint.connection.process(stream);
 }
 
-void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key) {
+void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution) {
     ClientEndpoint endpoint(_tickets_manager, _options);
-    endpoint.connection.ecdheHandshake(key);
+    endpoint.connection.ecdheHandshake(key, solution);
     endpoint.connection.ticketRequest(endpoint.TICKETS_MAX_COUNT);
     sendRequest(endpoint);
     EcdheConnectionInfo::Ptr info = new EcdheConnectionInfo();

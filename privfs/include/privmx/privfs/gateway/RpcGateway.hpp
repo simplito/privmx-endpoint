@@ -36,7 +36,7 @@ class RpcGateway
 public:
     using Ptr = Poco::SharedPtr<RpcGateway>;
 
-    static RpcGateway::Ptr createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options);
+    static RpcGateway::Ptr createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution = {});
     static RpcGateway::Ptr createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution = {});
     static RpcGateway::Ptr createGatewayFromKeyConnection(const crypto::PrivateKey& key, types::InitParameters init_parameters);
     static RpcGateway::Ptr createGatewayFromSrpConnection(const std::string& username, const std::string& password, types::InitParameters init_parameters);
