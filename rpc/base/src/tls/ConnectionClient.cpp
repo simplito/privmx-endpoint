@@ -94,13 +94,16 @@ inline string ConnectionClient::getClientAgent() {
     return _options.agent;
 }
 
-void ConnectionClient::ecdheHandshake(const PrivateKey& key) {
+void ConnectionClient::ecdheHandshake(const PrivateKey& key, const std::optional<std::string>& solution) {
     _ecdhe_private_key = key;
     string public_key = _ecdhe_private_key.value().getPublicKey().toDER();
     Object::Ptr packet = new Object();
     packet->set("type", "ecdhe");
     packet->set("key", BinaryString(public_key));
     packet->set("agent", getClientAgent());
+    if (solution.has_value()) {
+        packet->set("solution", solution.value());
+    }
     send(_pson_encoder.encode(packet), ContentType::HANDSHAKE);
 }
 

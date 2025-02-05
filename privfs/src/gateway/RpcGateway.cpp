@@ -37,8 +37,8 @@ using namespace Poco::JSON;
 using Poco::Dynamic::Var;
 using rpc::MessageSendOptionsEx;
 
-RpcGateway::Ptr RpcGateway::createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options) {
-    auto connection = rpc::ConnectionManager::getInstance()->createEcdheConnection({.key = key}, options);
+RpcGateway::Ptr RpcGateway::createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution) {
+    auto connection = rpc::ConnectionManager::getInstance()->createEcdheConnection({.key = key, .solution = solution}, options);
     return new RpcGateway(connection, nullopt);
 }
 
