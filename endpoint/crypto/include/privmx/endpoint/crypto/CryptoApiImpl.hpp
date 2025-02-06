@@ -28,7 +28,6 @@ class CryptoApiImpl
 public:
     core::Buffer signData(const core::Buffer& data, const std::string& key);
     bool verifySignature(const core::Buffer& data, const core::Buffer& signature, const std::string& key);
-    std::string generatePrivateKey_deprecated(const std::optional<std::string>& basestring);
     std::string generatePrivateKey(const std::optional<std::string>& basestring);
     std::string derivePrivateKey_deprecated(const std::string& password, const std::string& salt);
     std::string derivePrivateKey(const std::string& password, const std::string& salt);

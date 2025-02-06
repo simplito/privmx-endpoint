@@ -31,15 +31,6 @@ bool CryptoApiImpl::verifySignature(const core::Buffer& data, const core::Buffer
     return pubKey.verifyCompactSignatureWithHash(data.stdString(), signature.stdString());
 }
 
-std::string CryptoApiImpl::generatePrivateKey_deprecated(const std::optional<std::string>& basestring) {
-    if (basestring.has_value()) {
-        auto privWIF {getPrivKeyFromSeed(basestring.value(), 1000).toWIF()};
-        return privWIF;
-    }
-    auto privKey = privmx::crypto::PrivateKey::generateRandom();
-    return privKey.toWIF();
-}
-
 std::string CryptoApiImpl::generatePrivateKey(const std::optional<std::string>& basestring) {
     if (basestring.has_value()) {
         auto privWIF {getPrivKeyFromSeed(basestring.value(), 200000).toWIF()};
