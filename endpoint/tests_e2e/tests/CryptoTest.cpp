@@ -31,6 +31,12 @@ protected:
 
 TEST_F(CryptoTest, verifySignature) {
     core::Buffer sign = core::Buffer::from(privmx::utils::Hex::toString("1bf40aa304605ed8f94f3dc03564332f341a7620f419839c762151c50342366377207cf547e1c3837e796dd1b29e13d0772b3b9d0d53315b28fba7a4ed385d1fc4"));
+    EXPECT_THROW({
+        cryptoApi->verifySignature(core::Buffer::from("data"), core::Buffer::from("sign"), "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+    }, core::Exception);
+    EXPECT_THROW({
+        cryptoApi->verifySignature(core::Buffer::from("data"), sign, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHH");
+    }, core::Exception);
     bool status;
     EXPECT_NO_THROW({
        status = cryptoApi->verifySignature(core::Buffer::from("data"), sign, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
@@ -39,6 +45,9 @@ TEST_F(CryptoTest, verifySignature) {
 }
 
 TEST_F(CryptoTest, signData) {
+    EXPECT_THROW({
+        cryptoApi->signData(core::Buffer::from("data"), "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+    }, core::Exception);
     core::Buffer sign;
     EXPECT_NO_THROW({
         sign = cryptoApi->signData(core::Buffer::from("data"), "L2TUveYrXgohLcLVcvrYd48Nwy25cZNGEuGYjxwWnai2uW9KNpPb");
@@ -71,7 +80,21 @@ TEST_F(CryptoTest, derivePrivateKey) {
     EXPECT_EQ(keyInWIF, "L2TUveYrXgohLcLVcvrYd48Nwy25cZNGEuGYjxwWnai2uW9KNpPb");
 }
 
+TEST_F(CryptoTest, derivePrivateKey2) {
+    std::string keyInWIF;
+    EXPECT_NO_THROW({
+        keyInWIF = cryptoApi->derivePrivateKey2("pass","salt");
+    });
+    EXPECT_NO_THROW({
+        privmx::crypto::PrivateKey::fromWIF(keyInWIF);
+    });
+    EXPECT_EQ(keyInWIF, "L1PtGzD2iLGT3vPQkDGqKhrYCxjBQzfnVzG1D4cTuGnPvPqZEtTP");
+}
+
 TEST_F(CryptoTest, derivePublicKey) {
+    EXPECT_THROW({
+        cryptoApi->derivePublicKey("8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+    }, core::Exception);
     std::string keyInBase58DER;
     EXPECT_NO_THROW({
         keyInBase58DER = cryptoApi->derivePublicKey("L2TUveYrXgohLcLVcvrYd48Nwy25cZNGEuGYjxwWnai2uW9KNpPb");
