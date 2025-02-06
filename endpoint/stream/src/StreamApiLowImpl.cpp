@@ -21,7 +21,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ListQueryMapper.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 
-#include "privmx/endpoint/stream/StreamApiImpl.hpp"
+#include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
 #include "privmx/endpoint/stream/StreamTypes.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
@@ -38,7 +38,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiImpl::StreamApiImpl(
+StreamApiLowImpl::StreamApiLowImpl(
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -57,27 +57,15 @@ StreamApiImpl::StreamApiImpl(
         // streamGetTurnCredentials
         auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
         auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
-        libwebrtc::LibWebRTC::Initialize();
-        _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
-        _configuration = libwebrtc::RTCConfiguration();
-        for(size_t i = 0; i < credentials.size(); i++) {
-            libwebrtc::IceServer iceServer = {
-                .uri=credentials.get(i).url(), 
-                .username=portable::string(credentials.get(i).username()), 
-                .password=portable::string(credentials.get(i).password())
-            };
-            _configuration.ice_servers[i] = iceServer;
-        }
-        _constraints = libwebrtc::RTCMediaConstraints::Create();
-        _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-        _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiImpl::processConnectedEvent, this));
-        _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiImpl::processDisconnectedEvent, this));
+        _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
+        _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
     }
 
-StreamApiImpl::~StreamApiImpl() {
-    _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiImpl::StreamRoomData> value) {
+StreamApiLowImpl::~StreamApiLowImpl() {
+    _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> value) {
         for(auto stream: value->streamMap) {
-            stream.second->peerConnection->Close();
+            stream.second->webRtc->close();
         }
         value->streamMap.clear();
     });
@@ -88,7 +76,7 @@ StreamApiImpl::~StreamApiImpl() {
 }
 
 
-void StreamApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
+void StreamApiLowImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
     if(_internalContextEventManager->isInternalContextEvent(type, channel, data, "StreamKeyManagementEvent")) {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
         auto decryptedData = _internalContextEventManager->extractEventData(data);
@@ -103,147 +91,59 @@ void StreamApiImpl::processNotificationEvent(const std::string& type, const std:
     
 }
 
-void StreamApiImpl::processConnectedEvent() {
+void StreamApiLowImpl::processConnectedEvent() {
 
 }
 
-void StreamApiImpl::processDisconnectedEvent() {
+void StreamApiLowImpl::processDisconnectedEvent() {
 
 }
 // V3 code 
 
-int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
-    auto stream = std::make_shared<StreamData>(
-                StreamData{
-                    .webRtc = std::make_shared<WebRTC>(_peerConnectionFactory->Create(
-                            _configuration, 
-                            _constraints
-                        ),
-                        std::make_shared<PmxPeerConnectionObserver>(
-                            streamId,
-                            room->streamKeyManager,
-                            []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
-                        ))
+int64_t StreamApiLowImpl::createStream(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
+    auto roomOpt = _streamRoomMap.get(streamRoomId);
+    if(!roomOpt.has_value()) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+        model.id(streamRoomId);
+        auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
+        _streamRoomMap.set(
+            streamRoomId,
+            std::make_shared<StreamRoomData>(
+                StreamRoomData{
+                    .streamMap=std::map<uint64_t, std::shared_ptr<StreamData>>(), 
+                    .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
                 }
             )
-    stream->peerConnection->RegisterRTCPeerConnectionObserver(stream->peerConnectionObserver.get());
-    _api->createStream(streamRoomId, stream);
+        );
+        roomOpt = _streamRoomMap.get(streamRoomId);
+    }
+    auto room = roomOpt.value();
+    int64_t streamId = generateNumericId();
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamId) + ": STREAM Sender")
+    _streamIdToRoomId.set(streamId, streamRoomId);
+    room->streamMap.emplace(
+        std::make_pair(
+            streamId, 
+            std::make_shared<StreamData>(
+                StreamData{
+                    .webRtc = webRtc
+                }
+            )
+        )
+    );
+    auto stream = room->streamMap.at(streamId);
     return streamId;
 }
 
-// Adding track
-std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listAudioRecordingDevices() {  
-    std::string name, deviceId;
-    name.resize(255);
-    deviceId.resize(255);
-    _audioDevice = _peerConnectionFactory->GetAudioDevice();
-    uint32_t num = _audioDevice->RecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> result;
-    for (uint32_t i = 0; i < num; ++i) {
-        _audioDevice->RecordingDeviceName(i, (char*)name.data(), (char*)deviceId.data());
-        result.push_back(std::make_pair((int64_t)i, name));
-    }
-    return result;
-}
-
-std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listVideoRecordingDevices() {
-    std::string name, deviceId;
-    name.resize(255);
-    deviceId.resize(255);
-    _videoDevice = _peerConnectionFactory->GetVideoDevice();
-    uint32_t num = _videoDevice->NumberOfDevices();
-    std::vector<std::pair<int64_t, std::string>> result;
-    for (uint32_t i = 0; i < num; ++i) {
-        _videoDevice->GetDeviceName(i, (char*)name.data(), name.size(), (char*)deviceId.data(), deviceId.size());
-        result.push_back(std::make_pair((int64_t)i, name));
-    }
-    return result;
-}
-
-std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listDesktopRecordingDevices() {
-   throw stream::NotImplementedException();
-}
-// int64_t id, DeviceType type, const std::string& params_JSON can be merged to one struct [Track info]
-void StreamApiImpl::trackAdd(int64_t streamId, DeviceType type, int64_t id, const std::string& params_JSON) {
-    switch (type) {
-        case DeviceType::Audio :
-            return trackAddAudio(streamId, id, params_JSON);
-        case DeviceType::Video :
-            return trackAddVideo(streamId, id, params_JSON);
-        case DeviceType::Desktop :
-            return trackAddDesktop(streamId, id, params_JSON);
-    }
-}
-
-void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON) {
-    if(_audioDevice == nullptr) _audioDevice = _peerConnectionFactory->GetAudioDevice();
-    _audioDevice->SetRecordingDevice(id);
-    auto audioSource = _peerConnectionFactory->CreateAudioSource("audio_source");
-    auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
-    audioTrack->SetVolume(10);
-    // Add tracks to the peer connection
-    auto streamRoomId = _streamIdToRoomId.get(streamId);
-    if(!streamRoomId.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    auto room = _streamRoomMap.get(streamRoomId.value()).value();
-    auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->streamKeyManager->getCurrentWebRtcKeyStore());
-    room->streamKeyManager->addFrameCryptor(frameCryptor);
-}
-
-void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
-    if(_videoDevice == nullptr) _videoDevice = _peerConnectionFactory->GetVideoDevice();
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> videoDevice = _peerConnectionFactory->GetVideoDevice();
-    // params_JSON
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> videoCapturer = videoDevice->Create("video_capturer", id, 1280, 720, 30);
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", _constraints);
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
-
-    // Add tracks to the peer connection
-    auto streamRoomId = _streamIdToRoomId.get(streamId);
-    if(!streamRoomId.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    auto room = _streamRoomMap.get(streamRoomId.value()).value();
-    auto sender = room->streamMap.at(streamId)->peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(sender, room->streamKeyManager->getCurrentWebRtcKeyStore());
-    room->streamKeyManager->addFrameCryptor(frameCryptor);
-    // Start capture video
-    videoCapturer->StartCapture();
-}
-
-void StreamApiImpl::trackAddDesktop(int64_t streamId, int64_t id, const std::string& params_JSON) {
-    throw stream::NotImplementedException();
-}
-
 // Publishing stream
-void StreamApiImpl::publishStream(int64_t streamId) {
+void StreamApiLowImpl::publishStream(int64_t streamId) {
     auto streamRoomId = _streamIdToRoomId.get(streamId);
     if(!streamRoomId.has_value()) {
         throw IncorrectStreamIdException();
     }
     auto room = _streamRoomMap.get(streamRoomId.value()).value();
-    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection = room->streamMap.at(streamId)->peerConnection;
-    std::promise<std::string> t_spd = std::promise<std::string>();
-    peerConnection->CreateOffer(
-        [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
-            t_spd.set_value(sdp.std_string());
-        },
-        [&](const char* error) {
-            throw stream::WebRTCException("SdpCreateFailure" + std::string(error));
-        }, 
-        _constraints
-    );
-    std::string sdp = t_spd.get_future().get();
-    peerConnection->SetLocalDescription(
-        sdp, 
-        "offer", 
-        []() {}, 
-        [](const char* error) {
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
-        }
-    );
+    std::shared_ptr<WebRTCInterface> webRtc = room->streamMap.at(streamId)->webRtc;
+    std::string sdp = webRtc->createOfferAndSetLocalDescription();
     // Publish data on bridge
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
@@ -253,18 +153,11 @@ void StreamApiImpl::publishStream(int64_t streamId) {
     model.offer(sessionDescription);
     auto result = _serverApi->streamPublish(model);
     // Set remote description
-    peerConnection->SetRemoteDescription(
-        result.answer().sdp(), 
-        result.answer().type(),
-        [&]() {}, 
-        [&](const char* error) {
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
-        }
-    );
+    webRtc->setAnswerAndSetRemoteDescription(result.answer().sdp(), result.answer().type());
 }
 
 // Joining to Stream
-void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
+void StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings, std::shared_ptr<WebRTCInterface> webRtc) {
     auto roomOpt = _streamRoomMap.get(streamRoomId);
     if(!roomOpt.has_value()) {
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
@@ -299,53 +192,13 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
             streamId, 
             std::make_shared<StreamData>(
                 StreamData{
-                    .peerConnection=_peerConnectionFactory->Create(
-                        _configuration,
-                        _constraints
-                    ),
-                    .peerConnectionObserver=std::make_shared<PmxPeerConnectionObserver>(
-                        streamId,
-                        room->streamKeyManager,
-                        settings.OnFrame.has_value() ? 
-                            settings.OnFrame.value() : 
-                            []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
-                    )
+                    .webRtc = webRtc
                 }
             )
         )
     );
     auto stream = room->streamMap.at(streamId);
-    auto peerConnection = stream->peerConnection;
-    peerConnection->RegisterRTCPeerConnectionObserver(stream->peerConnectionObserver.get());
-    // Set remote description
-    peerConnection->SetRemoteDescription(
-        streamJoinResult.offer().sdp(), 
-        streamJoinResult.offer().type(),
-        [&]() {}, 
-        [&](const char* error) {
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
-        }
-    );
-    // Create answer
-    std::promise<std::string> t_spd = std::promise<std::string>();
-    peerConnection->CreateAnswer(
-        [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
-            t_spd.set_value(sdp.std_string());
-        },
-        [&](const char* error) {
-            throw stream::WebRTCException("SdpCreateFailure" + std::string(error));
-        }, 
-        _constraints
-    );
-    std::string sdp = t_spd.get_future().get();
-    peerConnection->SetLocalDescription(
-        sdp, 
-        "answer",
-        [&]() {}, 
-        [&](const char* error) {
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
-        }
-    );
+    std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
     sessionDescription.type("answer");
@@ -381,7 +234,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     room->streamKeyManager->requestKey(toSend);
 }
 
-std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {
+std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomId) {
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
     model.streamRoomId(streamRoomId);
     auto streamList = _serverApi->streamList(model).list();
@@ -392,7 +245,7 @@ std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) 
     return result;
 }
 
-std::string StreamApiImpl::createStreamRoom(
+std::string StreamApiLowImpl::createStreamRoom(
     const std::string& contextId, 
     const std::vector<core::UserWithPubKey>& users, 
     const std::vector<core::UserWithPubKey>&managers,
@@ -425,7 +278,7 @@ std::string StreamApiImpl::createStreamRoom(
     return result.streamRoomId();
 }
 
-void StreamApiImpl::updateStreamRoom(
+void StreamApiLowImpl::updateStreamRoom(
     const std::string& streamRoomId, 
     const std::vector<core::UserWithPubKey>& users, 
     const std::vector<core::UserWithPubKey>&managers,
@@ -484,7 +337,7 @@ void StreamApiImpl::updateStreamRoom(
     PRIVMX_DEBUG_TIME_STOP(PlatformStream, updateStreamRoom, data send)
 }
 
-core::PagingList<StreamRoom> StreamApiImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
+core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
     PRIVMX_DEBUG_TIME_START(PlatformStream, listStreamRooms)
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomListModel>();
     model.contextId(contextId);
@@ -503,7 +356,7 @@ core::PagingList<StreamRoom> StreamApiImpl::listStreamRooms(const std::string& c
     });
 }
 
-StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
+StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
     PRIVMX_DEBUG_TIME_START(PlatformStream, getStreamRoom)
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
@@ -515,7 +368,7 @@ StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
     return result;
 }
 
-void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {
+void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
     PRIVMX_DEBUG_TIME_START(PlatformStream, deleteStreamRoom)
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomDeleteModel>();
     model.id(streamRoomId);
@@ -523,7 +376,7 @@ void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {
     PRIVMX_DEBUG_TIME_STOP(PlatformStream, deleteStreamRoom)
 }
 
-DecryptedStreamRoomData StreamApiImpl::decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom) {
+DecryptedStreamRoomData StreamApiLowImpl::decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom) {
     try {
         auto streamRoomDataEntry = streamRoom.data().get(streamRoom.data().size()-1);
         auto key = _keyProvider->getKey(streamRoom.keys(), streamRoomDataEntry.keyId());
@@ -538,7 +391,7 @@ DecryptedStreamRoomData StreamApiImpl::decryptStreamRoomV4(const server::StreamR
     }
 }
 
-StreamRoom StreamApiImpl::convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData) {
+StreamRoom StreamApiLowImpl::convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData) {
     std::vector<std::string> users;
     std::vector<std::string> managers;
     for (auto x : streamRoomInfo.users()) {
@@ -565,7 +418,7 @@ StreamRoom StreamApiImpl::convertDecryptedStreamRoomDataToStreamRoom(const serve
     };
 }
 
-StreamRoom StreamApiImpl::decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom) {
+StreamRoom StreamApiLowImpl::decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom) {
     auto storDdataEntry = streamRoom.data().get(streamRoom.data().size()-1);
     auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(storDdataEntry.data());
     if (!versioned.versionEmpty() && versioned.version() == 4) {
@@ -575,11 +428,11 @@ StreamRoom StreamApiImpl::decryptAndConvertStreamRoomDataToStreamRoom(const serv
     return StreamRoom{{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
 }
 
-int64_t StreamApiImpl::generateNumericId() {
+int64_t StreamApiLowImpl::generateNumericId() {
     return std::rand();
 }
 
-privmx::utils::List<std::string> StreamApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
+privmx::utils::List<std::string> StreamApiLowImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for (auto user : users) {
         result.add(user.userId);

@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPIIMPL_HPP_
-#define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPIIMPL_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWIMPL_HPP_
+#define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWIMPL_HPP_
 
 #include <memory>
 #include <optional>
@@ -42,9 +42,9 @@ namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class StreamApiImpl {
+class StreamApiLowImpl {
 public:
-    StreamApiImpl(
+    StreamApiLowImpl(
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -53,7 +53,7 @@ public:
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
     );
-    ~StreamApiImpl();
+    ~StreamApiLowImpl();
 
     std::string createStreamRoom(
         const std::string& contextId, 
@@ -101,8 +101,7 @@ public:
 
 private:
     struct StreamData {
-        libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;
-        std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver;
+        std::shared_ptr<WebRTCInterface> webRtc;
 
     };
     struct StreamRoomData {
@@ -135,7 +134,6 @@ private:
     core::DataEncryptorV4 _dataEncryptor;
 
     // v3 webrtc
-    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     privmx::utils::ThreadSaveMap<uint64_t, std::string> _streamIdToRoomId;
 
@@ -144,11 +142,10 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> _audioDevice;
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> _videoDevice;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
-    std::shared_ptr<StreamApiLowImpl> _api;
 };
 
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPIIMPL_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWIMPL_HPP_
