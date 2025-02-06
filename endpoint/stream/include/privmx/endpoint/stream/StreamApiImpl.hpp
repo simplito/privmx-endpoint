@@ -30,6 +30,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
+#include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
@@ -53,7 +54,6 @@ public:
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
     );
-    ~StreamApiImpl();
 
     std::string createStreamRoom(
         const std::string& contextId, 
@@ -100,23 +100,6 @@ public:
     std::vector<Stream> listStreams(const std::string& streamRoomId);
 
 private:
-    struct StreamData {
-        libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection;
-        std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver;
-
-    };
-    struct StreamRoomData {
-        std::map<uint64_t, std::shared_ptr<StreamData>> streamMap;
-        std::shared_ptr<StreamKeyManager> streamKeyManager;
-    };
-    
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
-    void processConnectedEvent();
-    void processDisconnectedEvent();
-    privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
-    StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
-    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
     int64_t generateNumericId();
 
     void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
@@ -136,8 +119,7 @@ private:
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
-    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
-    privmx::utils::ThreadSaveMap<uint64_t, std::string> _streamIdToRoomId;
+    privmx::utils::ThreadSaveMap<uint64_t, libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection>> _peerConnectionMap;
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;

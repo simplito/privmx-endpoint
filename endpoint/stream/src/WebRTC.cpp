@@ -1,12 +1,20 @@
 #include "privmx/endpoint/stream/WebRTC.hpp"
+#include "privmx/endpoint/stream/StreamException.hpp"
 
 using namespace privmx::endpoint::stream;
 
-WebRTC::WebRTC(libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection) : _peerConnection(peerConnection), _peerConnectionObserver(peerConnectionObserver) {}
+WebRTC::WebRTC(
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection, 
+    std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver, 
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
+) :
+    _peerConnection(peerConnection),
+    _peerConnectionObserver(peerConnectionObserver),
+    _constraints(constraints) {}
 
 std::string WebRTC::createOfferAndSetLocalDescription() {
     std::promise<std::string> t_spd = std::promise<std::string>();
-    peerConnection->CreateOffer(
+    _peerConnection->CreateOffer(
         [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
             t_spd.set_value(sdp.std_string());
         },
@@ -16,7 +24,7 @@ std::string WebRTC::createOfferAndSetLocalDescription() {
         _constraints
     );
     std::string sdp = t_spd.get_future().get();
-    peerConnection->SetLocalDescription(
+    _peerConnection->SetLocalDescription(
         sdp, 
         "offer", 
         []() {}, 
@@ -29,7 +37,7 @@ std::string WebRTC::createOfferAndSetLocalDescription() {
 
 std::string WebRTC::createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) {
     // Set remote description
-    peerConnection->SetRemoteDescription(
+    _peerConnection->SetRemoteDescription(
         sdp, 
         type,
         [&]() {}, 
@@ -39,7 +47,7 @@ std::string WebRTC::createAnswerAndSetDescriptions(const std::string& sdp, const
     );
     // Create answer
     std::promise<std::string> t_spd = std::promise<std::string>();
-    peerConnection->CreateAnswer(
+    _peerConnection->CreateAnswer(
         [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
             t_spd.set_value(sdp.std_string());
         },
@@ -49,7 +57,7 @@ std::string WebRTC::createAnswerAndSetDescriptions(const std::string& sdp, const
         _constraints
     );
     std::string sdp2 = t_spd.get_future().get();
-    peerConnection->SetLocalDescription(
+    _peerConnection->SetLocalDescription(
         sdp2, 
         "answer",
         [&]() {}, 
@@ -61,7 +69,7 @@ std::string WebRTC::createAnswerAndSetDescriptions(const std::string& sdp, const
 }
 
 void WebRTC::setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) {
-    peerConnection->SetRemoteDescription(
+    _peerConnection->SetRemoteDescription(
         sdp, 
         type,
         [&]() {}, 

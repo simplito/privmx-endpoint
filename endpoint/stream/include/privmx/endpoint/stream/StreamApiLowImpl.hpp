@@ -28,16 +28,8 @@ limitations under the License.
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
-#include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
-#include <libwebrtc.h>
-#include <rtc_audio_device.h>
-#include <rtc_peerconnection.h>
-#include <base/portable.h>
-#include <rtc_mediaconstraints.h>
-#include <rtc_peerconnection.h>
-#include <pmx_frame_cryptor.h>
-
+#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 namespace privmx {
 namespace endpoint {
 namespace stream {
@@ -82,22 +74,19 @@ public:
 
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
-    int64_t createStream(const std::string& streamRoomId);
-
-    // Adding track
-    std::vector<std::pair<int64_t, std::string>> listAudioRecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
-
-    void trackAdd(int64_t streamId, DeviceType type, int64_t id = 0, const std::string& params_JSON = "{}");
+    int64_t createStream(const std::string& streamRoomId, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
     
     // Publishing stream
-    void publishStream(int64_t streamId);
+    void publishStream(int64_t localStreamId);
 
     // Joining to Stream
-    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
+    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::vector<Stream> listStreams(const std::string& streamRoomId);
+
+    std::shared_ptr<StreamKeyManager> getStreamKeyManager(const std::string& streamRoomId);
+
+    std::shared_ptr<StreamKeyManager> getStreamKeyManager(int64_t localStreamId);
 
 private:
     struct StreamData {
@@ -117,10 +106,8 @@ private:
     StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
     StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
     int64_t generateNumericId();
+    std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId);
 
-    void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackAddVideo(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackAddDesktop(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;

@@ -16,6 +16,14 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
+#include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include <libwebrtc.h>
+#include <rtc_audio_device.h>
+#include <rtc_peerconnection.h>
+#include <base/portable.h>
+#include <rtc_mediaconstraints.h>
+#include <rtc_peerconnection.h>
+#include <pmx_frame_cryptor.h>
 
 namespace privmx {
 namespace endpoint {
@@ -24,7 +32,11 @@ namespace stream {
 class WebRTC : public WebRTCInterface
 {
 public:
-    WebRTC(libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection, std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver);
+    WebRTC(
+        libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection, 
+        std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver, 
+        libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
+    );
     std::string createOfferAndSetLocalDescription() override;
     std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) override;
     void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) override;
@@ -34,6 +46,7 @@ public:
 private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> _peerConnection;
     std::shared_ptr<PmxPeerConnectionObserver> _peerConnectionObserver;
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
 };
 
 } // namespace stream

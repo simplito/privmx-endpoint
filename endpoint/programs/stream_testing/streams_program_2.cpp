@@ -80,8 +80,8 @@ int main(int argc, char** argv) {
             streamsId.push_back(streamlist[i].streamId);
         }
 
-        // stream::streamJoinSettings ssettings;
-        // streamApi.joinStream(streamRoomId, streamsId, ssettings);
+        stream::streamJoinSettings ssettings;
+        streamApi.joinStream(streamRoomId, streamsId, ssettings);
 
         std::this_thread::sleep_for(std::chrono::seconds(120));
        
