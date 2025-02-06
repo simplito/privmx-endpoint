@@ -169,6 +169,7 @@ public:
 
     /**
      * Reads file data.
+     * Single read call moves the files's cursor position by declared length or set it at the end of the file.
      *
      * @param handle handle to write file data
      * @param length size of data to read
