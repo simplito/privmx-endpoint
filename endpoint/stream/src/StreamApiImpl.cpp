@@ -152,9 +152,11 @@ void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::strin
     auto keyManager = _api->getStreamKeyManager(streamId);
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
         sender, 
-        keyManager->getCurrentWebRtcKeyStore()
+        WebRTC::createWebRtcKeyStore(keyManager->getCurrentWebRtcKeys())
     );
-    keyManager->addFrameCryptor(frameCryptor);
+    keyManager->addKeyUpdateCallback([frameCryptor](const std::vector<privmx::endpoint::stream::Key> keys) {
+        frameCryptor->setKeyStore(WebRTC::createWebRtcKeyStore(keys));
+    });
 }
 
 void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
@@ -175,9 +177,11 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
     auto keyManager = _api->getStreamKeyManager(streamId);
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
         sender, 
-        keyManager->getCurrentWebRtcKeyStore()
+        WebRTC::createWebRtcKeyStore(keyManager->getCurrentWebRtcKeys())
     );
-    keyManager->addFrameCryptor(frameCryptor);
+    keyManager->addKeyUpdateCallback([frameCryptor](const std::vector<privmx::endpoint::stream::Key> keys) {
+        frameCryptor->setKeyStore(WebRTC::createWebRtcKeyStore(keys));
+    });
     // Start capture video
     videoCapturer->StartCapture();    
 }
@@ -263,3 +267,4 @@ void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {
 int64_t StreamApiImpl::generateNumericId() {
     return std::rand();
 }
+

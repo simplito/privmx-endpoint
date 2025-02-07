@@ -74,19 +74,19 @@ StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
     _internalContextEventManager->unsubscribeFrom(_contextId);
 }
-std::shared_ptr<privmx::webrtc::KeyStore> StreamKeyManager::getCurrentWebRtcKeyStore() {
-    return _currentWebRtcKeyStore;
+std::vector<privmx::endpoint::stream::Key> StreamKeyManager::getCurrentWebRtcKeys() {
+    return _currentWebRtcKeys;
 }
 
-int64_t StreamKeyManager::addFrameCryptor(std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor) {
-    int64_t id = ++_nextFrameCryptorId;
-    _webRtcFrameCryptors.set(id, frameCryptor);
-    frameCryptor->setKeyStore(_currentWebRtcKeyStore);
+int64_t StreamKeyManager::addKeyUpdateCallback(std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> keyUpdateCallback) {
+    int64_t id = ++_nextKeyUpdateCallbackId;
+    _webRtcKeyUpdateCallbacks.set(id, keyUpdateCallback);
+    keyUpdateCallback(_currentWebRtcKeys);
     return id;
 }
 
-void StreamKeyManager::removeFrameCryptor(int64_t frameCryptorId) {
-    _webRtcFrameCryptors.erase(frameCryptorId);
+void StreamKeyManager::removeKeyUpdateCallback(int64_t keyUpdateCallbackId) {
+    _webRtcKeyUpdateCallbacks.erase(keyUpdateCallbackId);
 }
 
 void StreamKeyManager::respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey) {
@@ -251,19 +251,18 @@ void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventDa
     _internalContextEventManager->sendEvent(_contextId, eventData, users);
 }
 
-
 void StreamKeyManager::updateWebRtcKeyStore() {
-    std::vector<privmx::webrtc::Key> webRtcKeys;
+    std::vector<privmx::endpoint::stream::Key> webRtcKeys;
     _keysStrage.forAll([&]([[maybe_unused]]std::string key, std::shared_ptr<StreamEncKey> value) {
-        privmx::webrtc::Key webRtcKey {
+        privmx::endpoint::stream::Key webRtcKey {
             .keyId = value->key.id,
             .key =  value->key.key,
-            .type = value->key.id == _currentKeyId ? privmx::webrtc::KeyType::LOCAL : privmx::webrtc::KeyType::REMOTE
+            .type = value->key.id == _currentKeyId ? privmx::endpoint::stream::KeyType::LOCAL : privmx::endpoint::stream::KeyType::REMOTE
         };
         webRtcKeys.push_back(webRtcKey);
     });
-    _currentWebRtcKeyStore = privmx::webrtc::KeyStore::Create(webRtcKeys);
-    _webRtcFrameCryptors.forAll([&]([[maybe_unused]]int64_t key, std::shared_ptr<privmx::webrtc::FrameCryptor> value) {
-        value->setKeyStore(_currentWebRtcKeyStore);
+    _currentWebRtcKeys = webRtcKeys;
+    _webRtcKeyUpdateCallbacks.forAll([&]([[maybe_unused]]int64_t key, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> value) {
+        value(_currentWebRtcKeys);
     });
 }

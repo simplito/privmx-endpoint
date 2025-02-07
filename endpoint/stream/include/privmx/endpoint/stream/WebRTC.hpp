@@ -42,6 +42,7 @@ public:
     void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) override;
     void close() override;
     void updateKeys(const std::vector<Key>& keys) override;
+    static std::shared_ptr<privmx::webrtc::KeyStore> createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys);
 
 private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> _peerConnection;

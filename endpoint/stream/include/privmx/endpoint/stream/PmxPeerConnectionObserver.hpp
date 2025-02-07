@@ -68,7 +68,7 @@ public:
 private:
     uint64_t _streamId; 
     std::shared_ptr<StreamKeyManager> _streamKeyManager;
-    privmx::utils::ThreadSaveMap<std::string, int64_t> _frameCryptorsId;
+    privmx::utils::ThreadSaveMap<std::string, int64_t> _keyUpdateCallbackIds;
 
     std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
 };

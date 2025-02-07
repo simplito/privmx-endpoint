@@ -86,3 +86,17 @@ void WebRTC::close() {
 void WebRTC::updateKeys(const std::vector<Key>& keys) {
 
 }
+
+std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys) {
+    std::vector<privmx::webrtc::Key> webRtcKeys;
+    for(size_t i = 0; i < keys.size(); i++) {
+        webRtcKeys.push_back(
+            privmx::webrtc::Key{.
+                keyId=keys[i].keyId, 
+                .key=keys[i].key, 
+                .type=keys[i].type == privmx::endpoint::stream::KeyType::REMOTE ? privmx::webrtc::KeyType::REMOTE : privmx::webrtc::KeyType::LOCAL
+            }
+        );
+    }
+    return privmx::webrtc::KeyStore::Create(webRtcKeys);
+}

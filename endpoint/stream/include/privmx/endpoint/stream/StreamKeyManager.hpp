@@ -18,7 +18,6 @@ limitations under the License.
 #include <mutex>
 #include <condition_variable>
 #include <Poco/Dynamic/Var.h>
-#include <pmx_frame_cryptor.h>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/utils/CancellationToken.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -28,6 +27,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
+#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 
 namespace privmx {
@@ -50,9 +50,9 @@ public:
     void updateKey();
     void respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey);
     void removeUser(core::UserWithPubKey);
-    int64_t addFrameCryptor(std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor);
-    void removeFrameCryptor(int64_t frameCryptorId);
-    std::shared_ptr<privmx::webrtc::KeyStore> getCurrentWebRtcKeyStore();
+    int64_t addKeyUpdateCallback(std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> keyUpdateCallback);
+    void removeKeyUpdateCallback(int64_t keyUpdateCallbackId);
+    std::vector<privmx::endpoint::stream::Key> getCurrentWebRtcKeys();
 private:
     struct StreamEncKey {
         core::EncKey key;
@@ -66,7 +66,6 @@ private:
     void setRequestKeyResult(dynamic::RequestKeyRespondEvent result);
     void respondToUpdateRequest(dynamic::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey);
     void respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userPubKey);
-
     void sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
     void updateWebRtcKeyStore();
 
@@ -80,7 +79,7 @@ private:
     core::DataEncryptorV4 _dataEncryptor;
     privmx::utils::CancellationToken::Ptr _cancellationToken;
     std::thread _keyCollector;
-    privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<privmx::webrtc::FrameCryptor>> _webRtcFrameCryptors; 
+    privmx::utils::ThreadSaveMap<int64_t, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)>> _webRtcKeyUpdateCallbacks; 
 
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;
     std::vector<privmx::endpoint::core::UserWithPubKey> _connectedUsers;
@@ -90,8 +89,8 @@ private:
     std::mutex _updateKeyMutex;
     std::condition_variable _updateKeyCV;
     std::atomic_bool _keyUpdateInProgress = false;
-    std::shared_ptr<privmx::webrtc::KeyStore> _currentWebRtcKeyStore;
-    std::atomic_int64_t _nextFrameCryptorId = 0;
+    std::vector<privmx::endpoint::stream::Key> _currentWebRtcKeys;
+    std::atomic_int64_t _nextKeyUpdateCallbackId = 0;
 };
 
 } // stream

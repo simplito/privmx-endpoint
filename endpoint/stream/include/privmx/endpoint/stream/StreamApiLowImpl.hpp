@@ -123,11 +123,6 @@ private:
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     privmx::utils::ThreadSaveMap<uint64_t, std::string> _streamIdToRoomId;
-
-    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
-    libwebrtc::RTCConfiguration _configuration;
-    libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> _audioDevice;
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> _videoDevice;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

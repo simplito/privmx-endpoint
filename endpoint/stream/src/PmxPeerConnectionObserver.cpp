@@ -9,9 +9,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include "privmx/endpoint/stream/WebRTC.hpp"
 #include <rtc_video_frame.h>
 #include <iostream>
 #include <privmx/utils/Debug.hpp>
+
 
 using namespace privmx::endpoint::stream;
 
@@ -70,15 +72,18 @@ void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refpt
 }
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": TRACK ADDED")
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _streamKeyManager->getCurrentWebRtcKeyStore());
-    _frameCryptorsId.set(receiver->id().std_string(), _streamKeyManager->addFrameCryptor(frameCryptor));
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, WebRTC::createWebRtcKeyStore(_streamKeyManager->getCurrentWebRtcKeys()));
+    auto keyUpdateCallbackId = _streamKeyManager->addKeyUpdateCallback([frameCryptor](const std::vector<privmx::endpoint::stream::Key> keys) {
+        frameCryptor->setKeyStore(WebRTC::createWebRtcKeyStore(keys));
+    });
+    _keyUpdateCallbackIds.set(receiver->id().std_string(), keyUpdateCallbackId);
 }
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
-    auto frameCryptorId = _frameCryptorsId.get(receiver->id().std_string());
-    if(frameCryptorId.has_value()) {
-        _streamKeyManager->removeFrameCryptor(frameCryptorId.value());
+    auto keyUpdateCallbackId = _keyUpdateCallbackIds.get(receiver->id().std_string());
+    if(keyUpdateCallbackId.has_value()) {
+        _streamKeyManager->removeKeyUpdateCallback(keyUpdateCallbackId.value());
     }
-    _frameCryptorsId.erase(receiver->id().std_string());
+    _keyUpdateCallbackIds.erase(receiver->id().std_string());
 }
 
 
