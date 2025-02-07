@@ -80,9 +80,13 @@ public:
     void publishStream(int64_t localStreamId);
 
     // Joining to Stream
-    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
+    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::vector<Stream> listStreams(const std::string& streamRoomId);
+
+    void unpublishStream(int64_t localStreamId);
+
+    void leaveStream(int64_t localStreamId);
 
     std::shared_ptr<StreamKeyManager> getStreamKeyManager(const std::string& streamRoomId);
 
@@ -91,12 +95,18 @@ public:
 private:
     struct StreamData {
         std::shared_ptr<WebRTCInterface> webRtc;
-
+        std::optional<int64_t> sessionId;
     };
     struct StreamRoomData {
-        std::map<uint64_t, std::shared_ptr<StreamData>> streamMap;
+        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _id) : 
+            streamMap(privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamData>>()), 
+            streamKeyManager(_streamKeyManager), id(_id) {}
+        
+        privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamData>> streamMap;
         std::shared_ptr<StreamKeyManager> streamKeyManager;
-    };
+        std::string id;
+    }; 
+    // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
     
     void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
     void processConnectedEvent();
@@ -107,6 +117,10 @@ private:
     StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
     int64_t generateNumericId();
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId);
+
+    std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
+    std::shared_ptr<StreamRoomData> getStreamRoomData(int64_t localStreamId);
+    std::shared_ptr<StreamData> getStreamData(int64_t localStreamId, std::shared_ptr<StreamRoomData> room);
 
 
     privfs::RpcGateway::Ptr _gateway;
@@ -122,7 +136,7 @@ private:
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
-    privmx::utils::ThreadSaveMap<uint64_t, std::string> _streamIdToRoomId;
+    privmx::utils::ThreadSaveMap<int64_t, std::string> _streamIdToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

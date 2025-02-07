@@ -66,12 +66,12 @@ int main(int argc, char** argv) {
             std::nullopt
         );
         
-        auto streamId = streamApi.createStream(streamRoomId);
+        auto streamId_1 = streamApi.createStream(streamRoomId);
         auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-        streamApi.trackAdd(streamId, stream::DeviceType::Audio);
-        auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
-        streamApi.trackAdd(streamId, stream::DeviceType::Video);
-        streamApi.publishStream(streamId);
+        streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
+        // auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
+        // streamApi.trackAdd(streamId_1, stream::DeviceType::Video);
+        streamApi.publishStream(streamId_1);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         
         auto streamlist = streamApi.listStreams(streamRoomId);
@@ -81,8 +81,11 @@ int main(int argc, char** argv) {
         }
 
         stream::streamJoinSettings ssettings;
-        streamApi.joinStream(streamRoomId, streamsId, ssettings);
+        auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
 
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        streamApi.unpublishStream(streamId_1);
+        streamApi.leaveStream(streamId_2);
         std::this_thread::sleep_for(std::chrono::seconds(120));
        
     } catch (const core::Exception& e) {

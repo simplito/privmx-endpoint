@@ -64,9 +64,9 @@ StreamApiLowImpl::StreamApiLowImpl(
 
 StreamApiLowImpl::~StreamApiLowImpl() {
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> value) {
-        for(auto stream: value->streamMap) {
-            stream.second->webRtc->close();
-        }
+        value->streamMap.forAll([&]([[maybe_unused]]int64_t key, std::shared_ptr<StreamData> value) {
+            value->webRtc->close();
+        });
         value->streamMap.clear();
     });
     _streamRoomMap.clear();
@@ -104,16 +104,15 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
+    std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
+        std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
+        streamRoomId
+    );
     _streamRoomMap.set(
         streamRoomId,
-        std::make_shared<StreamRoomData>(
-            StreamRoomData{
-                .streamMap=std::map<uint64_t, std::shared_ptr<StreamData>>(), 
-                .streamKeyManager=std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
-            }
-        )
+        streamRoomData
     );
-    return _streamRoomMap.get(streamRoomId).value();
+    return streamRoomData;
 }
 
 std::shared_ptr<StreamKeyManager> StreamApiLowImpl::getStreamKeyManager(const std::string& streamRoomId) {
@@ -142,43 +141,34 @@ int64_t StreamApiLowImpl::createStream(const std::string& streamRoomId, int64_t 
     }
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(localStreamId) + ": STREAM Sender")
     _streamIdToRoomId.set(localStreamId, streamRoomId);
-    room->streamMap.emplace(
-        std::make_pair(
-            localStreamId, 
-            std::make_shared<StreamData>(
-                StreamData{
-                    .webRtc = webRtc
-                }
-            )
-        )
+    room->streamMap.set(
+        localStreamId, 
+        std::make_shared<StreamData>(StreamData{.webRtc = webRtc, .sessionId=std::nullopt})
     );
-    auto stream = room->streamMap.at(localStreamId);
     return localStreamId;
 }
 
 // Publishing stream
 void StreamApiLowImpl::publishStream(int64_t localStreamId) {
-    auto streamRoomId = _streamIdToRoomId.get(localStreamId);
-    if(!streamRoomId.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    auto room = _streamRoomMap.get(streamRoomId.value()).value();
-    std::shared_ptr<WebRTCInterface> webRtc = room->streamMap.at(localStreamId)->webRtc;
+    auto room = getStreamRoomData(localStreamId);
+    auto streamData = getStreamData(localStreamId, room);
+    std::shared_ptr<WebRTCInterface> webRtc = streamData->webRtc;
     std::string sdp = webRtc->createOfferAndSetLocalDescription();
     // Publish data on bridge
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
     sessionDescription.type("offer");
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
-    model.streamRoomId(streamRoomId.value()); //TODO
+    model.streamRoomId(room->id); //TODO
     model.offer(sessionDescription);
     auto result = _serverApi->streamPublish(model);
+    streamData->sessionId = result.sessionId();
     // Set remote description
     webRtc->setAnswerAndSetRemoteDescription(result.answer().sdp(), result.answer().type());
 }
 
 // Joining to Stream
-void StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
+int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
     auto roomOpt = _streamRoomMap.get(streamRoomId);
     std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
     if(!roomOpt.has_value()) {
@@ -197,17 +187,15 @@ void StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::ve
     streamJoinModel.streamRoomId(streamRoomId);
     auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
     // creating peerConnectio
-    room->streamMap.emplace(
-        std::make_pair(
-            localStreamId, 
-            std::make_shared<StreamData>(
-                StreamData{
-                    .webRtc = webRtc
-                }
-            )
+    room->streamMap.set(
+        localStreamId, 
+        std::make_shared<StreamData>(
+            StreamData{
+                .webRtc = webRtc,
+                .sessionId = streamJoinResult.sessionId()
+            }
         )
     );
-    auto stream = room->streamMap.at(localStreamId);
     std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
@@ -242,6 +230,7 @@ void StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::ve
         }
     }
     room->streamKeyManager->requestKey(toSend);
+    return localStreamId;
 }
 
 std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomId) {
@@ -448,4 +437,60 @@ privmx::utils::List<std::string> StreamApiLowImpl::mapUsers(const std::vector<co
         result.add(user.userId);
     }
     return result;
+}
+
+void StreamApiLowImpl::unpublishStream(int64_t localStreamId) {
+    auto room = getStreamRoomData(localStreamId);
+    auto streamData = getStreamData(localStreamId, room);
+    if(streamData->sessionId.has_value()) {
+        server::StreamUnpublishModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamUnpublishModel>();
+        model.sessionId(streamData->sessionId.value());
+        _serverApi->streamUnpublish(model);
+    }
+    streamData->webRtc->close();
+    room->streamMap.erase(localStreamId);
+    if(room->streamMap.size() == 0) {
+        _streamIdToRoomId.erase(localStreamId);
+        _streamRoomMap.erase(room->id);
+    }
+}
+
+void StreamApiLowImpl::leaveStream(int64_t localStreamId) {
+    auto room = getStreamRoomData(localStreamId);
+    auto streamData = getStreamData(localStreamId, room);
+    if(streamData->sessionId.has_value()) {
+        server::StreamLeaveModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamLeaveModel>();
+        model.sessionId(streamData->sessionId.value());
+        _serverApi->streamLeave(model);
+    }
+    streamData->webRtc->close();
+    room->streamMap.erase(localStreamId);
+    if(room->streamMap.size() == 0) {
+        _streamIdToRoomId.erase(localStreamId);
+        _streamRoomMap.erase(room->id);
+    }
+}
+
+std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const std::string& streamRoomId) {
+    auto room = _streamRoomMap.get(streamRoomId);
+    if(!room.has_value()) {
+        throw StreamCacheException();
+    }
+    return room.value();
+}
+
+std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(int64_t localStreamId) {
+    auto streamRoomId = _streamIdToRoomId.get(localStreamId);
+    if(!streamRoomId.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    return getStreamRoomData(streamRoomId.value());
+}
+
+std::shared_ptr<StreamApiLowImpl::StreamData> StreamApiLowImpl::getStreamData(int64_t localStreamId, std::shared_ptr<StreamRoomData> room) {
+    auto streamData = room->streamMap.get(localStreamId);
+    if(!streamData.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    return streamData.value();
 }

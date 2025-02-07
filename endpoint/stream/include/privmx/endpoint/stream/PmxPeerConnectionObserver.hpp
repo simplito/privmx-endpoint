@@ -65,6 +65,8 @@ public:
     void OnTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) override;
     void OnAddTrack(libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
     void OnRemoveTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
+
+    void RemoveAllKeyUpdateCallbacks();
 private:
     uint64_t _streamId; 
     std::shared_ptr<StreamKeyManager> _streamKeyManager;

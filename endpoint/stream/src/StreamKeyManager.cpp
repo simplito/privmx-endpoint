@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include <iostream>
+#include <privmx/utils/Debug.hpp>
 
 #define MAX_UPDATE_TIMEOUT 1000*5
 #define MAX_STD_KEY_TTL 1000*60
@@ -40,7 +41,7 @@ StreamKeyManager::StreamKeyManager(
     _cancellationToken = privmx::utils::CancellationToken::create();
     //create thread to remove old keys
     _keyCollector = std::thread([&]() {
-        while (true) {
+        while (!_cancellationToken->isCanceled()) {
             try {
                 _cancellationToken->sleep( std::chrono::milliseconds(1000));
             } catch (const privmx::utils::OperationCancelledException& e) {
@@ -73,6 +74,7 @@ StreamKeyManager::StreamKeyManager(
 StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
     _internalContextEventManager->unsubscribeFrom(_contextId);
+    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Successfully Deconstructed : " + _streamRoomId);
 }
 std::vector<privmx::endpoint::stream::Key> StreamKeyManager::getCurrentWebRtcKeys() {
     return _currentWebRtcKeys;

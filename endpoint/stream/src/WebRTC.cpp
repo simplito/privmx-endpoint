@@ -81,10 +81,11 @@ void WebRTC::setAnswerAndSetRemoteDescription(const std::string& sdp, const std:
 
 void WebRTC::close() {
     _peerConnection->Close();
+    _peerConnectionObserver->RemoveAllKeyUpdateCallbacks();
 }
 
 void WebRTC::updateKeys(const std::vector<Key>& keys) {
-
+    
 }
 
 std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys) {

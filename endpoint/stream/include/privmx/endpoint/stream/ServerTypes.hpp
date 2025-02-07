@@ -177,6 +177,14 @@ ENDPOINT_SERVER_TYPE(StreamRoomSendCustomEventModel)
     LIST_FIELD(users, std::string)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
+    INT64_FIELD(sessionId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamLeaveModel)
+    INT64_FIELD(sessionId)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     INT64_FIELD(version)
     STRING_FIELD(publicMeta)

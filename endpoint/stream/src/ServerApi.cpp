@@ -58,6 +58,15 @@ void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
     std::cout << privmx::utils::Utils::stringifyVar(a, true) << std::endl;
     return;
 }
+
+void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
+    requestWS("streamUnpublish", model);
+}
+
+void ServerApi::streamLeave(server::StreamLeaveModel model) {
+    requestWS("streamLeave", model);
+}
+
 server::ContextGetUserResult ServerApi::contextGetUsers(server::ContextGetUsersModel model) {
     return privmx::utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(_gateway->request("context.contextGetUsers", model));
 }

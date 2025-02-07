@@ -196,7 +196,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
 }
 
 // Joining to Stream
-void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
+int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
     
     int64_t streamId = generateNumericId();
     auto peerConnection = _peerConnectionFactory->Create(
@@ -213,7 +213,7 @@ void StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vecto
     );
     peerConnection->RegisterRTCPeerConnectionObserver(peerConnectionObserver.get());
     std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(peerConnection, peerConnectionObserver, _constraints);
-    _api->joinStream(streamRoomId, streamsId, settings, streamId, peerConnectionWebRTC);
+    return _api->joinStream(streamRoomId, streamsId, settings, streamId, peerConnectionWebRTC);
 }
 
 std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {
@@ -268,3 +268,10 @@ int64_t StreamApiImpl::generateNumericId() {
     return std::rand();
 }
 
+void StreamApiImpl::unpublishStream(int64_t streamId) {
+    _api->unpublishStream(streamId);
+}
+
+void StreamApiImpl::leaveStream(int64_t streamId) {
+    _api->leaveStream(streamId);
+}

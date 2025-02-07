@@ -39,6 +39,8 @@ public:
     server::StreamJoinResult streamJoin(server::StreamJoinModel model);
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
+    void streamUnpublish(server::StreamUnpublishModel model);
+    void streamLeave(server::StreamLeaveModel model);
     // TMP
     server::ContextGetUserResult contextGetUsers(server::ContextGetUsersModel model);
 

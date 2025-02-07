@@ -59,7 +59,7 @@ void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::
 
 }
 void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
-
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON REMOVE STREAM")
 }
 void PmxPeerConnectionObserver::OnDataChannel([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) {
 
@@ -79,11 +79,18 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
     _keyUpdateCallbackIds.set(receiver->id().std_string(), keyUpdateCallbackId);
 }
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON REMOVE TRACK")
     auto keyUpdateCallbackId = _keyUpdateCallbackIds.get(receiver->id().std_string());
     if(keyUpdateCallbackId.has_value()) {
         _streamKeyManager->removeKeyUpdateCallback(keyUpdateCallbackId.value());
     }
     _keyUpdateCallbackIds.erase(receiver->id().std_string());
+}
+
+void PmxPeerConnectionObserver::RemoveAllKeyUpdateCallbacks() {
+    _keyUpdateCallbackIds.forAll([&]([[maybe_unused]]const std::string& key, int64_t value) {
+        _streamKeyManager->removeKeyUpdateCallback(value);
+    });
 }
 
 

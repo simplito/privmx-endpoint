@@ -84,20 +84,21 @@ public:
     // Stream
     int64_t createStream(const std::string& streamRoomId);
 
-    // Adding track
     std::vector<std::pair<int64_t, std::string>> listAudioRecordingDevices();
     std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
     std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
 
     void trackAdd(int64_t streamId, DeviceType type, int64_t id = 0, const std::string& params_JSON = "{}");
     
-    // Publishing stream
     void publishStream(int64_t streamId);
 
-    // Joining to Stream
-    void joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
+    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
 
     std::vector<Stream> listStreams(const std::string& streamRoomId);
+
+    void unpublishStream(int64_t streamId);
+
+    void leaveStream(int64_t streamId);
 
 private:
     int64_t generateNumericId();
