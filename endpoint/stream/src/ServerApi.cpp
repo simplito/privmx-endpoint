@@ -72,17 +72,21 @@ server::ContextGetUserResult ServerApi::contextGetUsers(server::ContextGetUsersM
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
+    std::cout << privmx::utils::Utils::stringifyVar(params, true) << std::endl; 
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params));
 }
 
 Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+    std::cout << privmx::utils::Utils::stringifyVar(params, true) << std::endl; 
     return _gateway->request("stream." + method, params);
 }
 
 template<class T> T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
+    std::cout << privmx::utils::Utils::stringifyVar(params, true) << std::endl; 
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET}));
 }
 
 Poco::Dynamic::Var ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+    std::cout << privmx::utils::Utils::stringifyVar(params, true) << std::endl; 
     return _gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET});
 }

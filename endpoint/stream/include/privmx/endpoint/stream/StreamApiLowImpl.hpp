@@ -88,14 +88,11 @@ public:
 
     void leaveStream(int64_t localStreamId);
 
-    std::shared_ptr<StreamKeyManager> getStreamKeyManager(const std::string& streamRoomId);
-
-    std::shared_ptr<StreamKeyManager> getStreamKeyManager(int64_t localStreamId);
-
 private:
     struct StreamData {
         std::shared_ptr<WebRTCInterface> webRtc;
         std::optional<int64_t> sessionId;
+        int64_t updateId;
     };
     struct StreamRoomData {
         StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _id) : 

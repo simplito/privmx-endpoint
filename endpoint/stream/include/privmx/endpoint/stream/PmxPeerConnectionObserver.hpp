@@ -18,7 +18,6 @@ limitations under the License.
 #include <rtc_peerconnection.h>
 #include "privmx/endpoint/stream/Types.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
-#include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include <pmx_frame_cryptor.h>
 
 namespace privmx {
@@ -50,7 +49,7 @@ class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
 public:
     PmxPeerConnectionObserver(
         uint64_t streamId, 
-        std::shared_ptr<StreamKeyManager> streamKeyManager, 
+        std::shared_ptr<privmx::webrtc::KeyStore> keys, 
         std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
@@ -65,14 +64,13 @@ public:
     void OnTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) override;
     void OnAddTrack(libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
     void OnRemoveTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
-
-    void RemoveAllKeyUpdateCallbacks();
+    void UpdateCurrentKeys(std::shared_ptr<privmx::webrtc::KeyStore> newKeys);
 private:
     uint64_t _streamId; 
-    std::shared_ptr<StreamKeyManager> _streamKeyManager;
-    privmx::utils::ThreadSaveMap<std::string, int64_t> _keyUpdateCallbackIds;
-
+    std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
     std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
+    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
+
 };
 
 } // stream

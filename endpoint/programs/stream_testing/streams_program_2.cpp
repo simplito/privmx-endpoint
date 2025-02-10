@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
         crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
         core::Connection connection = core::Connection::connect("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
         stream::StreamApi streamApi = stream::StreamApi::create(connection);
+        
         auto context = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
         auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
         auto pubKey = cryptoApi.derivePublicKey("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN");
@@ -65,28 +66,37 @@ int main(int argc, char** argv) {
             privmx::endpoint::core::Buffer::from(""),
             std::nullopt
         );
-        
-        auto streamId_1 = streamApi.createStream(streamRoomId);
-        auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-        streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
-        // auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
-        // streamApi.trackAdd(streamId_1, stream::DeviceType::Video);
-        streamApi.publishStream(streamId_1);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        
-        auto streamlist = streamApi.listStreams(streamRoomId);
-        std::vector<int64_t> streamsId;
-        for(int i = 0; i < streamlist.size(); i++) {
-            streamsId.push_back(streamlist[i].streamId);
+        for(int ii = 0; ii<40 ; ii++) {
+            auto streamId_1 = streamApi.createStream(streamRoomId);
+            auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
+            streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
+            // auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
+            // streamApi.trackAdd(streamId_1, stream::DeviceType::Video);
+            streamApi.publishStream(streamId_1);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            
+            auto streamlist = streamApi.listStreams(streamRoomId);
+            std::vector<int64_t> streamsId;
+            for(int i = 0; i < streamlist.size(); i++) {
+                streamsId.push_back(streamlist[i].streamId);
+            }
+            {
+                stream::streamJoinSettings ssettings;
+                auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                streamApi.unpublishStream(streamId_1);
+                streamApi.leaveStream(streamId_2);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        // for(int i = 0; i < 20; i++) {
+        //     auto tmp = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+        //     std::this_thread::sleep_for(std::chrono::seconds(1));
+        //     streamApi.leaveStream(tmp);
+        // }
         }
-
-        stream::streamJoinSettings ssettings;
-        auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
-
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        streamApi.unpublishStream(streamId_1);
-        streamApi.leaveStream(streamId_2);
-        std::this_thread::sleep_for(std::chrono::seconds(120));
+
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
@@ -99,6 +109,7 @@ int main(int argc, char** argv) {
     } catch (...) {
         cerr << "Error" << endl;
     }
+    
 
     return 0;
 }

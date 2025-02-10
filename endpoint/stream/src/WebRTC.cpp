@@ -1,16 +1,21 @@
 #include "privmx/endpoint/stream/WebRTC.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include <future>
+#include <privmx/utils/Debug.hpp>
 
 using namespace privmx::endpoint::stream;
 
 WebRTC::WebRTC(
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection, 
-    std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver, 
+    std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver,
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
 ) :
     _peerConnection(peerConnection),
     _peerConnectionObserver(peerConnectionObserver),
-    _constraints(constraints) {}
+    _constraints(constraints)
+{
+    _currentWebRtcKeys = privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>());
+}
 
 std::string WebRTC::createOfferAndSetLocalDescription() {
     std::promise<std::string> t_spd = std::promise<std::string>();
@@ -80,12 +85,34 @@ void WebRTC::setAnswerAndSetRemoteDescription(const std::string& sdp, const std:
 }
 
 void WebRTC::close() {
+    PRIVMX_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTC::close()");
+    _webRtcKeyUpdateCallbacks.clear();
     _peerConnection->Close();
-    _peerConnectionObserver->RemoveAllKeyUpdateCallbacks();
+    // _peerConnectionObserver.reset();
+    // _peerConnection->Release();
+    // _peerConnection.release();
+}
+
+std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::getCurrentKeys() {
+    return _currentWebRtcKeys;
 }
 
 void WebRTC::updateKeys(const std::vector<Key>& keys) {
-    
+    _currentWebRtcKeys =  createWebRtcKeyStore(keys);
+    _peerConnectionObserver->UpdateCurrentKeys(_currentWebRtcKeys);
+    _webRtcKeyUpdateCallbacks.forAll([&]([[maybe_unused]] int64_t key, std::function<void (std::shared_ptr<privmx::webrtc::KeyStore>)> value) {
+        value(_currentWebRtcKeys);
+    });
+}
+
+int64_t WebRTC::addKeyUpdateCallback(std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)> keyUpdateCallback) {
+    int64_t id = ++_nextKeyUpdateCallbackId;
+    _webRtcKeyUpdateCallbacks.set(id, keyUpdateCallback);
+    return id;
+}
+
+void WebRTC::removeKeyUpdateCallback(int64_t keyUpdateCallbackId) {
+    _webRtcKeyUpdateCallbacks.erase(keyUpdateCallbackId);
 }
 
 std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys) {

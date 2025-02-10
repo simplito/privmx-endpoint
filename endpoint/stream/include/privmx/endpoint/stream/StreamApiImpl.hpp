@@ -31,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
+#include "privmx/endpoint/stream/WebRTC.hpp"
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
@@ -101,6 +102,7 @@ public:
     void leaveStream(int64_t streamId);
 
 private:
+    
     int64_t generateNumericId();
 
     void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
@@ -120,12 +122,10 @@ private:
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
-    privmx::utils::ThreadSaveMap<uint64_t, libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection>> _peerConnectionMap;
+    privmx::utils::ThreadSaveMap<uint64_t, std::shared_ptr<WebRTC>> _streamDataMap3;
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
-    libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> _audioDevice;
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> _videoDevice;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLowImpl> _api;
 };
