@@ -66,40 +66,27 @@ int main(int argc, char** argv) {
             privmx::endpoint::core::Buffer::from(""),
             std::nullopt
         );
-        for(int ii = 0; ii<1 ; ii++) {
-            auto streamId_1 = streamApi.createStream(streamRoomId);
-            auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-            streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
-            // auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
-            // streamApi.trackAdd(streamId_1, stream::DeviceType::Video);
-            streamApi.publishStream(streamId_1);
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            
-            auto streamlist = streamApi.listStreams(streamRoomId);
-            std::vector<int64_t> streamsId;
-            for(int i = 0; i < streamlist.size(); i++) {
-                streamsId.push_back(streamlist[i].streamId);
-            }
-            // {
-            //     stream::streamJoinSettings ssettings;
-            //     auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
-
-            //     std::this_thread::sleep_for(std::chrono::seconds(120));
-            //     streamApi.unpublishStream(streamId_1);
-            //     streamApi.leaveStream(streamId_2);
-            //     std::this_thread::sleep_for(std::chrono::seconds(4));
-            // }
-            {
-                stream::streamJoinSettings ssettings;
-                for(int i = 0; i < 20; i++) {
-                    auto tmp = streamApi.joinStream(streamRoomId, streamsId, ssettings);
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
-                    streamApi.leaveStream(tmp);
-                }
-                streamApi.unpublishStream(streamId_1);
-            }
-        }
+        auto streamId_1 = streamApi.createStream(streamRoomId);
+        auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
+        streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
+        // auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
+        // streamApi.trackAdd(streamId_1, stream::DeviceType::Video);
+        streamApi.publishStream(streamId_1);
         std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+        auto streamlist = streamApi.listStreams(streamRoomId);
+        std::vector<int64_t> streamsId;
+        for(int i = 0; i < streamlist.size(); i++) {
+            streamsId.push_back(streamlist[i].streamId);
+        }
+
+        stream::streamJoinSettings ssettings;
+        auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        streamApi.unpublishStream(streamId_1);
+        streamApi.leaveStream(streamId_2);
+        std::this_thread::sleep_for(std::chrono::seconds(120));
 
        
     } catch (const core::Exception& e) {
