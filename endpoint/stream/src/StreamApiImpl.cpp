@@ -86,7 +86,7 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
     );
     std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(peerConnection, peerConnectionObserver, _constraints);
     
-    _streamDataMap3.set( streamId, peerConnectionWebRTC);
+    _streamDataMap.set( streamId, peerConnectionWebRTC);
     peerConnection->RegisterRTCPeerConnectionObserver(peerConnectionObserver.get());
     _api->createStream(streamRoomId, streamId, peerConnectionWebRTC);
     return streamId;
@@ -143,7 +143,7 @@ void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::strin
     auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
     audioTrack->SetVolume(10);
     // Add tracks to the peer connection
-    auto webrtcOpt = _streamDataMap3.get(streamId);
+    auto webrtcOpt = _streamDataMap.get(streamId);
     if(!webrtcOpt.has_value()) {
         throw IncorrectStreamIdException();
     }
@@ -168,7 +168,7 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
 
     // Add tracks to the peer connection
-    auto webrtcOpt = _streamDataMap3.get(streamId);
+    auto webrtcOpt = _streamDataMap.get(streamId);
     if(!webrtcOpt.has_value()) {
         throw IncorrectStreamIdException();
     }
@@ -212,7 +212,7 @@ int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::ve
     );
     std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(peerConnection, peerConnectionObserver, _constraints);
 
-    _streamDataMap3.set( streamId, peerConnectionWebRTC);
+    _streamDataMap.set( streamId, peerConnectionWebRTC);
     peerConnection->RegisterRTCPeerConnectionObserver(peerConnectionObserver.get());
     return _api->joinStream(streamRoomId, streamsId, settings, streamId, peerConnectionWebRTC);
 }
@@ -270,11 +270,24 @@ int64_t StreamApiImpl::generateNumericId() {
 }
 
 void StreamApiImpl::unpublishStream(int64_t streamId) {
+    auto webrtcOpt = _streamDataMap.get(streamId);
+    if(!webrtcOpt.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    auto webrtc = webrtcOpt.value();
     _api->unpublishStream(streamId);
-    _streamDataMap3.erase(streamId);
+    _peerConnectionFactory->Delete(webrtc->getPeerConnection());
+    _streamDataMap.erase(streamId);
+
 }
 
 void StreamApiImpl::leaveStream(int64_t streamId) {
+    auto webrtcOpt = _streamDataMap.get(streamId);
+    if(!webrtcOpt.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    auto webrtc = webrtcOpt.value();
     _api->leaveStream(streamId);
-    _streamDataMap3.erase(streamId);
+    _peerConnectionFactory->Delete(webrtc->getPeerConnection());
+    _streamDataMap.erase(streamId);
 }

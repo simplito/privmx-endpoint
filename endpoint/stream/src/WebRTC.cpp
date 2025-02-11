@@ -17,11 +17,6 @@ WebRTC::WebRTC(
     _currentWebRtcKeys = privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>());
 }
 
-WebRTC::~WebRTC() {
-    _peerConnection.release();
-    _peerConnectionObserver.reset();
-}
-
 std::string WebRTC::createOfferAndSetLocalDescription() {
     std::promise<std::string> t_spd = std::promise<std::string>();
     _peerConnection->CreateOffer(
