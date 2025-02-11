@@ -1,0 +1,10 @@
+[requires]
+privmx-endpoint/2.2.2
+ncurses/6.5
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[layout]
+cmake_layout
