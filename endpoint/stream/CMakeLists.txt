@@ -1,29 +1,26 @@
-file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
-set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include)
-set(INCLUDE_PUB_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include_pub)
+add_subdirectory(stream)
 
-add_library(libwebrtc SHARED IMPORTED)
-set_target_properties(libwebrtc PROPERTIES
-  IMPORTED_LOCATION "<path_to_libwebrtc>"
-  INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
-)
+option(PRIVMX_BUILD_WITH_WEBRTC "Build Stream module with additional layer of the native WebRTC library" OFF)
+message(STATUS "Build Stream module with additional layer of the native WebRTC library - PRIVMX_BUILD_WITH_WEBRTC=${PRIVMX_BUILD_WITH_WEBRTC}")
+
+set(LIBS "")
+
+if(PRIVMX_BUILD_WITH_WEBRTC)
+    add_subdirectory(webrtc)
+    list(APPEND LIBS privmxendpointstream_webrtc)
+endif()
 
 if(BUILD_SHARED_LIBS)
-    add_library(privmxendpointstream SHARED ${SOURCES})
+    add_library(privmxendpointstream SHARED)
 else()
-    add_library(privmxendpointstream STATIC ${SOURCES})
+    add_library(privmxendpointstream STATIC)
 endif()
-target_include_directories(privmxendpointstream PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointstream PRIVATE -fPIC -Wall -Wextra)
-target_link_libraries(privmxendpointstream PRIVATE Poco::Foundation privmx privmxendpointcore libwebrtc)
+target_link_libraries(privmxendpointstream PRIVATE Poco::Foundation privmx privmxendpointcore privmxendpointstream_stream ${LIBS})
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxendpointstream PROPERTIES POSITION_INDEPENDENT_CODE True)
 endif()
 install(TARGETS privmxendpointstream DESTINATION lib)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include_pub/privmx DESTINATION include)
-if(PRIVMX_INSTALL_PRIVATE_HEADERS)
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/privmx DESTINATION include)
-endif()
 if(PRIVMX_WERROR)
     target_compile_options(privmxendpointstream PRIVATE -Werror)
 endif()

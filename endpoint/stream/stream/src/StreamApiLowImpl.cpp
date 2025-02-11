@@ -27,14 +27,6 @@ limitations under the License.
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 
 
-#include <libwebrtc.h>
-#include <rtc_audio_device.h>
-#include <rtc_peerconnection.h>
-#include <base/portable.h>
-#include <rtc_mediaconstraints.h>
-#include <rtc_peerconnection.h>
-#include <pmx_frame_cryptor.h>
-
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
