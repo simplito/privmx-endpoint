@@ -79,6 +79,7 @@ private:
     core::DataEncryptorV4 _dataEncryptor;
     privmx::utils::CancellationToken::Ptr _cancellationToken;
     std::thread _keyCollector;
+    std::optional<std::thread> _keyUpdater;
     privmx::utils::ThreadSaveMap<int64_t, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)>> _webRtcKeyUpdateCallbacks; 
 
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;

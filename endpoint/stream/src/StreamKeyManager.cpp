@@ -14,7 +14,7 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*60
+#define MAX_STD_KEY_TTL 1000*7
 
 using namespace privmx::endpoint::stream; 
 
@@ -39,11 +39,11 @@ StreamKeyManager::StreamKeyManager(
     updateWebRtcKeyStore();
     // ->setKey(currentKey.id, currentKey.key);
     _cancellationToken = privmx::utils::CancellationToken::create();
-    //create thread to remove old keys
+    // create thread to remove old keys
     _keyCollector = std::thread([&]() {
         while (!_cancellationToken->isCanceled()) {
             try {
-                _cancellationToken->sleep( std::chrono::milliseconds(1000));
+                _cancellationToken->sleep( std::chrono::milliseconds(500));
             } catch (const privmx::utils::OperationCancelledException& e) {
                 break;
             }
@@ -65,15 +65,16 @@ StreamKeyManager::StreamKeyManager(
                 updateWebRtcKeyStore();
             }
         }
-        
     }); 
-    _keyCollector.detach();
     _internalContextEventManager->subscribeFor(_contextId);
 }
 
 StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
+    _updateKeyCV.notify_all();
     _internalContextEventManager->unsubscribeFrom(_contextId);
+    if(_keyCollector.joinable()) _keyCollector.join();
+    if(_keyUpdater.has_value()) if(_keyUpdater.value().joinable()) _keyUpdater.value().join();
     PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Successfully Deconstructed : " + _streamRoomId);
 }
 std::vector<privmx::endpoint::stream::Key> StreamKeyManager::getCurrentWebRtcKeys() {
@@ -172,17 +173,19 @@ void StreamKeyManager::updateKey() {
     // send to users
     sendStreamKeyManagementEvent(respond, _connectedUsers);
     //thread for timeout and update
-    std::thread t([&]() {
+    _keyUpdater = std::thread([&]() {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
         _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
-        _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
-        _currentKeyId = _keyForUpdate->key.id;
-        updateWebRtcKeyStore();
-        _keyUpdateInProgress = false;
-    }); 
-    t.detach();
+        if(!_cancellationToken->isCanceled()) {
+            _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
+            _currentKeyId = _keyForUpdate->key.id;
+            updateWebRtcKeyStore();
+            _keyUpdateInProgress = false;
+        }
+    });
+    _keyUpdater.value().detach();
 }
-//
+
 void StreamKeyManager::respondToUpdateRequest(dynamic::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey) {
     //extract key
     auto newKey = request.encKey();

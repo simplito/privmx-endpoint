@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
             privmx::endpoint::core::Buffer::from(""),
             std::nullopt
         );
-        for(int ii = 0; ii<40 ; ii++) {
+        for(int ii = 0; ii<20 ; ii++) {
             auto streamId_1 = streamApi.createStream(streamRoomId);
             auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
             streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 streamApi.unpublishStream(streamId_1);
                 streamApi.leaveStream(streamId_2);
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                // std::this_thread::sleep_for(std::chrono::seconds(10));
             }
         // for(int i = 0; i < 20; i++) {
         //     auto tmp = streamApi.joinStream(streamRoomId, streamsId, ssettings);

@@ -88,9 +88,8 @@ void WebRTC::close() {
     PRIVMX_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTC::close()");
     _webRtcKeyUpdateCallbacks.clear();
     _peerConnection->Close();
-    // _peerConnectionObserver.reset();
-    // _peerConnection->Release();
-    // _peerConnection.release();
+    _peerConnection.release();
+    _peerConnectionObserver.reset();
 }
 
 std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::getCurrentKeys() {

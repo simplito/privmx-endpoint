@@ -130,7 +130,13 @@ int64_t StreamApiLowImpl::createStream(const std::string& streamRoomId, int64_t 
     });
     room->streamMap.set(
         localStreamId, 
-        std::make_shared<StreamData>(StreamData{.webRtc = webRtc, .sessionId=std::nullopt, .updateId=keyUpdateId})
+        std::make_shared<StreamData>(
+            StreamData{
+                .webRtc = webRtc, 
+                .sessionId=std::nullopt, 
+                .updateId=keyUpdateId
+            }
+        )
     );
     return localStreamId;
 }

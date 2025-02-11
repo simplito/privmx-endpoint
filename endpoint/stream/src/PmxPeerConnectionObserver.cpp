@@ -60,9 +60,9 @@ void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::
 }
 void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON REMOVE STREAM")
-    // for(size_t i = 0; i < stream->tracks().size(); i++) { 
-    //     _frameCryptors.erase( stream->tracks()[i]->id().std_string());
-    // }
+    for(size_t i = 0; i < stream->tracks().size(); i++) { 
+        _frameCryptors.erase( stream->tracks()[i]->id().std_string());
+    }
 }
 void PmxPeerConnectionObserver::OnDataChannel([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) {
 
@@ -75,21 +75,21 @@ void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refpt
 }
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": TRACK ADDED")
-    // _frameCryptors.set(
-    //     receiver->track()->id().std_string(), 
-    //     privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _currentKeys)
-    // );
+    _frameCryptors.set(
+        receiver->track()->id().std_string(), 
+        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _currentKeys)
+    );
 }
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON REMOVE TRACK")
-    // _frameCryptors.erase(receiver->track()->id().std_string());
+    _frameCryptors.erase(receiver->track()->id().std_string());
 }
 
 void PmxPeerConnectionObserver::UpdateCurrentKeys(std::shared_ptr<privmx::webrtc::KeyStore> newKeys) {
     _currentKeys = newKeys;
-    // _frameCryptors.forAll([&]([[maybe_unused]]const std::string &id, const std::shared_ptr<privmx::webrtc::FrameCryptor> &frameCryptor) {
-    //     frameCryptor->setKeyStore(_currentKeys);
-    // });
+    _frameCryptors.forAll([&]([[maybe_unused]]const std::string &id, const std::shared_ptr<privmx::webrtc::FrameCryptor> &frameCryptor) {
+        frameCryptor->setKeyStore(_currentKeys);
+    });
     
 }
 
