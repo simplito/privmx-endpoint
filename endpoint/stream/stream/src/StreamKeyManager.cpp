@@ -14,7 +14,7 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*7
+#define MAX_STD_KEY_TTL 1000*60
 
 using namespace privmx::endpoint::stream; 
 
@@ -43,7 +43,7 @@ StreamKeyManager::StreamKeyManager(
     _keyCollector = std::thread([&]() {
         while (!_cancellationToken->isCanceled()) {
             try {
-                _cancellationToken->sleep( std::chrono::milliseconds(500));
+                _cancellationToken->sleep( std::chrono::milliseconds(1000));
             } catch (const privmx::utils::OperationCancelledException& e) {
                 break;
             }
@@ -93,7 +93,6 @@ void StreamKeyManager::removeKeyUpdateCallback(int64_t keyUpdateCallbackId) {
 }
 
 void StreamKeyManager::respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey) {
-    std::cout << "event.subtype(): " << event.subtype() << std::endl;
     if(event.subtype() == "RequestKeyEvent") {
         respondToRequestKey(userId, userPubKey);
     } else if(event.subtype() == "RequestKeyRespondEvent") {
@@ -252,7 +251,6 @@ dynamic::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
 void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
     data.streamRoomId(_streamRoomId);
     core::InternalContextEventData eventData = {.type="StreamKeyManagementEvent", .data= privmx::endpoint::core::Buffer::from(utils::Utils::stringifyVar(data))};
-    std::cout << users.size() << std::endl;
     _internalContextEventManager->sendEvent(_contextId, eventData, users);
 }
 

@@ -48,9 +48,9 @@ private:
 class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
 public:
     PmxPeerConnectionObserver(
-        uint64_t streamId, 
+        int64_t streamId, 
         std::shared_ptr<privmx::webrtc::KeyStore> keys, 
-        std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback
+        std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> onFrameCallback
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
@@ -66,9 +66,9 @@ public:
     void OnRemoveTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
     void UpdateCurrentKeys(std::shared_ptr<privmx::webrtc::KeyStore> newKeys);
 private:
-    uint64_t _streamId; 
+    int64_t _streamId; 
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
-    std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
+    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> _onFrameCallback;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
 
 };

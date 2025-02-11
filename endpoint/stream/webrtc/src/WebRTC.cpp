@@ -7,16 +7,23 @@ using namespace privmx::endpoint::stream;
 
 WebRTC::WebRTC(
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
-    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection, 
-    std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver,
-    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
+    libwebrtc::RTCConfiguration configuration,
+    int64_t streamId,
+    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame
 ) :
     _peerConnectionFactory(peerConnectionFactory),
-    _peerConnection(peerConnection),
-    _peerConnectionObserver(peerConnectionObserver),
-    _constraints(constraints)
+    _constraints(constraints),
+    _peerConnection(_peerConnectionFactory->Create(configuration, constraints)),
+    _peerConnectionObserver(std::make_shared<PmxPeerConnectionObserver>(streamId, privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()), OnFrame)),
+    _streamId(streamId)
 {
     _currentWebRtcKeys = privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>());
+    _peerConnection->RegisterRTCPeerConnectionObserver(_peerConnectionObserver.get());
+}
+
+WebRTC::~WebRTC() {
+    _peerConnectionFactory->Delete(_peerConnection);
 }
 
 std::string WebRTC::createOfferAndSetLocalDescription() {
@@ -88,33 +95,34 @@ void WebRTC::setAnswerAndSetRemoteDescription(const std::string& sdp, const std:
 
 void WebRTC::close() {
     PRIVMX_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTC::close()");
-    _webRtcKeyUpdateCallbacks.clear();
+    _frameCryptors.clear();
     _peerConnection->Close();
-    _peerConnectionFactory->Delete(_peerConnection);
-    _peerConnection = nullptr;
-    _peerConnectionObserver.reset();
-}
-
-std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::getCurrentKeys() {
-    return _currentWebRtcKeys;
 }
 
 void WebRTC::updateKeys(const std::vector<Key>& keys) {
     _currentWebRtcKeys =  createWebRtcKeyStore(keys);
     _peerConnectionObserver->UpdateCurrentKeys(_currentWebRtcKeys);
-    _webRtcKeyUpdateCallbacks.forAll([&]([[maybe_unused]] int64_t key, std::function<void (std::shared_ptr<privmx::webrtc::KeyStore>)> value) {
-        value(_currentWebRtcKeys);
-    });
+    for(size_t i = 0; i < _frameCryptors.size(); i++) {
+        _frameCryptors[i]->setKeyStore(_currentWebRtcKeys);
+    }
 }
 
-int64_t WebRTC::addKeyUpdateCallback(std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)> keyUpdateCallback) {
-    int64_t id = ++_nextKeyUpdateCallbackId;
-    _webRtcKeyUpdateCallbacks.set(id, keyUpdateCallback);
-    return id;
-}
+void WebRTC::AddTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack) {
+    auto sender = _peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(_streamId)}});
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
+        sender, 
+       _currentWebRtcKeys
+    );
+    _frameCryptors.push_back(frameCryptor);
 
-void WebRTC::removeKeyUpdateCallback(int64_t keyUpdateCallbackId) {
-    _webRtcKeyUpdateCallbacks.erase(keyUpdateCallbackId);
+}
+void WebRTC::AddTrack(libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack) {
+    auto sender = _peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(_streamId)}});
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
+        sender, 
+        _currentWebRtcKeys
+    );
+    _frameCryptors.push_back(frameCryptor);
 }
 
 std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys) {

@@ -25,9 +25,9 @@ int FrameImpl::ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_wi
 }
 
 PmxPeerConnectionObserver::PmxPeerConnectionObserver(
-    uint64_t streamId, 
+    int64_t streamId, 
     std::shared_ptr<privmx::webrtc::KeyStore> keys, 
-    std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback
+    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> onFrameCallback
 ) : _streamId(streamId), _currentKeys(keys), _onFrameCallback(onFrameCallback) {}
 
 void PmxPeerConnectionObserver::OnSignalingState([[maybe_unused]] libwebrtc::RTCSignalingState state) {
@@ -49,11 +49,13 @@ void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": STREAM ADDED")
     PRIVMX_DEBUG("STREAMS", "API", "stream->video_tracks().size() -> " + std::to_string(stream->video_tracks().size()))
     PRIVMX_DEBUG("STREAMS", "API", "stream->audio_tracks().size() -> " + std::to_string(stream->audio_tracks().size()))
-    for(size_t i = 0; i < stream->video_tracks().size(); i++) { 
-        RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
-            new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback, std::to_string(_streamId) + "-" + std::to_string(i))
-        };
-        stream->video_tracks()[i]->AddRenderer(r);
+    if(_onFrameCallback.has_value()) {
+        for(size_t i = 0; i < stream->video_tracks().size(); i++) { 
+            RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
+                new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), std::to_string(_streamId) + "-" + std::to_string(i))
+            };
+            stream->video_tracks()[i]->AddRenderer(r);
+        }
     }
 
 

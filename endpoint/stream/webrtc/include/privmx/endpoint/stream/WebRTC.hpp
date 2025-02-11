@@ -36,30 +36,31 @@ class WebRTC : public WebRTCInterface
 public:
     WebRTC(
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
-        libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection,
-        std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver, 
-        libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
+        libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
+        libwebrtc::RTCConfiguration configuration,
+        int64_t streamId,
+        std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame
     );
+    ~WebRTC();
     std::string createOfferAndSetLocalDescription() override;
     std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) override;
     void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) override;
     void close() override;
-    std::shared_ptr<privmx::webrtc::KeyStore> getCurrentKeys();
     void updateKeys(const std::vector<Key>& keys) override;
+    void AddTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack);
+    void AddTrack(libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack);
+private:
     int64_t addKeyUpdateCallback(std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)> keyUpdateCallback);
     void removeKeyUpdateCallback(int64_t keyUpdateCallbackId);
-    inline libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> getPeerConnection() {return _peerConnection;}
-
     static std::shared_ptr<privmx::webrtc::KeyStore> createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys);
-
-private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> _peerConnection;
     std::shared_ptr<PmxPeerConnectionObserver> _peerConnectionObserver;
-    libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
+    int64_t _streamId;
     std::shared_ptr<privmx::webrtc::KeyStore> _currentWebRtcKeys;
     std::atomic_int64_t _nextKeyUpdateCallbackId = 0;
-    privmx::utils::ThreadSaveMap<int64_t, std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)>> _webRtcKeyUpdateCallbacks;
+    std::vector<std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
 };
 
 } // namespace stream

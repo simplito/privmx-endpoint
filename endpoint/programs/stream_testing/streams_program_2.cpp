@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
             privmx::endpoint::core::Buffer::from(""),
             std::nullopt
         );
-        for(int ii = 0; ii<20 ; ii++) {
+        for(int ii = 0; ii<1 ; ii++) {
             auto streamId_1 = streamApi.createStream(streamRoomId);
             auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
             streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
@@ -80,20 +80,24 @@ int main(int argc, char** argv) {
             for(int i = 0; i < streamlist.size(); i++) {
                 streamsId.push_back(streamlist[i].streamId);
             }
+            // {
+            //     stream::streamJoinSettings ssettings;
+            //     auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+
+            //     std::this_thread::sleep_for(std::chrono::seconds(120));
+            //     streamApi.unpublishStream(streamId_1);
+            //     streamApi.leaveStream(streamId_2);
+            //     std::this_thread::sleep_for(std::chrono::seconds(4));
+            // }
             {
                 stream::streamJoinSettings ssettings;
-                auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
-
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                for(int i = 0; i < 20; i++) {
+                    auto tmp = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    streamApi.leaveStream(tmp);
+                }
                 streamApi.unpublishStream(streamId_1);
-                streamApi.leaveStream(streamId_2);
-                // std::this_thread::sleep_for(std::chrono::seconds(10));
             }
-        // for(int i = 0; i < 20; i++) {
-        //     auto tmp = streamApi.joinStream(streamRoomId, streamsId, ssettings);
-        //     std::this_thread::sleep_for(std::chrono::seconds(1));
-        //     streamApi.leaveStream(tmp);
-        // }
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
 

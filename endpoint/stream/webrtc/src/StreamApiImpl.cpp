@@ -75,19 +75,8 @@ StreamApiImpl::StreamApiImpl(
 
 int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
     int64_t streamId = generateNumericId();
-    auto peerConnection = _peerConnectionFactory->Create(
-        _configuration, 
-        _constraints
-    );
-    auto peerConnectionObserver = std::make_shared<PmxPeerConnectionObserver>(
-        streamId,
-        privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()),
-        []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
-    );
-    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, peerConnection, peerConnectionObserver, _constraints);
-    
+    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, std::nullopt);
     _streamDataMap.set( streamId, peerConnectionWebRTC);
-    peerConnection->RegisterRTCPeerConnectionObserver(peerConnectionObserver.get());
     _api->createStream(streamRoomId, streamId, peerConnectionWebRTC);
     return streamId;
 }
@@ -148,16 +137,7 @@ void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::strin
         throw IncorrectStreamIdException();
     }
     auto webrtc = webrtcOpt.value();
-    auto peerConnection = webrtc->getPeerConnection();
-    auto sender = peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-        sender, 
-        privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>())
-    );
-    webrtc->addKeyUpdateCallback([frameCryptor](std::shared_ptr<privmx::webrtc::KeyStore> keys) {
-        frameCryptor->setKeyStore(keys);
-    });
-
+    webrtc->AddTrack(audioTrack);
 }
 
 void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
@@ -173,15 +153,7 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
         throw IncorrectStreamIdException();
     }
     auto webrtc = webrtcOpt.value();
-    auto peerConnection = webrtc->getPeerConnection();
-    auto sender = peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-        sender, 
-        privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>())
-    );
-    webrtc->addKeyUpdateCallback([frameCryptor](std::shared_ptr<privmx::webrtc::KeyStore> keys) {
-        frameCryptor->setKeyStore(keys);
-    });
+    webrtc->AddTrack(videoTrack);
     // Start capture video
     videoCapturer->StartCapture();    
 }
@@ -197,23 +169,9 @@ void StreamApiImpl::publishStream(int64_t streamId) {
 
 // Joining to Stream
 int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
-    
     int64_t streamId = generateNumericId();
-    auto peerConnection = _peerConnectionFactory->Create(
-        _configuration, 
-        _constraints
-    );
-    auto peerConnectionObserver = std::make_shared<PmxPeerConnectionObserver>(
-        streamId,
-        privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()),
-        settings.OnFrame.has_value() ? 
-            settings.OnFrame.value() : 
-            []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
-    );
-    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, peerConnection, peerConnectionObserver, _constraints);
-
+    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, settings.OnFrame);
     _streamDataMap.set( streamId, peerConnectionWebRTC);
-    peerConnection->RegisterRTCPeerConnectionObserver(peerConnectionObserver.get());
     return _api->joinStream(streamRoomId, streamsId, settings, streamId, peerConnectionWebRTC);
 }
 
