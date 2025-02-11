@@ -35,6 +35,7 @@ class WebRTC : public WebRTCInterface
 {
 public:
     WebRTC(
+        libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection,
         std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver, 
         libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
@@ -52,6 +53,7 @@ public:
     static std::shared_ptr<privmx::webrtc::KeyStore> createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys);
 
 private:
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> _peerConnection;
     std::shared_ptr<PmxPeerConnectionObserver> _peerConnectionObserver;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;

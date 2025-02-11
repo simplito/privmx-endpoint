@@ -84,7 +84,7 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
         privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()),
         []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
     );
-    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(peerConnection, peerConnectionObserver, _constraints);
+    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, peerConnection, peerConnectionObserver, _constraints);
     
     _streamDataMap.set( streamId, peerConnectionWebRTC);
     peerConnection->RegisterRTCPeerConnectionObserver(peerConnectionObserver.get());
@@ -210,7 +210,7 @@ int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::ve
             settings.OnFrame.value() : 
             []([[maybe_unused]] int64_t w, [[maybe_unused]] int64_t h, [[maybe_unused]] std::shared_ptr<Frame> frame, [[maybe_unused]] const std::string& id) {}
     );
-    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(peerConnection, peerConnectionObserver, _constraints);
+    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, peerConnection, peerConnectionObserver, _constraints);
 
     _streamDataMap.set( streamId, peerConnectionWebRTC);
     peerConnection->RegisterRTCPeerConnectionObserver(peerConnectionObserver.get());
@@ -270,24 +270,12 @@ int64_t StreamApiImpl::generateNumericId() {
 }
 
 void StreamApiImpl::unpublishStream(int64_t streamId) {
-    auto webrtcOpt = _streamDataMap.get(streamId);
-    if(!webrtcOpt.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    auto webrtc = webrtcOpt.value();
     _api->unpublishStream(streamId);
-    _peerConnectionFactory->Delete(webrtc->getPeerConnection());
     _streamDataMap.erase(streamId);
 
 }
 
 void StreamApiImpl::leaveStream(int64_t streamId) {
-    auto webrtcOpt = _streamDataMap.get(streamId);
-    if(!webrtcOpt.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    auto webrtc = webrtcOpt.value();
     _api->leaveStream(streamId);
-    _peerConnectionFactory->Delete(webrtc->getPeerConnection());
     _streamDataMap.erase(streamId);
 }

@@ -6,10 +6,12 @@
 using namespace privmx::endpoint::stream;
 
 WebRTC::WebRTC(
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> peerConnection, 
     std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver,
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
 ) :
+    _peerConnectionFactory(peerConnectionFactory),
     _peerConnection(peerConnection),
     _peerConnectionObserver(peerConnectionObserver),
     _constraints(constraints)
@@ -88,6 +90,9 @@ void WebRTC::close() {
     PRIVMX_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTC::close()");
     _webRtcKeyUpdateCallbacks.clear();
     _peerConnection->Close();
+    _peerConnectionFactory->Delete(_peerConnection);
+    _peerConnection = nullptr;
+    _peerConnectionObserver.reset();
 }
 
 std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::getCurrentKeys() {
