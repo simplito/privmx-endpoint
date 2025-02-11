@@ -39,6 +39,7 @@ public:
         std::shared_ptr<PmxPeerConnectionObserver> peerConnectionObserver, 
         libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints
     );
+    ~WebRTC();
     std::string createOfferAndSetLocalDescription() override;
     std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) override;
     void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) override;
