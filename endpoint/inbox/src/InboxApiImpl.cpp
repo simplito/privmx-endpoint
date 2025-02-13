@@ -64,6 +64,13 @@ InboxApiImpl::InboxApiImpl(
     _inboxHandleManager(InboxHandleManager(handleManager)),
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
+    _inboxCache(InboxCache([&](const std::string& id) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::InboxGetModel>();
+        model.id(id);
+        // model.type(INBOX_TYPE_FILTER_FLAG);
+        return _serverApi->inboxGet(model).inbox();
+    })),
+    _subscribeForInbox(false),
     _serverRequestChunkSize(serverRequestChunkSize),
     _inboxSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "inbox", "entries")),
     _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread", "messages"))
@@ -144,7 +151,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
                      const bool forceGenerateNewKey, const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
     // get current inbox
-    auto currentInbox = getInboxFromServerOrCache(inboxId);
+    auto currentInbox = _inboxCache.get(inboxId, !_subscribeForInbox);
     auto currentInboxReadable = decryptInbox(currentInbox);
 
     // extract current users info
@@ -229,8 +236,32 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
 }
 
 
+// Inbox InboxApiImpl::getInbox(const std::string& inboxId) {
+//     return convertInbox(_inboxCache.get(inboxId, !_subscribeForInbox));
+// }
+
 Inbox InboxApiImpl::getInbox(const std::string& inboxId) {
-    return convertInbox(getInboxFromServerOrCache(inboxId));
+    return _getInboxEx(inboxId, std::string());
+}
+
+Inbox InboxApiImpl::getInboxEx(const std::string& inboxId, const std::string& type) {
+    return _getInboxEx(inboxId, type);
+}
+
+Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& type) {
+    PRIVMX_DEBUG_TIME_START(PlatformInbox, _getInboxEx)
+    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::InboxGetModel>();
+    model.id(inboxId);
+    if (type.length() > 0) {
+        model.type(type);
+    }
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, _getInboxEx, getting inbox)
+    auto inbox = _serverApi->inboxGet(model).inbox();
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, _getInboxEx, data send)
+    _inboxCache.update(inbox.id(), inbox);
+    auto result = decryptAndConvertInboxDataToInbox(inbox);
+    PRIVMX_DEBUG_TIME_STOP(PlatformInbox, _getInboxEx, data decrypted)
+    return result;
 }
 
 core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& contextId, const core::PagingQuery& query) {
@@ -242,7 +273,8 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
     auto inboxesRaw = inboxesListResult.inboxes();
     std::vector<inbox::Inbox> ret;
     for (auto inboxRaw: inboxesRaw) {
-        auto inbox = convertInbox(inboxRaw);
+        _inboxCache.update(inboxRaw.id(), inboxRaw);
+        auto inbox = decryptAndConvertInboxDataToInbox(inboxRaw);
         ret.push_back(inbox);
     }
     return core::PagingList<Inbox> {
@@ -261,7 +293,7 @@ InboxPublicView InboxApiImpl::getInboxPublicView(const std::string& inboxId) {
 }
 
 void InboxApiImpl::deleteInbox(const std::string& inboxId) {
-    auto inboxDataRaw {getInboxDataEntry(getInboxFromServerOrCache(inboxId)).data()};
+    auto inboxDataRaw {getInboxDataEntry(_inboxCache.get(inboxId, !_subscribeForInbox)).data()};
     auto inboxDeleteModel = Factory::createObject<server::InboxDeleteModel>();
     inboxDeleteModel.inboxId(inboxId);
 
@@ -369,15 +401,15 @@ inbox::InboxEntry InboxApiImpl::readEntry(const std::string& inboxEntryId) {
     auto messageRaw = getServerMessage(inboxEntryId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, readEntry, data recv);
     auto inboxId {readInboxIdFromMessageKeyId(messageRaw.keyId())};
-    auto inbox {getInboxFromServerOrCache(inboxId)};
-    auto result = convertInboxEntry(inbox, messageRaw);
+    auto inbox {_inboxCache.get(inboxId, !_subscribeForInbox)};
+    auto result = decryptAndConvertInboxEntryDataToInboxEntry(inbox, messageRaw);
     PRIVMX_DEBUG_TIME_STOP(InboxApi, readEntry, data decrypted)
     return result;
 }
 
 core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(const std::string& inboxId, const core::PagingQuery& query) {
     PRIVMX_DEBUG_TIME_START(InboxApi, listEntries)
-    auto inboxRaw {getInboxFromServerOrCache(inboxId)};
+    auto inboxRaw {_inboxCache.get(inboxId, !_subscribeForInbox)};
     auto inboxData {getInboxDataEntry(inboxRaw).data()};
     auto threadId = inboxData.threadId();
     auto model = Factory::createObject<thread::server::ThreadMessagesGetModel>();
@@ -388,9 +420,9 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(const std::string&
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, listEntries, data recv)
     std::vector<inbox::InboxEntry> messages;
     if(messagesList.messages().size()>0) {
-        auto inbox = getInboxFromServerOrCache(readInboxIdFromMessageKeyId(messagesList.messages().get(0).keyId()));
+        auto inbox = _inboxCache.get(readInboxIdFromMessageKeyId(messagesList.messages().get(0).keyId()), !_subscribeForInbox);
         for (auto message : messagesList.messages()) {
-            messages.push_back(convertInboxEntry(inbox, message));
+            messages.push_back(decryptAndConvertInboxEntryDataToInboxEntry(inbox, message));
         }
     }
     PRIVMX_DEBUG_TIME_STOP(InboxApi, listEntries, data decrypted)
@@ -424,7 +456,7 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     PRIVMX_DEBUG_TIME_START(InboxApi, createInboxFileHandleForRead, handle_to_create)
     auto messageRaw = getServerMessage(readMessageIdFromFileKeyId(file.keyId()));
 
-    auto inbox = getInboxFromServerOrCache(readInboxIdFromMessageKeyId(messageRaw.keyId()));
+    auto inbox = _inboxCache.get(readInboxIdFromMessageKeyId(messageRaw.keyId()), !_subscribeForInbox);
 
     auto messageData = decryptInboxEntry(inbox, messageRaw);
     auto decryptedFile = decryptInboxFileMetaV4(file, messageData.privateData.filesMetaKey);
@@ -538,8 +570,7 @@ InboxPublicViewAsResult InboxApiImpl::getInboxPublicData(const std::string& inbo
     return result;
 }
 
-Inbox InboxApiImpl::convertInbox(const inbox::server::Inbox& inboxRaw) {
-    auto inboxData = decryptInbox(inboxRaw);
+Inbox InboxApiImpl::convertInbox(const inbox::server::Inbox& inboxRaw, const InboxDataResult& inboxData) {
     inbox::Inbox ret {
         .inboxId = inboxRaw.id(),
         .contextId = inboxRaw.contextId(),
@@ -557,6 +588,12 @@ Inbox InboxApiImpl::convertInbox(const inbox::server::Inbox& inboxRaw) {
         .statusCode = inboxData.statusCode
     };
     return ret;
+}
+
+
+inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(const inbox::server::Inbox& inboxRaw) {
+    auto inboxData = decryptInbox(inboxRaw);
+    return convertInbox(inboxRaw, inboxData);
 }
 
 inbox::server::InboxMessageServer InboxApiImpl::unpackInboxOrigMessage(const std::string& serialized) {
@@ -615,12 +652,11 @@ std::vector<std::string> InboxApiImpl::getFilesIdsFromServerMessage(const privmx
     return listToVector<std::string>(serverMessage.files());
 }
 
-inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message) {
+inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message, const inbox::InboxEntryResult& inboxEntry) {
     inbox::InboxEntry result;
     result.entryId = message.id();
     result.inboxId = inbox.id();
     result.createDate = message.createDate();
-    auto inboxEntry {decryptInboxEntry(inbox, message)};
     std::string filesMetaKey = inboxEntry.privateData.filesMetaKey;
     result.data = core::Buffer::from(inboxEntry.privateData.text);
     result.authorPubKey = inboxEntry.publicData.userPubKey;
@@ -650,6 +686,11 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox:
     return result;
 }
 
+inbox::InboxEntry InboxApiImpl::decryptAndConvertInboxEntryDataToInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message) {
+    auto inboxEntry = decryptInboxEntry(inbox, message);
+    return convertInboxEntry(inbox, message, inboxEntry);
+}
+
 inbox::FilesConfig InboxApiImpl::getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig) {
     inbox::FilesConfig _fileConfig;
     if (fileConfig.has_value()) {
@@ -667,14 +708,16 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, [[maybe_unu
     if(_inboxSubscriptionHelper.hasSubscriptionForModule()) {
         if (type == "inboxCreated") {
             auto raw = Factory::createObject<server::Inbox>(data);
-            auto data = convertInbox(raw);
+            _inboxCache.update(raw.id(), raw);
+            auto data = decryptAndConvertInboxDataToInbox(raw);
             std::shared_ptr<InboxCreatedEvent> event(new InboxCreatedEvent());
             event->channel = "inbox";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "inboxUpdated") {
             auto raw = Factory::createObject<server::Inbox>(data);
-            auto data = convertInbox(raw);
+            _inboxCache.update(raw.id(), raw);
+            auto data = decryptAndConvertInboxDataToInbox(raw);
             std::shared_ptr<InboxUpdatedEvent> event(new InboxUpdatedEvent());
             event->channel = "inbox";
             event->data = data;
@@ -691,15 +734,14 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, [[maybe_unu
     if (type == "threadNewMessage") {
         auto raw = Factory::createObject<privmx::endpoint::thread::server::Message>(data); 
         if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
-            auto inbox = getInboxFromServerOrCache(readInboxIdFromMessageKeyId(raw.keyId()));
-            auto message = convertInboxEntry(inbox, raw);
+            auto inbox = _inboxCache.get(readInboxIdFromMessageKeyId(raw.keyId()), !_subscribeForInbox);
+            auto message = decryptAndConvertInboxEntryDataToInboxEntry(inbox, raw);
             std::shared_ptr<InboxEntryCreatedEvent> event(new InboxEntryCreatedEvent());
             event->channel = "inbox/" + inbox.id() + "/entries";
             event->data = message;
             _eventMiddleware->emitApiEvent(event);
         }
-    }
-    if (type == "threadDeletedMessage") {
+    } else if (type == "threadDeletedMessage") {
         auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadDeletedMessageEventData>(data); 
         if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
             auto inboxId = _threadSubscriptionHelper.getParentModuleId(raw.threadId());
@@ -711,7 +753,21 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, [[maybe_unu
             };
             _eventMiddleware->emitApiEvent(event);
         }
-    }
+    } else if (type == "subscribe") {
+        std::string channel = data->has("channel") ? data->get("channel") : "";
+        if(channel == "inbox") {
+            PRIVMX_DEBUG("InboxApi", "Cache", "Enabled")
+            _subscribeForInbox = true;
+        }
+    } else if (type == "unsubscribe") {
+        std::string channel = data->has("channel") ? data->get("channel") : "";
+        if(channel == "inbox") {
+            PRIVMX_DEBUG("InboxApi", "Cache", "Disabled")
+            _subscribeForInbox = false;
+            _inboxCache.reset();
+        }
+    } 
+
 }
 
 void InboxApiImpl::subscribeForInboxEvents() {
@@ -729,7 +785,7 @@ void InboxApiImpl::unsubscribeFromInboxEvents() {
 }
 
 void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
-    auto inbox = getInboxFromServerOrCache(inboxId);
+    auto inbox = _inboxCache.get(inboxId, !_subscribeForInbox);
     auto inboxData = getInboxDataEntry(inbox).data();
     if(_threadSubscriptionHelper.hasSubscriptionForElement(inboxData.threadId())) {
         throw AlreadySubscribedException(inboxId);
@@ -738,7 +794,7 @@ void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
 }
 
 void InboxApiImpl::unsubscribeFromEntryEvents(const std::string& inboxId) {
-    auto inbox = getInboxFromServerOrCache(inboxId);
+    auto inbox = _inboxCache.get(inboxId, !_subscribeForInbox);
     auto inboxData = getInboxDataEntry(inbox).data();
     if(!_threadSubscriptionHelper.hasSubscriptionForElement(inboxData.threadId())) {
         throw NotSubscribedException(inboxId);
@@ -747,11 +803,11 @@ void InboxApiImpl::unsubscribeFromEntryEvents(const std::string& inboxId) {
 }
 
 void InboxApiImpl::processConnectedEvent() {
-//    _storeMap.clear();
+   _inboxCache.reset();
 }
 
 void InboxApiImpl::processDisconnectedEvent() {
-//    _storeMap.clear();
+   _inboxCache.reset();
 }
 
 InboxDeletedEventData InboxApiImpl::convertInboxDeletedEventData(const server::InboxDeletedEventData& data) {
@@ -820,12 +876,6 @@ void InboxApiImpl::deleteMessageAndFiles(const thread::server::Message& message)
         _storeApi.deleteFile(fileId);
     }
     _threadApi.deleteMessage(message.id());
-}
-
-inbox::server::Inbox InboxApiImpl::getInboxFromServerOrCache(const std::string& inboxId) {
-    auto inboxGetModel = Factory::createObject<inbox::server::InboxGetModel>();
-    inboxGetModel.id(inboxId);
-    return _serverApi->inboxGet(inboxGetModel).inbox();
 }
 
 thread::server::Message InboxApiImpl::getServerMessage(const std::string& messageId) {
