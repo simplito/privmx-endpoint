@@ -47,5 +47,7 @@ void Bindings::printErrorInJS(std::string& msg) {
 }
 
 val Bindings::callJSRawSync(val& name, val& params) {
-    return val::take_ownership(em_method_caller(name.as_handle(), params.as_handle()));
+    auto ret = val::take_ownership(em_method_caller(name.as_handle(), params.as_handle()));
+    emscripten_sleep(0);
+    return ret;
 }
