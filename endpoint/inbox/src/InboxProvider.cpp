@@ -9,14 +9,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/inbox/InboxCache.hpp"
+#include "privmx/endpoint/inbox/InboxProvider.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
-InboxCache::InboxCache(std::function<server::Inbox(std::string)> getInbox) : core::Cache<std::string, server::Inbox>(getInbox) {}
+InboxProvider::InboxProvider(std::function<server::Inbox(std::string)> getInbox) : core::ContainerProvider<std::string, server::Inbox>(getInbox) {}
     
-void InboxCache::update(const std::string& id, const server::Inbox& value) {
+void InboxProvider::updateCache(const std::string& id, const server::Inbox& value) {
     if(id != value.id()) {
         throw CachedInboxIdMismatchException();
     }

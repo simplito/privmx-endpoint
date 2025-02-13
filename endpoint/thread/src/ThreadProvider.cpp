@@ -9,16 +9,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/store/StoreCache.hpp"
+#include "privmx/endpoint/thread/ThreadProvider.hpp"
 
 using namespace privmx::endpoint;
-using namespace privmx::endpoint::store;
+using namespace privmx::endpoint::thread;
 
-StoreCache::StoreCache(std::function<server::Store(std::string)> getStore) : core::Cache<std::string, server::Store>(getStore) {}
+ThreadProvider::ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread) : core::ContainerProvider<std::string, server::ThreadInfo>(getThread) {}
     
-void StoreCache::update(const std::string& id, const server::Store& value) {
+void ThreadProvider::updateCache(const std::string& id, const server::ThreadInfo& value) {
     if(id != value.id()) {
-        throw CachedStoreIdMismatchException();
+        throw CachedThreadIdMismatchException();
     }
     auto cached = _storage.get(id);
     if(!cached.has_value()) {

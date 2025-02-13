@@ -12,7 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXCACHE_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXCACHE_HPP_
 
-#include <privmx/endpoint/core/Cache.hpp>
+#include <privmx/endpoint/core/ContainerProvider.hpp>
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
 
@@ -20,10 +20,10 @@ namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxCache : public core::Cache<std::string, server::Inbox> {
+class InboxProvider : public core::ContainerProvider<std::string, server::Inbox> {
 public:
-    InboxCache(std::function<server::Inbox(std::string)> getThread);
-    void update(const std::string& id, const server::Inbox& value) override;
+    InboxProvider(std::function<server::Inbox(std::string)> getThread);
+    void updateCache(const std::string& id, const server::Inbox& value) override;
 };
 
 } // inbox

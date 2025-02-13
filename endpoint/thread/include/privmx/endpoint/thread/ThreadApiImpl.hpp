@@ -33,7 +33,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadDataEncryptorV4.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/thread/ThreadCache.hpp"
+#include "privmx/endpoint/thread/ThreadProvider.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -124,7 +124,7 @@ private:
     MessageDataV2Encryptor _messageDataV2Encryptor;
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
-    ThreadCache _threadCache;
+    ThreadProvider _threadProvider;
     bool _subscribeForThread;
     core::SubscriptionHelper _threadSubscriptionHelper;
 

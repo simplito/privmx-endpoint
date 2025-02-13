@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_CORE_CACHE_HPP_
-#define _PRIVMXLIB_ENDPOINT_CORE_CACHE_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_CONTAINERPROVIDER_HPP_
+#define _PRIVMXLIB_ENDPOINT_CORE_CONTAINERPROVIDER_HPP_
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/utils/TypedObject.hpp>
@@ -22,9 +22,9 @@ namespace core {
 
 
 template <typename ID, typename VALUE>
-class Cache {
+class ContainerProvider {
 public:
-    inline Cache(std::function<VALUE(ID)> getterFunction) : 
+    inline ContainerProvider(std::function<VALUE(ID)> getterFunction) : 
         _storage(privmx::utils::ThreadSaveMap<ID, VALUE>()), _getterFunction(getterFunction) {}
 
     inline virtual VALUE get(const ID& id, bool force = true)  {
@@ -35,7 +35,7 @@ public:
         return cachedValue.has_value() ? cachedValue.value() : getFromOutsideAndUpdate(id);  
     }
 
-    inline virtual void update(const ID& id, const VALUE& value) { _storage.set(id, value); }
+    inline virtual void updateCache(const ID& id, const VALUE& value) { _storage.set(id, value); }
 
     inline void remove(const ID& id) {_storage.erase(id);}
 
@@ -43,7 +43,7 @@ public:
 protected:
     inline VALUE getFromOutsideAndUpdate(const ID& id)  {
         const VALUE& value = _getterFunction(id);
-        update(id, value);
+        updateCache(id, value);
         return value;
     }
     privmx::utils::ThreadSaveMap<ID, VALUE> _storage;
@@ -54,4 +54,4 @@ protected:
 } // endpoint
 } // privmx
 
-#endif // _PRIVMXLIB_ENDPOINT_CORE_CACHE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_CONTAINERPROVIDER_HPP_

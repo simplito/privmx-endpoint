@@ -38,7 +38,7 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreDataEncryptorV4.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/store/StoreCache.hpp"
+#include "privmx/endpoint/store/StoreProvider.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -161,7 +161,7 @@ private:
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
     FileMetaEncryptor _fileMetaEncryptor;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    StoreCache _storeCache;
+    StoreProvider _storeProvider;
     bool _subscribeForStore;
     core::SubscriptionHelper _storeSubscriptionHelper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

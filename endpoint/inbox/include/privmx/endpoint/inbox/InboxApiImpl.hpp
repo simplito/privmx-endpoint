@@ -43,7 +43,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxDataProcessorV4.hpp"
 #include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/inbox/InboxCache.hpp"
+#include "privmx/endpoint/inbox/InboxProvider.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -167,7 +167,7 @@ private:
     InboxHandleManager _inboxHandleManager;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    InboxCache _inboxCache;
+    InboxProvider _inboxProvider;
     bool _subscribeForInbox;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId, _messageDeleterId;
