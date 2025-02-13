@@ -33,6 +33,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadDataEncryptorV4.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
+#include "privmx/endpoint/thread/ThreadProvider.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -101,8 +102,6 @@ private:
     Thread convertDecryptedThreadDataToThread(const server::ThreadInfo& threadInfo, const DecryptedThreadData& threadData);
     Thread decryptAndConvertThreadDataToThread(const server::ThreadInfo& thread);
 
-    server::ThreadInfo getThreadFromCacheOrServer(const std::string& threadId);
-    void updateThreadInCache(server::ThreadInfo thread);
     core::EncKey getThreadEncKey(const server::ThreadInfo& thread);
 
     dynamic::MessageDataV2 decryptMessageDataV2(const server::ThreadInfo& thread, const server::Message& message);
@@ -125,7 +124,7 @@ private:
     MessageDataV2Encryptor _messageDataV2Encryptor;
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
-    utils::ThreadSaveMap<std::string, server::ThreadInfo> _threadMap;
+    ThreadProvider _threadProvider;
     bool _subscribeForThread;
     core::SubscriptionHelper _threadSubscriptionHelper;
 
