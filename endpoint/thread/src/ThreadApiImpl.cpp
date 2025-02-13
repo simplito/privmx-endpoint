@@ -49,7 +49,12 @@ ThreadApiImpl::ThreadApiImpl(
     _messageDataV2Encryptor(MessageDataV2Encryptor()),
     _messageDataV3Encryptor(MessageDataV3Encryptor()),
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
-    _threadMap(utils::ThreadSaveMap<std::string, server::ThreadInfo>()),
+    _threadProvider(ThreadProvider([&](const std::string& id) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::ThreadGetModel>();
+        model.threadId(id);
+        model.type(THREAD_TYPE_FILTER_FLAG);
+        return _serverApi.threadGet(model).thread();
+    })),
     _subscribeForThread(false),
     _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages"))
 {
@@ -212,9 +217,10 @@ Thread ThreadApiImpl::_getThreadEx(const std::string& threadId, const std::strin
         params->set("type", type);
     }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, getting thread)
-    auto thread = _serverApi.threadGet(params);
+    auto thread = _serverApi.threadGet(params).thread();
+    _threadProvider.updateCache(thread.id(), thread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, data send)
-    auto result = decryptAndConvertThreadDataToThread(thread.thread());
+    auto result = decryptAndConvertThreadDataToThread(thread);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _getThreadEx, data decrypted)
     return result;
 }
@@ -240,6 +246,7 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _listThreadsEx, data send)
     std::vector<Thread> threads;
     for (auto thread : threadsList.threads()) {
+        _threadProvider.updateCache(thread.id(), thread);
         threads.push_back(decryptAndConvertThreadDataToThread(thread));
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _listThreadsEx, data decrypted)
@@ -255,7 +262,7 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
-    auto thread = getThreadFromCacheOrServer(message.threadId());
+    auto thread = _threadProvider.get(message.threadId(), !_subscribeForThread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data send);
     auto result = decryptAndConvertMessageDataToMessage(thread, message);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
@@ -270,7 +277,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting messageList)
     auto messagesList = _serverApi.threadMessagesGet(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
-    auto thread = getThreadFromCacheOrServer(threadId);
+    auto thread = _threadProvider.get(threadId, !_subscribeForThread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     std::vector<Message> messages;
     for (auto message : messagesList.messages()) {
@@ -284,7 +291,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
 }
 std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessage);
-    auto thread = getThreadFromCacheOrServer(threadId);
+    auto thread = _threadProvider.get(threadId, !_subscribeForThread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
     auto msgKey = getThreadEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
@@ -320,7 +327,7 @@ void ThreadApiImpl::updateMessage(
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
-    auto thread = getThreadFromCacheOrServer(message.threadId());
+    auto thread = _threadProvider.get(message.threadId(), !_subscribeForThread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
     auto msgKey = getThreadEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
@@ -344,7 +351,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         if (type == "threadCreated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
             if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                updateThreadInCache(raw);
+                _threadProvider.updateCache(raw.id(), raw);
                 auto data = decryptAndConvertThreadDataToThread(raw); 
                 std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
                 event->channel = channel;
@@ -354,7 +361,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         } else if (type == "threadUpdated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
             if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                updateThreadInCache(raw);
+                _threadProvider.updateCache(raw.id(), raw);
                 auto data = decryptAndConvertThreadDataToThread(raw);
                 std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
                 event->channel = channel;
@@ -364,6 +371,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         } else if (type == "threadDeleted") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(data);
             if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                _threadProvider.remove(raw.threadId());
                 auto data = Mapper::mapToThreadDeletedEventData(raw);
                 std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
                 event->channel = channel;
@@ -384,7 +392,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
     if (type == "threadNewMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
         if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
-            auto thread = getThreadFromCacheOrServer(raw.threadId());
+            auto thread = _threadProvider.get(raw.threadId(), !_subscribeForThread);
             auto data = decryptAndConvertMessageDataToMessage(thread, raw);
             std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
             event->channel = channel;
@@ -394,7 +402,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
     } else if (type == "threadUpdatedMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
         if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
-            auto thread = getThreadFromCacheOrServer(raw.threadId());
+            auto thread = _threadProvider.get(raw.threadId(), !_subscribeForThread);
             auto data = decryptAndConvertMessageDataToMessage(thread, raw);
             std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
             event->channel = channel;
@@ -421,7 +429,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         if(channel == "thread") {
             PRIVMX_DEBUG("ThreadApi", "Cache", "Disabled")
             _subscribeForThread = false;
-            _threadMap.clear();
+            _threadProvider.reset();
         }
     }
 }
@@ -457,11 +465,11 @@ void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
 }
 
 void ThreadApiImpl::processConnectedEvent() {
-    _threadMap.clear();
+    _threadProvider.reset();
 }
 
 void ThreadApiImpl::processDisconnectedEvent() {
-    _threadMap.clear();
+    _threadProvider.reset();
 }
 
 privmx::utils::List<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
@@ -730,37 +738,4 @@ core::EncKey ThreadApiImpl::getThreadEncKey(const server::ThreadInfo& thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
     auto key = _keyProvider->getKey(thread.keys(), thread_data_entry.keyId());
     return key;
-}
-
-server::ThreadInfo ThreadApiImpl::getThreadFromCacheOrServer(const std::string& threadId) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, getThreadFromCacheOrServer)
-    auto cache_value = _threadMap.get(threadId);
-    if(cache_value.has_value()) {
-        PRIVMX_DEBUG_TIME_STOP(PlatformThread, getThreadFromCacheOrServer, thread in cache)
-        return cache_value.value();
-    }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThreadFromCacheOrServer, requesting thread from server)
-    Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
-    params->set("threadId", threadId);
-    auto thread = _serverApi.threadGet(params).thread();
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, getThreadFromCacheOrServer, data send)
-    updateThreadInCache(thread);
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, getThreadFromCacheOrServer, update cache)
-    return thread;
-}
-
-void ThreadApiImpl::updateThreadInCache(server::ThreadInfo thread) {
-    auto cachedThread = _threadMap.get(thread.id());
-    if(!cachedThread.has_value()) {
-        if(_subscribeForThread) {
-        _threadMap.set(thread.id(), thread);
-        }
-        return;
-    }
-    auto cachedThread_value = cachedThread.value();
-    if(thread.version() > cachedThread_value.version()) {
-        _threadMap.set(thread.id(), thread);
-    } else if (thread.version() == cachedThread_value.version() && thread.lastModificationDate() > cachedThread_value.lastModificationDate()) {
-        _threadMap.set(thread.id(), thread);
-    }
 }

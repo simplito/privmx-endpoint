@@ -551,6 +551,10 @@ TEST_F(ThreadTest, updateThread_incorrect_data) {
 }
 
 TEST_F(ThreadTest, updateThread_correct_data) {
+    //enable cache
+    EXPECT_NO_THROW({
+        threadApi->subscribeForThreadEvents();
+    });
     thread::Thread thread;
     // new users
     EXPECT_NO_THROW({

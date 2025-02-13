@@ -554,6 +554,10 @@ TEST_F(StoreTest, updateStore_incorrect_data) {
 }
 
 TEST_F(StoreTest, updateStore_correct_data) {
+    //enable cache
+    EXPECT_NO_THROW({
+        storeApi->subscribeForStoreEvents();
+    });
     store::Store store;
     // new users
     EXPECT_NO_THROW({
