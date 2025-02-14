@@ -29,6 +29,9 @@ public:
         if (listQuery.lastId.has_value()) {
             obj.lastId(listQuery.lastId.value());
         }
+        if(listQuery.queryJSONString.has_value()) {
+            obj
+        }
     }
 };
 

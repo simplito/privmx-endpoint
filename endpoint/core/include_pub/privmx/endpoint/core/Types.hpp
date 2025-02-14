@@ -49,6 +49,11 @@ struct PagingQuery {
      * ID of the element from which query results should start
      */
     std::optional<std::string> lastId;
+
+    /**
+     * extra query parameters in serialized JSON  
+     */
+    std::optional<std::string> queryJSONString;
 };
 
 /**
