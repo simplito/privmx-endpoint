@@ -60,10 +60,16 @@ void EventApiImpl::emitEvent(const std::string& contextId, const std::string& ch
 
 void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
+    if(_contextSubscriptionHelper.hasSubscriptionForElementCustom(contextId, channelName)) {
+        throw AlreadySubscribedException();
+    }
     _contextSubscriptionHelper.subscribeForElementCustom(contextId, channelName);
 }
 void EventApiImpl::unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
+    if(!_contextSubscriptionHelper.hasSubscriptionForElementCustom(contextId, channelName)) {
+        throw NotSubscribedException();
+    }
     _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, channelName);
 }
 

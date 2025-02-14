@@ -28,7 +28,7 @@ std::shared_ptr<core::SerializedEvent> CustomContextEvent::serialize() const {
 }
 
 bool Events::isCustomContextEvent(const core::EventHolder& handler) {
-    return handler.type() == "eventMessageDeleted";
+    return handler.type() == "customContext";
 }
 
 CustomContextEvent Events::extractCustomContextEvent(const core::EventHolder& handler) {

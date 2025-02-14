@@ -105,6 +105,6 @@ void SubscriptionHelperExt::unsubscribeFromElementCustom(const std::string& elem
 }
 
 std::string SubscriptionHelperExt::getParentModuleId(const std::string& elementId) {
-    auto tmp = _map.get(elementId);
+    auto tmp = _map.get(_moduleName + "/" + elementId + "/" + _elementName);
     return tmp.has_value() ? tmp.value() : std::string();
 }
