@@ -163,3 +163,25 @@ Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicy>(const ContainerPoli
     obj->set("item", serialize(val.item));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserWithPubKey>(const UserWithPubKey& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$UserWithPubKey");
+    }
+    obj->set("userId", serialize(val.userId));
+    obj->set("pubKey", serialize(val.pubKey));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$UserInfo");
+    }
+    obj->set("user", serialize(val.user));
+    obj->set("isActive", serialize(val.isActive));
+    return obj;
+}
