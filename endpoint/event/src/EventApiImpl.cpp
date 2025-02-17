@@ -71,18 +71,16 @@ void EventApiImpl::emitEventInternal(const std::string& contextId, InternalConte
 
 bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType) {
     //check if type == "custom" and channel == "context/<contextId>/internal"
-    if(type == "custom" && channel.length() >= 8+9 && channel.substr(0, 8) == "context/" && channel.substr(channel.length()-9, 9) == "/" INTERNAL_CHANNEL_NAME) {
+    if(type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
-        if(!raw.idEmpty()) {
-            if(raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
-                auto rawEventDataJSON = raw.eventData().extract<Poco::JSON::Object::Ptr>();
-                if(rawEventDataJSON->has("type")) {
-                    if(!internalContextEventType.has_value()) {
+        if( !raw.idEmpty() && channel == "context/" + raw.id() + "/" INTERNAL_CHANNEL_NAME && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
+            auto rawEventDataJSON = raw.eventData().extract<Poco::JSON::Object::Ptr>();
+            if(rawEventDataJSON->has("type")) {
+                if(!internalContextEventType.has_value()) {
+                    return true;
+                } else {
+                    if(rawEventDataJSON->getValue<std::string>("type") == internalContextEventType.value()) {
                         return true;
-                    } else {
-                        if(rawEventDataJSON->getValue<std::string>("type") == internalContextEventType.value()) {
-                            return true;
-                        }
                     }
                 }
             }
