@@ -1615,3 +1615,63 @@ TEST_F(ThreadTest, updateThread_policy) {
         );
     }, core::Exception);
 }
+
+TEST_F(ThreadTest, listThreads_query) {
+    std::string threadId;
+    core::PagingList<thread::Thread> listThreads;
+    EXPECT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("{\"test\":1}"),
+            core::Buffer::from("list_query_test"),
+            std::nullopt
+        );
+    });
+    if(threadId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        listThreads = threadApi->listThreads(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0,
+                .limit=100,
+                .sortOrder="asc",
+                .queryJSONString="{\"test\":1}"
+            }
+        );
+    });
+    EXPECT_EQ(listThreads.totalAvailable, 1);
+    EXPECT_EQ(listThreads.readItems.size(), 1);
+    if(listThreads.readItems.size() >= 1) {
+        auto thread = listThreads.readItems[0];
+        EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
+        EXPECT_EQ(thread.threadId, threadId);
+        EXPECT_EQ(thread.messagesCount, 0);
+        EXPECT_EQ(thread.statusCode, 0);
+        EXPECT_EQ(thread.publicMeta.stdString(), "{\"test\":1}");
+        EXPECT_EQ(thread.privateMeta.stdString(), "list_query_test");
+        EXPECT_EQ(thread.creator, reader->getString("Login.user_1_id"));
+        EXPECT_EQ(thread.lastModifier, reader->getString("Login.user_1_id"));
+        EXPECT_EQ(thread.users.size(), 1);
+        if(thread.users.size() == 1) {
+            EXPECT_EQ(thread.users[0], reader->getString("Login.user_1_id"));
+        }
+        EXPECT_EQ(thread.managers.size(), 1);
+        if(thread.managers.size() == 1) {
+            EXPECT_EQ(thread.managers[0], reader->getString("Login.user_1_id"));
+        }
+    }
+}
