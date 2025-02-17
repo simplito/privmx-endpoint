@@ -19,23 +19,23 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
-std::string CustomContextEvent::toJSON() const {
-    return core::JsonSerializer<CustomContextEvent>::serialize(*this);
+std::string ContextCustomEvent::toJSON() const {
+    return core::JsonSerializer<ContextCustomEvent>::serialize(*this);
 }
 
-std::shared_ptr<core::SerializedEvent> CustomContextEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> ContextCustomEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-bool Events::isCustomContextEvent(const core::EventHolder& handler) {
+bool Events::isContextCustomEvent(const core::EventHolder& handler) {
     return handler.type() == "customContext";
 }
 
-CustomContextEvent Events::extractCustomContextEvent(const core::EventHolder& handler) {
+ContextCustomEvent Events::extractContextCustomEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<CustomContextEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<ContextCustomEvent>(handler.get());
         if (!event) {
-            throw CannotExtractCustomContextEvent();
+            throw CannotExtractContextCustomEvent();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

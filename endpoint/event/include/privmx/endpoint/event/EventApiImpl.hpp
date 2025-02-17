@@ -34,7 +34,7 @@ private:
     void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
     void processConnectedEvent();
     void processDisconnectedEvent();
-
+    void emitEventEx(const std::string& contextId, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::vector<core::UserWithPubKey>& users, const std::string &encryptionKey);
     void validateChannelName(const std::string& channelName);
     privmx::crypto::PrivateKey _userPrivKey;
     ServerApi _serverApi;

@@ -11,12 +11,12 @@ namespace event {
 /**
  * Holds data of event that arrives when custom context event is emitted.
  */
-struct CustomContextEvent : public core::Event {
+struct ContextCustomEvent : public core::Event {
 
     /**
      * Event constructor
      */
-    CustomContextEvent() : core::Event("customContext") {}
+    ContextCustomEvent() : core::Event("customContext") {}
 
     /**
      * Get Event as JSON string
@@ -51,20 +51,20 @@ class Events {
 public:
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'CustomContextEvent' 
+     * Checks whether event held in the 'EventHolder' is an 'ContextCustomEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'CustomContextEvent', else otherwise
+     * @return true for 'ContextCustomEvent', else otherwise
      */
-    static bool isCustomContextEvent(const core::EventHolder& eventHolder);
+    static bool isContextCustomEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'CustomContextEvent' 
+     * Gets Event held in the 'EventHolder' as an 'ContextCustomEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'CustomContextEvent' object
+     * @return 'ContextCustomEvent' object
      */
-    static CustomContextEvent extractCustomContextEvent(const core::EventHolder& eventHolder);
+    static ContextCustomEvent extractContextCustomEvent(const core::EventHolder& eventHolder);
 
 };
 

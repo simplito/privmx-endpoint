@@ -1986,8 +1986,8 @@ TEST_F(CoreEventTest, waitEvent_getEvent_getCustom_event_enabled) {
         EXPECT_EQ(event->connectionId, connection->getConnectionId());
         EXPECT_EQ(event->type, "customContext");
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
-        if(event::Events::isCustomContextEvent(event)) {
-            event::CustomContextEvent customContextEvent = event::Events::extractCustomContextEvent(event);
+        if(event::Events::isContextCustomEvent(event)) {
+            event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);
             EXPECT_EQ(customContextEvent.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(customContextEvent.userId, reader->getString("Login.user_1_id"));
             EXPECT_EQ(customContextEvent.data.stdString(), "test event");

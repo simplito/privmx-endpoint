@@ -38,7 +38,7 @@ namespace event {
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointEventException, "Unknown endpoint event exception", "Event", 0x0009)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, UnallowedChannelNameException, "Unallowed channel name", 0x0002)
-DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, CannotExtractCustomContextEvent, "Cannot extract CustomContextEvent", 0x0003)
+DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, CannotExtractContextCustomEvent, "Cannot extract ContextCustomEvent", 0x0003)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, NotSubscribedException, "Not subscribed", 0x0004)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, AlreadySubscribedException, "Already subscribed", 0x0005)
 

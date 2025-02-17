@@ -43,19 +43,7 @@ EventApiImpl::~EventApiImpl() {
 void EventApiImpl::emitEvent(const std::string& contextId, const std::string& channelName, const core::Buffer& eventData, const std::vector<core::UserWithPubKey>& users) {
     validateChannelName(channelName);
     auto key = privmx::crypto::Crypto::randomBytes(32);
-    utils::List<server::UserKey> userKeys = utils::TypedObjectFactory::createNewList<server::UserKey>();
-    for (auto user : users) {
-        server::UserKey userKey = utils::TypedObjectFactory::createNewObject<server::UserKey>();
-        userKey.id(user.userId);
-        userKey.key(privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), key));
-        userKeys.add(userKey);
-    }
-    server::ContextEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextEmitCustomEventModel>();
-    model.contextId(contextId);
-    model.data(_dataEncryptor.signAndEncryptAndEncode( eventData, _userPrivKey, key));
-    model.channel(channelName);
-    model.users(userKeys);
-    _serverApi.contextSendCustomEvent(model);
+    emitEventEx(contextId, INTERNAL_CHANNEL_NAME, _dataEncryptor.signAndEncryptAndEncode( eventData, _userPrivKey, key), users, key);
 }
 
 void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
@@ -78,26 +66,14 @@ void EventApiImpl::emitEventInternal(const std::string& contextId, InternalConte
     server::EncryptedInternalContextEvent encryptedEvent = privmx::utils::TypedObjectFactory::createNewObject<server::EncryptedInternalContextEvent>();
     encryptedEvent.type(event.type);
     encryptedEvent.encryptedData(_dataEncryptor.signAndEncryptAndEncode( event.data, _userPrivKey, key));
-    utils::List<server::UserKey> userKeys = utils::TypedObjectFactory::createNewList<server::UserKey>();
-    for (auto user : users) {
-        server::UserKey userKey = utils::TypedObjectFactory::createNewObject<server::UserKey>();
-        userKey.id(user.userId);
-        userKey.key(privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), key));
-        userKeys.add(userKey);
-    }
-    server::ContextEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextEmitCustomEventModel>();
-    model.contextId(contextId);
-    model.data(encryptedEvent);
-    model.channel("internal");
-    model.users(userKeys);
-    _serverApi.contextSendCustomEvent(model);
+    emitEventEx(contextId, INTERNAL_CHANNEL_NAME, encryptedEvent, users, key);
 }
 
 bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType) {
     //check if type == "custom" and channel == "context/<contextId>/internal"
     if(type == "custom" && channel.length() >= 8+9 && channel.substr(0, 8) == "context/" && channel.substr(channel.length()-9, 9) == "/" INTERNAL_CHANNEL_NAME) {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
-        if(!raw.idEmpty() && _contextSubscriptionHelper.hasSubscriptionForElementCustom(raw.id(), "internal")) {
+        if(!raw.idEmpty()) {
             if(raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
                 auto rawEventDataJSON = raw.eventData().extract<Poco::JSON::Object::Ptr>();
                 if(rawEventDataJSON->has("type")) {
@@ -144,7 +120,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const std::
             _userPrivKey.getPublicKey(), 
             encKey
         );
-        std::shared_ptr<privmx::endpoint::event::CustomContextEvent> event(new privmx::endpoint::event::CustomContextEvent());
+        std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
         event->channel = channel;
         event->data = decryptedData;
         event->contextId = rawEvent.id();
@@ -159,6 +135,21 @@ void EventApiImpl::processConnectedEvent() {
 void EventApiImpl::processDisconnectedEvent() {
 }
 
+void EventApiImpl::emitEventEx(const std::string& contextId, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::vector<core::UserWithPubKey>& users, const std::string &encryptionKey) {
+    utils::List<server::UserKey> userKeys = utils::TypedObjectFactory::createNewList<server::UserKey>();
+    for (auto user : users) {
+        server::UserKey userKey = utils::TypedObjectFactory::createNewObject<server::UserKey>();
+        userKey.id(user.userId);
+        userKey.key(privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), encryptionKey));
+        userKeys.add(userKey);
+    }
+    server::ContextEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextEmitCustomEventModel>();
+    model.contextId(contextId);
+    model.data(encryptedEventData);
+    model.channel(channelName);
+    model.users(userKeys);
+    _serverApi.contextSendCustomEvent(model);
+}
 
 void EventApiImpl::validateChannelName(const std::string& channelName) {
     if(std::find(_unallowedChannelsNames.begin(), _unallowedChannelsNames.end(), channelName) != _unallowedChannelsNames.end()) {

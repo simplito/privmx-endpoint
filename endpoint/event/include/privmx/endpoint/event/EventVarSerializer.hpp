@@ -25,7 +25,7 @@ namespace endpoint {
 namespace core {
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<event::CustomContextEvent>(const event::CustomContextEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEvent>(const event::ContextCustomEvent& val);
 
 
 }  // namespace core
