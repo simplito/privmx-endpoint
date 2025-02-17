@@ -102,6 +102,12 @@ Poco::Dynamic::Var VarSerializer::serialize<ItemPolicy>(const ItemPolicy& val);
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicy>(const ContainerPolicy& val);
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserWithPubKey>(const UserWithPubKey& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val);
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

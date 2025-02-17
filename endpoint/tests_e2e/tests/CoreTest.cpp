@@ -335,3 +335,43 @@ TEST_F(CoreTest, listContexts_correct_data) {
         EXPECT_EQ(context.contextId, reader->getString("Context_2.contextId"));
     }
 }
+
+TEST_F(CoreTest, getContextUsers) {
+    std::vector<privmx::endpoint::core::UserInfo> userInfo;
+    EXPECT_THROW({
+        connection->getContextUsers("blach-blach");
+    }, core::Exception);
+    
+    EXPECT_NO_THROW({
+        userInfo = connection->getContextUsers(reader->getString("Context_1.contextId"));
+    });
+    EXPECT_EQ(userInfo.size(), 2);
+    EXPECT_EQ(userInfo[0].isActive, true);
+    EXPECT_EQ(userInfo[0].user.userId, reader->getString("Login.user_1_id"));
+    EXPECT_EQ(userInfo[0].user.pubKey, reader->getString("Login.user_1_pubKey"));
+    EXPECT_EQ(userInfo[1].isActive, false);
+    EXPECT_EQ(userInfo[1].user.userId, reader->getString("Login.user_2_id"));
+    EXPECT_EQ(userInfo[1].user.pubKey, reader->getString("Login.user_2_pubKey"));
+    //connect second user
+    std::shared_ptr<core::Connection> connection_2;
+    EXPECT_NO_THROW({
+        connection_2 = std::make_shared<core::Connection>(
+            core::Connection::connect(
+                reader->getString("Login.user_2_privKey"), 
+                reader->getString("Login.solutionId"), 
+                getPlatformUrl(reader->getString("Login.instanceUrl"))
+            )
+        );
+    });
+
+    EXPECT_NO_THROW({
+        userInfo = connection->getContextUsers(reader->getString("Context_2.contextId"));
+    });
+    EXPECT_EQ(userInfo.size(), 2);
+    EXPECT_EQ(userInfo[0].isActive, true);
+    EXPECT_EQ(userInfo[0].user.userId, reader->getString("Login.user_1_id"));
+    EXPECT_EQ(userInfo[0].user.pubKey, reader->getString("Login.user_1_pubKey"));
+    EXPECT_EQ(userInfo[1].isActive, true);
+    EXPECT_EQ(userInfo[1].user.userId, reader->getString("Login.user_2_id"));
+    EXPECT_EQ(userInfo[1].user.pubKey, reader->getString("Login.user_2_pubKey"));
+}

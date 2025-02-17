@@ -29,7 +29,8 @@ public:
         ConnectPublic = 1,
         GetConnectionId = 2,
         ListContexts = 3,
-        Disconnect = 4
+        Disconnect = 4,
+        GetContextUsers = 5
     };
 
     ConnectionVarInterface(const core::VarSerializer& serializer)
@@ -40,6 +41,7 @@ public:
     Poco::Dynamic::Var getConnectionId(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listContexts(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var disconnect(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getContextUsers(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

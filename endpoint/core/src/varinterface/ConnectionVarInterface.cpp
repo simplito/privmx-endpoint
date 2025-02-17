@@ -21,7 +21,8 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
                                          {ConnectPublic, &ConnectionVarInterface::connectPublic},
                                          {GetConnectionId, &ConnectionVarInterface::getConnectionId},
                                          {ListContexts, &ConnectionVarInterface::listContexts},
-                                         {Disconnect, &ConnectionVarInterface::disconnect}};
+                                         {Disconnect, &ConnectionVarInterface::disconnect},
+                                         {GetContextUsers, &ConnectionVarInterface::getContextUsers}};
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
     auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3);
@@ -57,6 +58,13 @@ Poco::Dynamic::Var ConnectionVarInterface::disconnect(const Poco::Dynamic::Var& 
     VarInterfaceUtil::validateAndExtractArray(args, 0);
     _connection.disconnect();
     return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::getContextUsers(const Poco::Dynamic::Var& args) {
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto result = _connection.getContextUsers(contextId);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var ConnectionVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
