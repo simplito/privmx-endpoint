@@ -10,6 +10,9 @@
 #include <privmx/endpoint/store/Events.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
 #include <privmx/endpoint/inbox/Events.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
+#include <privmx/endpoint/event/Events.hpp>
+#include <privmx/endpoint/event/EventException.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/crypto/Crypto.hpp>
@@ -49,12 +52,18 @@ protected:
                 *storeApi
             )
         );
+        eventApi = std::make_shared<event::EventApi>(
+            event::EventApi::create(
+                *connection
+            )
+        );
     }
     void customTearDown() override { // tmp segfault fix
         connection.reset();
         threadApi.reset();
         storeApi.reset();
         inboxApi.reset();
+        eventApi.reset();
         reader.reset();
         privmx::endpoint::core::EventQueueImpl::getInstance()->clear();
     }
@@ -62,6 +71,7 @@ protected:
     std::shared_ptr<thread::ThreadApi> threadApi;
     std::shared_ptr<store::StoreApi> storeApi;
     std::shared_ptr<inbox::InboxApi> inboxApi;
+    std::shared_ptr<event::EventApi> eventApi;
     core::EventQueue eventQueue = core::EventQueue::getInstance();
     Poco::Util::IniFileConfiguration::Ptr reader;
 };
@@ -1865,7 +1875,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_inboxEntryDeleted_enabled) {
         );
     });
     EXPECT_NO_THROW({
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
         if(eventHolder.has_value()) {
             event = eventHolder.value().get();
@@ -1911,6 +1921,112 @@ TEST_F(CoreEventTest, waitEvent_getEvent_inboxEntryDeleted_disabled) {
     EXPECT_NO_THROW({
         inboxApi->deleteEntry(
             reader->getString("Entry_1.entryId")
+        );
+    });
+    EXPECT_NO_THROW({
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event == nullptr) {
+
+    } else {
+        std::cout << "Received Event with type " << event->type << std::endl;
+        std::cout << "Expected null" << std::endl;
+        FAIL();
+    }
+}
+
+TEST_F(CoreEventTest, waitEvent_getEvent_getCustom_event_enabled) {
+    std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
+    EXPECT_NO_THROW({
+        std::optional<core::EventHolder> eventHolder = eventQueue.waitEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event != nullptr) {
+        EXPECT_EQ(event->connectionId, connection->getConnectionId());
+        EXPECT_EQ(event->type, "libConnected");
+    } else {
+        FAIL();
+    }
+    EXPECT_THROW({
+        eventApi->subscribeForCustomEvents(reader->getString("Context_1.contextId"), "internal");
+    }, core::Exception);
+    EXPECT_NO_THROW({
+        eventApi->subscribeForCustomEvents(reader->getString("Context_1.contextId"), "testing");
+    });
+    EXPECT_NO_THROW({
+        std::vector<privmx::endpoint::core::UserWithPubKey> users;
+        users.push_back(privmx::endpoint::core::UserWithPubKey{.userId=reader->getString("Login.user_1_id"), .pubKey=reader->getString("Login.user_1_pubKey")});
+        eventApi->emitEvent(
+            reader->getString("Context_1.contextId"), 
+            "testing", 
+            core::Buffer::from("test event"), 
+            users
+        );
+    });
+    EXPECT_NO_THROW({
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    EXPECT_NO_THROW({
+        EXPECT_EQ(event->connectionId, connection->getConnectionId());
+        EXPECT_EQ(event->type, "customContext");
+        EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
+        if(event::Events::isContextCustomEvent(event)) {
+            event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);
+            EXPECT_EQ(customContextEvent.contextId, reader->getString("Context_1.contextId"));
+            EXPECT_EQ(customContextEvent.userId, reader->getString("Login.user_1_id"));
+            EXPECT_EQ(customContextEvent.data.stdString(), "test event");
+        } else {
+            FAIL();
+        }
+    });
+}
+
+TEST_F(CoreEventTest, waitEvent_getEvent_getCustom_event_disabled) {
+    std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
+    EXPECT_NO_THROW({
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event != nullptr) {
+        EXPECT_EQ(event->connectionId, connection->getConnectionId());
+        EXPECT_EQ(event->type, "libConnected");
+    } else {
+        FAIL();
+    }
+    EXPECT_THROW({
+        eventApi->unsubscribeFromCustomEvents(reader->getString("Context_1.contextId"), "internal");
+    }, event::UnallowedChannelNameException);
+    EXPECT_THROW({
+        eventApi->unsubscribeFromCustomEvents(reader->getString("Context_1.contextId"), "testing");
+    }, core::Exception);
+    EXPECT_NO_THROW({
+        std::vector<privmx::endpoint::core::UserWithPubKey> users;
+        users.push_back(privmx::endpoint::core::UserWithPubKey{.userId=reader->getString("Login.user_1_id"), .pubKey=reader->getString("Login.user_1_pubKey")});
+        eventApi->emitEvent(
+            reader->getString("Context_1.contextId"), 
+            "testing", 
+            core::Buffer::from("test event"), 
+            users
         );
     });
     EXPECT_NO_THROW({
