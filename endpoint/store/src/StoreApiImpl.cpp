@@ -68,8 +68,8 @@ StoreApiImpl::StoreApiImpl(
     _subscribeForStore(false),
     _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
-    _storeDataEncryptorV4(StoreDataEncryptorV4())
-
+    _storeDataEncryptorV4(StoreDataEncryptorV4()),
+    _unallowedChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StoreApiImpl::processConnectedEvent, this));
@@ -514,81 +514,85 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
 }
 
 void StoreApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if (_storeSubscriptionHelper.hasSubscriptionForModule()) {
-        if (type == "storeCreated") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                _storeProvider.updateCache(raw.id(), raw);
-                auto data = decryptAndConvertStoreDataToStore(raw);
-                std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "storeUpdated") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                _storeProvider.updateCache(raw.id(), raw);
-                auto data = decryptAndConvertStoreDataToStore(raw);
-                std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "storeDeleted") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreDeletedEventData>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                _storeProvider.remove(raw.storeId());
-                auto data = Mapper::mapToStoreDeletedEventData(raw);
-                std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "storeStatsChanged") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                auto data = Mapper::mapToStoreStatsChangedEventData(raw);
-                std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        
-        }
+    if(!_storeSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+        return;
     }
-    
-    if (type == "storeFileCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
-        if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto store {_storeProvider.get(raw.storeId(), !_subscribeForStore)};
-            auto file = decryptAndConvertFileDataToFileInfo(store, raw);
-
-            // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
-            std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
-            event->channel = channel;
-            event->data = file;
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "storeFileUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
-        if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto store {_storeProvider.get(raw.storeId(), !_subscribeForStore)};
-            auto file = decryptAndConvertFileDataToFileInfo(store, raw);
-            std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
-            event->channel = channel;
-            event->data = file;
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "storeFileDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(data);
-        if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto data = Mapper::mapToStoreFileDeletedEventData(raw);
-            std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
+    if (type == "storeCreated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.updateCache(raw.id(), raw);
+            auto data = decryptAndConvertStoreDataToStore(raw);
+            std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
             event->channel = channel;
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
+    } else if (type == "storeUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.updateCache(raw.id(), raw);
+            auto data = decryptAndConvertStoreDataToStore(raw);
+            std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "storeDeleted") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreDeletedEventData>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.remove(raw.storeId());
+            auto data = Mapper::mapToStoreDeletedEventData(raw);
+            std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "storeStatsChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            auto data = Mapper::mapToStoreStatsChangedEventData(raw);
+            std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    
+    } else if (type == "storeFileCreated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
+        auto store {_storeProvider.get(raw.storeId(), !_subscribeForStore)};
+        auto file = decryptAndConvertFileDataToFileInfo(store, raw);
+
+        // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
+        std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
+        event->channel = channel;
+        event->data = file;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "storeFileUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
+        auto store {_storeProvider.get(raw.storeId(), !_subscribeForStore)};
+        auto file = decryptAndConvertFileDataToFileInfo(store, raw);
+        std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
+        event->channel = channel;
+        event->data = file;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "storeFileDeleted") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(data);
+        auto data = Mapper::mapToStoreFileDeletedEventData(raw);
+        std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
+        event->channel = channel;
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "custom") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreCustomEventData>(data);
+        auto store = _storeProvider.get(raw.id());
+        auto key = _keyProvider->getKey(store.keys(), raw.keyId());
+        auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
+        std::shared_ptr<StoreCustomEvent> event(new StoreCustomEvent());
+        event->channel = channel;
+        event->data = data;
+        event->userId = raw.author().id();
+        event->storeId = raw.id();
+        _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
         std::string channel = data->has("channel") ? data->get("channel") : "";
         if(channel == "store") {
@@ -893,4 +897,45 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     storeFileUpdateModel.meta(encryptedMeta.asVar());
     storeFileUpdateModel.keyId(key.id);
     _serverApi->storeFileUpdate(storeFileUpdateModel);
+}
+
+void StoreApiImpl::validateChannelName(const std::string& channelName) {
+    if(std::find(_unallowedChannelsNames.begin(), _unallowedChannelsNames.end(), channelName) != _unallowedChannelsNames.end()) {
+        throw UnallowedChannelNameException();
+    }
+}
+
+void StoreApiImpl::emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
+    validateChannelName(channelName);
+    auto store = _storeProvider.get(storeId);
+    auto key = _keyProvider->getKey(store.keys(), store.keyId());
+    auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    for(auto userId: usersIds) {
+        usersIdList.add(userId);
+    }
+    server::StoreEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StoreEmitCustomEventModel>();
+    model.storeId(storeId);
+    model.data(_eventDataEncryptorV4.signAndEncryptAndEncode(eventData, _userPrivKey, key.key));
+    model.channel(channelName);
+    model.users(usersIdList);
+    model.keyId(key.id);
+    _serverApi->storeSendCustomEvent(model);
+}
+
+void StoreApiImpl::subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
+    validateChannelName(channelName);
+    auto store = _storeProvider.get(storeId);
+    if(_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
+        throw AlreadySubscribedException(storeId);
+    }
+    _storeSubscriptionHelper.subscribeForElementCustom(storeId, channelName);
+}
+
+void StoreApiImpl::unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
+    validateChannelName(channelName);
+    auto store = _storeProvider.get(storeId);
+    if(!_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
+        throw NotSubscribedException(storeId);
+    }
+    _storeSubscriptionHelper.unsubscribeFromElementCustom(storeId, channelName);
 }

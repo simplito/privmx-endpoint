@@ -99,6 +99,10 @@ public:
     void unsubscribeFromStoreEvents();
     void subscribeForFileEvents(const std::string& storeId);
     void unsubscribeFromFileEvents(const std::string& storeId);
+
+    void emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
+    void subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName);
+    void unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName);
 private:
     struct StoreFileDecryptionParams {
         std::string fileId;
@@ -142,6 +146,8 @@ private:
     
     StoreFileDecryptionParams getStoreFileDecryptionParams(const server::File& file, const core::EncKey& encKey);
     int64_t createFileReadHandle(const StoreFileDecryptionParams& storeFileDecryptionParams);
+    void validateChannelName(const std::string& channelName);
+    
     static const size_t _CHUNK_SIZE;
     
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -169,6 +175,8 @@ private:
 
     FileMetaEncryptorV4 _fileMetaEncryptorV4;
     StoreDataEncryptorV4 _storeDataEncryptorV4;
+    core::DataEncryptorV4 _eventDataEncryptorV4;
+    std::vector<std::string> _unallowedChannelsNames;
     
 
     inline static const std::string STORE_TYPE_FILTER_FLAG = "store";

@@ -57,6 +57,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxPublicDataMismatchExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException, "Writing to entry interupted. Written data smaller then declared", 0x0014)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, HandleIsUsedInInboxHandleException, "Handle is used in inbox handle", 0x0015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, CachedInboxIdMismatchException, "Cached inbox id mismatch", 0x0016)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, CannotExtractInboxCustomEventException, "Cannot extract InboxCustomEvent", 0x0017)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, UnallowedChannelNameException, "Unallowed channel name", 0x0018)
 
 } // store
 } // endpoint

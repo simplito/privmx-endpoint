@@ -39,7 +39,8 @@ public:
     server::StoreFileReadResult storeFileRead(const server::StoreFileReadModel& model);
     void storeFileWrite(const server::StoreFileWriteModel& model);
     void storeFileUpdate(const server::StoreFileUpdateModel& model);
-    void storeFileDelete(const server::StoreFileDeleteModel& model);    
+    void storeFileDelete(const server::StoreFileDeleteModel& model);  
+    void storeSendCustomEvent(server::StoreEmitCustomEventModel model);  
 private:
     template<typename T> 
     T request(const std::string& method, const Poco::JSON::Object::Ptr& params); //only typed object

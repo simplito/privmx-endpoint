@@ -56,6 +56,10 @@ void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel model) {
     request("threadMessageUpdate", model);
 }
 
+void ServerApi::threadSendCustomEvent(server::ThreadEmitCustomEventModel model) {
+    request("threadSendCustomEvent", model);
+}
+
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("thread." + method, params));
 }

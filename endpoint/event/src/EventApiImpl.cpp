@@ -27,7 +27,7 @@ EventApiImpl::EventApiImpl(const privmx::crypto::PrivateKey& userPrivKey, privfs
     _serverApi(ServerApi(gateway)),
     _eventMiddleware(eventMiddleware),
     _contextSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "context", "contexts")),
-    _unallowedChannelsNames({INTERNAL_CHANNEL_NAME}) 
+    _unallowedChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&EventApiImpl::processConnectedEvent, this));
@@ -66,14 +66,14 @@ void EventApiImpl::emitEventInternal(const std::string& contextId, InternalConte
     server::EncryptedInternalContextEvent encryptedEvent = privmx::utils::TypedObjectFactory::createNewObject<server::EncryptedInternalContextEvent>();
     encryptedEvent.type(event.type);
     encryptedEvent.encryptedData(_dataEncryptor.signAndEncryptAndEncode( event.data, _userPrivKey, key));
-    emitEventEx(contextId, INTERNAL_CHANNEL_NAME, encryptedEvent, users, key);
+    emitEventEx(contextId, INTERNAL_EVENT_CHANNEL_NAME, encryptedEvent, users, key);
 }
 
 bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType) {
     //check if type == "custom" and channel == "context/<contextId>/internal"
     if(type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
-        if( !raw.idEmpty() && channel == "context/" + raw.id() + "/" INTERNAL_CHANNEL_NAME && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
+        if( !raw.idEmpty() && channel == "context/" + raw.id() + "/" INTERNAL_EVENT_CHANNEL_NAME && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
             auto rawEventDataJSON = raw.eventData().extract<Poco::JSON::Object::Ptr>();
             if(rawEventDataJSON->has("type")) {
                 if(!internalContextEventType.has_value()) {
@@ -98,17 +98,17 @@ InternalContextEvent EventApiImpl::extractInternalEventData(const Poco::JSON::Ob
 }
 
 void EventApiImpl::subscribeForInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.subscribeForElementCustom(contextId, INTERNAL_CHANNEL_NAME);
+    _contextSubscriptionHelper.subscribeForElementCustom(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::unsubscribeFromInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, INTERNAL_CHANNEL_NAME);
+    _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
     if(type == "custom" && _contextSubscriptionHelper.hasSubscriptionForChannel(channel) && data->get("eventData").isString()) {
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
-        if(channel == "context/" + rawEvent.id() + "/" INTERNAL_CHANNEL_NAME) return;
+        if(channel == "context/" + rawEvent.id() + "/" INTERNAL_EVENT_CHANNEL_NAME) return;
         auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(
             _userPrivKey, 
             rawEvent.key()

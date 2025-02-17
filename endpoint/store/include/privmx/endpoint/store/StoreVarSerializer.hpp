@@ -72,6 +72,10 @@ Poco::Dynamic::Var VarSerializer::serialize<PagingList<store::File>>(const Pagin
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::ServerFileInfo>(const store::ServerFileInfo& val);
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<store::StoreCustomEvent>(const store::StoreCustomEvent& val);
+
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

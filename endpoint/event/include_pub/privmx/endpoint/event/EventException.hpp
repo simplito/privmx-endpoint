@@ -33,7 +33,7 @@ namespace privmx {
 namespace endpoint {
 namespace event {
 
-#define ENDPOINT_THREAD_EXCEPTION_CODE 0x00090000
+#define ENDPOINT_EVENT_EXCEPTION_CODE 0x00090000
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointEventException, "Unknown endpoint event exception", "Event", 0x0009)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, NotInitializedException, "Endpoint not initialized", 0x0001)

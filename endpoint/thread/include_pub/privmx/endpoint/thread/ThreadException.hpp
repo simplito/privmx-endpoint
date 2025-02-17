@@ -54,6 +54,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadMessageUp
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadPublicDataMismatchException, "Thread public data mismatch", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, MessagePublicDataMismatchException, "Message public data mismatch", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CachedThreadIdMismatchException, "Cached thread id mismatch", 0x0012)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadCustomEventException, "Cannot extract ThreadCustomEvent", 0x0013)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, UnallowedChannelNameException, "Unallowed channel name", 0x0014)
 
 } // thread
 } // endpoint

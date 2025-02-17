@@ -32,7 +32,10 @@ std::map<ThreadApiVarInterface::METHOD, Poco::Dynamic::Var (ThreadApiVarInterfac
                                         {SubscribeForThreadEvents, &ThreadApiVarInterface::subscribeForThreadEvents},
                                         {UnsubscribeFromThreadEvents, &ThreadApiVarInterface::unsubscribeFromThreadEvents},
                                         {SubscribeForMessageEvents, &ThreadApiVarInterface::subscribeForMessageEvents},
-                                        {UnsubscribeFromMessageEvents, &ThreadApiVarInterface::unsubscribeFromMessageEvents}};
+                                        {UnsubscribeFromMessageEvents, &ThreadApiVarInterface::unsubscribeFromMessageEvents},
+                                        {EmitEvent, &ThreadApiVarInterface::emitEvent},
+                                        {SubscribeForThreadCustomEvents, &ThreadApiVarInterface::subscribeForThreadCustomEvents},
+                                        {UnsubscribeFromThreadCustomEvents, &ThreadApiVarInterface::unsubscribeFromThreadCustomEvents}};
 
 Poco::Dynamic::Var ThreadApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -154,6 +157,32 @@ Poco::Dynamic::Var ThreadApiVarInterface::unsubscribeFromMessageEvents(const Poc
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
     _threadApi.unsubscribeFromMessageEvents(threadId);
+    return {};
+}
+
+Poco::Dynamic::Var ThreadApiVarInterface::emitEvent(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
+    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
+    auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "eventData");
+    auto usersIds = _deserializer.deserializeVector<std::string>(argsArr->get(3), "usersIds");
+    _threadApi.emitEvent(threadId, channelName, eventData, usersIds);
+    return {};
+}
+
+Poco::Dynamic::Var ThreadApiVarInterface::subscribeForThreadCustomEvents(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
+    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
+    _threadApi.subscribeForThreadCustomEvents(threadId, channelName);
+    return {};
+}
+
+Poco::Dynamic::Var ThreadApiVarInterface::unsubscribeFromThreadCustomEvents(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
+    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
+    _threadApi.unsubscribeFromThreadCustomEvents(threadId, channelName);
     return {};
 }
 
