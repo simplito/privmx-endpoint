@@ -43,7 +43,7 @@ EventApiImpl::~EventApiImpl() {
 void EventApiImpl::emitEvent(const std::string& contextId, const std::string& channelName, const core::Buffer& eventData, const std::vector<core::UserWithPubKey>& users) {
     validateChannelName(channelName);
     auto key = privmx::crypto::Crypto::randomBytes(32);
-    emitEventEx(contextId, INTERNAL_CHANNEL_NAME, _dataEncryptor.signAndEncryptAndEncode( eventData, _userPrivKey, key), users, key);
+    emitEventEx(contextId, channelName, _dataEncryptor.signAndEncryptAndEncode( eventData, _userPrivKey, key), users, key);
 }
 
 void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
