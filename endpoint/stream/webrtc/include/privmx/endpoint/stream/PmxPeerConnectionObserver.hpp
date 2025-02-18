@@ -16,7 +16,7 @@ limitations under the License.
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
-#include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <pmx_frame_cryptor.h>
 

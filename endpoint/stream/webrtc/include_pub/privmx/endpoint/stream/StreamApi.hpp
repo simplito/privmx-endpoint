@@ -20,7 +20,7 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/webrtc/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -71,7 +71,7 @@ public:
     
     void publishStream(int64_t streamId);
 
-    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings);
+    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings);
 
     std::vector<Stream> listStreams(const std::string& streamRoomId);
 

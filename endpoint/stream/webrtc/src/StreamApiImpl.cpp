@@ -168,11 +168,11 @@ void StreamApiImpl::publishStream(int64_t streamId) {
 }
 
 // Joining to Stream
-int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
+int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings) {
     int64_t streamId = generateNumericId();
     std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, settings.OnFrame);
     _streamDataMap.set( streamId, peerConnectionWebRTC);
-    return _api->joinStream(streamRoomId, streamsId, streamId, peerConnectionWebRTC);
+    return _api->joinStream(streamRoomId, streamsId, settings.settings, streamId, peerConnectionWebRTC);
 }
 
 std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {

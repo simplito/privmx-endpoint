@@ -154,7 +154,7 @@ void StreamApiLowImpl::publishStream(int64_t localStreamId) {
 }
 
 // Joining to Stream
-int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
+int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, [[maybe_unused]] const Settings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
     auto roomOpt = _streamRoomMap.get(streamRoomId);
     std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
     if(!roomOpt.has_value()) {

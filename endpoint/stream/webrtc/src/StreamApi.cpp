@@ -184,7 +184,7 @@ void StreamApi::publishStream(int64_t streamId) {
     }
 }
 
-int64_t StreamApi::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings) {
+int64_t StreamApi::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {

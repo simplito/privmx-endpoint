@@ -66,7 +66,7 @@ public:
     
     void publishStream(int64_t localStreamId);
 
-    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
+    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const Settings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::vector<Stream> listStreams(const std::string& streamRoomId);
 
