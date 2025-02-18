@@ -144,11 +144,11 @@ void StreamApiLow::publishStream(int64_t localStreamId) {
     }
 }
 
-int64_t StreamApiLow::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const streamJoinSettings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
+int64_t StreamApiLow::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->joinStream(streamRoomId, streamsId, settings, localStreamId, webRtc);
+        return _impl->joinStream(streamRoomId, streamsId, localStreamId, webRtc);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
