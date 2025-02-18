@@ -15,6 +15,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "privmx/endpoint/core/Buffer.hpp"
+
 namespace privmx {
 namespace endpoint {
 namespace stream {
@@ -28,7 +30,7 @@ enum KeyType
 struct Key
 {
     std::string keyId;
-    std::string key;
+    core::Buffer key;
     KeyType type;
 };
 

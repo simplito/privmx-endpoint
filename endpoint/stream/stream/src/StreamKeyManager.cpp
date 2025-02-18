@@ -259,7 +259,7 @@ void StreamKeyManager::updateWebRtcKeyStore() {
     _keysStrage.forAll([&]([[maybe_unused]]std::string key, std::shared_ptr<StreamEncKey> value) {
         privmx::endpoint::stream::Key webRtcKey {
             .keyId = value->key.id,
-            .key =  value->key.key,
+            .key =  core::Buffer::from(value->key.key),
             .type = value->key.id == _currentKeyId ? privmx::endpoint::stream::KeyType::LOCAL : privmx::endpoint::stream::KeyType::REMOTE
         };
         webRtcKeys.push_back(webRtcKey);
