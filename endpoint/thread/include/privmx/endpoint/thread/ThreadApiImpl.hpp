@@ -93,6 +93,7 @@ private:
         const std::string& type,
         const std::optional<core::ContainerPolicy>& policies
     );
+    server::ThreadInfo getRawThreadFromCacheOrBridge(const std::string& threadId);
     Thread _getThreadEx(const std::string& threadId, const std::string& type);
     core::PagingList<Thread> _listThreadsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 

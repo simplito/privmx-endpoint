@@ -219,7 +219,7 @@ Thread ThreadApiImpl::_getThreadEx(const std::string& threadId, const std::strin
     }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, getting thread)
     auto thread = _serverApi.threadGet(params).thread();
-    _threadProvider.updateCache(thread.id(), thread);
+    if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValue(thread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, data send)
     auto result = decryptAndConvertThreadDataToThread(thread);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _getThreadEx, data decrypted)
@@ -247,7 +247,7 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _listThreadsEx, data send)
     std::vector<Thread> threads;
     for (auto thread : threadsList.threads()) {
-        _threadProvider.updateCache(thread.id(), thread);
+        if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValue(thread);
         threads.push_back(decryptAndConvertThreadDataToThread(thread));
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _listThreadsEx, data decrypted)
@@ -263,7 +263,7 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
-    auto thread = _threadProvider.get(message.threadId(), !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(message.threadId());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data send);
     auto result = decryptAndConvertMessageDataToMessage(thread, message);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
@@ -278,7 +278,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting messageList)
     auto messagesList = _serverApi.threadMessagesGet(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
-    auto thread = _threadProvider.get(threadId, !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     std::vector<Message> messages;
     for (auto message : messagesList.messages()) {
@@ -292,7 +292,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
 }
 std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessage);
-    auto thread = _threadProvider.get(threadId, !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
     auto msgKey = getThreadEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
@@ -328,7 +328,7 @@ void ThreadApiImpl::updateMessage(
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
-    auto thread = _threadProvider.get(message.threadId(), !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(message.threadId());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
     auto msgKey = getThreadEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
@@ -348,15 +348,13 @@ void ThreadApiImpl::updateMessage(
 }
 
 void ThreadApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if(!_threadSubscriptionHelper.hasSubscriptionForChannel(channel)) {
-        // if(channel != INTERNAL_EVENT_CHANNEL_NAME) {
-            return;
-        // }
+    if(!_threadSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+        return;
     }
     if (type == "threadCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            _threadProvider.updateCache(raw.id(), raw);
+            _threadProvider.updateByValue(raw);
             auto data = decryptAndConvertThreadDataToThread(raw); 
             std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
             event->channel = channel;
@@ -366,7 +364,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
     } else if (type == "threadUpdated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            _threadProvider.updateCache(raw.id(), raw);
+            _threadProvider.updateByValue(raw);
             auto data = decryptAndConvertThreadDataToThread(raw);
             std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
             event->channel = channel;
@@ -376,7 +374,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
     } else if (type == "threadDeleted") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            _threadProvider.remove(raw.threadId());
+            _threadProvider.invalidateByContainerId(raw.threadId());
             auto data = Mapper::mapToThreadDeletedEventData(raw);
             std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
             event->channel = channel;
@@ -386,6 +384,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
     } else if (type == "threadStats") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            _threadProvider.updateStats(raw);
             auto data = Mapper::mapToThreadStatsEventData(raw);
             std::shared_ptr<ThreadStatsChangedEvent> event(new ThreadStatsChangedEvent());
             event->channel = channel;
@@ -394,7 +393,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         }
     } else if (type == "threadNewMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
-        auto thread = _threadProvider.get(raw.threadId(), !_subscribeForThread);
+        auto thread = getRawThreadFromCacheOrBridge(raw.threadId());
         auto data = decryptAndConvertMessageDataToMessage(thread, raw);
         std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
         event->channel = channel;
@@ -402,7 +401,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadUpdatedMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
-        auto thread = _threadProvider.get(raw.threadId(), !_subscribeForThread);
+        auto thread = getRawThreadFromCacheOrBridge(raw.threadId());
         auto data = decryptAndConvertMessageDataToMessage(thread, raw);
         std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
         event->channel = channel;
@@ -437,7 +436,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         if(channelName == "thread") {
             PRIVMX_DEBUG("ThreadApi", "Cache", "Disabled")
             _subscribeForThread = false;
-            _threadProvider.reset();
+            _threadProvider.invalidate();
         }
     }
 }
@@ -473,11 +472,11 @@ void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
 }
 
 void ThreadApiImpl::processConnectedEvent() {
-    _threadProvider.reset();
+    _threadProvider.invalidate();
 }
 
 void ThreadApiImpl::processDisconnectedEvent() {
-    _threadProvider.reset();
+    _threadProvider.invalidate();
 }
 
 privmx::utils::List<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
@@ -787,4 +786,11 @@ void ThreadApiImpl::unsubscribeFromThreadCustomEvents(const std::string& threadI
         throw NotSubscribedException(threadId);
     }
     _threadSubscriptionHelper.unsubscribeFromElementCustom(threadId, channelName);
+}
+
+server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::string& threadId) {
+    // useing threadProvider only with THREAD_TYPE_FILTER_FLAG 
+    // making sure to have valid cache
+    if(!_subscribeForThread) _threadProvider.update(threadId);
+    return _threadProvider.get(threadId);
 }

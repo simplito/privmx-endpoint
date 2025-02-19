@@ -27,24 +27,20 @@ public:
     inline ContainerProvider(std::function<VALUE(ID)> getterFunction) : 
         _storage(privmx::utils::ThreadSaveMap<ID, VALUE>()), _getterFunction(getterFunction) {}
 
-    inline virtual VALUE get(const ID& id, bool force = true)  {
-        if(force) {
-            return getFromOutsideAndUpdate(id);
-        }
-        std::optional<VALUE> cachedValue = _storage.get(id);
-        return cachedValue.has_value() ? cachedValue.value() : getFromOutsideAndUpdate(id);  
+    inline virtual VALUE get(const ID& containerId)  {
+        std::optional<VALUE> cachedValue = _storage.get(containerId);
+        return cachedValue.has_value() ? cachedValue.value() : getFromOutsideAndUpdate(containerId);  
     }
+    inline virtual void update(const ID& containerId) { getFromOutsideAndUpdate(containerId); }
+    inline virtual void updateByValue(const VALUE& container) = 0;
 
-    inline virtual void updateCache(const ID& id, const VALUE& value) { _storage.set(id, value); }
-
-    inline void remove(const ID& id) {_storage.erase(id);}
-
-    inline void reset() { _storage.clear();}
+    inline void invalidateByContainerId(const ID& containerId) {_storage.erase(containerId);}
+    inline void invalidate() { _storage.clear();}
 protected:
-    inline VALUE getFromOutsideAndUpdate(const ID& id)  {
-        const VALUE& value = _getterFunction(id);
-        updateCache(id, value);
-        return value;
+    inline VALUE getFromOutsideAndUpdate(const ID& containerId)  {
+        const VALUE& container = _getterFunction(containerId);
+        updateByValue(container);
+        return container;
     }
     privmx::utils::ThreadSaveMap<ID, VALUE> _storage;
     std::function<VALUE(ID)> _getterFunction;

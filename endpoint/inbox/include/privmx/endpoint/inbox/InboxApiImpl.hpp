@@ -116,7 +116,7 @@ public:
     void unsubscribeFromInboxCustomEvents(const std::string& inboxId, const std::string& channelName);
 
 private:
-
+    server::Inbox getRawInboxFromCacheOrBridge(const std::string& inboxId);
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxDataResult decryptInbox(const inbox::server::Inbox& inboxRaw);
