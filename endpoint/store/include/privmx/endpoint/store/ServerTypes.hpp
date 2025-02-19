@@ -153,12 +153,8 @@ ENDPOINT_SERVER_TYPE(StoreFileGetManyResult)
     LIST_FIELD(files, FileListElement)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StoreFileListModel)
+ENDPOINT_SERVER_TYPE_INHERIT(StoreFileListModel, core::server::ListModel)
     STRING_FIELD(storeId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreFileListResult)
@@ -208,12 +204,8 @@ ENDPOINT_SERVER_TYPE(StoreGetResult)
     OBJECT_FIELD(store, Store)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StoreListModel)
+ENDPOINT_SERVER_TYPE_INHERIT(StoreListModel, core::server::ListModel)
     STRING_FIELD(contextId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
     STRING_FIELD(type)
 TYPE_END
 

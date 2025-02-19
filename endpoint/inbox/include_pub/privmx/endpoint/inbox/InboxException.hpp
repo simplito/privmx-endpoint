@@ -58,6 +58,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, WritingToEntryInteruptedWritt
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, HandleIsUsedInInboxHandleException, "Handle is used in inbox handle", 0x0015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, CannotExtractInboxCustomEventException, "Cannot extract InboxCustomEvent", 0x0017)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, UnallowedChannelNameException, "Unallowed channel name", 0x0018)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxModuleDoesNotSupportQueriesYetException, "Inbox module does not support queries yet.", 0x0099)
+
 
 } // store
 } // endpoint

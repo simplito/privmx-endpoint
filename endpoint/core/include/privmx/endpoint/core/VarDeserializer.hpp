@@ -70,6 +70,9 @@ template<>
 bool VarDeserializer::deserialize<bool>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
+Poco::JSON::Object::Ptr VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
 UserWithPubKey VarDeserializer::deserialize<UserWithPubKey>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>

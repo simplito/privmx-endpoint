@@ -82,12 +82,8 @@ ENDPOINT_SERVER_TYPE(ThreadGetModel)
     STRING_FIELD(type)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(ThreadListModel)
+ENDPOINT_SERVER_TYPE_INHERIT(ThreadListModel, core::server::ListModel)
     STRING_FIELD(contextId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
     STRING_FIELD(type)
 TYPE_END
 
@@ -127,12 +123,8 @@ ENDPOINT_SERVER_TYPE(ThreadMessageGetModel)
     STRING_FIELD(messageId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(ThreadMessagesGetModel)
+ENDPOINT_SERVER_TYPE_INHERIT(ThreadMessagesGetModel, core::server::ListModel)
     STRING_FIELD(threadId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessageGetResult)
