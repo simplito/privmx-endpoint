@@ -23,9 +23,7 @@ void InboxProvider::updateByValue(const server::Inbox& container) {
         return;
     }
     auto cached_container = cached.value();
-    if(container.version() > cached_container.version()) {
-        _storage.set(container.id(), container);
-    } else if (container.version() == cached_container.version() && container.lastModificationDate() > cached_container.lastModificationDate()) {
+    if(container.version() >= cached_container.version() || container.lastModificationDate() > cached_container.lastModificationDate()) {
         _storage.set(container.id(), container);
     }
 }
