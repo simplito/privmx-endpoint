@@ -16,19 +16,23 @@ using namespace privmx::endpoint::thread;
 
 ThreadProvider::ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread) : core::ContainerProvider<std::string, server::ThreadInfo>(getThread) {}
     
-void ThreadProvider::updateCache(const std::string& id, const server::ThreadInfo& value) {
-    if(id != value.id()) {
-        throw CachedThreadIdMismatchException();
-    }
-    auto cached = _storage.get(id);
+void ThreadProvider::updateByValue(const server::ThreadInfo& container) {
+    auto cached = _storage.get(container.id());
     if(!cached.has_value()) {
-        _storage.set(id, value);
+        _storage.set(container.id(), container);
         return;
     }
-    auto cached_value = cached.value();
-    if(value.version() > cached_value.version()) {
-        _storage.set(id, value);
-    } else if (value.version() == cached_value.version() && value.lastModificationDate() > cached_value.lastModificationDate()) {
-        _storage.set(id, value);
+    auto cached_container = cached.value();
+    if(container.version() > cached_container.version()) {
+        _storage.set(container.id(), container);
+    } else if (container.version() == cached_container.version() && container.lastModificationDate() > cached_container.lastModificationDate()) {
+        _storage.set(container.id(), container);
     }
+}
+
+void ThreadProvider::updateStats(const server::ThreadStatsEventData& stats) {
+    auto threadInfo = this->get(stats.threadId());
+    threadInfo.messages(stats.messages());
+    threadInfo.lastMsgDate(stats.lastMsgDate());
+    updateByValue(threadInfo);
 }

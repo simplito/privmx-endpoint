@@ -16,19 +16,16 @@ using namespace privmx::endpoint::inbox;
 
 InboxProvider::InboxProvider(std::function<server::Inbox(std::string)> getInbox) : core::ContainerProvider<std::string, server::Inbox>(getInbox) {}
     
-void InboxProvider::updateCache(const std::string& id, const server::Inbox& value) {
-    if(id != value.id()) {
-        throw CachedInboxIdMismatchException();
-    }
-    auto cached = _storage.get(id);
+void InboxProvider::updateByValue(const server::Inbox& container) {
+    auto cached = _storage.get(container.id());
     if(!cached.has_value()) {
-        _storage.set(id, value);
+        _storage.set(container.id(), container);
         return;
     }
-    auto cached_value = cached.value();
-    if(value.version() > cached_value.version()) {
-        _storage.set(id, value);
-    } else if (value.version() == cached_value.version() && value.lastModificationDate() > cached_value.lastModificationDate()) {
-        _storage.set(id, value);
+    auto cached_container = cached.value();
+    if(container.version() > cached_container.version()) {
+        _storage.set(container.id(), container);
+    } else if (container.version() == cached_container.version() && container.lastModificationDate() > cached_container.lastModificationDate()) {
+        _storage.set(container.id(), container);
     }
 }

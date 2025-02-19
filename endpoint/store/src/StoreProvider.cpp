@@ -16,19 +16,23 @@ using namespace privmx::endpoint::store;
 
 StoreProvider::StoreProvider(std::function<server::Store(std::string)> getStore) : core::ContainerProvider<std::string, server::Store>(getStore) {}
     
-void StoreProvider::updateCache(const std::string& id, const server::Store& value) {
-    if(id != value.id()) {
-        throw CachedStoreIdMismatchException();
-    }
-    auto cached = _storage.get(id);
+void StoreProvider::updateByValue( const server::Store& container) {
+    auto cached = _storage.get(container.id());
     if(!cached.has_value()) {
-        _storage.set(id, value);
+        _storage.set(container.id(), container);
         return;
     }
-    auto cached_value = cached.value();
-    if(value.version() > cached_value.version()) {
-        _storage.set(id, value);
-    } else if (value.version() == cached_value.version() && value.lastModificationDate() > cached_value.lastModificationDate()) {
-        _storage.set(id, value);
+    auto cached_container = cached.value();
+    if(container.version() > cached_container.version()) {
+        _storage.set(container.id(), container);
+    } else if (container.version() == cached_container.version() && container.lastModificationDate() > cached_container.lastModificationDate()) {
+        _storage.set(container.id(), container);
     }
+}
+
+void StoreProvider::updateStats(const server::StoreStatsChangedEventData& stats) {
+    auto store = this->get(stats.id());
+    store.files(stats.files());
+    store.lastFileDate(stats.lastFileDate());
+    updateByValue(store);
 }
