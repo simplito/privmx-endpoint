@@ -1649,7 +1649,7 @@ TEST_F(ThreadTest, listThreads_query) {
                 .skip=0,
                 .limit=100,
                 .sortOrder="asc",
-                .queryJSONString="{\"test\":1}"
+                .queryAsJson="{\"test\":1}"
             }
         );
     });
