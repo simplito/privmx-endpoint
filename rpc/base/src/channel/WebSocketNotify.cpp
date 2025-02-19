@@ -66,7 +66,7 @@ void WebSocketNotify::queueForNotify(const string data) {
         notifier_active = true;
         notifier_cancellation_token = privmx::utils::CancellationToken::create();
         consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
-            while(!token->isCanceled()) {
+            while(!token->isCancelled()) {
                 notifier();
             }
         }, notifier_cancellation_token);
