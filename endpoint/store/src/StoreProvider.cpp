@@ -23,7 +23,7 @@ void StoreProvider::updateByValue( const server::Store& container) {
         return;
     }
     auto cached_container = cached.value();
-    if(container.version() >= cached_container.version() || container.lastModificationDate() > cached_container.lastModificationDate()) {
+    if(container.version() > cached_container.version() || container.lastModificationDate() > cached_container.lastModificationDate()) {
         _storage.set(container.id(), container);
     }
 }
