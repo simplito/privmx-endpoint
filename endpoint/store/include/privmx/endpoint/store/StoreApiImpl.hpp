@@ -113,6 +113,7 @@ private:
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
                 const std::optional<core::ContainerPolicy>& policies);
+    server::Store getRawStoreFromCacheOrBridge(const std::string& storeId);
     Store _storeGetEx(const std::string& storeId, const std::string& type);
     core::PagingList<Store> _storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
 
