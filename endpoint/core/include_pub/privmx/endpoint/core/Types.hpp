@@ -53,7 +53,7 @@ struct PagingQuery {
     /**
      * extra query parameters in serialized JSON  
      */
-    std::optional<std::string> queryJSONString;
+    std::optional<std::string> queryAsJson;
 };
 
 /**

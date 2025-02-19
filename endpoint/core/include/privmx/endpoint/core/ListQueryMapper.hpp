@@ -28,8 +28,8 @@ public:
         if (listQuery.lastId.has_value()) {
             obj.lastId(listQuery.lastId.value());
         }
-        if(listQuery.queryJSONString.has_value()) {
-            obj.query(privmx::utils::Utils::parseJson(listQuery.queryJSONString.value()));
+        if(listQuery.queryAsJson.has_value()) {
+            obj.query(privmx::utils::Utils::parseJson(listQuery.queryAsJson.value()));
         }
     }
 };
