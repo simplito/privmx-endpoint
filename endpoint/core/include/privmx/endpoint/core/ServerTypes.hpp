@@ -50,6 +50,22 @@ ENDPOINT_SERVER_TYPE(ContextListResult)
     INT64_FIELD(count)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
+    STRING_FIELD(contextId)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UserIdentity)
+    STRING_FIELD(id)
+    STRING_FIELD(pub)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatus, UserIdentity)
+    STRING_FIELD(status)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
+    LIST_FIELD(users, server::UserIdentityWithStatus)
+TYPE_END
 
 } // server
 } // core

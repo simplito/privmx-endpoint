@@ -87,6 +87,22 @@ struct UserWithPubKey {
 };
 
 /**
+ * Contains Infomation about user
+ */
+struct UserInfo {
+    /**
+     * User publicKey and usetId
+     */
+    UserWithPubKey user;
+
+    /**
+     *  is user connected to bridge
+     */
+    bool isActive;
+};
+
+
+/**
  * Contains container's policies.
  */
 struct ContainerPolicyWithoutItem {

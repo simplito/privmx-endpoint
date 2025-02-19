@@ -41,6 +41,7 @@ public:
     void connectPublic(const std::string& solutionId, const std::string& platformUrl);
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
+    std::vector<UserInfo> getContextUsers(const std::string& contextId);
     void disconnect();
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
     const privmx::crypto::PrivateKey& getUserPrivKey() const { return _userPrivKey; }

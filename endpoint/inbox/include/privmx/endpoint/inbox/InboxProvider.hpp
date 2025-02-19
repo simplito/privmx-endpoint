@@ -23,7 +23,7 @@ namespace inbox {
 class InboxProvider : public core::ContainerProvider<std::string, server::Inbox> {
 public:
     InboxProvider(std::function<server::Inbox(std::string)> getThread);
-    void updateCache(const std::string& id, const server::Inbox& value) override;
+    void updateByValue(const server::Inbox& value) override;
 };
 
 } // inbox

@@ -61,6 +61,15 @@ public:
     PagingList<Context> listContexts(const PagingQuery& pagingQuery);
 
     /**
+     * Gets a list of users of given context.
+     * 
+     * @param contextId ID of the context
+     * 
+     * @return vector containing a list of users Info
+     */
+    std::vector<UserInfo> getContextUsers(const std::string& contextId);
+
+    /**
      * Disconnects from the PrivMX Bridge server.
      *
      */
