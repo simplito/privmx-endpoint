@@ -21,13 +21,15 @@ namespace core {
 
 class ListQueryMapper {
 public:
-    template<class T>
-    static void map(T& obj, const PagingQuery& listQuery) {
+    static void map(server::ListModel obj, const PagingQuery& listQuery) {
         obj.sortOrder(listQuery.sortOrder);
         obj.limit(listQuery.limit);
         obj.skip(listQuery.skip);
         if (listQuery.lastId.has_value()) {
             obj.lastId(listQuery.lastId.value());
+        }
+        if(listQuery.queryAsJson.has_value()) {
+            obj.query(privmx::utils::Utils::parseJson(listQuery.queryAsJson.value()));
         }
     }
 };

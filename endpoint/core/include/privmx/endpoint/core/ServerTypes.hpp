@@ -37,6 +37,7 @@ ENDPOINT_SERVER_TYPE(ListModel)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(lastId)
+    VAR_FIELD(query) // JSON
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ContextInfo)

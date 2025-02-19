@@ -265,6 +265,9 @@ Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& t
 }
 
 core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& contextId, const core::PagingQuery& query) {
+    if(query.queryAsJson.has_value()) {
+        throw InboxModuleDoesNotSupportQueriesYetException();
+    }
     auto model = Factory::createObject<inbox::server::InboxListModel>();
     model.contextId(contextId);
     core::ListQueryMapper::map(model, query);
@@ -408,6 +411,9 @@ inbox::InboxEntry InboxApiImpl::readEntry(const std::string& inboxEntryId) {
 }
 
 core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(const std::string& inboxId, const core::PagingQuery& query) {
+    if(query.queryAsJson.has_value()) {
+        throw InboxModuleDoesNotSupportQueriesYetException();
+    }
     PRIVMX_DEBUG_TIME_START(InboxApi, listEntries)
     auto inboxRaw {getRawInboxFromCacheOrBridge(inboxId)};
     auto inboxData {getInboxDataEntry(inboxRaw).data()};
