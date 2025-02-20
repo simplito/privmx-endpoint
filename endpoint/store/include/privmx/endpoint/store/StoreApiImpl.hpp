@@ -177,7 +177,7 @@ private:
     FileMetaEncryptorV4 _fileMetaEncryptorV4;
     StoreDataEncryptorV4 _storeDataEncryptorV4;
     core::DataEncryptorV4 _eventDataEncryptorV4;
-    std::vector<std::string> _unallowedChannelsNames;
+    std::vector<std::string> _forbiddenChannelsNames;
     
 
     inline static const std::string STORE_TYPE_FILTER_FLAG = "store";

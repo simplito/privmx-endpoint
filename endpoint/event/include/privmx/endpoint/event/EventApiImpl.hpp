@@ -39,7 +39,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::SubscriptionHelper _contextSubscriptionHelper;
     core::DataEncryptorV4 _dataEncryptor;
-    std::vector<std::string> _unallowedChannelsNames;
+    std::vector<std::string> _forbiddenChannelsNames;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

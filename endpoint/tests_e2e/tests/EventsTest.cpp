@@ -2018,7 +2018,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_getCustom_event_disabled) {
     }
     EXPECT_THROW({
         eventApi->unsubscribeFromCustomEvents(reader->getString("Context_1.contextId"), "internal");
-    }, event::UnallowedChannelNameException);
+    }, event::ForbiddenChannelNameException);
     EXPECT_THROW({
         eventApi->unsubscribeFromCustomEvents(reader->getString("Context_1.contextId"), "testing");
     }, core::Exception);
@@ -2068,7 +2068,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_thread_custom_event_enabled) {
     }
     EXPECT_THROW({
         threadApi->subscribeForThreadCustomEvents(reader->getString("Thread_1.threadId"), "internal");
-    }, thread::UnallowedChannelNameException);
+    }, thread::ForbiddenChannelNameException);
     EXPECT_NO_THROW({
         threadApi->subscribeForThreadCustomEvents(reader->getString("Thread_1.threadId"), "testing");
     });
@@ -2123,7 +2123,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_get_thread_custom_event_disabled) {
     }
     EXPECT_THROW({
         threadApi->unsubscribeFromThreadCustomEvents(reader->getString("Thread_1.threadId"), "internal");
-    }, thread::UnallowedChannelNameException);
+    }, thread::ForbiddenChannelNameException);
     EXPECT_THROW({
         threadApi->unsubscribeFromThreadCustomEvents(reader->getString("Thread_1.threadId"), "testing");
     }, core::Exception);
@@ -2171,7 +2171,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_store_custom_event_enabled) {
     }
     EXPECT_THROW({
         storeApi->subscribeForStoreCustomEvents(reader->getString("Store_1.storeId"), "internal");
-    }, store::UnallowedChannelNameException);
+    }, store::ForbiddenChannelNameException);
     EXPECT_NO_THROW({
         storeApi->subscribeForStoreCustomEvents(reader->getString("Store_1.storeId"), "testing");
     });
@@ -2226,7 +2226,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_get_store_custom_event_disabled) {
     }
     EXPECT_THROW({
         storeApi->unsubscribeFromStoreCustomEvents(reader->getString("Store_1.storeId"), "internal");
-    }, store::UnallowedChannelNameException);
+    }, store::ForbiddenChannelNameException);
     EXPECT_THROW({
         storeApi->unsubscribeFromStoreCustomEvents(reader->getString("Store_1.storeId"), "testing");
     }, core::Exception);
@@ -2274,7 +2274,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_inbox_custom_event_enabled) {
     }
     EXPECT_THROW({
         inboxApi->subscribeForInboxCustomEvents(reader->getString("Inbox_1.inboxId"), "internal");
-    }, inbox::UnallowedChannelNameException);
+    }, inbox::ForbiddenChannelNameException);
     EXPECT_NO_THROW({
         inboxApi->subscribeForInboxCustomEvents(reader->getString("Inbox_1.inboxId"), "testing");
     });
@@ -2329,7 +2329,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_get_inbox_custom_event_disabled) {
     }
     EXPECT_THROW({
         inboxApi->unsubscribeFromInboxCustomEvents(reader->getString("Inbox_1.inboxId"), "internal");
-    }, inbox::UnallowedChannelNameException);
+    }, inbox::ForbiddenChannelNameException);
     EXPECT_THROW({
         inboxApi->unsubscribeFromInboxCustomEvents(reader->getString("Inbox_1.inboxId"), "testing");
     }, core::Exception);

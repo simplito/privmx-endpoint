@@ -139,7 +139,7 @@ private:
     MessageDataEncryptorV4 _messageDataEncryptorV4;
     ThreadDataEncryptorV4 _threadDataEncryptorV4;
     core::DataEncryptorV4 _eventDataEncryptorV4;
-    std::vector<std::string> _unallowedChannelsNames;
+    std::vector<std::string> _forbiddenChannelsNames;
 
     inline static const std::string THREAD_TYPE_FILTER_FLAG = "thread";
 };

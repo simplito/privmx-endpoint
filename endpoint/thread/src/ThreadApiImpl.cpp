@@ -57,7 +57,7 @@ ThreadApiImpl::ThreadApiImpl(
     })),
     _subscribeForThread(false),
     _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages")),
-    _unallowedChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
+    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&ThreadApiImpl::processConnectedEvent, this));
@@ -416,7 +416,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadCustomEventData>(data);
-        auto thread = _threadProvider.get(raw.id());
+        auto thread = getRawThreadFromCacheOrBridge(raw.id());
         auto key = _keyProvider->getKey(thread.keys(), raw.keyId());
         auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
         std::shared_ptr<ThreadCustomEvent> event(new ThreadCustomEvent());
@@ -456,7 +456,7 @@ void ThreadApiImpl::unsubscribeFromThreadEvents() {
 }
 
 void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
-    auto thread = _threadProvider.get(threadId);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     if(_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
         throw AlreadySubscribedException(threadId);
     }
@@ -464,7 +464,7 @@ void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
 }
 
 void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
-    auto thread = _threadProvider.get(threadId);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     if(!_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
         throw NotSubscribedException(threadId);
     }
@@ -748,14 +748,14 @@ core::EncKey ThreadApiImpl::getThreadEncKey(const server::ThreadInfo& thread) {
 }
 
 void ThreadApiImpl::validateChannelName(const std::string& channelName) {
-    if(std::find(_unallowedChannelsNames.begin(), _unallowedChannelsNames.end(), channelName) != _unallowedChannelsNames.end()) {
-        throw UnallowedChannelNameException();
+    if(std::find(_forbiddenChannelsNames.begin(), _forbiddenChannelsNames.end(), channelName) != _forbiddenChannelsNames.end()) {
+        throw ForbiddenChannelNameException();
     }
 }
 
 void ThreadApiImpl::emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
     validateChannelName(channelName);
-    auto thread = _threadProvider.get(threadId);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     auto key = _keyProvider->getKey(thread.keys(), thread.keyId());
     auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for(auto userId: usersIds) {
@@ -772,7 +772,7 @@ void ThreadApiImpl::emitEvent(const std::string& threadId, const std::string& ch
 
 void ThreadApiImpl::subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto thread = _threadProvider.get(threadId);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     if(_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
         throw AlreadySubscribedException(threadId);
     }
@@ -781,7 +781,7 @@ void ThreadApiImpl::subscribeForThreadCustomEvents(const std::string& threadId, 
 
 void ThreadApiImpl::unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto thread = _threadProvider.get(threadId);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     if(!_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
         throw NotSubscribedException(threadId);
     }

@@ -69,7 +69,7 @@ StoreApiImpl::StoreApiImpl(
     _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
     _storeDataEncryptorV4(StoreDataEncryptorV4()),
-    _unallowedChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
+    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StoreApiImpl::processConnectedEvent, this));
@@ -589,7 +589,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreCustomEventData>(data);
-        auto store = _storeProvider.get(raw.id());
+        auto store = getRawStoreFromCacheOrBridge(raw.id());
         auto key = _keyProvider->getKey(store.keys(), raw.keyId());
         auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
         std::shared_ptr<StoreCustomEvent> event(new StoreCustomEvent());
@@ -905,14 +905,14 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
 }
 
 void StoreApiImpl::validateChannelName(const std::string& channelName) {
-    if(std::find(_unallowedChannelsNames.begin(), _unallowedChannelsNames.end(), channelName) != _unallowedChannelsNames.end()) {
-        throw UnallowedChannelNameException();
+    if(std::find(_forbiddenChannelsNames.begin(), _forbiddenChannelsNames.end(), channelName) != _forbiddenChannelsNames.end()) {
+        throw ForbiddenChannelNameException();
     }
 }
 
 void StoreApiImpl::emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
     validateChannelName(channelName);
-    auto store = _storeProvider.get(storeId);
+    auto store = getRawStoreFromCacheOrBridge(storeId);
     auto key = _keyProvider->getKey(store.keys(), store.keyId());
     auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for(auto userId: usersIds) {
@@ -929,7 +929,7 @@ void StoreApiImpl::emitEvent(const std::string& storeId, const std::string& chan
 
 void StoreApiImpl::subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto store = _storeProvider.get(storeId);
+    auto store = getRawStoreFromCacheOrBridge(storeId);
     if(_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
         throw AlreadySubscribedException(storeId);
     }
@@ -938,7 +938,7 @@ void StoreApiImpl::subscribeForStoreCustomEvents(const std::string& storeId, con
 
 void StoreApiImpl::unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto store = _storeProvider.get(storeId);
+    auto store = getRawStoreFromCacheOrBridge(storeId);
     if(!_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
         throw NotSubscribedException(storeId);
     }

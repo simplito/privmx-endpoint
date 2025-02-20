@@ -27,7 +27,7 @@ EventApiImpl::EventApiImpl(const privmx::crypto::PrivateKey& userPrivKey, privfs
     _serverApi(ServerApi(gateway)),
     _eventMiddleware(eventMiddleware),
     _contextSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "context", "contexts")),
-    _unallowedChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}) 
+    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&EventApiImpl::processConnectedEvent, this));
@@ -150,7 +150,7 @@ void EventApiImpl::emitEventEx(const std::string& contextId, const std::string& 
 }
 
 void EventApiImpl::validateChannelName(const std::string& channelName) {
-    if(std::find(_unallowedChannelsNames.begin(), _unallowedChannelsNames.end(), channelName) != _unallowedChannelsNames.end()) {
-        throw UnallowedChannelNameException();
+    if(std::find(_forbiddenChannelsNames.begin(), _forbiddenChannelsNames.end(), channelName) != _forbiddenChannelsNames.end()) {
+        throw ForbiddenChannelNameException();
     }
 }
