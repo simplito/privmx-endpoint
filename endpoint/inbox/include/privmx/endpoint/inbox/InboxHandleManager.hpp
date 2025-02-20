@@ -84,6 +84,8 @@ public:
         const std::string& fileHmac,
         std::shared_ptr<store::ServerApi> server
     );
+    bool isFileReadHandle(int64_t fileHandleId);
+    bool isFileWriteHandle(int64_t fileHandleId);
     std::shared_ptr<store::FileReadHandle> getFileReadHandle(int64_t fileHandleId);
     void removeFileHandle(int64_t fileHandleId, bool force = false);
 private:
