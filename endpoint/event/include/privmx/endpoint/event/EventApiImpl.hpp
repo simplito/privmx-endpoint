@@ -14,8 +14,6 @@ namespace privmx {
 namespace endpoint {
 namespace event {
 
-#define INTERNAL_CHANNEL_NAME "internal"
-
 class EventApiImpl {
 public:
     EventApiImpl(const privmx::crypto::PrivateKey& userPrivKey, privfs::RpcGateway::Ptr gateway, std::shared_ptr<core::EventMiddleware> eventMiddleware, std::shared_ptr<core::EventChannelManager> eventChannelManager);
@@ -41,7 +39,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::SubscriptionHelper _contextSubscriptionHelper;
     core::DataEncryptorV4 _dataEncryptor;
-    std::vector<std::string> _unallowedChannelsNames;
+    std::vector<std::string> _forbiddenChannelsNames;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

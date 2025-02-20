@@ -39,7 +39,10 @@ public:
         SubscribeForThreadEvents = 11,
         UnsubscribeFromThreadEvents = 12,
         SubscribeForMessageEvents = 13,
-        UnsubscribeFromMessageEvents = 14
+        UnsubscribeFromMessageEvents = 14,
+        EmitEvent = 15,
+        SubscribeForThreadCustomEvents = 16,
+        UnsubscribeFromThreadCustomEvents = 17
     };
 
     ThreadApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -60,6 +63,9 @@ public:
     Poco::Dynamic::Var unsubscribeFromThreadEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeForMessageEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromMessageEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var emitEvent(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeForThreadCustomEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFromThreadCustomEvents(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

@@ -28,7 +28,7 @@ std::shared_ptr<core::SerializedEvent> ContextCustomEvent::serialize() const {
 }
 
 bool Events::isContextCustomEvent(const core::EventHolder& handler) {
-    return handler.type() == "customContext";
+    return handler.type() == "contextCustom";
 }
 
 ContextCustomEvent Events::extractContextCustomEvent(const core::EventHolder& handler) {

@@ -215,6 +215,30 @@ public:
      */    
     void unsubscribeFromFileEvents(const std::string& storeId);
 
+    /**
+     * Emit Custom Event for selected group users of Store.
+     * 
+     * @param storeId ID of the Store on witch event will be send
+     * @param channelName name of event channel
+     * @param eventData encrypted event data
+     * @param usersIds list of userId for which event will be send 
+     */
+    void emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
+    
+    /**
+     * Subscribes for custom events in given Store on given channel.
+     * @param store ID of the Store to subscribe
+     * @param channelName name of the channel to subscribe
+     */ 
+    void subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName);
+
+     /**
+     * Unsubscribes from custom events in given Store on given channel.
+     * @param store ID of the Store to unsubscribe
+     * @param channelName name of the channel to unsubscribe
+     */ 
+    void unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName);
+
     std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }
 private:
     void validateEndpoint();

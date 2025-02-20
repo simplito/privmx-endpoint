@@ -43,6 +43,10 @@ void ServerApi::inboxDelete(server::InboxDeleteModel model) {
     request("inboxDelete", model);
 }
 
+void ServerApi::inboxSendCustomEvent(server::InboxEmitCustomEventModel model) {
+    request("inboxSendCustomEvent", model);
+}
+
 template<class T> T ServerApi::request(const std::string method, const Poco::JSON::Object::Ptr params) {  //only typed object
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("inbox." + method, params));
 }

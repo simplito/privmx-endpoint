@@ -216,3 +216,18 @@ Poco::Dynamic::Var VarSerializer::serialize<PagingList<thread::Message>>(const P
     obj->set("readItems", serialize(val.readItems));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadCustomEvent>(const thread::ThreadCustomEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "thread$ThreadCustomEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("data", serialize(val.data));
+    obj->set("threadId", serialize(val.threadId));
+    obj->set("userId", serialize(val.userId));
+    return obj;
+}

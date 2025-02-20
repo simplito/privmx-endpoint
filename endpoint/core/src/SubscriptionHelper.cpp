@@ -40,12 +40,18 @@ bool SubscriptionHelper::hasSubscriptionForChannel(const std::string& fullChanne
 
 void SubscriptionHelper::subscribeForModule(bool silent) {
     _eventChannelManager->subscribeFor(_moduleName);
-    if(!silent) _moduleFlag = true;
+    if(!silent) {
+        _moduleFlag = true;
+        _subscriptionMap.set(_moduleName, true);
+    }
 }
 
 void SubscriptionHelper::unsubscribeFromModule(bool silent) {
     _eventChannelManager->unsubscribeFrom(_moduleName);
-    if(!silent) _moduleFlag = false;
+    if(!silent) {
+        _moduleFlag = false;
+        _subscriptionMap.erase(_moduleName);
+    }
 }
 
 void SubscriptionHelper::subscribeForElement(const std::string& elementId, bool silent) {
