@@ -131,7 +131,7 @@ std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::createWebRtcKeyStore(const std
         webRtcKeys.push_back(
             privmx::webrtc::Key{.
                 keyId=keys[i].keyId, 
-                .key=keys[i].key, 
+                .key=keys[i].key.stdString(), 
                 .type=keys[i].type == privmx::endpoint::stream::KeyType::REMOTE ? privmx::webrtc::KeyType::REMOTE : privmx::webrtc::KeyType::LOCAL
             }
         );

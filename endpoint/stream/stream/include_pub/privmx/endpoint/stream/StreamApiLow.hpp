@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
-#define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
+#define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 
 #include <memory>
 #include <optional>
@@ -20,19 +20,20 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class StreamApiImpl;
+class StreamApiLowImpl;
 
-class StreamApi {
+class StreamApiLow {
 public:
 
-    static StreamApi create(core::Connection& connetion);
-    StreamApi() = default;
+    static StreamApiLow create(core::Connection& connetion);
+    StreamApiLow() = default;
 
     std::string createStreamRoom(
         const std::string& contextId, 
@@ -61,34 +62,28 @@ public:
 
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
-    int64_t createStream(const std::string& streamRoomId);
-
-    std::vector<std::pair<int64_t, std::string>> listAudioRecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
-
-    void trackAdd(int64_t streamId, DeviceType type, int64_t id = 0, const std::string& params_JSON = "{}");
+    int64_t createStream(const std::string& streamRoomId, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
     
-    void publishStream(int64_t streamId);
+    void publishStream(int64_t localStreamId);
 
-    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings);
+    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const Settings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::vector<Stream> listStreams(const std::string& streamRoomId);
 
-    void unpublishStream(int64_t streamId);
+    void unpublishStream(int64_t localStreamId);
 
-    void leaveStream(int64_t streamId);
+    void leaveStream(int64_t localStreamId);
 
-    std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }
+    std::shared_ptr<StreamApiLowImpl> getImpl() const { return _impl; }
 
 private:
     void validateEndpoint();
-    StreamApi(const std::shared_ptr<StreamApiImpl>& impl);
-    std::shared_ptr<StreamApiImpl> _impl;
+    StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl);
+    std::shared_ptr<StreamApiLowImpl> _impl;
 };
 
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_

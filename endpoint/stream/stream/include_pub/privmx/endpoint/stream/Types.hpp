@@ -20,21 +20,11 @@ namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class Frame {
-public:
-    virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
-};
-
-struct streamJoinSettings {
-    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame;
-
-};
-
-enum DeviceType {
-    Audio,
-    Video,
-    Desktop
-};
+/**
+ * Additional stream settings.
+ * Reserved for future use.
+*/
+struct Settings {};
 
 struct StreamRoom {
     std::string contextId;
