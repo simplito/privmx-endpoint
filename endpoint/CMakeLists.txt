@@ -17,6 +17,7 @@ if(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(store)
     add_subdirectory(inbox)
     add_subdirectory(stream)
+    add_subdirectory(event)
 endif(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
 
 if(PRIVMX_ENABLE_TESTS_E2E)

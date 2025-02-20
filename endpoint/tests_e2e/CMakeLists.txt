@@ -8,6 +8,7 @@ target_include_directories(privmxendpointcore PUBLIC ${INCLUDE_DIRS})
 target_include_directories(privmxendpointthread PUBLIC ${INCLUDE_DIRS})
 target_include_directories(privmxendpointstore PUBLIC ${INCLUDE_DIRS})
 target_include_directories(privmxendpointinbox PUBLIC ${INCLUDE_DIRS})
+target_include_directories(privmxendpointevent PRIVATE ${INCLUDE_DIRS})
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/startTest.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/utils ${CMAKE_CURRENT_BINARY_DIR}/utils)
@@ -25,7 +26,7 @@ target_link_libraries(privmxplatform_test_e2e_StoreTest privmx privmxendpointcor
 add_executable(privmxplatform_test_e2e_InboxTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/InboxTest.cpp)
 target_link_libraries(privmxplatform_test_e2e_InboxTest privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
 add_executable(privmxplatform_test_e2e_EventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/EventsTest.cpp)
-target_link_libraries(privmxplatform_test_e2e_EventsTest privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
+target_link_libraries(privmxplatform_test_e2e_EventsTest privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
 add_executable(privmxplatform_test_e2e_CryptoTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/CryptoTest.cpp)
 target_link_libraries(privmxplatform_test_e2e_CryptoTest privmx privmxendpointcore privmxendpointcrypto Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
 

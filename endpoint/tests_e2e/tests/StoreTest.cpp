@@ -554,6 +554,10 @@ TEST_F(StoreTest, updateStore_incorrect_data) {
 }
 
 TEST_F(StoreTest, updateStore_correct_data) {
+    //enable cache
+    EXPECT_NO_THROW({
+        storeApi->subscribeForStoreEvents();
+    });
     store::Store store;
     // new users
     EXPECT_NO_THROW({
@@ -2039,4 +2043,117 @@ TEST_F(StoreTest, updateStore_policy) {
             reader->getString("File_1.info_fileId")
         );
     }, core::Exception);
+}
+
+TEST_F(StoreTest, listStores_query) {
+    std::string storeId;
+    core::PagingList<store::Store> listStores;
+    EXPECT_NO_THROW({
+        storeId = storeApi->createStore(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("{\"test\":1}"),
+            core::Buffer::from("list_query_test"),
+            std::nullopt
+        );
+    });
+    if(storeId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        listStores = storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0,
+                .limit=100,
+                .sortOrder="asc",
+                .queryAsJson="{\"test\":1}"
+            }
+        );
+    });
+    EXPECT_EQ(listStores.totalAvailable, 1);
+    EXPECT_EQ(listStores.readItems.size(), 1);
+    if(listStores.readItems.size() >= 1) {
+        auto store = listStores.readItems[0];
+        EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
+        EXPECT_EQ(store.storeId, storeId);
+        EXPECT_EQ(store.filesCount, 0);
+        EXPECT_EQ(store.statusCode, 0);
+        EXPECT_EQ(store.publicMeta.stdString(), "{\"test\":1}");
+        EXPECT_EQ(store.privateMeta.stdString(), "list_query_test");
+        EXPECT_EQ(store.creator, reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.lastModifier, reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.users.size(), 1);
+        if(store.users.size() == 1) {
+            EXPECT_EQ(store.users[0], reader->getString("Login.user_1_id"));
+        }
+        EXPECT_EQ(store.managers.size(), 1);
+        if(store.managers.size() == 1) {
+            EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
+        }
+    }
+}
+
+TEST_F(StoreTest, updateStore_key_update_open_file) {
+    std::string fileId;
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });
+    int64_t read_handle = 0;
+    std::string read_data;
+    EXPECT_NO_THROW({
+        read_handle = storeApi->openFile(
+            reader->getString("File_1.info_fileId")
+        );
+    });
+    EXPECT_NO_THROW({
+        read_data = storeApi->readFromFile(
+            read_handle,
+            reader->getInt64("File_1.size")
+        ).stdString();
+    });
+    EXPECT_NO_THROW({
+        storeApi->closeFile(
+            read_handle
+        );
+    });
+       
 }

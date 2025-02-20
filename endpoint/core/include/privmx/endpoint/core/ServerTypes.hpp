@@ -37,6 +37,7 @@ ENDPOINT_SERVER_TYPE(ListModel)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(lastId)
+    VAR_FIELD(query) // JSON
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ContextInfo)
@@ -49,33 +50,21 @@ ENDPOINT_SERVER_TYPE(ContextListResult)
     INT64_FIELD(count)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(UserIdentity)
+ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
+    STRING_FIELD(contextId)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UserIdentity)
     STRING_FIELD(id)
     STRING_FIELD(pub)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(UserKey)
-    STRING_FIELD(id)  // userId
-    STRING_FIELD(key) // encKey encrypted with user pubkey;
+ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatus, UserIdentity)
+    STRING_FIELD(status)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(CustomEventModel)
-    STRING_FIELD(contextId)
-    STRING_FIELD(channel)
-    VAR_FIELD(data) // encrypted
-    LIST_FIELD(users, UserKey)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(ContextCustomEventData)
-    STRING_FIELD(id)
-    VAR_FIELD(eventData)
-    STRING_FIELD(key) // encryption Key
-    OBJECT_FIELD(author, UserIdentity)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(EncryptedInternalContextEventData) //Internal
-    STRING_FIELD(type) // public data about event type
-    STRING_FIELD(encryptedData)
+ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
+    LIST_FIELD(users, server::UserIdentityWithStatus)
 TYPE_END
 
 } // server

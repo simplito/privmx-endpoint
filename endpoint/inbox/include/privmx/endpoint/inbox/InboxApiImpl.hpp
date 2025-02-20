@@ -43,6 +43,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxDataProcessorV4.hpp"
 #include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
+#include "privmx/endpoint/inbox/InboxProvider.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -82,6 +83,7 @@ public:
                      const std::optional<core::ContainerPolicyWithoutItem>& policies);
 
     inbox::Inbox getInbox(const std::string& inboxId);
+    inbox::Inbox getInboxEx(const std::string& inboxId, const std::string& type);
     core::PagingList<inbox::Inbox> listInboxes(const std::string& contextId, const core::PagingQuery& query);
     inbox::InboxPublicView getInboxPublicView(const std::string& inboxId);
     void deleteInbox(const std::string& inboxId);
@@ -110,16 +112,19 @@ public:
     void unsubscribeFromEntryEvents(const std::string& inboxId);
 
 private:
-    inbox::server::Inbox getInboxFromServerOrCache(const std::string& inboxId);
+    server::Inbox getRawInboxFromCacheOrBridge(const std::string& inboxId);
+    inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxDataResult decryptInbox(const inbox::server::Inbox& inboxRaw);
     InboxPublicViewAsResult getInboxPublicData(const std::string& inboxId);
-    inbox::Inbox convertInbox(const inbox::server::Inbox& inboxRaw);
+    inbox::Inbox convertInbox(const inbox::server::Inbox& inboxRaw, const InboxDataResult& inboxData);
+    inbox::Inbox decryptAndConvertInboxDataToInbox(const inbox::server::Inbox& inboxRaw);
     inbox::server::InboxDataEntry getInboxDataEntry(const inbox::server::Inbox& inboxRaw);
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
 
     InboxEntryResult decryptInboxEntry(const inbox::server::Inbox& inbox, const thread::server::Message& message);
-    inbox::InboxEntry convertInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message);
+    inbox::InboxEntry convertInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message, const inbox::InboxEntryResult& inboxEntry);
+    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message);
     store::FileMetaToEncrypt prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
     store::DecryptedFileMeta decryptInboxFileMetaV4(const store::server::File& file, const std::string& filesMetaKey);
 
@@ -162,6 +167,8 @@ private:
     InboxHandleManager _inboxHandleManager;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
+    InboxProvider _inboxProvider;
+    bool _subscribeForInbox;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId, _messageDeleterId;
     size_t _serverRequestChunkSize;

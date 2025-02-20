@@ -55,16 +55,7 @@ public:
      * @param randomSeed optional string used as the base to generate the new key
      * @return generated ECC key in WIF format
      */
-    [[deprecated("Use generatePrivateKey2(const std::optional<std::string>& randomSeed).")]]
     std::string generatePrivateKey(const std::optional<std::string>& randomSeed);
-
-    /**
-     * Generates a new private ECC key.
-     *
-     * @param randomSeed optional string used as the base to generate the new key
-     * @return generated ECC key in WIF format
-     */
-    std::string generatePrivateKey2(const std::optional<std::string>& randomSeed);
 
     /**
      * Generates a new private ECC key from a password using pbkdf2.

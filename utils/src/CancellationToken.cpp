@@ -33,15 +33,15 @@ CancellationToken::Ptr CancellationToken::create(CancellationToken::Ptr token) {
     return new CancellationToken(token);
 }
 
-CancellationToken::CancellationToken() : _canceled(false) {}
+CancellationToken::CancellationToken() : _cancelled(false) {}
 
-CancellationToken::CancellationToken(CancellationToken::Ptr token) : _canceled(token->isCanceled()) {
+CancellationToken::CancellationToken(CancellationToken::Ptr token) : _cancelled(token->isCancelled()) {
     _parent = Task(token, [&]{ cancel(); });
 }
 
 void CancellationToken::cancel() {
     UniqueLock lock(_mutex);
-    _canceled.store(true);
+    _cancelled.store(true);
     _cv.notify_all();
     auto copy = _tasks;
     lock.unlock();

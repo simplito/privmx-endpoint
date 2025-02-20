@@ -24,10 +24,11 @@ namespace core {
 
 class SubscriptionHelper {
 public:
-    SubscriptionHelper(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string moduleName, const std::string elementName);
+    SubscriptionHelper(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& elementName);
     bool hasSubscriptionForModule();
     bool hasSubscriptionForElement(const std::string& elementId);
     bool hasSubscriptionForElementCustom(const std::string& elementId, const std::string& channelName);
+    bool hasSubscriptionForChannel(const std::string& fullChannel);
 
     void subscribeForModule(bool silent = false);
     void unsubscribeFromModule(bool silent = false);
@@ -40,15 +41,15 @@ private:
     std::string _moduleName;
     std::string _elementName;
     bool _moduleFlag;
-    utils::ThreadSaveMap<std::string, bool> _map;
-    utils::ThreadSaveMap<std::string, bool> _mapCustom;
+    utils::ThreadSaveMap<std::string, bool> _subscriptionMap;
 };
 
 class SubscriptionHelperExt {
 public:
-    SubscriptionHelperExt(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string moduleName, const std::string elementName);
+    SubscriptionHelperExt(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& elementName);
     bool hasSubscriptionForElement(const std::string& elementId);
     bool hasSubscriptionForElementCustom(const std::string& elementId, const std::string& channelName);
+    bool hasSubscriptionForChannel(const std::string& fullChannel);
     std::string getParentModuleId(const std::string& elementId);
 
     void subscribeForElement(const std::string& elementId, const std::string& parentModuleId, bool silent = false);
@@ -57,6 +58,8 @@ public:
     void unsubscribeFromElementCustom(const std::string& elementId, const std::string& channelName, bool silent = false);
 private:
     SubscriptionHelper _subscriptionHelper;
+    std::string _moduleName;
+    std::string _elementName;
     utils::ThreadSaveMap<std::string, std::string> _map;
     utils::ThreadSaveMap<std::string, std::string> _mapCustom;
 };

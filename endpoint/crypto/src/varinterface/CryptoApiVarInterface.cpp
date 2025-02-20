@@ -22,6 +22,7 @@ std::map<CryptoApiVarInterface::METHOD, Poco::Dynamic::Var (CryptoApiVarInterfac
                                         {SignData, &CryptoApiVarInterface::signData},
                                         {GeneratePrivateKey, &CryptoApiVarInterface::generatePrivateKey},
                                         {DerivePrivateKey, &CryptoApiVarInterface::derivePrivateKey},
+                                        {DerivePrivateKey2, &CryptoApiVarInterface::derivePrivateKey2},
                                         {DerivePublicKey, &CryptoApiVarInterface::derivePublicKey},
                                         {GenerateKeySymmetric, &CryptoApiVarInterface::generateKeySymmetric},
                                         {EncryptDataSymmetric, &CryptoApiVarInterface::encryptDataSymmetric},
@@ -64,6 +65,14 @@ Poco::Dynamic::Var CryptoApiVarInterface::derivePrivateKey(const Poco::Dynamic::
     auto password = _deserializer.deserialize<std::string>(argsArr->get(0), "password");
     auto salt = _deserializer.deserialize<std::string>(argsArr->get(1), "salt");
     auto result = _cryptoApi.derivePrivateKey(password, salt);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var CryptoApiVarInterface::derivePrivateKey2(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto password = _deserializer.deserialize<std::string>(argsArr->get(0), "password");
+    auto salt = _deserializer.deserialize<std::string>(argsArr->get(1), "salt");
+    auto result = _cryptoApi.derivePrivateKey2(password, salt);
     return _serializer.serialize(result);
 }
 

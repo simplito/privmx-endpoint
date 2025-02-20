@@ -38,6 +38,7 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreDataEncryptorV4.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
+#include "privmx/endpoint/store/StoreProvider.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -112,6 +113,7 @@ private:
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
                 const std::optional<core::ContainerPolicy>& policies);
+    server::Store getRawStoreFromCacheOrBridge(const std::string& storeId);
     Store _storeGetEx(const std::string& storeId, const std::string& type);
     core::PagingList<Store> _storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
 
@@ -125,7 +127,6 @@ private:
     Store convertDecryptedStoreDataToStore(const server::Store& storeRaw, const DecryptedStoreData& storeData);
     Store decryptAndConvertStoreDataToStore(const server::Store& storeRaw);
 
-    void updateStoreInCache(server::Store store);
 
     // OLD CODE    
     StoreFile decryptStoreFileV1(const server::Store& store, const server::File& storeFile);
@@ -142,7 +143,6 @@ private:
     
     StoreFileDecryptionParams getStoreFileDecryptionParams(const server::File& file, const core::EncKey& encKey);
     int64_t createFileReadHandle(const StoreFileDecryptionParams& storeFileDecryptionParams);
-    server::Store getStoreFromServerOrCache(const std::string& storeId, const std::string& type = STORE_TYPE_FILTER_FLAG);
     static const size_t _CHUNK_SIZE;
     
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -162,7 +162,7 @@ private:
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
     FileMetaEncryptor _fileMetaEncryptor;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    utils::ThreadSaveMap<std::string, server::Store> _storeMap;
+    StoreProvider _storeProvider;
     bool _subscribeForStore;
     core::SubscriptionHelper _storeSubscriptionHelper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

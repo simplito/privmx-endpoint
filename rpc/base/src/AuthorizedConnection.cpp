@@ -180,9 +180,9 @@ void AuthorizedConnection::sendRequest(ClientEndpoint& endpoint, bool web_socket
     endpoint.connection.process(stream);
 }
 
-void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key) {
+void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution) {
     ClientEndpoint endpoint(_tickets_manager, _options);
-    endpoint.connection.ecdheHandshake(key);
+    endpoint.connection.ecdheHandshake(key, solution);
     endpoint.connection.ticketRequest(endpoint.TICKETS_MAX_COUNT);
     sendRequest(endpoint);
     EcdheConnectionInfo::Ptr info = new EcdheConnectionInfo();
@@ -388,11 +388,11 @@ void AuthorizedConnection::clearWebSocket() {
 }
 
 void AuthorizedConnection::activateUpdateTicketLoop() {
-    if(_ticket_updater_cancellation_token->isCanceled()) {
+    if(_ticket_updater_cancellation_token->isCancelled()) {
         _ticket_updater_cancellation_token = utils::CancellationToken::create();
     }
     auto t = std::thread([&](privmx::utils::CancellationToken::Ptr token){
-        while(!token->isCanceled()) {
+        while(!token->isCancelled()) {
             try {
                 if(_tickets_manager.shouldAskForNewTickets(ClientEndpoint::TICKETS_MIN_COUNT)) {
                     ClientEndpoint endpoint(_tickets_manager, _options);

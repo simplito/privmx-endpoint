@@ -29,12 +29,13 @@ public:
         SignData = 1,
         GeneratePrivateKey = 2,
         DerivePrivateKey = 3,
-        DerivePublicKey = 4,
-        GenerateKeySymmetric = 5,
-        EncryptDataSymmetric = 6,
-        DecryptDataSymmetric = 7,
-        ConvertPEMKeytoWIFKey = 8,
-        VerifySignature = 9,
+        DerivePrivateKey2 = 4,
+        DerivePublicKey = 5,
+        GenerateKeySymmetric = 6,
+        EncryptDataSymmetric = 7,
+        DecryptDataSymmetric = 8,
+        ConvertPEMKeytoWIFKey = 9,
+        VerifySignature = 10,
     };
 
     CryptoApiVarInterface(const core::VarSerializer& serializer)
@@ -45,6 +46,7 @@ public:
     Poco::Dynamic::Var verifySignature(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var generatePrivateKey(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var derivePrivateKey(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var derivePrivateKey2(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var derivePublicKey(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var generateKeySymmetric(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var encryptDataSymmetric(const Poco::Dynamic::Var& args);

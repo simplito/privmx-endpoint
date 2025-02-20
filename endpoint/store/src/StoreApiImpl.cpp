@@ -59,7 +59,12 @@ StoreApiImpl::StoreApiImpl(
     _dataEncryptorCompatV1(core::DataEncryptor<dynamic::compat_v1::StoreData>()),
     _fileMetaEncryptor(FileMetaEncryptor()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
-    _storeMap(utils::ThreadSaveMap<std::string, server::Store>()),
+    _storeProvider(StoreProvider([&](const std::string& id) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StoreGetModel>();
+        model.storeId(id);
+        model.type(STORE_TYPE_FILTER_FLAG);
+        return _serverApi->storeGet(model).store();
+    })),
     _subscribeForStore(false),
     _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
@@ -224,9 +229,18 @@ Store StoreApiImpl::getStoreEx(const std::string& storeId, const std::string& ty
 }
 
 Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& type) {
-    auto storeRaw {getStoreFromServerOrCache(storeId, type)};
-    auto result = decryptAndConvertStoreDataToStore(storeRaw);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeGet, data decrypted)
+    PRIVMX_DEBUG_TIME_START(PlatformStore, _storeGetEx)
+    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StoreGetModel>();
+    model.storeId(storeId);
+    if (type.length() > 0) {
+        model.type(type);
+    }
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, getting store)
+    auto store = _serverApi->storeGet(model).store();
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, data send)
+    if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
+    auto result = decryptAndConvertStoreDataToStore(store);
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _storeGetEx, data decrypted)
     return result;
 }
 
@@ -251,6 +265,7 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
     auto storesResult = _serverApi->storeList(storeListModel);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList, data send)
     for(auto store : storesResult.stores()) {
+        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
         stores.push_back(decryptAndConvertStoreDataToStore(store));
     }
     core::PagingList<Store> result = {
@@ -268,7 +283,7 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet)
     auto serverFileResult = _serverApi->storeFileGet(storeFileGetModel);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet, data send)
-    // auto ret {convertStoreFile(file_raw.file(), decryptStoreFile(file_raw.store(), file_raw.file()).meta)};
+    if(serverFileResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFileResult.store());
     auto ret {decryptAndConvertFileDataToFileInfo(serverFileResult.store(), serverFileResult.file())};
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileGet, data decrypted)
     return ret;
@@ -282,8 +297,8 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList)
     auto serverFilesResult = _serverApi->storeFileList(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send)
-
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send);
+    if(serverFilesResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFilesResult.store());
     std::vector<File> filesList;
     // auto store {convertStore(files_raw.store(), decryptStore(files_raw.store()))};
     for(auto rawFile: serverFilesResult.files()) {
@@ -310,7 +325,8 @@ void StoreApiImpl::deleteFile(const std::string& fileId) {
 
 int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
     //check if store exist
-    auto store {getStoreFromServerOrCache(storeId)};
+    auto store = getRawStoreFromCacheOrBridge(storeId);
+    
 
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         storeId,
@@ -350,7 +366,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
-    auto key = _keyProvider->getKey(file_raw.store().keys(), file_raw.store().keyId());
+    auto key = _keyProvider->getKey(file_raw.store().keys(), file_raw.file().keyId());
     auto decryptionParams = getStoreFileDecryptionParams(file_raw.file(), key);
     return createFileReadHandle(decryptionParams);
 }
@@ -360,6 +376,9 @@ StoreApiImpl::StoreFileDecryptionParams StoreApiImpl::getStoreFileDecryptionPara
         // When meta is not string, then is new V4 format as object
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
         auto fileMeta = _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encKey.key);
+        if(fileMeta.statusCode != 0) {
+            throw FileDecryptionFailedException("file decryption Failed with status code: " + std::to_string(fileMeta.statusCode));
+        }
         auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileMeta.internalMeta.stdString()));
         if ((uint64_t)internalMeta.chunkSize() > SIZE_MAX) {
             throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");
@@ -451,7 +470,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     
     server::Store store;
     if (handle->getFileId().empty()) {
-        store = getStoreFromServerOrCache(handle->getStoreId());
+        store = getRawStoreFromCacheOrBridge(handle->getStoreId());
     } else {
         auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
         storeFileGetModel.fileId(handle->getFileId());
@@ -503,6 +522,8 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
         if (type == "storeCreated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
             if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+                
+                _storeProvider.updateByValue(raw);
                 auto data = decryptAndConvertStoreDataToStore(raw);
                 std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
                 event->channel = channel;
@@ -512,6 +533,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
         } else if (type == "storeUpdated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
             if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+                _storeProvider.updateByValue(raw);
                 auto data = decryptAndConvertStoreDataToStore(raw);
                 std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
                 event->channel = channel;
@@ -521,6 +543,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
         } else if (type == "storeDeleted") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreDeletedEventData>(data);
             if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+                _storeProvider.invalidateByContainerId(raw.storeId());
                 auto data = Mapper::mapToStoreDeletedEventData(raw);
                 std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
                 event->channel = channel;
@@ -530,6 +553,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
         } else if (type == "storeStatsChanged") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(data);
             if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+                _storeProvider.updateStats(raw);
                 auto data = Mapper::mapToStoreStatsChangedEventData(raw);
                 std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
                 event->channel = channel;
@@ -543,7 +567,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
     if (type == "storeFileCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
         if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto store {getStoreFromServerOrCache(raw.storeId())};
+            auto store {getRawStoreFromCacheOrBridge(raw.storeId())};
             auto file = decryptAndConvertFileDataToFileInfo(store, raw);
 
             // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
@@ -555,7 +579,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
     } else if (type == "storeFileUpdated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
         if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto store {getStoreFromServerOrCache(raw.storeId())};
+            auto store {getRawStoreFromCacheOrBridge(raw.storeId())};
             auto file = decryptAndConvertFileDataToFileInfo(store, raw);
             std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
             event->channel = channel;
@@ -582,7 +606,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
         if(channel == "store") {
             PRIVMX_DEBUG("StoreApi", "Cache", "Disabled")
             _subscribeForStore = false;
-            _storeMap.clear();
+            _storeProvider.invalidate();
         }
     } 
 }
@@ -602,7 +626,7 @@ void StoreApiImpl::unsubscribeFromStoreEvents() {
 }
 
 void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
-    auto store {getStoreFromServerOrCache(storeId)};
+    auto store {getRawStoreFromCacheOrBridge(storeId)};
     if(_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
         throw AlreadySubscribedException(storeId);
     }
@@ -610,7 +634,7 @@ void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
 }
 
 void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
-    auto store {getStoreFromServerOrCache(storeId)};
+    auto store {getRawStoreFromCacheOrBridge(storeId)};
     if(!_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
         throw NotSubscribedException(storeId);
     }
@@ -618,11 +642,11 @@ void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
 }
 
 void StoreApiImpl::processConnectedEvent() {
-    _storeMap.clear();
+    _storeProvider.invalidate();
 }
 
 void StoreApiImpl::processDisconnectedEvent() {
-    _storeMap.clear();
+    _storeProvider.invalidate();
 }
 
 dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(const server::Store& storeRaw) {
@@ -734,24 +758,6 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(const server::Store& store
     }
     auto e = UnknowStoreFormatException();
     return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
-}
-
-server::Store StoreApiImpl::getStoreFromServerOrCache(const std::string& storeId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, getStore)
-    auto cache_value = _storeMap.get(storeId);
-    if(cache_value.has_value()) {
-        PRIVMX_DEBUG_TIME_STOP(PlatformStore, getStore, store in cache)
-        return cache_value.value();
-    }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getStore, requesting store from server)
-    auto storeGetModel = utils::TypedObjectFactory::createNewObject<server::StoreGetModel>();
-    storeGetModel.storeId(storeId);
-    storeGetModel.type(type);
-    auto store = _serverApi->storeGet(storeGetModel).store();
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getStore, data send)
-    updateStoreInCache(store);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, getStore, update cache)
-    return store;
 }
 
 // OLD CODE
@@ -869,22 +875,6 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::Store store, serv
     return File{{},{},{},{},{},.statusCode = e.getCode()};
 }
 
-void StoreApiImpl::updateStoreInCache(server::Store store) {
-    auto cachedStore = _storeMap.get(store.id());
-    if(!cachedStore.has_value()) {
-        if(_subscribeForStore) {
-        _storeMap.set(store.id(), store);
-        }
-        return;
-    }
-    auto cachedStore_value = cachedStore.value();
-    if(store.version() > cachedStore_value.version()) {
-        _storeMap.set(store.id(), store);
-    } else if (store.version() == cachedStore_value.version() && store.lastModificationDate() > cachedStore_value.lastModificationDate()) {
-        _storeMap.set(store.id(), store);
-    }
-}
-
 void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
@@ -909,4 +899,11 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     storeFileUpdateModel.meta(encryptedMeta.asVar());
     storeFileUpdateModel.keyId(key.id);
     _serverApi->storeFileUpdate(storeFileUpdateModel);
+}
+
+server::Store StoreApiImpl::getRawStoreFromCacheOrBridge(const std::string& storeId) {
+    // useing _storeProvider only with STORE_TYPE_FILTER_FLAG 
+    // making sure to have valid cache
+    if(!_subscribeForStore) _storeProvider.update(storeId);
+    return _storeProvider.get(storeId);
 }

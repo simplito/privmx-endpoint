@@ -66,11 +66,10 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     auto contextSubscriptionHelper = std::make_shared<SubscriptionHelper>(_eventChannelManager, "context", "contexts");
-    _internalContextEventManager = std::make_shared<InternalContextEventManager>(_userPrivKey, _gateway, contextSubscriptionHelper);
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
-void ConnectionImpl::connectPublic([[maybe_unused]] const std::string& solutionId, const std::string& platformUrl) {
+void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl) {
     // TODO: solutionId is reserved for future use
     PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
     rpc::ConnectionOptions options;
@@ -79,7 +78,7 @@ void ConnectionImpl::connectPublic([[maybe_unused]] const std::string& solutionI
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = false;
     auto key = privmx::crypto::PrivateKey::generateRandom();
-    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options);
+    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
@@ -107,7 +106,6 @@ void ConnectionImpl::connectPublic([[maybe_unused]] const std::string& solutionI
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     auto contextSubscriptionHelper = std::make_shared<SubscriptionHelper>(_eventChannelManager, "context", "contexts");
-    _internalContextEventManager = std::make_shared<InternalContextEventManager>(_userPrivKey, _gateway, contextSubscriptionHelper);
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -119,7 +117,7 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
     PRIVMX_DEBUG_TIME_START(PlatformThread, contextList)
     auto listModel = utils::TypedObjectFactory::createNewObject<server::ListModel>();
     ListQueryMapper::map(listModel, pagingQuery);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data encrypted)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data)
     auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextListResult>(
         _gateway->request("context.contextList", listModel));
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data send)
@@ -129,6 +127,30 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, contextList)
     return PagingList<Context>{.totalAvailable = response.count(), .readItems = contexts};
+}
+
+std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& contextId) {
+    PRIVMX_DEBUG_TIME_START(PlatformThread, getContextUsers)
+    auto model = utils::TypedObjectFactory::createNewObject<server::ContextGetUsersModel>();
+    model.contextId(contextId);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data)
+    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(
+        _gateway->request("context.contextGetUsers", model));
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data send)
+    std::vector<UserInfo> usersInfo {};
+    for (auto user : response.users()) {
+        usersInfo.push_back(
+            UserInfo{
+                .user=UserWithPubKey{
+                    .userId=user.id(), 
+                    .pubKey=user.pub()
+                }, 
+                .isActive= user.status() == "active"
+            }
+        );
+    }
+    PRIVMX_DEBUG_TIME_STOP(PlatformThread, getContextUsers)
+    return usersInfo;
 }
 
 void ConnectionImpl::disconnect() {

@@ -30,7 +30,6 @@ limitations under the License.
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/SubscriptionHelper.hpp"
-#include "privmx/endpoint/core/InternalContextEventManager.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -43,6 +42,7 @@ public:
     void connectPublic(const std::string& solutionId, const std::string& platformUrl);
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
+    std::vector<UserInfo> getContextUsers(const std::string& contextId);
     void disconnect();
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
     const privmx::crypto::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
@@ -51,7 +51,6 @@ public:
     const std::shared_ptr<EventMiddleware>& getEventMiddleware() const { return _eventMiddleware; }
     const std::shared_ptr<EventChannelManager>& getEventChannelManager() const { return _eventChannelManager; }
     const std::shared_ptr<HandleManager>& getHandleManager() const { return _handleManager; }
-    const std::shared_ptr<InternalContextEventManager>& getInternalContextEventManager() const { return _internalContextEventManager; }
 
     const rpc::ServerConfig& getServerConfig() const { return _serverConfig; }
 
@@ -67,7 +66,6 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
-    std::shared_ptr<InternalContextEventManager> _internalContextEventManager;
 };
 
 }  // namespace core
