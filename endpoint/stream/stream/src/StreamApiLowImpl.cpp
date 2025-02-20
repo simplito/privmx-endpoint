@@ -31,19 +31,19 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
 StreamApiLowImpl::StreamApiLowImpl(
+    const std::shared_ptr<event::EventApiImpl>& eventApi,
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-    const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
-) : _gateway(gateway),
+    const std::shared_ptr<core::EventChannelManager>& eventChannelManager
+) : _eventApi(eventApi),
+    _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
     _eventMiddleware(eventMiddleware),
-    _internalContextEventManager(internalContextEventManager),
     _serverApi(std::make_shared<ServerApi>(gateway)),
     _streamSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "stream", "streams")) {
         // streamGetTurnCredentials
@@ -67,6 +67,15 @@ StreamApiLowImpl::~StreamApiLowImpl() {
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
 }
 
+std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
+    auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
+    std::vector<TurnCredentials> result;
+    for(auto credential : credentials) {
+        result.push_back(TurnCredentials{.url=credential.url(), .username=credential.username(), .password=credential.password(), .expirationTime=credential.expirationTime()});
+    }
+    return result;
+}
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
     if(_internalContextEventManager->isInternalContextEvent(type, channel, data, "StreamKeyManagementEvent")) {

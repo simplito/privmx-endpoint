@@ -24,7 +24,6 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
-#include <privmx/endpoint/core/InternalContextEventManager.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
@@ -47,13 +46,13 @@ namespace stream {
 class StreamApiImpl {
 public:
     StreamApiImpl(
+        const std::shared_ptr<event::EventApiImpl>& eventApi,
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-        const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
+        const std::shared_ptr<core::EventChannelManager>& eventChannelManager
     );
 
     std::string createStreamRoom(
@@ -108,17 +107,6 @@ private:
     void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
     void trackAddVideo(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
     void trackAddDesktop(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-
-    privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::InternalContextEventManager> _internalContextEventManager;
-    std::shared_ptr<ServerApi> _serverApi;
-    core::SubscriptionHelper _streamSubscriptionHelper;
-    StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
-    core::DataEncryptorV4 _dataEncryptor;
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;

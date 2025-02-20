@@ -23,7 +23,9 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
-#include <privmx/endpoint/core/InternalContextEventManager.hpp>
+#include <privmx/endpoint/core/SubscriptionHelper.hpp>
+#include <privmx/endpoint/event/EventApiImpl.hpp>
+
 #include "privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
@@ -37,12 +39,12 @@ namespace stream {
 class StreamKeyManager {
 public:
     StreamKeyManager( 
+        std::shared_ptr<event::EventApiImpl> eventApi,
         std::shared_ptr<core::KeyProvider> keyProvider, 
         std::shared_ptr<ServerApi> serverApi,
         privmx::crypto::PrivateKey userPrivKey, 
         const std::string& streamRoomId, 
-        const std::string& contextId,
-        const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
+        const std::string& contextId
     );
     ~StreamKeyManager();
     
@@ -69,13 +71,13 @@ private:
     void sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
     void updateWebRtcKeyStore();
 
+    std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::shared_ptr<ServerApi> _serverApi;
     privmx::crypto::PrivateKey _userPrivKey;
     privmx::crypto::PublicKey _userPubKey;
     std::string _streamRoomId;
     std::string _contextId;
-    std::shared_ptr<core::InternalContextEventManager> _internalContextEventManager;
     core::DataEncryptorV4 _dataEncryptor;
     privmx::utils::CancellationToken::Ptr _cancellationToken;
     std::thread _keyCollector;

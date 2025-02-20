@@ -26,6 +26,13 @@ namespace stream {
 */
 struct Settings {};
 
+struct TurnCredentials {
+    std::string url;
+    std::string username;
+    std::string password;
+    int64_t expirationTime;
+};
+
 struct StreamRoom {
     std::string contextId;
     std::string streamRoomId;

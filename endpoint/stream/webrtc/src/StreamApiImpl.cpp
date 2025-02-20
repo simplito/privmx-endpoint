@@ -37,39 +37,28 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
 StreamApiImpl::StreamApiImpl(
+    const std::shared_ptr<event::EventApiImpl>& eventApi,
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-    const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
-) : _gateway(gateway),
-    _userPrivKey(userPrivKey),
-    _keyProvider(keyProvider),
-    _host(host),
-    _eventMiddleware(eventMiddleware),
-    _internalContextEventManager(internalContextEventManager),
-    _serverApi(std::make_shared<ServerApi>(gateway)),
-    _streamSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "stream", "streams")) 
-    
-{
-    // streamGetTurnCredentials
-    auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
-    auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
+    const std::shared_ptr<core::EventChannelManager>& eventChannelManager
+) {
+    _api = std::make_shared<StreamApiLowImpl>(eventApi, gateway, userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager);
+    auto credentials = _api->getTurnCredentials();
     libwebrtc::LibWebRTC::Initialize();
     _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
     _configuration = libwebrtc::RTCConfiguration();
     for(size_t i = 0; i < credentials.size(); i++) {
         libwebrtc::IceServer iceServer = {
-            .uri=credentials.get(i).url(), 
-            .username=portable::string(credentials.get(i).username()), 
-            .password=portable::string(credentials.get(i).password())
+            .uri=credentials[i].url, 
+            .username=portable::string(credentials[i].username), 
+            .password=portable::string(credentials[i].password)
         };
         _configuration.ice_servers[i] = iceServer;
     }
     _constraints = libwebrtc::RTCMediaConstraints::Create();
-    _api = std::make_shared<StreamApiLowImpl>(gateway, userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, internalContextEventManager);
 }
 
 
@@ -176,14 +165,7 @@ int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::ve
 }
 
 std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {
-    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
-    model.streamRoomId(streamRoomId);
-    auto streamList = _serverApi->streamList(model).list();
-    std::vector<Stream> result;
-    for(auto stream: streamList) {
-        result.push_back(Stream{.streamId=stream.streamId(),.userId=stream.userId()});
-    }
-    return result;
+    return _api->listStreams(streamRoomId);
 }
 
 std::string StreamApiImpl::createStreamRoom(

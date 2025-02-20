@@ -24,7 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
-#include <privmx/endpoint/core/InternalContextEventManager.hpp>
+#include <privmx/endpoint/event/EventApiImpl.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
@@ -37,15 +37,17 @@ namespace stream {
 class StreamApiLowImpl {
 public:
     StreamApiLowImpl(
+        const std::shared_ptr<event::EventApiImpl>& eventApi,
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
-        const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
+        const std::shared_ptr<core::EventChannelManager>& eventChannelManager
     );
     ~StreamApiLowImpl();
+
+    std::vector<TurnCredentials> getTurnCredentials();
 
     std::string createStreamRoom(
         const std::string& contextId, 
@@ -119,13 +121,12 @@ private:
     std::shared_ptr<StreamRoomData> getStreamRoomData(int64_t localStreamId);
     std::shared_ptr<StreamData> getStreamData(int64_t localStreamId, std::shared_ptr<StreamRoomData> room);
 
-
+    std::shared_ptr<event::EventApiImpl> _eventApi;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::InternalContextEventManager> _internalContextEventManager;
     std::shared_ptr<ServerApi> _serverApi;
     core::SubscriptionHelper _streamSubscriptionHelper;
     StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;

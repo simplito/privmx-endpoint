@@ -19,6 +19,7 @@ limitations under the License.
 #include <functional>
 
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 
@@ -31,7 +32,7 @@ class StreamApiImpl;
 class StreamApi {
 public:
 
-    static StreamApi create(core::Connection& connetion);
+    static StreamApi create(core::Connection& connetion, event::EventApi eventApi);
     StreamApi() = default;
 
     std::string createStreamRoom(

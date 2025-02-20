@@ -16,7 +16,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
-
+#include <privmx/endpoint/event/EventApiImpl.hpp>
 #include "privmx/endpoint/stream/StreamApi.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
@@ -25,17 +25,18 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApi StreamApi::create(core::Connection& connection) {
+StreamApi StreamApi::create(core::Connection& connection, event::EventApi eventApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+        std::shared_ptr<event::EventApiImpl> eventApiImpl = eventApi.getImpl();
         std::shared_ptr<StreamApiImpl> impl(new StreamApiImpl(
+            eventApiImpl,
             connectionImpl->getGateway(),
             connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
-            connectionImpl->getInternalContextEventManager()
+            connectionImpl->getEventChannelManager()
         ));
         return StreamApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
