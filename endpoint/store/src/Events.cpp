@@ -50,6 +50,10 @@ std::string StoreFileUpdatedEvent::toJSON() const {
 std::string StoreFileDeletedEvent::toJSON() const {
     return core::JsonSerializer<StoreFileDeletedEvent>::serialize(*this);
 }
+
+std::string StoreCustomEvent::toJSON() const {
+    return core::JsonSerializer<StoreCustomEvent>::serialize(*this);
+}
 //
 std::shared_ptr<core::SerializedEvent> StoreCreatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
@@ -76,6 +80,10 @@ std::shared_ptr<core::SerializedEvent> StoreFileUpdatedEvent::serialize() const 
 }
 
 std::shared_ptr<core::SerializedEvent> StoreFileDeletedEvent::serialize() const {
+    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+}
+
+std::shared_ptr<core::SerializedEvent> StoreCustomEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 //
@@ -192,6 +200,23 @@ StoreFileDeletedEvent Events::extractStoreFileDeletedEvent(const core::EventHold
         auto event = std::dynamic_pointer_cast<StoreFileDeletedEvent>(handler.get());
         if (!event) {
             throw CannotExtractStoreFileDeletedEventException();
+        }
+        return *event;
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+bool Events::isStoreCustomEvent(const core::EventHolder& handler) {
+    return handler.type() == "storeCustom";
+}
+
+StoreCustomEvent Events::extractStoreCustomEvent(const core::EventHolder& handler) {
+    try {
+        auto event = std::dynamic_pointer_cast<StoreCustomEvent>(handler.get());
+        if (!event) {
+            throw CannotExtractStoreCustomEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

@@ -43,6 +43,8 @@ public:
     void inboxSend(server::InboxSendModel model);
 
     void inboxDelete(server::InboxDeleteModel model);
+
+    void inboxSendCustomEvent(server::InboxEmitCustomEventModel model);
 private:
     template<typename T>
     T request(std::string method, Poco::JSON::Object::Ptr params); //only typed object

@@ -162,6 +162,30 @@ public:
      */    
     void unsubscribeFromMessageEvents(const std::string& threadId);
 
+    /**
+     * Emit Custom Event for selected group users of Thread.
+     * 
+     * @param threadId ID of the Thread on witch event will be send
+     * @param channelName name of event channel
+     * @param eventData encrypted event data
+     * @param usersIds list of userId for which event will be send 
+     */
+    void emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
+    
+    /**
+     * Subscribes for custom events in given Thread on given channel.
+     * @param thread ID of the Thread to subscribe
+     * @param channelName name of the channel to subscribe
+     */ 
+    void subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName);
+
+     /**
+     * Unsubscribes from custom events in given Thread on given channel.
+     * @param thread ID of the Thread to unsubscribe
+     * @param channelName name of the channel to unsubscribe
+     */ 
+    void unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName);
+
     std::shared_ptr<ThreadApiImpl> getImpl() const { return _impl; }
     
 private:

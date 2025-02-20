@@ -269,6 +269,31 @@ namespace server {
         STRING_FIELD(type)
     };
 
+    class InboxEmitCustomEventModel : public utils::TypedObject
+    {
+    public:
+        ENDPOINT_SERVER_TYPE_CONSTRUCTOR(InboxEmitCustomEventModel)
+        void initialize() override {
+        }
+        STRING_FIELD(inboxId)
+        STRING_FIELD(channel);
+        STRING_FIELD(keyId);
+        VAR_FIELD(data);
+        LIST_FIELD(users, std::string);
+    };
+
+    class InboxCustomEventData : public utils::TypedObject
+    {
+    public:
+        ENDPOINT_SERVER_TYPE_CONSTRUCTOR(InboxCustomEventData)
+        void initialize() override {
+        }
+        STRING_FIELD(id);
+        STRING_FIELD(keyId);
+        VAR_FIELD(eventData);
+        OBJECT_FIELD(author, core::server::UserIdentity);
+    };
+
 
 } // server
 } // inbox

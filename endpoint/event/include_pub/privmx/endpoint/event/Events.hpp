@@ -16,7 +16,7 @@ struct ContextCustomEvent : public core::Event {
     /**
      * Event constructor
      */
-    ContextCustomEvent() : core::Event("customContext") {}
+    ContextCustomEvent() : core::Event("contextCustom") {}
 
     /**
      * Get Event as JSON string

@@ -37,7 +37,8 @@ public:
     void threadMessageDelete(server::ThreadMessageDeleteModel model);
     server::ThreadMessageGetResult threadMessageGet(server::ThreadMessageGetModel model);
     server::ThreadMessagesGetResult threadMessagesGet(server::ThreadMessagesGetModel model);
-    void threadMessageUpdate(server::ThreadMessageUpdateModel model);
+    void threadMessageUpdate(server::ThreadMessageUpdateModel model) ;
+    void threadSendCustomEvent(server::ThreadEmitCustomEventModel model);
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object

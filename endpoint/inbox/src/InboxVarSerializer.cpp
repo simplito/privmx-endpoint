@@ -190,3 +190,19 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEvent>(const
     obj->set("data", serialize(val.data));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxCustomEvent>(const inbox::InboxCustomEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "inbox$InboxCustomEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("data", serialize(val.data));
+    obj->set("inboxId", serialize(val.inboxId));
+    obj->set("userId", serialize(val.userId));
+    return obj;
+}
+

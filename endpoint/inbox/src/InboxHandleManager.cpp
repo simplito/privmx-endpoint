@@ -113,6 +113,9 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandl
 }
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {
+    if(!isFileWriteHandle(fileHandleId)) {
+        throw InvalidFileWriteHandleException();
+    }
     return _fileHandleManager.getFileWriteHandle(fileHandleId);
 }
 
@@ -129,7 +132,19 @@ std::shared_ptr<store::FileReadHandle> InboxHandleManager::createFileReadHandle(
 ) {
     return _fileHandleManager.createFileReadHandle(fileId, fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
 }
+bool InboxHandleManager::isFileReadHandle(int64_t fileHandleId) {
+    auto fileHandle = _fileHandleManager.getFileHandle(fileHandleId);
+    return fileHandle->isReadHandle();
+}
+bool InboxHandleManager::isFileWriteHandle(int64_t fileHandleId) {
+    auto fileHandle = _fileHandleManager.getFileHandle(fileHandleId);
+    return fileHandle->isWriteHandle();
+}
+
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::getFileReadHandle(int64_t fileHandleId) {
+    if(!isFileReadHandle(fileHandleId)) {
+        throw InvalidFileReadHandleException();
+    }
     return _fileHandleManager.getFileReadHandle(fileHandleId);
 }
 void InboxHandleManager::removeFileHandle(int64_t fileHandleId, bool force) {

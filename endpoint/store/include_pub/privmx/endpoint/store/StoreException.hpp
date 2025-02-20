@@ -49,8 +49,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileInvalidChecksumException,
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileChunkInvalidChecksumException, "File chunk invalid checksum", 0x000B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileChunkInvalidCipherChecksumException, "File chunk invalid cipher checksum", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileChunkSizeException, "Invalid file chunk size", 0x000E)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileReadHandleException, "Invalid file handle: handle is not read handle", 0x000F)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileWriteHandleException, "Invalid file handle: handle is not write handle", 0x0010)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileReadHandleException, "Invalid file handle: handle is not FILE_READ_HANDLE", 0x000F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileWriteHandleException, "Invalid file handle: handle is not FILE_WRITE_HANDLE", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileHandleException, "Invalid file handle: handle does not exist", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, IncorrectKeyIdFormatException, "Incorrect key id format", 0x0012)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileVersionMismatchHandleClosedException, "File version mismatch, handle closed", 0x0013)
@@ -70,6 +70,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StorePublicDataMismatchExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FilePublicDataMismatchException, "File public data mismatch", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, WritingToFileInteruptedWrittenDataSmallerThenDeclaredException, "Writing to file interupted. Written data smaller then declared", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileDecryptionFailedException, "FileDecryptionFailed", 0x0023)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, CannotExtractStoreCustomEventException, "Cannot extract StoreCustomEvent", 0x0024)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, ForbiddenChannelNameException, "Forbidden channel name", 0x0025)
+
 
 } // store
 } // endpoint
