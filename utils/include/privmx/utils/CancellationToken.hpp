@@ -47,7 +47,7 @@ public:
     CancellationToken();
     CancellationToken(CancellationToken::Ptr token);
     void cancel();
-    bool isCanceled();
+    bool isCancelled();
     void validate();
     template<typename Rep, typename Period>
     void sleep(const std::chrono::duration<Rep, Period>& duration);
@@ -58,7 +58,7 @@ private:
     void unregisterTask(int id);
     void throwOperationCanceled();
 
-    std::atomic_bool _canceled;
+    std::atomic_bool _cancelled;
     Mutex _mutex;
     ConditionVariable _cv;
     int _id = 0;
@@ -66,12 +66,12 @@ private:
     Task _parent;
 };
 
-inline bool CancellationToken::isCanceled() {
-    return _canceled.load();
+inline bool CancellationToken::isCancelled() {
+    return _cancelled.load();
 }
 
 inline void CancellationToken::validate() {
-    if (isCanceled()) {
+    if (isCancelled()) {
         throwOperationCanceled();
     }
 }
@@ -83,7 +83,7 @@ inline void CancellationToken::throwOperationCanceled() {
 template<typename Rep, typename Period>
 inline void CancellationToken::sleep(const std::chrono::duration<Rep, Period>& duration) {
     UniqueLock lock(_mutex);
-    if (_canceled) {
+    if (_cancelled) {
         throwOperationCanceled();
     }
     auto status = _cv.wait_for(lock, duration);
