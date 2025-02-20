@@ -118,6 +118,7 @@ private:
     Message decryptAndConvertMessageDataToMessage(const server::ThreadInfo& thread, const server::Message& message);
 
     void validateChannelName(const std::string& channelName);
+    void assertThreadExist(const std::string& threadId);
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;

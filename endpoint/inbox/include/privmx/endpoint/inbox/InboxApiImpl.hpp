@@ -149,6 +149,7 @@ private:
     InboxEntryResult getEmptyResultWithStatusCode(const int64_t statusCode);
     std::vector<std::string> getFilesIdsFromServerMessage(const privmx::endpoint::inbox::server::InboxMessageServer& serverMessage);
     void validateChannelName(const std::string& channelName);
+    void assertInboxExist(const std::string& inboxId);
 
     template <typename T = std::string>
     static std::vector<T> listToVector(utils::List<T> list) {

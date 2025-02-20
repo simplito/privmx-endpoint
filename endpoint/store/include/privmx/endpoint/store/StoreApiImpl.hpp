@@ -148,6 +148,8 @@ private:
     StoreFileDecryptionParams getStoreFileDecryptionParams(const server::File& file, const core::EncKey& encKey);
     int64_t createFileReadHandle(const StoreFileDecryptionParams& storeFileDecryptionParams);
     void validateChannelName(const std::string& channelName);
+    void assertStoreExist(const std::string& storeId);
+    void assertFileExist(const std::string& fileId);
     
     static const size_t _CHUNK_SIZE;
     

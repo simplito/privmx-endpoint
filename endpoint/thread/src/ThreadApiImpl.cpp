@@ -456,7 +456,7 @@ void ThreadApiImpl::unsubscribeFromThreadEvents() {
 }
 
 void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
-    auto thread = getRawThreadFromCacheOrBridge(threadId);
+    assertThreadExist(threadId);
     if(_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
         throw AlreadySubscribedException(threadId);
     }
@@ -464,7 +464,7 @@ void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
 }
 
 void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
-    auto thread = getRawThreadFromCacheOrBridge(threadId);
+    assertThreadExist(threadId);
     if(!_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
         throw NotSubscribedException(threadId);
     }
@@ -772,7 +772,7 @@ void ThreadApiImpl::emitEvent(const std::string& threadId, const std::string& ch
 
 void ThreadApiImpl::subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto thread = getRawThreadFromCacheOrBridge(threadId);
+    assertThreadExist(threadId);
     if(_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
         throw AlreadySubscribedException(threadId);
     }
@@ -781,7 +781,7 @@ void ThreadApiImpl::subscribeForThreadCustomEvents(const std::string& threadId, 
 
 void ThreadApiImpl::unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto thread = getRawThreadFromCacheOrBridge(threadId);
+    assertThreadExist(threadId);
     if(!_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
         throw NotSubscribedException(threadId);
     }
@@ -793,4 +793,9 @@ server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::strin
     // making sure to have valid cache
     if(!_subscribeForThread) _threadProvider.update(threadId);
     return _threadProvider.get(threadId);
+}
+
+void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
+    //check if thread is in cache or on server
+    getRawThreadFromCacheOrBridge(threadId);
 }

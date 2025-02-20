@@ -924,7 +924,7 @@ void InboxApiImpl::emitEvent(const std::string& inboxId, const std::string& chan
 
 void InboxApiImpl::subscribeForInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto inbox = getRawInboxFromCacheOrBridge(inboxId);
+    assertInboxExist(inboxId);
     if(_inboxSubscriptionHelper.hasSubscriptionForElementCustom(inboxId, channelName)) {
         throw AlreadySubscribedException(inboxId);
     }
@@ -933,7 +933,7 @@ void InboxApiImpl::subscribeForInboxCustomEvents(const std::string& inboxId, con
 
 void InboxApiImpl::unsubscribeFromInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto inbox = getRawInboxFromCacheOrBridge(inboxId);
+    assertInboxExist(inboxId);
     if(!_inboxSubscriptionHelper.hasSubscriptionForElementCustom(inboxId, channelName)) {
         throw NotSubscribedException(inboxId);
     }
@@ -945,4 +945,9 @@ server::Inbox InboxApiImpl::getRawInboxFromCacheOrBridge(const std::string& inbo
     // making sure to have valid cache
     if(!_subscribeForInbox) _inboxProvider.update(inboxId);
     return _inboxProvider.get(inboxId);
+}
+
+void InboxApiImpl::assertInboxExist(const std::string& inboxId) {
+    //check if inbox is in cache or on server
+    getRawInboxFromCacheOrBridge(inboxId);
 }

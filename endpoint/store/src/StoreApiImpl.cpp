@@ -324,10 +324,7 @@ void StoreApiImpl::deleteFile(const std::string& fileId) {
 }
 
 int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
-    //check if store exist
-    auto store = getRawStoreFromCacheOrBridge(storeId);
-    
-
+    assertStoreExist(storeId);
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         storeId,
         std::string(),
@@ -343,10 +340,7 @@ int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer&
 }
 
 int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
-    //check if file exist
-    auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
-    storeFileGetModel.fileId(fileId);
-    auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
+    assertFileExist(fileId);
 
    std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         std::string(),
@@ -629,7 +623,7 @@ void StoreApiImpl::unsubscribeFromStoreEvents() {
 }
 
 void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
-    auto store {getRawStoreFromCacheOrBridge(storeId)};
+    assertStoreExist(storeId);
     if(_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
         throw AlreadySubscribedException(storeId);
     }
@@ -637,7 +631,7 @@ void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
 }
 
 void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
-    auto store {getRawStoreFromCacheOrBridge(storeId)};
+    assertStoreExist(storeId);
     if(!_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
         throw NotSubscribedException(storeId);
     }
@@ -929,7 +923,7 @@ void StoreApiImpl::emitEvent(const std::string& storeId, const std::string& chan
 
 void StoreApiImpl::subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto store = getRawStoreFromCacheOrBridge(storeId);
+    assertStoreExist(storeId);
     if(_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
         throw AlreadySubscribedException(storeId);
     }
@@ -938,7 +932,7 @@ void StoreApiImpl::subscribeForStoreCustomEvents(const std::string& storeId, con
 
 void StoreApiImpl::unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
     validateChannelName(channelName);
-    auto store = getRawStoreFromCacheOrBridge(storeId);
+    assertStoreExist(storeId);
     if(!_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
         throw NotSubscribedException(storeId);
     }
@@ -950,4 +944,15 @@ server::Store StoreApiImpl::getRawStoreFromCacheOrBridge(const std::string& stor
     // making sure to have valid cache
     if(!_subscribeForStore) _storeProvider.update(storeId);
     return _storeProvider.get(storeId);
+}
+
+void StoreApiImpl::assertStoreExist(const std::string& storeId) {
+    //check if store is in cache or on server
+    getRawStoreFromCacheOrBridge(storeId);
+}
+
+void StoreApiImpl::assertFileExist(const std::string& fileId) {
+    auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
+    storeFileGetModel.fileId(fileId);
+    _serverApi->storeFileGet(storeFileGetModel);
 }
