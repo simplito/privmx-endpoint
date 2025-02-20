@@ -526,7 +526,7 @@ void InboxApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
 std::string InboxApiImpl::closeFile(const int64_t handle) {
     PRIVMX_DEBUG_TIME_START(InboxApi, closeFile)
     if(!_inboxHandleManager.isFileReadHandle(handle)) {
-        throw InvalidFileReadHandleException("CloseFile works only on file read handles not write");
+        throw InvalidFileReadHandleException("CloseFile() invalid file handle. Expected FILE_READ_HANDLE, but FILE_WRITE_HANDLE used.");
     }
     std::shared_ptr<store::FileHandle> handlePtr = _inboxHandleManager.getFileReadHandle(handle);
     _inboxHandleManager.removeFileHandle(handle);
