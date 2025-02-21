@@ -36,6 +36,7 @@ core::Buffer CryptoApi::signData(const core::Buffer& data, const std::string& pr
 
 bool CryptoApi::verifySignature(const core::Buffer& data, const core::Buffer& signature, const std::string& publicKey) {
     core::Validator::validatePubKeyBase58DER(publicKey, "field:publicKey ");
+    core::Validator::validateSignature(signature.stdString(), "field:signature ");
     try {
         return _impl->verifySignature(data, signature, publicKey);
     } catch (const privmx::utils::PrivmxException& e) {

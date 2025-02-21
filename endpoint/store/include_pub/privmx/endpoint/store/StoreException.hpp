@@ -70,6 +70,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StorePublicDataMismatchExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FilePublicDataMismatchException, "File public data mismatch", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, WritingToFileInteruptedWrittenDataSmallerThenDeclaredException, "Writing to file interupted. Written data smaller then declared", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, CachedStoreIdMismatchException, "Cached store id mismatch", 0x0023)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileDecryptionFailedException, "FileDecryptionFailed", 0x0024)
 
 } // store
 } // endpoint

@@ -365,7 +365,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
-    auto key = _keyProvider->getKey(file_raw.store().keys(), file_raw.store().keyId());
+    auto key = _keyProvider->getKey(file_raw.store().keys(), file_raw.file().keyId());
     auto decryptionParams = getStoreFileDecryptionParams(file_raw.file(), key);
     return createFileReadHandle(decryptionParams);
 }
@@ -375,6 +375,9 @@ StoreApiImpl::StoreFileDecryptionParams StoreApiImpl::getStoreFileDecryptionPara
         // When meta is not string, then is new V4 format as object
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
         auto fileMeta = _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encKey.key);
+        if(fileMeta.statusCode != 0) {
+            throw FileDecryptionFailedException("file decryption Failed with status code: " + std::to_string(fileMeta.statusCode));
+        }
         auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileMeta.internalMeta.stdString()));
         if ((uint64_t)internalMeta.chunkSize() > SIZE_MAX) {
             throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");

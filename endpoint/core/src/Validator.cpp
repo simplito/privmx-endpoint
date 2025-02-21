@@ -173,6 +173,12 @@ void Validator::validatePubKeyBase58DER(const string& value, const string& stack
     }
 }
 
+void Validator::validateSignature(const std::string& value, const std::string& stack_trace) {
+    if (value.size() != 65 || value.front() < 27 || value.front() > 42) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid signature"));
+    }
+}
+
 void Validator::validateEventType(const Event& value, const std::string& type, const std::string& stack_trace) {
     if(value.type != type) {
         throw InvalidParamsException(stack_trace + " | " + ("Invalid Event type, expected '"+ type +"', received '" + value.type + "'"));
