@@ -24,12 +24,13 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
-#include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/WebRTC.hpp"
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
@@ -45,15 +46,7 @@ namespace stream {
 
 class StreamApiImpl {
 public:
-    StreamApiImpl(
-        const std::shared_ptr<event::EventApiImpl>& eventApi,
-        const privfs::RpcGateway::Ptr& gateway,
-        const privmx::crypto::PrivateKey& userPrivKey,
-        const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const std::string& host,
-        const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager
-    );
+    StreamApiImpl(core::Connection& connection, event::EventApi eventApi);
 
     std::string createStreamRoom(
         const std::string& contextId, 
@@ -115,7 +108,7 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
-    std::shared_ptr<StreamApiLowImpl> _api;
+    std::shared_ptr<StreamApiLow> _api;
 };
 
 }  // namespace stream

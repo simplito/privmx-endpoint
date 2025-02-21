@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamTypes.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
@@ -36,16 +37,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiImpl::StreamApiImpl(
-    const std::shared_ptr<event::EventApiImpl>& eventApi,
-    const privfs::RpcGateway::Ptr& gateway,
-    const privmx::crypto::PrivateKey& userPrivKey,
-    const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const std::string& host,
-    const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager
-) {
-    _api = std::make_shared<StreamApiLowImpl>(eventApi, gateway, userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager);
+StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi eventApi) {
+    _api = std::make_shared<StreamApiLow>(StreamApiLow::create(connection, eventApi));
     auto credentials = _api->getTurnCredentials();
     libwebrtc::LibWebRTC::Initialize();
     _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();

@@ -11,19 +11,20 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <map>
 
-// #include <privmx/utils/IniFileReader.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/utils/PrivmxException.hpp>
+
 
 using namespace std;
 using namespace privmx::endpoint;
@@ -149,6 +150,7 @@ private:
     int tmp = 0;
 
     std::shared_ptr<core::Connection> connection;
+    std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApi> streamApi;
 };
 
@@ -206,12 +208,14 @@ MyFrame::MyFrame()
         streamRoomId = streamRoomList.readItems[0].streamRoomId;
     }   
     PublishToStreamRoom(streamRoomId);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     JoinToStreamRoom(streamRoomId);
 }
 
 void MyFrame::Connect(std::string privKey, std::string solutionId, std::string url) {
     connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, url));
-    streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection));
+    eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
+    streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
 }
 
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
@@ -229,7 +233,7 @@ void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
     for(int i = 0; i < streamlist.size(); i++) {
         streamsId.push_back(streamlist[i].streamId);
     }
-    stream::streamJoinSettings ssettings {
+    stream::StreamJoinSettings ssettings {
         .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
             this->OnFrame(w, h, frame, id);
         }
@@ -246,10 +250,10 @@ void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::st
         mapOfVideoPanels[id] = videoPanel;
         sizer->Add(videoPanel, 1, wxEXPAND | wxALL,5);
 
-        // //TMP
-        // TMPVideoPanel = new VideoPanel(this);
-        // mapOfVideoPanels[id+"TMP"] = videoPanel;
-        // sizer->Add(TMPVideoPanel, 1, wxEXPAND | wxALL,5);
+        //TMP
+        TMPVideoPanel = new VideoPanel(this);
+        mapOfVideoPanels[id+"TMP"] = videoPanel;
+        sizer->Add(TMPVideoPanel, 1, wxEXPAND | wxALL,5);
         Layout();
     } else {
         videoPanel = mapOfVideoPanels[id];

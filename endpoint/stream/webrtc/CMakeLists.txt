@@ -4,14 +4,14 @@ set(INCLUDE_PUB_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include_pub)
 
 add_library(libwebrtc SHARED IMPORTED)
 set_target_properties(libwebrtc PROPERTIES
-  IMPORTED_LOCATION "<path_to_libwebrtc>"
-  INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
+    IMPORTED_LOCATION "<path_to_libwebrtc>"
+    INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
 )
 
 add_library(privmxendpointstream_webrtc OBJECT ${SOURCES})
 target_include_directories(privmxendpointstream_webrtc PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointstream_webrtc PRIVATE -fPIC -Wall -Wextra)
-target_link_libraries(privmxendpointstream_webrtc PRIVATE Poco::Foundation privmx privmxendpointcore privmxendpointstream_stream libwebrtc)
+target_link_libraries(privmxendpointstream_webrtc PRIVATE Poco::Foundation privmx privmxendpointcore privmxendpointevent privmxendpointstream_stream libwebrtc)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxendpointstream_webrtc PROPERTIES POSITION_INDEPENDENT_CODE True)
 endif()

@@ -9,7 +9,7 @@
 
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
@@ -97,7 +97,8 @@ int main(int argc, char** argv) {
     try {
         crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
         core::Connection connection = core::Connection::connect("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
-        stream::StreamApi streamApi = stream::StreamApi::create(connection);
+        event::EventApi eventApi = event::EventApi::create(connection);
+        stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         auto context = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
         auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
         auto pubKey = cryptoApi.derivePublicKey("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN");
@@ -127,7 +128,7 @@ int main(int argc, char** argv) {
             streamsId.push_back(streamlist[i].streamId);
         }
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
-        stream::streamJoinSettings ssettings {
+        stream::StreamJoinSettings ssettings {
             .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
                 r.OnFrame(w, h, frame, id);
             }

@@ -19,13 +19,13 @@ limitations under the License.
 using namespace privmx::endpoint::stream; 
 
 StreamKeyManager::StreamKeyManager(
+    std::shared_ptr<event::EventApiImpl> eventApi,
     std::shared_ptr<core::KeyProvider> keyProvider, 
     std::shared_ptr<ServerApi> serverApi,
     privmx::crypto::PrivateKey userPrivKey, 
     const std::string& streamRoomId,
-    const std::string& contextId,
-    const std::shared_ptr<core::InternalContextEventManager>& internalContextEventManager
-) : _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId), _internalContextEventManager(internalContextEventManager) {
+    const std::string& contextId
+) : _eventApi(eventApi), _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId) {
     _userPubKey = _userPrivKey.getPublicKey();
     // generate curren key
     auto currentKey = _keyProvider->generateKey();
@@ -41,7 +41,7 @@ StreamKeyManager::StreamKeyManager(
     _cancellationToken = privmx::utils::CancellationToken::create();
     // create thread to remove old keys
     _keyCollector = std::thread([&]() {
-        while (!_cancellationToken->isCanceled()) {
+        while (!_cancellationToken->isCancelled()) {
             try {
                 _cancellationToken->sleep( std::chrono::milliseconds(1000));
             } catch (const privmx::utils::OperationCancelledException& e) {
@@ -66,13 +66,13 @@ StreamKeyManager::StreamKeyManager(
             }
         }
     }); 
-    _internalContextEventManager->subscribeFor(_contextId);
+    _eventApi->subscribeForInternalEvents(_contextId);
 }
 
 StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
     _updateKeyCV.notify_all();
-    _internalContextEventManager->unsubscribeFrom(_contextId);
+    _eventApi->unsubscribeFromInternalEvents(_contextId);
     if(_keyCollector.joinable()) _keyCollector.join();
     if(_keyUpdater.has_value()) if(_keyUpdater.value().joinable()) _keyUpdater.value().join();
     PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Successfully Deconstructed : " + _streamRoomId);
@@ -175,7 +175,7 @@ void StreamKeyManager::updateKey() {
     _keyUpdater = std::thread([&]() {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
         _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
-        if(!_cancellationToken->isCanceled()) {
+        if(!_cancellationToken->isCancelled()) {
             _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
             _currentKeyId = _keyForUpdate->key.id;
             updateWebRtcKeyStore();
@@ -250,8 +250,8 @@ dynamic::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
 
 void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
     data.streamRoomId(_streamRoomId);
-    core::InternalContextEventData eventData = {.type="StreamKeyManagementEvent", .data= privmx::endpoint::core::Buffer::from(utils::Utils::stringifyVar(data))};
-    _internalContextEventManager->sendEvent(_contextId, eventData, users);
+    event::InternalContextEvent event = {.type="StreamKeyManagementEvent", .data= privmx::endpoint::core::Buffer::from(utils::Utils::stringifyVar(data))};
+    _eventApi->emitEventInternal(_contextId, event, users);
 }
 
 void StreamKeyManager::updateWebRtcKeyStore() {

@@ -20,8 +20,10 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
+
 
 namespace privmx {
 namespace endpoint {
@@ -32,8 +34,10 @@ class StreamApiLowImpl;
 class StreamApiLow {
 public:
 
-    static StreamApiLow create(core::Connection& connetion);
+    static StreamApiLow create(core::Connection& connection, event::EventApi& eventApi);
     StreamApiLow() = default;
+
+    std::vector<TurnCredentials> getTurnCredentials();
 
     std::string createStreamRoom(
         const std::string& contextId, 

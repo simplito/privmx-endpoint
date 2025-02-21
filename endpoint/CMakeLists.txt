@@ -13,11 +13,11 @@ message(STATUS "Build endpoint ping - PRIVMX_BUILD_ENDPOINT_ENDPOINT=${PRIVMX_BU
 if(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(core)
     add_subdirectory(crypto)
+    add_subdirectory(event)
     add_subdirectory(thread)
     add_subdirectory(store)
     add_subdirectory(inbox)
     add_subdirectory(stream)
-    add_subdirectory(event)
 endif(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
 
 if(PRIVMX_ENABLE_TESTS_E2E)

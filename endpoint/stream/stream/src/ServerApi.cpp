@@ -54,8 +54,7 @@ server::StreamJoinResult ServerApi::streamJoin(server::StreamJoinModel model)  {
 }
 
 void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
-    auto a = requestWS("streamAcceptOffer", model);
-    return;
+    requestWS("streamAcceptOffer", model);
 }
 
 void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
@@ -64,10 +63,6 @@ void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
 
 void ServerApi::streamLeave(server::StreamLeaveModel model) {
     requestWS("streamLeave", model);
-}
-
-server::ContextGetUserResult ServerApi::contextGetUsers(server::ContextGetUsersModel model) {
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(_gateway->request("context.contextGetUsers", model));
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object

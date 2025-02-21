@@ -32,6 +32,7 @@ using namespace privmx::endpoint::stream;
 
 StreamApiLowImpl::StreamApiLowImpl(
     const std::shared_ptr<event::EventApiImpl>& eventApi,
+    const std::shared_ptr<core::ConnectionImpl>& connection,
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -39,6 +40,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::EventChannelManager>& eventChannelManager
 ) : _eventApi(eventApi),
+    _connection(connection),
     _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
@@ -78,9 +80,9 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 }
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if(_internalContextEventManager->isInternalContextEvent(type, channel, data, "StreamKeyManagementEvent")) {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::ContextCustomEventData>(data);
-        auto decryptedData = _internalContextEventManager->extractEventData(data);
+    if(_eventApi->isInternalContextEvent(type, channel, data, "StreamKeyManagementEvent")) {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<event::server::ContextCustomEventData>(data);
+        auto decryptedData = _eventApi->extractInternalEventData(data);
         auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<dynamic::StreamKeyManagementEvent>(
             privmx::utils::Utils::parseJson(decryptedData.data.stdString())
         );
@@ -106,7 +108,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
-        std::make_shared<StreamKeyManager>(_keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _internalContextEventManager),
+        std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId()),
         streamRoomId
     );
     _streamRoomMap.set(
@@ -214,9 +216,7 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     modelStreams.streamRoomId(streamRoomId);
     auto streamsList = _serverApi->streamList(modelStreams).list();
     // get all users for pubKey
-    auto modelGetUsersKeys = privmx::utils::TypedObjectFactory::createNewObject<server::ContextGetUsersModel>();
-    modelGetUsersKeys.contextId(streamRoom.contextId());
-    auto allUsersList = _serverApi->contextGetUsers(modelGetUsersKeys).users(); 
+    std::vector<core::UserInfo> allUsersList = _connection->getContextUsers(streamRoom.contextId()); 
     std::vector<std::string> usersIds;
     for(auto s: streamsList) {
         if ( std::find(streamsId.begin(), streamsId.end(), s.streamId()) != streamsId.end() ) {
@@ -224,9 +224,9 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
         }
     }
     std::vector<core::UserWithPubKey> toSend;
-    for(auto userWithPubKey: allUsersList) {
-        if(std::find(usersIds.begin(), usersIds.end(), userWithPubKey.id()) != usersIds.end() ) {
-            toSend.push_back(core::UserWithPubKey{.userId=userWithPubKey.id(), .pubKey=userWithPubKey.pub()});
+    for(auto userInfo: allUsersList) {
+        if(std::find(usersIds.begin(), usersIds.end(), userInfo.user.userId) != usersIds.end() ) {
+            toSend.push_back(userInfo.user);
         }
     }
     room->streamKeyManager->requestKey(toSend);

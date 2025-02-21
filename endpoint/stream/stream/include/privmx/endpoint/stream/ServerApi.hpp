@@ -41,8 +41,6 @@ public:
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
     void streamLeave(server::StreamLeaveModel model);
-    // TMP
-    server::ContextGetUserResult contextGetUsers(server::ContextGetUsersModel model);
 
 private:
     template<typename T>

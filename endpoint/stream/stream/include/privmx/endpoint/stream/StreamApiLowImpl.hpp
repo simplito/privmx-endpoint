@@ -38,6 +38,7 @@ class StreamApiLowImpl {
 public:
     StreamApiLowImpl(
         const std::shared_ptr<event::EventApiImpl>& eventApi,
+        const std::shared_ptr<core::ConnectionImpl>& connection,
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -122,6 +123,7 @@ private:
     std::shared_ptr<StreamData> getStreamData(int64_t localStreamId, std::shared_ptr<StreamRoomData> room);
 
     std::shared_ptr<event::EventApiImpl> _eventApi;
+    std::shared_ptr<core::ConnectionImpl> _connection;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;

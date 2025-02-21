@@ -87,12 +87,8 @@ ENDPOINT_SERVER_TYPE(StreamRoomGetResult)
     OBJECT_FIELD(streamRoom, StreamRoomInfo)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamRoomListModel)
+ENDPOINT_SERVER_TYPE_INHERIT(StreamRoomListModel, core::server::ListModel)
     STRING_FIELD(contextId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
     STRING_FIELD(type)
 TYPE_END
 

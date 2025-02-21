@@ -32,7 +32,7 @@ class StreamApiImpl;
 class StreamApi {
 public:
 
-    static StreamApi create(core::Connection& connetion, event::EventApi eventApi);
+    static StreamApi create(core::Connection& connection, event::EventApi& eventApi);
     StreamApi() = default;
 
     std::string createStreamRoom(

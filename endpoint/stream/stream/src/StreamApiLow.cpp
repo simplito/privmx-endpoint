@@ -16,6 +16,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
+#include <privmx/endpoint/event/EventApiImpl.hpp>
 
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
@@ -25,17 +26,19 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiLow StreamApiLow::create(core::Connection& connection) {
+StreamApiLow StreamApiLow::create(core::Connection& connection, event::EventApi& eventApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+        std::shared_ptr<event::EventApiImpl> eventApiImpl = eventApi.getImpl();
         std::shared_ptr<StreamApiLowImpl> impl(new StreamApiLowImpl(
+            eventApiImpl,
+            connectionImpl,
             connectionImpl->getGateway(),
             connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
-            connectionImpl->getInternalContextEventManager()
+            connectionImpl->getEventChannelManager()
         ));
         return StreamApiLow(impl);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -45,6 +48,16 @@ StreamApiLow StreamApiLow::create(core::Connection& connection) {
 }
 
 StreamApiLow::StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl) : _impl(impl) {}
+
+std::vector<TurnCredentials> StreamApiLow::getTurnCredentials() {
+    validateEndpoint();
+    try {
+        return _impl->getTurnCredentials();
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
 
 std::string StreamApiLow::createStreamRoom(
     const std::string& contextId, 
