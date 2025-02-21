@@ -83,6 +83,7 @@ public:
     static void validateId(const std::string& value, const std::string& stack_trace = "");
     static void validatePrivKeyWIF(const std::string& value, const std::string& stack_trace = "");
     static void validatePubKeyBase58DER(const std::string& value, const std::string& stack_trace = "");
+    static void validateSignature(const std::string& value, const std::string& stack_trace = "");
     static void validateEventType(const Event& value, const std::string& type, const std::string& stack_trace = "");
     template<typename T>
     static void validateClass(const T& value, const std::string& stack_trace = "") {
