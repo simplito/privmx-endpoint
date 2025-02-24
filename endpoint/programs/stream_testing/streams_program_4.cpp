@@ -3,6 +3,7 @@
 #include <wx/rawbmp.h>
 #include <wx/rawbmp.h>
 #include <wx/dcgraph.h>
+#include <wx/textentry.h>
 
 #include <iostream>
 #include <sstream>
@@ -37,9 +38,9 @@ using namespace privmx::endpoint;
 typedef wxAlphaPixelData PixelData;
 
 // when creating the bitmap, use an explicit depth of 32!
-wxBitmap RGBAintoBitmap(int w, int h, unsigned char *rgba ) {
-   wxBitmap b = wxBitmap(w, h, 32);
-   PixelData bmdata(b);
+std::shared_ptr<wxBitmap> RGBAintoBitmap(int w, int h, unsigned char *rgba ) {
+   std::shared_ptr<wxBitmap> b = std::make_shared<wxBitmap>(w, h, 32);
+   PixelData bmdata(*b);
    PixelData::Iterator dst(bmdata);
    for( int y = 0; y < h; y++)
    {
@@ -80,12 +81,12 @@ private:
     void OnPaint(wxPaintEvent& event);
     std::mutex m;
     std::vector<unsigned char> picDataVector;
-    wxBitmap bmp = wxBitmap(MAX_VIDEO_W, MAX_VIDEO_H, 32);
+    std::shared_ptr<wxBitmap> bmp = std::make_shared<wxBitmap>(MAX_VIDEO_W, MAX_VIDEO_H, 32);
     bool haveFrame = false;
 };
 
 VideoPanel::VideoPanel(wxWindow * parent) :
-    wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize)
+    wxPanel(parent, wxID_ANY, wxDefaultPosition, wxSize(320,180))
 {
     this->SetBackgroundColour(wxColor(100, 100, 200));
     this->Bind(wxEVT_PAINT, &VideoPanel::OnPaint, this);
@@ -103,27 +104,30 @@ void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::
     int64_t W =  scale * w;
     int64_t H =  scale * h;
     // std::cout << W << " - " << H << " IMG Size" << std::endl;
+        
+    if(H < 1 || W < 1) return;
+    // picDataVector.reserve(4*w*h);
+    // frame->ConvertToRGBA(&picDataVector[0], 1, w, h);
+    // bmp = RGBAintoBitmap(w, h, &picDataVector[0]);
+    picDataVector.reserve(4*W*H);
+    frame->ConvertToRGBA(&picDataVector[0], 1, W, H);
     {
         std::unique_lock<std::mutex> lock(m); 
-        if(H < 1 || W < 1) return;
-        haveFrame = true;
-        // picDataVector.reserve(4*w*h);
-        // frame->ConvertToRGBA(&picDataVector[0], 1, w, h);
-        // bmp = RGBAintoBitmap(w, h, &picDataVector[0]);
-        picDataVector.reserve(4*W*H);
-        frame->ConvertToRGBA(&picDataVector[0], 1, W, H);
         bmp = RGBAintoBitmap(W, H, &picDataVector[0]);
+        haveFrame = true;
     }
     this->Refresh();
 }
 
 void VideoPanel::OnPaint(wxPaintEvent& event)
 {
-    std::unique_lock<std::mutex> lock(m);
+    std::cout << "OnPaint" << std::endl;
     wxPaintDC dc(this);
     dc.Clear();
     if(haveFrame) {
-        dc.DrawBitmap(bmp.GetSubBitmap(wxRect(0, 0, bmp.GetWidth(), bmp.GetHeight())), 0, 0, false);
+        std::unique_lock<std::mutex> lock(m);
+        std::shared_ptr<wxBitmap> tmp_bmp = bmp;
+        dc.DrawBitmap(tmp_bmp->GetSubBitmap(wxRect(0, 0, tmp_bmp->GetWidth(), tmp_bmp->GetHeight())), 0, 0, false);
     }
 }
 
@@ -135,6 +139,7 @@ public:
     void Connect(std::string privKey, std::string solutionId, std::string url);
     void PublishToStreamRoom(std::string streamRoomId);
     void JoinToStreamRoom(std::string streamRoomId);
+    std::vector<privmx::endpoint::stream::StreamRoom> ListStreamRooms(std::string streamRoomId);
 private:
     void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id);
     void OnResize(wxSizeEvent& event);
@@ -143,8 +148,19 @@ private:
     std::map<std::string, VideoPanel*> mapOfVideoPanels;
     VideoPanel* TMPVideoPanel;
 
-
     wxPanel* m_board;
+
+
+    wxGridSizer* controlSizer;
+    wxButton* connectButton;
+    wxButton* joinButton;
+    wxButton* publishButton;
+    wxTextCtrl* hostURLInput;
+    wxTextCtrl* privKeyInput;
+    wxTextCtrl* solutionIdInput;
+    wxTextCtrl* streamRoomIdInput;
+
+
     std::vector<unsigned char> picData_vector = std::vector<unsigned char>(4 * MAX_VIDEO_W * MAX_VIDEO_W);
     wxBitmap bmp = wxBitmap(MAX_VIDEO_W, MAX_VIDEO_H, 32);
     int tmp = 0;
@@ -159,6 +175,8 @@ private:
 bool MyApp::OnInit()
 {
     MyFrame *appFrame = new MyFrame();
+    appFrame->SetClientSize(600, 400);
+    appFrame->Center();
     appFrame->Show(true);
     return true;
 }
@@ -177,14 +195,57 @@ void MyFrame::OnResize(wxSizeEvent& event) {
 MyFrame::MyFrame()
     : wxFrame(nullptr, wxID_ANY, "Video Board", wxDefaultPosition, wxDefaultSize)
 {
+    controlSizer = new wxGridSizer(2);
+    m_board = new wxPanel(this, wxID_ANY);
+    // m_board->Bind(wxEVT_SIZE, &MyFrame::OnResize , m_board);
+    connectButton = new wxButton(this->m_board, wxID_ANY, "Connect");
+    joinButton = new wxButton(this->m_board, wxID_ANY, "Join");
+    publishButton = new wxButton(this->m_board, wxID_ANY, "Publish");
+    hostURLInput = new wxTextCtrl(this->m_board, wxID_ANY, "http://webrtc2.s24.simplito.com:3000");
+    privKeyInput = new wxTextCtrl(this->m_board, wxID_ANY, "KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8");
+    solutionIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "fc47c4e4-e1dc-414a-afa4-71d436398cfc");
+    streamRoomIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "stream room Id");
+
+
+    controlSizer->Add(hostURLInput, 1, wxEXPAND | wxALL,5);
+    controlSizer->Add(privKeyInput, 1, wxEXPAND | wxALL,5);
+    controlSizer->Add(solutionIdInput, 1, wxEXPAND | wxALL,5);
+    controlSizer->Add(connectButton, 1, wxEXPAND | wxALL,5);
+    
+    controlSizer->Add(streamRoomIdInput, 1, wxEXPAND | wxALL,5);
+    controlSizer->Add(joinButton, 1, wxEXPAND | wxALL,5);
+    controlSizer->Add(publishButton, 1, wxEXPAND | wxALL,5);
+
+    this->connectButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
+      Connect(privKeyInput->GetValue().ToStdString(), solutionIdInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());
+    });
+
+    this->joinButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
+      JoinToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+    });
+    this->publishButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
+      PublishToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+    });
+
+    m_board->SetSizerAndFit(controlSizer);
     
     sizer = new wxGridSizer(2);
-    this->SetSizer(sizer);
     this->Bind(wxEVT_SIZE, &MyFrame::OnResize , this);
+    sizer->Add(m_board, 1, wxEXPAND | wxALL,5);
+    this->SetSizerAndFit(sizer);
 
+    // Connect(privKeyInput->GetValue().ToStdString(), solutionIdInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());
+     
+    // PublishToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+    // std::this_thread::sleep_for(std::chrono::seconds(1));
+    // JoinToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+}
+
+void MyFrame::Connect(std::string privKey, std::string solutionId, std::string url) {
+    connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, url));
+    eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
+    streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
     crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
-    std::string privKey = "KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8";
-    Connect(privKey, "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
     auto context = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
     auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
     std::string streamRoomId;
@@ -206,16 +267,8 @@ MyFrame::MyFrame()
         
     } else {
         streamRoomId = streamRoomList.readItems[0].streamRoomId;
-    }   
-    PublishToStreamRoom(streamRoomId);
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    JoinToStreamRoom(streamRoomId);
-}
-
-void MyFrame::Connect(std::string privKey, std::string solutionId, std::string url) {
-    connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, url));
-    eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
-    streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
+    }
+    streamRoomIdInput->SetValue(streamRoomId);
 }
 
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
@@ -230,6 +283,7 @@ void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
 void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
     auto streamlist = streamApi->listStreams(streamRoomId);
     std::vector<int64_t> streamsId;
+    if(streamlist.size() == 0) return;
     for(int i = 0; i < streamlist.size(); i++) {
         streamsId.push_back(streamlist[i].streamId);
     }
@@ -241,6 +295,11 @@ void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
     streamApi->joinStream(streamRoomId, streamsId, ssettings);
 }
 
+std::vector<privmx::endpoint::stream::StreamRoom> MyFrame::ListStreamRooms(std::string contextId) {
+    auto streamlist = streamApi->listStreamRooms(contextId, core::PagingQuery{.skip=0, .limit=100, .sortOrder="desc"}); 
+    return streamlist.readItems;
+}
+
 void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
     auto it = mapOfVideoPanels.find(id);
     VideoPanel* videoPanel;
@@ -249,16 +308,10 @@ void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::st
         videoPanel = new VideoPanel(this);
         mapOfVideoPanels[id] = videoPanel;
         sizer->Add(videoPanel, 1, wxEXPAND | wxALL,5);
-
-        //TMP
-        TMPVideoPanel = new VideoPanel(this);
-        mapOfVideoPanels[id+"TMP"] = videoPanel;
-        sizer->Add(TMPVideoPanel, 1, wxEXPAND | wxALL,5);
         Layout();
     } else {
         videoPanel = mapOfVideoPanels[id];
     }
     videoPanel->Render(w,h,frame);
-    // TMPVideoPanel->Render(w,h,frame);
 }
  

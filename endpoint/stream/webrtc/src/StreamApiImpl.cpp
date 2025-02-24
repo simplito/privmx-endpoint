@@ -20,9 +20,7 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
-#include "privmx/endpoint/stream/StreamTypes.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
-#include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/WebRTC.hpp"
 
 

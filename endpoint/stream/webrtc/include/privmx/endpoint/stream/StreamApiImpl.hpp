@@ -26,10 +26,7 @@ limitations under the License.
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
-#include "privmx/endpoint/stream/ServerApi.hpp"
-#include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
-#include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/WebRTC.hpp"
 #include <libwebrtc.h>
