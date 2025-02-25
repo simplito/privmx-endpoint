@@ -12,6 +12,7 @@ limitations under the License.
 #include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
@@ -173,16 +174,29 @@ void StoreApiImpl::updateStore(
     auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
 
     // adjust key
-    std::vector<std::string> usersDiff {core::EndpointUtils::getDifference(oldUsersAll, usersWithPubKeyToIds(new_users))};
-
-    bool needNewKey = usersDiff.size() > 0;
-
+    std::vector<std::string> deletedUsers {core::EndpointUtils::getDifference(oldUsersAll, usersWithPubKeyToIds(new_users))};
+    std::vector<std::string> addedUsers {core::EndpointUtils::getDifference(usersWithPubKeyToIds(new_users), oldUsersAll)};
+    std::vector<core::UserWithPubKey> usersToAddMissingKey;
+    for(auto new_user: new_users) {
+        if( std::find(addedUsers.begin(), addedUsers.end(), new_user.userId) != addedUsers.end()) {
+            usersToAddMissingKey.push_back(new_user);
+        }
+    }
+    bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
     auto currentKey {_keyProvider->getKey(currentStore.keys(), currentStore.keyId())};
-    auto storeKey = forceGenerateNewKey || needNewKey ? _keyProvider->generateKey() : currentKey; 
+    auto storeKey = currentKey; 
+    privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
+    if(needNewKey) {
+        storeKey = _keyProvider->generateKey();
+        keys = _keyProvider->prepareKeysList(new_users, storeKey);
+    }
+    if(usersToAddMissingKey.size() > 0) {
+        auto tmp = _keyProvider->prepareOldKeysListForNewUsers(currentStore.keys(),usersToAddMissingKey);
+        for(auto t: tmp) keys.add(t);
+    }
+
 
     auto model = utils::TypedObjectFactory::createNewObject<server::StoreUpdateModel>();
-
-
     auto usersList = utils::TypedObjectFactory::createNewList<std::string>();
     for (auto user: users) {
         usersList.add(user.userId);
@@ -194,7 +208,7 @@ void StoreApiImpl::updateStore(
 
     model.id(storeId);
     model.keyId(storeKey.id);
-    model.keys(_keyProvider->prepareKeysList(new_users, storeKey));
+    model.keys(keys);
     model.users(usersList);
     model.managers(managersList);
     model.version(version);
