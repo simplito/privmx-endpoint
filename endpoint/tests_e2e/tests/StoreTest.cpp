@@ -2157,3 +2157,45 @@ TEST_F(StoreTest, updateStore_key_update_open_file) {
     });
        
 }
+
+TEST_F(StoreTest, update_access_to_old_files) {
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });
+    disconnect();
+    connectAs(User2);
+    privmx::endpoint::store::File file;
+    EXPECT_NO_THROW({
+        file = storeApi->getFile(
+            reader->getString("File_1.info_fileId")
+        );
+    });
+    EXPECT_EQ(file.statusCode, 0);
+}
