@@ -11,11 +11,6 @@ set_target_properties(libwebrtc PROPERTIES
 )
 target_include_directories(privmxendpointstream PRIVATE ${INCLUDE_DIRS})
 
-
-# Only libwebrtc
-add_executable(streamsProgram1 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_1.cpp)
-target_link_libraries(streamsProgram1 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
-
 # privmxendpointstream
 add_executable(streamsProgram2 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_2.cpp)
 target_link_libraries(streamsProgram2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
