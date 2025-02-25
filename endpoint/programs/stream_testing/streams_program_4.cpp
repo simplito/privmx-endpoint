@@ -93,22 +93,13 @@ VideoPanel::VideoPanel(wxWindow * parent) :
 }
 
 void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame) {
-    
-    std::cout << w << " - " << h << " frame Size" << std::endl;
     auto panel_size = this->GetClientSize();
-    // std::cout << panel_size.GetWidth() << " - " << panel_size.GetHeight() << " board Size" << std::endl;
     double scaleW = (double)panel_size.GetWidth() / w;
     double scaleH = (double)panel_size.GetHeight() / h;
     double scale = scaleW < scaleH ? scaleW : scaleH;
-    // std::cout << scaleW << " - " << scaleH << " board scale" << std::endl;
     int64_t W =  scale * w;
     int64_t H =  scale * h;
-    // std::cout << W << " - " << H << " IMG Size" << std::endl;
-        
     if(H < 1 || W < 1) return;
-    // picDataVector.reserve(4*w*h);
-    // frame->ConvertToRGBA(&picDataVector[0], 1, w, h);
-    // bmp = RGBAintoBitmap(w, h, &picDataVector[0]);
     picDataVector.reserve(4*W*H);
     frame->ConvertToRGBA(&picDataVector[0], 1, W, H);
     {
@@ -116,12 +107,11 @@ void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::
         bmp = RGBAintoBitmap(W, H, &picDataVector[0]);
         haveFrame = true;
     }
-    this->Refresh();
+    
 }
 
 void VideoPanel::OnPaint(wxPaintEvent& event)
 {
-    std::cout << "OnPaint" << std::endl;
     wxPaintDC dc(this);
     dc.Clear();
     if(haveFrame) {
@@ -145,8 +135,7 @@ private:
     void OnResize(wxSizeEvent& event);
     std::mutex m;
     wxGridSizer* sizer;
-    std::map<std::string, VideoPanel*> mapOfVideoPanels;
-    VideoPanel* TMPVideoPanel;
+    std::map<std::string, std::shared_ptr<VideoPanel>> mapOfVideoPanels;
 
     wxPanel* m_board;
 
@@ -188,7 +177,6 @@ void MyFrame::OnResize(wxSizeEvent& event) {
     int numberOfVideos = mapOfVideoPanels.size() != 0 ? mapOfVideoPanels.size() : 1;
     int numberCol = numberOfMaxCol < numberOfVideos ? numberOfMaxCol : numberOfVideos;
     sizer->SetCols(numberCol);
-    Refresh(); 
     event.Skip(); 
 }
 
@@ -197,7 +185,6 @@ MyFrame::MyFrame()
 {
     controlSizer = new wxGridSizer(2);
     m_board = new wxPanel(this, wxID_ANY);
-    // m_board->Bind(wxEVT_SIZE, &MyFrame::OnResize , m_board);
     connectButton = new wxButton(this->m_board, wxID_ANY, "Connect");
     joinButton = new wxButton(this->m_board, wxID_ANY, "Join");
     publishButton = new wxButton(this->m_board, wxID_ANY, "Publish");
@@ -234,11 +221,14 @@ MyFrame::MyFrame()
     sizer->Add(m_board, 1, wxEXPAND | wxALL,5);
     this->SetSizerAndFit(sizer);
 
-    // Connect(privKeyInput->GetValue().ToStdString(), solutionIdInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());
-     
-    // PublishToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
-    // std::this_thread::sleep_for(std::chrono::seconds(1));
-    // JoinToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+    std::thread t([&]() {
+        while(true) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+            std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {if(p.second!=nullptr) p.second->Refresh(); ;});
+        }
+    }); 
+    t.detach();
 }
 
 void MyFrame::Connect(std::string privKey, std::string solutionId, std::string url) {
@@ -269,6 +259,7 @@ void MyFrame::Connect(std::string privKey, std::string solutionId, std::string u
         streamRoomId = streamRoomList.readItems[0].streamRoomId;
     }
     streamRoomIdInput->SetValue(streamRoomId);
+    
 }
 
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
@@ -302,16 +293,18 @@ std::vector<privmx::endpoint::stream::StreamRoom> MyFrame::ListStreamRooms(std::
 
 void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
     auto it = mapOfVideoPanels.find(id);
-    VideoPanel* videoPanel;
+    std::shared_ptr<VideoPanel> videoPanel ;
     if (it == mapOfVideoPanels.end()) {
         //add video panel 
-        videoPanel = new VideoPanel(this);
+        videoPanel = std::make_shared<VideoPanel>(this);
         mapOfVideoPanels[id] = videoPanel;
-        sizer->Add(videoPanel, 1, wxEXPAND | wxALL,5);
+        sizer->Add(videoPanel.get(), 1, wxEXPAND | wxALL,5);
         Layout();
     } else {
         videoPanel = mapOfVideoPanels[id];
     }
-    videoPanel->Render(w,h,frame);
+    if(videoPanel != nullptr) {
+        videoPanel->Render(w,h,frame);
+    }
 }
  
