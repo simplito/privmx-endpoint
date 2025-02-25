@@ -163,15 +163,26 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
 
     // adjust key
-    std::vector<std::string> usersDiff {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
-    bool needNewKey = usersDiff.size() > 0;
-
-    // key
+    std::vector<std::string> deletedUsers {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
+    std::vector<std::string> addedUsers {core::EndpointUtils::getDifference(core::EndpointUtils::usersWithPubKeyToIds(new_users), oldUsersAll)};
+    std::vector<core::UserWithPubKey> usersToAddMissingKey;
+    for(auto new_user: new_users) {
+        if( std::find(addedUsers.begin(), addedUsers.end(), new_user.userId) != addedUsers.end()) {
+            usersToAddMissingKey.push_back(new_user);
+        }
+    }
+    bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
     auto currentKey {_keyProvider->getKey(currentInbox.keys(), currentInbox.keyId())};
-    auto inboxKey = forceGenerateNewKey || needNewKey ? _keyProvider->generateKey() : currentKey;
-
-    auto keysList = _keyProvider->prepareKeysList(new_users, inboxKey);
-
+    auto inboxKey = currentKey; 
+    privmx::utils::List<core::server::KeyEntrySet> keysList = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
+    if(needNewKey) {
+        inboxKey = _keyProvider->generateKey();
+        keysList = _keyProvider->prepareKeysList(new_users, inboxKey);
+    }
+    if(usersToAddMissingKey.size() > 0) {
+        auto tmp = _keyProvider->prepareOldKeysListForNewUsers(currentInbox.keys(),usersToAddMissingKey);
+        for(auto t: tmp) keysList.add(t);
+    }
     // prep keys
     auto eccKey = crypto::ECC::fromPrivateKey(inboxKey.key);
     auto privateKey = crypto::PrivateKey(eccKey);

@@ -1675,3 +1675,45 @@ TEST_F(ThreadTest, listThreads_query) {
         }
     }
 }
+
+TEST_F(ThreadTest, update_access_to_old_messages) {
+    EXPECT_NO_THROW({
+        threadApi->updateThread(
+            reader->getString("Thread_1.threadId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });
+    disconnect();
+    connectAs(User2);
+    privmx::endpoint::thread::Message message;
+    EXPECT_NO_THROW({
+        message = threadApi->getMessage(
+            reader->getString("Message_1.info_messageId")
+        );
+    });
+    EXPECT_EQ(message.statusCode, 0);
+}
