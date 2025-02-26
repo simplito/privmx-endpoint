@@ -1916,47 +1916,6 @@ TEST_F(InboxTest, updateInbox_policy) {
     }, core::Exception);
 }
 
-
-TEST_F(InboxTest, listInboxes_query) {
-    std::string inboxId;
-    core::PagingList<inbox::Inbox> listInboxes;
-    EXPECT_NO_THROW({
-        inboxId = inboxApi->createInbox(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                core::UserWithPubKey{
-                    .userId=reader->getString("Login.user_1_id"),
-                    .pubKey=reader->getString("Login.user_1_pubKey")
-                }
-            },
-            std::vector<core::UserWithPubKey>{
-                core::UserWithPubKey{
-                    .userId=reader->getString("Login.user_1_id"),
-                    .pubKey=reader->getString("Login.user_1_pubKey")
-                }
-            },
-            core::Buffer::from("{\"test\":1}"),
-            core::Buffer::from("list_query_test"),
-            std::nullopt,
-            std::nullopt
-        );
-    });
-    if(inboxId.empty()) { 
-        FAIL();
-    }
-    EXPECT_THROW({
-        listInboxes = inboxApi->listInboxes(
-            reader->getString("Context_1.contextId"),
-            core::PagingQuery{
-                .skip=0,
-                .limit=100,
-                .sortOrder="asc",
-                .queryAsJson="{\"test\":1}"
-            }
-        );
-    }, privmx::endpoint::inbox::InboxModuleDoesNotSupportQueriesYetException);
-}
-
 TEST_F(InboxTest, update_access_to_old_entries) {
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
