@@ -218,6 +218,25 @@ void StreamApi::leaveStream(int64_t streamId) {
     }
 }
 
+void StreamApi::keyManagement(const std::string& streamRoomId, bool disable) {
+    validateEndpoint();
+    try {
+        return _impl->keyManagement(streamRoomId, disable);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::dropBrokenFrames(bool enable) {
+    validateEndpoint();
+    try {
+        return _impl->dropBrokenFrames(enable);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
 
 void StreamApi::validateEndpoint() {
     if(!_impl) throw NotInitializedException();

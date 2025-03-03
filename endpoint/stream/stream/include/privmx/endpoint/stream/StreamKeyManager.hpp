@@ -55,6 +55,7 @@ public:
     int64_t addKeyUpdateCallback(std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> keyUpdateCallback);
     void removeKeyUpdateCallback(int64_t keyUpdateCallbackId);
     std::vector<privmx::endpoint::stream::Key> getCurrentWebRtcKeys();
+    inline void keyManagement(bool disable) {disableKeyUpdateForEncryptors=disable;}
 private:
     struct StreamEncKey {
         core::EncKey key;
@@ -94,6 +95,7 @@ private:
     std::atomic_bool _keyUpdateInProgress = false;
     std::vector<privmx::endpoint::stream::Key> _currentWebRtcKeys;
     std::atomic_int64_t _nextKeyUpdateCallbackId = 0;
+    bool disableKeyUpdateForEncryptors = false;
 };
 
 } // stream

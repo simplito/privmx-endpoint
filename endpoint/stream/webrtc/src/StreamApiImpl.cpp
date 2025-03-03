@@ -50,12 +50,12 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
         _configuration.ice_servers[i] = iceServer;
     }
     _constraints = libwebrtc::RTCMediaConstraints::Create();
+    _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed=false};
 }
-
 
 int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
     int64_t streamId = generateNumericId();
-    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, std::nullopt);
+    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, _frameCryptorOptions, std::nullopt);
     _streamDataMap.set( streamId, peerConnectionWebRTC);
     _api->createStream(streamRoomId, streamId, peerConnectionWebRTC);
     return streamId;
@@ -150,7 +150,7 @@ void StreamApiImpl::publishStream(int64_t streamId) {
 // Joining to Stream
 int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings) {
     int64_t streamId = generateNumericId();
-    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, settings.OnFrame);
+    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, _frameCryptorOptions, settings.OnFrame);
     _streamDataMap.set( streamId, peerConnectionWebRTC);
     return _api->joinStream(streamRoomId, streamsId, settings.settings, streamId, peerConnectionWebRTC);
 }
@@ -209,4 +209,15 @@ void StreamApiImpl::unpublishStream(int64_t streamId) {
 void StreamApiImpl::leaveStream(int64_t streamId) {
     _api->leaveStream(streamId);
     _streamDataMap.erase(streamId);
+}
+
+void StreamApiImpl::keyManagement(const std::string& streamRoomId, bool disable) {
+    _api->keyManagement(streamRoomId, disable);
+}
+
+void StreamApiImpl::dropBrokenFrames(bool enable) {
+    _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed=enable};
+    _streamDataMap.forAll([&]([[maybe_unused]]const uint64_t &id, std::shared_ptr<privmx::endpoint::stream::WebRTC> webRTC) {
+        webRTC->setCryptorOptions(_frameCryptorOptions);
+    });
 }

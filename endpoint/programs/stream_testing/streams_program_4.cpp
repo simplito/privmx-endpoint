@@ -148,6 +148,11 @@ private:
     wxTextCtrl* privKeyInput;
     wxTextCtrl* solutionIdInput;
     wxTextCtrl* streamRoomIdInput;
+    wxPanel* checkbox_board;
+    wxBoxSizer* checkBoxSizer;
+    wxCheckBox* brickKeyManager;
+    wxCheckBox* hideBrokenFrames;
+
 
 
     std::vector<unsigned char> picData_vector = std::vector<unsigned char>(4 * MAX_VIDEO_W * MAX_VIDEO_W);
@@ -202,6 +207,24 @@ MyFrame::MyFrame()
     controlSizer->Add(streamRoomIdInput, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(joinButton, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(publishButton, 1, wxEXPAND | wxALL,5);
+
+    checkbox_board = new wxPanel(this, wxID_ANY);
+    checkBoxSizer = new wxBoxSizer(wxVERTICAL);
+    brickKeyManager = new wxCheckBox(this->checkbox_board, wxID_ANY, "brick Key Manager");
+    hideBrokenFrames = new wxCheckBox(this->checkbox_board, wxID_ANY, "hide broken frames");
+    checkBoxSizer->Add(brickKeyManager, 1, wxALIGN_CENTER);
+    checkBoxSizer->Add(hideBrokenFrames, 1, wxALIGN_CENTER);
+
+    this->brickKeyManager->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
+        streamApi->keyManagement(streamRoomIdInput->GetValue().ToStdString(), brickKeyManager->GetValue());
+    });
+    this->hideBrokenFrames->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
+        streamApi->dropBrokenFrames(hideBrokenFrames->GetValue());
+    });
+
+    checkbox_board->SetSizerAndFit(checkBoxSizer);
+    controlSizer->Add(checkbox_board, 1, wxEXPAND | wxALL,5);
+
 
     this->connectButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
       Connect(privKeyInput->GetValue().ToStdString(), solutionIdInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());

@@ -91,6 +91,8 @@ public:
 
     void leaveStream(int64_t localStreamId);
 
+    void keyManagement(const std::string& streamRoomId, bool disable);
+
 private:
     struct StreamData {
         std::shared_ptr<WebRTCInterface> webRtc;

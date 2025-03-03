@@ -78,6 +78,8 @@ public:
 
     void leaveStream(int64_t localStreamId);
 
+    void keyManagement(const std::string& streamRoomId, bool disable);
+
     std::shared_ptr<StreamApiLowImpl> getImpl() const { return _impl; }
 
 private:

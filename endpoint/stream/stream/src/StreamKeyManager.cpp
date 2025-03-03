@@ -14,7 +14,7 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*60
+#define MAX_STD_KEY_TTL 1000*10
 
 using namespace privmx::endpoint::stream; 
 
@@ -170,7 +170,9 @@ void StreamKeyManager::updateKey() {
     respond.subtype("UpdateKeyEvent");
     respond.encKey(newKey);
     // send to users
-    sendStreamKeyManagementEvent(respond, _connectedUsers);
+    if(!disableKeyUpdateForEncryptors) {
+        sendStreamKeyManagementEvent(respond, _connectedUsers);
+    }
     //thread for timeout and update
     _keyUpdater = std::thread([&]() {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
@@ -265,7 +267,9 @@ void StreamKeyManager::updateWebRtcKeyStore() {
         webRtcKeys.push_back(webRtcKey);
     });
     _currentWebRtcKeys = webRtcKeys;
-    _webRtcKeyUpdateCallbacks.forAll([&]([[maybe_unused]]int64_t key, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> value) {
-        value(_currentWebRtcKeys);
-    });
+    if(!disableKeyUpdateForEncryptors) {
+        _webRtcKeyUpdateCallbacks.forAll([&]([[maybe_unused]]int64_t key, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> value) {
+            value(_currentWebRtcKeys);
+        });
+    }
 }

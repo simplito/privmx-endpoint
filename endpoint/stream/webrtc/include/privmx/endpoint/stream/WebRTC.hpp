@@ -39,6 +39,7 @@ public:
         libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
         libwebrtc::RTCConfiguration configuration,
         int64_t streamId,
+        privmx::webrtc::FrameCryptorOptions frameCryptorOptions,
         std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame
     );
     ~WebRTC();
@@ -49,6 +50,7 @@ public:
     void updateKeys(const std::vector<Key>& keys) override;
     void AddTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack);
     void AddTrack(libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack);
+    void setCryptorOptions(const privmx::webrtc::FrameCryptorOptions& options);
 private:
     int64_t addKeyUpdateCallback(std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)> keyUpdateCallback);
     void removeKeyUpdateCallback(int64_t keyUpdateCallbackId);
@@ -56,6 +58,7 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> _peerConnection;
+    privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::shared_ptr<PmxPeerConnectionObserver> _peerConnectionObserver;
     int64_t _streamId;
     std::shared_ptr<privmx::webrtc::KeyStore> _currentWebRtcKeys;

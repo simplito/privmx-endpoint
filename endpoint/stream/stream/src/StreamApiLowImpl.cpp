@@ -496,3 +496,9 @@ std::shared_ptr<StreamApiLowImpl::StreamData> StreamApiLowImpl::getStreamData(in
     }
     return streamData.value();
 }
+
+void StreamApiLowImpl::keyManagement(const std::string& streamRoomId, bool disable) {
+    auto room = _streamRoomMap.get(streamRoomId);
+    if(room.has_value())
+        room.value()->streamKeyManager->keyManagement(disable);
+}

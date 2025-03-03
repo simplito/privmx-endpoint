@@ -25,10 +25,12 @@ int FrameImpl::ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_wi
 }
 
 PmxPeerConnectionObserver::PmxPeerConnectionObserver(
+    libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
     int64_t streamId, 
     std::shared_ptr<privmx::webrtc::KeyStore> keys, 
-    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> onFrameCallback
-) : _streamId(streamId), _currentKeys(keys), _onFrameCallback(onFrameCallback) {}
+    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> onFrameCallback,
+    const privmx::webrtc::FrameCryptorOptions& options
+) : _peerConnectionFactory(peerConnectionFactory), _streamId(streamId), _currentKeys(keys), _onFrameCallback(onFrameCallback), _options(options) {}
 
 void PmxPeerConnectionObserver::OnSignalingState([[maybe_unused]] libwebrtc::RTCSignalingState state) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON SIGNALING STATE")
@@ -79,7 +81,7 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": TRACK ADDED")
     _frameCryptors.set(
         receiver->track()->id().std_string(), 
-        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(receiver, _currentKeys)
+        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(_peerConnectionFactory ,receiver, _currentKeys, _options)
     );
 }
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
@@ -92,7 +94,13 @@ void PmxPeerConnectionObserver::UpdateCurrentKeys(std::shared_ptr<privmx::webrtc
     _frameCryptors.forAll([&]([[maybe_unused]]const std::string &id, const std::shared_ptr<privmx::webrtc::FrameCryptor> &frameCryptor) {
         frameCryptor->setKeyStore(_currentKeys);
     });
-    
+}
+
+void PmxPeerConnectionObserver::SetFrameCryptorOptions(privmx::webrtc::FrameCryptorOptions options) {
+    _options = options;
+    _frameCryptors.forAll([&]([[maybe_unused]]const std::string &id, const std::shared_ptr<privmx::webrtc::FrameCryptor> &frameCryptor) {
+        frameCryptor->setOptions(_options);
+    });
 }
 
 

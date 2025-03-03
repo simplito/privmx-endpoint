@@ -90,6 +90,9 @@ public:
 
     void leaveStream(int64_t streamId);
 
+    void keyManagement(const std::string& streamRoomId, bool disable);
+    void dropBrokenFrames(bool enable);
+
 private:
     
     int64_t generateNumericId();
@@ -104,6 +107,7 @@ private:
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
+    privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLow> _api;
 };

@@ -198,6 +198,15 @@ void StreamApiLow::leaveStream(int64_t streamId) {
     }
 }
 
+void StreamApiLow::keyManagement(const std::string& streamRoomId, bool disable) {
+    validateEndpoint();
+    try {
+        return _impl->keyManagement(streamRoomId, disable);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
 
 void StreamApiLow::validateEndpoint() {
     if(!_impl) throw NotInitializedException();
