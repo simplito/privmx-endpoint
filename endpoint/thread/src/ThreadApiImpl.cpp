@@ -279,7 +279,28 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
     auto thread = getRawThreadFromCacheOrBridge(message.threadId());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data send);
+
     auto result = decryptAndConvertMessageDataToMessage(thread, message);
+    if (result.statusCode == 0) {
+        auto verifier {_connection.getImpl()->getUserVerifier()};
+
+        std::vector<core::VerificationRequest> verifierInput {{
+            .contextId = thread.contextId(),
+            .senderId = result.info.author,
+            .senderPubKey = result.authorPubKey,
+            .date = result.info.createDate
+        }};
+
+        std::vector<bool> verified;
+        try {
+            verified = verifier->verify(verifierInput);
+        } catch (...) {
+            throw core::UserVerificationMethodUnhandledException();
+        }
+        if (verified[0] == false) {
+            result.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        }
+    }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
     return result;
 }
@@ -295,9 +316,33 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
     auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     std::vector<Message> messages;
+
     for (auto message : messagesList.messages()) {
         messages.push_back(decryptAndConvertMessageDataToMessage(thread, message));
     }
+
+    auto verifier {_connection.getImpl()->getUserVerifier()};
+    std::vector<core::VerificationRequest> verifierInput {};
+    for (auto message: messages) {
+        verifierInput.push_back({
+            .contextId = thread.contextId(),
+            .senderId = message.info.author,
+            .senderPubKey = message.authorPubKey,
+            .date = message.info.createDate
+        });
+    }
+    std::vector<bool> verified;
+    try {
+        verified = verifier->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+    for (size_t i = 0; i < messages.size(); ++i) {
+        if (messages[i].statusCode == 0) {
+            messages[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        }
+    }
+
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, listMessages, data decrypted)
     return core::PagingList<Message>({
         .totalAvailable = messagesList.count(),

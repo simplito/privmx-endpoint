@@ -86,6 +86,11 @@ std::vector<UserInfo> Connection::getContextUsers(const std::string& contextId) 
     }
 }
 
+void Connection::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
+    _impl->setUserVerifier(verifier);
+}
+
+
 void Connection::disconnect() {
     validateEndpoint();
     try {

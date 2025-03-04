@@ -150,6 +150,11 @@ std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& context
     return usersInfo;
 }
 
+void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
+    utils::Lock lock(_mutex);
+    _userVerifier = verifier;
+}
+
 void ConnectionImpl::disconnect() {
     if (!_gateway.isNull()) {
         _gateway->destroy();

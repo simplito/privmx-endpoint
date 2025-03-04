@@ -49,6 +49,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NotImplementedException, "Not 
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidMethodException, "Invalid method", 0x000B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidArgumentTypeException, "Invalid argument type", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidBackendRequestModeException, "Invalid BackendRequest mode", 0x000D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationFailureException, "User verification failure", 0x000E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationMethodUnhandledException, "UserVerifierInterface.verify() thrown an exception. Implementation of the UserVerifierInterface should provide adequate error handling.", 0x000F)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
