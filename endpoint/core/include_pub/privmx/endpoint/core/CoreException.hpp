@@ -59,6 +59,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataBiggerThanDeclaredEx
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataSmallerThanDeclaredException, "Data smaller than declared", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataDifferentThanDeclaredException, "Data different than declared", 0x0007)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibBreakEventException, "Cannot extract LibBreakEvent", 0x0008)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationFailureException, "User verification failure", 0x0009)
 
 } // core
 } // endpoint

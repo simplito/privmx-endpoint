@@ -319,3 +319,11 @@ core::Exception ExceptionConverter::convert(const privmx::utils::PrivmxException
     }
     return core::Exception("Unknown exception", "Unknown", "unknown", e.getCode() | 0xE0000000, "Msg: " + (std::string)e.what() + "\nDescription: " + e.getData());
 }
+
+int64_t ExceptionConverter::getCodeOfUserAuthorizationFailureException() {
+    try {
+        throw privmx::endpoint::core::UserVerificationFailureException();
+    } catch (const privmx::endpoint::core::UserVerificationFailureException& e) {
+        return e.getCode();
+    }
+}

@@ -299,6 +299,21 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet, data send)
     if(serverFileResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFileResult.store());
     auto ret {decryptAndConvertFileDataToFileInfo(serverFileResult.store(), serverFileResult.file())};
+    if (ret.statusCode == 0) {
+        auto verifier {_connection.getImpl()->getUserVerifier()};
+
+        std::vector<core::VerificationRequest> verifierInput {};
+        verifierInput.push_back({
+            .contextId = serverFileResult.store().contextId(),
+            .senderId = ret.info.author,
+            .senderPubKey = ret.authorPubKey,
+            .date = ret.info.createDate
+        });
+        auto verified {verifier->verify(verifierInput)};
+        if (verified[0] == false) {
+            ret.statusCode = core::ExceptionConverter::getCodeOfUserAuthorizationFailureException();
+        }
+    }
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileGet, data decrypted)
     return ret;
 }
@@ -320,6 +335,27 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
         auto file {decryptAndConvertFileDataToFileInfo(serverFilesResult.store(), rawFile)};
         filesList.push_back(file);
     }
+
+    auto verifier {_connection.getImpl()->getUserVerifier()};
+    std::vector<core::VerificationRequest> verifierInput {};
+    for (auto file: filesList) {
+        verifierInput.push_back({
+            .contextId = serverFilesResult.store().contextId(),
+            .senderId = file.info.author,
+            .senderPubKey = file.authorPubKey,
+            .date = file.info.createDate
+        });
+    }
+
+    auto verified {verifier->verify(verifierInput)};
+    for (size_t i = 0; i < filesList.size(); ++i) {
+        if (filesList[i].statusCode == 0) {
+            filesList[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserAuthorizationFailureException();
+        }
+    }
+
+
+
     core::PagingList<File> ret({
         .totalAvailable = serverFilesResult.count(),
         .readItems = filesList
