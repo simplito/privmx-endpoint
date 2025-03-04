@@ -211,8 +211,8 @@ void StreamApiImpl::leaveStream(int64_t streamId) {
     _streamDataMap.erase(streamId);
 }
 
-void StreamApiImpl::keyManagement(const std::string& streamRoomId, bool disable) {
-    _api->keyManagement(streamRoomId, disable);
+void StreamApiImpl::keyManagement(bool disable) {
+    _api->keyManagement(disable);
 }
 
 void StreamApiImpl::dropBrokenFrames(bool enable) {

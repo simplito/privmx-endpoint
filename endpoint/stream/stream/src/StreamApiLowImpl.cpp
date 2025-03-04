@@ -497,8 +497,8 @@ std::shared_ptr<StreamApiLowImpl::StreamData> StreamApiLowImpl::getStreamData(in
     return streamData.value();
 }
 
-void StreamApiLowImpl::keyManagement(const std::string& streamRoomId, bool disable) {
-    auto room = _streamRoomMap.get(streamRoomId);
-    if(room.has_value())
-        room.value()->streamKeyManager->keyManagement(disable);
+void StreamApiLowImpl::keyManagement(bool disable) {
+    _streamRoomMap.forAll([disable]([[maybe_unused]]const std::string& id, std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room) {
+        room->streamKeyManager->keyManagement(disable);
+    });
 }

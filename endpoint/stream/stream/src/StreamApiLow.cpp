@@ -198,10 +198,10 @@ void StreamApiLow::leaveStream(int64_t streamId) {
     }
 }
 
-void StreamApiLow::keyManagement(const std::string& streamRoomId, bool disable) {
+void StreamApiLow::keyManagement(bool disable) {
     validateEndpoint();
     try {
-        return _impl->keyManagement(streamRoomId, disable);
+        return _impl->keyManagement(disable);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

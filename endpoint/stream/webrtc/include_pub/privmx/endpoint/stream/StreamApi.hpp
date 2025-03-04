@@ -80,7 +80,7 @@ public:
 
     void leaveStream(int64_t streamId);
 
-    void keyManagement(const std::string& streamRoomId, bool disable);
+    void keyManagement(bool disable);
     void dropBrokenFrames(bool enable);
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }

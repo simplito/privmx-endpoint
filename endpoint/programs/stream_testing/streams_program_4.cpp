@@ -216,10 +216,27 @@ MyFrame::MyFrame()
     checkBoxSizer->Add(hideBrokenFrames, 1, wxALIGN_CENTER);
 
     this->brickKeyManager->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
-        streamApi->keyManagement(streamRoomIdInput->GetValue().ToStdString(), brickKeyManager->GetValue());
+        
+        try {
+            if(streamApi == nullptr) {
+                brickKeyManager->SetValue(false);
+                return;
+            }
+            streamApi->keyManagement(brickKeyManager->GetValue());
+        } catch (const privmx::endpoint::core::Exception& e) {
+
+        };
     });
     this->hideBrokenFrames->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
-        streamApi->dropBrokenFrames(hideBrokenFrames->GetValue());
+        try {
+            if(streamApi == nullptr) {
+                hideBrokenFrames->SetValue(false);
+                return;
+            }
+            streamApi->dropBrokenFrames(hideBrokenFrames->GetValue());
+        } catch (const privmx::endpoint::core::Exception& e) {
+            hideBrokenFrames->SetValue(false);
+        };
     });
 
     checkbox_board->SetSizerAndFit(checkBoxSizer);
@@ -227,14 +244,28 @@ MyFrame::MyFrame()
 
 
     this->connectButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
-      Connect(privKeyInput->GetValue().ToStdString(), solutionIdInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());
+        try {
+            Connect(privKeyInput->GetValue().ToStdString(), solutionIdInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());
+        } catch (const privmx::endpoint::core::Exception& e) {
+
+        };
     });
 
     this->joinButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
-      JoinToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+        try {
+            if(streamApi == nullptr) return;
+            JoinToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+        } catch (const privmx::endpoint::core::Exception& e) {
+
+        };
     });
     this->publishButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
-      PublishToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+        try {
+            if(streamApi == nullptr) return;
+            PublishToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+        } catch (const privmx::endpoint::core::Exception& e) {
+
+        };
     });
 
     m_board->SetSizerAndFit(controlSizer);
