@@ -26,6 +26,7 @@ class Hex
 public:
     static std::string from(const std::string& data);
     static std::string toString(const std::string& hex_data);
+    static bool is(const std::string& data);
 };
 
 class Base32
@@ -33,6 +34,7 @@ class Base32
 public:
     static std::string decode(const std::string& base32_data);
     static std::string encode(const std::string& data);
+    static bool is(const std::string& data);
 };
 
 class Base64
