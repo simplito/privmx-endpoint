@@ -14,7 +14,7 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*10
+#define MAX_STD_KEY_TTL 1000*60
 
 using namespace privmx::endpoint::stream; 
 
