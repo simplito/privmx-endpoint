@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "privmx/endpoint/core/Buffer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -12,25 +13,25 @@ namespace core {
 class Hex
 {
 public:
-    static std::string from(const std::string& data);
-    static std::string toString(const std::string& hex_data);
-    static bool is(const std::string& data);
+    static Buffer from(const Buffer& data);
+    static Buffer toString(const Buffer& hex_data);
+    static bool is(const Buffer& data);
 };
 
 class Base32
 {
 public:
-    static std::string from(const std::string& data);
-    static std::string toString(const std::string& base32_data);
-    static bool is(const std::string& data);
+    static Buffer from(const Buffer& data);
+    static Buffer toString(const Buffer& base32_data);
+    static bool is(const Buffer& data);
 };
 
 class Base64
 {
 public:
-    static std::string from(const std::string& data);
-    static std::string toString(const std::string& base64_data);
-    static bool is(const std::string& data);
+    static Buffer from(const Buffer& data);
+    static Buffer toString(const Buffer& base64_data);
+    static bool is(const Buffer& data);
 };
 
 class Utils

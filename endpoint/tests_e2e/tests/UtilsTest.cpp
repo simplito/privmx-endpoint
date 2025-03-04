@@ -23,41 +23,41 @@ protected:
 };
 
 TEST_F(UtilsTest, Hex) {
-    std::string text = "Test Hex";
-    std::string textInHex = "5465737420486578";
+    core::Buffer text = core::Buffer::from("Test Hex");
+    core::Buffer textInHex = core::Buffer::from("5465737420486578");
     EXPECT_EQ(textInHex, privmx::endpoint::core::Hex::from(text));
     EXPECT_EQ(text, privmx::endpoint::core::Hex::toString(textInHex));
     EXPECT_EQ(true, privmx::endpoint::core::Hex::is(textInHex));
-    std::string randomText = privmx::crypto::Crypto::randomBytes(1024);
+    core::Buffer randomText = core::Buffer::from(privmx::crypto::Crypto::randomBytes(1024));
     EXPECT_EQ(randomText, privmx::endpoint::core::Hex::toString(privmx::endpoint::core::Hex::from(randomText)));
     EXPECT_EQ(true, privmx::endpoint::core::Hex::is(privmx::endpoint::core::Hex::from(randomText)));
-    EXPECT_EQ(false, privmx::endpoint::core::Hex::is("blach"));
-    EXPECT_EQ(true, privmx::endpoint::core::Hex::is("1234567890ABCDE"));
-    EXPECT_EQ("\xAA\xBB", privmx::endpoint::core::Hex::toString("aabb"));
+    EXPECT_EQ(false, privmx::endpoint::core::Hex::is(core::Buffer::from("blach")));
+    EXPECT_EQ(true, privmx::endpoint::core::Hex::is(core::Buffer::from("1234567890ABCDE")));
+    EXPECT_EQ(core::Buffer::from("\xAA\xBB"), privmx::endpoint::core::Hex::toString(core::Buffer::from("aabb")));
 }
 
 TEST_F(UtilsTest, Base32) {
-    std::string text = "Test Base32";
-    std::string textInBase32 = "KRSXG5BAIJQXGZJTGI======";
+    core::Buffer text = core::Buffer::from("Test Base32");
+    core::Buffer textInBase32 = core::Buffer::from("KRSXG5BAIJQXGZJTGI======");
     EXPECT_EQ(textInBase32, privmx::endpoint::core::Base32::from(text));
     EXPECT_EQ(text, privmx::endpoint::core::Base32::toString(textInBase32));
     EXPECT_EQ(true, privmx::endpoint::core::Base32::is(textInBase32));
-    std::string randomText = privmx::crypto::Crypto::randomBytes(1024);
+    core::Buffer randomText = core::Buffer::from(privmx::crypto::Crypto::randomBytes(1024));
     EXPECT_EQ(randomText, privmx::endpoint::core::Base32::toString(privmx::endpoint::core::Base32::from(randomText)));
     EXPECT_EQ(true, privmx::endpoint::core::Base32::is(privmx::endpoint::core::Base32::from(randomText)));
-    EXPECT_EQ(false, privmx::endpoint::core::Base32::is("blach"));
+    EXPECT_EQ(false, privmx::endpoint::core::Base32::is(core::Buffer::from("blach")));
 }
 
 TEST_F(UtilsTest, Base64) {
-    std::string text = "Test Base64";
-    std::string textInBase64 = "VGVzdCBCYXNlNjQ=";
+    core::Buffer text = core::Buffer::from("Test Base64");
+    core::Buffer textInBase64 = core::Buffer::from("VGVzdCBCYXNlNjQ=");
     EXPECT_EQ(textInBase64, privmx::endpoint::core::Base64::from(text));
     EXPECT_EQ(text, privmx::endpoint::core::Base64::toString(textInBase64));
     EXPECT_EQ(true, privmx::endpoint::core::Base64::is(textInBase64));
-    std::string randomText = privmx::crypto::Crypto::randomBytes(1024);
+    core::Buffer randomText = core::Buffer::from(privmx::crypto::Crypto::randomBytes(1024));
     EXPECT_EQ(randomText, privmx::endpoint::core::Base64::toString(privmx::endpoint::core::Base64::from(randomText)));
     EXPECT_EQ(true, privmx::endpoint::core::Base64::is(privmx::endpoint::core::Base64::from(randomText)));
-    EXPECT_EQ(false, privmx::endpoint::core::Base64::is("blach"));
+    EXPECT_EQ(false, privmx::endpoint::core::Base64::is(core::Buffer::from("blach")));
 }
 
 TEST_F(UtilsTest, Utils) {

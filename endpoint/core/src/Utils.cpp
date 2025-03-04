@@ -14,34 +14,34 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::string Hex::from(const std::string& data) {
-    return privmx::utils::Hex::from(data);
+Buffer Hex::from(const Buffer& data) {
+    return core::Buffer::from(privmx::utils::Hex::from(data.stdString()));
 }
-std::string Hex::toString(const std::string& hex_data) {
-    return privmx::utils::Hex::toString(hex_data);
+Buffer Hex::toString(const Buffer& hex_data) {
+    return core::Buffer::from(privmx::utils::Hex::toString(hex_data.stdString()));
 }
-bool Hex::is(const std::string& data) {
-    return privmx::utils::Hex::is(data);
-}
-
-std::string Base32::from(const std::string& data) {
-    return privmx::utils::Base32::encode(data);
-}
-std::string Base32::toString(const std::string& base32_data) {
-    return privmx::utils::Base32::decode(base32_data);
-}
-bool Base32::is(const std::string& data) {
-    return privmx::utils::Base32::is(data);
+bool Hex::is(const Buffer& data) {
+    return privmx::utils::Hex::is(data.stdString());
 }
 
-std::string Base64::from(const std::string& data) {
-    return privmx::utils::Base64::from(data);
+Buffer Base32::from(const Buffer& data) {
+    return core::Buffer::from(privmx::utils::Base32::encode(data.stdString()));
 }
-std::string Base64::toString(const std::string& base64_data) {
-    return privmx::utils::Base64::toString(base64_data);
+Buffer Base32::toString(const Buffer& base32_data) {
+    return core::Buffer::from(privmx::utils::Base32::decode(base32_data.stdString()));
 }
-bool Base64::is(const std::string& data) {
-    return privmx::utils::Base64::is(data);
+bool Base32::is(const Buffer& data) {
+    return privmx::utils::Base32::is(data.stdString());
+}
+
+Buffer Base64::from(const Buffer& data) {
+    return core::Buffer::from(privmx::utils::Base64::from(data.stdString()));
+}
+Buffer Base64::toString(const Buffer& base64_data) {
+    return core::Buffer::from(privmx::utils::Base64::toString(base64_data.stdString()));
+}
+bool Base64::is(const Buffer& data) {
+    return privmx::utils::Base64::is(data.stdString());
 }
 
 std::string Utils::fillTo32(const std::string& data) {
