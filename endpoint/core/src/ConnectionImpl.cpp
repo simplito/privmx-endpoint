@@ -151,6 +151,7 @@ std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& context
 }
 
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
+    utils::Lock lock(_mutex);
     _userVerifier = verifier;
 }
 

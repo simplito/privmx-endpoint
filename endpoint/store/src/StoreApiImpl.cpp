@@ -302,16 +302,21 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     if (ret.statusCode == 0) {
         auto verifier {_connection.getImpl()->getUserVerifier()};
 
-        std::vector<core::VerificationRequest> verifierInput {};
-        verifierInput.push_back({
+        std::vector<core::VerificationRequest> verifierInput {{
             .contextId = serverFileResult.store().contextId(),
             .senderId = ret.info.author,
             .senderPubKey = ret.authorPubKey,
             .date = ret.info.createDate
-        });
-        auto verified {verifier->verify(verifierInput)};
+        }};
+
+        std::vector<bool> verified;
+        try {
+            verified = verifier->verify(verifierInput);
+        } catch (...) {
+            throw core::UserVerificationMethodUnhandledException();
+        }
         if (verified[0] == false) {
-            ret.statusCode = core::ExceptionConverter::getCodeOfUserAuthorizationFailureException();
+            ret.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
         }
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileGet, data decrypted)
@@ -347,10 +352,16 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
         });
     }
 
-    auto verified {verifier->verify(verifierInput)};
+    std::vector<bool> verified;
+    try {
+        verified = verifier->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+
     for (size_t i = 0; i < filesList.size(); ++i) {
         if (filesList[i].statusCode == 0) {
-            filesList[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserAuthorizationFailureException();
+            filesList[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
         }
     }
 

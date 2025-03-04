@@ -284,16 +284,21 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     if (result.statusCode == 0) {
         auto verifier {_connection.getImpl()->getUserVerifier()};
 
-        std::vector<core::VerificationRequest> verifierInput {};
-        verifierInput.push_back({
+        std::vector<core::VerificationRequest> verifierInput {{
             .contextId = thread.contextId(),
             .senderId = result.info.author,
             .senderPubKey = result.authorPubKey,
             .date = result.info.createDate
-        });
-        auto verified {verifier->verify(verifierInput)};
+        }};
+
+        std::vector<bool> verified;
+        try {
+            verified = verifier->verify(verifierInput);
+        } catch (...) {
+            throw core::UserVerificationMethodUnhandledException();
+        }
         if (verified[0] == false) {
-            result.statusCode = core::ExceptionConverter::getCodeOfUserAuthorizationFailureException();
+            result.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
         }
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
@@ -326,14 +331,18 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
             .date = message.info.createDate
         });
     }
-
-    auto verified {verifier->verify(verifierInput)};
+    std::vector<bool> verified;
+    try {
+        verified = verifier->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
     for (size_t i = 0; i < messages.size(); ++i) {
         if (messages[i].statusCode == 0) {
-            messages[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserAuthorizationFailureException();
+            messages[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
         }
     }
-        
+
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, listMessages, data decrypted)
     return core::PagingList<Message>({
         .totalAvailable = messagesList.count(),

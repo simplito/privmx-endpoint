@@ -76,6 +76,7 @@ private:
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifierInterface> _userVerifier;
+    utils::Mutex _mutex;
 };
 
 }  // namespace core
