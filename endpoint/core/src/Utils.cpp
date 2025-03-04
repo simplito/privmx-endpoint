@@ -14,30 +14,30 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-Buffer Hex::from(const Buffer& data) {
+Buffer Hex::encode(const Buffer& data) {
     return core::Buffer::from(privmx::utils::Hex::from(data.stdString()));
 }
-Buffer Hex::toString(const Buffer& hex_data) {
+Buffer Hex::decode(const Buffer& hex_data) {
     return core::Buffer::from(privmx::utils::Hex::toString(hex_data.stdString()));
 }
 bool Hex::is(const Buffer& data) {
     return privmx::utils::Hex::is(data.stdString());
 }
 
-Buffer Base32::from(const Buffer& data) {
+Buffer Base32::encode(const Buffer& data) {
     return core::Buffer::from(privmx::utils::Base32::encode(data.stdString()));
 }
-Buffer Base32::toString(const Buffer& base32_data) {
+Buffer Base32::decode(const Buffer& base32_data) {
     return core::Buffer::from(privmx::utils::Base32::decode(base32_data.stdString()));
 }
 bool Base32::is(const Buffer& data) {
     return privmx::utils::Base32::is(data.stdString());
 }
 
-Buffer Base64::from(const Buffer& data) {
+Buffer Base64::encode(const Buffer& data) {
     return core::Buffer::from(privmx::utils::Base64::from(data.stdString()));
 }
-Buffer Base64::toString(const Buffer& base64_data) {
+Buffer Base64::decode(const Buffer& base64_data) {
     return core::Buffer::from(privmx::utils::Base64::toString(base64_data.stdString()));
 }
 bool Base64::is(const Buffer& data) {

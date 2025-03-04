@@ -13,24 +13,24 @@ namespace core {
 class Hex
 {
 public:
-    static Buffer from(const Buffer& data);
-    static Buffer toString(const Buffer& hex_data);
+    static Buffer encode(const Buffer& data);
+    static Buffer decode(const Buffer& hex_data);
     static bool is(const Buffer& data);
 };
 
 class Base32
 {
 public:
-    static Buffer from(const Buffer& data);
-    static Buffer toString(const Buffer& base32_data);
+    static Buffer encode(const Buffer& data);
+    static Buffer decode(const Buffer& base32_data);
     static bool is(const Buffer& data);
 };
 
 class Base64
 {
 public:
-    static Buffer from(const Buffer& data);
-    static Buffer toString(const Buffer& base64_data);
+    static Buffer encode(const Buffer& data);
+    static Buffer decode(const Buffer& base64_data);
     static bool is(const Buffer& data);
 };
 
