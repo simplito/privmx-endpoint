@@ -31,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Types.hpp"
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/endpoint/core/DefaultUserVerifierInterface.hpp>
+#include <shared_mutex>
 
 namespace privmx {
 namespace endpoint {
@@ -57,7 +58,7 @@ public:
 
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
     const std::shared_ptr<UserVerifierInterface> getUserVerifier() {
-        utils::Lock lock(_mutex);
+        std::shared_lock lock(_mutex);
         return _userVerifier;    
     }
 
@@ -74,7 +75,7 @@ private:
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifierInterface> _userVerifier;
-    utils::Mutex _mutex;
+    std::shared_mutex _mutex;
 };
 
 }  // namespace core
