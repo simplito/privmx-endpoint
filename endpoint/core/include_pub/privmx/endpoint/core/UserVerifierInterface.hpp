@@ -8,11 +8,6 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-/**
- * UserVerifierInterface - an interface consisting of a single verify() method, which - when implemented - should perform verification of the provided data using an external service verification
- * should be done using an external service such as an application server or a PKI server.
- */
-
 struct VerificationRequest {
     /**
      * Id of the Context
@@ -32,10 +27,18 @@ struct VerificationRequest {
     const int64_t date;
 };
 
+/**
+ * UserVerifierInterface - an interface consisting of a single verify() method, which - when implemented - should perform verification of the provided data using an external service verification
+ * should be done using an external service such as an application server or a PKI server.
+ */
 class UserVerifierInterface {
 public:
     /**
-     * Takes as a parameter the VerificationRequest structure containing basic information of the container's element being checked.
+     * Verifies whether the specified users are valid.
+     * Checks if each user belonged to the Context and if this is their key in `date` and return `true` or `false` otherwise.
+     * 
+     * @param request List of user data to verification
+     * @return List of verification results whose items correspond to the items in the input list
      */
     virtual std::vector<bool> verify(const std::vector<VerificationRequest>& request) = 0;
 protected:

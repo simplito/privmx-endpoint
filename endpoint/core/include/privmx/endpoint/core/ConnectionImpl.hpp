@@ -56,10 +56,7 @@ public:
     const rpc::ServerConfig& getServerConfig() const { return _serverConfig; }
 
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
-    const std::shared_ptr<UserVerifierInterface> getUserVerifier() { 
-        if (!_userVerifier) {
-            _userVerifier = std::make_shared<core::DefaultUserVerifierInterface>();
-        }
+    const std::shared_ptr<UserVerifierInterface> getUserVerifier() {
         return _userVerifier;    
     }
 

@@ -23,7 +23,9 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {}
+ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
+    _userVerifier = std::make_shared<core::DefaultUserVerifierInterface>();
+}
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
                              const std::string& platformUrl) {
