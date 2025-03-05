@@ -31,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Types.hpp"
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/endpoint/core/DefaultUserVerifierInterface.hpp>
+#include <mutex>
 #include <shared_mutex>
 
 namespace privmx {
