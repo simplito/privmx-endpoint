@@ -6,6 +6,7 @@
 #include <string>
 
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/crypto/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -117,6 +118,18 @@ public:
      * @return private key in WIF format
      */
     std::string convertPEMKeytoWIFKey(const std::string& pemKey);
+
+    BIP39_t generate(std::size_t strength, const std::string& password = std::string());
+
+    BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
+
+    BIP39_t fromEntropy(const std::string& entropy, const std::string& password = std::string());
+
+    std::string entropyToMnemonic(const std::string& entropy);
+
+    std::string mnemonicToEntropy(const std::string& mnemonic);
+
+    std::string mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
 
 private:
     CryptoApi(const std::shared_ptr<CryptoApiImpl>& impl);

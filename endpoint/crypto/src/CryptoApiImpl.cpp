@@ -13,10 +13,10 @@ limitations under the License.
 #include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/ecc/ExtKey.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/crypto/BIP39.hpp>
 
 #include "privmx/endpoint/crypto/CryptoApiImpl.hpp"
 #include "privmx/endpoint/crypto/KeyConverter.hpp"
-
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::crypto;
 
@@ -84,4 +84,31 @@ privmx::crypto::PrivateKey CryptoApiImpl::getPrivKeyFromSeed(const std::string& 
 
 std::string CryptoApiImpl::convertPEMKeytoWIFKey(const std::string& keyPEM) {
     return KeyConverter::cryptoKeyConvertPEMToWIF(keyPEM);
+}
+
+BIP39_t CryptoApiImpl::generate(std::size_t strength, const std::string& password) {
+    auto bip = privmx::crypto::BIP39::generate(strength, password);
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=bip.entropy};
+}
+
+BIP39_t CryptoApiImpl::fromMnemonic(const std::string& mnemonic, const std::string& password) {
+    auto bip = privmx::crypto::BIP39::fromMnemonic(mnemonic, password);
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=bip.entropy};
+}
+
+BIP39_t CryptoApiImpl::fromEntropy(const std::string& entropy, const std::string& password) {
+    auto bip = privmx::crypto::BIP39::fromEntropy(entropy, password);
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=bip.entropy};
+}
+
+std::string CryptoApiImpl::entropyToMnemonic(const std::string& entropy) {
+    return privmx::crypto::Bip39Impl::entropyToMnemonic(entropy);
+}
+
+std::string CryptoApiImpl::mnemonicToEntropy(const std::string& mnemonic) {
+    return privmx::crypto::Bip39Impl::mnemonicToEntropy(mnemonic);
+}
+
+std::string CryptoApiImpl::mnemonicToSeed(const std::string& mnemonic, const std::string& password) {
+    return privmx::crypto::Bip39Impl::mnemonicToSeed(mnemonic, password);
 }
