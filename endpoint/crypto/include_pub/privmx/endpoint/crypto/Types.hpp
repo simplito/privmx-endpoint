@@ -19,10 +19,22 @@ namespace privmx {
 namespace endpoint {
 namespace crypto {
 
+/**
+ * Struct containing ECC generated key using BIP-39
+ */
 struct BIP39_t {
 
+    /**
+     * BIP-39 mnemonic.
+     */
     std::string mnemonic;
+    /**
+     * Ecc Key.
+     */
     ExtKey ext_key;
+    /**
+     * BIP-39 entropy.
+     */
     std::string entropy;
 };
 
