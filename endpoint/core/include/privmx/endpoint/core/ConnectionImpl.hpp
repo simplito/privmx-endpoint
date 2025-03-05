@@ -57,6 +57,7 @@ public:
 
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
     const std::shared_ptr<UserVerifierInterface> getUserVerifier() {
+        utils::Lock lock(_mutex);
         return _userVerifier;    
     }
 
