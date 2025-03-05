@@ -14,45 +14,36 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-Buffer Hex::encode(const Buffer& data) {
-    return core::Buffer::from(privmx::utils::Hex::from(data.stdString()));
+std::string Hex::encode(const Buffer& data) {
+    return privmx::utils::Hex::from(data.stdString());
 }
-Buffer Hex::decode(const Buffer& hex_data) {
-    return core::Buffer::from(privmx::utils::Hex::toString(hex_data.stdString()));
+Buffer Hex::decode(const std::string& hex_data) {
+    return core::Buffer::from(privmx::utils::Hex::toString(hex_data));
 }
-bool Hex::is(const Buffer& data) {
-    return privmx::utils::Hex::is(data.stdString());
-}
-
-Buffer Base32::encode(const Buffer& data) {
-    return core::Buffer::from(privmx::utils::Base32::encode(data.stdString()));
-}
-Buffer Base32::decode(const Buffer& base32_data) {
-    return core::Buffer::from(privmx::utils::Base32::decode(base32_data.stdString()));
-}
-bool Base32::is(const Buffer& data) {
-    return privmx::utils::Base32::is(data.stdString());
+bool Hex::is(const std::string& data) {
+    return privmx::utils::Hex::is(data);
 }
 
-Buffer Base64::encode(const Buffer& data) {
-    return core::Buffer::from(privmx::utils::Base64::from(data.stdString()));
+std::string Base32::encode(const Buffer& data) {
+    return privmx::utils::Base32::encode(data.stdString());
 }
-Buffer Base64::decode(const Buffer& base64_data) {
-    return core::Buffer::from(privmx::utils::Base64::toString(base64_data.stdString()));
+Buffer Base32::decode(const std::string& base32_data) {
+    return core::Buffer::from(privmx::utils::Base32::decode(base32_data));
 }
-bool Base64::is(const Buffer& data) {
-    return privmx::utils::Base64::is(data.stdString());
+bool Base32::is(const std::string& data) {
+    return privmx::utils::Base32::is(data);
 }
 
-std::string Utils::fillTo32(const std::string& data) {
-    return privmx::utils::Utils::fillTo32(data);
+std::string Base64::encode(const Buffer& data) {
+    return privmx::utils::Base64::from(data.stdString());
 }
-std::string Utils::removeEscape(const std::string& data) {
-    return privmx::utils::Utils::removeEscape(data);
+Buffer Base64::decode(const std::string& base64_data) {
+    return core::Buffer::from(privmx::utils::Base64::toString(base64_data));
 }
-std::string Utils::formatToBase32(const std::string& data) {
-    return privmx::utils::Utils::formatToBase32(data);
+bool Base64::is(const std::string& data) {
+    return privmx::utils::Base64::is(data);
 }
+
 std::string Utils::trim(const std::string& data) {
     return privmx::utils::Utils::trim(data);
 }
