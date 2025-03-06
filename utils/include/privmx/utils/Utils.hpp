@@ -79,7 +79,7 @@ public:
     static std::string trim(const std::string& data);
     static std::vector<std::string> split(std::string data, const std::string& delimiter);
 
-    static std::vector<std::string> splitStringByCharacter(const std::string& str, char character);
+    static std::vector<std::string> parseIniFileLine(const std::string& str, char character);
     static void ltrim(std::string& s);
     static void rtrim(std::string& s);
 

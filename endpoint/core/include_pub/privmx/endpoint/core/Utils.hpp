@@ -37,9 +37,9 @@ public:
 class Utils
 {
 public:
+
     static std::string trim(const std::string& data);
     static std::vector<std::string> split(std::string data, const std::string& delimiter);
-    static std::vector<std::string> splitStringByCharacter(const std::string& data, char character);
     static void ltrim(std::string& data);
     static void rtrim(std::string& data);
 };

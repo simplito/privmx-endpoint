@@ -216,7 +216,7 @@ std::string Utils::trim(const std::string& data) {
     return Poco::trim(data);
 }
 
-std::vector<std::string> Utils::splitStringByCharacter(const std::string& str, char character) {
+std::vector<std::string> Utils::parseIniFileLine(const std::string& str, char character) {
     auto result = std::vector<std::string>{};
     auto ss = std::stringstream{str};
     std::string _namespace {""};

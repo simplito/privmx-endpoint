@@ -50,9 +50,6 @@ std::string Utils::trim(const std::string& data) {
 std::vector<std::string> Utils::split(std::string data, const std::string& delimiter) {
     return privmx::utils::Utils::split(data, delimiter);
 }
-std::vector<std::string> Utils::splitStringByCharacter(const std::string& data, char character) {
-    return privmx::utils::Utils::splitStringByCharacter(data, character);
-}
 void Utils::ltrim(std::string& data) {
     return privmx::utils::Utils::ltrim(data);
 }

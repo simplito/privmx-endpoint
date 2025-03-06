@@ -63,7 +63,6 @@ TEST_F(UtilsTest, Base64) {
 TEST_F(UtilsTest, Utils) {
     EXPECT_EQ("test", privmx::endpoint::core::Utils::trim(" test "));
     EXPECT_EQ(std::vector<std::string>({"test","test"}), privmx::endpoint::core::Utils::split("test, test", ", "));
-    EXPECT_EQ(std::vector<std::string>({"test","test"}), privmx::endpoint::core::Utils::splitStringByCharacter("test- test", '-'));
     std::string test = " test ";
     privmx::endpoint::core::Utils::ltrim(test);
     EXPECT_EQ("test ", test);
