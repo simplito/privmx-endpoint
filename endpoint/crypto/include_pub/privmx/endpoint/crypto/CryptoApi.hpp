@@ -120,16 +120,16 @@ public:
     std::string convertPEMKeytoWIFKey(const std::string& pemKey);
 
     /**
-     * Generate ECC key and BIP-39 mnemonic from a password using BIP-39
+     * Generates ECC key and BIP-39 mnemonic from a password using BIP-39
      * 
-     * @param strength size of BIP-39 entropy if must be multiple 32
+     * @param strength size of BIP-39 entropy, must be a multiple of 32
      * @param password the password used to generate the Key
      * @return BIP-39_t struct containing ECC Key and associated with it BIP-39 mnemonic and entropy
      */
     BIP39_t generate(std::size_t strength, const std::string& password = std::string());
 
     /**
-     * Generate ECC key using BIP-39 mnemonic
+     * Generates ECC key using BIP-39 mnemonic
      * 
      * @param mnemonic the BIP-39 entropy used to generate the Key
      * @param password the password used to generate the Key
@@ -138,7 +138,7 @@ public:
     BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
 
     /**
-     * Generate ECC key using BIP-39 entropy
+     * Generates ECC key using BIP-39 entropy
      * 
      * @param entropy the BIP-39 entropy used to generate the Key
      * @param password the password used to generate the Key
@@ -163,7 +163,7 @@ public:
     core::Buffer mnemonicToEntropy(const std::string& mnemonic);
 
     /**
-     * Generate seed used in key generation using BIP-39 mnemonic using PBKDF2
+     * Generates a seed used to generate a key using BIP-39 mnemonic with PBKDF2
      * 
      * @param mnemonic BIP-39 mnemonic
      * @param password the password used to generate the seed

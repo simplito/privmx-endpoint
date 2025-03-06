@@ -31,13 +31,13 @@ class ExtKey
 {
 public:
     /**
-     * Creates ExtKey form given seed.
+     * Creates ExtKey from given seed.
      * @param seed the seed used to generate Key
      * @return ExtKey object
     */
     static ExtKey fromSeed(const core::Buffer& seed);
     /**
-     * Decode ExtKey form Base58 format.
+     * Decodes ExtKey from Base58 format.
      *
      * @param base58 the ExtKey in Base58
      * @return ExtKey object
@@ -84,49 +84,49 @@ public:
     std::string getPrivatePartAsBase58() const;
 
     /**
-     * Converts ExtKey only public part to Base58 string.
+     * Converts the public part of ExtKey to Base58 string.
      *
      * @return ExtKey in Base58 format
     */
     std::string getPublicPartAsBase58() const;
 
     /**
-     * Extract ECC PrivateKey
+     * Extracts ECC PrivateKey
      *
      * @return ECC key in WIF format
     */
     std::string getPrivateKey() const;
 
     /**
-     * Extract ECC PublicKey
+     * Extracts ECC PublicKey
      *
      * @return ECC key in BASE58DER format
     */
     std::string getPublicKey() const;
 
     /**
-     * Extract raw ECC PrivateKey
+     * Extracts raw ECC PrivateKey
      *
      * @return ECC PrivateKey 
     */
     core::Buffer getPrivateEncKey() const;
 
     /**
-     * Extract raw ECC PublicKey Address
+     * Extracts ECC PublicKey Address
      *
      * @return ECC Address in BASE58 format
     */
     std::string getPublicKeyAsBase58Address() const;
 
     /**
-     * @brief Get the chain code of Extended Key
+     * @brief Gets the chain code of Extended Key
      * 
      * @return Raw chain code
      */
     core::Buffer getChainCode() const;
 
     /**
-     * @brief Validate a signature of message.
+     * @brief Validates a signature of a message.
      * 
      * @param message data used on validation
      * @param signature signature of data to verify
@@ -134,7 +134,7 @@ public:
      */
     bool verifyCompactSignatureWithHash(const core::Buffer& message, const core::Buffer& signature) const;
     /**
-     * Check if ExtKey is Private 
+     * Checks if ExtKey is Private 
      *
      * @return returns true if ExtKey is private
     */
