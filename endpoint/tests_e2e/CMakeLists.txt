@@ -29,6 +29,8 @@ add_executable(privmxplatform_test_e2e_EventsTest ${CMAKE_CURRENT_SOURCE_DIR}/te
 target_link_libraries(privmxplatform_test_e2e_EventsTest privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
 add_executable(privmxplatform_test_e2e_CryptoTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/CryptoTest.cpp)
 target_link_libraries(privmxplatform_test_e2e_CryptoTest privmx privmxendpointcore privmxendpointcrypto Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
+add_executable(privmxplatform_test_e2e_UtilsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/UtilsTest.cpp)
+target_link_libraries(privmxplatform_test_e2e_UtilsTest privmx privmxendpointcore Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
 
 
 add_executable(privmxplatform_test_e2e_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/test_env/create_docker/DockerSetupData.cpp)

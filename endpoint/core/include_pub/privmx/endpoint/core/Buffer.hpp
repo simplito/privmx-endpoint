@@ -69,6 +69,8 @@ public:
      */
     const char* data() const { return _data.data(); }
 
+    bool operator==(const Buffer& obj) const {return this->_data == obj._data;}
+
 private:
     Buffer(const std::string& str) : _data(str) {}
 
