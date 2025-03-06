@@ -35,7 +35,7 @@ struct BIP39_t {
     /**
      * BIP-39 entropy.
      */
-    std::string entropy;
+    core::Buffer entropy;
 };
 
 } // crypto

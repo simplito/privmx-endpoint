@@ -144,7 +144,7 @@ public:
      * @param password the password used to generate the Key
      * @return BIP-39_t struct containing ECC Key and associated with it BIP-39 mnemonic and entropy
      */
-    BIP39_t fromEntropy(const std::string& entropy, const std::string& password = std::string());
+    BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
    
     /**
      * Converts BIP-39 entropy to mnemonic
@@ -152,7 +152,7 @@ public:
      * @param entropy BIP-39 entropy
      * @return BIP-39 mnemonic
      */
-    std::string entropyToMnemonic(const std::string& entropy);
+    std::string entropyToMnemonic(const core::Buffer& entropy);
 
     /**
      * Converts BIP-39 mnemonic to entropy
@@ -160,7 +160,7 @@ public:
      * @param mnemonic BIP-39 mnemonic
      * @return BIP-39 entropy
      */
-    std::string mnemonicToEntropy(const std::string& mnemonic);
+    core::Buffer mnemonicToEntropy(const std::string& mnemonic);
 
     /**
      * Generate seed used in key generation using BIP-39 mnemonic using PBKDF2
@@ -169,7 +169,7 @@ public:
      * @param password the password used to generate the seed
      * @return generated seed 
      */
-    std::string mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
+    core::Buffer mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
 
 private:
     CryptoApi(const std::shared_ptr<CryptoApiImpl>& impl);

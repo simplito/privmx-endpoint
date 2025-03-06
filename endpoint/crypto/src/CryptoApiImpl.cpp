@@ -88,27 +88,27 @@ std::string CryptoApiImpl::convertPEMKeytoWIFKey(const std::string& keyPEM) {
 
 BIP39_t CryptoApiImpl::generate(std::size_t strength, const std::string& password) {
     auto bip = privmx::crypto::BIP39::generate(strength, password);
-    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=bip.entropy};
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=core::Buffer::from(bip.entropy)};
 }
 
 BIP39_t CryptoApiImpl::fromMnemonic(const std::string& mnemonic, const std::string& password) {
     auto bip = privmx::crypto::BIP39::fromMnemonic(mnemonic, password);
-    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=bip.entropy};
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=core::Buffer::from(bip.entropy)};
 }
 
-BIP39_t CryptoApiImpl::fromEntropy(const std::string& entropy, const std::string& password) {
-    auto bip = privmx::crypto::BIP39::fromEntropy(entropy, password);
-    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=bip.entropy};
+BIP39_t CryptoApiImpl::fromEntropy(const core::Buffer& entropy, const std::string& password) {
+    auto bip = privmx::crypto::BIP39::fromEntropy(entropy.stdString(), password);
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=core::Buffer::from(bip.entropy)};
 }
 
-std::string CryptoApiImpl::entropyToMnemonic(const std::string& entropy) {
-    return privmx::crypto::Bip39Impl::entropyToMnemonic(entropy);
+std::string CryptoApiImpl::entropyToMnemonic(const core::Buffer& entropy) {
+    return privmx::crypto::Bip39Impl::entropyToMnemonic(entropy.stdString());
 }
 
-std::string CryptoApiImpl::mnemonicToEntropy(const std::string& mnemonic) {
-    return privmx::crypto::Bip39Impl::mnemonicToEntropy(mnemonic);
+core::Buffer CryptoApiImpl::mnemonicToEntropy(const std::string& mnemonic) {
+    return core::Buffer::from(privmx::crypto::Bip39Impl::mnemonicToEntropy(mnemonic));
 }
 
-std::string CryptoApiImpl::mnemonicToSeed(const std::string& mnemonic, const std::string& password) {
-    return privmx::crypto::Bip39Impl::mnemonicToSeed(mnemonic, password);
+core::Buffer CryptoApiImpl::mnemonicToSeed(const std::string& mnemonic, const std::string& password) {
+    return core::Buffer::from(privmx::crypto::Bip39Impl::mnemonicToSeed(mnemonic, password));
 }

@@ -15,8 +15,8 @@ limitations under the License.
 using namespace privmx::endpoint::crypto;
 
 
-ExtKey ExtKey::fromSeed(const std::string& seed) {
-    return ExtKey(privmx::crypto::ExtKey::fromSeed(seed));
+ExtKey ExtKey::fromSeed(const core::Buffer& seed) {
+    return ExtKey(privmx::crypto::ExtKey::fromSeed(seed.stdString()));
 }
 
 ExtKey ExtKey::fromBase58(const std::string& base58) {
@@ -60,20 +60,20 @@ std::string ExtKey::getPublicKey() const {
     return _impl->getPublicKeyAsBase58();
 }
 
-std::string ExtKey::getPrivateEncKey() const {
-    return _impl->getPrivateEncKey();
+privmx::endpoint::core::Buffer ExtKey::getPrivateEncKey() const {
+    return privmx::endpoint::core::Buffer::from(_impl->getPrivateEncKey());
 }
 
 std::string ExtKey::getPublicKeyAsBase58Address() const {
     return _impl->getPublicKeyAsBase58Address();
 }
 
-const std::string& ExtKey::getChainCode() const {
-    return _impl->getChainCode();
+privmx::endpoint::core::Buffer ExtKey::getChainCode() const {
+    return privmx::endpoint::core::Buffer::from(_impl->getChainCode());
 }
 
-bool ExtKey::verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const {
-    return _impl->verifyCompactSignatureWithHash(message, signature);
+bool ExtKey::verifyCompactSignatureWithHash(const privmx::endpoint::core::Buffer& message, const privmx::endpoint::core::Buffer& signature) const {
+    return _impl->verifyCompactSignatureWithHash(message.stdString(), signature.stdString());
 }
 
 bool ExtKey::isPrivate() const {

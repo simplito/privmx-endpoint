@@ -136,7 +136,7 @@ BIP39_t CryptoApi::fromMnemonic(const std::string& mnemonic, const std::string& 
     }
 }
 
-BIP39_t CryptoApi::fromEntropy(const std::string& entropy, const std::string& password) {
+BIP39_t CryptoApi::fromEntropy(const core::Buffer& entropy, const std::string& password) {
     try {
         return _impl->fromEntropy(entropy, password);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -145,7 +145,7 @@ BIP39_t CryptoApi::fromEntropy(const std::string& entropy, const std::string& pa
     }
 }
 
-std::string CryptoApi::entropyToMnemonic(const std::string& entropy) {
+std::string CryptoApi::entropyToMnemonic(const core::Buffer& entropy) {
     try {
         return _impl->entropyToMnemonic(entropy);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -154,7 +154,7 @@ std::string CryptoApi::entropyToMnemonic(const std::string& entropy) {
     }
 }
 
-std::string CryptoApi::mnemonicToEntropy(const std::string& mnemonic) {
+core::Buffer CryptoApi::mnemonicToEntropy(const std::string& mnemonic) {
     try {
         return _impl->mnemonicToEntropy(mnemonic);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -163,7 +163,7 @@ std::string CryptoApi::mnemonicToEntropy(const std::string& mnemonic) {
     }
 }
 
-std::string CryptoApi::mnemonicToSeed(const std::string& mnemonic, const std::string& password) {
+core::Buffer CryptoApi::mnemonicToSeed(const std::string& mnemonic, const std::string& password) {
     try {
         return _impl->mnemonicToSeed(mnemonic, password);
     } catch (const privmx::utils::PrivmxException& e) {

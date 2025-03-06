@@ -39,10 +39,10 @@ public:
     std::string convertPEMKeytoWIFKey(const std::string& keyPEM);
     BIP39_t generate(std::size_t strength, const std::string& password = std::string());
     BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
-    BIP39_t fromEntropy(const std::string& entropy, const std::string& password = std::string());
-    std::string entropyToMnemonic(const std::string& entropy);
-    std::string mnemonicToEntropy(const std::string& mnemonic);
-    std::string mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
+    BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
+    std::string entropyToMnemonic(const core::Buffer& entropy);
+    core::Buffer mnemonicToEntropy(const std::string& mnemonic);
+    core::Buffer mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
 
 private:
     privmx::crypto::PrivateKey getPrivKeyFromSeed(const std::string& seed, size_t rounds);

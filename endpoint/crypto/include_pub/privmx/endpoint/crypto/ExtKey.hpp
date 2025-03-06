@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <string>
 #include <memory>
+#include <privmx/endpoint/core/Buffer.hpp>
 
 
 namespace privmx {
@@ -34,7 +35,7 @@ public:
      * @param seed the seed used to generate Key
      * @return ExtKey object
     */
-    static ExtKey fromSeed(const std::string& seed);
+    static ExtKey fromSeed(const core::Buffer& seed);
     /**
      * Decode ExtKey form Base58 format.
      *
@@ -108,7 +109,7 @@ public:
      *
      * @return ECC PrivateKey 
     */
-    std::string getPrivateEncKey() const;
+    core::Buffer getPrivateEncKey() const;
 
     /**
      * Extract raw ECC PublicKey Address
@@ -122,7 +123,7 @@ public:
      * 
      * @return Raw chain code
      */
-    const std::string& getChainCode() const;
+    core::Buffer getChainCode() const;
 
     /**
      * @brief Validate a signature of message.
@@ -131,7 +132,7 @@ public:
      * @param signature signature of data to verify
      * @return message validation result
      */
-    bool verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const;
+    bool verifyCompactSignatureWithHash(const core::Buffer& message, const core::Buffer& signature) const;
     /**
      * Check if ExtKey is Private 
      *
