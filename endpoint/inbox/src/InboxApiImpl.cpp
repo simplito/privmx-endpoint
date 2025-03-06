@@ -890,13 +890,13 @@ store::DecryptedFileMeta InboxApiImpl::decryptInboxFileMetaV4(const store::serve
 std::string InboxApiImpl::readInboxIdFromMessageKeyId(const std::string& keyId) {
     _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
-    return utils::Utils::splitStringByCharacter(trimmedKeyId, '-')[1];
+    return utils::Utils::split(trimmedKeyId, "-")[1];
 }
 
 std::string InboxApiImpl::readMessageIdFromFileKeyId(const std::string& keyId) {
     _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
-    return utils::Utils::splitStringByCharacter(trimmedKeyId, '-')[3];
+    return utils::Utils::split(trimmedKeyId, "-")[3];
 }
 
 void InboxApiImpl::deleteMessageAndFiles(const thread::server::Message& message) {
