@@ -44,6 +44,21 @@ TEST_F(CryptoTest, verifySignature) {
     EXPECT_EQ(status, true);
 }
 
+TEST_F(CryptoTest, verifySignature2) {
+    auto dataToSign {core::Buffer::from("data")};
+    auto temperedData {core::Buffer::from("datax")};
+
+    auto privKey {cryptoApi->generatePrivateKey(std::nullopt)};
+    auto pubKey {cryptoApi->derivePublicKey(privKey)};
+    auto signature {cryptoApi->signData(dataToSign, privKey)};
+
+    auto verified {cryptoApi->verifySignature(dataToSign, signature, pubKey)};
+    auto verified2 {cryptoApi->verifySignature(temperedData, signature, pubKey)};
+
+    EXPECT_EQ(verified, true);
+    EXPECT_EQ(verified2, false);    
+}
+
 TEST_F(CryptoTest, signData) {
     EXPECT_THROW({
         cryptoApi->signData(core::Buffer::from("data"), "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
