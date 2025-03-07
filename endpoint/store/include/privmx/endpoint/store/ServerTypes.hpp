@@ -153,12 +153,8 @@ ENDPOINT_SERVER_TYPE(StoreFileGetManyResult)
     LIST_FIELD(files, FileListElement)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StoreFileListModel)
+ENDPOINT_SERVER_TYPE_INHERIT(StoreFileListModel, core::server::ListModel)
     STRING_FIELD(storeId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreFileListResult)
@@ -208,12 +204,8 @@ ENDPOINT_SERVER_TYPE(StoreGetResult)
     OBJECT_FIELD(store, Store)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StoreListModel)
+ENDPOINT_SERVER_TYPE_INHERIT(StoreListModel, core::server::ListModel)
     STRING_FIELD(contextId)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(sortOrder)
-    STRING_FIELD(lastId)
     STRING_FIELD(type)
 TYPE_END
 
@@ -324,6 +316,21 @@ ENDPOINT_SERVER_TYPE(StoreFileDeletedEventData)
     STRING_FIELD(id)
     STRING_FIELD(contextId)
     STRING_FIELD(storeId)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(StoreEmitCustomEventModel)
+    STRING_FIELD(storeId);
+    STRING_FIELD(channel);
+    STRING_FIELD(keyId);
+    VAR_FIELD(data);
+    LIST_FIELD(users, std::string);
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(StoreCustomEventData)
+    STRING_FIELD(id);
+    STRING_FIELD(keyId);
+    VAR_FIELD(eventData);
+    OBJECT_FIELD(author, core::server::UserIdentity);
 TYPE_END
 
 } // server

@@ -23,7 +23,8 @@ namespace thread {
 class ThreadProvider : public core::ContainerProvider<std::string, server::ThreadInfo> {
 public:
     ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread);
-    void updateCache(const std::string& id, const server::ThreadInfo& value) override;
+    void updateByValue(const server::ThreadInfo& container) override;
+    void updateStats(const server::ThreadStatsEventData& stats);
 };
 
 } // thread

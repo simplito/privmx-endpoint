@@ -243,6 +243,30 @@ public:
      */
     void unsubscribeFromEntryEvents(const std::string& inboxId);
 
+    /**
+     * Emit Custom Event for selected group users of Inbox.
+     * 
+     * @param inboxId ID of the Inbox on witch event will be send
+     * @param channelName name of event channel
+     * @param eventData encrypted event data
+     * @param usersIds list of userId for which event will be send 
+     */
+    void emitEvent(const std::string& inboxId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
+    
+    /**
+     * Subscribes for custom events in given Inbox on given channel.
+     * @param inbox ID of the Inbox to subscribe
+     * @param channelName name of the channel to subscribe
+     */ 
+    void subscribeForInboxCustomEvents(const std::string& inboxId, const std::string& channelName);
+
+     /**
+     * Unsubscribes from custom events in given Inbox on given channel.
+     * @param inbox ID of the Inbox to unsubscribe
+     * @param channelName name of the channel to unsubscribe
+     */ 
+    void unsubscribeFromInboxCustomEvents(const std::string& inboxId, const std::string& channelName);
+
 private:
     void validateEndpoint();
     InboxApi(const std::shared_ptr<InboxApiImpl>& impl);

@@ -49,6 +49,11 @@ struct PagingQuery {
      * ID of the element from which query results should start
      */
     std::optional<std::string> lastId;
+
+    /**
+     * extra query parameters in serialized JSON  
+     */
+    std::optional<std::string> queryAsJson;
 };
 
 /**
@@ -80,6 +85,22 @@ struct UserWithPubKey {
      */
     std::string pubKey;
 };
+
+/**
+ * Contains Infomation about user
+ */
+struct UserInfo {
+    /**
+     * User publicKey and usetId
+     */
+    UserWithPubKey user;
+
+    /**
+     *  is user connected to bridge
+     */
+    bool isActive;
+};
+
 
 /**
  * Contains container's policies.

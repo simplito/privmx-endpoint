@@ -45,7 +45,10 @@ public:
         SubscribeForStoreEvents = 17,
         UnsubscribeFromStoreEvents = 18,
         SubscribeForFileEvents = 19,
-        UnsubscribeFromFileEvents = 20
+        UnsubscribeFromFileEvents = 20,
+        EmitEvent = 21,
+        SubscribeForStoreCustomEvents = 22,
+        UnsubscribeFromStoreCustomEvents = 23
     };
 
     StoreApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -72,6 +75,9 @@ public:
     Poco::Dynamic::Var unsubscribeFromStoreEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeForFileEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromFileEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var emitEvent(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeForStoreCustomEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFromStoreCustomEvents(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

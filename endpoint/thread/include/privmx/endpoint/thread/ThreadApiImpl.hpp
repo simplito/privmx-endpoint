@@ -79,6 +79,10 @@ public:
     void unsubscribeFromThreadEvents();
     void subscribeForMessageEvents(std::string threadId);
     void unsubscribeFromMessageEvents(std::string threadId);
+
+    void emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
+    void subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName);
+    void unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName);
 private:
     std::string _createThreadEx(
         const std::string& contextId, 
@@ -89,6 +93,7 @@ private:
         const std::string& type,
         const std::optional<core::ContainerPolicy>& policies
     );
+    server::ThreadInfo getRawThreadFromCacheOrBridge(const std::string& threadId);
     Thread _getThreadEx(const std::string& threadId, const std::string& type);
     core::PagingList<Thread> _listThreadsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 
@@ -111,7 +116,9 @@ private:
     Message convertMessageDataV3ToMessage(const server::Message& message, dynamic::MessageDataV3 messageData);
     Message convertDecryptedMessageDataToMessage(const server::Message& message, DecryptedMessageData messageData);
     Message decryptAndConvertMessageDataToMessage(const server::ThreadInfo& thread, const server::Message& message);
-    
+
+    void validateChannelName(const std::string& channelName);
+    void assertThreadExist(const std::string& threadId);
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -132,6 +139,8 @@ private:
     std::string _messageDecryptorId, _messageDeleterId;
     MessageDataEncryptorV4 _messageDataEncryptorV4;
     ThreadDataEncryptorV4 _threadDataEncryptorV4;
+    core::DataEncryptorV4 _eventDataEncryptorV4;
+    std::vector<std::string> _forbiddenChannelsNames;
 
     inline static const std::string THREAD_TYPE_FILTER_FLAG = "thread";
 };

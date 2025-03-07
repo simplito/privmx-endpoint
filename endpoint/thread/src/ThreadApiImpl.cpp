@@ -56,7 +56,8 @@ ThreadApiImpl::ThreadApiImpl(
         return _serverApi.threadGet(model).thread();
     })),
     _subscribeForThread(false),
-    _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages"))
+    _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages")),
+    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&ThreadApiImpl::processConnectedEvent, this));
@@ -232,7 +233,7 @@ Thread ThreadApiImpl::_getThreadEx(const std::string& threadId, const std::strin
     }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, getting thread)
     auto thread = _serverApi.threadGet(params).thread();
-    _threadProvider.updateCache(thread.id(), thread);
+    if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValue(thread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, data send)
     auto result = decryptAndConvertThreadDataToThread(thread);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _getThreadEx, data decrypted)
@@ -260,7 +261,7 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _listThreadsEx, data send)
     std::vector<Thread> threads;
     for (auto thread : threadsList.threads()) {
-        _threadProvider.updateCache(thread.id(), thread);
+        if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValue(thread);
         threads.push_back(decryptAndConvertThreadDataToThread(thread));
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _listThreadsEx, data decrypted)
@@ -276,9 +277,30 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
-    auto thread = _threadProvider.get(message.threadId(), !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(message.threadId());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data send);
+
     auto result = decryptAndConvertMessageDataToMessage(thread, message);
+    if (result.statusCode == 0) {
+        auto verifier {_connection.getImpl()->getUserVerifier()};
+
+        std::vector<core::VerificationRequest> verifierInput {{
+            .contextId = thread.contextId(),
+            .senderId = result.info.author,
+            .senderPubKey = result.authorPubKey,
+            .date = result.info.createDate
+        }};
+
+        std::vector<bool> verified;
+        try {
+            verified = verifier->verify(verifierInput);
+        } catch (...) {
+            throw core::UserVerificationMethodUnhandledException();
+        }
+        if (verified[0] == false) {
+            result.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        }
+    }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
     return result;
 }
@@ -291,12 +313,36 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting messageList)
     auto messagesList = _serverApi.threadMessagesGet(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
-    auto thread = _threadProvider.get(threadId, !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     std::vector<Message> messages;
+
     for (auto message : messagesList.messages()) {
         messages.push_back(decryptAndConvertMessageDataToMessage(thread, message));
     }
+
+    auto verifier {_connection.getImpl()->getUserVerifier()};
+    std::vector<core::VerificationRequest> verifierInput {};
+    for (auto message: messages) {
+        verifierInput.push_back({
+            .contextId = thread.contextId(),
+            .senderId = message.info.author,
+            .senderPubKey = message.authorPubKey,
+            .date = message.info.createDate
+        });
+    }
+    std::vector<bool> verified;
+    try {
+        verified = verifier->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+    for (size_t i = 0; i < messages.size(); ++i) {
+        if (messages[i].statusCode == 0) {
+            messages[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        }
+    }
+
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, listMessages, data decrypted)
     return core::PagingList<Message>({
         .totalAvailable = messagesList.count(),
@@ -305,7 +351,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
 }
 std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessage);
-    auto thread = _threadProvider.get(threadId, !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
     auto msgKey = getThreadEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
@@ -341,7 +387,7 @@ void ThreadApiImpl::updateMessage(
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
-    auto thread = _threadProvider.get(message.threadId(), !_subscribeForThread);
+    auto thread = getRawThreadFromCacheOrBridge(message.threadId());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
     auto msgKey = getThreadEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
@@ -361,89 +407,95 @@ void ThreadApiImpl::updateMessage(
 }
 
 void ThreadApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if(_threadSubscriptionHelper.hasSubscriptionForModule()) {
-        if (type == "threadCreated") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
-            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                _threadProvider.updateCache(raw.id(), raw);
-                auto data = decryptAndConvertThreadDataToThread(raw); 
-                std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "threadUpdated") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
-            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                _threadProvider.updateCache(raw.id(), raw);
-                auto data = decryptAndConvertThreadDataToThread(raw);
-                std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "threadDeleted") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(data);
-            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                _threadProvider.remove(raw.threadId());
-                auto data = Mapper::mapToThreadDeletedEventData(raw);
-                std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "threadStats") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(data);
-            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                auto data = Mapper::mapToThreadStatsEventData(raw);
-                std::shared_ptr<ThreadStatsChangedEvent> event(new ThreadStatsChangedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } 
+    if(!_threadSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+        return;
     }
-    if (type == "threadNewMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
-        if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
-            auto thread = _threadProvider.get(raw.threadId(), !_subscribeForThread);
-            auto data = decryptAndConvertMessageDataToMessage(thread, raw);
-            std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
+    if (type == "threadCreated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
+        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            _threadProvider.updateByValue(raw);
+            auto data = decryptAndConvertThreadDataToThread(raw); 
+            std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
             event->channel = channel;
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
+    } else if (type == "threadUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
+        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            _threadProvider.updateByValue(raw);
+            auto data = decryptAndConvertThreadDataToThread(raw);
+            std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "threadDeleted") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(data);
+        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            _threadProvider.invalidateByContainerId(raw.threadId());
+            auto data = Mapper::mapToThreadDeletedEventData(raw);
+            std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "threadStats") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(data);
+        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            _threadProvider.updateStats(raw);
+            auto data = Mapper::mapToThreadStatsEventData(raw);
+            std::shared_ptr<ThreadStatsChangedEvent> event(new ThreadStatsChangedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "threadNewMessage") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
+        auto thread = getRawThreadFromCacheOrBridge(raw.threadId());
+        auto data = decryptAndConvertMessageDataToMessage(thread, raw);
+        std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
+        event->channel = channel;
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadUpdatedMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
-        if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
-            auto thread = _threadProvider.get(raw.threadId(), !_subscribeForThread);
-            auto data = decryptAndConvertMessageDataToMessage(thread, raw);
-            std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
-            event->channel = channel;
-            event->data = data;
-            _eventMiddleware->emitApiEvent(event);
-        }
+        auto thread = getRawThreadFromCacheOrBridge(raw.threadId());
+        auto data = decryptAndConvertMessageDataToMessage(thread, raw);
+        std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
+        event->channel = channel;
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadDeletedMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(data);
-        if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
-            auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
-            std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
-            event->channel = channel;
-            event->data = data;
-            _eventMiddleware->emitApiEvent(event);
-        }
+        auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
+        std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
+        event->channel = channel;
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "custom") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadCustomEventData>(data);
+        auto thread = getRawThreadFromCacheOrBridge(raw.id());
+        auto key = _keyProvider->getKey(thread.keys(), raw.keyId());
+        auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
+        std::shared_ptr<ThreadCustomEvent> event(new ThreadCustomEvent());
+        event->channel = channel;
+        event->data = data;
+        event->userId = raw.author().id();
+        event->threadId = raw.id();
+        _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "thread") {
+        std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
+        if(channelName == "thread") {
             PRIVMX_DEBUG("ThreadApi", "Cache", "Enabled")
             _subscribeForThread = true;
         }
     } else if (type == "unsubscribe") {
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "thread") {
+        std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
+        if(channelName == "thread") {
             PRIVMX_DEBUG("ThreadApi", "Cache", "Disabled")
             _subscribeForThread = false;
-            _threadProvider.reset();
+            _threadProvider.invalidate();
         }
     }
 }
@@ -463,7 +515,7 @@ void ThreadApiImpl::unsubscribeFromThreadEvents() {
 }
 
 void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
-    auto thread = getThread(threadId);
+    assertThreadExist(threadId);
     if(_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
         throw AlreadySubscribedException(threadId);
     }
@@ -471,7 +523,7 @@ void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
 }
 
 void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
-    auto thread = getThread(threadId);
+    assertThreadExist(threadId);
     if(!_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
         throw NotSubscribedException(threadId);
     }
@@ -479,11 +531,11 @@ void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
 }
 
 void ThreadApiImpl::processConnectedEvent() {
-    _threadProvider.reset();
+    _threadProvider.invalidate();
 }
 
 void ThreadApiImpl::processDisconnectedEvent() {
-    _threadProvider.reset();
+    _threadProvider.invalidate();
 }
 
 privmx::utils::List<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
@@ -752,4 +804,57 @@ core::EncKey ThreadApiImpl::getThreadEncKey(const server::ThreadInfo& thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
     auto key = _keyProvider->getKey(thread.keys(), thread_data_entry.keyId());
     return key;
+}
+
+void ThreadApiImpl::validateChannelName(const std::string& channelName) {
+    if(std::find(_forbiddenChannelsNames.begin(), _forbiddenChannelsNames.end(), channelName) != _forbiddenChannelsNames.end()) {
+        throw ForbiddenChannelNameException();
+    }
+}
+
+void ThreadApiImpl::emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
+    validateChannelName(channelName);
+    auto thread = getRawThreadFromCacheOrBridge(threadId);
+    auto key = _keyProvider->getKey(thread.keys(), thread.keyId());
+    auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    for(auto userId: usersIds) {
+        usersIdList.add(userId);
+    }
+    server::ThreadEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::ThreadEmitCustomEventModel>();
+    model.threadId(threadId);
+    model.data(_eventDataEncryptorV4.signAndEncryptAndEncode(eventData, _userPrivKey, key.key));
+    model.channel(channelName);
+    model.users(usersIdList);
+    model.keyId(key.id);
+    _serverApi.threadSendCustomEvent(model);
+}
+
+void ThreadApiImpl::subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
+    validateChannelName(channelName);
+    assertThreadExist(threadId);
+    if(_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
+        throw AlreadySubscribedException(threadId);
+    }
+    _threadSubscriptionHelper.subscribeForElementCustom(threadId, channelName);
+}
+
+void ThreadApiImpl::unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
+    validateChannelName(channelName);
+    assertThreadExist(threadId);
+    if(!_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
+        throw NotSubscribedException(threadId);
+    }
+    _threadSubscriptionHelper.unsubscribeFromElementCustom(threadId, channelName);
+}
+
+server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::string& threadId) {
+    // useing threadProvider only with THREAD_TYPE_FILTER_FLAG 
+    // making sure to have valid cache
+    if(!_subscribeForThread) _threadProvider.update(threadId);
+    return _threadProvider.get(threadId);
+}
+
+void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
+    //check if thread is in cache or on server
+    getRawThreadFromCacheOrBridge(threadId);
 }

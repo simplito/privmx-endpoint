@@ -69,8 +69,8 @@ StoreApiImpl::StoreApiImpl(
     _subscribeForStore(false),
     _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
-    _storeDataEncryptorV4(StoreDataEncryptorV4())
-
+    _storeDataEncryptorV4(StoreDataEncryptorV4()),
+    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StoreApiImpl::processConnectedEvent, this));
@@ -252,7 +252,7 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, getting store)
     auto store = _serverApi->storeGet(model).store();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, data send)
-    _storeProvider.updateCache(store.id(), store);
+    if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
     auto result = decryptAndConvertStoreDataToStore(store);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, _storeGetEx, data decrypted)
     return result;
@@ -279,7 +279,7 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
     auto storesResult = _serverApi->storeList(storeListModel);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList, data send)
     for(auto store : storesResult.stores()) {
-        _storeProvider.updateCache(store.id(), store);
+        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
         stores.push_back(decryptAndConvertStoreDataToStore(store));
     }
     core::PagingList<Store> result = {
@@ -297,8 +297,28 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet)
     auto serverFileResult = _serverApi->storeFileGet(storeFileGetModel);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet, data send)
-    // auto ret {convertStoreFile(file_raw.file(), decryptStoreFile(file_raw.store(), file_raw.file()).meta)};
+    if(serverFileResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFileResult.store());
     auto ret {decryptAndConvertFileDataToFileInfo(serverFileResult.store(), serverFileResult.file())};
+    if (ret.statusCode == 0) {
+        auto verifier {_connection.getImpl()->getUserVerifier()};
+
+        std::vector<core::VerificationRequest> verifierInput {{
+            .contextId = serverFileResult.store().contextId(),
+            .senderId = ret.info.author,
+            .senderPubKey = ret.authorPubKey,
+            .date = ret.info.createDate
+        }};
+
+        std::vector<bool> verified;
+        try {
+            verified = verifier->verify(verifierInput);
+        } catch (...) {
+            throw core::UserVerificationMethodUnhandledException();
+        }
+        if (verified[0] == false) {
+            ret.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        }
+    }
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileGet, data decrypted)
     return ret;
 }
@@ -311,8 +331,8 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList)
     auto serverFilesResult = _serverApi->storeFileList(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send)
-
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send);
+    if(serverFilesResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFilesResult.store());
     std::vector<File> filesList;
     // auto store {convertStore(files_raw.store(), decryptStore(files_raw.store()))};
     for(auto rawFile: serverFilesResult.files()) {
@@ -320,6 +340,33 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
         auto file {decryptAndConvertFileDataToFileInfo(serverFilesResult.store(), rawFile)};
         filesList.push_back(file);
     }
+
+    auto verifier {_connection.getImpl()->getUserVerifier()};
+    std::vector<core::VerificationRequest> verifierInput {};
+    for (auto file: filesList) {
+        verifierInput.push_back({
+            .contextId = serverFilesResult.store().contextId(),
+            .senderId = file.info.author,
+            .senderPubKey = file.authorPubKey,
+            .date = file.info.createDate
+        });
+    }
+
+    std::vector<bool> verified;
+    try {
+        verified = verifier->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+
+    for (size_t i = 0; i < filesList.size(); ++i) {
+        if (filesList[i].statusCode == 0) {
+            filesList[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        }
+    }
+
+
+
     core::PagingList<File> ret({
         .totalAvailable = serverFilesResult.count(),
         .readItems = filesList
@@ -338,9 +385,7 @@ void StoreApiImpl::deleteFile(const std::string& fileId) {
 }
 
 int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
-    //check if store exist
-    auto store = _storeProvider.get(storeId, !_subscribeForStore);
-
+    assertStoreExist(storeId);
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         storeId,
         std::string(),
@@ -356,10 +401,7 @@ int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer&
 }
 
 int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
-    //check if file exist
-    auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
-    storeFileGetModel.fileId(fileId);
-    auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
+    assertFileExist(fileId);
 
    std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         std::string(),
@@ -483,7 +525,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     
     server::Store store;
     if (handle->getFileId().empty()) {
-        store = _storeProvider.get(handle->getStoreId(), !_subscribeForStore);
+        store = getRawStoreFromCacheOrBridge(handle->getStoreId());
     } else {
         auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
         storeFileGetModel.fileId(handle->getFileId());
@@ -531,81 +573,86 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
 }
 
 void StoreApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if (_storeSubscriptionHelper.hasSubscriptionForModule()) {
-        if (type == "storeCreated") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                _storeProvider.updateCache(raw.id(), raw);
-                auto data = decryptAndConvertStoreDataToStore(raw);
-                std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "storeUpdated") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                _storeProvider.updateCache(raw.id(), raw);
-                auto data = decryptAndConvertStoreDataToStore(raw);
-                std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "storeDeleted") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreDeletedEventData>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                _storeProvider.remove(raw.storeId());
-                auto data = Mapper::mapToStoreDeletedEventData(raw);
-                std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        } else if (type == "storeStatsChanged") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(data);
-            if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                auto data = Mapper::mapToStoreStatsChangedEventData(raw);
-                std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
-                event->channel = channel;
-                event->data = data;
-                _eventMiddleware->emitApiEvent(event);
-            }
-        
-        }
+    if(!_storeSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+        return;
     }
-    
-    if (type == "storeFileCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
-        if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto store {_storeProvider.get(raw.storeId(), !_subscribeForStore)};
-            auto file = decryptAndConvertFileDataToFileInfo(store, raw);
-
-            // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
-            std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
-            event->channel = channel;
-            event->data = file;
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "storeFileUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
-        if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto store {_storeProvider.get(raw.storeId(), !_subscribeForStore)};
-            auto file = decryptAndConvertFileDataToFileInfo(store, raw);
-            std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
-            event->channel = channel;
-            event->data = file;
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "storeFileDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(data);
-        if(_storeSubscriptionHelper.hasSubscriptionForElement(raw.storeId())) {
-            auto data = Mapper::mapToStoreFileDeletedEventData(raw);
-            std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
+    if (type == "storeCreated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.updateByValue(raw);
+            auto data = decryptAndConvertStoreDataToStore(raw);
+            std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
             event->channel = channel;
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
+    } else if (type == "storeUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.updateByValue(raw);
+            auto data = decryptAndConvertStoreDataToStore(raw);
+            std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "storeDeleted") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreDeletedEventData>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.invalidateByContainerId(raw.storeId());
+            auto data = Mapper::mapToStoreDeletedEventData(raw);
+            std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "storeStatsChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(data);
+        if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.updateStats(raw);
+            auto data = Mapper::mapToStoreStatsChangedEventData(raw);
+            std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
+            event->channel = channel;
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    
+    } else if (type == "storeFileCreated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
+        auto store {getRawStoreFromCacheOrBridge(raw.storeId())};
+        auto file = decryptAndConvertFileDataToFileInfo(store, raw);
+
+        // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
+        std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
+        event->channel = channel;
+        event->data = file;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "storeFileUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
+        auto store {getRawStoreFromCacheOrBridge(raw.storeId())};
+        auto file = decryptAndConvertFileDataToFileInfo(store, raw);
+        std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
+        event->channel = channel;
+        event->data = file;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "storeFileDeleted") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(data);
+        auto data = Mapper::mapToStoreFileDeletedEventData(raw);
+        std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
+        event->channel = channel;
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "custom") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreCustomEventData>(data);
+        auto store = getRawStoreFromCacheOrBridge(raw.id());
+        auto key = _keyProvider->getKey(store.keys(), raw.keyId());
+        auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
+        std::shared_ptr<StoreCustomEvent> event(new StoreCustomEvent());
+        event->channel = channel;
+        event->data = data;
+        event->userId = raw.author().id();
+        event->storeId = raw.id();
+        _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
         std::string channel = data->has("channel") ? data->get("channel") : "";
         if(channel == "store") {
@@ -617,7 +664,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
         if(channel == "store") {
             PRIVMX_DEBUG("StoreApi", "Cache", "Disabled")
             _subscribeForStore = false;
-            _storeProvider.reset();
+            _storeProvider.invalidate();
         }
     } 
 }
@@ -637,7 +684,7 @@ void StoreApiImpl::unsubscribeFromStoreEvents() {
 }
 
 void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
-    auto store {_storeProvider.get(storeId, !_subscribeForStore)};
+    assertStoreExist(storeId);
     if(_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
         throw AlreadySubscribedException(storeId);
     }
@@ -645,7 +692,7 @@ void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
 }
 
 void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
-    auto store {_storeProvider.get(storeId, !_subscribeForStore)};
+    assertStoreExist(storeId);
     if(!_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
         throw NotSubscribedException(storeId);
     }
@@ -653,11 +700,11 @@ void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
 }
 
 void StoreApiImpl::processConnectedEvent() {
-    _storeProvider.reset();
+    _storeProvider.invalidate();
 }
 
 void StoreApiImpl::processDisconnectedEvent() {
-    _storeProvider.reset();
+    _storeProvider.invalidate();
 }
 
 dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(const server::Store& storeRaw) {
@@ -910,4 +957,63 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     storeFileUpdateModel.meta(encryptedMeta.asVar());
     storeFileUpdateModel.keyId(key.id);
     _serverApi->storeFileUpdate(storeFileUpdateModel);
+}
+
+void StoreApiImpl::validateChannelName(const std::string& channelName) {
+    if(std::find(_forbiddenChannelsNames.begin(), _forbiddenChannelsNames.end(), channelName) != _forbiddenChannelsNames.end()) {
+        throw ForbiddenChannelNameException();
+    }
+}
+
+void StoreApiImpl::emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
+    validateChannelName(channelName);
+    auto store = getRawStoreFromCacheOrBridge(storeId);
+    auto key = _keyProvider->getKey(store.keys(), store.keyId());
+    auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    for(auto userId: usersIds) {
+        usersIdList.add(userId);
+    }
+    server::StoreEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StoreEmitCustomEventModel>();
+    model.storeId(storeId);
+    model.data(_eventDataEncryptorV4.signAndEncryptAndEncode(eventData, _userPrivKey, key.key));
+    model.channel(channelName);
+    model.users(usersIdList);
+    model.keyId(key.id);
+    _serverApi->storeSendCustomEvent(model);
+}
+
+void StoreApiImpl::subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
+    validateChannelName(channelName);
+    assertStoreExist(storeId);
+    if(_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
+        throw AlreadySubscribedException(storeId);
+    }
+    _storeSubscriptionHelper.subscribeForElementCustom(storeId, channelName);
+}
+
+void StoreApiImpl::unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
+    validateChannelName(channelName);
+    assertStoreExist(storeId);
+    if(!_storeSubscriptionHelper.hasSubscriptionForElementCustom(storeId, channelName)) {
+        throw NotSubscribedException(storeId);
+    }
+    _storeSubscriptionHelper.unsubscribeFromElementCustom(storeId, channelName);
+}
+
+server::Store StoreApiImpl::getRawStoreFromCacheOrBridge(const std::string& storeId) {
+    // useing _storeProvider only with STORE_TYPE_FILTER_FLAG 
+    // making sure to have valid cache
+    if(!_subscribeForStore) _storeProvider.update(storeId);
+    return _storeProvider.get(storeId);
+}
+
+void StoreApiImpl::assertStoreExist(const std::string& storeId) {
+    //check if store is in cache or on server
+    getRawStoreFromCacheOrBridge(storeId);
+}
+
+void StoreApiImpl::assertFileExist(const std::string& fileId) {
+    auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
+    storeFileGetModel.fileId(fileId);
+    _serverApi->storeFileGet(storeFileGetModel);
 }

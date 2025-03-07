@@ -23,7 +23,9 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {}
+ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
+    _userVerifier = std::make_shared<core::DefaultUserVerifierInterface>();
+}
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
                              const std::string& platformUrl) {
@@ -114,7 +116,7 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
     PRIVMX_DEBUG_TIME_START(PlatformThread, contextList)
     auto listModel = utils::TypedObjectFactory::createNewObject<server::ListModel>();
     ListQueryMapper::map(listModel, pagingQuery);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data encrypted)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data)
     auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextListResult>(
         _gateway->request("context.contextList", listModel));
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data send)
@@ -124,6 +126,35 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, contextList)
     return PagingList<Context>{.totalAvailable = response.count(), .readItems = contexts};
+}
+
+std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& contextId) {
+    PRIVMX_DEBUG_TIME_START(PlatformThread, getContextUsers)
+    auto model = utils::TypedObjectFactory::createNewObject<server::ContextGetUsersModel>();
+    model.contextId(contextId);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data)
+    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(
+        _gateway->request("context.contextGetUsers", model));
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data send)
+    std::vector<UserInfo> usersInfo {};
+    for (auto user : response.users()) {
+        usersInfo.push_back(
+            UserInfo{
+                .user=UserWithPubKey{
+                    .userId=user.id(), 
+                    .pubKey=user.pub()
+                }, 
+                .isActive= user.status() == "active"
+            }
+        );
+    }
+    PRIVMX_DEBUG_TIME_STOP(PlatformThread, getContextUsers)
+    return usersInfo;
+}
+
+void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
+    std::unique_lock lock(_mutex);
+    _userVerifier = verifier;
 }
 
 void ConnectionImpl::disconnect() {

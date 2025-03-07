@@ -2045,6 +2045,65 @@ TEST_F(StoreTest, updateStore_policy) {
     }, core::Exception);
 }
 
+TEST_F(StoreTest, listStores_query) {
+    std::string storeId;
+    core::PagingList<store::Store> listStores;
+    EXPECT_NO_THROW({
+        storeId = storeApi->createStore(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("{\"test\":1}"),
+            core::Buffer::from("list_query_test"),
+            std::nullopt
+        );
+    });
+    if(storeId.empty()) { 
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        listStores = storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0,
+                .limit=100,
+                .sortOrder="asc",
+                .queryAsJson="{\"test\":1}"
+            }
+        );
+    });
+    EXPECT_EQ(listStores.totalAvailable, 1);
+    EXPECT_EQ(listStores.readItems.size(), 1);
+    if(listStores.readItems.size() >= 1) {
+        auto store = listStores.readItems[0];
+        EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
+        EXPECT_EQ(store.storeId, storeId);
+        EXPECT_EQ(store.filesCount, 0);
+        EXPECT_EQ(store.statusCode, 0);
+        EXPECT_EQ(store.publicMeta.stdString(), "{\"test\":1}");
+        EXPECT_EQ(store.privateMeta.stdString(), "list_query_test");
+        EXPECT_EQ(store.creator, reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.lastModifier, reader->getString("Login.user_1_id"));
+        EXPECT_EQ(store.users.size(), 1);
+        if(store.users.size() == 1) {
+            EXPECT_EQ(store.users[0], reader->getString("Login.user_1_id"));
+        }
+        EXPECT_EQ(store.managers.size(), 1);
+        if(store.managers.size() == 1) {
+            EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
+        }
+    }
+}
 
 TEST_F(StoreTest, updateStore_key_update_open_file) {
     std::string fileId;

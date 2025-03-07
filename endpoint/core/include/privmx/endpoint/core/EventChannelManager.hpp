@@ -22,6 +22,8 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+#define INTERNAL_EVENT_CHANNEL_NAME "internal"
+
 class EventChannelManager {
 public:
     EventChannelManager(privfs::RpcGateway::Ptr gateway, std::shared_ptr<EventMiddleware> eventMiddleware);

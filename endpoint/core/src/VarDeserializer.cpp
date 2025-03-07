@@ -51,6 +51,12 @@ bool VarDeserializer::deserialize<bool>(const Poco::Dynamic::Var& val, const std
     return val.extract<bool>();
 }
 
+template<>
+Poco::JSON::Object::Ptr VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    return val.extract<Poco::JSON::Object::Ptr>();
+}
+
 // // core
 
 template<>
@@ -65,10 +71,17 @@ template<>
 PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    std::optional<std::string> query;
+    auto tmp = deserializeOptional<Poco::JSON::Object::Ptr>(obj->get("query"), name + ".query");
+    if(tmp.has_value()) {
+        query = privmx::utils::Utils::stringify(tmp.value());
+    }
     return {.skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),
             .limit = deserialize<int64_t>(obj->get("limit"), name + ".limit"),
             .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
-            .lastId = deserializeOptional<std::string>(obj->get("lastId"), name + ".lastId")};
+            .lastId = deserializeOptional<std::string>(obj->get("lastId"), name + ".lastId"),
+            .queryAsJson = query
+    };
 }
 
 

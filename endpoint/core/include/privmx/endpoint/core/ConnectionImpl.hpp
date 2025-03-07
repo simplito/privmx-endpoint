@@ -29,6 +29,10 @@ limitations under the License.
 #include "privmx/endpoint/core/HandleManager.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include <privmx/endpoint/core/UserVerifierInterface.hpp>
+#include <privmx/endpoint/core/DefaultUserVerifierInterface.hpp>
+#include <mutex>
+#include <shared_mutex>
 
 namespace privmx {
 namespace endpoint {
@@ -41,6 +45,7 @@ public:
     void connectPublic(const std::string& solutionId, const std::string& platformUrl);
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
+    std::vector<UserInfo> getContextUsers(const std::string& contextId);
     void disconnect();
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
     const privmx::crypto::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
@@ -51,6 +56,12 @@ public:
     const std::shared_ptr<HandleManager>& getHandleManager() const { return _handleManager; }
 
     const rpc::ServerConfig& getServerConfig() const { return _serverConfig; }
+
+    void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
+    const std::shared_ptr<UserVerifierInterface> getUserVerifier() {
+        std::shared_lock lock(_mutex);
+        return _userVerifier;    
+    }
 
 private:
     int64_t generateConnectionId();
@@ -64,6 +75,8 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
+    std::shared_ptr<UserVerifierInterface> _userVerifier;
+    std::shared_mutex _mutex;
 };
 
 }  // namespace core

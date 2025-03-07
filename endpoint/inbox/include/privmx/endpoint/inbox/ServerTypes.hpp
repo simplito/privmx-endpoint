@@ -34,19 +34,6 @@ namespace server {
         STRING_FIELD(data)
     };
 
-    class ListModel : public utils::TypedObject
-    {
-    public:
-        ENDPOINT_SERVER_TYPE_CONSTRUCTOR(ListModel)
-        void initialize() override {
-            initializeObject({"sortOrder", "skip", "limit"});
-        }
-        STRING_FIELD(sortOrder)
-        INT32_FIELD(skip)
-        INT32_FIELD(limit)
-        STRING_FIELD(lastId)
-    };
-
     class FileConfig : public utils::TypedObject
     {
     public:
@@ -185,10 +172,10 @@ namespace server {
     };
 
 
-    class InboxListModel : public ListModel
+    class InboxListModel : public core::server::ListModel
     {
     public:
-        ENDPOINT_SERVER_TYPE_CONSTRUCTOR_INHERIT(InboxListModel, ListModel)
+        ENDPOINT_SERVER_TYPE_CONSTRUCTOR_INHERIT(InboxListModel, core::server::ListModel)
         void initialize() override {
         }
         STRING_FIELD(contextId)
@@ -280,6 +267,31 @@ namespace server {
         INT64_FIELD(lastSubmitDate)
         INT64_FIELD(submits)
         STRING_FIELD(type)
+    };
+
+    class InboxEmitCustomEventModel : public utils::TypedObject
+    {
+    public:
+        ENDPOINT_SERVER_TYPE_CONSTRUCTOR(InboxEmitCustomEventModel)
+        void initialize() override {
+        }
+        STRING_FIELD(inboxId)
+        STRING_FIELD(channel);
+        STRING_FIELD(keyId);
+        VAR_FIELD(data);
+        LIST_FIELD(users, std::string);
+    };
+
+    class InboxCustomEventData : public utils::TypedObject
+    {
+    public:
+        ENDPOINT_SERVER_TYPE_CONSTRUCTOR(InboxCustomEventData)
+        void initialize() override {
+        }
+        STRING_FIELD(id);
+        STRING_FIELD(keyId);
+        VAR_FIELD(eventData);
+        OBJECT_FIELD(author, core::server::UserIdentity);
     };
 
 
