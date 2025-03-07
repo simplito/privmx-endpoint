@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/thread/ThreadDataEncryptorV4.hpp"
+#include "privmx/endpoint/thread/encryptors/thread/ThreadDataEncryptorV4.hpp"
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"

@@ -17,7 +17,7 @@ limitations under the License.
 #include <string>
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/DataEncryptor.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -30,7 +30,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/MessageKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/thread/MessageDataEncryptorV4.hpp"
-#include "privmx/endpoint/thread/ThreadDataEncryptorV4.hpp"
+#include "privmx/endpoint/thread/encryptors/thread/ThreadDataEncryptorV4.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/thread/ThreadProvider.hpp"
@@ -119,7 +119,6 @@ private:
 
     void validateChannelName(const std::string& channelName);
     void assertThreadExist(const std::string& threadId);
-
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;

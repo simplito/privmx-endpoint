@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/core/DataEncryptorV4.hpp"
+#include "privmx/endpoint/core/encryptors/DataEncryptorV4.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;

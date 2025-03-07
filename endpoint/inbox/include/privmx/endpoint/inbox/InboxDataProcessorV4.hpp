@@ -13,7 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATAENCRYPTORV4_HPP_
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
-#include "privmx/endpoint/core/DataEncryptorV4.hpp"
+#include "privmx/endpoint/core/encryptors/DataEncryptorV4.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"

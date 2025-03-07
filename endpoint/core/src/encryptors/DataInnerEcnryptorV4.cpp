@@ -11,7 +11,7 @@ limitations under the License.
 
 #include "privmx/crypto/CryptoPrivmx.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/DataInnerEncryptorV4.hpp"
+#include "privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp"
 #include "privmx/utils/Utils.hpp"
 
 using namespace privmx::endpoint;

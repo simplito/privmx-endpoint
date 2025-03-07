@@ -118,7 +118,16 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
         storeCreateModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    storeCreateModel.keys(_keyProvider->prepareKeysList(all_users, storeKey));
+    storeCreateModel.keys(
+        _keyProvider->prepareKeysList(
+            all_users, 
+            storeKey, 
+            _connection.getImpl()->createDIO(
+                contextId, 
+                utils::Hex::from(crypto::Crypto::randomBytes(16))
+            ), _keyProvider->generateContainerControlNumber()
+        )
+    );
 
     auto usersList = utils::TypedObjectFactory::createNewList<std::string>();
     for (auto user: users) {
@@ -183,15 +192,35 @@ void StoreApiImpl::updateStore(
         }
     }
     bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-    auto currentKey {_keyProvider->getKey(currentStore.keys(), currentStore.keyId())};
-    auto storeKey = currentKey; 
+    
+    // read all key to check if all key belongs to this store
+    auto storeKeys {_keyProvider->getAllKeysAndVerify(currentStore.keys(), {.contextId=currentStore.contextId(), .containerId=storeId})};
+    
+    // setting store Key adding new users
+    core::EncKey storeKey;
+    core::DataIntegrityObject updateStoreDio = _connection.getImpl()->createDIO(currentStore.contextId(), storeId);
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
         storeKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(new_users, storeKey);
+        keys = _keyProvider->prepareKeysList(
+            new_users, 
+            storeKey, 
+            updateStoreDio,
+            storeKeys[0].containerControlNumber
+        );
+    } else {
+        // find key with corresponding keyId 
+        for(size_t i = 0; i < storeKeys.size(); i++) {
+            storeKey = storeKeys[i];
+        }
     }
     if(usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareOldKeysListForNewUsers(currentStore.keys(),usersToAddMissingKey);
+        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
+            storeKeys,
+            usersToAddMissingKey, 
+            updateStoreDio, 
+            storeKeys[0].containerControlNumber
+        );
         for(auto t: tmp) keys.add(t);
     }
 
@@ -421,7 +450,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
-    auto key = _keyProvider->getKey(file_raw.store().keys(), file_raw.file().keyId());
+    auto key = _keyProvider->getKeyAndVerify(file_raw.store().keys(), file_raw.file().keyId(), {.contextId=file_raw.store().contextId(), .containerId=file_raw.store().id()});
     auto decryptionParams = getStoreFileDecryptionParams(file_raw.file(), key);
     return createFileReadHandle(decryptionParams);
 }
@@ -531,7 +560,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
         storeFileGetModel.fileId(handle->getFileId());
         store = _serverApi->storeFileGet(storeFileGetModel).store();
     }
-    auto key = _keyProvider->getKey(store.keys(), store.keyId());
+    auto key = _keyProvider->getKeyAndVerify(store.keys(), store.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
 
     auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
     internalFileMeta.version(4);
@@ -645,7 +674,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const std::
     } else if (type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreCustomEventData>(data);
         auto store = getRawStoreFromCacheOrBridge(raw.id());
-        auto key = _keyProvider->getKey(store.keys(), raw.keyId());
+        auto key = _keyProvider->getKeyAndVerify(store.keys(), raw.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
         auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
         std::shared_ptr<StoreCustomEvent> event(new StoreCustomEvent());
         event->channel = channel;
@@ -710,7 +739,7 @@ void StoreApiImpl::processDisconnectedEvent() {
 dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(const server::Store& storeRaw) {
     try {
         auto encryptedDataEntry = storeRaw.data().get(storeRaw.data().size()-1);
-        auto key = _keyProvider->getKey(storeRaw.keys(), encryptedDataEntry.keyId());
+        auto key = _keyProvider->getKeyAndVerify(storeRaw.keys(), encryptedDataEntry.keyId(), {.contextId=storeRaw.contextId(), .containerId=storeRaw.id()});
         return _dataEncryptorCompatV1.decrypt(encryptedDataEntry.data(), key);
     } catch (const core::Exception& e) {
         dynamic::compat_v1::StoreData result = utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreData>();
@@ -733,7 +762,7 @@ dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(const server::Store& 
 DecryptedStoreData StoreApiImpl::decryptStoreV4(const server::Store& storeRaw) {
     try {
         auto encryptedDataEntry = storeRaw.data().get(storeRaw.data().size()-1);
-        auto key = _keyProvider->getKey(storeRaw.keys(), encryptedDataEntry.keyId());
+        auto key = _keyProvider->getKeyAndVerify(storeRaw.keys(), encryptedDataEntry.keyId(), {.contextId=storeRaw.contextId(), .containerId=storeRaw.id()});
         auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV4>(encryptedDataEntry.data());
         return _storeDataEncryptorV4.decrypt(encryptedDataEntryVar, key.key);
     } catch (const core::Exception& e) {
@@ -823,8 +852,8 @@ StoreFile StoreApiImpl::decryptStoreFileV1(const server::Store& store, const ser
     try {
         std::string keyId = storeFile.keyId();
         _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
-        auto key = _keyProvider->getKey(store.keys(), keyId).key;
-        auto file = decryptAndVerifyFileV1(key, storeFile);
+        auto encKey = _keyProvider->getKeyAndVerify(store.keys(), keyId, {.contextId=store.contextId(), .containerId=store.id()});
+        auto file = decryptAndVerifyFileV1(encKey.key, storeFile);
         return file;
     } catch (const privmx::endpoint::core::Exception& e) {
         StoreFile result = {.raw=storeFile, .meta=privmx::utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreFileMeta>(), .verified="invalid"};
@@ -873,7 +902,7 @@ StoreFile StoreApiImpl::decryptAndVerifyFileV1(const std::string &filesKey, serv
 DecryptedFileMeta StoreApiImpl::decryptFileMetaV4(const server::Store& store, const server::File& file) {
     try {
         auto keyId = file.keyId();
-        auto encKey = _keyProvider->getKey(store.keys(), keyId);
+        auto encKey = _keyProvider->getKeyAndVerify(store.keys(), keyId, {.contextId=store.contextId(), .containerId=store.id()});
         _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
         auto encryptionKey = encKey.key;
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
@@ -940,7 +969,7 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     auto storeFileGetResult = _serverApi->storeFileGet(storeFileGetModel);
     server::Store store = storeFileGetResult.store();
     server::File file = storeFileGetResult.file();
-    core::EncKey key = _keyProvider->getKey(store.keys(), store.keyId());
+    auto key = _keyProvider->getKeyAndVerify(store.keys(), store.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
     DecryptedFileMeta decryptedFile = decryptFileMetaV4(store, file);
 
     store::FileMetaToEncrypt fileMeta {
@@ -968,7 +997,7 @@ void StoreApiImpl::validateChannelName(const std::string& channelName) {
 void StoreApiImpl::emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
     validateChannelName(channelName);
     auto store = getRawStoreFromCacheOrBridge(storeId);
-    auto key = _keyProvider->getKey(store.keys(), store.keyId());
+    auto key = _keyProvider->getKeyAndVerify(store.keys(), store.keyId(), {.contextId=store.contextId(), .containerId=storeId});
     auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for(auto userId: usersIds) {
         usersIdList.add(userId);

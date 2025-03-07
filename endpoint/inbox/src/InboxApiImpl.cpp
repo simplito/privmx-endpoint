@@ -40,6 +40,7 @@ using namespace privmx;
 const Poco::Int64 InboxApiImpl::_CHUNK_SIZE = 128 * 1024;
 
 InboxApiImpl::InboxApiImpl(
+    const core::Connection& connection,
     const thread::ThreadApi& threadApi,
     const store::StoreApi& storeApi,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -52,7 +53,8 @@ InboxApiImpl::InboxApiImpl(
     const std::shared_ptr<core::HandleManager>& handleManager,
     size_t serverRequestChunkSize
 )
-    : _threadApi(threadApi),
+    : _connection(connection),
+    _threadApi(threadApi),
     _storeApi(storeApi),
     _keyProvider(keyProvider),
     _serverApi(serverApi),
@@ -133,7 +135,14 @@ std::string InboxApiImpl::createInbox(
     // add current inbox key
     createInboxModel.keyId(inboxKey.id);
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    auto keysList = _keyProvider->prepareKeysList(all_users, inboxKey);
+    auto keysList = _keyProvider->prepareKeysList(
+        all_users, 
+        inboxKey, 
+        _connection.getImpl()->createDIO(
+            contextId, 
+            utils::Hex::from(crypto::Crypto::randomBytes(16))
+        ), _keyProvider->generateContainerControlNumber()
+    );
     createInboxModel.keys(keysList);
     if (policies.has_value()) {
         createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems.value()));
@@ -172,17 +181,36 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         }
     }
     bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-    auto currentKey {_keyProvider->getKey(currentInbox.keys(), currentInbox.keyId())};
-    auto inboxKey = currentKey; 
+    auto inboxKeys {_keyProvider->getAllKeysAndVerify(currentInbox.keys(), {.contextId=currentInbox.contextId(), .containerId=inboxId})};
+    
+    // setting thread Key adding new users
+    core::EncKey inboxKey;
+    core::DataIntegrityObject updateThreadDio = _connection.getImpl()->createDIO(currentInbox.contextId(), inboxId);
     privmx::utils::List<core::server::KeyEntrySet> keysList = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
         inboxKey = _keyProvider->generateKey();
-        keysList = _keyProvider->prepareKeysList(new_users, inboxKey);
+        keysList = _keyProvider->prepareKeysList(
+            new_users, 
+            inboxKey, 
+            updateThreadDio,
+            inboxKeys[0].containerControlNumber
+        );
+    } else {
+        // find key with corresponding keyId 
+        for(size_t i = 0; i < inboxKeys.size(); i++) {
+            inboxKey = inboxKeys[i];
+        }
     }
     if(usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareOldKeysListForNewUsers(currentInbox.keys(),usersToAddMissingKey);
+        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
+            inboxKeys,
+            usersToAddMissingKey, 
+            updateThreadDio, 
+            inboxKeys[0].containerControlNumber
+        );
         for(auto t: tmp) keysList.add(t);
     }
+
     // prep keys
     auto eccKey = crypto::ECC::fromPrivateKey(inboxKey.key);
     auto privateKey = crypto::PrivateKey(eccKey);
@@ -566,7 +594,7 @@ inbox::server::InboxDataEntry InboxApiImpl::getInboxDataEntry(const inbox::serve
 
 InboxDataResult InboxApiImpl::decryptInbox(const inbox::server::Inbox& inboxRaw) {
     auto inboxDataEntry {getInboxDataEntry(inboxRaw)};
-    return _inboxDataProcessorV4.unpackAll(inboxDataEntry.data(), _keyProvider->getKey(inboxRaw.keys(), inboxDataEntry.keyId()).key);
+    return _inboxDataProcessorV4.unpackAll(inboxDataEntry.data(), _keyProvider->getKeyAndVerify(inboxRaw.keys(), inboxDataEntry.keyId(), {.contextId=inboxRaw.contextId(), .containerId=inboxRaw.id()}).key);
 }
 
 InboxPublicViewAsResult InboxApiImpl::getInboxPublicData(const std::string& inboxId) {
@@ -635,8 +663,7 @@ InboxEntryResult InboxApiImpl::decryptInboxEntry(const privmx::endpoint::inbox::
 
         auto serializer = inbox::InboxEntriesDataEncryptorSerializer::Ptr(new inbox::InboxEntriesDataEncryptorSerializer());
         auto msgPublicData = serializer->unpackMessagePublicOnly(msgData);
-        
-        auto encKey = _keyProvider->getKey(inbox.keys(), msgPublicData.usedInboxKeyId);
+        auto encKey = _keyProvider->getKeyAndVerify(inbox.keys(), msgPublicData.usedInboxKeyId, {.contextId=inbox.contextId(), .containerId=inbox.id()});
         auto eccKey = crypto::ECC::fromPrivateKey(encKey.key);
         auto privKeyECC = crypto::PrivateKey(eccKey);
         auto decrypted = serializer->unpackMessage(msgData, privKeyECC);
@@ -773,8 +800,8 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, [[maybe_unu
         }
     } else if (type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::InboxCustomEventData>(data);
-        auto store = getRawInboxFromCacheOrBridge(raw.id());
-        auto key = _keyProvider->getKey(store.keys(), raw.keyId());
+        auto inbox = getRawInboxFromCacheOrBridge(raw.id());
+        auto key = _keyProvider->getKeyAndVerify(inbox.keys(), raw.keyId(), {.contextId=inbox.contextId(), .containerId=inbox.id()});
         auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
         std::shared_ptr<InboxCustomEvent> event(new InboxCustomEvent());
         event->channel = channel;
@@ -922,7 +949,7 @@ void InboxApiImpl::validateChannelName(const std::string& channelName) {
 void InboxApiImpl::emitEvent(const std::string& inboxId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
     validateChannelName(channelName);
     auto inbox = getRawInboxFromCacheOrBridge(inboxId);
-    auto key = _keyProvider->getKey(inbox.keys(), inbox.keyId());
+    auto key = _keyProvider->getKeyAndVerify(inbox.keys(), inbox.keyId(), {.contextId=inbox.contextId(), .containerId=inboxId});
     auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for(auto userId: usersIds) {
         usersIdList.add(userId);

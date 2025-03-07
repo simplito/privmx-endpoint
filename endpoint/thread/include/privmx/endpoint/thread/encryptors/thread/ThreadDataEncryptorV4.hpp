@@ -12,10 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_THREAD_THREADDATAENCRYPTORV4_HPP
 #define _PRIVMXLIB_ENDPOINT_THREAD_THREADDATAENCRYPTORV4_HPP
 
-#include "privmx/endpoint/core/CoreTypes.hpp"
-#include "privmx/endpoint/core/DataEncryptorV4.hpp"
-#include "privmx/endpoint/core/ServerTypes.hpp"
-#include "privmx/endpoint/core/Types.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/thread/ThreadTypes.hpp"
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 

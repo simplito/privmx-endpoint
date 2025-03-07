@@ -20,7 +20,7 @@ limitations under the License.
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/DataEncryptor.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
@@ -53,6 +53,7 @@ class InboxApiImpl
 {
 public:
     InboxApiImpl(
+        const core::Connection& connection,
         const thread::ThreadApi& threadApi,
         const store::StoreApi& storeApi,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -160,7 +161,7 @@ private:
         return ret;
     }
     static const Poco::Int64 _CHUNK_SIZE;
-
+    core::Connection _connection;
     endpoint::thread::ThreadApi _threadApi;
     endpoint::store::StoreApi _storeApi;
     std::shared_ptr<core::KeyProvider> _keyProvider;

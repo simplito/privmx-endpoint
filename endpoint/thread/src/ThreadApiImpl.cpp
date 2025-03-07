@@ -114,7 +114,16 @@ std::string ThreadApiImpl::_createThreadEx(
     create_thread_model.keyId(threadKey.id);
     create_thread_model.data(_threadDataEncryptorV4.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
     auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    create_thread_model.keys(_keyProvider->prepareKeysList(allUsers, threadKey));
+    create_thread_model.keys(
+        _keyProvider->prepareKeysList(
+            allUsers, 
+            threadKey, 
+            _connection.getImpl()->createDIO(
+                contextId, 
+                utils::Hex::from(crypto::Crypto::randomBytes(16))
+            ), _keyProvider->generateContainerControlNumber()
+        )
+    );
     create_thread_model.users(mapUsers(users));
     create_thread_model.managers(mapUsers(managers));
     if (type.length() > 0) {
@@ -165,15 +174,35 @@ void ThreadApiImpl::updateThread(
         }
     }
     bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-    auto currentKey {_keyProvider->getKey(currentThread.keys(), currentThread.keyId())};
-    auto threadKey = currentKey; 
+
+    // read all key to check if all key belongs to this thread
+    auto threadKeys {_keyProvider->getAllKeysAndVerify(currentThread.keys(), {.contextId=currentThread.contextId(), .containerId=threadId})};
+    
+    // setting thread Key adding new users
+    core::EncKey threadKey;
+    core::DataIntegrityObject updateThreadDio = _connection.getImpl()->createDIO(currentThread.contextId(), threadId);
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
         threadKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(new_users, threadKey);
+        keys = _keyProvider->prepareKeysList(
+            new_users, 
+            threadKey, 
+            updateThreadDio,
+            threadKeys[0].containerControlNumber
+        );
+    } else {
+        // find key with corresponding keyId 
+        for(size_t i = 0; i < threadKeys.size(); i++) {
+            threadKey = threadKeys[i];
+        }
     }
     if(usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareOldKeysListForNewUsers(currentThread.keys(),usersToAddMissingKey);
+        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
+            threadKeys,
+            usersToAddMissingKey, 
+            updateThreadDio, 
+            threadKeys[0].containerControlNumber
+        );
         for(auto t: tmp) keys.add(t);
     }
     auto model = utils::TypedObjectFactory::createNewObject<server::ThreadUpdateModel>();
@@ -331,6 +360,8 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
             .date = message.info.createDate
         });
     }
+    
+
     std::vector<bool> verified;
     try {
         verified = verifier->verify(verifierInput);
@@ -476,7 +507,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
     } else if (type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadCustomEventData>(data);
         auto thread = getRawThreadFromCacheOrBridge(raw.id());
-        auto key = _keyProvider->getKey(thread.keys(), raw.keyId());
+        auto key = _keyProvider->getKeyAndVerify(thread.keys(), raw.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
         auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
         std::shared_ptr<ThreadCustomEvent> event(new ThreadCustomEvent());
         event->channel = channel;
@@ -549,7 +580,7 @@ privmx::utils::List<std::string> ThreadApiImpl::mapUsers(const std::vector<core:
 dynamic::ThreadDataV1 ThreadApiImpl::decryptThreadV1(const server::ThreadInfo& thread) {
     try {
         auto thread_data_entry = thread.data().get(thread.data().size()-1);
-        auto key = _keyProvider->getKey(thread.keys(), thread_data_entry.keyId());
+        auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
         return _dataEncryptorThread.decrypt(thread_data_entry.data(), key);
     } catch (const core::Exception& e) {
         dynamic::ThreadDataV1 result = utils::TypedObjectFactory::createNewObject<dynamic::ThreadDataV1>();
@@ -572,7 +603,7 @@ dynamic::ThreadDataV1 ThreadApiImpl::decryptThreadV1(const server::ThreadInfo& t
 DecryptedThreadData ThreadApiImpl::decryptThreadV4(const server::ThreadInfo& thread) {
     try {
         auto thread_data_entry = thread.data().get(thread.data().size()-1);
-        auto key = _keyProvider->getKey(thread.keys(), thread_data_entry.keyId());
+        auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
         auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV4>(thread_data_entry.data());
         return _threadDataEncryptorV4.decrypt(encryptedThreadData, key.key);
     } catch (const core::Exception& e) {
@@ -663,7 +694,7 @@ dynamic::MessageDataV2 ThreadApiImpl::decryptMessageDataV2(const server::ThreadI
     try {
         auto keyId = message.keyId();
         _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
-        auto encKey = _keyProvider->getKey(thread.keys(), keyId);
+        auto encKey = _keyProvider->getKeyAndVerify(thread.keys(), keyId, {.contextId=thread.contextId(), .containerId=thread.id()});
         auto msg = _messageDataV2Encryptor.decryptAndGetSign(message.data(), encKey);
         return msg.data();
     } catch (const core::Exception& e) {
@@ -689,7 +720,7 @@ dynamic::MessageDataV3 ThreadApiImpl::decryptMessageDataV3(const server::ThreadI
     try {
         auto keyId = message.keyId();
         _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
-        auto encKey = _keyProvider->getKey(thread.keys(), keyId);
+        auto encKey = _keyProvider->getKeyAndVerify(thread.keys(), keyId, {.contextId=thread.contextId(), .containerId=thread.id()});
         auto msg = _messageDataV3Encryptor.decryptAndGetSign(message.data(), encKey);
         return msg.data();
     } catch (const core::Exception& e) {
@@ -713,7 +744,7 @@ dynamic::MessageDataV3 ThreadApiImpl::decryptMessageDataV3(const server::ThreadI
 DecryptedMessageData ThreadApiImpl::decryptMessageDataV4(const server::ThreadInfo& thread, const server::Message& message) {
     try {
         auto keyId = message.keyId();
-        auto encKey = _keyProvider->getKey(thread.keys(), keyId);
+        auto encKey = _keyProvider->getKeyAndVerify(thread.keys(), keyId, {.contextId=thread.contextId(), .containerId=thread.id()});
         _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
         auto encryptionKey = encKey.key;
         auto encryptedMessageData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV4>(message.data());
@@ -802,7 +833,7 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(const server::Threa
 
 core::EncKey ThreadApiImpl::getThreadEncKey(const server::ThreadInfo& thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
-    auto key = _keyProvider->getKey(thread.keys(), thread_data_entry.keyId());
+    auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
     return key;
 }
 
@@ -815,7 +846,7 @@ void ThreadApiImpl::validateChannelName(const std::string& channelName) {
 void ThreadApiImpl::emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
     validateChannelName(channelName);
     auto thread = getRawThreadFromCacheOrBridge(threadId);
-    auto key = _keyProvider->getKey(thread.keys(), thread.keyId());
+    auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
     auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for(auto userId: usersIds) {
         usersIdList.add(userId);

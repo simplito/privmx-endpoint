@@ -21,6 +21,7 @@ store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::Fil
                                                                 const crypto::PrivateKey& authorPrivateKey,
                                                                 const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<store::server::EncryptedFileMetaV4>();
+    {
     result.version(4);
     result.publicMeta(_dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey));
     try {
@@ -33,6 +34,8 @@ store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::Fil
         _dataEncryptor.signAndEncryptAndEncode(serializeNumber(fileMeta.fileSize), authorPrivateKey, encryptionKey));
     result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(fileMeta.internalMeta, authorPrivateKey, encryptionKey));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
+    }
+    
     return result;
 }
 
