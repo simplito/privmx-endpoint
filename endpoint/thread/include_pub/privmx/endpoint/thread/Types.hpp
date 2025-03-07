@@ -32,6 +32,11 @@ struct ServerMessageInfo {
      * ID of the user who created the message
      */
     std::string author;
+    
+    /**
+     * 
+     */
+    int64_t structureVersion;
 };
 
 /**

@@ -15,7 +15,7 @@ limitations under the License.
 #include "privmx/crypto/ecc/PrivateKey.hpp"
 #include "privmx/crypto/ecc/PublicKey.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
-#include "privmx/endpoint/core/DataInnerEncryptorV4.hpp"
+#include "privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp"
 
 namespace privmx {
 namespace endpoint {

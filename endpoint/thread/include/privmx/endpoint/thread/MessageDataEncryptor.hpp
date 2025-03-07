@@ -17,7 +17,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/core/DataEncryptor.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptor.hpp>
 
 #include "privmx/endpoint/thread/ThreadTypes.hpp"
 #include "privmx/endpoint/thread/ServerTypes.hpp"

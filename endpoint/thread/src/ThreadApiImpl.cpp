@@ -114,7 +114,7 @@ std::string ThreadApiImpl::_createThreadEx(
     create_thread_model.keyId(threadKey.id);
     create_thread_model.data(_threadDataEncryptorV4.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
     auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    create_thread_model.keys(_keyProvider->prepareKeysList(allUsers, threadKey));
+    create_thread_model.keys(_keyProvider->prepareKeysList(allUsers, threadKey, _connection.getImpl()->createDIO(contextId, utils::Hex::from(crypto::Crypto::randomBytes(16)))));
     create_thread_model.users(mapUsers(users));
     create_thread_model.managers(mapUsers(managers));
     if (type.length() > 0) {
@@ -331,6 +331,8 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
             .date = message.info.createDate
         });
     }
+    
+
     std::vector<bool> verified;
     try {
         verified = verifier->verify(verifierInput);

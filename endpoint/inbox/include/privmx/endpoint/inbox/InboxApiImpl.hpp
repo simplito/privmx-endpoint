@@ -20,7 +20,7 @@ limitations under the License.
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/DataEncryptor.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>

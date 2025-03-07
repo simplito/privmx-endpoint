@@ -49,6 +49,12 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
     });
+    _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextGetModel>();
+        model.contextId(id);
+        return utils::TypedObjectFactory::createObjectFromVar<server::ContextGetResult>(
+            _gateway->request("context.contextList", model)).context();
+    });
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
@@ -168,4 +174,24 @@ void ConnectionImpl::disconnect() {
 
 int64_t ConnectionImpl::generateConnectionId() {
     return reinterpret_cast<std::intptr_t>(this);
+}
+
+std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
+    return _contextProvider->get(contextId).userId();
+}
+
+DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, const std::string& containerId) {
+    int64_t nonce = 0;
+    auto nonceStr = privmx::crypto::Crypto::randomBytes(8);
+    for(auto c : nonceStr) {
+        nonce = (nonce << 8) + c;
+    }
+    return core::DataIntegrityObject{
+        .creatorUserId = getMyUserId(contextId),
+        .creatorPubKey = _userPrivKey.getPublicKey().toBase58DER(),
+        .contextId = contextId,
+        .containerId = containerId,
+        .timestamp = privmx::utils::Utils::getNowTimestamp(),
+        .nonce = nonce
+    };
 }

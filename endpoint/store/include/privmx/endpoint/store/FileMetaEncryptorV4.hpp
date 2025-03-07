@@ -12,11 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV4_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV4_HPP_
 
-#include "privmx/endpoint/core/CoreTypes.hpp"
-#include "privmx/endpoint/core/DataEncryptorV4.hpp"
-#include "privmx/endpoint/core/ServerTypes.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/store/ServerTypes.hpp"
-#include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
 
 namespace privmx {

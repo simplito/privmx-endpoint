@@ -29,8 +29,9 @@ limitations under the License.
 #include "privmx/endpoint/core/HandleManager.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/Types.hpp"
-#include <privmx/endpoint/core/UserVerifierInterface.hpp>
-#include <privmx/endpoint/core/DefaultUserVerifierInterface.hpp>
+#include "privmx/endpoint/core/UserVerifierInterface.hpp"
+#include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
+#include "privmx/endpoint/core/ContextProvider.hpp"
 #include <mutex>
 #include <shared_mutex>
 
@@ -62,6 +63,10 @@ public:
         std::shared_lock lock(_mutex);
         return _userVerifier;    
     }
+    std::string getMyUserId(const std::string& contextId);
+    DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId);
+    bool validateDIO(const DataIntegrityObject& dio, const std::string& contextId, const std::string& containerId);
+
 
 private:
     int64_t generateConnectionId();
@@ -76,6 +81,7 @@ private:
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifierInterface> _userVerifier;
+    std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
 };
 
