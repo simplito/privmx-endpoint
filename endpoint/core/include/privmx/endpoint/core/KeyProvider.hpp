@@ -30,7 +30,10 @@ public:
     EncKey getKey(const utils::List<server::KeyEntry>& keys, const std::string& keyId);
     privmx::utils::List<server::KeyEntrySet> prepareKeysList(const std::vector<UserWithPubKey>& users,
                                                              const EncKey& key);
-    privmx::utils::List<server::KeyEntrySet> prepareOldKeysListForNewUsers(const utils::List<server::KeyEntry>& oldKeys, const std::vector<UserWithPubKey>& users);             
+    privmx::utils::List<server::KeyEntrySet> prepareOldKeysListForNewUsers(const utils::List<server::KeyEntry>& oldKeys, const std::vector<UserWithPubKey>& users);     
+
+    privmx::utils::List<server::KeyEntrySet> prepareKeysList(const std::vector<UserWithPubKey>& users, const EncKey& key, const core::DataIntegrityObject& dio);
+    privmx::utils::List<server::KeyEntrySet> prepareOldKeysListForNewUsers(const utils::List<server::KeyEntry>& oldKeys, const std::vector<UserWithPubKey>& users);         
 
 private:
     privmx::crypto::PrivateKey _key;

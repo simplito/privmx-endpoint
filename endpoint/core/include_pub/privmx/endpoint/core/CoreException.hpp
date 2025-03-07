@@ -52,6 +52,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidBackendRequestModeExcep
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationFailureException, "User verification failure", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationMethodUnhandledException, "UserVerifierInterface.verify() thrown an exception. Implementation of the UserVerifierInterface should provide adequate error handling.", 0x000F)
 
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyMalformedDataException, "Encryption key malformed data", 0x0010)
+
+
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibPlatformDisconnectedEventException, "Cannot extract LibPlatformDisconnectedEvent", 0x0002)

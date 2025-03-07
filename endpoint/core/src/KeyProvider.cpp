@@ -51,6 +51,11 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std:
     }
     return result;
 }
+// key <- encKey
+// creatorId <- userId of creator
+// containerId <- thread/store/inbox/itp
+// contextId
+// EciesEncryptor <- creator PrivateKey
 
 privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareOldKeysListForNewUsers(const utils::List<server::KeyEntry>& oldKeys, const std::vector<UserWithPubKey>& users) {
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();

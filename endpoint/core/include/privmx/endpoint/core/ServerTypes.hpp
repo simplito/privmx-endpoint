@@ -21,15 +21,31 @@ namespace endpoint {
 namespace core {
 namespace server {
 
+
+ENDPOINT_CLIENT_TYPE(DataIntegrityObject)
+    INT64_FIELD(version)
+    STRING_FIELD(contextId)
+    STRING_FIELD(containerId)
+    STRING_FIELD(creatorUserId)
+    INT64_FIELD(timestamp)
+    INT64_FIELD(nonce)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(EncryptedKeyEntryDataV2)
+    INT64_FIELD(version)
+    STRING_FIELD(encryptedKey)
+    STRING_FIELD(dio) // signed and in base64
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(KeyEntry)
     STRING_FIELD(keyId)
-    STRING_FIELD(data)
+    VAR_FIELD(data)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(KeyEntrySet)
     STRING_FIELD(user)
     STRING_FIELD(keyId)
-    STRING_FIELD(data)
+    VAR_FIELD(data)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ListModel)

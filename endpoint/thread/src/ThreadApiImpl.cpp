@@ -331,6 +331,8 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
             .date = message.info.createDate
         });
     }
+    
+
     std::vector<bool> verified;
     try {
         verified = verifier->verify(verifierInput);
