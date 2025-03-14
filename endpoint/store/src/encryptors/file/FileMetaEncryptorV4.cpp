@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/store/FileMetaEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
@@ -17,7 +17,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::FileMetaToEncrypt& fileMeta,
+store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::FileMetaToEncryptV4& fileMeta,
                                                                 const crypto::PrivateKey& authorPrivateKey,
                                                                 const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<store::server::EncryptedFileMetaV4>();
@@ -39,12 +39,13 @@ store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::Fil
     return result;
 }
 
-store::DecryptedFileMeta FileMetaEncryptorV4::decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
+store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
                                                       const std::string& encryptionKey) {
-    validateVersion(encryptedFileMeta);
-    DecryptedFileMeta result;
+    DecryptedFileMetaV4 result;
     result.statusCode = 0;
+    result.dataStructureVersion = 4;
     try {
+        validateVersion(encryptedFileMeta);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedFileMeta.authorPubKey());
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta(), authorPublicKey);
         if(!encryptedFileMeta.publicMetaObjectEmpty()) {

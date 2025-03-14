@@ -14,7 +14,7 @@ limitations under the License.
 #include <Poco/JSON/Parser.h>
 #include <privmx/utils/Utils.hpp>
 
-#include "privmx/endpoint/store/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
 
 using namespace privmx::endpoint::store;
 

@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/CoreTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -40,34 +41,62 @@ struct StoreFile
     std::string verified;
 };
 
-struct FileMetaToEncrypt {
+struct FileMetaToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     int64_t fileSize;
     core::Buffer internalMeta;
 };
 
-struct DecryptedFileMeta {
+struct FileMetaToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer internalMeta;
+    core::DataIntegrityObject dio;
+};
+
+struct DecryptedFileMetaV4 : core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     int64_t fileSize;
     core::Buffer internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
 };
 
-struct StoreDataToEncrypt {
+struct DecryptedFileMetaV5 : core::DecryptedVersionedData {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer internalMeta;
+    std::string authorPubKey;
+    core::DataIntegrityObject dio;
+};
+
+struct StoreDataToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     std::optional<core::Buffer> internalMeta;
 };
 
-struct DecryptedStoreData {
+struct StoreDataToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    std::optional<core::Buffer> internalMeta;
+    core::DataIntegrityObject dio;
+};
+
+struct DecryptedStoreDataV4 : core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
+};
+
+struct DecryptedStoreDataV5 : core::DecryptedVersionedData {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    std::optional<core::Buffer> internalMeta;
+    std::string authorPubKey;
+    core::DataIntegrityObject dio;
 };
 
 } // store

@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/store/StoreDataEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/store/StoreDataEncryptorV4.hpp"
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
@@ -17,7 +17,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-server::EncryptedStoreDataV4 StoreDataEncryptorV4::encrypt(const StoreDataToEncrypt& plainData,
+server::EncryptedStoreDataV4 StoreDataEncryptorV4::encrypt(const StoreDataToEncryptV4& plainData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedStoreDataV4>();
@@ -38,11 +38,13 @@ server::EncryptedStoreDataV4 StoreDataEncryptorV4::encrypt(const StoreDataToEncr
     return result;
 }
 
-DecryptedStoreData StoreDataEncryptorV4::decrypt(
+DecryptedStoreDataV4 StoreDataEncryptorV4::decrypt(
     const server::EncryptedStoreDataV4& encryptedData, const std::string& encryptionKey) {
-    DecryptedStoreData result;
+    DecryptedStoreDataV4 result;
     result.statusCode = 0;
+    result.dataStructureVersion = 4;
     try {
+        validateVersion(encryptedData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey());
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedData.publicMeta(), authorPublicKey);
         if(!encryptedData.publicMetaObjectEmpty()) {

@@ -30,14 +30,16 @@ limitations under the License.
 
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/FileDataProvider.hpp"
-#include "privmx/endpoint/store/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
 #include "privmx/endpoint/store/RequestApi.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/FileHandle.hpp"
 #include "privmx/endpoint/store/FileKeyIdFormatValidator.hpp"
-#include "privmx/endpoint/store/FileMetaEncryptorV4.hpp"
-#include "privmx/endpoint/store/StoreDataEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
+#include "privmx/endpoint/store/encryptors/store/StoreDataEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/store/StoreDataEncryptorV5.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/StoreProvider.hpp"
@@ -128,10 +130,13 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     dynamic::compat_v1::StoreData decryptStoreV1(const server::Store& storeRaw);
-    DecryptedStoreData decryptStoreV4(const server::Store& storeRaw);
+    DecryptedStoreDataV4 decryptStoreV4(const server::Store& storeRaw);
+    DecryptedStoreDataV5 decryptStoreV5(const server::Store& storeRaw);
     Store convertStoreDataV1ToStore(const server::Store& storeRaw, dynamic::compat_v1::StoreData storeData);
-    Store convertDecryptedStoreDataToStore(const server::Store& storeRaw, const DecryptedStoreData& storeData);
+    Store convertDecryptedStoreDataV4ToStore(const server::Store& storeRaw, const DecryptedStoreDataV4& storeData);
+    Store convertDecryptedStoreDataV5ToStore(const server::Store& storeRaw, const DecryptedStoreDataV5& storeData);
     Store decryptAndConvertStoreDataToStore(const server::Store& storeRaw);
+    void assertStoreDataIntegrity(const server::Store& store);
 
 
     // OLD CODE    
@@ -140,9 +145,11 @@ private:
     std::string verifyFileV1Signature(FileMetaSigned meta, server::File raw, std::string& serverId);
     // OLD CODE   
     StoreFile decryptAndVerifyFileV1(const std::string &filesKey, server::File x);
-    DecryptedFileMeta decryptFileMetaV4(const server::Store& store, const server::File& file);
+    DecryptedFileMetaV4 decryptFileMetaV4(const server::Store& store, const server::File& file);
+    DecryptedFileMetaV5 decryptFileMetaV5(const server::Store& store, const server::File& file);
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
-    File convertDecryptedFileMetaToFile(server::File file, DecryptedFileMeta fileData);
+    File convertDecryptedFileMetaV4ToFile(server::File file, DecryptedFileMetaV4 fileData);
+    File convertDecryptedFileMetaV5ToFile(server::File file, DecryptedFileMetaV5 fileData);
     File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
 
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
@@ -180,6 +187,8 @@ private:
 
     FileMetaEncryptorV4 _fileMetaEncryptorV4;
     StoreDataEncryptorV4 _storeDataEncryptorV4;
+    FileMetaEncryptorV5 _fileMetaEncryptorV5;
+    StoreDataEncryptorV5 _storeDataEncryptorV5;
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
     

@@ -9,11 +9,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV4_HPP_
-#define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV4_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV5_HPP_
+#define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV5_HPP_
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/store/ServerTypes.hpp"
@@ -23,24 +24,26 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class FileMetaEncryptorV4 {
+class FileMetaEncryptorV5 {
 public:
-    store::server::EncryptedFileMetaV4 encrypt(const store::FileMetaToEncrypt& fileMeta,
+    store::server::EncryptedFileMetaV5 encrypt(const store::FileMetaToEncryptV5& fileMeta,
                                               const crypto::PrivateKey& authorPrivateKey,
                                               const std::string& encryptionKey);
-    store::DecryptedFileMeta decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
+    store::DecryptedFileMetaV5 decrypt(const store::server::EncryptedFileMetaV5& encryptedFileMeta,
                                     const std::string& encryptionKey);
-
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta);
 private:
-    void validateVersion(const store::server::EncryptedFileMetaV4& encryptedFileMeta);
+    void assertDataFormat(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
     core::Buffer serializeNumber(const int64_t& number);
     int64_t deserializeNumber(const core::Buffer& buffer);
 
     core::DataEncryptorV4 _dataEncryptor;
+    core::DIOEncryptorV1 _DIOEncryptor;
+
 };
 
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_CORE_FILEMETAENCRYPTORV4_HPP_
+#endif  //_PRIVMXLIB_ENDPOINT_CORE_FILEMETAENCRYPTORV5_HPP_

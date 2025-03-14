@@ -25,10 +25,10 @@ namespace store {
 
 class StoreDataEncryptorV4 {
 public:
-    server::EncryptedStoreDataV4 encrypt(const StoreDataToEncrypt& plainData,
+    server::EncryptedStoreDataV4 encrypt(const StoreDataToEncryptV4& plainData,
                                         const crypto::PrivateKey& authorPrivateKey,
                                         const std::string& encryptionKey);
-    DecryptedStoreData decrypt(const server::EncryptedStoreDataV4& encryptedData,
+    DecryptedStoreDataV4 decrypt(const server::EncryptedStoreDataV4& encryptedData,
                                 const std::string& encryptionKey);
 
 private:

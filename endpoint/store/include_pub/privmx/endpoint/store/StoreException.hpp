@@ -72,6 +72,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, WritingToFileInteruptedWritte
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileDecryptionFailedException, "FileDecryptionFailed", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, CannotExtractStoreCustomEventException, "Cannot extract StoreCustomEvent", 0x0024)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, ForbiddenChannelNameException, "Forbidden channel name", 0x0025)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StoreEncryptionKeyValidationException, "Failed Store encryption key validation", 0x0026)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StoreDataIntegrityException, "Failed Store data integrity check", 0x0027)
 
 
 } // store
