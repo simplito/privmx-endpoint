@@ -25,10 +25,10 @@ namespace thread {
 
 class ThreadDataEncryptorV4 {
 public:
-    server::EncryptedThreadDataV4 encrypt(const ThreadDataToEncrypt& threadData,
+    server::EncryptedThreadDataV4 encrypt(const ThreadDataToEncryptV4& threadData,
                                         const crypto::PrivateKey& authorPrivateKey,
                                         const std::string& encryptionKey);
-    DecryptedThreadData decrypt(const server::EncryptedThreadDataV4& encryptedThreadData,
+    DecryptedThreadDataV4 decrypt(const server::EncryptedThreadDataV4& encryptedThreadData,
                                 const std::string& encryptionKey);
 
 private:

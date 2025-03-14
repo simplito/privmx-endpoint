@@ -26,11 +26,13 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/ServerApi.hpp"
 #include "privmx/endpoint/thread/DynamicTypes.hpp"
-#include "privmx/endpoint/thread/MessageDataEncryptor.hpp"
+#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptor.hpp"
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/MessageKeyIdFormatValidator.hpp"
-#include "privmx/endpoint/thread/MessageDataEncryptorV4.hpp"
+#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV4.hpp"
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataEncryptorV4.hpp"
+#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV5.hpp"
+#include "privmx/endpoint/thread/encryptors/thread/ThreadDataEncryptorV5.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/thread/ThreadProvider.hpp"
@@ -102,20 +104,25 @@ private:
     void processDisconnectedEvent();
     utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     dynamic::ThreadDataV1 decryptThreadV1(const server::ThreadInfo& thread);
-    DecryptedThreadData decryptThreadV4(const server::ThreadInfo& thread);
+    DecryptedThreadDataV4 decryptThreadV4(const server::ThreadInfo& thread);
+    DecryptedThreadDataV5 decryptThreadV5(const server::ThreadInfo& thread);
     Thread convertThreadDataV1ToThread(const server::ThreadInfo& threadInfo, dynamic::ThreadDataV1 threadData);
-    Thread convertDecryptedThreadDataToThread(const server::ThreadInfo& threadInfo, const DecryptedThreadData& threadData);
+    Thread convertDecryptedThreadDataV4ToThread(const server::ThreadInfo& threadInfo, const DecryptedThreadDataV4& threadData);
+    Thread convertDecryptedThreadDataV5ToThread(const server::ThreadInfo& threadInfo, const DecryptedThreadDataV5& threadData);
     Thread decryptAndConvertThreadDataToThread(const server::ThreadInfo& thread);
-
+    void assertThreadDataIntegrity(const server::ThreadInfo& thread);
     core::EncKey getThreadEncKey(const server::ThreadInfo& thread);
 
     dynamic::MessageDataV2 decryptMessageDataV2(const server::ThreadInfo& thread, const server::Message& message);
     dynamic::MessageDataV3 decryptMessageDataV3(const server::ThreadInfo& thread, const server::Message& message);
-    DecryptedMessageData decryptMessageDataV4(const server::ThreadInfo& thread, const server::Message& message);
+    DecryptedMessageDataV4 decryptMessageDataV4(const server::ThreadInfo& thread, const server::Message& message);
+    DecryptedMessageDataV5 decryptMessageDataV5(const server::ThreadInfo& thread, const server::Message& message);
     Message convertMessageDataV2ToMessage(const server::Message& message, dynamic::MessageDataV2 messageData);
     Message convertMessageDataV3ToMessage(const server::Message& message, dynamic::MessageDataV3 messageData);
-    Message convertDecryptedMessageDataToMessage(const server::Message& message, DecryptedMessageData messageData);
+    Message convertDecryptedMessageDataV4ToMessage(const server::Message& message, DecryptedMessageDataV4 messageData);
+    Message convertDecryptedMessageDataV5ToMessage(const server::Message& message, DecryptedMessageDataV5 messageData);
     Message decryptAndConvertMessageDataToMessage(const server::ThreadInfo& thread, const server::Message& message);
+    void assertMessageDataIntegrity(const server::Message& message);
 
     void validateChannelName(const std::string& channelName);
     void assertThreadExist(const std::string& threadId);
@@ -138,6 +145,8 @@ private:
     std::string _messageDecryptorId, _messageDeleterId;
     MessageDataEncryptorV4 _messageDataEncryptorV4;
     ThreadDataEncryptorV4 _threadDataEncryptorV4;
+    MessageDataEncryptorV5 _messageDataEncryptorV5;
+    ThreadDataEncryptorV5 _threadDataEncryptorV5;
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
 

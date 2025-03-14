@@ -15,39 +15,71 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/thread/DynamicTypes.hpp"
+#include "privmx/endpoint/core/CoreTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-struct MessageDataToEncrypt {
+struct MessageDataToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;
     std::optional<core::Buffer> internalMeta;
 };
 
-struct DecryptedMessageData {
+struct MessageDataToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer data;
+    std::optional<core::Buffer> internalMeta;
+    core::DataIntegrityObject dio;
+};
+
+struct DecryptedMessageDataV4 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
 };
 
-struct ThreadDataToEncrypt {
+struct DecryptedMessageDataV5 : public core::DecryptedVersionedData {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer data;
+    std::optional<core::Buffer> internalMeta;
+    std::string authorPubKey;
+    core::DataIntegrityObject dio;
+};
+
+struct ThreadDataToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     std::optional<core::Buffer> internalMeta;
 };
 
-struct DecryptedThreadData {
+struct ThreadDataToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    std::optional<core::Buffer> internalMeta;
+    core::DataIntegrityObject dio;
+};
+
+
+struct DecryptedThreadDataV4 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
+};
+
+struct DecryptedThreadDataV5 : public core::DecryptedVersionedData {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    std::optional<core::Buffer> internalMeta;
+    std::string authorPubKey;
+    core::DataIntegrityObject dio;
 };
 
 } // thread

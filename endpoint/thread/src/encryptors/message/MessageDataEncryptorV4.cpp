@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/thread/MessageDataEncryptorV4.hpp"
+#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV4.hpp"
 
 #include "privmx/utils/Utils.hpp"
 #include "privmx/utils/Debug.hpp"
@@ -20,7 +20,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageDataToEncrypt& messageData,
+server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageDataToEncryptV4& messageData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedMessageDataV4>();
@@ -42,12 +42,13 @@ server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageData
     return result;
 }
 
-DecryptedMessageData MessageDataEncryptorV4::decrypt(
+DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
     const server::EncryptedMessageDataV4& encryptedMessageData, const std::string& encryptionKey) {
-    validateVersion(encryptedMessageData);
-    DecryptedMessageData result;
+    DecryptedMessageDataV4 result;
     result.statusCode = 0;
+    result.dataStructureVersion = 4;
     try {
+        validateVersion(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey());
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta(), authorPublicKey);
         if(!encryptedMessageData.publicMetaObjectEmpty()) {

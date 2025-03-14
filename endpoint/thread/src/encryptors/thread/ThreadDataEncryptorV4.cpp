@@ -17,7 +17,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-server::EncryptedThreadDataV4 ThreadDataEncryptorV4::encrypt(const ThreadDataToEncrypt& threadData,
+server::EncryptedThreadDataV4 ThreadDataEncryptorV4::encrypt(const ThreadDataToEncryptV4& threadData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedThreadDataV4>();
@@ -38,12 +38,13 @@ server::EncryptedThreadDataV4 ThreadDataEncryptorV4::encrypt(const ThreadDataToE
     return result;
 }
 
-DecryptedThreadData ThreadDataEncryptorV4::decrypt(
+DecryptedThreadDataV4 ThreadDataEncryptorV4::decrypt(
     const server::EncryptedThreadDataV4& encryptedThreadData, const std::string& encryptionKey) {
-    validateVersion(encryptedThreadData);
-    DecryptedThreadData result;
+    DecryptedThreadDataV4 result;
     result.statusCode = 0;
+    result.dataStructureVersion = 4;
     try {
+        validateVersion(encryptedThreadData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedThreadData.authorPubKey());
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedThreadData.publicMeta(), authorPublicKey);
         if(!encryptedThreadData.publicMetaObjectEmpty()) {

@@ -53,7 +53,9 @@ ThreadApiImpl::ThreadApiImpl(
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::ThreadGetModel>();
         model.threadId(id);
         model.type(THREAD_TYPE_FILTER_FLAG);
-        return _serverApi.threadGet(model).thread();
+        auto serverThread = _serverApi.threadGet(model).thread();
+        assertThreadDataIntegrity(serverThread);
+        return serverThread;
     })),
     _subscribeForThread(false),
     _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages")),
@@ -104,24 +106,28 @@ std::string ThreadApiImpl::_createThreadEx(
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, _createThreadEx)
     auto threadKey = _keyProvider->generateKey();
-    ThreadDataToEncrypt threadDataToEncrypt {
+    auto threadDIO = _connection.getImpl()->createDIO(
+        contextId,
+        utils::Utils::getNowTimestampStr() + "-" + utils::Hex::from(crypto::Crypto::randomBytes(8))
+    );
+    ThreadDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = std::nullopt
+        .internalMeta = std::nullopt,
+        .dio = threadDIO
     };
     auto create_thread_model = utils::TypedObjectFactory::createNewObject<server::ThreadCreateModel>();
+    create_thread_model.threadId(threadDIO.containerId);
     create_thread_model.contextId(contextId);
     create_thread_model.keyId(threadKey.id);
-    create_thread_model.data(_threadDataEncryptorV4.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
+    create_thread_model.data(_threadDataEncryptorV5.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
     auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     create_thread_model.keys(
         _keyProvider->prepareKeysList(
             allUsers, 
             threadKey, 
-            _connection.getImpl()->createDIO(
-                contextId, 
-                utils::Hex::from(crypto::Crypto::randomBytes(16))
-            ), _keyProvider->generateContainerControlNumber()
+            threadDIO,
+            _keyProvider->generateContainerControlNumber()
         )
     );
     create_thread_model.users(mapUsers(users));
@@ -227,12 +233,17 @@ void ThreadApiImpl::updateThread(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    ThreadDataToEncrypt threadDataToEncrypt {
+    auto threadDIO = _connection.getImpl()->createDIO(
+        currentThread.contextId(),
+        threadId
+    );
+    ThreadDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = std::nullopt
+        .internalMeta = std::nullopt,
+        .dio = threadDIO
     };
-    model.data(_threadDataEncryptorV4.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
+    model.data(_threadDataEncryptorV5.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateThread, data encrypted)
     _serverApi.threadUpdate(model);
@@ -388,13 +399,18 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
     send_message_model.threadId(thread.id());
     send_message_model.keyId(msgKey.id);
-    MessageDataToEncrypt messageData {
+    auto messageDIO = _connection.getImpl()->createDIO(
+        thread.contextId(),
+        threadId
+    );
+    MessageDataToEncryptV5 messageData {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .data = data,
-        .internalMeta = std::nullopt
+        .internalMeta = std::nullopt,
+        .dio = messageDIO
     };
-    auto encryptedMessageData = _messageDataEncryptorV4.encrypt(messageData, _userPrivKey, msgKey.key);
+    auto encryptedMessageData = _messageDataEncryptorV5.encrypt(messageData, _userPrivKey, msgKey.key);
     send_message_model.data(encryptedMessageData.asVar());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, data encrypted)
     auto result = _serverApi.threadMessageSend(send_message_model);
@@ -417,6 +433,7 @@ void ThreadApiImpl::updateMessage(
     model.messageId(messageId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
+    assertMessageDataIntegrity(message);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
     auto thread = getRawThreadFromCacheOrBridge(message.threadId());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
@@ -424,13 +441,18 @@ void ThreadApiImpl::updateMessage(
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
     send_message_model.messageId(messageId);
     send_message_model.keyId(msgKey.id);
-    MessageDataToEncrypt messageData {
+    auto messageDIO = _connection.getImpl()->createDIO(
+        message.contextId(),
+        message.threadId()
+    );
+    MessageDataToEncryptV5 messageData {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .data = data,
-        .internalMeta = std::nullopt
+        .internalMeta = std::nullopt,
+        .dio = messageDIO
     };
-    auto encryptedMessageData = _messageDataEncryptorV4.encrypt(messageData, _userPrivKey, msgKey.key);
+    auto encryptedMessageData = _messageDataEncryptorV5.encrypt(messageData, _userPrivKey, msgKey.key);
     send_message_model.data(encryptedMessageData.asVar());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data encrypted)
     _serverApi.threadMessageUpdate(send_message_model);
@@ -600,18 +622,33 @@ dynamic::ThreadDataV1 ThreadApiImpl::decryptThreadV1(const server::ThreadInfo& t
     }
 }
 
-DecryptedThreadData ThreadApiImpl::decryptThreadV4(const server::ThreadInfo& thread) {
+DecryptedThreadDataV4 ThreadApiImpl::decryptThreadV4(const server::ThreadInfo& thread) {
     try {
         auto thread_data_entry = thread.data().get(thread.data().size()-1);
         auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
         auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV4>(thread_data_entry.data());
         return _threadDataEncryptorV4.decrypt(encryptedThreadData, key.key);
     } catch (const core::Exception& e) {
-        return DecryptedThreadData({{},{},{},{},.statusCode = e.getCode()});
+        return DecryptedThreadDataV4{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedThreadData({{},{},{},{},.statusCode = core::ExceptionConverter::convert(e).getCode()});
+        return DecryptedThreadDataV4{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
     } catch (...) {
-        return DecryptedThreadData({{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE});
+        return DecryptedThreadDataV4{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
+    }
+}
+
+DecryptedThreadDataV5 ThreadApiImpl::decryptThreadV5(const server::ThreadInfo& thread) {
+    try {
+        auto thread_data_entry = thread.data().get(thread.data().size()-1);
+        auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
+        auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(thread_data_entry.data());
+        return _threadDataEncryptorV5.decrypt(encryptedThreadData, key.key);
+    } catch (const core::Exception& e) {
+        return DecryptedThreadDataV5{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{},{}};
+    } catch (const privmx::utils::PrivmxException& e) {
+        return DecryptedThreadDataV5{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+    } catch (...) {
+        return DecryptedThreadDataV5{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
 }
 
@@ -646,7 +683,36 @@ Thread ThreadApiImpl::convertThreadDataV1ToThread(const server::ThreadInfo& thre
     };
 }
 
-Thread ThreadApiImpl::convertDecryptedThreadDataToThread(const server::ThreadInfo& threadInfo, const DecryptedThreadData& threadData) {
+Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(const server::ThreadInfo& threadInfo, const DecryptedThreadDataV4& threadData) {
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    for (auto x : threadInfo.users()) {
+        users.push_back(x);
+    }
+    for (auto x : threadInfo.managers()) {
+        managers.push_back(x);
+    }
+
+    return {
+        .contextId = threadInfo.contextId(),
+        .threadId = threadInfo.id(),
+        .createDate = threadInfo.createDate(),
+        .creator = threadInfo.creator(),
+        .lastModificationDate = threadInfo.lastModificationDate(),
+        .lastModifier = threadInfo.lastModifier(),
+        .users = users,
+        .managers = managers,
+        .version = threadInfo.version(),
+        .lastMsgDate = threadInfo.lastMsgDate(),
+        .publicMeta = threadData.publicMeta,
+        .privateMeta = threadData.privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
+        .messagesCount = threadInfo.messages(),
+        .statusCode = threadData.statusCode
+    };
+}
+
+Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(const server::ThreadInfo& threadInfo, const DecryptedThreadDataV5& threadData) {
     std::vector<std::string> users;
     std::vector<std::string> managers;
     for (auto x : threadInfo.users()) {
@@ -679,9 +745,14 @@ Thread ThreadApiImpl::decryptAndConvertThreadDataToThread(const server::ThreadIn
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
     if (!thread_data_entry.data().isString()) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(thread_data_entry.data());
-        if (!versioned.versionEmpty() && versioned.version() == 4) {
-            return convertDecryptedThreadDataToThread(thread, decryptThreadV4(thread));
-        }
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+            case 4:
+                return convertDecryptedThreadDataV4ToThread(thread, decryptThreadV4(thread));
+            case 5:
+                return convertDecryptedThreadDataV5ToThread(thread, decryptThreadV5(thread));
+            }
+        } 
         auto e = UnknowThreadFormatException();
         return Thread{
             {},{},{},{},{},{},{},{},{},{},{},{},{},{},
@@ -741,7 +812,7 @@ dynamic::MessageDataV3 ThreadApiImpl::decryptMessageDataV3(const server::ThreadI
     }
 }
 
-DecryptedMessageData ThreadApiImpl::decryptMessageDataV4(const server::ThreadInfo& thread, const server::Message& message) {
+DecryptedMessageDataV4 ThreadApiImpl::decryptMessageDataV4(const server::ThreadInfo& thread, const server::Message& message) {
     try {
         auto keyId = message.keyId();
         auto encKey = _keyProvider->getKeyAndVerify(thread.keys(), keyId, {.contextId=thread.contextId(), .containerId=thread.id()});
@@ -750,11 +821,28 @@ DecryptedMessageData ThreadApiImpl::decryptMessageDataV4(const server::ThreadInf
         auto encryptedMessageData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV4>(message.data());
         return _messageDataEncryptorV4.decrypt(encryptedMessageData, encryptionKey);
     } catch (const core::Exception& e) {
-        return DecryptedMessageData({{},{},{},{},{},.statusCode = e.getCode()});
+        return DecryptedMessageDataV4{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedMessageData({{},{},{},{},{},.statusCode = core::ExceptionConverter::convert(e).getCode()});
+        return DecryptedMessageDataV4{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
     } catch (...) {
-        return DecryptedMessageData({{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE});
+        return DecryptedMessageDataV4{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+    }
+}
+
+DecryptedMessageDataV5 ThreadApiImpl::decryptMessageDataV5(const server::ThreadInfo& thread, const server::Message& message) {
+    try {
+        auto keyId = message.keyId();
+        auto encKey = _keyProvider->getKeyAndVerify(thread.keys(), keyId, {.contextId=thread.contextId(), .containerId=thread.id()});
+        _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
+        auto encryptionKey = encKey.key;
+        auto encryptedMessageData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV5>(message.data());
+        return _messageDataEncryptorV5.decrypt(encryptedMessageData, encryptionKey);
+    } catch (const core::Exception& e) {
+        return DecryptedMessageDataV5{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{},{},{}};
+    } catch (const privmx::utils::PrivmxException& e) {
+        return DecryptedMessageDataV5{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
+    } catch (...) {
+        return DecryptedMessageDataV5{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
     }
 }
 
@@ -796,7 +884,24 @@ Message ThreadApiImpl::convertMessageDataV3ToMessage(const server::Message& mess
     return ret;
 }
 
-Message ThreadApiImpl::convertDecryptedMessageDataToMessage(const server::Message& message, DecryptedMessageData messageData) {
+Message ThreadApiImpl::convertDecryptedMessageDataV4ToMessage(const server::Message& message, DecryptedMessageDataV4 messageData) {
+    Message ret {
+        .info = {
+            .threadId = message.threadId(),
+            .messageId = message.id(),
+            .createDate = message.createDate(),
+            .author = message.author(),
+        },
+        .publicMeta = messageData.publicMeta, 
+        .privateMeta = messageData.privateMeta,
+        .data = messageData.data,
+        .authorPubKey = messageData.authorPubKey,
+        .statusCode = messageData.statusCode
+    };
+    return ret;
+}
+
+Message ThreadApiImpl::convertDecryptedMessageDataV5ToMessage(const server::Message& message, DecryptedMessageDataV5 messageData) {
     Message ret {
         .info = {
             .threadId = message.threadId(),
@@ -818,9 +923,14 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(const server::Threa
     // Solution with data as object is newer than data as base64 string
     if (!message.data().isString()) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(message.data());
-        if (!versioned.versionEmpty() && versioned.version() == 4) {
-            return convertDecryptedMessageDataToMessage(message, decryptMessageDataV4(thread, message));
-        }
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+            case 4:
+                return convertDecryptedMessageDataV4ToMessage(message, decryptMessageDataV4(thread, message));
+            case 5:
+                return convertDecryptedMessageDataV5ToMessage(message, decryptMessageDataV5(thread, message));
+            }
+        } 
         auto e = UnknowMessageFormatException();
         return Message{{},{},{},{},{},.statusCode = e.getCode()};
     }
@@ -888,4 +998,56 @@ server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::strin
 void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
     //check if thread is in cache or on server
     getRawThreadFromCacheOrBridge(threadId);
+}
+
+void ThreadApiImpl::assertThreadDataIntegrity(const server::ThreadInfo& thread) {
+    auto thread_data_entry = thread.data().get(thread.data().size()-1);
+    if (!thread_data_entry.data().isString()) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(thread_data_entry.data());
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+            case 5: 
+                {
+                    auto thread_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(thread_data_entry.data());
+                    auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
+                    if(
+                        dio.containerId != thread.id() ||
+                        dio.contextId != thread.contextId() ||
+                        dio.creatorUserId != thread.lastModifier()
+                        // check timestamp
+                    ) {
+                        throw ThreadDataIntegrityException();
+                    }
+                    return ;
+                }
+            }
+        } 
+        throw UnknowThreadFormatException();
+    }
+}
+
+void ThreadApiImpl::assertMessageDataIntegrity(const server::Message& message) {
+    auto message_data = message.data();
+    if (!message_data.isString()) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(message_data);
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+            case 5: 
+                {
+                    auto thread_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(message_data);
+                    auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
+                    if(
+                        dio.containerId != message.threadId() ||
+                        dio.contextId != message.contextId() ||
+                        dio.creatorUserId != (message.updates().size() == 0 ? message.author() : message.updates().get(message.updates().size()-1).author())
+                        // check timestamp
+                    ) {
+                        throw ThreadDataIntegrityException();
+                    }
+                    return ;
+                }
+            }
+        } 
+        throw UnknowThreadFormatException();
+    }
 }

@@ -17,7 +17,7 @@ limitations under the License.
 
 #include <privmx/endpoint/thread/ThreadException.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include "privmx/endpoint/thread/MessageDataEncryptor.hpp"
+#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptor.hpp"
 
 using namespace privmx::endpoint::thread;
 
