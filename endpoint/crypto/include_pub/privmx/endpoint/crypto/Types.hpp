@@ -20,7 +20,7 @@ namespace endpoint {
 namespace crypto {
 
 /**
- * Struct containing ECC generated key using BIP-39
+ * Struct containing ECC generated key using BIP-39.
  */
 struct BIP39_t {
 

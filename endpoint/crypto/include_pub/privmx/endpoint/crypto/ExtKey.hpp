@@ -91,35 +91,35 @@ public:
     std::string getPublicPartAsBase58() const;
 
     /**
-     * Extracts ECC PrivateKey
+     * Extracts ECC PrivateKey.
      *
      * @return ECC key in WIF format
     */
     std::string getPrivateKey() const;
 
     /**
-     * Extracts ECC PublicKey
+     * Extracts ECC PublicKey.
      *
      * @return ECC key in BASE58DER format
     */
     std::string getPublicKey() const;
 
     /**
-     * Extracts raw ECC PrivateKey
+     * Extracts raw ECC PrivateKey.
      *
      * @return ECC PrivateKey 
     */
     core::Buffer getPrivateEncKey() const;
 
     /**
-     * Extracts ECC PublicKey Address
+     * Extracts ECC PublicKey Address.
      *
      * @return ECC Address in BASE58 format
     */
     std::string getPublicKeyAsBase58Address() const;
 
     /**
-     * @brief Gets the chain code of Extended Key
+     * @brief Gets the chain code of Extended Key.
      * 
      * @return Raw chain code
      */
@@ -134,7 +134,7 @@ public:
      */
     bool verifyCompactSignatureWithHash(const core::Buffer& message, const core::Buffer& signature) const;
     /**
-     * Checks if ExtKey is Private 
+     * Checks if ExtKey is Private.
      *
      * @return returns true if ExtKey is private
     */
