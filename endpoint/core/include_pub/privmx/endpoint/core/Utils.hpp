@@ -15,7 +15,7 @@ class Hex
 public:
 
     /**
-     * Encodes buffer to a string in Hex format
+     * Encodes buffer to a string in Hex format.
      *
      * @param data buffer to encode
      * 
@@ -24,7 +24,7 @@ public:
     static std::string encode(const Buffer& data);
 
     /**
-     * Decodes string in Hex to buffer
+     * Decodes string in Hex to buffer.
      *
      * @param hex_data string to decode
      * 
@@ -33,7 +33,7 @@ public:
     static Buffer decode(const std::string& hex_data);
 
     /**
-     * Checks if given string is in Hex format
+     * Checks if given string is in Hex format.
      *
      * @param data string to check
      * 
@@ -47,7 +47,7 @@ class Base32
 public:
 
     /**
-     * Encodes buffer to string in Base32 format
+     * Encodes buffer to string in Base32 format.
      *
      * @param data buffer to encode
      * 
@@ -56,7 +56,7 @@ public:
     static std::string encode(const Buffer& data);
 
     /**
-     * Decodes string in Base32 to buffer
+     * Decodes string in Base32 to buffer.
      *
      * @param hex_data string to decode
      * 
@@ -65,7 +65,7 @@ public:
     static Buffer decode(const std::string& base32_data);
 
     /**
-     * Checks if given string is in Base32 format
+     * Checks if given string is in Base32 format.
      *
      * @param data string to check
      * 
@@ -79,7 +79,7 @@ class Base64
 public:
 
     /**
-     * Encodes buffer to string in Base64 format
+     * Encodes buffer to string in Base64 format.
      *
      * @param data buffer to encode
      * 
@@ -88,7 +88,7 @@ public:
     static std::string encode(const Buffer& data);
 
     /**
-     * Decodes string in Base64 to buffer
+     * Decodes string in Base64 to buffer.
      *
      * @param hex_data string to decode
      * 
@@ -97,7 +97,7 @@ public:
     static Buffer decode(const std::string& base64_data);
 
     /**
-     * Checks if given string is in Base64 format
+     * Checks if given string is in Base64 format.
      *
      * @param data string to check
      * 
@@ -111,7 +111,7 @@ class Utils
 public:
 
     /**
-     * Removes all trailing whitespace
+     * Removes all trailing whitespace.
      *
      * @param data 
      * 
@@ -120,7 +120,7 @@ public:
     static std::string trim(const std::string& data);
 
     /**
-     * Splits string by given delimiter (delimiter is removed)
+     * Splits string by given delimiter (delimiter is removed).
      *
      * @param data string to split
      * @param delimiter string which will be split
@@ -129,14 +129,14 @@ public:
     static std::vector<std::string> split(std::string data, const std::string& delimiter);
 
     /**
-     * Removes all whitespace from the left of given string
+     * Removes all whitespace from the left of given string.
      *
      * @param data reference to string
      */
     static void ltrim(std::string& data);
 
     /**
-     * Removes all whitespace from the right of given string
+     * Removes all whitespace from the right of given string.
      *
      * @param data string to check
      */
