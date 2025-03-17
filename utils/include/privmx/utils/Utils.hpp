@@ -26,6 +26,7 @@ class Hex
 public:
     static std::string from(const std::string& data);
     static std::string toString(const std::string& hex_data);
+    static bool is(const std::string& data);
 };
 
 class Base32
@@ -33,6 +34,7 @@ class Base32
 public:
     static std::string decode(const std::string& base32_data);
     static std::string encode(const std::string& data);
+    static bool is(const std::string& data);
 };
 
 class Base64
@@ -77,7 +79,7 @@ public:
     static std::string trim(const std::string& data);
     static std::vector<std::string> split(std::string data, const std::string& delimiter);
 
-    static std::vector<std::string> splitStringByCharacter(const std::string& str, char character);
+    static std::vector<std::string> parseIniFileLine(const std::string& str, char character);
     static void ltrim(std::string& s);
     static void rtrim(std::string& s);
 
