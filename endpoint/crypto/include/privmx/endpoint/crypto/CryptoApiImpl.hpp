@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/crypto/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -36,6 +37,12 @@ public:
     core::Buffer encryptDataSymmetric(const core::Buffer& data, const core::Buffer& key);
     core::Buffer decryptDataSymmetric(const core::Buffer& data, const core::Buffer& key);
     std::string convertPEMKeytoWIFKey(const std::string& keyPEM);
+    BIP39_t generateBip39(std::size_t strength, const std::string& password = std::string());
+    BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
+    BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
+    std::string entropyToMnemonic(const core::Buffer& entropy);
+    core::Buffer mnemonicToEntropy(const std::string& mnemonic);
+    core::Buffer mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
 
 private:
     privmx::crypto::PrivateKey getPrivKeyFromSeed(const std::string& seed, size_t rounds);

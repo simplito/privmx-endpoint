@@ -108,6 +108,9 @@ Int64 TimestampServiceImpl::getNowTimestamp() {
 TimestampService::Ptr Utils::timestamp_service = new TimestampServiceImpl();
 
 string Utils::fillTo32(const string& data) {
+    if(data.length() >= 32) {
+        return data;
+    }
     return string(32 - data.length(), 0) + data;
 }
 
