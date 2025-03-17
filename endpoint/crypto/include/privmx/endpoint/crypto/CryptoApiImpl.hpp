@@ -37,7 +37,7 @@ public:
     core::Buffer encryptDataSymmetric(const core::Buffer& data, const core::Buffer& key);
     core::Buffer decryptDataSymmetric(const core::Buffer& data, const core::Buffer& key);
     std::string convertPEMKeytoWIFKey(const std::string& keyPEM);
-    BIP39_t generate(std::size_t strength, const std::string& password = std::string());
+    BIP39_t generateBip39(std::size_t strength, const std::string& password = std::string());
     BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
     BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
     std::string entropyToMnemonic(const core::Buffer& entropy);

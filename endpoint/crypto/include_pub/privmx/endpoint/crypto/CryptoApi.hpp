@@ -124,16 +124,16 @@ public:
      * 
      * @param strength size of BIP-39 entropy, must be a multiple of 32
      * @param password the password used to generate the Key
-     * @return BIP-39_t struct containing ECC Key and associated with it BIP-39 mnemonic and entropy
+     * @return BIP39_t object containing ECC Key and associated with it BIP-39 mnemonic and entropy
      */
-    BIP39_t generate(std::size_t strength, const std::string& password = std::string());
+    BIP39_t generateBip39(std::size_t strength, const std::string& password = std::string());
 
     /**
      * Generates ECC key using BIP-39 mnemonic
      * 
      * @param mnemonic the BIP-39 entropy used to generate the Key
      * @param password the password used to generate the Key
-     * @return BIP-39_t struct containing ECC Key and associated with it BIP-39 mnemonic and entropy
+     * @return BIP39_t object containing ECC Key and associated with it BIP-39 mnemonic and entropy
      */
     BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
 
@@ -142,7 +142,7 @@ public:
      * 
      * @param entropy the BIP-39 entropy used to generate the Key
      * @param password the password used to generate the Key
-     * @return BIP-39_t struct containing ECC Key and associated with it BIP-39 mnemonic and entropy
+     * @return BIP39_t object containing ECC Key and associated with it BIP-39 mnemonic and entropy
      */
     BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
    

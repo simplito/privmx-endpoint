@@ -118,9 +118,9 @@ std::string CryptoApi::convertPEMKeytoWIFKey(const std::string& pemKey) {
     }
 }
 
-BIP39_t CryptoApi::generate(std::size_t strength, const std::string& password) {
+BIP39_t CryptoApi::generateBip39(std::size_t strength, const std::string& password) {
     try {
-        return _impl->generate(strength, password);
+        return _impl->generateBip39(strength, password);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

@@ -86,7 +86,7 @@ std::string CryptoApiImpl::convertPEMKeytoWIFKey(const std::string& keyPEM) {
     return KeyConverter::cryptoKeyConvertPEMToWIF(keyPEM);
 }
 
-BIP39_t CryptoApiImpl::generate(std::size_t strength, const std::string& password) {
+BIP39_t CryptoApiImpl::generateBip39(std::size_t strength, const std::string& password) {
     auto bip = privmx::crypto::BIP39::generate(strength, password);
     return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=core::Buffer::from(bip.entropy)};
 }
