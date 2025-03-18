@@ -9,18 +9,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/inbox/InboxDataProcessorV4.hpp"
+#include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV4.hpp"
 
 #include "privmx/endpoint/inbox/InboxException.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
-server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorModel& plainData,
+server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorModelV4& plainData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& inboxKey) {
     
-    auto serverPublicData = utils::TypedObjectFactory::createNewObject<PublicDataV4>();
+    auto serverPublicData = utils::TypedObjectFactory::createNewObject<server::PublicDataV4>();
     serverPublicData.version(4);
     serverPublicData.publicMeta(_dataEncryptor.signAndEncode(plainData.publicData.publicMeta, authorPrivateKey));
     try {
@@ -33,7 +33,7 @@ server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorMo
     serverPublicData.inboxPubKey(plainData.publicData.inboxEntriesPubKeyBase58DER);
     serverPublicData.inboxKeyId(plainData.publicData.inboxEntriesKeyId);
 
-    auto serverPrivateData = utils::TypedObjectFactory::createNewObject<PrivateDataV4>();
+    auto serverPrivateData = utils::TypedObjectFactory::createNewObject<server::PrivateDataV4>();
     serverPrivateData.version(4);
     serverPrivateData.privateMeta(
         _dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey));
@@ -53,8 +53,9 @@ server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorMo
     return serverInboxData;
 }
 
-InboxDataResult InboxDataProcessorV4::unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey) {
-    InboxDataResult result;
+InboxDataResultV4 InboxDataProcessorV4::unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey) {
+    InboxDataResultV4 result;
+    result.dataStructureVersion = 4;
     result.storeId = encryptedData.storeId();
     result.threadId = encryptedData.threadId();
     result.filesConfig = InboxDataHelper::fileConfigFromTypedObject(encryptedData.fileConfig());
@@ -69,18 +70,19 @@ InboxDataResult InboxDataProcessorV4::unpackAll(const server::InboxData& encrypt
     return result;
 }
 
-InboxPublicDataAsResult InboxDataProcessorV4::unpackPublicOnly(const Poco::Dynamic::Var& publicData) {
+InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublicOnly(const Poco::Dynamic::Var& publicData) {
     return unpackPublic(publicData);
 }
 
 /// PRIVATE METHODS
-InboxPublicDataAsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic::Var& publicData) {
+InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic::Var& publicData) {
 
-    InboxPublicDataAsResult result;
+    InboxPublicDataV4AsResult result;
+    result.dataStructureVersion = 4;
     result.statusCode = 0;
     try {
         validateVersion(publicData);
-        auto publicDataV4 = utils::TypedObjectFactory::createObjectFromVar<PublicDataV4>(publicData);
+        auto publicDataV4 = utils::TypedObjectFactory::createObjectFromVar<server::PublicDataV4>(publicData);
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(publicDataV4.authorPubKey());
 
         result.publicMeta = _dataEncryptor.decodeAndVerify(publicDataV4.publicMeta(), authorPublicKeyECC);
@@ -106,14 +108,15 @@ InboxPublicDataAsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic::
     return result;
 }
 
-InboxPrivateDataAsResult InboxDataProcessorV4::unpackPrivate(
+InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
     const server::InboxData& encryptedData, const std::string& inboxKey) {
 
-    InboxPrivateDataAsResult result;
+    InboxPrivateDataV4AsResult result;
+    result.dataStructureVersion = 4;
     result.statusCode = 0;
     try {
         validateVersion(encryptedData.meta());
-        auto privateDataV4 = utils::TypedObjectFactory::createObjectFromVar<PrivateDataV4>(encryptedData.meta());
+        auto privateDataV4 = utils::TypedObjectFactory::createObjectFromVar<server::PrivateDataV4>(encryptedData.meta());
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV4.authorPubKey());
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV4.privateMeta(), authorPublicKeyECC, inboxKey);
