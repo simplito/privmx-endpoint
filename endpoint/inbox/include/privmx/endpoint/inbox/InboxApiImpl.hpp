@@ -135,18 +135,12 @@ private:
     inbox::InboxEntry convertInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message, const inbox::InboxEntryResult& inboxEntry);
     inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message);
     store::FileMetaToEncryptV5 prepareMeta(const inbox::CommitFileInfo& commitFileInfo, privmx::endpoint::core::DataIntegrityObject fileDIO);
-    store::DecryptedFileMetaV4 decryptInboxFileMetaV4(const store::server::File& file, const std::string& filesMetaKey);
-    store::DecryptedFileMetaV5 decryptInboxFileMetaV5(const store::server::File& file, const std::string& filesMetaKey);
 
     void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
     void processConnectedEvent();
     void processDisconnectedEvent();
     InboxDeletedEventData convertInboxDeletedEventData(const server::InboxDeletedEventData& data);
 
-    store::File convertFileV4(const store::server::File& file, const store::DecryptedFileMetaV4& decryptedFileMeta);
-    store::File convertFileV5(const store::server::File& file, const store::DecryptedFileMetaV5& decryptedFileMeta);
-    store::File tryDecryptAndConvertFileV4(const store::server::File& file, const std::string& filesMetaKey);
-    store::File decryptAndConvertFileDataToFileInfo(const store::server::File& file, const std::string& filesMetaKey);
     int64_t createInboxFileHandleForRead(const store::server::File& file);
 
     std::string readInboxIdFromMessageKeyId(const std::string& keyId);

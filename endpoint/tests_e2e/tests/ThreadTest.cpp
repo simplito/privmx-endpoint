@@ -407,6 +407,7 @@ TEST_F(ThreadTest, createThread) {
             threadId
         );
     });
+    EXPECT_EQ(thread.statusCode, 0);
     EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
     EXPECT_EQ(thread.privateMeta.stdString(), "private");
@@ -442,6 +443,7 @@ TEST_F(ThreadTest, createThread) {
             threadId
         );
     });
+    EXPECT_EQ(thread.statusCode, 0);
     EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
     EXPECT_EQ(thread.privateMeta.stdString(), "private");
@@ -588,6 +590,7 @@ TEST_F(ThreadTest, updateThread_correct_data) {
             reader->getString("Thread_1.threadId")
         );
     });
+    EXPECT_EQ(thread.statusCode, 0);    
     EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(thread.version, 2);
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
@@ -633,6 +636,7 @@ TEST_F(ThreadTest, updateThread_correct_data) {
             reader->getString("Thread_1.threadId")
         );
     });
+    EXPECT_EQ(thread.statusCode, 0);    
     EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(thread.version, 3);
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
@@ -678,6 +682,7 @@ TEST_F(ThreadTest, updateThread_correct_data) {
             reader->getString("Thread_2.threadId")
         );
     });
+    EXPECT_EQ(thread.statusCode, 0);    
     EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(thread.version, 2);
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
@@ -719,6 +724,7 @@ TEST_F(ThreadTest, updateThread_correct_data) {
             reader->getString("Thread_2.threadId")
         );
     });
+    EXPECT_EQ(thread.statusCode, 0);    
     EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(thread.version, 3);
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
@@ -755,6 +761,7 @@ TEST_F(ThreadTest, updateThread_correct_data) {
             reader->getString("Thread_3.threadId")
         );
     });
+    EXPECT_EQ(thread.statusCode, 0);    
     EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(thread.version, 2);
     EXPECT_EQ(thread.publicMeta.stdString(), "public");

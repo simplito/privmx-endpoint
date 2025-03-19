@@ -90,7 +90,7 @@ core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const
         dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.publicMeta()) ||
         dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.privateMeta()) ||
         dio.mapOfDataSha256.at("data") != privmx::crypto::Crypto::sha256(encryptedMessageData.data()) || (
-            encryptedMessageData.internalMetaEmpty() &&
+            !encryptedMessageData.internalMetaEmpty() &&
             dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.internalMeta())
         )
     ) {
@@ -105,7 +105,8 @@ void MessageDataEncryptorV5::assertDataFormat(const server::EncryptedMessageData
         encryptedMessageData.publicMetaEmpty() ||
         encryptedMessageData.privateMetaEmpty() ||
         encryptedMessageData.authorPubKeyEmpty() ||
-        encryptedMessageData.dataEmpty()
+        encryptedMessageData.dataEmpty() ||
+        encryptedMessageData.dioEmpty()
     ) {
         throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version()) + " expected version: 5");
     }

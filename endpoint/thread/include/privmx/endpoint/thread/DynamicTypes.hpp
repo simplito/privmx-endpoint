@@ -73,10 +73,6 @@ ENDPOINT_CLIENT_TYPE_INHERIT(MessageDataV3Signed, IMessageDataSigned)
     OBJECT_FIELD(data, MessageDataV3)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(VersionedData)
-    INT64_FIELD(version)
-TYPE_END
-
 
 } // dynamic
 } // thread

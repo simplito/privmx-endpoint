@@ -34,7 +34,7 @@ string EciesEncryptor::decrypt(const PrivateKey& priv, const string& cipher, con
     auto external_pub = cipher.substr(1, 33);
     auto my_pub = cipher.substr(34, 33);
     auto external_pub_ec = PublicKey::fromDER(external_pub);
-    if(pubOfSignature.has_value() && external_pub_ec == pubOfSignature.value()) {
+    if(pubOfSignature.has_value() && external_pub_ec != pubOfSignature.value()) {
         throw GivenPubKeyDoesNotMatchException();
     }
     auto my_pub_ec = PublicKey::fromDER(my_pub);
@@ -61,7 +61,7 @@ string EciesEncryptor::encryptToBase64(const PublicKey& pub, const string& data,
 
 string EciesEncryptor::encrypt(const PublicKey& pub, const string& data, const std::optional<PrivateKey>& privForSignature) {
     auto priv = privForSignature.has_value() ? privForSignature.value() : PrivateKey::generateRandom();
-    ECIES ecies(privForSignature.value(), pub);
+    ECIES ecies(priv, pub);
     auto cipher = ecies.encrypt(data);
     return string("e")
             .append(priv.getPublicKey().toDER())

@@ -27,7 +27,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
     result.version(2);
     auto keyToEncrypt = privmx::utils::TypedObjectFactory::createNewObject<server::EncryptionKey>();
     keyToEncrypt.id(key.id);
-    keyToEncrypt.key(key.key);
+    keyToEncrypt.key(utils::Base64::from(key.key));
     keyToEncrypt.containerControlNumber(key.containerControlNumber);
     result.encryptedKey(crypto::EciesEncryptor::encryptObjectToBase64(encryptionKey, keyToEncrypt, authorPrivateKey));
     std::unordered_map<std::string, std::string> mapOfDataSha256;
@@ -39,14 +39,14 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
 
 DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryDataV2& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey) {
     DecryptedEncKeyV2 result;
+    result.statusCode = 0;
     result.dataStructureVersion = 2;
     try {
         assertDataFormat(encryptedEncKey);
         ExpandedDataIntegrityObject expandedDio = _DIOEncryptor.decodeAndVerify(encryptedEncKey.dio());
         result.dio = expandedDio;
         if(
-            expandedDio.mapOfDataSha256.at("encryptedKey") != privmx::crypto::Crypto::sha256(encryptedEncKey.encryptedKey()) ||
-            expandedDio.objectFormat == 2
+            expandedDio.mapOfDataSha256.at("encryptedKey") != privmx::crypto::Crypto::sha256(encryptedEncKey.encryptedKey())
         ) {
             throw DataIntegrityObjectInvalidSHA256Exception();
         }
@@ -57,7 +57,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
             throw EncryptionKeyMalformedDataException();
         }
         result.id = decryptedKey.id();
-        result.key = decryptedKey.key();
+        result.key = utils::Base64::toString(decryptedKey.key());
         result.containerControlNumber = decryptedKey.containerControlNumber();
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();

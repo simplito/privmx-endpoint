@@ -28,6 +28,7 @@ struct InboxPublicViewData : public core::DecryptedVersionedData {
     std::string inboxEntriesPubKeyBase58DER;
     std::string inboxEntriesKeyId;
     std::string inboxId;
+    int64_t version;
 };
 
 // V4

@@ -27,6 +27,17 @@ constexpr uint64_t IV_SIZE = 16;
 constexpr uint64_t HMAC_SIZE = 32;
 constexpr uint64_t CHUNK_PADDING = 16;
 
+struct FileDecryptionParams {
+    std::string fileId;
+    uint64_t sizeOnServer;
+    uint64_t originalSize;
+    int64_t cipherType;
+    size_t chunkSize;
+    std::string key;
+    std::string hmac;
+    int64_t version;
+};
+
 struct FileMetaSigned
 {
     dynamic::compat_v1::StoreFileMeta meta;

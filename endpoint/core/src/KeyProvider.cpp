@@ -77,7 +77,17 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std:
         server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
         key_entry_set.user(user.userId);
         key_entry_set.keyId(key.id);
-        key_entry_set.data(_encKeyEncryptorV2.encrypt(EncKeyV2ToEncrypt{key, .dio=dio, .containerControlNumber = containerControlNumber}, crypto::PublicKey::fromBase58DER(user.pubKey), _key));
+        key_entry_set.data(
+            _encKeyEncryptorV2.encrypt(
+                EncKeyV2ToEncrypt{
+                    key, 
+                    .dio=dio, 
+                    .containerControlNumber = containerControlNumber
+                }, 
+                crypto::PublicKey::fromBase58DER(user.pubKey), 
+                _key
+            )
+        );
         result.add(key_entry_set);
     }    
     return result;
@@ -86,7 +96,7 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std:
 privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(const std::vector<DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, int64_t containerControlNumber) {
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
     for (auto missingKey : missingKeys) {
-
+        if(missingKey.statusCode != 0) continue;
         for (auto user : users) {
             server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
             key_entry_set.user(user.userId);
@@ -109,7 +119,7 @@ std::vector<DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::List<ser
                 throw EncryptionKeyUnknownDataVersionException();
             } else if(versioned.version() == 2) { 
                 DecryptedEncKeyV2 decryptedEncKey = _encKeyEncryptorV2.decrypt(
-                    utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKeyEntryDataV2>(versioned),
+                    utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKeyEntryDataV2>(key.data()),
                     _key
                 );
                 result.push_back(decryptedEncKey);
@@ -136,7 +146,7 @@ void KeyProvider::validateData(std::vector<DecryptedEncKeyV2>& decryptedKeys, co
     std::optional<int64_t> containerControlNumber = std::nullopt;
     //create data validation request
     for(size_t i = 0; i<decryptedKeys.size();i++) {
-        if(decryptedKeys[i].statusCode == 0) {
+        if(decryptedKeys[i].statusCode == 0 && decryptedKeys[i].dataStructureVersion == 2)  {
             if(!containerControlNumber.has_value()) {
                 containerControlNumber = decryptedKeys[i].containerControlNumber;
             }

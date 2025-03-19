@@ -73,6 +73,34 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(const store::server::Enc
     return result;
 }
 
+store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(const store::server::EncryptedFileMetaV5& encryptedFileMeta) {
+    DecryptedFileMetaV5 result;
+    result.statusCode = 0;
+    result.dataStructureVersion = 5;
+    try {
+        result.dio = getDIOAndAssertIntegrity(encryptedFileMeta);
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedFileMeta.authorPubKey());
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta(), authorPublicKey);
+        if(!encryptedFileMeta.publicMetaObjectEmpty()) {
+            auto tmp_1 = utils::Utils::stringify(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
+            auto tmp_2 = utils::Utils::stringify(encryptedFileMeta.publicMetaObject());
+            if(tmp_1 != tmp_2) {
+                auto e = FilePublicDataMismatchException();
+                result.statusCode = e.getCode();
+            }
+        }
+        result.authorPubKey = encryptedFileMeta.authorPubKey();   
+    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        result.statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
+    return result;
+}
+
+
 core::DataIntegrityObject FileMetaEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta) {
     assertDataFormat(encryptedFileMeta);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedFileMeta.dio());

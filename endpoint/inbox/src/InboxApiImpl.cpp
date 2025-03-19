@@ -333,7 +333,7 @@ InboxPublicView InboxApiImpl::getInboxPublicView(const std::string& inboxId) {
     auto publicData {getInboxPublicViewData(inboxId)};
     return inbox::InboxPublicView {
         .inboxId = publicData.inboxId,
-        .version = publicData.dataStructureVersion,
+        .version = publicData.version,
         .publicMeta = publicData.publicMeta
     };
 }
@@ -385,14 +385,17 @@ int64_t InboxApiImpl::prepareEntry(
 void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto handle = _inboxHandleManager.getInboxHandle(inboxHandle);
     auto publicData {getInboxPublicViewData(handle->inboxId)};
-    auto inboxDIO = _connection.getImpl()->createDIO(
-        "",
-        handle->inboxId
-    );
 
     auto inboxPubKeyECC = privmx::crypto::PublicKey::fromBase58DER(publicData.inboxEntriesPubKeyBase58DER);// keys to encrypt message (generated or taken from param)
-    auto _userPrivKeyECC = (handle->userPrivKey.has_value() ? privmx::crypto::PrivateKey::fromWIF(handle->userPrivKey.value()) : privmx::crypto::PrivateKey::generateRandom());
+    auto _userPrivKeyECC = (handle->userPrivKey.has_value() ? privmx::crypto::PrivateKey::fromWIF(handle->userPrivKey.value()) : _userPrivKey);
     auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
+    //update Key
+    auto inboxDIO = _connection.getImpl()->createDIO(
+        "",
+        handle->inboxId,
+        "public_user",
+        _userPrivKeyECC.getPublicKey()
+    );
 
     std::string filesMetaKey;
     bool hasFiles = !handle->inboxFileHandles.empty();
@@ -512,21 +515,21 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     auto inbox = getRawInboxFromCacheOrBridge(readInboxIdFromMessageKeyId(messageRaw.keyId()));
 
     auto messageData = decryptInboxEntry(inbox, messageRaw);
-    auto decryptedFile = decryptInboxFileMetaV4(file, messageData.privateData.filesMetaKey);
-    auto internalMeta = Factory::createObject<store::dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(decryptedFile.internalMeta.stdString()));
+    core::DecryptedEncKey fileMetaEncKey{
+        core::EncKey{.id="", .key=messageData.privateData.filesMetaKey},
+        core::DecryptedVersionedData{.dataStructureVersion=0, .statusCode=0}
+    };
+    auto decryptionParams = _storeApi.getImpl()->getFileDecryptionParams(file, fileMetaEncKey);
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, createInboxFileHandleForRead, file_key_extracted)
-    if ((uint64_t)internalMeta.chunkSize() > SIZE_MAX) {
-        throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");
-    }
     std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
         file.id(), 
-        (uint64_t)internalMeta.size(),
-        (uint64_t)file.size(),
-        (size_t)internalMeta.chunkSize(),
+        decryptionParams.originalSize,
+        decryptionParams.sizeOnServer,
+        decryptionParams.chunkSize,
         _serverRequestChunkSize,
         file.version(),
-        privmx::utils::Base64::toString(internalMeta.key()),
-        privmx::utils::Base64::toString(internalMeta.hmac()),
+        decryptionParams.key,
+        decryptionParams.hmac,
         _serverApi
     );
     PRIVMX_DEBUG_TIME_STOP(InboxApi, createInboxFileHandleForRead, handle_created)
@@ -583,7 +586,7 @@ std::string InboxApiImpl::closeFile(const int64_t handle) {
 
 store::FileMetaToEncryptV5 InboxApiImpl::prepareMeta(const privmx::endpoint::inbox::CommitFileInfo& commitFileInfo, privmx::endpoint::core::DataIntegrityObject fileDIO) {
     auto internalFileMeta = Factory::createObject<store::dynamic::InternalStoreFileMeta>();
-    internalFileMeta.version(4);
+    internalFileMeta.version(5);
     internalFileMeta.size(commitFileInfo.size);
     internalFileMeta.cipherType(commitFileInfo.fileSendResult.cipherType);
     internalFileMeta.chunkSize(commitFileInfo.fileSendResult.chunkSize);
@@ -669,6 +672,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
                     {
                         auto publicData {_inboxDataProcessorV4.unpackPublicOnly(publicView.publicData())};
                         result.inboxId = publicView.inboxId();
+                        result.version = publicView.version();
                         result.dataStructureVersion = publicData.dataStructureVersion;
                         result.authorPubKey = publicData.authorPubKey;
                         result.inboxEntriesPubKeyBase58DER = publicData.inboxEntriesPubKeyBase58DER;
@@ -681,6 +685,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
                     {
                         auto publicData {_inboxDataProcessorV5.unpackPublicOnly(publicView.publicData())};
                         result.inboxId = publicView.inboxId();
+                        result.version = publicView.version();
                         result.dataStructureVersion = publicData.dataStructureVersion;
                         result.authorPubKey = publicData.authorPubKey;
                         result.inboxEntriesPubKeyBase58DER = publicData.inboxEntriesPubKeyBase58DER;
@@ -777,7 +782,10 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox:
     result.entryId = message.id();
     result.inboxId = inbox.id();
     result.createDate = message.createDate();
-    std::string filesMetaKey = inboxEntry.privateData.filesMetaKey;
+    core::DecryptedEncKey fileMetaEncKey{
+        core::EncKey{.id="", .key=inboxEntry.privateData.filesMetaKey},
+        core::DecryptedVersionedData{.dataStructureVersion=0, .statusCode=0}
+    };
     result.data = core::Buffer::from(inboxEntry.privateData.text);
     result.authorPubKey = inboxEntry.publicData.userPubKey;
     result.statusCode = inboxEntry.statusCode;
@@ -787,7 +795,7 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox:
             auto serverFiles {_serverApi->storeFileGetMany(filesGetModel)};
             for (auto file : serverFiles.files()) {
                 if(file.errorEmpty()) {
-                    result.files.push_back(decryptAndConvertFileDataToFileInfo(file, filesMetaKey));
+                    result.files.push_back(_storeApi.getImpl()->decryptAndConvertFileDataToFileInfo(file, fileMetaEncKey));
                 } else {
                     store::File error;
                     auto e = FileFetchFailedException();
@@ -948,76 +956,6 @@ InboxDeletedEventData InboxApiImpl::convertInboxDeletedEventData(const server::I
        .inboxId = data.inboxId()
    };
 }
-
-store::File InboxApiImpl::decryptAndConvertFileDataToFileInfo(const store::server::File& file, const std::string& filesMetaKey) {
-    return tryDecryptAndConvertFileV4(file, filesMetaKey);
-}
-
-store::File InboxApiImpl::convertFileV4(const store::server::File& file, const store::DecryptedFileMetaV4& decryptedFileMeta) {
-    return store::File {
-        .info = {
-            .storeId = file.storeId(),
-            .fileId = file.id(),
-            .createDate = file.created(),
-            .author = file.creator()
-        },
-        .publicMeta = decryptedFileMeta.publicMeta,
-        .privateMeta = decryptedFileMeta.privateMeta,
-        .size = decryptedFileMeta.fileSize,
-        .authorPubKey = decryptedFileMeta.authorPubKey,
-        .statusCode = decryptedFileMeta.statusCode
-    };
-}
-
-store::File InboxApiImpl::convertFileV5(const store::server::File& file, const store::DecryptedFileMetaV5& decryptedFileMeta) {
-    auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<store::dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(decryptedFileMeta.internalMeta.stdString()));
-    return store::File {
-        .info = {
-            .storeId = file.storeId(),
-            .fileId = file.id(),
-            .createDate = file.created(),
-            .author = file.creator()
-        },
-        .publicMeta = decryptedFileMeta.publicMeta,
-        .privateMeta = decryptedFileMeta.privateMeta,
-        .size = internalMeta.size(),
-        .authorPubKey = decryptedFileMeta.authorPubKey,
-        .statusCode = decryptedFileMeta.statusCode
-    };
-}
-
-store::File InboxApiImpl::tryDecryptAndConvertFileV4(const store::server::File& file, const std::string& filesMetaKey) {
-    store::File result;
-    try {
-        return convertFileV4(file, decryptInboxFileMetaV4(file, filesMetaKey));
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
-    return result;    
-}
-
-store::DecryptedFileMetaV4 InboxApiImpl::decryptInboxFileMetaV4(const store::server::File& file, const std::string& filesMetaKey) {
-    if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto encryptedFileMeta = Factory::createObject<store::server::EncryptedFileMetaV4>(file.meta());
-        return _fileMetaEncryptorV4.decrypt(encryptedFileMeta, filesMetaKey);
-    }
-    throw FailedToDecryptFileMetaException();
-    return store::DecryptedFileMetaV4();
-}
-
-store::DecryptedFileMetaV5 InboxApiImpl::decryptInboxFileMetaV5(const store::server::File& file, const std::string& filesMetaKey) {
-    if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto encryptedFileMeta = Factory::createObject<store::server::EncryptedFileMetaV5>(file.meta());
-        return _fileMetaEncryptorV5.decrypt(encryptedFileMeta, filesMetaKey);
-    }
-    throw FailedToDecryptFileMetaException();
-    return store::DecryptedFileMetaV5();
-}
-
 std::string InboxApiImpl::readInboxIdFromMessageKeyId(const std::string& keyId) {
     _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);

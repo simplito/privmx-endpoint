@@ -81,8 +81,7 @@ ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ContextGetModel)
-    STRING_FIELD(contextId)
-    INT64_FIELD(count)
+    STRING_FIELD(id)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(ContextGetResult)

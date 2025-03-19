@@ -17,16 +17,20 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& autorKey) {
+    if(dio.creatorPubKey != autorKey.getPublicKey().toBase58DER()) {
+        throw DataIntegrityObjectMismatchEncKeyException();
+    }
     auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<server::DataIntegrityObject>();
     dioJSON.version(1);
     dioJSON.creatorUserId(dio.creatorUserId);
+    dioJSON.creatorPublicKey(dio.creatorPubKey);
     dioJSON.contextId(dio.contextId);
     dioJSON.containerId(dio.containerId);
     dioJSON.timestamp(dio.timestamp);
     dioJSON.nonce(dio.nonce);
     auto dioJSONmapOfDataSha256 = privmx::utils::TypedObjectFactory::createNewMap<std::string>();
     for(auto  a: dio.mapOfDataSha256) {
-        dioJSONmapOfDataSha256.add(a.first, a.second);
+        dioJSONmapOfDataSha256.add(a.first, utils::Base64::from(a.second));
     }
     dioJSON.mapOfDataSha256(dioJSONmapOfDataSha256);
     dioJSON.objectFormat(dio.objectFormat);
@@ -41,7 +45,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     _dataEncryptor.verifySignature(dioAndSignature, privmx::crypto::PublicKey::fromBase58DER(dioJSON.creatorPublicKey()));
     std::unordered_map<std::string, std::string> mapOfDataSha256;
     for(auto  a: dioJSON.mapOfDataSha256()) {
-        mapOfDataSha256.insert(a);
+        mapOfDataSha256.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));
     }
 
     return ExpandedDataIntegrityObject{

@@ -107,17 +107,11 @@ public:
     void emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
     void subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName);
     void unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName);
+
+    //For Inbox
+    FileDecryptionParams getFileDecryptionParams(const server::File& file, const core::DecryptedEncKey& encKey);
+    File decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
 private:
-    struct StoreFileDecryptionParams {
-        std::string fileId;
-        uint64_t sizeOnServer;
-        uint64_t originalSize;
-        int64_t cipherType;
-        size_t chunkSize;
-        std::string key;
-        std::string hmac;
-        int64_t version;
-    };
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
                 const std::optional<core::ContainerPolicy>& policies);
@@ -137,25 +131,27 @@ private:
     Store convertDecryptedStoreDataV5ToStore(const server::Store& storeRaw, const DecryptedStoreDataV5& storeData);
     Store decryptAndConvertStoreDataToStore(const server::Store& storeRaw);
     void assertStoreDataIntegrity(const server::Store& store);
+    void assertFileDataIntegrity(const server::File& file);
 
 
     // OLD CODE    
-    StoreFile decryptStoreFileV1(const server::Store& store, const server::File& storeFile);
+    StoreFile decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey);
     // OLD CODE   
     std::string verifyFileV1Signature(FileMetaSigned meta, server::File raw, std::string& serverId);
     // OLD CODE   
     StoreFile decryptAndVerifyFileV1(const std::string &filesKey, server::File x);
-    DecryptedFileMetaV4 decryptFileMetaV4(const server::Store& store, const server::File& file);
-    DecryptedFileMetaV5 decryptFileMetaV5(const server::Store& store, const server::File& file);
+    DecryptedFileMetaV4 decryptFileMetaV4(server::File file, const core::DecryptedEncKey& encKey);
+    DecryptedFileMetaV5 decryptFileMetaV5(server::File file, const core::DecryptedEncKey& encKey);
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
-    File convertDecryptedFileMetaV4ToFile(server::File file, DecryptedFileMetaV4 fileData);
-    File convertDecryptedFileMetaV5ToFile(server::File file, DecryptedFileMetaV5 fileData);
+    File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
+    File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
     File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
+    dynamic::InternalStoreFileMeta extractInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
+    dynamic::InternalStoreFileMeta extractInternalMeta(server::Store store, server::File file);
 
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     
-    StoreFileDecryptionParams getStoreFileDecryptionParams(const server::File& file, const core::EncKey& encKey);
-    int64_t createFileReadHandle(const StoreFileDecryptionParams& storeFileDecryptionParams);
+    int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
     void validateChannelName(const std::string& channelName);
     void assertStoreExist(const std::string& storeId);
     void assertFileExist(const std::string& fileId);

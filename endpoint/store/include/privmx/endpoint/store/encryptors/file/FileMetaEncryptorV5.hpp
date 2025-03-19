@@ -31,6 +31,7 @@ public:
                                               const std::string& encryptionKey);
     store::DecryptedFileMetaV5 decrypt(const store::server::EncryptedFileMetaV5& encryptedFileMeta,
                                     const std::string& encryptionKey);
+    store::DecryptedFileMetaV5 extractPublic(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta);
 private:
     void assertDataFormat(const store::server::EncryptedFileMetaV5& encryptedFileMeta);

@@ -64,8 +64,9 @@ public:
         return _userVerifier;    
     }
     std::string getMyUserId(const std::string& contextId);
-    DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId);
-    bool validateDIO(const DataIntegrityObject& dio, const std::string& contextId, const std::string& containerId);
+    DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId, 
+        const std::optional<std::string>& userId = std::nullopt, const std::optional<crypto::PublicKey>& pubKey = std::nullopt
+    );
 
 
 private:

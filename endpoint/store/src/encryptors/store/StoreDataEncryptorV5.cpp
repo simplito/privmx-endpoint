@@ -84,8 +84,8 @@ core::DataIntegrityObject StoreDataEncryptorV5::getDIOAndAssertIntegrity(const s
         dio.creatorPubKey != encryptedStoreData.authorPubKey() ||
         dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.publicMeta()) ||
         dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.privateMeta()) || (
-            encryptedStoreData.internalMetaEmpty() &&
-            dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.publicMeta())
+            !encryptedStoreData.internalMetaEmpty() &&
+            dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.internalMeta())
         )
     ) {
         throw core::DataIntegrityObjectInvalidSHA256Exception();

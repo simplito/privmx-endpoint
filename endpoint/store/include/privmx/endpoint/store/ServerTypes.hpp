@@ -78,6 +78,7 @@ ENDPOINT_SERVER_TYPE(Store)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreCreateModel)
+    STRING_FIELD(storeId)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)

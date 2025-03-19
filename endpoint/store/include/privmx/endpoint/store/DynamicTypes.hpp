@@ -22,10 +22,6 @@ namespace store {
 namespace dynamic {
 //V4
 
-ENDPOINT_CLIENT_TYPE(VersionedData)
-    INT64_FIELD(version)
-TYPE_END
-
 ENDPOINT_CLIENT_TYPE(InternalStoreFileMeta)
     INT64_FIELD(version)
     INT64_FIELD(size)

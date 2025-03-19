@@ -77,13 +77,14 @@ DecryptedThreadDataV5 ThreadDataEncryptorV5::decrypt(const server::EncryptedThre
 
 core::DataIntegrityObject ThreadDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedThreadDataV5& encryptedThreadData) {
     assertDataFormat(encryptedThreadData);
-    auto dio = _DIOEncryptor.decodeAndVerify(encryptedThreadData.dio());
+    auto encryptedDIO = encryptedThreadData.dio();
+    auto dio = _DIOEncryptor.decodeAndVerify(encryptedDIO);
     if (
         dio.objectFormat != 5 ||
         dio.creatorPubKey != encryptedThreadData.authorPubKey() ||
         dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.publicMeta()) ||
         dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.privateMeta()) || (
-            encryptedThreadData.internalMetaEmpty() &&
+            !encryptedThreadData.internalMetaEmpty() &&
             dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.publicMeta())
         )
     ) {
@@ -93,12 +94,12 @@ core::DataIntegrityObject ThreadDataEncryptorV5::getDIOAndAssertIntegrity(const 
 }
 
 void ThreadDataEncryptorV5::assertDataFormat(const server::EncryptedThreadDataV5& encryptedThreadData) {
-
     if (encryptedThreadData.versionEmpty() ||
         encryptedThreadData.version() != 5 ||
         encryptedThreadData.publicMetaEmpty() ||
         encryptedThreadData.privateMetaEmpty() ||
-        encryptedThreadData.authorPubKeyEmpty()
+        encryptedThreadData.authorPubKeyEmpty() ||
+        encryptedThreadData.dioEmpty()
     ) {
         throw InvalidEncryptedThreadDataVersionException(std::to_string(encryptedThreadData.version()) + " expected version: 5");
     }

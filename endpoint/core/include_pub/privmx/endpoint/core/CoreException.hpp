@@ -57,6 +57,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyContainerValidati
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectDuplicatedException, "Data integrity object duplicated", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectMalformedDataException, "Data integrity object malformed data", 0x0014)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectInvalidSHA256Exception, "Data integrity object ivalid SHA256", 0x0015)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectMismatchEncKeyException, "Data integrity object mismatch encryption key", 0x0016)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
