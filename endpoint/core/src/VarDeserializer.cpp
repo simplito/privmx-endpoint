@@ -80,7 +80,7 @@ PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& 
             .limit = deserialize<int64_t>(obj->get("limit"), name + ".limit"),
             .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
             .lastId = deserializeOptional<std::string>(obj->get("lastId"), name + ".lastId"),
-            .queryAsJson = query
+            .queryAsJson = deserializeOptional<std::string>(obj->get("queryAsJson"), name + ".queryAsJson")
     };
 }
 

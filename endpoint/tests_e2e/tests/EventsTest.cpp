@@ -1991,9 +1991,9 @@ TEST_F(CoreEventTest, waitEvent_getEvent_getCustom_event_enabled) {
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
         if(event::Events::isContextCustomEvent(event)) {
             event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);
-            EXPECT_EQ(customContextEvent.contextId, reader->getString("Context_1.contextId"));
-            EXPECT_EQ(customContextEvent.userId, reader->getString("Login.user_1_id"));
-            EXPECT_EQ(customContextEvent.data.stdString(), "test event");
+            EXPECT_EQ(customContextEvent.data.contextId, reader->getString("Context_1.contextId"));
+            EXPECT_EQ(customContextEvent.data.userId, reader->getString("Login.user_1_id"));
+            EXPECT_EQ(customContextEvent.data.payload.stdString(), "test event");
         } else {
             FAIL();
         }

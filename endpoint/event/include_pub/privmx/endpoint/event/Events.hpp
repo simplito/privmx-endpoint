@@ -9,6 +9,24 @@ namespace endpoint {
 namespace event {
 
 /**
+ * Holds information of `InboxEntryDeleted` event data.
+ */
+struct ContextCustomEventData {
+    /**
+     * Context ID
+     */
+    std::string contextId;
+    /**
+     * User ID (event's sender)
+     */
+    std::string userId;
+    /**
+     * Event's actual payload
+     */
+    core::Buffer payload;
+};
+
+/**
  * Holds data of event that arrives when custom context event is emitted.
  */
 struct ContextCustomEvent : public core::Event {
@@ -31,17 +49,9 @@ struct ContextCustomEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
     
     /**
-     * id of context from which it was sent
+     * Event's data
      */
-    std::string contextId;
-    /**
-     * id of user which sent it
-     */
-    std::string userId;
-    /**
-     * event data
-     */
-    core::Buffer data;
+    ContextCustomEventData data;
 };
 
 /**

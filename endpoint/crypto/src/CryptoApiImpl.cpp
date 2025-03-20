@@ -13,10 +13,10 @@ limitations under the License.
 #include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/ecc/ExtKey.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/crypto/BIP39.hpp>
 
 #include "privmx/endpoint/crypto/CryptoApiImpl.hpp"
 #include "privmx/endpoint/crypto/KeyConverter.hpp"
-
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::crypto;
 
@@ -84,4 +84,31 @@ privmx::crypto::PrivateKey CryptoApiImpl::getPrivKeyFromSeed(const std::string& 
 
 std::string CryptoApiImpl::convertPEMKeytoWIFKey(const std::string& keyPEM) {
     return KeyConverter::cryptoKeyConvertPEMToWIF(keyPEM);
+}
+
+BIP39_t CryptoApiImpl::generateBip39(std::size_t strength, const std::string& password) {
+    auto bip = privmx::crypto::BIP39::generate(strength, password);
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=core::Buffer::from(bip.entropy)};
+}
+
+BIP39_t CryptoApiImpl::fromMnemonic(const std::string& mnemonic, const std::string& password) {
+    auto bip = privmx::crypto::BIP39::fromMnemonic(mnemonic, password);
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=core::Buffer::from(bip.entropy)};
+}
+
+BIP39_t CryptoApiImpl::fromEntropy(const core::Buffer& entropy, const std::string& password) {
+    auto bip = privmx::crypto::BIP39::fromEntropy(entropy.stdString(), password);
+    return BIP39_t{.mnemonic=bip.mnemonic, .ext_key=ExtKey(bip.ext_key), .entropy=core::Buffer::from(bip.entropy)};
+}
+
+std::string CryptoApiImpl::entropyToMnemonic(const core::Buffer& entropy) {
+    return privmx::crypto::Bip39Impl::entropyToMnemonic(entropy.stdString());
+}
+
+core::Buffer CryptoApiImpl::mnemonicToEntropy(const std::string& mnemonic) {
+    return core::Buffer::from(privmx::crypto::Bip39Impl::mnemonicToEntropy(mnemonic));
+}
+
+core::Buffer CryptoApiImpl::mnemonicToSeed(const std::string& mnemonic, const std::string& password) {
+    return core::Buffer::from(privmx::crypto::Bip39Impl::mnemonicToSeed(mnemonic, password));
 }
