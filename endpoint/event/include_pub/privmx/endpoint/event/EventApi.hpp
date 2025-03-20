@@ -17,12 +17,42 @@ class EventApiImpl;
 class EventApi {
 public:
 
+    /**
+     * Creates an instance of 'EventApi'.
+     * 
+     * @param connection instance of 'Connection'
+     * 
+     * @return EventApi object
+     */
     static EventApi create(core::Connection& connection);
     EventApi() = default;
 
+    /**
+     * Emits the custom event on the given Context and channel.
+     * 
+     * @param contextId ID of the Context
+     * @param channelName name of the Channel
+     * @param eventData event's data
+     * @param users list of UserWithPubKey objects which defines the recipeints of the event
+     */
     void emitEvent(const std::string& contextId, const std::string& channelName, const core::Buffer& eventData, const std::vector<core::UserWithPubKey>& users);
+    
+    /**
+     * Subscribe for the custom events on the given channel.
+     * 
+     * @param contextId ID of the Context
+     * @param channelName name of the Channel
+     */
     void subscribeForCustomEvents(const std::string& contextId, const std::string& channelName);
+    
+    /**
+     * Unsubscribe from the custom events on the given channel.
+     * 
+     * @param contextId ID of the Context
+     * @param channelName name of the Channel
+     */
     void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
+
     std::shared_ptr<EventApiImpl> getImpl() const { return _impl; }
 private:
     void validateEndpoint();

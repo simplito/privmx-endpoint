@@ -30,6 +30,10 @@ limitations under the License.
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/SubscriptionHelper.hpp"
+#include <privmx/endpoint/core/UserVerifierInterface.hpp>
+#include <privmx/endpoint/core/DefaultUserVerifierInterface.hpp>
+#include <mutex>
+#include <shared_mutex>
 
 namespace privmx {
 namespace endpoint {
@@ -54,6 +58,12 @@ public:
 
     const rpc::ServerConfig& getServerConfig() const { return _serverConfig; }
 
+    void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
+    const std::shared_ptr<UserVerifierInterface> getUserVerifier() {
+        std::shared_lock lock(_mutex);
+        return _userVerifier;    
+    }
+
 private:
     int64_t generateConnectionId();
 
@@ -66,6 +76,8 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
+    std::shared_ptr<UserVerifierInterface> _userVerifier;
+    std::shared_mutex _mutex;
 };
 
 }  // namespace core

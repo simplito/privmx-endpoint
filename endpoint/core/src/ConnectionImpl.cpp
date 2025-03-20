@@ -24,7 +24,9 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {}
+ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
+    _userVerifier = std::make_shared<core::DefaultUserVerifierInterface>();
+}
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
                              const std::string& platformUrl) {
@@ -151,6 +153,11 @@ std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& context
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getContextUsers)
     return usersInfo;
+}
+
+void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
+    std::unique_lock lock(_mutex);
+    _userVerifier = verifier;
 }
 
 void ConnectionImpl::disconnect() {

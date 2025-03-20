@@ -52,6 +52,28 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std:
     return result;
 }
 
+privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareOldKeysListForNewUsers(const utils::List<server::KeyEntry>& oldKeys, const std::vector<UserWithPubKey>& users) {
+    utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
+    for (auto oldKey : oldKeys) {
+        auto key = privmx::crypto::EciesEncryptor::decryptFromBase64(_key, oldKey.data());
+        for (auto user : users) {
+            server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
+            key_entry_set.user(user.userId);
+            key_entry_set.keyId(oldKey.keyId());
+            key_entry_set.data(
+                crypto::EciesEncryptor::encryptToBase64(
+                    crypto::PublicKey::fromBase58DER(
+                        user.pubKey
+                    ),
+                    key
+                )
+            );
+            result.add(key_entry_set);
+        }
+    }
+    return result;
+}
+
 // privmx::utils::List<server::KeyEntrySet> KeyProvider::updateKeysList(const utils::List<server::KeyEntrySet>& currentKeysList, const std::string& currentKeyId, const std::vector<UserWithPubKey>& newUsers, const EncKey& key) {
 //     utils::List<server::KeyEntrySet> filteredKeysList = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
 //     for (auto entry : currentKeysList) {
@@ -59,11 +81,7 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std:
 //             filteredKeysList.add(entry);
 //         }
 //     }
-
 //     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
-    
-    
-    
 //     for (auto user : users) {
 //         server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
 //         key_entry_set.user(user.userId);

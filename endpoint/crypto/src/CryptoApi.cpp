@@ -36,6 +36,7 @@ core::Buffer CryptoApi::signData(const core::Buffer& data, const std::string& pr
 
 bool CryptoApi::verifySignature(const core::Buffer& data, const core::Buffer& signature, const std::string& publicKey) {
     core::Validator::validatePubKeyBase58DER(publicKey, "field:publicKey ");
+    core::Validator::validateSignature(signature.stdString(), "field:signature ");
     try {
         return _impl->verifySignature(data, signature, publicKey);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -111,6 +112,60 @@ core::Buffer CryptoApi::decryptDataSymmetric(const core::Buffer& data, const cor
 std::string CryptoApi::convertPEMKeytoWIFKey(const std::string& pemKey) {
     try {
         return _impl->convertPEMKeytoWIFKey(pemKey);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+BIP39_t CryptoApi::generateBip39(std::size_t strength, const std::string& password) {
+    try {
+        return _impl->generateBip39(strength, password);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+BIP39_t CryptoApi::fromMnemonic(const std::string& mnemonic, const std::string& password) {
+    try {
+        return _impl->fromMnemonic(mnemonic, password);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+BIP39_t CryptoApi::fromEntropy(const core::Buffer& entropy, const std::string& password) {
+    try {
+        return _impl->fromEntropy(entropy, password);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string CryptoApi::entropyToMnemonic(const core::Buffer& entropy) {
+    try {
+        return _impl->entropyToMnemonic(entropy);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::Buffer CryptoApi::mnemonicToEntropy(const std::string& mnemonic) {
+    try {
+        return _impl->mnemonicToEntropy(mnemonic);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::Buffer CryptoApi::mnemonicToSeed(const std::string& mnemonic, const std::string& password) {
+    try {
+        return _impl->mnemonicToSeed(mnemonic, password);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

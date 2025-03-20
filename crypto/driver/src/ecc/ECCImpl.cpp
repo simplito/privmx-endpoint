@@ -141,6 +141,12 @@ ECCImpl::Signature ECCImpl::sign2(const string& data) const {
 }
 
 bool ECCImpl::verify(const std::string& data, const std::string& signature) const {
+    if (signature.size() != 65) {
+        throw InvalidSignatureSizeException();
+    }
+    if (signature.front() < 27 || signature.front() > 42) {
+        throw InvalidSignatureHeaderException();
+    }
     ECCImpl::Signature sig;
     sig.r = BNImpl::fromBuffer(signature.substr(1, 32));
     sig.s = BNImpl::fromBuffer(signature.substr(33, 32));
@@ -148,6 +154,9 @@ bool ECCImpl::verify(const std::string& data, const std::string& signature) cons
 }
 
 bool ECCImpl::verify2(const std::string& data, const ECCImpl::Signature& signature) const {
+    if (signature.r->getBitsLength() > 256 || signature.s->getBitsLength() > 256) {
+        throw InvalidSignatureSizeException();
+    }
     validate();
     privmxDrvEcc_Signature sig;
     sig.r = signature.r.cast<BNImpl>()->getRaw();
