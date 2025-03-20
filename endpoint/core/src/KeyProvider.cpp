@@ -53,15 +53,20 @@ DecryptedEncKeyV2 KeyProvider::getKeyAndVerify(const utils::List<server::KeyEntr
     
 }
 
-std::vector<DecryptedEncKeyV2> KeyProvider::getKeysAndVerify(const utils::List<server::KeyEntry>& keys, const std::vector<std::string>& keyIds, const EncKeyV2IntegrityValidationData& integrityValidationData) {
+std::map<std::string, DecryptedEncKeyV2> KeyProvider::getKeysAndVerify(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyV2IntegrityValidationData& integrityValidationData) {
     utils::List<server::KeyEntry> toDecrypt = utils::TypedObjectFactory::createNewList<server::KeyEntry>();
     for (auto key: keys) {
         if(std::find(keyIds.begin(), keyIds.end(), key.keyId()) != keyIds.end()) {
             toDecrypt.add(key);
         }
     }
-    auto result = decryptKeysAndVerify(toDecrypt, integrityValidationData);
-    validateKeyForDuplication(result);
+    if(toDecrypt.size() == 0) return std::map<std::string, DecryptedEncKeyV2>();
+    auto decrypted = decryptKeysAndVerify(toDecrypt, integrityValidationData);
+    validateKeyForDuplication(decrypted);
+    std::map<std::string, DecryptedEncKeyV2> result;
+    for (auto key: decrypted) {
+        result.insert(std::make_pair(key.id,key));
+    }
     return result;
 }
 
@@ -141,8 +146,7 @@ std::vector<DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::List<ser
 }
 
 void KeyProvider::validateData(std::vector<DecryptedEncKeyV2>& decryptedKeys, const EncKeyV2IntegrityValidationData& integrityValidationData) {
-    std::vector<size_t> tmp;
-    std::vector<VerificationRequest> verificationRequest;
+
     std::optional<int64_t> containerControlNumber = std::nullopt;
     //create data validation request
     for(size_t i = 0; i<decryptedKeys.size();i++) {
@@ -155,15 +159,24 @@ void KeyProvider::validateData(std::vector<DecryptedEncKeyV2>& decryptedKeys, co
                 decryptedKeys[i].containerControlNumber != containerControlNumber.value()
             ) {
                 decryptedKeys[i].statusCode = EncryptionKeyContainerValidationException().getCode();
-            } else {
-                tmp.push_back(i);
-                verificationRequest.push_back(VerificationRequest{
-                    .contextId = decryptedKeys[i].dio.contextId,
-                    .senderId = decryptedKeys[i].dio.creatorUserId,
-                    .senderPubKey = decryptedKeys[i].dio.creatorPubKey,
-                    .date = decryptedKeys[i].dio.timestamp
-                });
             }
+        }
+    }
+    if(integrityValidationData.enableVerificationRequest) validateUserData(decryptedKeys);
+}
+
+void KeyProvider::validateUserData(std::vector<DecryptedEncKeyV2>& decryptedKeys) {
+    std::vector<size_t> tmp;
+    std::vector<VerificationRequest> verificationRequest;
+    for(size_t i = 0; i<decryptedKeys.size();i++) {
+        if(decryptedKeys[i].statusCode == 0 && decryptedKeys[i].dataStructureVersion == 2)  {
+            tmp.push_back(i);
+            verificationRequest.push_back(VerificationRequest{
+                .contextId = decryptedKeys[i].dio.contextId,
+                .senderId = decryptedKeys[i].dio.creatorUserId,
+                .senderPubKey = decryptedKeys[i].dio.creatorPubKey,
+                .date = decryptedKeys[i].dio.timestamp
+            });
         }
     }
     auto verificationResult = _getUserVerifier()->verify(verificationRequest);
@@ -171,8 +184,9 @@ void KeyProvider::validateData(std::vector<DecryptedEncKeyV2>& decryptedKeys, co
         if(verificationResult[i] == false) {
             decryptedKeys[tmp[i]].statusCode = UserVerificationFailureException().getCode();
         }
-    }    
+    }  
 }
+
 
 void KeyProvider::validateKeyForDuplication(std::vector<DecryptedEncKeyV2>& keys) {
     std::map<std::pair<int64_t, int64_t>, size_t> duplicateMap;

@@ -21,6 +21,11 @@ namespace endpoint {
 namespace thread {
 namespace dynamic {
 
+ENDPOINT_CLIENT_TYPE(internalMeta)
+    STRING_FIELD(threadCCN)
+    INT64_FIELD(KeyId)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(ThreadDataV1)
     STRING_FIELD(title)
     INT64_FIELD(statusCode)

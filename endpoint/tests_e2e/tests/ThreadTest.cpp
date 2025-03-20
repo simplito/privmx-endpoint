@@ -1079,6 +1079,7 @@ TEST_F(ThreadTest, sendMessage) {
             messageId
         );
     });
+    EXPECT_EQ(message.statusCode, 0);
     EXPECT_EQ(message.data.stdString().length(), random_data.length());
     if(message.data.stdString().length() == random_data.length()) {
         EXPECT_EQ(message.data.stdString(), random_data);
@@ -1129,6 +1130,7 @@ TEST_F(ThreadTest, updateMessage) {
             reader->getString("Message_1.info_messageId")
         );
     });
+    EXPECT_EQ(message.statusCode, 0);
     EXPECT_EQ(message.data.stdString().length(), random_data.length());
     if(message.data.stdString().length() == random_data.length()) {
         EXPECT_EQ(message.data.stdString(), random_data);

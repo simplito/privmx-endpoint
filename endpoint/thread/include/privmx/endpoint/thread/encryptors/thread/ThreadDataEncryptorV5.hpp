@@ -32,6 +32,7 @@ public:
         const std::string& encryptionKey
     );
     DecryptedThreadDataV5 decrypt(const server::EncryptedThreadDataV5& encryptedThreadData, const std::string& encryptionKey);
+    DecryptedThreadDataV5 extractPublic(const server::EncryptedThreadDataV5& encryptedThreadData);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedThreadDataV5& encryptedThreadData);
 private:
     void assertDataFormat(const server::EncryptedThreadDataV5& encryptedThreadData);

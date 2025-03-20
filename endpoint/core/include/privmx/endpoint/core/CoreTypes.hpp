@@ -66,6 +66,7 @@ struct DecryptedEncKeyV2 : public DecryptedEncKey {
 struct EncKeyV2IntegrityValidationData {
     std::string contextId;
     std::string containerId;
+    bool enableVerificationRequest = true;
 };
 
 }  // namespace core

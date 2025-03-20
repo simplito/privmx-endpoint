@@ -81,6 +81,33 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
     return result;
 }
 
+DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData) {
+    DecryptedMessageDataV5 result;
+    result.statusCode = 0;
+    result.dataStructureVersion = 5;
+    try {
+        result.dio = getDIOAndAssertIntegrity(encryptedMessageData);
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey());
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta(), authorPublicKey);
+        if(!encryptedMessageData.publicMetaObjectEmpty()) {
+            auto tmp_1 = utils::Utils::stringify(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
+            auto tmp_2 = utils::Utils::stringify(encryptedMessageData.publicMetaObject());
+            if(tmp_1 != tmp_2) {
+                auto e = MessagePublicDataMismatchException();
+                result.statusCode = e.getCode();
+            }
+        }
+        result.authorPubKey = encryptedMessageData.authorPubKey();   
+    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        result.statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
+    return result;
+}
+
 core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encryptedMessageData) {
     assertDataFormat(encryptedMessageData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedMessageData.dio());

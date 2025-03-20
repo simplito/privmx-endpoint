@@ -53,7 +53,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationFailureExcepti
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationMethodUnhandledException, "UserVerifierInterface.verify() thrown an exception. Implementation of the UserVerifierInterface should provide adequate error handling.", 0x000F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyMalformedDataException, "Encryption key malformed data", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyUnknownDataVersionException, "Encryption key unknown data version", 0x0011)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyContainerValidationException, "Encryption key container validation", 0x0012)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyContainerValidationException, "Encryption key container validation error", 0x0012)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectDuplicatedException, "Data integrity object duplicated", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectMalformedDataException, "Data integrity object malformed data", 0x0014)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectInvalidSHA256Exception, "Data integrity object ivalid SHA256", 0x0015)

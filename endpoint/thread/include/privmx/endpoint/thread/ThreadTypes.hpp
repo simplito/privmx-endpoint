@@ -62,7 +62,7 @@ struct ThreadDataToEncryptV4 {
 struct ThreadDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
+    core::Buffer internalMeta;
     core::DataIntegrityObject dio;
 };
 
@@ -77,7 +77,7 @@ struct DecryptedThreadDataV4 : public core::DecryptedVersionedData {
 struct DecryptedThreadDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
+    core::Buffer internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };

@@ -33,10 +33,8 @@ server::EncryptedThreadDataV5 ThreadDataEncryptorV5::encrypt(const ThreadDataToE
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(threadData.privateMeta, authorPrivateKey, encryptionKey));
     mapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
-    if (threadData.internalMeta.has_value()) {
-        result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(threadData.internalMeta.value(), authorPrivateKey, encryptionKey));
-        mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
-    }
+    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(threadData.internalMeta, authorPrivateKey, encryptionKey));
+    mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
     core::ExpandedDataIntegrityObject expandedDio = {threadData.dio, .objectFormat=5, .mapOfDataSha256=mapOfDataSha256};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
@@ -44,7 +42,6 @@ server::EncryptedThreadDataV5 ThreadDataEncryptorV5::encrypt(const ThreadDataToE
 }
 
 DecryptedThreadDataV5 ThreadDataEncryptorV5::decrypt(const server::EncryptedThreadDataV5& encryptedThreadData, const std::string& encryptionKey) {
-    
     DecryptedThreadDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = 5;
@@ -61,9 +58,35 @@ DecryptedThreadDataV5 ThreadDataEncryptorV5::decrypt(const server::EncryptedThre
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedThreadData.privateMeta(), authorPublicKey, encryptionKey);
-        result.internalMeta = encryptedThreadData.internalMetaEmpty() ? 
-            std::nullopt : 
-            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(encryptedThreadData.internalMeta(), authorPublicKey, encryptionKey));
+        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedThreadData.internalMeta(), authorPublicKey, encryptionKey);
+        result.authorPubKey = encryptedThreadData.authorPubKey();   
+    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        result.statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
+    return result;
+}
+
+
+DecryptedThreadDataV5 ThreadDataEncryptorV5::extractPublic(const server::EncryptedThreadDataV5& encryptedThreadData) {
+    DecryptedThreadDataV5 result;
+    result.statusCode = 0;
+    result.dataStructureVersion = 5;
+    try {  
+        result.dio = getDIOAndAssertIntegrity(encryptedThreadData);
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedThreadData.authorPubKey());
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedThreadData.publicMeta(), authorPublicKey);
+        if(!encryptedThreadData.publicMetaObjectEmpty()) {
+            auto tmp_1 = utils::Utils::stringify(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
+            auto tmp_2 = utils::Utils::stringify(encryptedThreadData.publicMetaObject());
+            if(tmp_1 != tmp_2) {
+                auto e = ThreadPublicDataMismatchException();
+                result.statusCode = e.getCode();
+            }
+        }
         result.authorPubKey = encryptedThreadData.authorPubKey();   
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
@@ -83,10 +106,8 @@ core::DataIntegrityObject ThreadDataEncryptorV5::getDIOAndAssertIntegrity(const 
         dio.objectFormat != 5 ||
         dio.creatorPubKey != encryptedThreadData.authorPubKey() ||
         dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.publicMeta()) ||
-        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.privateMeta()) || (
-            !encryptedThreadData.internalMetaEmpty() &&
-            dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.publicMeta())
-        )
+        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.privateMeta()) ||
+        dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.internalMeta())     
     ) {
         throw core::DataIntegrityObjectInvalidSHA256Exception();
     }
@@ -98,6 +119,7 @@ void ThreadDataEncryptorV5::assertDataFormat(const server::EncryptedThreadDataV5
         encryptedThreadData.version() != 5 ||
         encryptedThreadData.publicMetaEmpty() ||
         encryptedThreadData.privateMetaEmpty() ||
+        encryptedThreadData.internalMetaEmpty() ||
         encryptedThreadData.authorPubKeyEmpty() ||
         encryptedThreadData.dioEmpty()
     ) {

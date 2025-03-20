@@ -32,11 +32,13 @@ public:
     KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifierInterface>()> getUserVerifier);
     EncKey generateKey();
     int64_t generateContainerControlNumber();
+    DecryptedEncKeyV2 getKey(const utils::List<server::KeyEntry>& keys, const std::string& keyId);
     DecryptedEncKeyV2 getKeyAndVerify(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyV2IntegrityValidationData& integrityValidationData);
-    std::vector<DecryptedEncKeyV2> getKeysAndVerify(const utils::List<server::KeyEntry>& keys, const std::vector<std::string>& keyIds, const EncKeyV2IntegrityValidationData& integrityValidationData);
+    std::map<std::string,DecryptedEncKeyV2> getKeysAndVerify(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyV2IntegrityValidationData& integrityValidationData);
     std::vector<DecryptedEncKeyV2> getAllKeysAndVerify(const utils::List<server::KeyEntry>& serverKeys, const EncKeyV2IntegrityValidationData& integrityValidationData);
     privmx::utils::List<server::KeyEntrySet> prepareKeysList(const std::vector<UserWithPubKey>& users, const EncKey& key, const DataIntegrityObject& dio, int64_t containerControlNumber);
-    privmx::utils::List<server::KeyEntrySet> prepareMissingKeysForNewUsers(const std::vector<DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, int64_t containerControlNumber);     
+    privmx::utils::List<server::KeyEntrySet> prepareMissingKeysForNewUsers(const std::vector<DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, int64_t containerControlNumber);
+    void validateUserData(std::vector<DecryptedEncKeyV2>& decryptedKeys);
 private:
     std::vector<DecryptedEncKeyV2> decryptKeysAndVerify(utils::List<server::KeyEntry> keys, const EncKeyV2IntegrityValidationData& integrityValidationData);
     void validateKeyForDuplication(std::vector<DecryptedEncKeyV2>& keys);
