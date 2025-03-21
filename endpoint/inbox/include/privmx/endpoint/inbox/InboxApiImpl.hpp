@@ -123,12 +123,13 @@ private:
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
-    InboxDataResultV4 decryptInboxV4(const inbox::server::Inbox& inboxRaw);
+    InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::Inbox convertInboxV4(const inbox::server::Inbox& inboxRaw, const InboxDataResultV4& inboxData);
-    InboxDataResultV5 decryptInboxV5(const inbox::server::Inbox& inboxRaw);
+    InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::Inbox convertInboxV5(const inbox::server::Inbox& inboxRaw, const InboxDataResultV5& inboxData);
-    inbox::Inbox decryptAndConvertInboxDataToInbox(const inbox::server::Inbox& inboxRaw);
-    inbox::server::InboxDataEntry getInboxDataEntry(const inbox::server::Inbox& inboxRaw);
+    inbox::Inbox decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    inbox::Inbox decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);
+    inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::Inbox inbox);
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
 
     InboxEntryResult decryptInboxEntry(const inbox::server::Inbox& inbox, const thread::server::Message& message);

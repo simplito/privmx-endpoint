@@ -114,13 +114,14 @@ std::string InboxApiImpl::createInbox(
         contextId,
         utils::Utils::getNowTimestampStr() + "-" + utils::Hex::from(crypto::Crypto::randomBytes(8))
     );
+    auto inboxCCN = _keyProvider->generateContainerControlNumber();
     InboxDataProcessorModelV5 inboxDataIn {
         .storeId = storeId,
         .threadId = threadId,
         .filesConfig = getFilesConfigOptOrDefault(fileConfig),
         .privateData = {
             .privateMeta = privateMeta,
-            .internalMeta = std::nullopt,
+            .internalMeta = core::Buffer::from(std::to_string(inboxCCN)),
             .dio = inboxDIO
         },
         .publicData = {
@@ -145,7 +146,8 @@ std::string InboxApiImpl::createInbox(
         _connection.getImpl()->createDIO(
             contextId, 
             utils::Hex::from(crypto::Crypto::randomBytes(16))
-        ), _keyProvider->generateContainerControlNumber()
+        ), 
+        inboxCCN
     );
     createInboxModel.keys(keysList);
     if (policies.has_value()) {
@@ -166,7 +168,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
 ) {
     // get current inbox
     auto currentInbox = getRawInboxFromCacheOrBridge(inboxId);
-    auto currentInboxData = getInboxDataEntry(currentInbox).data();
+    auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data();
 
     // extract current users info
     auto usersVec {core::EndpointUtils::listToVector<std::string>(currentInbox.users())};
@@ -189,14 +191,14 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     
     // setting thread Key adding new users
     core::EncKey inboxKey;
-    core::DataIntegrityObject updateThreadDio = _connection.getImpl()->createDIO(currentInbox.contextId(), inboxId);
+    core::DataIntegrityObject updateInboxDio = _connection.getImpl()->createDIO(currentInbox.contextId(), inboxId);
     privmx::utils::List<core::server::KeyEntrySet> keysList = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
         inboxKey = _keyProvider->generateKey();
         keysList = _keyProvider->prepareKeysList(
             new_users, 
             inboxKey, 
-            updateThreadDio,
+            updateInboxDio,
             inboxKeys[0].containerControlNumber
         );
     } else {
@@ -209,7 +211,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             inboxKeys,
             usersToAddMissingKey, 
-            updateThreadDio, 
+            updateInboxDio, 
             inboxKeys[0].containerControlNumber
         );
         for(auto t: tmp) keysList.add(t);
@@ -317,15 +319,31 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
 
     auto inboxesListResult = _serverApi->inboxList(model);
     auto inboxesRaw = inboxesListResult.inboxes();
-    std::vector<inbox::Inbox> ret;
-    for (auto inboxRaw: inboxesRaw) {
-        _inboxProvider.updateByValue(inboxRaw);
-        auto inbox = decryptAndConvertInboxDataToInbox(inboxRaw);
-        ret.push_back(inbox);
+    std::vector<inbox::Inbox> inboxes;
+    std::vector<core::DecryptedEncKeyV2> keys;
+    //create verification request for keys
+    for (size_t i = 0; i < inboxesRaw.size(); i++) {
+        auto inbox = inboxesRaw.get(i);
+        auto inboxEntry = getInboxCurrentDataEntry(inbox);
+        auto key = _keyProvider->getKeyAndVerify(inbox.keys(), inboxEntry.keyId(), {.contextId=inbox.contextId(), .containerId=inbox.id(), .enableVerificationRequest=false});
+        keys.push_back(key);
+    }
+    //send verification request and update key statuscode
+    _keyProvider->validateUserData(keys);
+    //
+    for (size_t i = 0; i < inboxesRaw.size(); i++) {
+        auto inbox = inboxesRaw.get(i);
+        try {
+             _inboxProvider.updateByValue(inbox);
+            inboxes.push_back(decryptAndConvertInboxDataToInbox(inbox, getInboxCurrentDataEntry(inbox), keys[i]));
+        } catch (const core::Exception& e) {
+            PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList, data exception)
+            inboxes.push_back(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
+        }
     }
     return core::PagingList<Inbox> {
         .totalAvailable = inboxesListResult.count(),
-        .readItems = ret
+        .readItems = inboxes
     };
 }
 
@@ -339,7 +357,7 @@ InboxPublicView InboxApiImpl::getInboxPublicView(const std::string& inboxId) {
 }
 
 void InboxApiImpl::deleteInbox(const std::string& inboxId) {
-    auto inboxDataRaw {getInboxDataEntry(getRawInboxFromCacheOrBridge(inboxId)).data()};
+    auto inboxDataRaw {getInboxCurrentDataEntry(getRawInboxFromCacheOrBridge(inboxId)).data()};
     auto inboxDeleteModel = Factory::createObject<server::InboxDeleteModel>();
     inboxDeleteModel.inboxId(inboxId);
 
@@ -466,7 +484,7 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(const std::string&
     }
     PRIVMX_DEBUG_TIME_START(InboxApi, listEntries)
     auto inboxRaw {getRawInboxFromCacheOrBridge(inboxId)};
-    auto inboxData {getInboxDataEntry(inboxRaw).data()};
+    auto inboxData {getInboxCurrentDataEntry(inboxRaw).data()};
     auto threadId = inboxData.threadId();
     auto model = Factory::createObject<thread::server::ThreadMessagesGetModel>();
     model.threadId(threadId);
@@ -601,15 +619,14 @@ store::FileMetaToEncryptV5 InboxApiImpl::prepareMeta(const privmx::endpoint::inb
     return fileMetaToEncrypt;
 }
 
-inbox::server::InboxDataEntry InboxApiImpl::getInboxDataEntry(const inbox::server::Inbox& inboxRaw) {
+inbox::server::InboxDataEntry InboxApiImpl::getInboxCurrentDataEntry(inbox::server::Inbox inboxRaw) {
     auto dataEntry = inboxRaw.data().get(inboxRaw.data().size()-1);
     return dataEntry;
 }
 
 
-InboxDataResultV4 InboxApiImpl::decryptInboxV4(const inbox::server::Inbox& inboxRaw) {
-    auto inboxDataEntry {getInboxDataEntry(inboxRaw)};
-    return _inboxDataProcessorV4.unpackAll(inboxDataEntry.data(), _keyProvider->getKeyAndVerify(inboxRaw.keys(), inboxDataEntry.keyId(), {.contextId=inboxRaw.contextId(), .containerId=inboxRaw.id()}).key);
+InboxDataResultV4 InboxApiImpl::decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
+    return _inboxDataProcessorV4.unpackAll(inboxEntry.data(), encKey.key);
 }
 
 Inbox InboxApiImpl::convertInboxV4(const inbox::server::Inbox& inboxRaw, const InboxDataResultV4& inboxData) {
@@ -632,9 +649,8 @@ Inbox InboxApiImpl::convertInboxV4(const inbox::server::Inbox& inboxRaw, const I
     return ret;
 }
 
-InboxDataResultV5 InboxApiImpl::decryptInboxV5(const inbox::server::Inbox& inboxRaw) {
-    auto inboxDataEntry {getInboxDataEntry(inboxRaw)};
-    return _inboxDataProcessorV5.unpackAll(inboxDataEntry.data(), _keyProvider->getKeyAndVerify(inboxRaw.keys(), inboxDataEntry.keyId(), {.contextId=inboxRaw.contextId(), .containerId=inboxRaw.id()}).key);
+InboxDataResultV5 InboxApiImpl::decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
+    return _inboxDataProcessorV5.unpackAll(inboxEntry.data(), encKey.key);
 }
 
 Inbox InboxApiImpl::convertInboxV5(const inbox::server::Inbox& inboxRaw, const InboxDataResultV5& inboxData) {
@@ -703,16 +719,15 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
 }
 
 
-inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(const inbox::server::Inbox& inboxRaw) {
-    auto entry = getInboxDataEntry(inboxRaw);
-    if (entry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(entry.data().meta());
+inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
+    if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inboxEntry.data().meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4:
-                    return convertInboxV4(inboxRaw, decryptInboxV4(inboxRaw));
+                    return convertInboxV4(inbox, decryptInboxV4(inboxEntry, encKey));
                 case 5:
-                    return convertInboxV5(inboxRaw, decryptInboxV5(inboxRaw));
+                    return convertInboxV5(inbox, decryptInboxV5(inboxEntry, encKey));
             }
         }
     }
@@ -720,6 +735,12 @@ inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(const inbox::server
     auto e = UnknowInboxFormatException();
     result.statusCode = e.getCode();
     return result;
+}
+
+inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox) {
+    auto entry = getInboxCurrentDataEntry(inbox);
+    auto key = _keyProvider->getKeyAndVerify(inbox.keys(), entry.keyId(), {.contextId=inbox.contextId(), .containerId=inbox.id()});
+    return decryptAndConvertInboxDataToInbox(inbox, entry, key);
 }
 
 inbox::server::InboxMessageServer InboxApiImpl::unpackInboxOrigMessage(const std::string& serialized) {
@@ -927,7 +948,7 @@ void InboxApiImpl::unsubscribeFromInboxEvents() {
 
 void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
     auto inbox = getRawInboxFromCacheOrBridge(inboxId);
-    auto inboxData = getInboxDataEntry(inbox).data();
+    auto inboxData = getInboxCurrentDataEntry(inbox).data();
     if(_threadSubscriptionHelper.hasSubscriptionForElement(inboxData.threadId())) {
         throw AlreadySubscribedException(inboxId);
     }
@@ -936,7 +957,7 @@ void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
 
 void InboxApiImpl::unsubscribeFromEntryEvents(const std::string& inboxId) {
     auto inbox = getRawInboxFromCacheOrBridge(inboxId);
-    auto inboxData = getInboxDataEntry(inbox).data();
+    auto inboxData = getInboxCurrentDataEntry(inbox).data();
     if(!_threadSubscriptionHelper.hasSubscriptionForElement(inboxData.threadId())) {
         throw NotSubscribedException(inboxId);
     }
