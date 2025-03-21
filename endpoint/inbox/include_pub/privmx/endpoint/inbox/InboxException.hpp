@@ -60,6 +60,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InvalidFileReadHandleExceptio
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InvalidFileWriteHandleException, "Invalid file handle: handle is not FILE_WRITE_HANDLE", 0x0017)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, CannotExtractInboxCustomEventException, "Cannot extract InboxCustomEvent", 0x0018)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, ForbiddenChannelNameException, "Forbidden channel name", 0x0019)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, UnknowInboxFormatException, "Unknow Inbox format", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxModuleDoesNotSupportQueriesYetException, "Inbox module does not support queries yet.", 0x0099)
 
 

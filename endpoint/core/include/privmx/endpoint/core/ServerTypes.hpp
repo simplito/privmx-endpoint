@@ -21,15 +21,41 @@ namespace endpoint {
 namespace core {
 namespace server {
 
+ENDPOINT_CLIENT_TYPE(VersionedData)
+    INT64_FIELD(version)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
+    STRING_FIELD(creatorUserId)
+    STRING_FIELD(creatorPublicKey)
+    STRING_FIELD(contextId)
+    STRING_FIELD(containerId)
+    INT64_FIELD(timestamp)
+    INT64_FIELD(nonce)
+    MAP_FIELD(mapOfDataSha256, std::string)
+    INT64_FIELD(objectFormat)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(EncryptionKey)
+    STRING_FIELD(id)
+    STRING_FIELD(key)
+    INT64_FIELD(containerControlNumber)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKeyEntryDataV2, VersionedData)
+    STRING_FIELD(encryptedKey) // encrypted EncryptionKey
+    STRING_FIELD(dio) // signed and encoded in base64 DataIntegrityObject
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(KeyEntry)
     STRING_FIELD(keyId)
-    STRING_FIELD(data)
+    VAR_FIELD(data)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(KeyEntrySet)
     STRING_FIELD(user)
     STRING_FIELD(keyId)
-    STRING_FIELD(data)
+    VAR_FIELD(data)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ListModel)
@@ -52,6 +78,14 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
     STRING_FIELD(contextId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(ContextGetModel)
+    STRING_FIELD(id)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(ContextGetResult)
+    OBJECT_FIELD(context, ContextInfo)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(UserIdentity)
