@@ -123,15 +123,18 @@ private:
     void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    dynamic::compat_v1::StoreData decryptStoreV1(const server::Store& storeRaw);
-    DecryptedStoreDataV4 decryptStoreV4(const server::Store& storeRaw);
-    DecryptedStoreDataV5 decryptStoreV5(const server::Store& storeRaw);
-    Store convertStoreDataV1ToStore(const server::Store& storeRaw, dynamic::compat_v1::StoreData storeData);
-    Store convertDecryptedStoreDataV4ToStore(const server::Store& storeRaw, const DecryptedStoreDataV4& storeData);
-    Store convertDecryptedStoreDataV5ToStore(const server::Store& storeRaw, const DecryptedStoreDataV5& storeData);
-    Store decryptAndConvertStoreDataToStore(const server::Store& storeRaw);
-    void assertStoreDataIntegrity(const server::Store& store);
-    void assertFileDataIntegrity(const server::File& file);
+    dynamic::compat_v1::StoreData decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    DecryptedStoreDataV4 decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    DecryptedStoreDataV5 decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
+    Store convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData);
+    Store convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData);
+    Store decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    Store decryptAndConvertStoreDataToStore(server::Store store);
+    int64_t decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    int64_t decryptStoreInternalMeta(server::Store store);
+    void assertStoreDataIntegrity(server::Store store);
+    core::DecryptedEncKey getStoreCurrentEncKey(server::Store store);
 
 
     // OLD CODE    
@@ -146,9 +149,9 @@ private:
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
     File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
-    dynamic::InternalStoreFileMeta extractInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
-    dynamic::InternalStoreFileMeta extractInternalMeta(server::Store store, server::File file);
-
+    dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
+    dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::Store store, server::File file);
+    void assertFileDataIntegrity(server::File file);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);

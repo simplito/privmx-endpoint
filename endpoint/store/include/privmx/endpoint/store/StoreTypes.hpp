@@ -91,7 +91,7 @@ struct StoreDataToEncryptV4 {
 struct StoreDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
+    core::Buffer internalMeta;
     core::DataIntegrityObject dio;
 };
 
@@ -105,7 +105,7 @@ struct DecryptedStoreDataV4 : core::DecryptedVersionedData {
 struct DecryptedStoreDataV5 : core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
+    core::Buffer internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };

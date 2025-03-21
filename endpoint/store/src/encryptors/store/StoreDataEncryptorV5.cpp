@@ -33,11 +33,8 @@ server::EncryptedStoreDataV5 StoreDataEncryptorV5::encrypt(const StoreDataToEncr
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(storeData.privateMeta, authorPrivateKey, encryptionKey));
     mapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
-    if (storeData.internalMeta.has_value()) {
-        result.internalMeta(
-            _dataEncryptor.signAndEncryptAndEncode(storeData.internalMeta.value(), authorPrivateKey, encryptionKey));
-            mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
-    }
+    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(storeData.internalMeta, authorPrivateKey, encryptionKey));
+    mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
     core::ExpandedDataIntegrityObject expandedDio = {storeData.dio, .objectFormat=5, .mapOfDataSha256=mapOfDataSha256};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
@@ -62,9 +59,34 @@ DecryptedStoreDataV5 StoreDataEncryptorV5::decrypt(
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedStoreData.privateMeta(), authorPublicKey, encryptionKey);
-        result.internalMeta = encryptedStoreData.internalMetaEmpty() ? 
-            std::nullopt : 
-            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(encryptedStoreData.internalMeta(), authorPublicKey, encryptionKey));
+        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedStoreData.internalMeta(), authorPublicKey, encryptionKey);
+        result.authorPubKey = encryptedStoreData.authorPubKey();   
+    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        result.statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
+    return result;
+}
+
+DecryptedStoreDataV5 StoreDataEncryptorV5::extractPublic(const server::EncryptedStoreDataV5& encryptedStoreData) {
+    DecryptedStoreDataV5 result;
+    result.statusCode = 0;
+    result.dataStructureVersion = 5;
+    try {
+        result.dio = getDIOAndAssertIntegrity(encryptedStoreData);
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedStoreData.authorPubKey());
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedStoreData.publicMeta(), authorPublicKey);
+        if(!encryptedStoreData.publicMetaObjectEmpty()) {
+            auto tmp_1 = utils::Utils::stringify(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
+            auto tmp_2 = utils::Utils::stringify(encryptedStoreData.publicMetaObject());
+            if(tmp_1 != tmp_2) {
+                auto e = StorePublicDataMismatchException();
+                result.statusCode = e.getCode();
+            }
+        }
         result.authorPubKey = encryptedStoreData.authorPubKey();   
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
@@ -83,10 +105,8 @@ core::DataIntegrityObject StoreDataEncryptorV5::getDIOAndAssertIntegrity(const s
         dio.objectFormat != 5 ||
         dio.creatorPubKey != encryptedStoreData.authorPubKey() ||
         dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.publicMeta()) ||
-        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.privateMeta()) || (
-            !encryptedStoreData.internalMetaEmpty() &&
-            dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.internalMeta())
-        )
+        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.privateMeta()) || 
+        dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.internalMeta())
     ) {
         throw core::DataIntegrityObjectInvalidSHA256Exception();
     }

@@ -31,6 +31,7 @@ public:
                                         const std::string& encryptionKey);
     DecryptedStoreDataV5 decrypt(const server::EncryptedStoreDataV5& encryptedStoreData,
                                 const std::string& encryptionKey);
+    DecryptedStoreDataV5 extractPublic(const server::EncryptedStoreDataV5& encryptedStoreData);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedStoreDataV5& encryptedStoreData);
 private:
     void assertDataFormat(const server::EncryptedStoreDataV5& encryptedStoreData);
