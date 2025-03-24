@@ -1970,10 +1970,10 @@ TEST_F(CoreEventTest, waitEvent_getEvent_getCustom_event_enabled) {
         std::vector<privmx::endpoint::core::UserWithPubKey> users;
         users.push_back(privmx::endpoint::core::UserWithPubKey{.userId=reader->getString("Login.user_1_id"), .pubKey=reader->getString("Login.user_1_pubKey")});
         eventApi->emitEvent(
-            reader->getString("Context_1.contextId"), 
+            reader->getString("Context_1.contextId"),
+            users,
             "testing", 
-            core::Buffer::from("test event"), 
-            users
+            core::Buffer::from("test event")
         );
     });
     EXPECT_NO_THROW({
@@ -2026,10 +2026,10 @@ TEST_F(CoreEventTest, waitEvent_getEvent_getCustom_event_disabled) {
         std::vector<privmx::endpoint::core::UserWithPubKey> users;
         users.push_back(privmx::endpoint::core::UserWithPubKey{.userId=reader->getString("Login.user_1_id"), .pubKey=reader->getString("Login.user_1_pubKey")});
         eventApi->emitEvent(
-            reader->getString("Context_1.contextId"), 
+            reader->getString("Context_1.contextId"),
+            users,
             "testing", 
-            core::Buffer::from("test event"), 
-            users
+            core::Buffer::from("test event")
         );
     });
     EXPECT_NO_THROW({

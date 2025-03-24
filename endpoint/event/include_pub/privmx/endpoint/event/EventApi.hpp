@@ -20,7 +20,7 @@ public:
     static EventApi create(core::Connection& connection);
     EventApi() = default;
 
-    void emitEvent(const std::string& contextId, const std::string& channelName, const core::Buffer& eventData, const std::vector<core::UserWithPubKey>& users);
+    void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
     void subscribeForCustomEvents(const std::string& contextId, const std::string& channelName);
     void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
     std::shared_ptr<EventApiImpl> getImpl() const { return _impl; }
