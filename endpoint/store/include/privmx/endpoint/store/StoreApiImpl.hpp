@@ -100,10 +100,6 @@ public:
     void unsubscribeFromStoreEvents();
     void subscribeForFileEvents(const std::string& storeId);
     void unsubscribeFromFileEvents(const std::string& storeId);
-
-    void emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
-    void subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName);
-    void unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName);
 private:
     struct StoreFileDecryptionParams {
         std::string fileId;
@@ -148,7 +144,6 @@ private:
     
     StoreFileDecryptionParams getStoreFileDecryptionParams(const server::File& file, const core::EncKey& encKey);
     int64_t createFileReadHandle(const StoreFileDecryptionParams& storeFileDecryptionParams);
-    void validateChannelName(const std::string& channelName);
     void assertStoreExist(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
     

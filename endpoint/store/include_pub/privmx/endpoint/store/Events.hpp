@@ -259,42 +259,6 @@ struct StoreFileDeletedEvent : public core::Event {
 };
 
 /**
- * Holds data of event that arrives when custom store event is emitted.
- */
-struct StoreCustomEvent : public core::Event {
-    
-    /**
-     * Event constructor
-     */
-    StoreCustomEvent() : core::Event("storeCustom") {}
-
-    /**
-     * Get Event as JSON string
-     * 
-     * @return JSON string
-     */
-    std::string toJSON() const override;
-
-    /**
-     * //doc-gen:ignore
-     */
-    std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
-    /**
-     * id of store from which it was sent
-     */
-    std::string storeId;
-    /**
-     * id of user which sent it
-     */
-    std::string userId;
-    /**
-     * event data
-     */
-    core::Buffer data;
-};
-
-/**
  * 'Events' provides the helpers methods for module's events management.
  */
 class Events {
@@ -410,22 +374,6 @@ public:
      * @return 'StoreFileDeletedEvent' object
      */
     static StoreFileDeletedEvent extractStoreFileDeletedEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Checks whether event held in the 'EventHolder' is an 'StoreCustomEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StoreCustomEvent', else otherwise
-     */
-    static bool isStoreCustomEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Gets Event held in the 'EventHolder' as an 'StoreCustomEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StoreCustomEvent' object
-     */
-    static StoreCustomEvent extractStoreCustomEvent(const core::EventHolder& eventHolder);
 };
 
 
