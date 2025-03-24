@@ -39,10 +39,7 @@ std::map<InboxApiVarInterface::METHOD, Poco::Dynamic::Var (InboxApiVarInterface:
                                        {SubscribeForInboxEvents, &InboxApiVarInterface::subscribeForInboxEvents},
                                        {UnsubscribeFromInboxEvents, &InboxApiVarInterface::unsubscribeFromInboxEvents},
                                        {SubscribeForEntryEvents, &InboxApiVarInterface::subscribeForEntryEvents},
-                                       {UnsubscribeFromEntryEvents, &InboxApiVarInterface::unsubscribeFromEntryEvents},
-                                       {EmitEvent, &InboxApiVarInterface::emitEvent},
-                                       {SubscribeForInboxCustomEvents, &InboxApiVarInterface::subscribeForInboxCustomEvents},
-                                       {UnsubscribeFromInboxCustomEvents, &InboxApiVarInterface::unsubscribeFromInboxCustomEvents}};
+                                       {UnsubscribeFromEntryEvents, &InboxApiVarInterface::unsubscribeFromEntryEvents}};
 
 Poco::Dynamic::Var InboxApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -219,32 +216,6 @@ Poco::Dynamic::Var InboxApiVarInterface::unsubscribeFromEntryEvents(const Poco::
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
     _inboxApi.unsubscribeFromEntryEvents(inboxId);
-    return {};
-}
-
-Poco::Dynamic::Var InboxApiVarInterface::emitEvent(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
-    auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "eventData");
-    auto usersIds = _deserializer.deserializeVector<std::string>(argsArr->get(3), "usersIds");
-    _inboxApi.emitEvent(inboxId, channelName, eventData, usersIds);
-    return {};
-}
-
-Poco::Dynamic::Var InboxApiVarInterface::subscribeForInboxCustomEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    _inboxApi.subscribeForInboxCustomEvents(inboxId, channelName);
-    return {};
-}
-
-Poco::Dynamic::Var InboxApiVarInterface::unsubscribeFromInboxCustomEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    _inboxApi.unsubscribeFromInboxCustomEvents(inboxId, channelName);
     return {};
 }
 

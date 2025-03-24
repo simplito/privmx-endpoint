@@ -220,18 +220,3 @@ Poco::Dynamic::Var VarSerializer::serialize<PagingList<store::File>>(const Pagin
     obj->set("readItems", serialize(val.readItems));
     return obj;
 }
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<store::StoreCustomEvent>(const store::StoreCustomEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreCustomEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("data", serialize(val.data));
-    obj->set("storeId", serialize(val.storeId));
-    obj->set("userId", serialize(val.userId));
-    return obj;
-}

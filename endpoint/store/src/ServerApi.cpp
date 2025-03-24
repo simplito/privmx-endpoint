@@ -67,10 +67,6 @@ void ServerApi::storeFileDelete(const server::StoreFileDeleteModel& model) {
     request("storeFileDelete", model);
 }
 
-void ServerApi::storeSendCustomEvent(server::StoreEmitCustomEventModel model) {
-    request("storeSendCustomEvent", model);
-}
-
 template<class T> T ServerApi::request(const std::string& method, const Poco::JSON::Object::Ptr& params) {  //only typed object
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("store." + method, params));
 }
