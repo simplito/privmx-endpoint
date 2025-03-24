@@ -180,6 +180,10 @@ bool Events::isThreadDeletedMessageEvent(const core::EventHolder& handler) {
     return handler.type() == "threadMessageDeleted";
 }
 
+bool Events::isThreadMessageDeletedEvent(const core::EventHolder& handler) {
+    return handler.type() == "threadMessageDeleted";
+}
+
 ThreadMessageDeletedEvent Events::extractThreadMessageDeletedEvent(const core::EventHolder& handler) {
     try {
         auto event = std::dynamic_pointer_cast<ThreadMessageDeletedEvent>(handler.get());
