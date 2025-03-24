@@ -64,8 +64,6 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEventData>(c
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEvent>(const inbox::InboxEntryDeletedEvent& val);
 
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxCustomEvent>(const inbox::InboxCustomEvent& val);
 
 }  // namespace core
 }  // namespace endpoint

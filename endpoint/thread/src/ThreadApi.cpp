@@ -223,35 +223,3 @@ void ThreadApi::unsubscribeFromMessageEvents(const std::string& threadId) {
     }
 }
 
-void ThreadApi::emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
-    validateEndpoint();
-    core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return _impl->emitEvent(threadId, channelName, eventData, usersIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ThreadApi::subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return _impl->subscribeForThreadCustomEvents(threadId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ThreadApi::unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return _impl->unsubscribeFromThreadCustomEvents(threadId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
