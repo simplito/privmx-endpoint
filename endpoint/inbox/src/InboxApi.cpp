@@ -308,36 +308,3 @@ void InboxApi::unsubscribeFromEntryEvents(const std::string& inboxId) {
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-
-void InboxApi::emitEvent(const std::string& inboxId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->emitEvent(inboxId, channelName, eventData, usersIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::subscribeForInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->subscribeForInboxCustomEvents(inboxId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::unsubscribeFromInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->unsubscribeFromInboxCustomEvents(inboxId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}

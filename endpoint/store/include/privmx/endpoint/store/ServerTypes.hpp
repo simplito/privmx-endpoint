@@ -335,21 +335,6 @@ ENDPOINT_SERVER_TYPE(StoreFileDeletedEventData)
     STRING_FIELD(storeId)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(StoreEmitCustomEventModel)
-    STRING_FIELD(storeId);
-    STRING_FIELD(channel);
-    STRING_FIELD(keyId);
-    VAR_FIELD(data);
-    LIST_FIELD(users, std::string);
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(StoreCustomEventData)
-    STRING_FIELD(id);
-    STRING_FIELD(keyId);
-    VAR_FIELD(eventData);
-    OBJECT_FIELD(author, core::server::UserIdentity);
-TYPE_END
-
 } // server
 } // store
 } // endpoint

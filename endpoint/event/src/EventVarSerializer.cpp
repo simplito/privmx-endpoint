@@ -26,8 +26,20 @@ Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEvent>(const eve
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
-    obj->set("contextId", serialize(val.contextId));
-    obj->set("userId", serialize(val.userId));
     obj->set("data", serialize(val.data));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEventData>(const event::ContextCustomEventData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "event$ContextCustomEventData");
+    }
+    obj->set("contextId", serialize(val.contextId));
+    obj->set("userId", serialize(val.userId));
+    obj->set("payload", serialize(val.payload));
+
+    return obj;
+}
+

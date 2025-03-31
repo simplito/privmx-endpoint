@@ -120,9 +120,11 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const std::
         );
         std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
         event->channel = channel;
-        event->data = decryptedData;
-        event->contextId = rawEvent.id();
-        event->userId = rawEvent.author().id();
+        event->data = {
+            .contextId = rawEvent.id(), 
+            .userId = rawEvent.author().id(), 
+            .payload = decryptedData
+        };
         _eventMiddleware->emitApiEvent(event);
     }
 }

@@ -103,11 +103,6 @@ public:
     void unsubscribeFromStoreEvents();
     void subscribeForFileEvents(const std::string& storeId);
     void unsubscribeFromFileEvents(const std::string& storeId);
-
-    void emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
-    void subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName);
-    void unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName);
-
     //For Inbox
     FileDecryptionParams getFileDecryptionParams(const server::File& file, const core::DecryptedEncKey& encKey);
     File decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
@@ -155,7 +150,6 @@ private:
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
-    void validateChannelName(const std::string& channelName);
     void assertStoreExist(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
     

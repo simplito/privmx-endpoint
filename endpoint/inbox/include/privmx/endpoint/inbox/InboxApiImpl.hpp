@@ -113,10 +113,6 @@ public:
     void unsubscribeFromInboxEvents();
     void subscribeForEntryEvents(const std::string& inboxId);
     void unsubscribeFromEntryEvents(const std::string& inboxId);
-    
-    void emitEvent(const std::string& inboxId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
-    void subscribeForInboxCustomEvents(const std::string& inboxId, const std::string& channelName);
-    void unsubscribeFromInboxCustomEvents(const std::string& inboxId, const std::string& channelName);
 
 private:
     server::Inbox getRawInboxFromCacheOrBridge(const std::string& inboxId);
@@ -150,7 +146,6 @@ private:
     thread::server::Message getServerMessage(const std::string& messageId);
     InboxEntryResult getEmptyResultWithStatusCode(const int64_t statusCode);
     std::vector<std::string> getFilesIdsFromServerMessage(const privmx::endpoint::inbox::server::InboxMessageServer& serverMessage);
-    void validateChannelName(const std::string& channelName);
     void assertInboxExist(const std::string& inboxId);
 
     template <typename T = std::string>

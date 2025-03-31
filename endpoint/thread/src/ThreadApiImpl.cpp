@@ -578,17 +578,6 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
         event->channel = channel;
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "custom") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadCustomEventData>(data);
-        auto thread = getRawThreadFromCacheOrBridge(raw.id());
-        auto key = _keyProvider->getKeyAndVerify(thread.keys(), raw.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
-        auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
-        std::shared_ptr<ThreadCustomEvent> event(new ThreadCustomEvent());
-        event->channel = channel;
-        event->data = data;
-        event->userId = raw.author().id();
-        event->threadId = raw.id();
-        _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
         std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
         if(channelName == "thread") {
@@ -1020,47 +1009,6 @@ core::DecryptedEncKey ThreadApiImpl::getThreadCurrentEncKey(server::ThreadInfo t
         {.contextId=thread.contextId(), .containerId=thread.id()}
     );
     return key;
-}
-
-void ThreadApiImpl::validateChannelName(const std::string& channelName) {
-    if(std::find(_forbiddenChannelsNames.begin(), _forbiddenChannelsNames.end(), channelName) != _forbiddenChannelsNames.end()) {
-        throw ForbiddenChannelNameException();
-    }
-}
-
-void ThreadApiImpl::emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
-    validateChannelName(channelName);
-    auto thread = getRawThreadFromCacheOrBridge(threadId);
-    auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
-    auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
-    for(auto userId: usersIds) {
-        usersIdList.add(userId);
-    }
-    server::ThreadEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::ThreadEmitCustomEventModel>();
-    model.threadId(threadId);
-    model.data(_eventDataEncryptorV4.signAndEncryptAndEncode(eventData, _userPrivKey, key.key));
-    model.channel(channelName);
-    model.users(usersIdList);
-    model.keyId(key.id);
-    _serverApi.threadSendCustomEvent(model);
-}
-
-void ThreadApiImpl::subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
-    validateChannelName(channelName);
-    assertThreadExist(threadId);
-    if(_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
-        throw AlreadySubscribedException(threadId);
-    }
-    _threadSubscriptionHelper.subscribeForElementCustom(threadId, channelName);
-}
-
-void ThreadApiImpl::unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName) {
-    validateChannelName(channelName);
-    assertThreadExist(threadId);
-    if(!_threadSubscriptionHelper.hasSubscriptionForElementCustom(threadId, channelName)) {
-        throw NotSubscribedException(threadId);
-    }
-    _threadSubscriptionHelper.unsubscribeFromElementCustom(threadId, channelName);
 }
 
 server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::string& threadId) {

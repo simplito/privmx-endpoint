@@ -81,10 +81,6 @@ public:
     void unsubscribeFromThreadEvents();
     void subscribeForMessageEvents(std::string threadId);
     void unsubscribeFromMessageEvents(std::string threadId);
-
-    void emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
-    void subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName);
-    void unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName);
 private:
     std::string _createThreadEx(
         const std::string& contextId, 
@@ -127,7 +123,6 @@ private:
     Message decryptAndConvertMessageDataToMessage(server::ThreadInfo thread, server::Message message);
     void assertMessageDataIntegrity(server::Message message);
 
-    void validateChannelName(const std::string& channelName);
     void assertThreadExist(const std::string& threadId);
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;

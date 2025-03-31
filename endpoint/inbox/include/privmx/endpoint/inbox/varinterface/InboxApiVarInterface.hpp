@@ -46,10 +46,7 @@ public:
         SubscribeForInboxEvents = 18,
         UnsubscribeFromInboxEvents = 19,
         SubscribeForEntryEvents = 20,
-        UnsubscribeFromEntryEvents = 21,
-        EmitEvent = 22,
-        SubscribeForInboxCustomEvents = 23,
-        UnsubscribeFromInboxCustomEvents = 24
+        UnsubscribeFromEntryEvents = 21
     };
 
     InboxApiVarInterface(core::Connection connection, thread::ThreadApi threadApi, store::StoreApi storeApi, const core::VarSerializer& serializer)
@@ -77,9 +74,6 @@ public:
     Poco::Dynamic::Var unsubscribeFromInboxEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeForEntryEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var emitEvent(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForInboxCustomEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromInboxCustomEvents(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
