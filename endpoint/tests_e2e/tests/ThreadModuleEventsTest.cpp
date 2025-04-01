@@ -584,7 +584,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeletedMessage_enabled) {
         EXPECT_EQ(event->connectionId, connection->getConnectionId());
         EXPECT_EQ(event->type, "threadMessageDeleted");
         EXPECT_EQ(event->channel, "thread/"+reader->getString("Thread_1.threadId")+"/messages");
-        if(thread::Events::isThreadDeletedMessageEvent(event)) {
+        if(thread::Events::isThreadMessageDeletedEvent(event)) {
             thread::ThreadDeletedMessageEventData threadDeletedMessage = thread::Events::extractThreadMessageDeletedEvent(event).data;
             EXPECT_EQ(threadDeletedMessage.messageId, reader->getString("Message_1.info_messageId"));
             EXPECT_EQ(threadDeletedMessage.threadId, reader->getString("Thread_1.threadId"));
