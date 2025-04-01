@@ -24,7 +24,7 @@ bool KeyIdFormatValidator::hasDefaultKeyIdFormat(const std::string& keyId) {
 bool KeyIdFormatValidator::hasExtendedKeyIdFormat(const std::string& keyId, const std::string& prefix, size_t dataElements) {
     if(keyId.size() >= 2 && keyId.front() == '<' && keyId.back() == '>') {
         std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
-        std::vector<std::string> keyData = utils::Utils::splitStringByCharacter(trimmedKeyId, '-');
+        std::vector<std::string> keyData = utils::Utils::split(trimmedKeyId, "-");
         if(!prefix.empty()) {
             if(keyData[0] != prefix) {
                 return false;

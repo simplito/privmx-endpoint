@@ -771,17 +771,6 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, [[maybe_unu
             };
             _eventMiddleware->emitApiEvent(event);
         }
-    } else if (type == "custom") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::InboxCustomEventData>(data);
-        auto store = getRawInboxFromCacheOrBridge(raw.id());
-        auto key = _keyProvider->getKey(store.keys(), raw.keyId());
-        auto data = _eventDataEncryptorV4.decodeAndDecryptAndVerify(raw.eventData(), crypto::PublicKey::fromBase58DER(raw.author().pub()), key.key);
-        std::shared_ptr<InboxCustomEvent> event(new InboxCustomEvent());
-        event->channel = channel;
-        event->data = data;
-        event->userId = raw.author().id();
-        event->inboxId = raw.id();
-        _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
         std::string channel = data->has("channel") ? data->get("channel") : "";
         if(channel == "inbox") {
@@ -890,13 +879,13 @@ store::DecryptedFileMeta InboxApiImpl::decryptInboxFileMetaV4(const store::serve
 std::string InboxApiImpl::readInboxIdFromMessageKeyId(const std::string& keyId) {
     _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
-    return utils::Utils::splitStringByCharacter(trimmedKeyId, '-')[1];
+    return utils::Utils::split(trimmedKeyId, "-")[1];
 }
 
 std::string InboxApiImpl::readMessageIdFromFileKeyId(const std::string& keyId) {
     _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
-    return utils::Utils::splitStringByCharacter(trimmedKeyId, '-')[3];
+    return utils::Utils::split(trimmedKeyId, "-")[3];
 }
 
 void InboxApiImpl::deleteMessageAndFiles(const thread::server::Message& message) {
@@ -911,47 +900,6 @@ thread::server::Message InboxApiImpl::getServerMessage(const std::string& messag
     auto model = Factory::createObject<thread::server::ThreadMessageGetModel>();
     model.messageId(messageId);
     return _serverApi->threadMessageGet(model).message();
-}
-
-void InboxApiImpl::validateChannelName(const std::string& channelName) {
-    if(std::find(_forbiddenChannelsNames.begin(), _forbiddenChannelsNames.end(), channelName) != _forbiddenChannelsNames.end()) {
-        throw ForbiddenChannelNameException();
-    }
-}
-
-void InboxApiImpl::emitEvent(const std::string& inboxId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
-    validateChannelName(channelName);
-    auto inbox = getRawInboxFromCacheOrBridge(inboxId);
-    auto key = _keyProvider->getKey(inbox.keys(), inbox.keyId());
-    auto usersIdList = privmx::utils::TypedObjectFactory::createNewList<std::string>();
-    for(auto userId: usersIds) {
-        usersIdList.add(userId);
-    }
-    server::InboxEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::InboxEmitCustomEventModel>();
-    model.inboxId(inboxId);
-    model.data(_eventDataEncryptorV4.signAndEncryptAndEncode(eventData, _userPrivKey, key.key));
-    model.channel(channelName);
-    model.users(usersIdList);
-    model.keyId(key.id);
-    _serverApi->inboxSendCustomEvent(model);
-}
-
-void InboxApiImpl::subscribeForInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
-    validateChannelName(channelName);
-    assertInboxExist(inboxId);
-    if(_inboxSubscriptionHelper.hasSubscriptionForElementCustom(inboxId, channelName)) {
-        throw AlreadySubscribedException(inboxId);
-    }
-    _inboxSubscriptionHelper.subscribeForElementCustom(inboxId, channelName);
-}
-
-void InboxApiImpl::unsubscribeFromInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
-    validateChannelName(channelName);
-    assertInboxExist(inboxId);
-    if(!_inboxSubscriptionHelper.hasSubscriptionForElementCustom(inboxId, channelName)) {
-        throw NotSubscribedException(inboxId);
-    }
-    _inboxSubscriptionHelper.unsubscribeFromElementCustom(inboxId, channelName);
 }
 
 server::Inbox InboxApiImpl::getRawInboxFromCacheOrBridge(const std::string& inboxId) {

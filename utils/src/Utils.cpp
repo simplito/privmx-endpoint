@@ -66,6 +66,11 @@ string Hex::toString(const string& hex_data) {
     return decodeInline<HexBinaryDecoder>(hex_data);
 }
 
+bool Hex::is(const string& data) {
+    std::regex hexRegex("^[0-9a-fA-F]+$");
+    return std::regex_match(data, hexRegex);
+}
+
 string Base32::decode(const string& base32_data) {
     return decodeInline<Base32Decoder>(base32_data);
 }
@@ -78,6 +83,11 @@ string Base32::encode(const string& data) {
     return encoded_data_stream.str();
 }
 
+bool Base32::is(const string& data) {
+    std::regex base32Regex("^(?:[A-Z2-7]{8})*(?:[A-Z2-7]{2}={6}|[A-Z2-7]{4}={4}|[A-Z2-7]{5}={3}|[A-Z2-7]{7}=)?$");
+    return std::regex_match(data, base32Regex);
+}
+
 string Base64::from(const string& data, int line_length) {
     return encodeInline<Base64Encoder>(data, line_length);
 }
@@ -87,7 +97,7 @@ string Base64::toString(const string& base64_data) {
 }
 
 bool Base64::is(const string& data) {
-    std::regex base64Regex("^[A-Za-z0-9+]*={0,2}$");
+    std::regex base64Regex("^(?=(.{4})*$)[A-Za-z0-9+/]*={0,2}$");
     return std::regex_match(data, base64Regex);
 }
 
@@ -98,6 +108,9 @@ Int64 TimestampServiceImpl::getNowTimestamp() {
 TimestampService::Ptr Utils::timestamp_service = new TimestampServiceImpl();
 
 string Utils::fillTo32(const string& data) {
+    if(data.length() >= 32) {
+        return data;
+    }
     return string(32 - data.length(), 0) + data;
 }
 
@@ -206,7 +219,7 @@ std::string Utils::trim(const std::string& data) {
     return Poco::trim(data);
 }
 
-std::vector<std::string> Utils::splitStringByCharacter(const std::string& str, char character) {
+std::vector<std::string> Utils::parseIniFileLine(const std::string& str, char character) {
     auto result = std::vector<std::string>{};
     auto ss = std::stringstream{str};
     std::string _namespace {""};
