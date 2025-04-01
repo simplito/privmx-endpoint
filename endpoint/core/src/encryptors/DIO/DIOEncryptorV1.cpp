@@ -42,7 +42,10 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
        privmx::utils::Utils::parseJsonObject(dioAndSignature.data.stdString())
     );
     assertDataFormat(dioJSON);
-    _dataEncryptor.verifySignature(dioAndSignature, privmx::crypto::PublicKey::fromBase58DER(dioJSON.creatorPublicKey()));
+    auto signatureStatus = _dataEncryptor.verifySignature(dioAndSignature, privmx::crypto::PublicKey::fromBase58DER(dioJSON.creatorPublicKey()));
+    if(!signatureStatus) {
+        throw DataIntegrityObjectInvalidSignatureException();
+    }
     std::unordered_map<std::string, std::string> mapOfDataSha256;
     for(auto  a: dioJSON.mapOfDataSha256()) {
         mapOfDataSha256.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));

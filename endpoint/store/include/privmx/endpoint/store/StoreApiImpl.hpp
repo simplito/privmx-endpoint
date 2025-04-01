@@ -124,11 +124,12 @@ private:
     Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
     Store convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData);
     Store convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData);
-    Store decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    std::tuple<Store, std::string> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
     Store decryptAndConvertStoreDataToStore(server::Store store);
     int64_t decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     int64_t decryptStoreInternalMeta(server::Store store);
-    void assertStoreDataIntegrity(server::Store store);
+    uint32_t validateStoreDataIntegrity(server::Store store);
     core::DecryptedEncKey getStoreCurrentEncKey(server::Store store);
 
 
@@ -143,10 +144,12 @@ private:
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
+    std::vector<File> decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files);
     File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
+    File decryptAndConvertFileDataToFileInfo(server::File file);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::Store store, server::File file);
-    void assertFileDataIntegrity(server::File file);
+    uint32_t validateFileDataIntegrity(server::File file);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);

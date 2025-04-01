@@ -105,10 +105,11 @@ private:
     Thread convertThreadDataV1ToThread(server::ThreadInfo threadInfo, dynamic::ThreadDataV1 threadData);
     Thread convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV4& threadData);
     Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV5& threadData);
-    Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    std::tuple<Thread, std::string> decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    std::vector<Thread> decryptAndConvertThreadsDataToThreads(utils::List<server::ThreadInfo> threads);
     Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread);
     int64_t decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
-    void assertThreadDataIntegrity(server::ThreadInfo thread);
+    uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     core::DecryptedEncKey getThreadCurrentEncKey(server::ThreadInfo thread);
 
     dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
@@ -120,8 +121,10 @@ private:
     Message convertDecryptedMessageDataV4ToMessage(server::Message message, DecryptedMessageDataV4 messageData);
     Message convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData);
     Message decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey);
+    std::vector<Message> decryptAndConvertMessagesDataToMessages(server::ThreadInfo thread, utils::List<server::Message> messages);
     Message decryptAndConvertMessageDataToMessage(server::ThreadInfo thread, server::Message message);
-    void assertMessageDataIntegrity(server::Message message);
+    Message decryptAndConvertMessageDataToMessage(server::Message message);
+    uint32_t validateMessageDataIntegrity(server::Message message);
 
     void assertThreadExist(const std::string& threadId);
     privfs::RpcGateway::Ptr _gateway;

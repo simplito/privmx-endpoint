@@ -137,6 +137,7 @@ namespace server {
             INIT_LIST(keys, privmx::endpoint::core::types::KeyEntrySet)
             INIT_OBJECT(data, InboxData)
         }
+        STRING_FIELD(inboxId)
         STRING_FIELD(contextId)
         LIST_FIELD(users, std::string) //cloud userId
         LIST_FIELD(managers, std::string) //cloud userId

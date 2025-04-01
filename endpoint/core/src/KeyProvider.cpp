@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 
 #include "privmx/endpoint/core/KeyProvider.hpp"
+#include "privmx/endpoint/core/Utils.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -30,12 +31,7 @@ EncKey KeyProvider::generateKey() {
 }
 
 int64_t KeyProvider::generateContainerControlNumber() {
-    int64_t containerControlNumber = 0;
-    std::string containerControlNumberStr = privmx::crypto::Crypto::randomBytes(8);
-    for(char c : containerControlNumberStr) {
-        containerControlNumber = (containerControlNumber << 8) + c;
-    }
-    return containerControlNumber;
+    return Utils::randomNumber();
 }
 
 DecryptedEncKeyV2 KeyProvider::getKeyAndVerify(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyV2IntegrityValidationData& integrityValidationData) {

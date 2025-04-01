@@ -182,3 +182,8 @@ void InboxDataProcessorV5::assertDataFormat(const server::PublicDataV5& encrypte
         throw InvalidEncryptedInboxDataVersionException();
     }
 }
+
+core::DataIntegrityObject InboxDataProcessorV5::getDIOAndAssertIntegrity(const server::InboxData& data) {
+    auto privateDataV5 = privmx::utils::TypedObjectFactory::createObjectFromVar<server::PrivateDataV5>(data.meta());
+    return getDIOAndAssertIntegrity(privateDataV5);
+}

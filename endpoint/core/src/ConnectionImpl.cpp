@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Utils.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -184,17 +185,13 @@ int64_t ConnectionImpl::generateConnectionId() {
 }
 
 std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
-    return _contextProvider->get(contextId).userId();
+    return _contextProvider->get(contextId).container.userId();
 }
 
 DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, const std::string& containerId, 
     const std::optional<std::string>& userId, const std::optional<crypto::PublicKey>& pubKey
 ) {
-    int64_t nonce = 0;
-    auto nonceStr = privmx::crypto::Crypto::randomBytes(8);
-    for(auto c : nonceStr) {
-        nonce = (nonce << 8) + c;
-    }
+    int64_t nonce = Utils::randomNumber();
     return core::DataIntegrityObject{
         .creatorUserId = userId.has_value() ? userId.value() : getMyUserId(contextId),
         .creatorPubKey = pubKey.has_value() ? pubKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),

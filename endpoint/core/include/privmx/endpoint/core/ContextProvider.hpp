@@ -21,7 +21,7 @@ namespace core {
 
 class ContextProvider : public core::ContainerProvider<std::string, server::ContextInfo> {
 public:
-    ContextProvider(std::function<server::ContextInfo(std::string)> getThread);
+    ContextProvider(std::function<server::ContextInfo(std::string)> getContext);
     void updateByValue(const server::ContextInfo& container) override;
 };
 

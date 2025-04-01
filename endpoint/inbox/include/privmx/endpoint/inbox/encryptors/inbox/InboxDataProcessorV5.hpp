@@ -40,6 +40,7 @@ public:
                                 const std::string& inboxKey);
 
     InboxPublicDataV5AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::InboxData& data);
 
 private:
     InboxPublicDataV5AsResult unpackPublic(const Poco::Dynamic::Var& publicData);

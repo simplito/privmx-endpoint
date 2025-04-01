@@ -177,7 +177,7 @@ ThreadMessageUpdatedEvent Events::extractThreadMessageUpdatedEvent(const core::E
 }
 
 bool Events::isThreadDeletedMessageEvent(const core::EventHolder& handler) {
-    return handler.type() == "threadMessageDeleted";
+    return handler.type() == "threadMessageDelweted";
 }
 
 ThreadMessageDeletedEvent Events::extractThreadMessageDeletedEvent(const core::EventHolder& handler) {

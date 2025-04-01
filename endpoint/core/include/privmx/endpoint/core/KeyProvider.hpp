@@ -14,6 +14,8 @@ limitations under the License.
 
 #include <memory>
 #include <functional>
+#include <vector>
+#include <map>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
@@ -32,7 +34,6 @@ public:
     KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifierInterface>()> getUserVerifier);
     EncKey generateKey();
     int64_t generateContainerControlNumber();
-    DecryptedEncKeyV2 getKey(const utils::List<server::KeyEntry>& keys, const std::string& keyId);
     DecryptedEncKeyV2 getKeyAndVerify(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyV2IntegrityValidationData& integrityValidationData);
     std::map<std::string,DecryptedEncKeyV2> getKeysAndVerify(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyV2IntegrityValidationData& integrityValidationData);
     std::vector<DecryptedEncKeyV2> getAllKeysAndVerify(const utils::List<server::KeyEntry>& serverKeys, const EncKeyV2IntegrityValidationData& integrityValidationData);

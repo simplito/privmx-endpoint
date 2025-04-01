@@ -14,13 +14,9 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-ContextProvider::ContextProvider(std::function<server::ContextInfo(std::string)> getContext) : core::ContainerProvider<std::string, server::ContextInfo>(getContext) {}
+ContextProvider::ContextProvider(std::function<server::ContextInfo(std::string)> getContext) 
+    : core::ContainerProvider<std::string, server::ContextInfo>(getContext, []([[maybe_unused]]server::ContextInfo c) {return 0;}) {}
     
 void ContextProvider::updateByValue(const server::ContextInfo& container) {
-    auto cached = _storage.get(container.contextId());
-    if(!cached.has_value()) {
-        _storage.set(container.contextId(), container);
-        return;
-    }
-    _storage.set(container.contextId(), container);
+    _storage.set(container.contextId(), ContainerInfo{.container=container, .status = core::DataIntegrityStatus::NotValidated});
 }
