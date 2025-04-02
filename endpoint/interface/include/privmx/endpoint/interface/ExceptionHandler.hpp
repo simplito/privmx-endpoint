@@ -20,6 +20,7 @@ limitations under the License.
 
 #include <privmx/utils/PrivmxException.hpp>
 #include "privmx/endpoint/core/Exception.hpp"
+#include "privmx/endpoint/interface/InterfaceException.hpp"
 
 namespace privmx {
 namespace utils {
@@ -27,20 +28,15 @@ namespace utils {
 class ExceptionHandler
 {
 public:
-    static Poco::Dynamic::Var make_error(const std::string& message = "Unspecified error", int type = 0, int code = 0);
+    static Poco::Dynamic::Var make_error(const std::string& message = "Unknown");
     static Poco::Dynamic::Var make_error(const endpoint::core::Exception& e);
     static Poco::Dynamic::Var make_error(const utils::PrivmxException& e);
     static Poco::Dynamic::Var make_error(const Poco::Exception& e);
     static Poco::Dynamic::Var make_error(const std::exception& e);
 };
 
-inline Poco::Dynamic::Var ExceptionHandler::make_error(const std::string& message, int type, int code) {
-    Poco::JSON::Object::Ptr error = new Poco::JSON::Object();
-    error->set("type", type);
-    error->set("code", code);
-    error->set("message", message);
-    error->set("__type", "Error");
-    return error;
+inline Poco::Dynamic::Var ExceptionHandler::make_error(const std::string& message) {
+    return make_error(endpoint::cinterface::UncaughtException(message));
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exception& e) {
@@ -55,15 +51,20 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exc
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const utils::PrivmxException& e) {
-    return make_error(e.what(), e.getType(), e.getCode());
+    std::string message = std::string("utils::PrivmxException: ") + e.what() +
+        ", type: " + std::to_string(e.getType()) +
+        ", code: " + std::to_string(e.getCode());
+    return make_error(message);
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const Poco::Exception& e) {
-    return make_error(e.displayText());
+    std::string message = std::string("Poco::Exception: ") + e.displayText();
+    return make_error(message);
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const std::exception& e) {
-    return make_error(e.what());
+    std::string message = std::string("std::exception: ") + e.what();
+    return make_error(message);
 }
 
 } // utils
