@@ -46,6 +46,7 @@ namespace cinterface { // confliceted name interface in Windows
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointInterfaceException, "Unknown endpoint interface exception", "Interface", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInterfaceException, InvalidMethodException, "Invalid method", 0x0001)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInterfaceException, UncaughtException, "Uncaught exception in C interface", 0x0002)
 
 } // cinterface
 } // endpoint
