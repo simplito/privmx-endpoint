@@ -49,6 +49,12 @@ int privmx_endpoint_newCryptoApi(CryptoApi** outPtr);
 int privmx_endpoint_freeCryptoApi(CryptoApi* ptr);
 int privmx_endpoint_execCryptoApi(CryptoApi* ptr, int method, const pson_value* args, pson_value** res);
 
+typedef struct EventApi EventApi;
+
+int privmx_endpoint_newEventApi(Connection* connectionPtr, EventApi** outPtr);
+int privmx_endpoint_freeEventApi(EventApi* ptr);
+int privmx_endpoint_execEventApi(EventApi* ptr, int method, const pson_value* args, pson_value** res);
+
 int privmx_endpoint_setCertsPath(const char* certsPath);
 
 #ifdef __cplusplus
