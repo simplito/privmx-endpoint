@@ -132,7 +132,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 4. The app's user knows the public keys of all the other users who are supposed to be added to a module (Thread/Store/Inbox).
 
 Hint: 
-- Instructions on how to add the user to the Context can be found in the [Bridge Installation Guide](https://docs.privmx.dev/bridge/getting-started).
+- Instructions on how to add the user to the Context can be found in the [Bridge Installation Guide](https://docs.privmx.dev/docs/latest/start/quick-start).
 - a pair of keys for that user can be generated, for example, using the code example above or by calling `genKeyPair.sh` script coming with the [PrivMX Bridge Server docker](https://github.com/simplito/privmx-bridge-docker).
 
 #### Example of using Threads API:
