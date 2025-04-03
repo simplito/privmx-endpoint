@@ -23,7 +23,8 @@ limitations under the License.
 #include "privmx/endpoint/interface/InterfaceException.hpp"
 
 namespace privmx {
-namespace utils {
+namespace endpoint {
+namespace cinterface {
 
 class ExceptionHandler
 {
@@ -67,7 +68,8 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const std::exception& e) 
     return make_error(message);
 }
 
-} // utils
+} // cinterface
+} // endpoint
 } // privmx
 
 #endif // _PRIVMXLIB_UTILS_EXCEPTIONHANDLER_HPP_
