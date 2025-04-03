@@ -17,10 +17,10 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::map<EventQueueVarInterface::METHOD, Poco::Dynamic::Var (EventQueueVarInterface::*)(const Poco::Dynamic::Var&)>
-    EventQueueVarInterface::methodMap = {{WaitEvent, &EventQueueVarInterface::waitEvent},
-                                         {GetEvent, &EventQueueVarInterface::getEvent},
-                                         {EmitBreakEvent, &EventQueueVarInterface::emitBreakEvent}};
+std::map<privmx_EventQueue_Method, Poco::Dynamic::Var (EventQueueVarInterface::*)(const Poco::Dynamic::Var&)>
+    EventQueueVarInterface::methodMap = {{privmx_EventQueue_WaitEvent, &EventQueueVarInterface::waitEvent},
+                                         {privmx_EventQueue_GetEvent, &EventQueueVarInterface::getEvent},
+                                         {privmx_EventQueue_EmitBreakEvent, &EventQueueVarInterface::emitBreakEvent}};
 
 Poco::Dynamic::Var EventQueueVarInterface::waitEvent(const Poco::Dynamic::Var& args) {
     VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -47,7 +47,7 @@ Poco::Dynamic::Var EventQueueVarInterface::emitBreakEvent(const Poco::Dynamic::V
     return {};
 }
 
-Poco::Dynamic::Var EventQueueVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var EventQueueVarInterface::exec(privmx_EventQueue_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw InvalidMethodException();

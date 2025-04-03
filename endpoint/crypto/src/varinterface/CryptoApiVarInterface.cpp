@@ -17,18 +17,18 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::crypto;
 
-std::map<CryptoApiVarInterface::METHOD, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    CryptoApiVarInterface::methodMap = {{Create, &CryptoApiVarInterface::create},
-                                        {SignData, &CryptoApiVarInterface::signData},
-                                        {GeneratePrivateKey, &CryptoApiVarInterface::generatePrivateKey},
-                                        {DerivePrivateKey, &CryptoApiVarInterface::derivePrivateKey},
-                                        {DerivePrivateKey2, &CryptoApiVarInterface::derivePrivateKey2},
-                                        {DerivePublicKey, &CryptoApiVarInterface::derivePublicKey},
-                                        {GenerateKeySymmetric, &CryptoApiVarInterface::generateKeySymmetric},
-                                        {EncryptDataSymmetric, &CryptoApiVarInterface::encryptDataSymmetric},
-                                        {DecryptDataSymmetric, &CryptoApiVarInterface::decryptDataSymmetric},
-                                        {ConvertPEMKeytoWIFKey, &CryptoApiVarInterface::convertPEMKeytoWIFKey},
-                                        {VerifySignature, &CryptoApiVarInterface::verifySignature}};
+std::map<privmx_CryptoApi_Method, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)>
+    CryptoApiVarInterface::methodMap = {{privmx_CryptoApi_Create, &CryptoApiVarInterface::create},
+                                        {privmx_CryptoApi_SignData, &CryptoApiVarInterface::signData},
+                                        {privmx_CryptoApi_GeneratePrivateKey, &CryptoApiVarInterface::generatePrivateKey},
+                                        {privmx_CryptoApi_DerivePrivateKey, &CryptoApiVarInterface::derivePrivateKey},
+                                        {privmx_CryptoApi_DerivePrivateKey2, &CryptoApiVarInterface::derivePrivateKey2},
+                                        {privmx_CryptoApi_DerivePublicKey, &CryptoApiVarInterface::derivePublicKey},
+                                        {privmx_CryptoApi_GenerateKeySymmetric, &CryptoApiVarInterface::generateKeySymmetric},
+                                        {privmx_CryptoApi_EncryptDataSymmetric, &CryptoApiVarInterface::encryptDataSymmetric},
+                                        {privmx_CryptoApi_DecryptDataSymmetric, &CryptoApiVarInterface::decryptDataSymmetric},
+                                        {privmx_CryptoApi_ConvertPEMKeytoWIFKey, &CryptoApiVarInterface::convertPEMKeytoWIFKey},
+                                        {privmx_CryptoApi_VerifySignature, &CryptoApiVarInterface::verifySignature}};
 
 Poco::Dynamic::Var CryptoApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -112,7 +112,7 @@ Poco::Dynamic::Var CryptoApiVarInterface::convertPEMKeytoWIFKey(const Poco::Dyna
     return _serializer.serialize(result);
 }
 
-Poco::Dynamic::Var CryptoApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var CryptoApiVarInterface::exec(privmx_CryptoApi_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw core::InvalidMethodException();

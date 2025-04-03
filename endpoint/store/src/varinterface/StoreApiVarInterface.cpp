@@ -17,28 +17,28 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    StoreApiVarInterface::methodMap = {{Create, &StoreApiVarInterface::create},
-                                       {CreateStore, &StoreApiVarInterface::createStore},
-                                       {UpdateStore, &StoreApiVarInterface::updateStore},
-                                       {DeleteStore, &StoreApiVarInterface::deleteStore},
-                                       {GetStore, &StoreApiVarInterface::getStore},
-                                       {ListStores, &StoreApiVarInterface::listStores},
-                                       {CreateFile, &StoreApiVarInterface::createFile},
-                                       {UpdateFile, &StoreApiVarInterface::updateFile},
-                                       {UpdateFileMeta, &StoreApiVarInterface::updateFileMeta},
-                                       {WriteToFile, &StoreApiVarInterface::writeToFile},
-                                       {DeleteFile, &StoreApiVarInterface::deleteFile},
-                                       {GetFile, &StoreApiVarInterface::getFile},
-                                       {ListFiles, &StoreApiVarInterface::listFiles},
-                                       {OpenFile, &StoreApiVarInterface::openFile},
-                                       {ReadFromFile, &StoreApiVarInterface::readFromFile},
-                                       {SeekInFile, &StoreApiVarInterface::seekInFile},
-                                       {CloseFile, &StoreApiVarInterface::closeFile},
-                                       {SubscribeForStoreEvents, &StoreApiVarInterface::subscribeForStoreEvents},
-                                       {UnsubscribeFromStoreEvents, &StoreApiVarInterface::unsubscribeFromStoreEvents},
-                                       {SubscribeForFileEvents, &StoreApiVarInterface::subscribeForFileEvents},
-                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents}};
+std::map<privmx_StoreApi_Method, Poco::Dynamic::Var (StoreApiVarInterface::*)(const Poco::Dynamic::Var&)>
+    StoreApiVarInterface::methodMap = {{privmx_StoreApi_Create, &StoreApiVarInterface::create},
+                                       {privmx_StoreApi_CreateStore, &StoreApiVarInterface::createStore},
+                                       {privmx_StoreApi_UpdateStore, &StoreApiVarInterface::updateStore},
+                                       {privmx_StoreApi_DeleteStore, &StoreApiVarInterface::deleteStore},
+                                       {privmx_StoreApi_GetStore, &StoreApiVarInterface::getStore},
+                                       {privmx_StoreApi_ListStores, &StoreApiVarInterface::listStores},
+                                       {privmx_StoreApi_CreateFile, &StoreApiVarInterface::createFile},
+                                       {privmx_StoreApi_UpdateFile, &StoreApiVarInterface::updateFile},
+                                       {privmx_StoreApi_UpdateFileMeta, &StoreApiVarInterface::updateFileMeta},
+                                       {privmx_StoreApi_WriteToFile, &StoreApiVarInterface::writeToFile},
+                                       {privmx_StoreApi_DeleteFile, &StoreApiVarInterface::deleteFile},
+                                       {privmx_StoreApi_GetFile, &StoreApiVarInterface::getFile},
+                                       {privmx_StoreApi_ListFiles, &StoreApiVarInterface::listFiles},
+                                       {privmx_StoreApi_OpenFile, &StoreApiVarInterface::openFile},
+                                       {privmx_StoreApi_ReadFromFile, &StoreApiVarInterface::readFromFile},
+                                       {privmx_StoreApi_SeekInFile, &StoreApiVarInterface::seekInFile},
+                                       {privmx_StoreApi_CloseFile, &StoreApiVarInterface::closeFile},
+                                       {privmx_StoreApi_SubscribeForStoreEvents, &StoreApiVarInterface::subscribeForStoreEvents},
+                                       {privmx_StoreApi_UnsubscribeFromStoreEvents, &StoreApiVarInterface::unsubscribeFromStoreEvents},
+                                       {privmx_StoreApi_SubscribeForFileEvents, &StoreApiVarInterface::subscribeForFileEvents},
+                                       {privmx_StoreApi_UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents}};
 
 
 Poco::Dynamic::Var StoreApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -211,7 +211,7 @@ Poco::Dynamic::Var StoreApiVarInterface::updateFileMeta(const Poco::Dynamic::Var
     return {};
 }
 
-Poco::Dynamic::Var StoreApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StoreApiVarInterface::exec(privmx_StoreApi_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw core::InvalidMethodException();

@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/core/VarDeserializer.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
 #include "privmx/endpoint/crypto/CryptoApi.hpp"
+#include "privmx/endpoint/crypto/c_api.h"
 
 namespace privmx {
 namespace endpoint {
@@ -24,20 +25,6 @@ namespace crypto {
 
 class CryptoApiVarInterface {
 public:
-    enum METHOD {
-        Create = 0,
-        SignData = 1,
-        GeneratePrivateKey = 2,
-        DerivePrivateKey = 3,
-        DerivePrivateKey2 = 4,
-        DerivePublicKey = 5,
-        GenerateKeySymmetric = 6,
-        EncryptDataSymmetric = 7,
-        DecryptDataSymmetric = 8,
-        ConvertPEMKeytoWIFKey = 9,
-        VerifySignature = 10,
-    };
-
     CryptoApiVarInterface(const core::VarSerializer& serializer)
         : _serializer(serializer) {}
 
@@ -54,10 +41,10 @@ public:
 
     Poco::Dynamic::Var convertPEMKeytoWIFKey(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var exec(privmx_CryptoApi_Method method, const Poco::Dynamic::Var& args);
 
 private:
-    static std::map<METHOD, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
+    static std::map<privmx_CryptoApi_Method, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     CryptoApi _cryptoApi;
     core::VarDeserializer _deserializer;

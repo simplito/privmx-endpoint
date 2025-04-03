@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/event/EventApi.hpp"
 #include "privmx/endpoint/event/EventVarSerializer.hpp"
 #include <privmx/endpoint/core/VarDeserializer.hpp>
+#include "privmx/endpoint/event/c_api.h"
 
 namespace privmx {
 namespace endpoint {
@@ -24,13 +25,6 @@ namespace event {
 
 class EventApiVarInterface {
 public:
-    enum METHOD {
-        Create = 0,
-        EmitEvent = 1,
-        SubscribeForCustomEvents = 2,
-        UnsubscribeFromCustomEvents = 3,
-    };
-
     EventApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
         : _connection(std::move(connection)), _serializer(serializer) {}
 
@@ -39,12 +33,12 @@ public:
     Poco::Dynamic::Var subscribeForCustomEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromCustomEvents(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var exec(privmx_EventApi_Method method, const Poco::Dynamic::Var& args);
 
     EventApi getApi() const { return _eventApi; }
 
 private:
-    static std::map<METHOD, Poco::Dynamic::Var (EventApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
+    static std::map<privmx_EventApi_Method, Poco::Dynamic::Var (EventApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
     EventApi _eventApi;

@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxApi.hpp"
 #include "privmx/endpoint/inbox/InboxVarDeserializer.hpp"
 #include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
+#include "privmx/endpoint/inbox/c_api.h"
 
 namespace privmx {
 namespace endpoint {
@@ -24,31 +25,6 @@ namespace inbox {
 
 class InboxApiVarInterface {
 public:
-    enum METHOD {
-        Create = 0,
-        CreateInbox = 1,
-        UpdateInbox = 2,
-        GetInbox = 3,
-        ListInboxes = 4,
-        GetInboxPublicView = 5,
-        DeleteInbox = 6,
-        PrepareEntry = 7,
-        SendEntry = 8,
-        ReadEntry = 9,
-        ListEntries = 10,
-        DeleteEntry = 11,
-        CreateFileHandle = 12,
-        WriteToFile = 13,
-        OpenFile = 14,
-        ReadFromFile = 15,
-        SeekInFile = 16,
-        CloseFile = 17,
-        SubscribeForInboxEvents = 18,
-        UnsubscribeFromInboxEvents = 19,
-        SubscribeForEntryEvents = 20,
-        UnsubscribeFromEntryEvents = 21
-    };
-
     InboxApiVarInterface(core::Connection connection, thread::ThreadApi threadApi, store::StoreApi storeApi, const core::VarSerializer& serializer)
         : _connection(std::move(connection)), _threadApi(std::move(threadApi)), _storeApi(std::move(storeApi)), _serializer(serializer) {}
 
@@ -75,10 +51,10 @@ public:
     Poco::Dynamic::Var subscribeForEntryEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var exec(privmx_InboxApi_Method method, const Poco::Dynamic::Var& args);
 
 private:
-    static std::map<METHOD, Poco::Dynamic::Var (InboxApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
+    static std::map<privmx_InboxApi_Method, Poco::Dynamic::Var (InboxApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
     thread::ThreadApi _threadApi;

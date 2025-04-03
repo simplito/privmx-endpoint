@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/StoreVarDeserializer.hpp"
 #include "privmx/endpoint/store/StoreVarSerializer.hpp"
+#include "privmx/endpoint/store/c_api.h"
 
 namespace privmx {
 namespace endpoint {
@@ -24,30 +25,6 @@ namespace store {
 
 class StoreApiVarInterface {
 public:
-    enum METHOD {
-        Create = 0,
-        CreateStore = 1,
-        UpdateStore = 2,
-        DeleteStore = 3,
-        GetStore = 4,
-        ListStores = 5,
-        CreateFile = 6,
-        UpdateFile = 7,
-        UpdateFileMeta = 8,
-        WriteToFile = 9,
-        DeleteFile = 10,
-        GetFile = 11,
-        ListFiles = 12,
-        OpenFile = 13,
-        ReadFromFile = 14,
-        SeekInFile = 15,
-        CloseFile = 16,
-        SubscribeForStoreEvents = 17,
-        UnsubscribeFromStoreEvents = 18,
-        SubscribeForFileEvents = 19,
-        UnsubscribeFromFileEvents = 20,
-    };
-
     StoreApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
         : _connection(std::move(connection)), _serializer(serializer) {}
 
@@ -73,12 +50,12 @@ public:
     Poco::Dynamic::Var subscribeForFileEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromFileEvents(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var exec(privmx_StoreApi_Method method, const Poco::Dynamic::Var& args);
 
     StoreApi getApi() const { return _storeApi; }
 
 private:
-    static std::map<METHOD, Poco::Dynamic::Var (StoreApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
+    static std::map<privmx_StoreApi_Method, Poco::Dynamic::Var (StoreApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
     StoreApi _storeApi;
