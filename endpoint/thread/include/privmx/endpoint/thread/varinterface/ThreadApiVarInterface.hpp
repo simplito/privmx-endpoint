@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/ThreadVarDeserializer.hpp"
 #include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
+#include "privmx/endpoint/thread/c_api.h"
 
 namespace privmx {
 namespace endpoint {
@@ -24,24 +25,6 @@ namespace thread {
 
 class ThreadApiVarInterface {
 public:
-    enum METHOD {
-        Create = 0,
-        CreateThread = 1,
-        UpdateThread = 2,
-        DeleteThread = 3,
-        GetThread = 4,
-        ListThreads = 5,
-        GetMessage = 6,
-        ListMessages = 7,
-        SendMessage = 8,
-        DeleteMessage = 9,
-        UpdateMessage = 10,
-        SubscribeForThreadEvents = 11,
-        UnsubscribeFromThreadEvents = 12,
-        SubscribeForMessageEvents = 13,
-        UnsubscribeFromMessageEvents = 14
-    };
-
     ThreadApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
         : _connection(std::move(connection)), _serializer(serializer) {}
 
@@ -61,12 +44,12 @@ public:
     Poco::Dynamic::Var subscribeForMessageEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromMessageEvents(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var exec(privmx_ThreadApi_Method method, const Poco::Dynamic::Var& args);
 
     ThreadApi getApi() const { return _threadApi; }
 
 private:
-    static std::map<METHOD, Poco::Dynamic::Var (ThreadApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
+    static std::map<privmx_ThreadApi_Method, Poco::Dynamic::Var (ThreadApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
     ThreadApi _threadApi;

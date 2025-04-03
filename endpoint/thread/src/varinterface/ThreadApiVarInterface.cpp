@@ -17,22 +17,22 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-std::map<ThreadApiVarInterface::METHOD, Poco::Dynamic::Var (ThreadApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    ThreadApiVarInterface::methodMap = {{Create, &ThreadApiVarInterface::create},
-                                        {CreateThread, &ThreadApiVarInterface::createThread},
-                                        {UpdateThread, &ThreadApiVarInterface::updateThread},
-                                        {DeleteThread, &ThreadApiVarInterface::deleteThread},
-                                        {GetThread, &ThreadApiVarInterface::getThread},
-                                        {ListThreads, &ThreadApiVarInterface::listThreads},
-                                        {GetMessage, &ThreadApiVarInterface::getMessage},
-                                        {ListMessages, &ThreadApiVarInterface::listMessages},
-                                        {SendMessage, &ThreadApiVarInterface::sendMessage},
-                                        {DeleteMessage, &ThreadApiVarInterface::deleteMessage},
-                                        {UpdateMessage, &ThreadApiVarInterface::updateMessage},
-                                        {SubscribeForThreadEvents, &ThreadApiVarInterface::subscribeForThreadEvents},
-                                        {UnsubscribeFromThreadEvents, &ThreadApiVarInterface::unsubscribeFromThreadEvents},
-                                        {SubscribeForMessageEvents, &ThreadApiVarInterface::subscribeForMessageEvents},
-                                        {UnsubscribeFromMessageEvents, &ThreadApiVarInterface::unsubscribeFromMessageEvents}};
+std::map<privmx_ThreadApi_Method, Poco::Dynamic::Var (ThreadApiVarInterface::*)(const Poco::Dynamic::Var&)>
+    ThreadApiVarInterface::methodMap = {{privmx_ThreadApi_Create, &ThreadApiVarInterface::create},
+                                        {privmx_ThreadApi_CreateThread, &ThreadApiVarInterface::createThread},
+                                        {privmx_ThreadApi_UpdateThread, &ThreadApiVarInterface::updateThread},
+                                        {privmx_ThreadApi_DeleteThread, &ThreadApiVarInterface::deleteThread},
+                                        {privmx_ThreadApi_GetThread, &ThreadApiVarInterface::getThread},
+                                        {privmx_ThreadApi_ListThreads, &ThreadApiVarInterface::listThreads},
+                                        {privmx_ThreadApi_GetMessage, &ThreadApiVarInterface::getMessage},
+                                        {privmx_ThreadApi_ListMessages, &ThreadApiVarInterface::listMessages},
+                                        {privmx_ThreadApi_SendMessage, &ThreadApiVarInterface::sendMessage},
+                                        {privmx_ThreadApi_DeleteMessage, &ThreadApiVarInterface::deleteMessage},
+                                        {privmx_ThreadApi_UpdateMessage, &ThreadApiVarInterface::updateMessage},
+                                        {privmx_ThreadApi_SubscribeForThreadEvents, &ThreadApiVarInterface::subscribeForThreadEvents},
+                                        {privmx_ThreadApi_UnsubscribeFromThreadEvents, &ThreadApiVarInterface::unsubscribeFromThreadEvents},
+                                        {privmx_ThreadApi_SubscribeForMessageEvents, &ThreadApiVarInterface::subscribeForMessageEvents},
+                                        {privmx_ThreadApi_UnsubscribeFromMessageEvents, &ThreadApiVarInterface::unsubscribeFromMessageEvents}};
 
 Poco::Dynamic::Var ThreadApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -157,7 +157,7 @@ Poco::Dynamic::Var ThreadApiVarInterface::unsubscribeFromMessageEvents(const Poc
     return {};
 }
 
-Poco::Dynamic::Var ThreadApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var ThreadApiVarInterface::exec(privmx_ThreadApi_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw core::InvalidMethodException();

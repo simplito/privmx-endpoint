@@ -17,8 +17,8 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::map<BackendRequesterVarInterface::METHOD, Poco::Dynamic::Var (BackendRequesterVarInterface::*)(const Poco::Dynamic::Var&)>
-    BackendRequesterVarInterface::methodMap = {{BackendRequest, &BackendRequesterVarInterface::backendRequest}};
+std::map<privmx_BackendRequester_Method, Poco::Dynamic::Var (BackendRequesterVarInterface::*)(const Poco::Dynamic::Var&)>
+    BackendRequesterVarInterface::methodMap = {{privmx_BackendRequester_BackendRequest, &BackendRequesterVarInterface::backendRequest}};
 
 Poco::Dynamic::Var BackendRequesterVarInterface::backendRequest(const Poco::Dynamic::Var& args) {
     Poco::JSON::Array::Ptr argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3, 6);
@@ -46,7 +46,7 @@ Poco::Dynamic::Var BackendRequesterVarInterface::backendRequest(const Poco::Dyna
     }
 }
 
-Poco::Dynamic::Var BackendRequesterVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var BackendRequesterVarInterface::exec(privmx_BackendRequester_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw InvalidMethodException();

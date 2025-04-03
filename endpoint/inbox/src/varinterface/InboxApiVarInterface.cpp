@@ -17,29 +17,29 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
-std::map<InboxApiVarInterface::METHOD, Poco::Dynamic::Var (InboxApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    InboxApiVarInterface::methodMap = {{Create, &InboxApiVarInterface::create},
-                                       {CreateInbox, &InboxApiVarInterface::createInbox},
-                                       {UpdateInbox, &InboxApiVarInterface::updateInbox},
-                                       {GetInbox, &InboxApiVarInterface::getInbox},
-                                       {ListInboxes, &InboxApiVarInterface::listInboxes},
-                                       {GetInboxPublicView, &InboxApiVarInterface::getInboxPublicView},
-                                       {DeleteInbox, &InboxApiVarInterface::deleteInbox},
-                                       {PrepareEntry, &InboxApiVarInterface::prepareEntry},
-                                       {SendEntry, &InboxApiVarInterface::sendEntry},
-                                       {ReadEntry, &InboxApiVarInterface::readEntry},
-                                       {ListEntries, &InboxApiVarInterface::listEntries},
-                                       {DeleteEntry, &InboxApiVarInterface::deleteEntry},
-                                       {CreateFileHandle, &InboxApiVarInterface::createFileHandle},
-                                       {WriteToFile, &InboxApiVarInterface::writeToFile},
-                                       {OpenFile, &InboxApiVarInterface::openFile},
-                                       {ReadFromFile, &InboxApiVarInterface::readFromFile},
-                                       {SeekInFile, &InboxApiVarInterface::seekInFile},
-                                       {CloseFile, &InboxApiVarInterface::closeFile},
-                                       {SubscribeForInboxEvents, &InboxApiVarInterface::subscribeForInboxEvents},
-                                       {UnsubscribeFromInboxEvents, &InboxApiVarInterface::unsubscribeFromInboxEvents},
-                                       {SubscribeForEntryEvents, &InboxApiVarInterface::subscribeForEntryEvents},
-                                       {UnsubscribeFromEntryEvents, &InboxApiVarInterface::unsubscribeFromEntryEvents}};
+std::map<privmx_InboxApi_Method, Poco::Dynamic::Var (InboxApiVarInterface::*)(const Poco::Dynamic::Var&)>
+    InboxApiVarInterface::methodMap = {{privmx_InboxApi_Create, &InboxApiVarInterface::create},
+                                       {privmx_InboxApi_CreateInbox, &InboxApiVarInterface::createInbox},
+                                       {privmx_InboxApi_UpdateInbox, &InboxApiVarInterface::updateInbox},
+                                       {privmx_InboxApi_GetInbox, &InboxApiVarInterface::getInbox},
+                                       {privmx_InboxApi_ListInboxes, &InboxApiVarInterface::listInboxes},
+                                       {privmx_InboxApi_GetInboxPublicView, &InboxApiVarInterface::getInboxPublicView},
+                                       {privmx_InboxApi_DeleteInbox, &InboxApiVarInterface::deleteInbox},
+                                       {privmx_InboxApi_PrepareEntry, &InboxApiVarInterface::prepareEntry},
+                                       {privmx_InboxApi_SendEntry, &InboxApiVarInterface::sendEntry},
+                                       {privmx_InboxApi_ReadEntry, &InboxApiVarInterface::readEntry},
+                                       {privmx_InboxApi_ListEntries, &InboxApiVarInterface::listEntries},
+                                       {privmx_InboxApi_DeleteEntry, &InboxApiVarInterface::deleteEntry},
+                                       {privmx_InboxApi_CreateFileHandle, &InboxApiVarInterface::createFileHandle},
+                                       {privmx_InboxApi_WriteToFile, &InboxApiVarInterface::writeToFile},
+                                       {privmx_InboxApi_OpenFile, &InboxApiVarInterface::openFile},
+                                       {privmx_InboxApi_ReadFromFile, &InboxApiVarInterface::readFromFile},
+                                       {privmx_InboxApi_SeekInFile, &InboxApiVarInterface::seekInFile},
+                                       {privmx_InboxApi_CloseFile, &InboxApiVarInterface::closeFile},
+                                       {privmx_InboxApi_SubscribeForInboxEvents, &InboxApiVarInterface::subscribeForInboxEvents},
+                                       {privmx_InboxApi_UnsubscribeFromInboxEvents, &InboxApiVarInterface::unsubscribeFromInboxEvents},
+                                       {privmx_InboxApi_SubscribeForEntryEvents, &InboxApiVarInterface::subscribeForEntryEvents},
+                                       {privmx_InboxApi_UnsubscribeFromEntryEvents, &InboxApiVarInterface::unsubscribeFromEntryEvents}};
 
 Poco::Dynamic::Var InboxApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -219,7 +219,7 @@ Poco::Dynamic::Var InboxApiVarInterface::unsubscribeFromEntryEvents(const Poco::
     return {};
 }
 
-Poco::Dynamic::Var InboxApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var InboxApiVarInterface::exec(privmx_InboxApi_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw core::InvalidMethodException();

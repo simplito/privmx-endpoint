@@ -16,13 +16,13 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterface::*)(const Poco::Dynamic::Var&)>
-    ConnectionVarInterface::methodMap = {{Connect, &ConnectionVarInterface::connect},
-                                         {ConnectPublic, &ConnectionVarInterface::connectPublic},
-                                         {GetConnectionId, &ConnectionVarInterface::getConnectionId},
-                                         {ListContexts, &ConnectionVarInterface::listContexts},
-                                         {Disconnect, &ConnectionVarInterface::disconnect},
-                                         {GetContextUsers, &ConnectionVarInterface::getContextUsers}};
+std::map<privmx_Connection_Method, Poco::Dynamic::Var (ConnectionVarInterface::*)(const Poco::Dynamic::Var&)>
+    ConnectionVarInterface::methodMap = {{privmx_Connection_Connect, &ConnectionVarInterface::connect},
+                                         {privmx_Connection_ConnectPublic, &ConnectionVarInterface::connectPublic},
+                                         {privmx_Connection_GetConnectionId, &ConnectionVarInterface::getConnectionId},
+                                         {privmx_Connection_ListContexts, &ConnectionVarInterface::listContexts},
+                                         {privmx_Connection_Disconnect, &ConnectionVarInterface::disconnect},
+                                         {privmx_Connection_GetContextUsers, &ConnectionVarInterface::getContextUsers}};
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
     auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3);
@@ -67,7 +67,7 @@ Poco::Dynamic::Var ConnectionVarInterface::getContextUsers(const Poco::Dynamic::
     return _serializer.serialize(result);
 }
 
-Poco::Dynamic::Var ConnectionVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var ConnectionVarInterface::exec(privmx_Connection_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw InvalidMethodException();

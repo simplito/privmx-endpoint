@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <Poco/Dynamic/Var.h>
 
+#include "privmx/endpoint/core/c_api.h"
 #include "privmx/endpoint/core/EventQueue.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
 
@@ -23,8 +24,6 @@ namespace core {
 
 class EventQueueVarInterface {
 public:
-    enum METHOD { WaitEvent = 0, GetEvent = 1, EmitBreakEvent = 2 };
-
     EventQueueVarInterface(EventQueue eventQueue, const VarSerializer& serializer)
         : _eventQueue(std::move(eventQueue)), _serializer(serializer) {}
 
@@ -32,10 +31,10 @@ public:
     Poco::Dynamic::Var getEvent(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var emitBreakEvent(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var exec(privmx_EventQueue_Method method, const Poco::Dynamic::Var& args);
 
 private:
-    static std::map<METHOD, Poco::Dynamic::Var (EventQueueVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
+    static std::map<privmx_EventQueue_Method, Poco::Dynamic::Var (EventQueueVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     EventQueue _eventQueue;
     VarSerializer _serializer;

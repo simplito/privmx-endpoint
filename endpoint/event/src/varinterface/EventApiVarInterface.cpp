@@ -16,11 +16,11 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
-std::map<EventApiVarInterface::METHOD, Poco::Dynamic::Var (EventApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    EventApiVarInterface::methodMap = {{Create, &EventApiVarInterface::create},
-                                       {EmitEvent, &EventApiVarInterface::emitEvent},
-                                       {SubscribeForCustomEvents, &EventApiVarInterface::subscribeForCustomEvents},
-                                       {UnsubscribeFromCustomEvents, &EventApiVarInterface::unsubscribeFromCustomEvents}};
+std::map<privmx_EventApi_Method, Poco::Dynamic::Var (EventApiVarInterface::*)(const Poco::Dynamic::Var&)>
+    EventApiVarInterface::methodMap = {{privmx_EventApi_Create, &EventApiVarInterface::create},
+                                       {privmx_EventApi_EmitEvent, &EventApiVarInterface::emitEvent},
+                                       {privmx_EventApi_SubscribeForCustomEvents, &EventApiVarInterface::subscribeForCustomEvents},
+                                       {privmx_EventApi_UnsubscribeFromCustomEvents, &EventApiVarInterface::unsubscribeFromCustomEvents}};
 
 Poco::Dynamic::Var EventApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -55,7 +55,7 @@ Poco::Dynamic::Var EventApiVarInterface::unsubscribeFromCustomEvents(const Poco:
     return {};
 }
 
-Poco::Dynamic::Var EventApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var EventApiVarInterface::exec(privmx_EventApi_Method method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
         throw core::InvalidMethodException();
