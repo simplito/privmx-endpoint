@@ -31,10 +31,10 @@ Poco::Dynamic::Var EventApiVarInterface::create(const Poco::Dynamic::Var& args) 
 Poco::Dynamic::Var EventApiVarInterface::emitEvent(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "eventData");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(3), "users");
-    _eventApi.emitEvent(contextId, channelName, eventData, users);
+    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
+    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(2), "channelName");
+    auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "eventData");
+    _eventApi.emitEvent(contextId, users, channelName, eventData);
     return {};
 }
 

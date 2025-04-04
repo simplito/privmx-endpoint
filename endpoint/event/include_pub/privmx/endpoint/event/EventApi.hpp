@@ -31,11 +31,11 @@ public:
      * Emits the custom event on the given Context and channel.
      * 
      * @param contextId ID of the Context
+     * @param users list of UserWithPubKey objects which defines the recipeints of the event
      * @param channelName name of the Channel
      * @param eventData event's data
-     * @param users list of UserWithPubKey objects which defines the recipeints of the event
      */
-    void emitEvent(const std::string& contextId, const std::string& channelName, const core::Buffer& eventData, const std::vector<core::UserWithPubKey>& users);
+    void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
     
     /**
      * Subscribe for the custom events on the given channel.

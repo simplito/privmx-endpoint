@@ -358,7 +358,18 @@ public:
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'ThreadMessageDeletedEvent', else otherwise
      */
+
+    [[deprecated("Use isThreadMessageDeletedEvent(const core::EventHolder& eventHolder).")]]
     static bool isThreadDeletedMessageEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'ThreadMessageDeletedEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'ThreadMessageDeletedEvent', else otherwise
+     */
+
+    static bool isThreadMessageDeletedEvent(const core::EventHolder& eventHolder);
 
     /**
      * Gets Event held in the 'EventHolder' as an 'ThreadMessageDeletedEvent' 
