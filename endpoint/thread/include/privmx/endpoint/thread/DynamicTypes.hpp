@@ -21,6 +21,11 @@ namespace endpoint {
 namespace thread {
 namespace dynamic {
 
+ENDPOINT_CLIENT_TYPE(internalMeta)
+    STRING_FIELD(threadCCN)
+    INT64_FIELD(KeyId)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(ThreadDataV1)
     STRING_FIELD(title)
     INT64_FIELD(statusCode)
@@ -71,10 +76,6 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE_INHERIT(MessageDataV3Signed, IMessageDataSigned)
     OBJECT_FIELD(data, MessageDataV3)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(VersionedData)
-    INT64_FIELD(version)
 TYPE_END
 
 

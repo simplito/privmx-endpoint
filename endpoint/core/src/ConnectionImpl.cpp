@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Utils.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -40,7 +41,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
     _userPrivKey = key;
-    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key));
+    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
     _eventChannelManager = std::make_shared<EventChannelManager>(_gateway, _eventMiddleware);
@@ -48,6 +49,11 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _eventMiddleware->addConnectedEventListener([&] {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
+    });
+    _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextGetModel>();
+        model.id(id);
+        return utils::TypedObjectFactory::createObjectFromVar<server::ContextGetResult>(_gateway->request("context.contextGet", model)).context();
     });
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
@@ -78,6 +84,8 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = false;
     auto key = privmx::crypto::PrivateKey::generateRandom();
+    _userPrivKey = key;
+    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
     _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware =
@@ -87,6 +95,12 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     _eventMiddleware->addConnectedEventListener([&] {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
+    });
+    _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
+        auto context = privmx::utils::TypedObjectFactory::createNewObject<server::ContextInfo>();
+        context.contextId(id);
+        context.userId("public_user");
+        return context;
     });
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
@@ -168,4 +182,22 @@ void ConnectionImpl::disconnect() {
 
 int64_t ConnectionImpl::generateConnectionId() {
     return reinterpret_cast<std::intptr_t>(this);
+}
+
+std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
+    return _contextProvider->get(contextId).container.userId();
+}
+
+DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, const std::string& containerId, 
+    const std::optional<std::string>& userId, const std::optional<crypto::PublicKey>& pubKey
+) {
+    int64_t nonce = Utils::randomNumber();
+    return core::DataIntegrityObject{
+        .creatorUserId = userId.has_value() ? userId.value() : getMyUserId(contextId),
+        .creatorPubKey = pubKey.has_value() ? pubKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
+        .contextId = contextId,
+        .containerId = containerId,
+        .timestamp = privmx::utils::Utils::getNowTimestamp(),
+        .nonce = nonce
+    };
 }

@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/Utils.hpp"
 #include <privmx/utils/Utils.hpp>
+#include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -55,4 +56,12 @@ void Utils::ltrim(std::string& data) {
 }
 void Utils::rtrim(std::string& data) {
     return privmx::utils::Utils::rtrim(data);
+}
+int64_t Utils::randomNumber() {
+    int64_t result = 0;
+    auto resultStr = privmx::crypto::Crypto::randomBytes(8);
+    for(auto c : resultStr) {
+        result = (result << 8) | c;
+    }
+    return result;
 }

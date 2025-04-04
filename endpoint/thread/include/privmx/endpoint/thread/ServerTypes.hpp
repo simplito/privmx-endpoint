@@ -23,6 +23,7 @@ namespace thread {
 namespace server {
 
 ENDPOINT_SERVER_TYPE(ThreadCreateModel)
+    STRING_FIELD(threadId)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
@@ -97,6 +98,7 @@ ENDPOINT_SERVER_TYPE(ThreadListResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessageSendModel)
+    STRING_FIELD(messageId)
     STRING_FIELD(threadId)
     VAR_FIELD(data)
     STRING_FIELD(keyId)
@@ -110,13 +112,22 @@ ENDPOINT_SERVER_TYPE(ThreadMessageDeleteModel)
     STRING_FIELD(messageId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(MessageUpdate)
+    INT64_FIELD(createDate)
+    STRING_FIELD(author)
+TYPE_END
+
+
 ENDPOINT_SERVER_TYPE(Message)
     STRING_FIELD(id)
+    INT64_FIELD(version)
+    STRING_FIELD(contextId)
     STRING_FIELD(threadId)
     INT64_FIELD(createDate)
     STRING_FIELD(author)
     VAR_FIELD(data) // meta: unknown
     STRING_FIELD(keyId)
+    LIST_FIELD(updates, MessageUpdate)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessageGetModel)
@@ -159,8 +170,7 @@ ENDPOINT_SERVER_TYPE(ThreadStatsEventData)
     STRING_FIELD(type)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedMessageDataV4)
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV4, core::server::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -169,13 +179,32 @@ ENDPOINT_CLIENT_TYPE(EncryptedMessageDataV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedThreadDataV4)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV5, core::server::VersionedData)
+    STRING_FIELD(publicMeta)
+    OBJECT_PTR_FIELD(publicMetaObject)
+    STRING_FIELD(privateMeta)
+    STRING_FIELD(data)
+    STRING_FIELD(internalMeta)
+    STRING_FIELD(authorPubKey)
+    STRING_FIELD(dio)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV4, core::server::VersionedData)
+    STRING_FIELD(publicMeta)
+    OBJECT_PTR_FIELD(publicMetaObject)
+    STRING_FIELD(privateMeta)
+    STRING_FIELD(internalMeta)
+    STRING_FIELD(authorPubKey)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV5, core::server::VersionedData)
     INT64_FIELD(version)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
+    STRING_FIELD(dio)
 TYPE_END
 
 } // server

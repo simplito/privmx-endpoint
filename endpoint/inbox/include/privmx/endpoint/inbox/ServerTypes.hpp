@@ -56,8 +56,8 @@ namespace server {
         STRING_FIELD(threadId)
         STRING_FIELD(storeId)
         OBJECT_FIELD(fileConfig, FileConfig)
-        VAR_FIELD(meta) // required by server
-        VAR_FIELD(publicData) // required by server
+        VAR_FIELD(meta) // required by server ak privateData
+        VAR_FIELD(publicData) // required by server ak publicData
     };
 
     class InboxDataEntry : public utils::TypedObject
@@ -96,7 +96,34 @@ namespace server {
         VAR_FIELD(policy)
     };
 
+    ENDPOINT_CLIENT_TYPE_INHERIT(PrivateDataV4, core::server::VersionedData)
+        STRING_FIELD(privateMeta)
+        STRING_FIELD(internalMeta)
+        STRING_FIELD(authorPubKey)
+    TYPE_END
 
+    ENDPOINT_CLIENT_TYPE_INHERIT(PublicDataV4, core::server::VersionedData)
+        STRING_FIELD(publicMeta)
+        OBJECT_PTR_FIELD(publicMetaObject)
+        STRING_FIELD(authorPubKey)
+        STRING_FIELD(inboxPubKey)
+        STRING_FIELD(inboxKeyId)
+    TYPE_END
+
+    ENDPOINT_CLIENT_TYPE_INHERIT(PrivateDataV5, core::server::VersionedData)
+        STRING_FIELD(privateMeta)
+        STRING_FIELD(internalMeta)
+        STRING_FIELD(authorPubKey)
+        STRING_FIELD(dio)
+    TYPE_END
+
+    ENDPOINT_CLIENT_TYPE_INHERIT(PublicDataV5, core::server::VersionedData)
+        STRING_FIELD(publicMeta)
+        OBJECT_PTR_FIELD(publicMetaObject)
+        STRING_FIELD(authorPubKey)
+        STRING_FIELD(inboxPubKey)
+        STRING_FIELD(inboxKeyId)
+    TYPE_END
 
     /////////////// MODELS AND RESULTS ////////////////////////////
 
@@ -110,6 +137,7 @@ namespace server {
             INIT_LIST(keys, privmx::endpoint::core::types::KeyEntrySet)
             INIT_OBJECT(data, InboxData)
         }
+        STRING_FIELD(inboxId)
         STRING_FIELD(contextId)
         LIST_FIELD(users, std::string) //cloud userId
         LIST_FIELD(managers, std::string) //cloud userId

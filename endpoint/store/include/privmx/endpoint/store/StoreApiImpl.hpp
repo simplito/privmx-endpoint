@@ -21,7 +21,8 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/DataEncryptor.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptor.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
@@ -29,14 +30,16 @@ limitations under the License.
 
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/FileDataProvider.hpp"
-#include "privmx/endpoint/store/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
 #include "privmx/endpoint/store/RequestApi.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/FileHandle.hpp"
 #include "privmx/endpoint/store/FileKeyIdFormatValidator.hpp"
-#include "privmx/endpoint/store/FileMetaEncryptorV4.hpp"
-#include "privmx/endpoint/store/StoreDataEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
+#include "privmx/endpoint/store/encryptors/store/StoreDataEncryptorV4.hpp"
+#include "privmx/endpoint/store/encryptors/store/StoreDataEncryptorV5.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/StoreProvider.hpp"
@@ -100,17 +103,10 @@ public:
     void unsubscribeFromStoreEvents();
     void subscribeForFileEvents(const std::string& storeId);
     void unsubscribeFromFileEvents(const std::string& storeId);
+    //For Inbox
+    FileDecryptionParams getFileDecryptionParams(const server::File& file, const core::DecryptedEncKey& encKey);
+    File decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
 private:
-    struct StoreFileDecryptionParams {
-        std::string fileId;
-        uint64_t sizeOnServer;
-        uint64_t originalSize;
-        int64_t cipherType;
-        size_t chunkSize;
-        std::string key;
-        std::string hmac;
-        int64_t version;
-    };
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
                 const std::optional<core::ContainerPolicy>& policies);
@@ -122,28 +118,41 @@ private:
     void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    dynamic::compat_v1::StoreData decryptStoreV1(const server::Store& storeRaw);
-    DecryptedStoreData decryptStoreV4(const server::Store& storeRaw);
-    Store convertStoreDataV1ToStore(const server::Store& storeRaw, dynamic::compat_v1::StoreData storeData);
-    Store convertDecryptedStoreDataToStore(const server::Store& storeRaw, const DecryptedStoreData& storeData);
-    Store decryptAndConvertStoreDataToStore(const server::Store& storeRaw);
+    dynamic::compat_v1::StoreData decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    DecryptedStoreDataV4 decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    DecryptedStoreDataV5 decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
+    Store convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData);
+    Store convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData);
+    std::tuple<Store, std::string> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
+    Store decryptAndConvertStoreDataToStore(server::Store store);
+    int64_t decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    int64_t decryptStoreInternalMeta(server::Store store);
+    uint32_t validateStoreDataIntegrity(server::Store store);
+    core::DecryptedEncKey getStoreCurrentEncKey(server::Store store);
 
 
     // OLD CODE    
-    StoreFile decryptStoreFileV1(const server::Store& store, const server::File& storeFile);
+    StoreFile decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey);
     // OLD CODE   
     std::string verifyFileV1Signature(FileMetaSigned meta, server::File raw, std::string& serverId);
     // OLD CODE   
     StoreFile decryptAndVerifyFileV1(const std::string &filesKey, server::File x);
-    DecryptedFileMeta decryptFileMetaV4(const server::Store& store, const server::File& file);
+    DecryptedFileMetaV4 decryptFileMetaV4(server::File file, const core::DecryptedEncKey& encKey);
+    DecryptedFileMetaV5 decryptFileMetaV5(server::File file, const core::DecryptedEncKey& encKey);
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
-    File convertDecryptedFileMetaToFile(server::File file, DecryptedFileMeta fileData);
+    File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
+    File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
+    std::vector<File> decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files);
     File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
-
+    File decryptAndConvertFileDataToFileInfo(server::File file);
+    dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
+    dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::Store store, server::File file);
+    uint32_t validateFileDataIntegrity(server::File file);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     
-    StoreFileDecryptionParams getStoreFileDecryptionParams(const server::File& file, const core::EncKey& encKey);
-    int64_t createFileReadHandle(const StoreFileDecryptionParams& storeFileDecryptionParams);
+    int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
     void assertStoreExist(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
     
@@ -174,6 +183,8 @@ private:
 
     FileMetaEncryptorV4 _fileMetaEncryptorV4;
     StoreDataEncryptorV4 _storeDataEncryptorV4;
+    FileMetaEncryptorV5 _fileMetaEncryptorV5;
+    StoreDataEncryptorV5 _storeDataEncryptorV5;
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
     

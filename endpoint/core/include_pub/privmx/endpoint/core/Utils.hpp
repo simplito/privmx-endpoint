@@ -141,6 +141,11 @@ public:
      * @param data string to check
      */
     static void rtrim(std::string& data);
+
+    /**
+     * Generate random number on full range of int64_t
+     */
+    static int64_t randomNumber();
 };
 
 }  // namespace core

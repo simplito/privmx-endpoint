@@ -22,7 +22,7 @@ namespace store {
 
 class StoreProvider : public core::ContainerProvider<std::string, server::Store> {
 public:
-    StoreProvider(std::function<server::Store(std::string)> getThread);
+    StoreProvider(std::function<server::Store(std::string)> getStore, std::function<uint32_t(server::Store)> validateStore);
     void updateByValue(const server::Store& container) override;
     void updateStats(const server::StoreStatsChangedEventData& stats);
 };

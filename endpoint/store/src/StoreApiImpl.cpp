@@ -60,12 +60,16 @@ StoreApiImpl::StoreApiImpl(
     _dataEncryptorCompatV1(core::DataEncryptor<dynamic::compat_v1::StoreData>()),
     _fileMetaEncryptor(FileMetaEncryptor()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
-    _storeProvider(StoreProvider([&](const std::string& id) {
-        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StoreGetModel>();
-        model.storeId(id);
-        model.type(STORE_TYPE_FILTER_FLAG);
-        return _serverApi->storeGet(model).store();
-    })),
+    _storeProvider(StoreProvider(
+        [&](const std::string& id) {
+            auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StoreGetModel>();
+            model.storeId(id);
+            model.type(STORE_TYPE_FILTER_FLAG);
+            auto serverStore = _serverApi->storeGet(model).store();
+            return serverStore;
+        },
+        std::bind(&StoreApiImpl::validateStoreDataIntegrity, this, std::placeholders::_1)
+    )),
     _subscribeForStore(false),
     _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
@@ -100,17 +104,24 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
             const std::optional<core::ContainerPolicy>& policies) {
     PRIVMX_DEBUG_TIME_START(PlatformStore, _storeCreateEx)
     auto storeKey = _keyProvider->generateKey();
-    StoreDataToEncrypt storeDataToEncrypt {
+    auto storeDIO = _connection.getImpl()->createDIO(
+        contextId,
+        utils::Utils::getNowTimestampStr() + "-" + utils::Hex::from(crypto::Crypto::randomBytes(8))
+    );
+    auto storeCCN = _keyProvider->generateContainerControlNumber();
+    StoreDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = std::nullopt
+        .internalMeta = core::Buffer::from(std::to_string(storeCCN)),
+        .dio = storeDIO
     };
     // auto new_store_data = utils::TypedObjectFactory::createNewObject<dynamic::StoreData>();
     // new_store_data.name(name);
     auto storeCreateModel = utils::TypedObjectFactory::createNewObject<server::StoreCreateModel>();
+    storeCreateModel.storeId(storeDIO.containerId);
     storeCreateModel.contextId(contextId);
     storeCreateModel.keyId(storeKey.id);
-    storeCreateModel.data(_storeDataEncryptorV4.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
+    storeCreateModel.data(_storeDataEncryptorV5.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
     if (type.length() > 0) {
         storeCreateModel.type(type);
     }
@@ -118,7 +129,14 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
         storeCreateModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    storeCreateModel.keys(_keyProvider->prepareKeysList(all_users, storeKey));
+    storeCreateModel.keys(
+        _keyProvider->prepareKeysList(
+            all_users, 
+            storeKey, 
+            storeDIO,
+            storeCCN
+        )
+    );
 
     auto usersList = utils::TypedObjectFactory::createNewList<std::string>();
     for (auto user: users) {
@@ -163,9 +181,6 @@ void StoreApiImpl::updateStore(
     getModel.storeId(storeId);
     auto currentStore {_serverApi->storeGet(getModel).store()};
 
-    // std::cout << "STORE RAW on get" << std::endl;
-    // std::cout << utils::Utils::stringify(currentStore, true) << std::endl;
-
     // extract current users info
     auto usersVec {core::EndpointUtils::listToVector<std::string>(currentStore.users())};
     auto managersVec {core::EndpointUtils::listToVector<std::string>(currentStore.managers())};
@@ -183,15 +198,49 @@ void StoreApiImpl::updateStore(
         }
     }
     bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-    auto currentKey {_keyProvider->getKey(currentStore.keys(), currentStore.keyId())};
-    auto storeKey = currentKey; 
+    
+    // read all key to check if all key belongs to this store
+    auto storeKeys {_keyProvider->getAllKeysAndVerify(currentStore.keys(), {.contextId=currentStore.contextId(), .containerId=storeId})};
+    auto currentStoreEntry = currentStore.data().get(currentStore.data().size()-1);
+    core::DecryptedEncKey currentStoreKey;
+    for (auto key : storeKeys) {
+        if (currentStoreEntry.keyId() == key.id) {
+            currentStoreKey = key;
+            break;
+        }
+    }
+    auto storeCCN = decryptStoreInternalMeta(currentStoreEntry, currentStoreKey);
+    for(auto key : storeKeys) {
+        if(key.statusCode != 0 || (key.dataStructureVersion == 2 && key.containerControlNumber != storeCCN)) {
+            throw StoreEncryptionKeyValidationException();
+        }
+    }
+
+    // setting store Key adding new users
+    core::EncKey storeKey;
+    core::DataIntegrityObject updateStoreDio = _connection.getImpl()->createDIO(currentStore.contextId(), storeId);
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
         storeKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(new_users, storeKey);
+        keys = _keyProvider->prepareKeysList(
+            new_users, 
+            storeKey, 
+            updateStoreDio,
+            storeKeys[0].containerControlNumber
+        );
+    } else {
+        // find key with corresponding keyId 
+        for(size_t i = 0; i < storeKeys.size(); i++) {
+            storeKey = storeKeys[i];
+        }
     }
     if(usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareOldKeysListForNewUsers(currentStore.keys(),usersToAddMissingKey);
+        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
+            storeKeys,
+            usersToAddMissingKey, 
+            updateStoreDio, 
+            storeKeys[0].containerControlNumber
+        );
         for(auto t: tmp) keys.add(t);
     }
 
@@ -216,12 +265,13 @@ void StoreApiImpl::updateStore(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    StoreDataToEncrypt storeDataToEncrypt {
+    StoreDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = std::nullopt
+        .internalMeta = core::Buffer::from(std::to_string(storeCCN)),
+        .dio = updateStoreDio
     };
-    model.data(_storeDataEncryptorV4.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
+    model.data(_storeDataEncryptorV5.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeUpdate, data encrypted)
     _serverApi->storeUpdate(model);
@@ -252,9 +302,15 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, getting store)
     auto store = _serverApi->storeGet(model).store();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, data send)
-    if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
+    auto statusCode = validateStoreDataIntegrity(store);
+    if(statusCode != 0) {
+        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(storeId, core::DataIntegrityStatus::ValidationFailed);
+        return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
+    } else {
+        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(storeId, core::DataIntegrityStatus::ValidationSucceed);
+    }
     auto result = decryptAndConvertStoreDataToStore(store);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _storeGetEx, data decrypted)
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _getStoreEx, data decrypted)
     return result;
 }
 
@@ -268,7 +324,6 @@ core::PagingList<Store> StoreApiImpl::listStoresEx(const std::string& contextId,
 
 core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
     PRIVMX_DEBUG_TIME_START(PlatformStore, storeList)
-    std::vector<Store> stores;
     auto storeListModel = utils::TypedObjectFactory::createNewObject<server::StoreListModel>();
     storeListModel.contextId(contextId);
     if (type.length() > 0) {
@@ -276,18 +331,34 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
     }
     core::ListQueryMapper::map(storeListModel, query);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList)
-    auto storesResult = _serverApi->storeList(storeListModel);
+    auto storesList = _serverApi->storeList(storeListModel);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList, data send)
-    for(auto store : storesResult.stores()) {
+    std::vector<Store> stores;
+    for (size_t i = 0; i < storesList.stores().size(); i++) {
+        auto store = storesList.stores().get(i);
         if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
-        stores.push_back(decryptAndConvertStoreDataToStore(store));
+        auto statusCode = validateStoreDataIntegrity(store);
+        stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
+        if(statusCode == 0) {
+            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(store.id() ,core::DataIntegrityStatus::ValidationSucceed);
+        } else {
+            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(store.id() ,core::DataIntegrityStatus::ValidationFailed);
+            storesList.stores().remove(i);
+            i--;
+        }
     }
-    core::PagingList<Store> result = {
-        .totalAvailable = storesResult.count(),
+    auto tmp = decryptAndConvertStoresDataToStores(storesList.stores());
+    for(size_t j = 0, i = 0; i < stores.size(); i++) {
+        if(stores[i].statusCode == 0) {
+            stores[i] = tmp[j];
+            j++;
+        }
+    }
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _listStoresEx, data decrypted)
+    return core::PagingList<Store>({
+        .totalAvailable = storesList.count(),
         .readItems = stores
-    };
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeList, data decrypted)
-    return result;
+    });
 }
 
 File StoreApiImpl::getFile(const std::string& fileId) {
@@ -332,47 +403,15 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList)
     auto serverFilesResult = _serverApi->storeFileList(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send);
-    if(serverFilesResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFilesResult.store());
-    std::vector<File> filesList;
-    // auto store {convertStore(files_raw.store(), decryptStore(files_raw.store()))};
-    for(auto rawFile: serverFilesResult.files()) {
-        // auto file {convertStoreFile(file_raw, decryptStoreFile(files_raw.store(), file_raw).meta)};
-        auto file {decryptAndConvertFileDataToFileInfo(serverFilesResult.store(), rawFile)};
-        filesList.push_back(file);
-    }
-
-    auto verifier {_connection.getImpl()->getUserVerifier()};
-    std::vector<core::VerificationRequest> verifierInput {};
-    for (auto file: filesList) {
-        verifierInput.push_back({
-            .contextId = serverFilesResult.store().contextId(),
-            .senderId = file.info.author,
-            .senderPubKey = file.authorPubKey,
-            .date = file.info.createDate
-        });
-    }
-
-    std::vector<bool> verified;
-    try {
-        verified = verifier->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
-
-    for (size_t i = 0; i < filesList.size(); ++i) {
-        if (filesList[i].statusCode == 0) {
-            filesList[i].statusCode = verified[i] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-        }
-    }
-
-
-
-    core::PagingList<File> ret({
-        .totalAvailable = serverFilesResult.count(),
-        .readItems = filesList
-    });
+    auto store = serverFilesResult.store();
+    if(serverFilesResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
+    if(validateStoreDataIntegrity(store) != 0) throw StoreDataIntegrityException();
+    auto files = decryptAndConvertFilesDataToFilesInfo(store, serverFilesResult.files());
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileList, data decrypted)
-    return ret;
+    return core::PagingList<File>({
+        .totalAvailable = serverFilesResult.count(),
+        .readItems = files
+    });
 }
 
 void StoreApiImpl::deleteFile(const std::string& fileId) {
@@ -403,7 +442,7 @@ int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer&
 int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
     assertFileExist(fileId);
 
-   std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
+    std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         std::string(),
         fileId,
         (uint64_t)size,
@@ -421,53 +460,29 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
-    auto key = _keyProvider->getKey(file_raw.store().keys(), file_raw.file().keyId());
-    auto decryptionParams = getStoreFileDecryptionParams(file_raw.file(), key);
+    auto key = _keyProvider->getKeyAndVerify(file_raw.store().keys(), file_raw.file().keyId(), {.contextId=file_raw.store().contextId(), .containerId=file_raw.store().id()});
+    auto decryptionParams = getFileDecryptionParams(file_raw.file(), key);
     return createFileReadHandle(decryptionParams);
 }
 
-StoreApiImpl::StoreFileDecryptionParams StoreApiImpl::getStoreFileDecryptionParams(const server::File& file, const core::EncKey& encKey) {
-    if (!file.meta().isString()) {
-        // When meta is not string, then is new V4 format as object
-        auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
-        auto fileMeta = _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encKey.key);
-        if(fileMeta.statusCode != 0) {
-            throw FileDecryptionFailedException("file decryption Failed with status code: " + std::to_string(fileMeta.statusCode));
-        }
-        auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileMeta.internalMeta.stdString()));
-        if ((uint64_t)internalMeta.chunkSize() > SIZE_MAX) {
-            throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");
-        }
-        return StoreFileDecryptionParams {
-            .fileId = file.id(),
-            .sizeOnServer = (uint64_t)file.size(),
-            .originalSize = (uint64_t)internalMeta.size(),
-            .cipherType = internalMeta.cipherType(),
-            .chunkSize = (size_t)internalMeta.chunkSize(),
-            .key = privmx::utils::Base64::toString(internalMeta.key()),
-            .hmac = privmx::utils::Base64::toString(internalMeta.hmac()),
-            .version = file.version()
-        };
-    } else {
-        // When meta is string, then old version
-        auto decryptedFile = decryptAndVerifyFileV1(encKey.key, file);
-        if ((uint64_t)decryptedFile.meta.chunkSize() > SIZE_MAX) {
-            throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");
-        }
-        return StoreFileDecryptionParams {
-            .fileId = file.id(),
-            .sizeOnServer = (uint64_t)file.size(),
-            .originalSize = (uint64_t)decryptedFile.meta.size(),
-            .cipherType = decryptedFile.meta.cipherType(),
-            .chunkSize = (size_t)decryptedFile.meta.chunkSize(),
-            .key = privmx::utils::Base64::toString(decryptedFile.meta.key()),
-            .hmac = privmx::utils::Base64::toString(decryptedFile.meta.hmac()),
-            .version = file.version()
-        };
+FileDecryptionParams StoreApiImpl::getFileDecryptionParams(const server::File& file, const core::DecryptedEncKey& encKey) {
+    auto internalMeta = decryptFileInternalMeta(file, core::DecryptedEncKey(encKey));
+    if ((uint64_t)internalMeta.chunkSize() > SIZE_MAX) {
+        throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");
     }
+    return FileDecryptionParams {
+        .fileId = file.id(),
+        .sizeOnServer = (uint64_t)file.size(),
+        .originalSize = (uint64_t)internalMeta.size(),
+        .cipherType = internalMeta.cipherType(),
+        .chunkSize = (size_t)internalMeta.chunkSize(),
+        .key = privmx::utils::Base64::toString(internalMeta.key()),
+        .hmac = privmx::utils::Base64::toString(internalMeta.hmac()),
+        .version = file.version()
+    };
 }
 
-int64_t StoreApiImpl::createFileReadHandle(const StoreFileDecryptionParams& storeFileDecryptionParams) {
+int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams) {
     if (storeFileDecryptionParams.cipherType != 1) {
         throw UnsupportedCipherTypeException(std::to_string(storeFileDecryptionParams.cipherType) + " expected type: 1");
     }
@@ -531,7 +546,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
         storeFileGetModel.fileId(handle->getFileId());
         store = _serverApi->storeFileGet(storeFileGetModel).store();
     }
-    auto key = _keyProvider->getKey(store.keys(), store.keyId());
+    auto key = getStoreCurrentEncKey(store);
 
     auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
     internalFileMeta.version(4);
@@ -540,15 +555,18 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     internalFileMeta.chunkSize(data.chunkSize);
     internalFileMeta.key(utils::Base64::from(data.key));
     internalFileMeta.hmac(utils::Base64::from(data.hmac));
-
-    store::FileMetaToEncrypt fileMeta {
+    auto fileDIO = _connection.getImpl()->createDIO(
+        store.contextId(),
+        handle->getStoreId()
+    );
+    store::FileMetaToEncryptV5 fileMeta {
         .publicMeta = handle->getPublicMeta(),
         .privateMeta = handle->getPrivateMeta(),
-        .fileSize = handle->getSize(),
-        .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.asVar()))
+        .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.asVar())),
+        .dio = fileDIO
     };
 
-    auto encryptedMeta = _fileMetaEncryptorV4.encrypt(fileMeta, _userPrivKey, key.key);
+    auto encryptedMeta = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key);
 
     if (handle->getFileId().empty()) {
         // create file
@@ -696,11 +714,9 @@ void StoreApiImpl::processDisconnectedEvent() {
     _storeProvider.invalidate();
 }
 
-dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(const server::Store& storeRaw) {
+dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedDataEntry = storeRaw.data().get(storeRaw.data().size()-1);
-        auto key = _keyProvider->getKey(storeRaw.keys(), encryptedDataEntry.keyId());
-        return _dataEncryptorCompatV1.decrypt(encryptedDataEntry.data(), key);
+        return _dataEncryptorCompatV1.decrypt(storeEntry.data(), encKey);
     } catch (const core::Exception& e) {
         dynamic::compat_v1::StoreData result = utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreData>();
         result.name(std::string());
@@ -719,112 +735,271 @@ dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(const server::Store& 
     }
 }
 
-DecryptedStoreData StoreApiImpl::decryptStoreV4(const server::Store& storeRaw) {
+DecryptedStoreDataV4 StoreApiImpl::decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedDataEntry = storeRaw.data().get(storeRaw.data().size()-1);
-        auto key = _keyProvider->getKey(storeRaw.keys(), encryptedDataEntry.keyId());
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV4>(encryptedDataEntry.data());
-        return _storeDataEncryptorV4.decrypt(encryptedDataEntryVar, key.key);
+        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV4>(storeEntry.data());
+        return _storeDataEncryptorV4.decrypt(encryptedDataEntryVar, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedStoreData({{},{},{},{},.statusCode = e.getCode()});
+        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedStoreData({{},{},{},{},.statusCode = core::ExceptionConverter::convert(e).getCode()});
+        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{}});
     } catch (...) {
-        return DecryptedStoreData({{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE});
+        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{}});
     }
 }
 
-Store StoreApiImpl::convertStoreDataV1ToStore(const server::Store& storeRaw, dynamic::compat_v1::StoreData storeData) {
+DecryptedStoreDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+    try {
+        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(storeEntry.data());
+        if(encKey.statusCode != 0) {
+            auto tmp = _storeDataEncryptorV5.extractPublic(encryptedDataEntryVar);
+            tmp.statusCode = encKey.statusCode;
+            return tmp;
+        }
+        return _storeDataEncryptorV5.decrypt(encryptedDataEntryVar, encKey.key);
+    } catch (const core::Exception& e) {
+        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
+    } catch (const privmx::utils::PrivmxException& e) {
+        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+    } catch (...) {
+        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+    }
+}
+
+Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData) {
     std::vector<std::string> users;
     std::vector<std::string> managers;
-    for (auto x : storeRaw.users()) {
+    for (auto x : store.users()) {
         users.push_back(x);
     }
-    for (auto x : storeRaw.managers()) {
+    for (auto x : store.managers()) {
         managers.push_back(x);
     }
     Poco::JSON::Object::Ptr privateMeta = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
     privateMeta->set("title", storeData.name());
     int64_t statusCode = storeData.statusCodeOpt(0);
     return {
-        .storeId = storeRaw.id(),
-        .contextId = storeRaw.contextId(),
-        .createDate = storeRaw.createDate(),
-        .creator = storeRaw.creator(),
-        .lastModificationDate = storeRaw.lastModificationDate(),
-        .lastFileDate = storeRaw.lastFileDate(),
-        .lastModifier = storeRaw.lastModifier(),
+        .storeId = store.id(),
+        .contextId = store.contextId(),
+        .createDate = store.createDate(),
+        .creator = store.creator(),
+        .lastModificationDate = store.lastModificationDate(),
+        .lastFileDate = store.lastFileDate(),
+        .lastModifier = store.lastModifier(),
         .users = users,
         .managers = managers,
-        .version = storeRaw.version(),
+        .version = store.version(),
         .publicMeta = core::Buffer::from(""),
         .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
         .policy = {},
-        .filesCount = storeRaw.files(),
+        .filesCount = store.files(),
         .statusCode = statusCode
     };
 }
 
-Store StoreApiImpl::convertDecryptedStoreDataToStore(const server::Store& storeRaw, const DecryptedStoreData& storeData) {
+Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData) {
     std::vector<std::string> users;
     std::vector<std::string> managers;
-    for (auto x : storeRaw.users()) {
+    for (auto x : store.users()) {
         users.push_back(x);
     }
-    for (auto x : storeRaw.managers()) {
+    for (auto x : store.managers()) {
         managers.push_back(x);
     }
     Store result {
-        .storeId = storeRaw.id(),
-        .contextId = storeRaw.contextId(), 
-        .createDate = storeRaw.createDate(),
-        .creator = storeRaw.creator(),
-        .lastModificationDate = storeRaw.lastModificationDate(),
-        .lastFileDate = storeRaw.lastFileDate(),
-        .lastModifier = storeRaw.lastModifier(),
+        .storeId = store.id(),
+        .contextId = store.contextId(), 
+        .createDate = store.createDate(),
+        .creator = store.creator(),
+        .lastModificationDate = store.lastModificationDate(),
+        .lastFileDate = store.lastFileDate(),
+        .lastModifier = store.lastModifier(),
         .users = users,
         .managers = managers,
-        .version = storeRaw.version(),
+        .version = store.version(),
         .publicMeta = storeData.publicMeta,
         .privateMeta = storeData.privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(storeRaw.policy()), 
-        .filesCount = storeRaw.files(),
+        .policy = core::Factory::parsePolicyServerObject(store.policy()), 
+        .filesCount = store.files(),
         .statusCode = storeData.statusCode
     };
     return result;
 }
 
-Store StoreApiImpl::decryptAndConvertStoreDataToStore(const server::Store& storeRaw) {
-    auto store_data_entry = storeRaw.data().get(storeRaw.data().size()-1);
-    if (store_data_entry.data().isString()) {
-        return convertStoreDataV1ToStore(storeRaw, decryptStoreV1(storeRaw));
+Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData) {
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    for (auto x : store.users()) {
+        users.push_back(x);
     }
-    auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(store_data_entry.data());
-    if (!versioned.versionEmpty() && versioned.version() == 4) {
-        return convertDecryptedStoreDataToStore(storeRaw, decryptStoreV4(storeRaw));
+    for (auto x : store.managers()) {
+        managers.push_back(x);
+    }
+    Store result {
+        .storeId = store.id(),
+        .contextId = store.contextId(), 
+        .createDate = store.createDate(),
+        .creator = store.creator(),
+        .lastModificationDate = store.lastModificationDate(),
+        .lastFileDate = store.lastFileDate(),
+        .lastModifier = store.lastModifier(),
+        .users = users,
+        .managers = managers,
+        .version = store.version(),
+        .publicMeta = storeData.publicMeta,
+        .privateMeta = storeData.privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(store.policy()), 
+        .filesCount = store.files(),
+        .statusCode = storeData.statusCode
+    };
+    return result;
+}
+
+std::tuple<Store, std::string>  StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+    if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(storeEntry.data());
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+                case 4: {
+                    auto decryptedStoreData = decryptStoreV4(storeEntry, encKey);
+                    return std::make_tuple(convertDecryptedStoreDataV4ToStore(store, decryptedStoreData), decryptedStoreData.authorPubKey);
+                }
+                case 5: {
+                    auto decryptedStoreData = decryptStoreV5(storeEntry, encKey);
+                    return std::make_tuple(convertDecryptedStoreDataV5ToStore(store, decryptedStoreData), decryptedStoreData.authorPubKey);
+                }
+            }
+        }
+    } else if (storeEntry.data().isString()) {
+        return std::make_tuple(convertStoreDataV1ToStore(store, decryptStoreV1(storeEntry, encKey)), "");
     }
     auto e = UnknowStoreFormatException();
-    return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()};
+    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, "");
+}
+
+
+
+std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List<server::Store> stores) {
+    std::vector<Store> result;
+    std::vector<core::DecryptedEncKeyV2> keys;
+    //create verification request for keys
+    for (size_t i = 0; i < stores.size(); i++) {
+        auto store = stores.get(i);
+        auto store_data_entry = store.data().get(store.data().size()-1);
+        auto key = _keyProvider->getKeyAndVerify(store.keys(), store_data_entry.keyId(), {.contextId=store.contextId(), .containerId=store.id(), .enableVerificationRequest=false});
+        keys.push_back(key);
+    }
+    //send verification request and update key statuscode
+    _keyProvider->validateUserData(keys);
+    //
+    std::vector<std::string> lastModifiersPubKey;
+    for (size_t i = 0; i < stores.size(); i++) {
+        auto store = stores.get(i);
+        try {
+            auto tmp = decryptAndConvertStoreDataToStore(store, store.data().get(store.data().size()-1), keys[i]);
+            result.push_back(std::get<0>(tmp));
+            lastModifiersPubKey.push_back(std::get<1>(tmp));
+        } catch (const core::Exception& e) {
+            result.push_back(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
+            lastModifiersPubKey.push_back("");
+
+        }
+    }
+    std::vector<core::VerificationRequest> verifierInput {};
+    for (size_t i = 0; i < result.size(); i++) {
+        if(result[i].statusCode == 0) {
+            verifierInput.push_back({
+                .contextId = result[i].contextId,
+                .senderId = result[i].lastModifier,
+                .senderPubKey = lastModifiersPubKey[i],
+                .date = result[i].lastModificationDate
+            });
+        }
+    }
+    std::vector<bool> verified;
+    try {
+        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+    for (size_t j = 0, i = 0; i < result.size(); i++) {
+        if(result[i].statusCode == 0) {
+            result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+            j++;
+        }
+    }
+    return result;
+}
+
+Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
+    auto store_data_entry = store.data().get(store.data().size()-1);
+    auto key = _keyProvider->getKeyAndVerify(store.keys(), store_data_entry.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
+    Store result;
+    std::string lastModifierPubKey;
+    std::tie(result, lastModifierPubKey) = decryptAndConvertStoreDataToStore(store, store_data_entry, key);
+    if(result.statusCode != 0) return result;
+    std::vector<core::VerificationRequest> verifierInput {};
+    verifierInput.push_back({
+        .contextId = result.contextId,
+        .senderId = result.lastModifier,
+        .senderPubKey = lastModifierPubKey,
+        .date = result.lastModificationDate
+    });
+    std::vector<bool> verified;
+    try {
+        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+    result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+    return result;
+}
+
+core::DecryptedEncKey StoreApiImpl::getStoreCurrentEncKey(server::Store store) {
+    auto store_data_entry = store.data().get(store.data().size()-1);
+    auto key = _keyProvider->getKeyAndVerify(store.keys(), store_data_entry.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
+    return key;
+}
+
+int64_t StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+
+    if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(storeEntry.data());
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+                case 4:
+                    return 0;
+                case 5:
+                    return std::stoll(decryptStoreV5(storeEntry, encKey).internalMeta.stdString());
+            }
+        }
+    } else if (storeEntry.data().isString()) {
+        return 0;
+    }
+    throw UnknowStoreFormatException();
+}
+
+int64_t StoreApiImpl::decryptStoreInternalMeta(server::Store store) {
+    auto store_data_entry = store.data().get(store.data().size()-1);
+    auto key = _keyProvider->getKeyAndVerify(store.keys(), store_data_entry.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
+    return decryptStoreInternalMeta(store_data_entry, key);
 }
 
 // OLD CODE
-StoreFile StoreApiImpl::decryptStoreFileV1(const server::Store& store, const server::File& storeFile) {
+StoreFile StoreApiImpl::decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey) {
     try {
-        std::string keyId = storeFile.keyId();
-        _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
-        auto key = _keyProvider->getKey(store.keys(), keyId).key;
-        auto file = decryptAndVerifyFileV1(key, storeFile);
-        return file;
+        auto storeFile = decryptAndVerifyFileV1(encKey.key, file);
+        return storeFile;
     } catch (const privmx::endpoint::core::Exception& e) {
-        StoreFile result = {.raw=storeFile, .meta=privmx::utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreFileMeta>(), .verified="invalid"};
+        StoreFile result = {.raw=file, .meta=privmx::utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreFileMeta>(), .verified="invalid"};
         result.meta.statusCode(e.getCode());
         return result;
     } catch (const privmx::utils::PrivmxException& e) {
-        StoreFile result = {.raw=storeFile, .meta=privmx::utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreFileMeta>(), .verified="invalid"};
+        StoreFile result = {.raw=file, .meta=privmx::utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreFileMeta>(), .verified="invalid"};
         result.meta.statusCode(core::ExceptionConverter::convert(e).getCode());
         return result;
     } catch (...) {
-        StoreFile result = {.raw=storeFile, .meta=privmx::utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreFileMeta>(), .verified="invalid"};
+        StoreFile result = {.raw=file, .meta=privmx::utils::TypedObjectFactory::createNewObject<dynamic::compat_v1::StoreFileMeta>(), .verified="invalid"};
         result.meta.statusCode(ENDPOINT_CORE_EXCEPTION_CODE);
         return result;
     }
@@ -859,20 +1034,33 @@ StoreFile StoreApiImpl::decryptAndVerifyFileV1(const std::string &filesKey, serv
     return odp;
 }
 
-DecryptedFileMeta StoreApiImpl::decryptFileMetaV4(const server::Store& store, const server::File& file) {
+DecryptedFileMetaV4 StoreApiImpl::decryptFileMetaV4(server::File file, const core::DecryptedEncKey& encKey) {
     try {
-        auto keyId = file.keyId();
-        auto encKey = _keyProvider->getKey(store.keys(), keyId);
-        _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
-        auto encryptionKey = encKey.key;
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
-        return _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encryptionKey);
+        return _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedFileMeta({{},{},{},{},{},.statusCode = e.getCode()});
+        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMeta({{},{},{},{},{},.statusCode = core::ExceptionConverter::convert(e).getCode()});
+        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedFileMeta({{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE});
+        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+    }
+}
+
+DecryptedFileMetaV5 StoreApiImpl::decryptFileMetaV5(server::File file, const core::DecryptedEncKey& encKey) {
+    try {
+        auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(file.meta());
+        if(encKey.statusCode != 0) {
+            return _fileMetaEncryptorV5.extractPublic(encryptedFileMeta);
+        } else {
+            return _fileMetaEncryptorV5.decrypt(encryptedFileMeta, encKey.key);
+        }
+    } catch (const core::Exception& e) {
+        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
+    } catch (const privmx::utils::PrivmxException& e) {
+        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+    } catch (...) {
+        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -893,7 +1081,7 @@ File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::comp
     return result;
 }
 
-File StoreApiImpl::convertDecryptedFileMetaToFile(server::File file, DecryptedFileMeta fileData) {
+File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData) {
     store::ServerFileInfo fileInfo = {
         .storeId = file.storeId(),
         .fileId = file.id(),
@@ -910,16 +1098,161 @@ File StoreApiImpl::convertDecryptedFileMetaToFile(server::File file, DecryptedFi
     };
 }
 
-File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::Store store, server::File file) {
-    if (file.meta().isString()) {
-        return convertStoreFileMetaV1ToFile(file, decryptStoreFileV1(store, file).meta);
-    }
-    auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(file.meta());
-    if (!versioned.versionEmpty() && versioned.version() == 4) {
-        return convertDecryptedFileMetaToFile(file, decryptFileMetaV4(store, file));
+File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData) {
+    store::ServerFileInfo fileInfo = {
+        .storeId = file.storeId(),
+        .fileId = file.id(),
+        .createDate = file.created(),
+        .author = file.creator(),
+    };
+    auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileData.internalMeta.stdString()));
+    return store::File {
+        .info = fileInfo,
+        .publicMeta = fileData.publicMeta,
+        .privateMeta = fileData.privateMeta,
+        .size = internalMeta.size(),
+        .authorPubKey = fileData.authorPubKey,
+        .statusCode = fileData.statusCode
+    };
+}
+
+File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey) {
+    if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(file.meta());
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+                case 4:
+                    return convertDecryptedFileMetaV4ToFile(file, decryptFileMetaV4(file, encKey));
+                case 5:
+                    return convertDecryptedFileMetaV5ToFile(file, decryptFileMetaV5(file, encKey));
+            }
+        }
+    } else if (file.meta().isString()) {
+        return convertStoreFileMetaV1ToFile(file, decryptStoreFileV1(file, encKey).meta);
     }
     auto e = UnknowFileFormatException();
     return File{{},{},{},{},{},.statusCode = e.getCode()};
+}
+
+std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files) {
+    std::set<std::string> keyIds;
+    for (auto file : files) {
+        keyIds.insert(file.keyId());
+    }
+    auto keyMap = _keyProvider->getKeysAndVerify(store.keys(), keyIds, {.contextId=store.contextId(), .containerId=store.id()});
+    std::vector<File> result;
+    for (auto file : files) {
+
+        try {
+            auto statusCode = validateFileDataIntegrity(file);
+            if(statusCode == 0) {
+                result.push_back(decryptAndConvertFileDataToFileInfo(file, keyMap.at(file.keyId())));
+            } else {
+                result.push_back(File{{},{},{},{},{},.statusCode = statusCode});
+            }
+        } catch (const core::Exception& e) {
+            result.push_back(File{{},{},{},{},{},.statusCode = e.getCode()});
+        }
+    }
+    std::vector<core::VerificationRequest> verifierInput {};
+    for (auto file: result) {
+        if(file.statusCode == 0) {
+            verifierInput.push_back({
+                .contextId = store.contextId(),
+                .senderId = file.info.author,
+                .senderPubKey = file.authorPubKey,
+                .date = file.info.createDate
+            });
+        }
+    }
+    std::vector<bool> verified;
+    try {
+        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+    for (size_t j = 0, i = 0; i < result.size(); ++i) {
+        if (result[i].statusCode == 0) {
+            result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+            j++;
+        }
+    }
+    return result;
+}
+
+File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::Store store, server::File file) {
+    auto keyId = file.keyId();
+    auto encKey = _keyProvider->getKeyAndVerify(store.keys(), keyId, {.contextId=store.contextId(), .containerId=store.id()});
+    _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
+    auto result = decryptAndConvertFileDataToFileInfo(file, encKey);
+    if(result.statusCode != 0) return result;
+    std::vector<core::VerificationRequest> verifierInput {};
+        verifierInput.push_back({
+            .contextId = store.contextId(),
+            .senderId = result.info.author,
+            .senderPubKey = result.authorPubKey,
+            .date = result.info.createDate
+        });
+    std::vector<bool> verified;
+    try {
+        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
+    result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+    return result;
+}
+
+File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file) {
+    try {
+        auto store = getRawStoreFromCacheOrBridge(file.storeId());
+        return decryptAndConvertFileDataToFileInfo(store, file);
+    } catch (const core::Exception& e) {
+        return File{{},{},{},{},{},.statusCode = e.getCode()};
+    } catch (const privmx::utils::PrivmxException& e) {
+        return File{{},{},{},{},{},.statusCode = e.getCode()};
+    } catch (...) {
+        return File{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
+    }
+}
+
+dynamic::InternalStoreFileMeta StoreApiImpl::decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey) {
+    if(encKey.statusCode == 0) {
+        if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(file.meta());
+            if (!versioned.versionEmpty()) {
+                switch (versioned.version()) {
+                    case 4:
+                        return utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(
+                            utils::Utils::parseJson(decryptFileMetaV4(file, encKey).internalMeta.stdString())
+                        );
+                    case 5:
+                        return utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(
+                            utils::Utils::parseJson(decryptFileMetaV5(file, encKey).internalMeta.stdString())
+                        );
+                }
+            }
+        } else if (file.meta().isString()) {
+            auto decryptedFile = decryptStoreFileV1(file, encKey);
+            auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
+            internalFileMeta.version(1);
+            internalFileMeta.size(decryptedFile.meta.size());
+            internalFileMeta.cipherType(decryptedFile.meta.cipherType());
+            internalFileMeta.chunkSize(decryptedFile.meta.chunkSize());
+            internalFileMeta.key(utils::Base64::from(decryptedFile.meta.key()));
+            internalFileMeta.hmac(utils::Base64::from(decryptedFile.meta.hmac()));
+            return internalFileMeta;
+        }
+        throw UnknowFileFormatException();
+    }
+    return utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
+}
+
+dynamic::InternalStoreFileMeta StoreApiImpl::decryptFileInternalMeta(server::Store store, server::File file) {
+    auto keyId = file.keyId();
+    auto encKey = _keyProvider->getKeyAndVerify(store.keys(), keyId, {.contextId=store.contextId(), .containerId=store.id()});
+    _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
+    return decryptFileInternalMeta(file, encKey);
 }
 
 void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
@@ -929,18 +1262,24 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     auto storeFileGetResult = _serverApi->storeFileGet(storeFileGetModel);
     server::Store store = storeFileGetResult.store();
     server::File file = storeFileGetResult.file();
-    core::EncKey key = _keyProvider->getKey(store.keys(), store.keyId());
-    DecryptedFileMeta decryptedFile = decryptFileMetaV4(store, file);
-
-    store::FileMetaToEncrypt fileMeta {
+    auto statusCode = validateFileDataIntegrity(file);
+    if(statusCode != 0) {
+        throw FileDataIntegrityException();
+    }
+    auto key = getStoreCurrentEncKey(store);
+    auto fileDIO = _connection.getImpl()->createDIO(
+        file.contextId(),
+        file.storeId()
+    );
+    store::FileMetaToEncryptV5 fileMeta {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .fileSize = decryptedFile.fileSize,
-        .internalMeta = decryptedFile.internalMeta
+        .internalMeta = core::Buffer(),
+        .dio = fileDIO
     };
-
-    auto encryptedMeta = _fileMetaEncryptorV4.encrypt(fileMeta, _userPrivKey, key.key);
-
+    // get Internal Meta
+    fileMeta.internalMeta = core::Buffer::from(utils::Utils::stringifyVar(decryptFileInternalMeta(store, file)));
+    auto encryptedMeta = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key);
     auto storeFileUpdateModel = utils::TypedObjectFactory::createNewObject<server::StoreFileUpdateModel>();
     storeFileUpdateModel.fileId(fileId);
     storeFileUpdateModel.meta(encryptedMeta.asVar());
@@ -952,7 +1291,11 @@ server::Store StoreApiImpl::getRawStoreFromCacheOrBridge(const std::string& stor
     // useing _storeProvider only with STORE_TYPE_FILTER_FLAG 
     // making sure to have valid cache
     if(!_subscribeForStore) _storeProvider.update(storeId);
-    return _storeProvider.get(storeId);
+    auto storeContainerInfo = _storeProvider.get(storeId);
+    if(storeContainerInfo.status != core::DataIntegrityStatus::ValidationSucceed) {
+        throw StoreDataIntegrityException();
+    }
+    return storeContainerInfo.container;
 }
 
 void StoreApiImpl::assertStoreExist(const std::string& storeId) {
@@ -963,5 +1306,66 @@ void StoreApiImpl::assertStoreExist(const std::string& storeId) {
 void StoreApiImpl::assertFileExist(const std::string& fileId) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
-    _serverApi->storeFileGet(storeFileGetModel);
+    auto file = _serverApi->storeFileGet(storeFileGetModel).file();
+}
+
+uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
+    auto store_data_entry = store.data().get(store.data().size()-1);
+    if (store_data_entry.data().type()  == typeid(Poco::JSON::Object::Ptr)) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(store_data_entry.data());
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+            case 4:
+                return 0;
+            case 5: 
+                {
+                    auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
+                    auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
+                    if(
+                        dio.containerId != store.id() ||
+                        dio.contextId != store.contextId() ||
+                        dio.creatorUserId != store.lastModifier()
+                        // check timestamp
+                    ) {
+                        return StoreDataIntegrityException().getCode();
+                    }
+                    return 0;
+                }
+            }
+        } 
+        return UnknowStoreFormatException().getCode();
+    } else if(store_data_entry.data().isString()) {
+        return 0;
+    }
+    return UnknowStoreFormatException().getCode();
+}
+
+uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file) {
+    if (file.meta().type()  == typeid(Poco::JSON::Object::Ptr)) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(file.meta());
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+            case 4:
+                return 0;
+            case 5: 
+                {
+                    auto fileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(file.meta());
+                    auto dio = _fileMetaEncryptorV5.getDIOAndAssertIntegrity(fileMeta);
+                    if(
+                        dio.containerId != file.storeId() ||
+                        dio.contextId != file.contextId() ||
+                        dio.creatorUserId != file.lastModifier()
+                        // check timestamp
+                    ) {
+                        return FileDataIntegrityException().getCode();;
+                    }
+                    return 0;
+                }
+            }
+        } 
+        return UnknowStoreFormatException().getCode();
+    } else if(file.meta().isString()) {
+        return 0;
+    }
+    return UnknowStoreFormatException().getCode();
 }

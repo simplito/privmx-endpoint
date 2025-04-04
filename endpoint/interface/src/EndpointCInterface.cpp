@@ -25,6 +25,7 @@ limitations under the License.
 #include "privmx/endpoint/core/varinterface/BackendRequesterVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/EventQueueVarInterface.hpp"
+#include "privmx/endpoint/event/varinterface/EventApiVarInterface.hpp"
 #include "privmx/endpoint/thread/varinterface/ThreadApiVarInterface.hpp"
 #include "privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp"
 #include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
@@ -32,6 +33,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Config.hpp"
 
 using namespace privmx::endpoint;
+using namespace privmx::endpoint::cinterface;
 
 int privmx_endpoint_newEventQueue(EventQueue** outPtr) {
     core::EventQueueVarInterface* ptr = new core::EventQueueVarInterface(core::EventQueue::getInstance(), core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
@@ -45,7 +47,7 @@ int privmx_endpoint_freeEventQueue(EventQueue* ptr) {
 }
 
 int privmx_endpoint_execEventQueue(EventQueue* ptr, int method, const pson_value* args, pson_value** res) {
-    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+    return CApiExecutor::execFunc(res, [&]{
         core::EventQueueVarInterface* _ptr = (core::EventQueueVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((core::EventQueueVarInterface::METHOD)method, argsVal);
@@ -64,7 +66,7 @@ int privmx_endpoint_freeConnection(Connection* ptr) {
 }
 
 int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value* args, pson_value** res) {
-    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+    return CApiExecutor::execFunc(res, [&]{
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((core::ConnectionVarInterface::METHOD)method, argsVal);
@@ -83,7 +85,7 @@ int privmx_endpoint_freeBackendRequester(BackendRequester* ptr) {
 }
 
 int privmx_endpoint_execBackendRequester(BackendRequester* ptr, int method, const pson_value* args, pson_value** res) {
-    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+    return CApiExecutor::execFunc(res, [&]{
         core::BackendRequesterVarInterface* _ptr = (core::BackendRequesterVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((core::BackendRequesterVarInterface::METHOD)method, argsVal);
@@ -103,7 +105,7 @@ int privmx_endpoint_freeThreadApi(ThreadApi* ptr) {
 }
 
 int privmx_endpoint_execThreadApi(ThreadApi* ptr, int method, const pson_value* args, pson_value** res) {
-    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+    return CApiExecutor::execFunc(res, [&]{
         thread::ThreadApiVarInterface* _ptr = (thread::ThreadApiVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((thread::ThreadApiVarInterface::METHOD)method, argsVal);
@@ -123,7 +125,7 @@ int privmx_endpoint_freeStoreApi(StoreApi* ptr) {
 }
 
 int privmx_endpoint_execStoreApi(StoreApi* ptr, int method, const pson_value* args, pson_value** res) {
-    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+    return CApiExecutor::execFunc(res, [&]{
         store::StoreApiVarInterface* _ptr = (store::StoreApiVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((store::StoreApiVarInterface::METHOD)method, argsVal);
@@ -145,7 +147,7 @@ int privmx_endpoint_freeInboxApi(InboxApi* ptr) {
 }
 
 int privmx_endpoint_execInboxApi(InboxApi* ptr, int method, const pson_value* args, pson_value** res) {
-    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+    return CApiExecutor::execFunc(res, [&]{
         inbox::InboxApiVarInterface* _ptr = (inbox::InboxApiVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((inbox::InboxApiVarInterface::METHOD)method, argsVal);
@@ -164,10 +166,30 @@ int privmx_endpoint_freeCryptoApi(CryptoApi* ptr) {
 }
 
 int privmx_endpoint_execCryptoApi(CryptoApi* ptr, int method, const pson_value* args, pson_value** res) {
-    return privmx::utils::CApiExecutor::execFunc(res, [&]{
+    return CApiExecutor::execFunc(res, [&]{
         crypto::CryptoApiVarInterface* _ptr = (crypto::CryptoApiVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((crypto::CryptoApiVarInterface::METHOD)method, argsVal);
+    });
+}
+
+int privmx_endpoint_newEventApi(Connection* connectionPtr, EventApi** outPtr) {
+    core::ConnectionVarInterface* _connectionPtr = (core::ConnectionVarInterface*)connectionPtr;
+    event::EventApiVarInterface* ptr = new event::EventApiVarInterface(_connectionPtr->getApi(), core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    *outPtr = (EventApi*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_freeEventApi(EventApi* ptr) {
+    delete (event::EventApiVarInterface*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_execEventApi(EventApi* ptr, int method, const pson_value* args, pson_value** res) {
+    return CApiExecutor::execFunc(res, [&]{
+        event::EventApiVarInterface* _ptr = (event::EventApiVarInterface*)ptr;
+        const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
+        return _ptr->exec((event::EventApiVarInterface::METHOD)method, argsVal);
     });
 }
 

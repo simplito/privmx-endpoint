@@ -78,6 +78,7 @@ ENDPOINT_SERVER_TYPE(Store)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreCreateModel)
+    STRING_FIELD(storeId)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
@@ -163,8 +164,7 @@ ENDPOINT_SERVER_TYPE(StoreFileListResult)
     INT64_FIELD(count)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedFileMetaV4)
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedFileMetaV4, core::server::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -173,13 +173,30 @@ ENDPOINT_CLIENT_TYPE(EncryptedFileMetaV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedStoreDataV4)
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedFileMetaV5, core::server::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
+    STRING_FIELD(dio)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedStoreDataV4, core::server::VersionedData)
+    STRING_FIELD(publicMeta)
+    OBJECT_PTR_FIELD(publicMetaObject)
+    STRING_FIELD(privateMeta)
+    STRING_FIELD(internalMeta)
+    STRING_FIELD(authorPubKey)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedStoreDataV5, core::server::VersionedData)
+    STRING_FIELD(publicMeta)
+    OBJECT_PTR_FIELD(publicMetaObject)
+    STRING_FIELD(privateMeta)
+    STRING_FIELD(internalMeta)
+    STRING_FIELD(authorPubKey)
+    STRING_FIELD(dio)
 TYPE_END
 
 //-----------------------------------------------------
