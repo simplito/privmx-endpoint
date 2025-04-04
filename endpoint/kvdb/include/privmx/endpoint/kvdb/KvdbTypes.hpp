@@ -15,34 +15,43 @@ limitations under the License.
 #include <string>
 #include <optional>
 #include <privmx/endpoint/core/Buffer.hpp>
+#include "privmx/endpoint/core/CoreTypes.hpp"
 
 
 namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-struct KvdbDataToEncrypt {
+struct ItemDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
+    core::Buffer data;
     std::optional<core::Buffer> internalMeta;
+    core::DataIntegrityObject dio;
 };
 
-struct DecryptedKvdbData {
+struct DecryptedItemDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
+    core::Buffer data;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
+    core::DataIntegrityObject dio;
 };
 
-struct KvdbItemDataToEncrypt {
-    core::Buffer data;
+struct KvdbDataToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer internalMeta;
+    core::DataIntegrityObject dio;
 };
 
-struct DecryptedKvdbItemData {
-    core::Buffer data;
+struct DecryptedKvdbDataV5 : public core::DecryptedVersionedData {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
+    core::DataIntegrityObject dio;
 };
 
 } // kvdb

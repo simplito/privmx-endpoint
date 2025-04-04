@@ -38,6 +38,7 @@ public:
     void kvdbItemSet(server::KvdbItemSetModel model);
     void kvdbItemDelete(server::KvdbItemDeleteModel model);
     server::KvdbListKeysResult kvdbListKeys(server::KvdbListKeysModel model);
+    server::KvdbListKeysResult kvdbListItems(server::KvdbListKeysModel model);
     server::KvdbItemDeleteManyResult kvdbItemDeleteMany(server::KvdbItemDeleteManyModel model);
 private:
     template<typename T>

@@ -44,6 +44,11 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbStatsEventExc
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbNewItemEventException, "Cannot extract KvdbNewItemEvent", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbItemUpdatedEventException, "Cannot extract KvdbKvdbItemUpdatedEvent", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbDeletedItemEventException, "Cannot extract KvdbDeletedItemEvent", 0x0007)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbPublicDataMismatchException, "Kvdb public data mismatch", 0x0008)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedKvdbDataVersionException, "Invalid version of encrypted kvdb data", 0x0009)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, ItemPublicDataMismatchException, "Item public data mismatch", 0x000A)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedItemDataVersionException, "Invalid version of encrypted item data", 0x000B)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEncryptionKeyValidationException, "Failed kvdb encryption key validation", 0x000C)
 
 } // kvdb
 } // endpoint

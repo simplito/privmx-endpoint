@@ -43,15 +43,17 @@ ENDPOINT_SERVER_TYPE(KvdbInfo)
     INT64_FIELD(version)
     STRING_FIELD(type)
     VAR_FIELD(policy)
+    INT64_FIELD(items)
+    INT64_FIELD(lastItemDate)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedKvdbDataV4) // <- TODO update to V5 before publish
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbDataV5, core::server::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
+    STRING_FIELD(dio)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(KvdbCreateModel)
@@ -130,10 +132,14 @@ ENDPOINT_SERVER_TYPE(KvdbItemInfo)
     STRING_FIELD(keyId)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedKvdbItemDataV4) // <- TODO update to V5 before publish
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedItemDataV5, core::server::VersionedData)
+    STRING_FIELD(publicMeta)
+    OBJECT_PTR_FIELD(publicMetaObject)
+    STRING_FIELD(privateMeta)
     STRING_FIELD(data)
+    STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
+    STRING_FIELD(dio)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbItemGetModel)
@@ -167,13 +173,30 @@ ENDPOINT_CLIENT_TYPE(KvdbListKeysModel)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(sortOrder)
-    STRING_FIELD(query)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbListKeysResult)
     OBJECT_FIELD(kvdb, KvdbInfo)
     LIST_FIELD(kvdbItemKeys, std::string)
-    INT64_FIELD(number)
+    INT64_FIELD(count)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(KvdbListItemsModel)
+    STRING_FIELD(kvdbId)
+    STRING_FIELD(lastKey)
+    STRING_FIELD(prefix)
+    STRING_FIELD(sortBy)
+
+    INT64_FIELD(skip)
+    INT64_FIELD(limit)
+    STRING_FIELD(sortOrder)
+    STRING_FIELD(query)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(KvdbListItemsResult)
+    OBJECT_FIELD(kvdb, KvdbInfo)
+    LIST_FIELD(kvdbItems, KvdbItemInfo)
+    INT64_FIELD(v)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbItemDeleteManyModel)

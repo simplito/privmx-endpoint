@@ -21,7 +21,7 @@ using namespace privmx::endpoint::core;
 
 
 template<>
-kvdb::PagingQuery core::VarDeserializer::deserialize<kvdb::PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
+kvdb::ItemsPagingQuery core::VarDeserializer::deserialize<kvdb::ItemsPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
     core::TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {.skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),
@@ -34,3 +34,15 @@ kvdb::PagingQuery core::VarDeserializer::deserialize<kvdb::PagingQuery>(const Po
         };
 }
 
+template<>
+kvdb::KeysPagingQuery core::VarDeserializer::deserialize<kvdb::KeysPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {.skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),
+            .limit = deserialize<int64_t>(obj->get("limit"), name + ".limit"),
+            .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
+            .sortBy = deserializeOptional<std::string>(obj->get("sortBy"), name + ".sortBy"),
+            .lastKey = deserializeOptional<std::string>(obj->get("lastKey"), name + ".lastKey"),
+            .prefix = deserializeOptional<std::string>(obj->get("prefix"), name + ".prefix")
+        };
+}

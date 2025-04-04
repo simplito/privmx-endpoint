@@ -24,7 +24,10 @@ namespace endpoint {
 namespace core {
 
 template<>
-kvdb::PagingQuery core::VarDeserializer::deserialize<kvdb::PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name);
+kvdb::ItemsPagingQuery core::VarDeserializer::deserialize<kvdb::ItemsPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name);
+template<>
+kvdb::KeysPagingQuery core::VarDeserializer::deserialize<kvdb::KeysPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name);
+
 
 } // core
 } // endpoint

@@ -57,7 +57,8 @@ public:
     core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     Item getItem(const std::string& kvdbId, const std::string& key);
-    core::PagingList<std::string> listItemKeys(const std::string& kvdbId, const kvdb::PagingQuery& pagingQuery);
+    core::PagingList<std::string> listItemKeys(const std::string& kvdbId, const kvdb::KeysPagingQuery& pagingQuery);
+    core::PagingList<Item> listItem(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery);
     void setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& data, int64_t version);
     void deleteItem(const std::string& kvdbId, const std::string& key);
     void deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys);

@@ -70,6 +70,16 @@ struct Kvdb {
     core::Buffer privateMeta;
 
     /**
+     * total number of items in the Kvdb
+     */
+    int64_t items;
+
+    /**
+     * timestamp of last new item
+     */
+    int64_t lastItemDate;
+
+    /**
      * Kvdb's policies
      */
     core::ContainerPolicy policy;
@@ -142,7 +152,39 @@ struct Item {
     int64_t statusCode;
 };
 
-struct PagingQuery {
+struct KeysPagingQuery {
+    /**
+     * number of elements to skip from result
+     */
+    int64_t skip;
+
+    /**
+     * limit of elements to return for query
+     */
+    int64_t limit;
+
+    /**
+     * order of elements in result ("asc" for ascending, "desc" for descending)
+     */
+    std::string sortOrder;
+
+    /**
+     * order of elements are sorted in result ("createDate" for createDate, "itemKey" for itemKey, "lastModificationDate" for itemKey)
+     */
+    std::optional<std::string> sortBy;
+
+    /**
+     * Key of the element from which query results should start
+     */
+    std::optional<std::string> lastKey;
+
+    /**
+     * prefix of the element from which query results should have
+     */
+    std::optional<std::string> prefix;
+};
+
+struct ItemsPagingQuery {
     /**
      * number of elements to skip from result
      */

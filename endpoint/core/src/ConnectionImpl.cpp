@@ -99,7 +99,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
         auto context = privmx::utils::TypedObjectFactory::createNewObject<server::ContextInfo>();
         context.contextId(id);
-        context.userId("public_user");
+        context.userId("");
         return context;
     });
     if (_gateway->isConnected()) {
