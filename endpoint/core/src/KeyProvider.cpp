@@ -31,7 +31,7 @@ EncKey KeyProvider::generateKey() {
 }
 
 int64_t KeyProvider::generateContainerControlNumber() {
-    return Utils::randomNumber();
+    return Utils::generateRandomNumber();
 }
 
 DecryptedEncKeyV2 KeyProvider::getKeyAndVerify(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyV2IntegrityValidationData& integrityValidationData) {
@@ -117,7 +117,7 @@ std::vector<DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::List<ser
         if(key.data().type() == typeid(Poco::JSON::Object::Ptr)) {
             auto versioned = utils::TypedObjectFactory::createObjectFromVar<server::VersionedData>(key.data());
             if(versioned.versionEmpty()) {
-                throw EncryptionKeyUnknownDataVersionException();
+                throw UnknownEncryptionKeyVersionException();
             } else if(versioned.version() == 2) { 
                 DecryptedEncKeyV2 decryptedEncKey = _encKeyEncryptorV2.decrypt(
                     utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKeyEntryDataV2>(key.data()),
@@ -132,7 +132,7 @@ std::vector<DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::List<ser
             decryptedEncKey.containerControlNumber = 0;
             result.push_back(decryptedEncKey);
         } else {
-            decryptedEncKey.statusCode = EncryptionKeyUnknownDataVersionException().getCode();
+            decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
             result.push_back(decryptedEncKey);
         }
         
@@ -188,7 +188,7 @@ void KeyProvider::validateKeyForDuplication(std::vector<DecryptedEncKeyV2>& keys
     std::map<std::pair<int64_t, int64_t>, size_t> duplicateMap;
     for(size_t i = 0; i < keys.size(); i++ ) {
         if(keys[i].statusCode != 0 || keys[i].dio.creatorPubKey == "") continue;
-        auto keyNonce = keys[i].dio.nonce;
+        auto keyNonce = keys[i].dio.randomId;
         auto keyTimestamp = keys[i].dio.timestamp;
         std::pair<std::pair<int64_t, int64_t>, size_t> val = std::make_pair(std::make_pair(keyNonce,keyTimestamp), i);
         auto ret = duplicateMap.insert(val);

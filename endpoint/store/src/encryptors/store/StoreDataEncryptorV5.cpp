@@ -23,20 +23,20 @@ server::EncryptedStoreDataV5 StoreDataEncryptorV5::encrypt(const StoreDataToEncr
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedStoreDataV5>();
     result.version(5);
-    std::unordered_map<std::string, std::string> mapOfDataSha256;
+    std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(storeData.publicMeta, authorPrivateKey));
-    mapOfDataSha256.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
+    fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(storeData.publicMeta.stdString()));
     } catch (...) {
         result.publicMetaObjectClear();
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(storeData.privateMeta, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
+    fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
     result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(storeData.internalMeta, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
+    fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    core::ExpandedDataIntegrityObject expandedDio = {storeData.dio, .objectFormat=5, .mapOfDataSha256=mapOfDataSha256};
+    core::ExpandedDataIntegrityObject expandedDio = {storeData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result;
 }
@@ -102,13 +102,13 @@ core::DataIntegrityObject StoreDataEncryptorV5::getDIOAndAssertIntegrity(const s
     assertDataFormat(encryptedStoreData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedStoreData.dio());
     if (
-        dio.objectFormat != 5 ||
+        dio.structureVersion != 5 ||
         dio.creatorPubKey != encryptedStoreData.authorPubKey() ||
-        dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.publicMeta()) ||
-        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.privateMeta()) || 
-        dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.internalMeta())
+        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.publicMeta()) ||
+        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.privateMeta()) || 
+        dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.internalMeta())
     ) {
-        throw core::DataIntegrityObjectInvalidSHA256Exception();
+        throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }

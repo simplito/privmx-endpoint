@@ -22,7 +22,9 @@ namespace core {
 class ContextProvider : public core::ContainerProvider<std::string, server::ContextInfo> {
 public:
     ContextProvider(std::function<server::ContextInfo(std::string)> getContext);
-    void updateByValue(const server::ContextInfo& container) override;
+protected:
+    bool isNewerOrSameAsInStorage(const server::ContextInfo& container) override;
+    inline std::string getID(const server::ContextInfo& container) override {return container.contextId();}
 };
 
 } // core

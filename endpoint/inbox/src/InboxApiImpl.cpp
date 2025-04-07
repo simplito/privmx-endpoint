@@ -307,10 +307,10 @@ Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& t
     _inboxProvider.updateByValue(inbox);
     auto statusCode = validateInboxDataIntegrity(inbox);
     if(statusCode != 0) {
-        _inboxProvider.updateDataIntegrityStatus(inboxId, core::DataIntegrityStatus::ValidationFailed);
+        _inboxProvider.updateByValueAndStatus(inbox, core::DataIntegrityStatus::ValidationFailed);
         return Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
     } else {
-       _inboxProvider.updateDataIntegrityStatus(inboxId, core::DataIntegrityStatus::ValidationSucceed);
+       _inboxProvider.updateByValueAndStatus(inbox, core::DataIntegrityStatus::ValidationSucceed);
     }
     auto result = decryptAndConvertInboxDataToInbox(inbox);
     PRIVMX_DEBUG_TIME_STOP(PlatformInbox, _getInboxEx, data decrypted)
@@ -334,9 +334,9 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
         auto statusCode = validateInboxDataIntegrity(inbox);
         inboxes.push_back(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
         if(statusCode == 0) {
-            _inboxProvider.updateDataIntegrityStatus(inbox.id() ,core::DataIntegrityStatus::ValidationSucceed);
+            _inboxProvider.updateByValueAndStatus(inbox ,core::DataIntegrityStatus::ValidationSucceed);
         } else {
-            _inboxProvider.updateDataIntegrityStatus(inbox.id() ,core::DataIntegrityStatus::ValidationFailed);
+            _inboxProvider.updateByValueAndStatus(inbox ,core::DataIntegrityStatus::ValidationFailed);
             inboxesRaw.remove(i);
             i--;
         }
@@ -414,14 +414,12 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto inboxPubKeyECC = privmx::crypto::PublicKey::fromBase58DER(publicData.inboxEntriesPubKeyBase58DER);// keys to encrypt message (generated or taken from param)
     auto _userPrivKeyECC = (handle->userPrivKey.has_value() ? privmx::crypto::PrivateKey::fromWIF(handle->userPrivKey.value()) : _userPrivKey);
     auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
-    //update Key
-    auto inboxDIO = _connection.getImpl()->createDIO(
+    auto inboxDIO = _connection.getImpl()->createPublicDIO(
         "",
         handle->inboxId,
-        "public_user",
         _userPrivKeyECC.getPublicKey()
     );
-
+    //update Key
     std::string filesMetaKey;
     bool hasFiles = !handle->inboxFileHandles.empty();
     filesMetaKey = (hasFiles ? crypto::Crypto::randomBytes(32) : std::string());
@@ -726,24 +724,35 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
 }
 
 
-std::tuple<inbox::Inbox, std::string> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
+std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inboxEntry.data().meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
                     auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);
-                    return std::make_tuple(convertInboxV4(inbox, decryptedInboxData), decryptedInboxData.privateData.authorPubKey);
+                    return std::make_tuple(
+                        convertInboxV4(inbox, decryptedInboxData),
+                        core::DataIntegrityObject{
+                            .creatorUserId = inbox.lastModifier(),
+                            .creatorPubKey = decryptedInboxData.privateData.authorPubKey,
+                            .contextId = inbox.contextId(),
+                            .containerId = inbox.id(),
+                            .timestamp = inbox.lastModificationDate(),
+                            .randomId = 0
+                        }
+                        
+                    );
                 }
                 case 5: {
                     auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
-                    return std::make_tuple(convertInboxV5(inbox, decryptedInboxData), decryptedInboxData.privateData.authorPubKey);
+                    return std::make_tuple(convertInboxV5(inbox, decryptedInboxData), decryptedInboxData.privateData.dio);
                 }
             }
         }
     }
     auto e = UnknowInboxFormatException();
-    return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode()}, "");
+    return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode()}, core::DataIntegrityObject());
 }
 
 
@@ -760,17 +769,26 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxs(utils::Lis
     //send verification request and update key statuscode
     _keyProvider->validateUserData(keys);
     //
-    std::vector<std::string> lastModifiersPubKey;
+    std::vector<core::DataIntegrityObject> inboxesDIO;
+    std::map<std::string, bool> duplication_check;
     for (size_t i = 0; i < inboxes.size(); i++) {
         auto inbox = inboxes.get(i);
-        try {
+        try {;
+
             auto tmp = decryptAndConvertInboxDataToInbox(inbox, inbox.data().get(inbox.data().size()-1), keys[i]);
             result.push_back(std::get<0>(tmp));
-            lastModifiersPubKey.push_back(std::get<1>(tmp));
+            auto inboxDIO = std::get<1>(tmp);
+            inboxesDIO.push_back(inboxDIO);
+            //find duplication
+            std::string fullRandomId =  std::to_string(inboxDIO.randomId) + "-" + std::to_string(inboxDIO.timestamp);
+            if(duplication_check.find(fullRandomId) == duplication_check.end()) {
+                duplication_check.insert(std::make_pair(fullRandomId, true));
+            } else {
+                result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
+            }
         } catch (const core::Exception& e) {
             result.push_back(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
-            lastModifiersPubKey.push_back("");
-
+            inboxesDIO.push_back(core::DataIntegrityObject{});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -779,7 +797,7 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxs(utils::Lis
             verifierInput.push_back({
                 .contextId = result[i].contextId,
                 .senderId = result[i].lastModifier,
-                .senderPubKey = lastModifiersPubKey[i],
+                .senderPubKey = inboxesDIO[i].creatorPubKey,
                 .date = result[i].lastModificationDate
             });
         }
@@ -803,14 +821,14 @@ inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbo
     auto entry = getInboxCurrentDataEntry(inbox);
     auto key = _keyProvider->getKeyAndVerify(inbox.keys(), entry.keyId(), {.contextId=inbox.contextId(), .containerId=inbox.id()});
     inbox::Inbox result;
-    std::string lastModifierPubKey;
-    std::tie(result, lastModifierPubKey) = decryptAndConvertInboxDataToInbox(inbox, entry, key);
+    core::DataIntegrityObject inboxDIO;
+    std::tie(result, inboxDIO) = decryptAndConvertInboxDataToInbox(inbox, entry, key);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
     verifierInput.push_back({
         .contextId = result.contextId,
         .senderId = result.lastModifier,
-        .senderPubKey = lastModifierPubKey,
+        .senderPubKey = inboxDIO.creatorPubKey,
         .date = result.lastModificationDate
     });
     std::vector<bool> verified;
@@ -896,7 +914,7 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox:
             auto serverFiles {_serverApi->storeFileGetMany(filesGetModel)};
             for (auto file : serverFiles.files()) {
                 if(file.errorEmpty()) {
-                    result.files.push_back(_storeApi.getImpl()->decryptAndConvertFileDataToFileInfo(file, fileMetaEncKey));
+                    result.files.push_back(std::get<0>(_storeApi.getImpl()->decryptAndConvertFileDataToFileInfo(file, fileMetaEncKey)));
                 } else {
                     store::File error;
                     auto e = FileFetchFailedException();
@@ -1102,8 +1120,8 @@ uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
                 if(
                     dio.containerId != inbox.id() ||
                     dio.contextId != inbox.contextId() ||
-                    dio.creatorUserId != inbox.lastModifier()
-                    // check timestamp
+                    dio.creatorUserId != inbox.lastModifier() ||
+                    abs(dio.timestamp - inbox.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
                 ) {
                     return InboxDataIntegrityException().getCode();
                 }

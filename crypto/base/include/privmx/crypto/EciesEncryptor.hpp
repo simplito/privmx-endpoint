@@ -31,9 +31,9 @@ public:
     static std::string decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
     static std::string decrypt(const PrivateKey& priv, const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
     static std::string decryptV0(const PrivateKey& priv, const PublicKey& pub, const std::string& cipher);
-    static std::string encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data, const std::optional<PrivateKey>& privForSignature = std::nullopt);
-    static std::string encryptToBase64(const PublicKey& pub, const std::string& data, const std::optional<PrivateKey>& privForSignature = std::nullopt);
-    static std::string encrypt(const PublicKey& pub, const std::string& data, const std::optional<PrivateKey>& privForSignature = std::nullopt);
+    static std::string encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature);
+    static std::string encryptToBase64(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
+    static std::string encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
 };
 
 } // crypto

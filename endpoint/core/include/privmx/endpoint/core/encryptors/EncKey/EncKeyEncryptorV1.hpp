@@ -23,7 +23,6 @@ namespace core {
 
 class EncKeyEncryptorV1 {
 public:
-    std::string encrypt(const std::string& rawKey, const privmx::crypto::PublicKey& encryptionKey);
     std::string decrypt(const std::string& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey);
 };
 

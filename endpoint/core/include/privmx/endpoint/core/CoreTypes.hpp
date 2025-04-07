@@ -21,14 +21,12 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-
+#define TIMESTAMP_ALLOWED_DELTA 5*60*1000 // in miliseconds
 
 struct EncKey {
     std::string id;
     std::string key;
 };
-
-
 
 struct DataIntegrityObject {
     std::string creatorUserId;
@@ -36,7 +34,7 @@ struct DataIntegrityObject {
     std::string contextId;
     std::string containerId;
     int64_t timestamp;
-    int64_t nonce;
+    int64_t randomId;
 };
 
 struct DecryptedVersionedData {
@@ -47,9 +45,8 @@ struct DecryptedVersionedData {
 struct DecryptedEncKey : public EncKey, public DecryptedVersionedData {};
 
 struct ExpandedDataIntegrityObject : public DataIntegrityObject {
-    int64_t objectFormat;
-    std::unordered_map<std::string, std::string> mapOfDataSha256;
-    // key : sha256 of DataJSON
+    int64_t structureVersion;
+    std::unordered_map<std::string, std::string> fieldChecksums;
 };
 
 

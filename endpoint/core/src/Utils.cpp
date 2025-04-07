@@ -57,10 +57,11 @@ void Utils::ltrim(std::string& data) {
 void Utils::rtrim(std::string& data) {
     return privmx::utils::Utils::rtrim(data);
 }
-int64_t Utils::randomNumber() {
+int64_t Utils::generateRandomNumber() {
     int64_t result = 0;
     auto resultStr = privmx::crypto::Crypto::randomBytes(8);
-    for(auto c : resultStr) {
+    for(size_t i = 0; i < resultStr.length(); i++) {
+        uint8_t c = resultStr[i];
         result = (result << 8) | c;
     }
     return result;
