@@ -375,24 +375,6 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
         result.statusCode = e.getCode();
         return result;
     }
-    if (result.statusCode == 0) {
-        std::vector<core::VerificationRequest> verifierInput {{
-            .contextId = thread.contextId(),
-            .senderId = result.info.author,
-            .senderPubKey = result.authorPubKey,
-            .date = result.info.createDate
-        }};
-
-        std::vector<bool> verified;
-        try {
-            verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-        } catch (...) {
-            throw core::UserVerificationMethodUnhandledException();
-        }
-        if (verified[0] == false) {
-            result.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-        }
-    }
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
     return result;
 }
