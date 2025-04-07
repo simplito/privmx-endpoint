@@ -304,10 +304,10 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, data send)
     auto statusCode = validateStoreDataIntegrity(store);
     if(statusCode != 0) {
-        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(storeId, core::DataIntegrityStatus::ValidationFailed);
+        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store, core::DataIntegrityStatus::ValidationFailed);
         return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
     } else {
-        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(storeId, core::DataIntegrityStatus::ValidationSucceed);
+        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store, core::DataIntegrityStatus::ValidationSucceed);
     }
     auto result = decryptAndConvertStoreDataToStore(store);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, _getStoreEx, data decrypted)
@@ -340,9 +340,9 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
         auto statusCode = validateStoreDataIntegrity(store);
         stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
         if(statusCode == 0) {
-            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(store.id() ,core::DataIntegrityStatus::ValidationSucceed);
+            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store ,core::DataIntegrityStatus::ValidationSucceed);
         } else {
-            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateDataIntegrityStatus(store.id() ,core::DataIntegrityStatus::ValidationFailed);
+            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store ,core::DataIntegrityStatus::ValidationFailed);
             storesList.stores().remove(i);
             i--;
         }
@@ -855,26 +855,46 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
     return result;
 }
 
-std::tuple<Store, std::string>  StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(storeEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
                     auto decryptedStoreData = decryptStoreV4(storeEntry, encKey);
-                    return std::make_tuple(convertDecryptedStoreDataV4ToStore(store, decryptedStoreData), decryptedStoreData.authorPubKey);
+                    return std::make_tuple(
+                        convertDecryptedStoreDataV4ToStore(store, decryptedStoreData),
+                        core::DataIntegrityObject{
+                            .creatorUserId = store.lastModifier(),
+                            .creatorPubKey = decryptedStoreData.authorPubKey,
+                            .contextId = store.contextId(),
+                            .containerId = store.id(),
+                            .timestamp = store.lastModificationDate(),
+                            .randomId = 0
+                        }
+                    );
                 }
                 case 5: {
                     auto decryptedStoreData = decryptStoreV5(storeEntry, encKey);
-                    return std::make_tuple(convertDecryptedStoreDataV5ToStore(store, decryptedStoreData), decryptedStoreData.authorPubKey);
+                    return std::make_tuple(convertDecryptedStoreDataV5ToStore(store, decryptedStoreData), decryptedStoreData.dio);
                 }
             }
         }
     } else if (storeEntry.data().isString()) {
-        return std::make_tuple(convertStoreDataV1ToStore(store, decryptStoreV1(storeEntry, encKey)), "");
+        return std::make_tuple(
+            convertStoreDataV1ToStore(store, decryptStoreV1(storeEntry, encKey)), 
+            core::DataIntegrityObject{
+                .creatorUserId = store.lastModifier(),
+                .creatorPubKey = "",
+                .contextId = store.contextId(),
+                .containerId = store.id(),
+                .timestamp = store.lastModificationDate(),
+                .randomId = 0
+            }
+        );
     }
     auto e = UnknowStoreFormatException();
-    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, "");
+    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, core::DataIntegrityObject());
 }
 
 
@@ -892,16 +912,25 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
     //send verification request and update key statuscode
     _keyProvider->validateUserData(keys);
     //
-    std::vector<std::string> lastModifiersPubKey;
+    std::vector<core::DataIntegrityObject> storesDIO;
+    std::map<std::string, bool> duplication_check;
     for (size_t i = 0; i < stores.size(); i++) {
         auto store = stores.get(i);
         try {
             auto tmp = decryptAndConvertStoreDataToStore(store, store.data().get(store.data().size()-1), keys[i]);
             result.push_back(std::get<0>(tmp));
-            lastModifiersPubKey.push_back(std::get<1>(tmp));
+            auto storeDIO = std::get<1>(tmp);
+            storesDIO.push_back(storeDIO);
+            //find duplication
+            std::string fullRandomId =  std::to_string(storeDIO.randomId) + "-" + std::to_string(storeDIO.timestamp);
+            if(duplication_check.find(fullRandomId) == duplication_check.end()) {
+                duplication_check.insert(std::make_pair(fullRandomId, true));
+            } else {
+                result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
+            }
         } catch (const core::Exception& e) {
             result.push_back(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
-            lastModifiersPubKey.push_back("");
+            storesDIO.push_back(core::DataIntegrityObject());
 
         }
     }
@@ -911,7 +940,7 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
             verifierInput.push_back({
                 .contextId = result[i].contextId,
                 .senderId = result[i].lastModifier,
-                .senderPubKey = lastModifiersPubKey[i],
+                .senderPubKey = storesDIO[i].creatorPubKey,
                 .date = result[i].lastModificationDate
             });
         }
@@ -935,14 +964,14 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
     auto store_data_entry = store.data().get(store.data().size()-1);
     auto key = _keyProvider->getKeyAndVerify(store.keys(), store_data_entry.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
     Store result;
-    std::string lastModifierPubKey;
-    std::tie(result, lastModifierPubKey) = decryptAndConvertStoreDataToStore(store, store_data_entry, key);
+    core::DataIntegrityObject storeDIO;
+    std::tie(result, storeDIO) = decryptAndConvertStoreDataToStore(store, store_data_entry, key);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
     verifierInput.push_back({
         .contextId = result.contextId,
         .senderId = result.lastModifier,
-        .senderPubKey = lastModifierPubKey,
+        .senderPubKey = storeDIO.creatorPubKey,
         .date = result.lastModificationDate
     });
     std::vector<bool> verified;
@@ -1116,22 +1145,47 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
     };
 }
 
-File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey) {
+std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey) {
     if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(file.meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
-                case 4:
-                    return convertDecryptedFileMetaV4ToFile(file, decryptFileMetaV4(file, encKey));
-                case 5:
-                    return convertDecryptedFileMetaV5ToFile(file, decryptFileMetaV5(file, encKey));
+                case 4: {
+                    auto decryptedFile = decryptFileMetaV4(file, encKey);
+                    return std::make_tuple(
+                        convertDecryptedFileMetaV4ToFile(file, decryptedFile),
+                        core::DataIntegrityObject{
+                            .creatorUserId = file.lastModifier(),
+                            .creatorPubKey = decryptedFile.authorPubKey,
+                            .contextId = file.contextId(),
+                            .containerId = file.id(),
+                            .timestamp = file.lastModificationDate(),
+                            .randomId = 0
+                        }
+                    );
+                }
+                case 5: {
+                    auto decryptedFile = decryptFileMetaV5(file, encKey);
+                    return std::make_tuple(convertDecryptedFileMetaV5ToFile(file, decryptFileMetaV5(file, encKey)), decryptedFile.dio);
+                }
             }
         }
     } else if (file.meta().isString()) {
-        return convertStoreFileMetaV1ToFile(file, decryptStoreFileV1(file, encKey).meta);
+        auto decryptedFile = decryptStoreFileV1(file, encKey).meta;
+        return std::make_tuple(
+            convertStoreFileMetaV1ToFile(file, decryptedFile),
+            core::DataIntegrityObject{
+                .creatorUserId = file.lastModifier(),
+                .creatorPubKey = decryptedFile.authorEmpty() ? "" : decryptedFile.author().pubKeyOpt(""),
+                .contextId = file.contextId(),
+                .containerId = file.id(),
+                .timestamp = file.lastModificationDate(),
+                .randomId = 0
+            }
+        );
     }
     auto e = UnknowFileFormatException();
-    return File{{},{},{},{},{},.statusCode = e.getCode()};
+    return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
 }
 
 std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files) {
@@ -1141,12 +1195,21 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
     }
     auto keyMap = _keyProvider->getKeysAndVerify(store.keys(), keyIds, {.contextId=store.contextId(), .containerId=store.id()});
     std::vector<File> result;
+    std::map<std::string, bool> duplication_check;
     for (auto file : files) {
-
         try {
             auto statusCode = validateFileDataIntegrity(file);
             if(statusCode == 0) {
-                result.push_back(decryptAndConvertFileDataToFileInfo(file, keyMap.at(file.keyId())));
+                auto tmp = decryptAndConvertFileDataToFileInfo(file,  keyMap.at(file.keyId()));
+                result.push_back(std::get<0>(tmp));
+                auto fileDIO = std::get<1>(tmp);
+                //find duplication
+                std::string fullRandomId =  std::to_string(fileDIO.randomId) + "-" + std::to_string(fileDIO.timestamp);
+                if(duplication_check.find(fullRandomId) == duplication_check.end()) {
+                    duplication_check.insert(std::make_pair(fullRandomId, true));
+                } else {
+                    result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
+                }
             } else {
                 result.push_back(File{{},{},{},{},{},.statusCode = statusCode});
             }
@@ -1184,7 +1247,9 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::Store store, serv
     auto keyId = file.keyId();
     auto encKey = _keyProvider->getKeyAndVerify(store.keys(), keyId, {.contextId=store.contextId(), .containerId=store.id()});
     _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
-    auto result = decryptAndConvertFileDataToFileInfo(file, encKey);
+    File result;
+    core::DataIntegrityObject fileDIO;
+    std::tie(result, fileDIO) = decryptAndConvertFileDataToFileInfo(file, encKey);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
         verifierInput.push_back({
@@ -1324,8 +1389,8 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
                     if(
                         dio.containerId != store.id() ||
                         dio.contextId != store.contextId() ||
-                        dio.creatorUserId != store.lastModifier()
-                        // check timestamp
+                        dio.creatorUserId != store.lastModifier() ||
+                        abs(dio.timestamp - store.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
                     ) {
                         return StoreDataIntegrityException().getCode();
                     }
@@ -1354,8 +1419,8 @@ uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file) {
                     if(
                         dio.containerId != file.storeId() ||
                         dio.contextId != file.contextId() ||
-                        dio.creatorUserId != file.lastModifier()
-                        // check timestamp
+                        dio.creatorUserId != file.lastModifier() ||
+                        abs(dio.timestamp - file.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
                     ) {
                         return FileDataIntegrityException().getCode();;
                     }

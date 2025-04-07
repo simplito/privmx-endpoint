@@ -105,7 +105,7 @@ public:
     void unsubscribeFromFileEvents(const std::string& storeId);
     //For Inbox
     FileDecryptionParams getFileDecryptionParams(const server::File& file, const core::DecryptedEncKey& encKey);
-    File decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
+    std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
 private:
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
@@ -124,7 +124,7 @@ private:
     Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
     Store convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData);
     Store convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData);
-    std::tuple<Store, std::string> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
     Store decryptAndConvertStoreDataToStore(server::Store store);
     int64_t decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);

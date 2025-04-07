@@ -188,16 +188,26 @@ std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
     return _contextProvider->get(contextId).container.userId();
 }
 
-DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, const std::string& containerId, 
-    const std::optional<std::string>& userId, const std::optional<crypto::PublicKey>& pubKey
-) {
-    int64_t nonce = Utils::randomNumber();
+DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, const std::string& containerId) {
+    int64_t randomId = Utils::generateRandomNumber();
     return core::DataIntegrityObject{
-        .creatorUserId = userId.has_value() ? userId.value() : getMyUserId(contextId),
-        .creatorPubKey = pubKey.has_value() ? pubKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
+        .creatorUserId = getMyUserId(contextId),
+        .creatorPubKey = _userPrivKey.getPublicKey().toBase58DER(),
         .contextId = contextId,
         .containerId = containerId,
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
-        .nonce = nonce
+        .randomId = randomId
+    };
+}
+
+DataIntegrityObject ConnectionImpl::createPublicDIO(const std::string& contextId, const std::string& containerId, const crypto::PublicKey& pubKey) {
+    int64_t randomId = Utils::generateRandomNumber();
+    return core::DataIntegrityObject{
+        .creatorUserId = "",
+        .creatorPubKey = pubKey.toBase58DER(),
+        .contextId = contextId,
+        .containerId = containerId,
+        .timestamp = privmx::utils::Utils::getNowTimestamp(),
+        .randomId = randomId
     };
 }

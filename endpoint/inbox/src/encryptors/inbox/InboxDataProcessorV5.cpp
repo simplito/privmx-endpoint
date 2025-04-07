@@ -42,12 +42,12 @@ server::InboxData InboxDataProcessorV5::packForServer(const InboxDataProcessorMo
         privateDataMapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta())));
     }
     serverPrivateData.authorPubKey(authorPubKeyECC);
-    core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .objectFormat=5, .mapOfDataSha256=privateDataMapOfDataSha256};
+    core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .structureVersion=5, .fieldChecksums=privateDataMapOfDataSha256};
     serverPrivateData.dio(_DIOEncryptor.signAndEncode(privateDataExpandedDio, authorPrivateKey));
 
     auto serverInboxData = utils::TypedObjectFactory::createNewObject<server::InboxData>();
 
-    std::unordered_map<std::string, std::string> mapOfDataSha256;
+    std::unordered_map<std::string, std::string> fieldChecksums;
     serverInboxData.storeId(plainData.storeId);
     serverInboxData.threadId(plainData.threadId);
     serverInboxData.fileConfig(InboxDataHelper::fileConfigToTypedObject(plainData.filesConfig));
@@ -148,14 +148,14 @@ core::DataIntegrityObject InboxDataProcessorV5::getDIOAndAssertIntegrity(const s
     assertDataFormat(encryptedPrivateData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedPrivateData.dio());
     if (
-        dio.objectFormat != 5 ||
+        dio.structureVersion != 5 ||
         dio.creatorPubKey != encryptedPrivateData.authorPubKey() ||
-        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.privateMeta()) || (
+        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.privateMeta()) || (
             !encryptedPrivateData.internalMetaEmpty() &&
-            dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.internalMeta())
+            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.internalMeta())
         )
     ) {
-        throw core::DataIntegrityObjectInvalidSHA256Exception();
+        throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }

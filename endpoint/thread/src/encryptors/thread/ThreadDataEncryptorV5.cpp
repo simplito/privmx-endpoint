@@ -23,20 +23,20 @@ server::EncryptedThreadDataV5 ThreadDataEncryptorV5::encrypt(const ThreadDataToE
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedThreadDataV5>();
     result.version(5);
-    std::unordered_map<std::string, std::string> mapOfDataSha256;
+    std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(threadData.publicMeta, authorPrivateKey));
-    mapOfDataSha256.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
+    fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(threadData.publicMeta.stdString()));
     } catch (...) {
         result.publicMetaObjectClear();
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(threadData.privateMeta, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
+    fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
     result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(threadData.internalMeta, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
+    fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    core::ExpandedDataIntegrityObject expandedDio = {threadData.dio, .objectFormat=5, .mapOfDataSha256=mapOfDataSha256};
+    core::ExpandedDataIntegrityObject expandedDio = {threadData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result;
 }
@@ -103,13 +103,13 @@ core::DataIntegrityObject ThreadDataEncryptorV5::getDIOAndAssertIntegrity(const 
     auto encryptedDIO = encryptedThreadData.dio();
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedDIO);
     if (
-        dio.objectFormat != 5 ||
+        dio.structureVersion != 5 ||
         dio.creatorPubKey != encryptedThreadData.authorPubKey() ||
-        dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.publicMeta()) ||
-        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.privateMeta()) ||
-        dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.internalMeta())     
+        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.publicMeta()) ||
+        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.privateMeta()) ||
+        dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.internalMeta())     
     ) {
-        throw core::DataIntegrityObjectInvalidSHA256Exception();
+        throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }

@@ -27,13 +27,13 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.contextId(dio.contextId);
     dioJSON.containerId(dio.containerId);
     dioJSON.timestamp(dio.timestamp);
-    dioJSON.nonce(dio.nonce);
-    auto dioJSONmapOfDataSha256 = privmx::utils::TypedObjectFactory::createNewMap<std::string>();
-    for(auto  a: dio.mapOfDataSha256) {
-        dioJSONmapOfDataSha256.add(a.first, utils::Base64::from(a.second));
+    dioJSON.randomId(dio.randomId);
+    auto dioJSONfieldChecksums = privmx::utils::TypedObjectFactory::createNewMap<std::string>();
+    for(auto  a: dio.fieldChecksums) {
+        dioJSONfieldChecksums.add(a.first, utils::Base64::from(a.second));
     }
-    dioJSON.mapOfDataSha256(dioJSONmapOfDataSha256);
-    dioJSON.objectFormat(dio.objectFormat);
+    dioJSON.fieldChecksums(dioJSONfieldChecksums);
+    dioJSON.structureVersion(dio.structureVersion);
     return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), autorKey));
 }
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
@@ -46,9 +46,9 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     if(!signatureStatus) {
         throw DataIntegrityObjectInvalidSignatureException();
     }
-    std::unordered_map<std::string, std::string> mapOfDataSha256;
-    for(auto  a: dioJSON.mapOfDataSha256()) {
-        mapOfDataSha256.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));
+    std::unordered_map<std::string, std::string> fieldChecksums;
+    for(auto  a: dioJSON.fieldChecksums()) {
+        fieldChecksums.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));
     }
 
     return ExpandedDataIntegrityObject{
@@ -58,10 +58,10 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .contextId=dioJSON.contextId(),
             .containerId=dioJSON.containerId(),
             .timestamp=dioJSON.timestamp(),
-            .nonce=dioJSON.nonce()
+            .randomId=dioJSON.randomId()
         },
-        .objectFormat=dioJSON.objectFormat(),
-        .mapOfDataSha256=mapOfDataSha256
+        .structureVersion=dioJSON.structureVersion(),
+        .fieldChecksums=fieldChecksums
     };
 }
 
@@ -72,10 +72,10 @@ void DIOEncryptorV1::assertDataFormat(const server::DataIntegrityObject& dioJSON
         dioJSON.creatorPublicKeyEmpty() ||
         dioJSON.contextIdEmpty() ||
         dioJSON.containerIdEmpty() ||
-        dioJSON.nonceEmpty() ||
+        dioJSON.randomIdEmpty() ||
         dioJSON.timestampEmpty() ||
-        dioJSON.mapOfDataSha256Empty()
+        dioJSON.fieldChecksumsEmpty()
     ) {
-        throw DataIntegrityObjectMalformedDataException();
+        throw MalformedDataIntegrityObjectException();
     }
 }

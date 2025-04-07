@@ -16,7 +16,8 @@ using namespace privmx::endpoint::core;
 
 ContextProvider::ContextProvider(std::function<server::ContextInfo(std::string)> getContext) 
     : core::ContainerProvider<std::string, server::ContextInfo>(getContext, []([[maybe_unused]]server::ContextInfo c) {return 0;}) {}
-    
-void ContextProvider::updateByValue(const server::ContextInfo& container) {
-    _storage.set(container.contextId(), ContainerInfo{.container=container, .status = core::DataIntegrityStatus::NotValidated});
+
+bool ContextProvider::isNewerOrSameAsInStorage([[maybe_unused]] const server::ContextInfo& container) {
+    return true;
+    // in current version of context is differentiate between newer context and older 
 }

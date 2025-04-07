@@ -31,9 +31,9 @@ ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
     STRING_FIELD(contextId)
     STRING_FIELD(containerId)
     INT64_FIELD(timestamp)
-    INT64_FIELD(nonce)
-    MAP_FIELD(mapOfDataSha256, std::string)
-    INT64_FIELD(objectFormat)
+    INT64_FIELD(randomId)
+    MAP_FIELD(fieldChecksums, std::string)
+    INT64_FIELD(structureVersion)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(EncryptionKey)

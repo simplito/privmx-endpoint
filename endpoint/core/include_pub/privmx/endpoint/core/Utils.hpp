@@ -145,7 +145,7 @@ public:
     /**
      * Generate random number on full range of int64_t
      */
-    static int64_t randomNumber();
+    static int64_t generateRandomNumber();
 };
 
 }  // namespace core

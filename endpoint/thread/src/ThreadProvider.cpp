@@ -17,16 +17,18 @@ using namespace privmx::endpoint::thread;
 ThreadProvider::ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread, std::function<uint32_t(server::ThreadInfo)> validateThread) 
     : core::ContainerProvider<std::string, server::ThreadInfo>(getThread, validateThread) {}
     
-void ThreadProvider::updateByValue(const server::ThreadInfo& container) {
+bool ThreadProvider::isNewerOrSameAsInStorage(const server::ThreadInfo& container) {
     auto cached = _storage.get(container.id());
-    if(!cached.has_value()) {
-        _storage.set(container.id(), ContainerInfo{.container=container, .status = core::DataIntegrityStatus::NotValidated});
-        return;
+    if (!cached.has_value()) {
+        return true;
     }
     auto cached_container = cached.value().container;
-    if(container.version() > cached_container.version() || container.lastModificationDate() > cached_container.lastModificationDate()) {
-        _storage.set(container.id(), ContainerInfo{.container=container, .status = core::DataIntegrityStatus::NotValidated});
+    if (container.version() > cached_container.version() ||
+        (container.lastModificationDate() >= cached_container.lastModificationDate() && container.version() == cached_container.version())
+    ) {
+        return true;
     }
+    return false;
 }
 
 void ThreadProvider::updateStats(const server::ThreadStatsEventData& stats) {
