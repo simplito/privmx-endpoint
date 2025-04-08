@@ -370,26 +370,6 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet, data send)
     if(serverFileResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFileResult.store());
     auto ret {decryptAndConvertFileDataToFileInfo(serverFileResult.store(), serverFileResult.file())};
-    if (ret.statusCode == 0) {
-        auto verifier {_connection.getImpl()->getUserVerifier()};
-
-        std::vector<core::VerificationRequest> verifierInput {{
-            .contextId = serverFileResult.store().contextId(),
-            .senderId = ret.info.author,
-            .senderPubKey = ret.authorPubKey,
-            .date = ret.info.createDate
-        }};
-
-        std::vector<bool> verified;
-        try {
-            verified = verifier->verify(verifierInput);
-        } catch (...) {
-            throw core::UserVerificationMethodUnhandledException();
-        }
-        if (verified[0] == false) {
-            ret.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-        }
-    }
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileGet, data decrypted)
     return ret;
 }
