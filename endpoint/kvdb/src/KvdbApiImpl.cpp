@@ -91,7 +91,7 @@ std::string KvdbApiImpl::createKvdbEx(
     auto kvdbKey = _keyProvider->generateKey();
     auto kvdbDIO = _connection.getImpl()->createDIO(
         contextId,
-        utils::Utils::getNowTimestampStr() + "-" + utils::Hex::from(crypto::Crypto::randomBytes(8))
+        utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8))
     );
     auto kvdbCCN = _keyProvider->generateContainerControlNumber();
     KvdbDataToEncryptV5 kvdbDataToEncrypt {
@@ -270,10 +270,10 @@ Kvdb KvdbApiImpl::getKvdbEx(const std::string& kvdbId, const std::string& type) 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, _getKvdbEx, data send)
     auto statusCode = validateKvdbDataIntegrity(kvdb);
     if(statusCode != 0) {
-        if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateDataIntegrityStatus(kvdbId, core::DataIntegrityStatus::ValidationFailed);
+        if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateByValueAndStatus(kvdb, core::DataIntegrityStatus::ValidationFailed);
         return Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
     } else {
-        if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateDataIntegrityStatus(kvdbId, core::DataIntegrityStatus::ValidationSucceed);
+        if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateByValueAndStatus(kvdb, core::DataIntegrityStatus::ValidationSucceed);
     }
     auto result = decryptAndConvertKvdbDataToKvdb(kvdb);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, _getKvdbEx, data decrypted)
@@ -303,9 +303,9 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbsEx(const std::string& contextId, co
         auto statusCode = validateKvdbDataIntegrity(kvdb);
         kvdbs.push_back(Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
         if(statusCode == 0) {
-            if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateDataIntegrityStatus(kvdb.id() ,core::DataIntegrityStatus::ValidationSucceed);
+            if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateByValueAndStatus(kvdb ,core::DataIntegrityStatus::ValidationSucceed);
         } else {
-            if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateDataIntegrityStatus(kvdb.id() ,core::DataIntegrityStatus::ValidationFailed);
+            if(type == KVDB_TYPE_FILTER_FLAG) _kvdbProvider.updateByValueAndStatus(kvdb ,core::DataIntegrityStatus::ValidationFailed);
             kvdbsList.kvdbs().remove(i);
             i--;
         }
@@ -391,14 +391,33 @@ core::PagingList<std::string> KvdbApiImpl::listItemKeys(const std::string& kvdbI
     });
 }
 
+core::PagingList<Item> KvdbApiImpl::listItem(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery) {
+    PRIVMX_DEBUG_TIME_START(PlatformKvdb, listItem)
+    auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListItemsModel>();
+    model.kvdbId(kvdbId);
+    kvdb::Mapper::map(model, pagingQuery);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listItem, getting itemList)
+    auto itemsList = _serverApi.kvdbListItems(model);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listItemKeys, data send)
+    auto kvdb = itemsList.kvdb();
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listItemKeys, data send)
+    auto items = decryptAndConvertItemsDataToItems(kvdb, itemsList.kvdbItems());
+    PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, listItemKeys, data decrypted)
+    return core::PagingList<Item>({
+        .totalAvailable = itemsList.count(),
+        .readItems = items
+    });
+}
 
-std::string KvdbApiImpl::sendItem(const std::string& kvdbId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data) {
+void KvdbApiImpl::setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, sendItem);
     auto kvdb = getRawKvdbFromCacheOrBridge(kvdbId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, sendItem, getKvdb)
     auto msgKey = getKvdbCurrentEncKey(kvdb);
-    auto  send_item_model = utils::TypedObjectFactory::createNewObject<server::KvdbItemSendModel>();
+    auto  send_item_model = utils::TypedObjectFactory::createNewObject<server::KvdbItemSetModel>();
     send_item_model.kvdbId(kvdb.id());
+    send_item_model.kvdbItemKey(key);
+    send_item_model.version(version);
     send_item_model.keyId(msgKey.id);
     auto itemDIO = _connection.getImpl()->createDIO(
         kvdb.contextId(),
@@ -412,57 +431,17 @@ std::string KvdbApiImpl::sendItem(const std::string& kvdbId, const core::Buffer&
         .dio = itemDIO
     };
     auto encryptedItemData = _itemDataEncryptorV5.encrypt(itemData, _userPrivKey, msgKey.key);
-    send_item_model.data(encryptedItemData.asVar());
+    send_item_model.kvdbItemValue(encryptedItemData.asVar());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, sendItem, data encrypted)
-    auto result = _serverApi.kvdbItemSend(send_item_model);
+    _serverApi.kvdbItemSet(send_item_model);
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, sendItem, data send)
-    return result.itemId();
 }
-void KvdbApiImpl::deleteItem(const std::string& itemId) {
+
+void KvdbApiImpl::deleteItem(const std::string& kvdbId, const std::string& key) {
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbItemDeleteModel>();
-    model.itemId(itemId);
+    model.kvdbId(kvdbId);
+    model.kvdbItemKey(key);
     _serverApi.kvdbItemDelete(model);
-}
-void KvdbApiImpl::updateItem(
-    const std::string& itemId, 
-    const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta, 
-    const core::Buffer& data
-) {
-    PRIVMX_DEBUG_TIME_START(PlatformKvdb, updateItem);
-    auto model = utils::TypedObjectFactory::createNewObject<server::KvdbItemGetModel>();
-    model.itemId(itemId);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, updateItem, getting item)
-    auto item = _serverApi.kvdbItemGet(model).item();
-    auto statusCode = validateItemDataIntegrity(item);
-    if(statusCode != 0) {
-        throw ItemDataIntegrityException();
-    }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, updateItem, getting kvdb)
-
-    auto kvdb = getRawKvdbFromCacheOrBridge(item.kvdbId());
-
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, updateItem, data preparing)
-    auto msgKey = getKvdbCurrentEncKey(kvdb);
-    auto  send_item_model = utils::TypedObjectFactory::createNewObject<server::KvdbItemUpdateModel>();
-    send_item_model.itemId(itemId);
-    send_item_model.keyId(msgKey.id);
-    auto itemDIO = _connection.getImpl()->createDIO(
-        item.contextId(),
-        item.kvdbId()
-    );
-    ItemDataToEncryptV5 itemData {
-        .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .data = data,
-        .internalMeta = std::nullopt,
-        .dio = itemDIO
-    };
-    auto encryptedItemData = _itemDataEncryptorV5.encrypt(itemData, _userPrivKey, msgKey.key);
-    send_item_model.data(encryptedItemData.asVar());
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, updateItem, data encrypted)
-    _serverApi.kvdbItemUpdate(send_item_model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, updateItem, data send)
 }
 
 void KvdbApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
@@ -522,14 +501,14 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const std::s
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "kvdbNewItem") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Item>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbItemInfo>(data);
         auto data = decryptAndConvertItemDataToItem(raw);
         std::shared_ptr<KvdbNewItemEvent> event(new KvdbNewItemEvent());
         event->channel = channel;
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "kvdbUpdatedItem") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Item>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbItemInfo>(data);
         auto data = decryptAndConvertItemDataToItem(raw);
         std::shared_ptr<KvdbItemUpdatedEvent> event(new KvdbItemUpdatedEvent());
         event->channel = channel;
@@ -604,41 +583,7 @@ privmx::utils::List<std::string> KvdbApiImpl::mapUsers(const std::vector<core::U
     return result;
 }
 
-dynamic::KvdbDataV1 KvdbApiImpl::decryptKvdbV1(server::Kvdb2DataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        return _dataEncryptorKvdb.decrypt(kvdbEntry.data(), encKey);
-    } catch (const core::Exception& e) {
-        dynamic::KvdbDataV1 result = utils::TypedObjectFactory::createNewObject<dynamic::KvdbDataV1>();
-        result.title(std::string());
-        result.statusCode(e.getCode());
-        return result;
-    } catch (const privmx::utils::PrivmxException& e) {
-        dynamic::KvdbDataV1 result = utils::TypedObjectFactory::createNewObject<dynamic::KvdbDataV1>();
-        result.title(std::string());
-        result.statusCode(core::ExceptionConverter::convert(e).getCode());
-        return result;
-    } catch (...) {
-        dynamic::KvdbDataV1 result = utils::TypedObjectFactory::createNewObject<dynamic::KvdbDataV1>();
-        result.title(std::string());
-        result.statusCode(ENDPOINT_CORE_EXCEPTION_CODE);
-        return result;
-    }
-}
-
-DecryptedKvdbDataV4 KvdbApiImpl::decryptKvdbV4(server::Kvdb2DataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedKvdbData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbDataV4>(kvdbEntry.data());
-        return _kvdbDataEncryptorV4.decrypt(encryptedKvdbData, encKey.key);
-    } catch (const core::Exception& e) {
-        return DecryptedKvdbDataV4{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{}};
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedKvdbDataV4{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
-    } catch (...) {
-        return DecryptedKvdbDataV4{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
-    }
-}
-
-DecryptedKvdbDataV5 KvdbApiImpl::decryptKvdbV5(server::Kvdb2DataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
+DecryptedKvdbDataV5 KvdbApiImpl::decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     try {
         auto encryptedKvdbData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbDataV5>(kvdbEntry.data());
         if(encKey.statusCode != 0) {
@@ -654,66 +599,6 @@ DecryptedKvdbDataV5 KvdbApiImpl::decryptKvdbV5(server::Kvdb2DataEntry kvdbEntry,
     } catch (...) {
         return DecryptedKvdbDataV5{{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
-}
-
-Kvdb KvdbApiImpl::convertKvdbDataV1ToKvdb(server::KvdbInfo kvdbInfo, dynamic::KvdbDataV1 kvdbData) {
-    std::vector<std::string> users;
-    std::vector<std::string> managers;
-    for (auto x : kvdbInfo.users()) {
-        users.push_back(x);
-    }
-    for (auto x : kvdbInfo.managers()) {
-        managers.push_back(x);
-    }
-    Poco::JSON::Object::Ptr privateMeta = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-    privateMeta->set("title", kvdbData.title());
-    int64_t statusCode = kvdbData.statusCodeOpt(0);
-    return {
-        .contextId = kvdbInfo.contextId(),
-        .kvdbId = kvdbInfo.id(),
-        .createDate = kvdbInfo.createDate(),
-        .creator = kvdbInfo.creator(),
-        .lastModificationDate = kvdbInfo.lastModificationDate(),
-        .lastModifier = kvdbInfo.lastModifier(),
-        .users = users,
-        .managers = managers,
-        .version = kvdbInfo.version(),
-        .lastMsgDate = kvdbInfo.lastMsgDate(),
-        .publicMeta = core::Buffer::from(""),
-        .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
-        .policy = {},
-        .itemsCount = kvdbInfo.items(),
-        .statusCode = statusCode
-    };
-}
-
-Kvdb KvdbApiImpl::convertDecryptedKvdbDataV4ToKvdb(server::KvdbInfo kvdbInfo, const DecryptedKvdbDataV4& kvdbData) {
-    std::vector<std::string> users;
-    std::vector<std::string> managers;
-    for (auto x : kvdbInfo.users()) {
-        users.push_back(x);
-    }
-    for (auto x : kvdbInfo.managers()) {
-        managers.push_back(x);
-    }
-
-    return {
-        .contextId = kvdbInfo.contextId(),
-        .kvdbId = kvdbInfo.id(),
-        .createDate = kvdbInfo.createDate(),
-        .creator = kvdbInfo.creator(),
-        .lastModificationDate = kvdbInfo.lastModificationDate(),
-        .lastModifier = kvdbInfo.lastModifier(),
-        .users = users,
-        .managers = managers,
-        .version = kvdbInfo.version(),
-        .lastMsgDate = kvdbInfo.lastMsgDate(),
-        .publicMeta = kvdbData.publicMeta,
-        .privateMeta = kvdbData.privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(kvdbInfo.policy()), 
-        .itemsCount = kvdbInfo.items(),
-        .statusCode = kvdbData.statusCode
-    };
 }
 
 Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const DecryptedKvdbDataV5& kvdbData) {
@@ -736,35 +621,29 @@ Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, co
         .users = users,
         .managers = managers,
         .version = kvdbInfo.version(),
-        .lastMsgDate = kvdbInfo.lastMsgDate(),
         .publicMeta = kvdbData.publicMeta,
         .privateMeta = kvdbData.privateMeta,
+        .items = kvdbInfo.items(),
+        .lastItemDate = kvdbInfo.lastItemDate(),
         .policy = core::Factory::parsePolicyServerObject(kvdbInfo.policy()), 
-        .itemsCount = kvdbInfo.items(),
         .statusCode = kvdbData.statusCode
     };
 }
 
-std::tuple<Kvdb, std::string> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::Kvdb2DataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
+std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     if (kvdbEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(kvdbEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
-                case 4: {
-                    auto decryptedKvdbData = decryptKvdbV4(kvdbEntry, encKey);
-                    return std::make_tuple(convertDecryptedKvdbDataV4ToKvdb(kvdb, decryptedKvdbData), decryptedKvdbData.authorPubKey);
-                }
                 case 5: {
                     auto decryptedKvdbData = decryptKvdbV5(kvdbEntry, encKey);
-                    return std::make_tuple(convertDecryptedKvdbDataV5ToKvdb(kvdb, decryptedKvdbData), decryptedKvdbData.authorPubKey);
+                    return std::make_tuple(convertDecryptedKvdbDataV5ToKvdb(kvdb, decryptedKvdbData), decryptedKvdbData.dio);
                 }
             }
         } 
-    } else if (kvdbEntry.data().isString()) {
-        return std::make_tuple(convertKvdbDataV1ToKvdb(kvdb, decryptKvdbV1(kvdbEntry, encKey)), "");
     }
     auto e = UnknowKvdbFormatException();
-    return std::make_tuple(Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, "");
+    return std::make_tuple(Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, core::DataIntegrityObject());
 }
 
 
@@ -781,17 +660,25 @@ std::vector<Kvdb> KvdbApiImpl::decryptAndConvertKvdbsDataToKvdbs(privmx::utils::
     //send verification request and update key statuscode
     _keyProvider->validateUserData(keys);
     //
-    std::vector<std::string> lastModifiersPubKey;
+    std::vector<core::DataIntegrityObject> kvdbsDIO;
+    std::map<std::string, bool> duplication_check;
     for (size_t i = 0; i < kvdbs.size(); i++) {
         auto kvdb = kvdbs.get(i);
         try {
             auto tmp = decryptAndConvertKvdbDataToKvdb(kvdb, kvdb.data().get(kvdb.data().size()-1), keys[i]);
             result.push_back(std::get<0>(tmp));
-            lastModifiersPubKey.push_back(std::get<1>(tmp));
+            auto kvdbDIO = std::get<1>(tmp);
+            kvdbsDIO.push_back(kvdbDIO);
+            //find duplication
+            std::string fullRandomId =  std::to_string(kvdbDIO.randomId) + "-" + std::to_string(kvdbDIO.timestamp);
+            if(duplication_check.find(fullRandomId) == duplication_check.end()) {
+                duplication_check.insert(std::make_pair(fullRandomId, true));
+            } else {
+                result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
+            }
         } catch (const core::Exception& e) {
             result.push_back(Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
-            lastModifiersPubKey.push_back("");
-
+            kvdbsDIO.push_back(core::DataIntegrityObject{});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -800,7 +687,7 @@ std::vector<Kvdb> KvdbApiImpl::decryptAndConvertKvdbsDataToKvdbs(privmx::utils::
             verifierInput.push_back({
                 .contextId = result[i].contextId,
                 .senderId = result[i].lastModifier,
-                .senderPubKey = lastModifiersPubKey[i],
+                .senderPubKey = kvdbsDIO[i].creatorPubKey,
                 .date = result[i].lastModificationDate
             });
         }
@@ -824,14 +711,14 @@ Kvdb KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb) {
     auto kvdb_data_entry = kvdb.data().get(kvdb.data().size()-1);
     auto key = _keyProvider->getKeyAndVerify(kvdb.keys(), kvdb_data_entry.keyId(), {.contextId=kvdb.contextId(), .containerId=kvdb.id()});
     Kvdb result;
-    std::string lastModifierPubKey;
-    std::tie(result, lastModifierPubKey) = decryptAndConvertKvdbDataToKvdb(kvdb, kvdb_data_entry, key);
+    core::DataIntegrityObject kvdbDIO;
+    std::tie(result, kvdbDIO) = decryptAndConvertKvdbDataToKvdb(kvdb, kvdb_data_entry, key);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
     verifierInput.push_back({
         .contextId = result.contextId,
         .senderId = result.lastModifier,
-        .senderPubKey = lastModifierPubKey,
+        .senderPubKey = kvdbDIO.creatorPubKey,
         .date = result.lastModificationDate
     });
     std::vector<bool> verified;
@@ -844,67 +731,10 @@ Kvdb KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb) {
     return result;
 }
 
-dynamic::ItemDataV2 KvdbApiImpl::decryptItemDataV2(server::Item item, const core::DecryptedEncKey& encKey) {
-    try {
-        auto msg = _itemDataV2Encryptor.decryptAndGetSign(item.data(), encKey);
-        return msg.data();
-    } catch (const core::Exception& e) {
-        dynamic::ItemDataV2 result = utils::TypedObjectFactory::createNewObject<dynamic::ItemDataV2>();
-        result.v(0);
-        result.statusCode(e.getCode());
-        return result;
-    } catch (const privmx::utils::PrivmxException& e) {
-        dynamic::ItemDataV2 result = utils::TypedObjectFactory::createNewObject<dynamic::ItemDataV2>();
-        result.v(0);
-        result.statusCode(core::ExceptionConverter::convert(e).getCode());
-        return result;
-    } catch (...) {
-        dynamic::ItemDataV2 result = utils::TypedObjectFactory::createNewObject<dynamic::ItemDataV2>();
-        result.v(0);
-        result.statusCode(ENDPOINT_CORE_EXCEPTION_CODE);
-        return result;
-    }
-    
-}
 
-dynamic::ItemDataV3 KvdbApiImpl::decryptItemDataV3(server::Item item, const core::DecryptedEncKey& encKey) {
+DecryptedItemDataV5 KvdbApiImpl::decryptItemDataV5(server::KvdbItemInfo item, const core::DecryptedEncKey& encKey) {
     try {
-        auto msg = _itemDataV3Encryptor.decryptAndGetSign(item.data(), encKey);
-        return msg.data();
-    } catch (const core::Exception& e) {
-        dynamic::ItemDataV3 result = utils::TypedObjectFactory::createNewObject<dynamic::ItemDataV3>();
-        result.v(0);
-        result.statusCode(e.getCode());
-        return result;
-    } catch (const privmx::utils::PrivmxException& e) {
-        dynamic::ItemDataV3 result = utils::TypedObjectFactory::createNewObject<dynamic::ItemDataV3>();
-        result.v(0);
-        result.statusCode(core::ExceptionConverter::convert(e).getCode());
-        return result;
-    } catch (...) {
-        dynamic::ItemDataV3 result = utils::TypedObjectFactory::createNewObject<dynamic::ItemDataV3>();
-        result.v(0);
-        result.statusCode(ENDPOINT_CORE_EXCEPTION_CODE);
-        return result;
-    }
-}
-
-DecryptedItemDataV4 KvdbApiImpl::decryptItemDataV4(server::Item item, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedItemData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedItemDataV4>(item.data());
-        return _itemDataEncryptorV4.decrypt(encryptedItemData, encKey.key);
-    } catch (const core::Exception& e) {
-        return DecryptedItemDataV4{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{},{}};
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedItemDataV4{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
-    } catch (...) {
-        return DecryptedItemDataV4{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
-    }
-}
-
-DecryptedItemDataV5 KvdbApiImpl::decryptItemDataV5(server::Item item, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedItemData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedItemDataV5>(item.data());
+        auto encryptedItemData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedItemDataV5>(item.kvdbItemValue());
         if(encKey.statusCode != 0) {
             auto tmp = _itemDataEncryptorV5.extractPublic(encryptedItemData);
             tmp.statusCode = encKey.statusCode;
@@ -920,49 +750,11 @@ DecryptedItemDataV5 KvdbApiImpl::decryptItemDataV5(server::Item item, const core
     }
 }
 
-Item KvdbApiImpl::convertItemDataV2ToItem(server::Item item, dynamic::ItemDataV2 itemData) {
-    Pson::BinaryString data = itemData.textOpt("");
-    Poco::JSON::Object::Ptr privateMeta = itemData.copy();
-    privateMeta->remove("text");
-    privateMeta->remove("statusCode");
+Item KvdbApiImpl::convertDecryptedItemDataV5ToItem(server::KvdbItemInfo item, DecryptedItemDataV5 itemData) {
     Item ret {
         .info = {
             .kvdbId = item.kvdbId(),
-            .itemId = item.id(),
-            .createDate = item.createDate(),
-            .author = item.author(),
-        },
-        .publicMeta = core::Buffer(), 
-        .privateMeta = core::Buffer::from(privmx::utils::Utils::stringify(privateMeta)),
-        .data = core::Buffer::from(data),
-        .authorPubKey = itemData.author().pubKey(),
-        .statusCode = itemData.statusCodeOpt(0)
-    };
-    return ret;
-}
-
-Item KvdbApiImpl::convertItemDataV3ToItem(server::Item item, dynamic::ItemDataV3 itemData) {
-    Item ret {
-        .info = {
-            .kvdbId = item.kvdbId(),
-            .itemId = item.id(),
-            .createDate = item.createDate(),
-            .author = item.author(),
-        },
-        .publicMeta = core::Buffer::from(itemData.publicMetaOpt(Pson::BinaryString())), 
-        .privateMeta = core::Buffer::from(itemData.privateMetaOpt(Pson::BinaryString())),
-        .data = core::Buffer::from(itemData.dataOpt(Pson::BinaryString())),
-        .authorPubKey = std::string(),
-        .statusCode = itemData.statusCodeOpt(0)
-    };
-    return ret;
-}
-
-Item KvdbApiImpl::convertDecryptedItemDataV4ToItem(server::Item item, DecryptedItemDataV4 itemData) {
-    Item ret {
-        .info = {
-            .kvdbId = item.kvdbId(),
-            .itemId = item.id(),
+            .key = item.keyId(),
             .createDate = item.createDate(),
             .author = item.author(),
         },
@@ -975,61 +767,46 @@ Item KvdbApiImpl::convertDecryptedItemDataV4ToItem(server::Item item, DecryptedI
     return ret;
 }
 
-Item KvdbApiImpl::convertDecryptedItemDataV5ToItem(server::Item item, DecryptedItemDataV5 itemData) {
-    Item ret {
-        .info = {
-            .kvdbId = item.kvdbId(),
-            .itemId = item.id(),
-            .createDate = item.createDate(),
-            .author = item.author(),
-        },
-        .publicMeta = itemData.publicMeta, 
-        .privateMeta = itemData.privateMeta,
-        .data = itemData.data,
-        .authorPubKey = itemData.authorPubKey,
-        .statusCode = itemData.statusCode
-    };
-    return ret;
-}
-
-Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::Item item, const core::DecryptedEncKey& encKey) {
+std::tuple<Item, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbItemInfo item, const core::DecryptedEncKey& encKey) {
     // If data is not string, then data is object and has version field
     // Solution with data as object is newer than data as base64 string
-    if (item.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(item.data());
+    if (item.kvdbItemValue().type() == typeid(Poco::JSON::Object::Ptr)) {
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(item.kvdbItemValue());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
-            case 4:
-                return convertDecryptedItemDataV4ToItem(item, decryptItemDataV4(item, encKey));
-            case 5:
-                return convertDecryptedItemDataV5ToItem(item, decryptItemDataV5(item, encKey));
+                case 5: {
+                    auto decryptItem = decryptItemDataV5(item, encKey);
+                    return std::make_tuple(convertDecryptedItemDataV5ToItem(item, decryptItem), decryptItem.dio);
+                }
             }
         } 
-    } else if (item.data().isString()) {
-        // Temporary Solution need better way to dif V3 from V2
-        if(core::DataEncryptorUtil::hasSign(utils::Base64::toString(item.data()))) {
-            return convertItemDataV3ToItem(item, decryptItemDataV3(item, encKey));
-        }
-        return convertItemDataV2ToItem(item, decryptItemDataV2(item, encKey));
     }
-
     auto e = UnknowItemFormatException();
-    return Item{{},{},{},{},{},.statusCode = e.getCode()};
+    return std::make_tuple(Item{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
 }
 
-std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInfo kvdb, utils::List<server::Item> items) {
-    std::set<std::string> keyIds;
+std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInfo kvdb, utils::List<server::KvdbItemInfo> items) {
+   std::set<std::string> keyIds;
     for (auto item : items) {
         keyIds.insert(item.keyId());
     }
     auto keyMap = _keyProvider->getKeysAndVerify(kvdb.keys(), keyIds, {.contextId=kvdb.contextId(), .containerId=kvdb.id()});
     std::vector<Item> result;
+    std::map<std::string, bool> duplication_check;
     for (auto item : items) {
-
         try {
             auto statusCode = validateItemDataIntegrity(item);
             if(statusCode == 0) {
-                result.push_back(decryptAndConvertItemDataToItem(item, keyMap.at(item.keyId())));
+                auto tmp = decryptAndConvertItemDataToItem(item, keyMap.at(item.keyId()));
+                result.push_back(std::get<0>(tmp));
+                auto itemDIO = std::get<1>(tmp);
+                //find duplication
+                std::string fullRandomId =  std::to_string(itemDIO.randomId) + "-" + std::to_string(itemDIO.timestamp);
+                if(duplication_check.find(fullRandomId) == duplication_check.end()) {
+                    duplication_check.insert(std::make_pair(fullRandomId, true));
+                } else {
+                    result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
+                }
             } else {
                 result.push_back(Item{{},{},{},{},{},.statusCode = statusCode});
             }
@@ -1063,11 +840,12 @@ std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInf
     return result;
 }
 
-Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbInfo kvdb, server::Item item) {
+Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbInfo kvdb, server::KvdbItemInfo item) {
     auto keyId = item.keyId();
     auto encKey = _keyProvider->getKeyAndVerify(kvdb.keys(), keyId, {.contextId=kvdb.contextId(), .containerId=kvdb.id()});
-    _itemKeyIdFormatValidator.assertKeyIdFormat(keyId);
-    auto result = decryptAndConvertItemDataToItem(item, encKey);
+    Item result;
+    core::DataIntegrityObject itemDIO;
+    std::tie(result, itemDIO) = decryptAndConvertItemDataToItem(item, encKey);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
         verifierInput.push_back({
@@ -1086,7 +864,7 @@ Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbInfo kvdb, server:
     return result;
 }
 
-Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::Item item) {
+Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbItemInfo item) {
     try {
         auto kvdb = getRawKvdbFromCacheOrBridge(item.kvdbId());
         return decryptAndConvertItemDataToItem(kvdb, item);
@@ -1099,7 +877,7 @@ Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::Item item) {
     }
 }
 
-int64_t KvdbApiImpl::decryptKvdbInternalMeta(server::Kvdb2DataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
+int64_t KvdbApiImpl::decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     if (kvdbEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(kvdbEntry.data());
         if (!versioned.versionEmpty()) {
@@ -1171,8 +949,8 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
     return UnknowKvdbFormatException().getCode();
 }
 
-uint32_t KvdbApiImpl::validateItemDataIntegrity(server::Item item) {
-    auto item_data = item.data();
+uint32_t KvdbApiImpl::validateItemDataIntegrity(server::KvdbItemInfo item) {
+    auto item_data = item.kvdbItemValue();
     if (item_data.type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(item_data);
         if (!versioned.versionEmpty()) {
@@ -1186,7 +964,7 @@ uint32_t KvdbApiImpl::validateItemDataIntegrity(server::Item item) {
                     if(
                         dio.containerId != item.kvdbId() ||
                         dio.contextId != item.contextId() ||
-                        dio.creatorUserId != (item.updates().size() == 0 ? item.author() : item.updates().get(item.updates().size()-1).author())
+                        dio.creatorUserId != item.lastModifier()
                         // check timestamp
                     ) {
                         return ItemDataIntegrityException().getCode();

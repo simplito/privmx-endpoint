@@ -49,6 +49,12 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedKvdbDataVersio
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, ItemPublicDataMismatchException, "Item public data mismatch", 0x000A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedItemDataVersionException, "Invalid version of encrypted item data", 0x000B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEncryptionKeyValidationException, "Failed kvdb encryption key validation", 0x000C)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, AlreadySubscribedException, "Already subscribed", 0x000D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, NotSubscribedException, "Cannot unsubscribe if not subscribed", 0x000E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknowKvdbFormatException, "Unknow kvdb format", 0x000F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknowItemFormatException, "Unknow item format", 0x0010)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbDataIntegrityException, "Failed kvdb data integrity check", 0x0011)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, ItemDataIntegrityException, "Failed item data integrity check", 0x0012)
 
 } // kvdb
 } // endpoint

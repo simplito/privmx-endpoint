@@ -139,7 +139,7 @@ struct Item {
     /**
      * Item data
      */
-    std::string data;
+    core::Buffer data;
 
     /**
      * public key of an author of the message

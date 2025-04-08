@@ -148,18 +148,18 @@ core::PagingList<Item> KvdbApi::listItem(const std::string& kvdbId, const kvdb::
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     core::Validator::validateClass<kvdb::ItemsPagingQuery>(pagingQuery, "field:pagingQuery ");
     try {
-        return _impl->listItemKeys(kvdbId, pagingQuery);
+        return _impl->listItem(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void KvdbApi::setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& data, int64_t version) {
+void KvdbApi::setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
-        return _impl->setItem(kvdbId, key, data, version);
+        return _impl->setItem(kvdbId, key, publicMeta, privateMeta, data, version);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

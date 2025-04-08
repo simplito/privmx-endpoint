@@ -25,24 +25,24 @@ server::EncryptedItemDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEncrypt
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedItemDataV5>();
     result.version(5);
-    std::unordered_map<std::string, std::string> mapOfDataSha256;
+    std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey));
-    mapOfDataSha256.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
+    fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(messageData.publicMeta.stdString()));
     } catch (...) {
         result.publicMetaObjectClear();
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(messageData.privateMeta, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
+    fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
     result.data(_dataEncryptor.signAndEncryptAndEncode(messageData.data, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("data",privmx::crypto::Crypto::sha256(result.data())));
+    fieldChecksums.insert(std::make_pair("data",privmx::crypto::Crypto::sha256(result.data())));
     if (messageData.internalMeta.has_value()) {
         result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(messageData.internalMeta.value(), authorPrivateKey, encryptionKey));
-        mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
+        fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     }
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    core::ExpandedDataIntegrityObject expandedDio = {messageData.dio, .objectFormat=5, .mapOfDataSha256=mapOfDataSha256};
+    core::ExpandedDataIntegrityObject expandedDio = {messageData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result;
 }
@@ -111,16 +111,16 @@ core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const se
     assertDataFormat(encryptedItemData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedItemData.dio());
     if (
-        dio.objectFormat != 5 ||
+        dio.structureVersion != 5 ||
         dio.creatorPubKey != encryptedItemData.authorPubKey() ||
-        dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.publicMeta()) ||
-        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.privateMeta()) ||
-        dio.mapOfDataSha256.at("data") != privmx::crypto::Crypto::sha256(encryptedItemData.data()) || (
+        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.publicMeta()) ||
+        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.privateMeta()) ||
+        dio.fieldChecksums.at("data") != privmx::crypto::Crypto::sha256(encryptedItemData.data()) || (
             !encryptedItemData.internalMetaEmpty() &&
-            dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.internalMeta())
+            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.internalMeta())
         )
     ) {
-        throw core::DataIntegrityObjectInvalidSHA256Exception();
+        throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }

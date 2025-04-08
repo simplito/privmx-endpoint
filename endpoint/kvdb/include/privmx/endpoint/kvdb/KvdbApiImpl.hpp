@@ -74,7 +74,7 @@ public:
     Item getItem(const std::string& kvdbId, const std::string& key);
     core::PagingList<std::string> listItemKeys(const std::string& kvdbId, const kvdb::KeysPagingQuery& pagingQuery);
     core::PagingList<Item> listItem(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery);
-    void setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& data, int64_t version);
+    void setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
     void deleteItem(const std::string& kvdbId, const std::string& key);
     void deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys);
 
@@ -101,7 +101,7 @@ private:
 
     DecryptedKvdbDataV5 decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     Kvdb convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const DecryptedKvdbDataV5& kvdbData);
-    std::tuple<Kvdb, std::string> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
+    std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     std::vector<Kvdb> decryptAndConvertKvdbsDataToKvdbs(utils::List<server::KvdbInfo> kvdbs);
     Kvdb decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
     int64_t decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
@@ -110,12 +110,13 @@ private:
 
     DecryptedItemDataV5 decryptItemDataV5(server::KvdbItemInfo item, const core::DecryptedEncKey& encKey);
     Item convertDecryptedItemDataV5ToItem(server::KvdbItemInfo item, DecryptedItemDataV5 itemData);
-    Item decryptAndConvertItemDataToItem(server::KvdbItemInfo item, const core::DecryptedEncKey& encKey);
+    std::tuple<Item, core::DataIntegrityObject> decryptAndConvertItemDataToItem(server::KvdbItemInfo item, const core::DecryptedEncKey& encKey);
     std::vector<Item> decryptAndConvertItemsDataToItems(server::KvdbInfo kvdb, utils::List<server::KvdbItemInfo> items);
     Item decryptAndConvertItemDataToItem(server::KvdbInfo kvdb, server::KvdbItemInfo item);
     Item decryptAndConvertItemDataToItem(server::KvdbItemInfo item);
     uint32_t validateItemDataIntegrity(server::KvdbItemInfo item);
     
+    void assertKvdbExist(const std::string& kvdbId);
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;

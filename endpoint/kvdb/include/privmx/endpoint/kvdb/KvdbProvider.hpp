@@ -23,8 +23,10 @@ namespace kvdb {
 class KvdbProvider : public core::ContainerProvider<std::string, server::KvdbInfo> {
 public:
     KvdbProvider(std::function<server::KvdbInfo(std::string)> getKvdb, std::function<uint32_t(server::KvdbInfo)> validateKvdb);
-    void updateByValue(const server::KvdbInfo& container) override;
     void updateStats(const server::KvdbStatsEventData& stats);
+protected:
+    bool isNewerOrSameAsInStorage(const server::KvdbInfo& container) override;
+    inline std::string getID(const server::KvdbInfo& container) override {return container.id();}
 };
 
 } // kvdb

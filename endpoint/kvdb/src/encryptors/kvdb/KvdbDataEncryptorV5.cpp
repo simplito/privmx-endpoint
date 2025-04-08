@@ -23,20 +23,20 @@ server::EncryptedKvdbDataV5 KvdbDataEncryptorV5::encrypt(const KvdbDataToEncrypt
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedKvdbDataV5>();
     result.version(5);
-    std::unordered_map<std::string, std::string> mapOfDataSha256;
+    std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(kvdbData.publicMeta, authorPrivateKey));
-    mapOfDataSha256.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
+    fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(kvdbData.publicMeta.stdString()));
     } catch (...) {
         result.publicMetaObjectClear();
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(kvdbData.privateMeta, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
+    fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
     result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(kvdbData.internalMeta, authorPrivateKey, encryptionKey));
-    mapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
+    fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    core::ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, .objectFormat=5, .mapOfDataSha256=mapOfDataSha256};
+    core::ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result;
 }
@@ -103,13 +103,13 @@ core::DataIntegrityObject KvdbDataEncryptorV5::getDIOAndAssertIntegrity(const se
     auto encryptedDIO = encryptedKvdbData.dio();
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedDIO);
     if (
-        dio.objectFormat != 5 ||
+        dio.structureVersion != 5 ||
         dio.creatorPubKey != encryptedKvdbData.authorPubKey() ||
-        dio.mapOfDataSha256.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.publicMeta()) ||
-        dio.mapOfDataSha256.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.privateMeta()) ||
-        dio.mapOfDataSha256.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.internalMeta())     
+        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.publicMeta()) ||
+        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.privateMeta()) ||
+        dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.internalMeta())     
     ) {
-        throw core::DataIntegrityObjectInvalidSHA256Exception();
+        throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }

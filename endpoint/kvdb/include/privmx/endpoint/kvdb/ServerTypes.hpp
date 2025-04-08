@@ -125,11 +125,14 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(KvdbItemInfo)
     STRING_FIELD(kvdbItemKey)
     VAR_FIELD(kvdbItemValue)
+    STRING_FIELD(kvdbId)
     INT64_FIELD(version)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(author)
     STRING_FIELD(keyId)
+    INT64_FIELD(lastModificationDate)
+    STRING_FIELD(lastModifier)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedItemDataV5, core::server::VersionedData)
@@ -196,7 +199,7 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(KvdbListItemsResult)
     OBJECT_FIELD(kvdb, KvdbInfo)
     LIST_FIELD(kvdbItems, KvdbItemInfo)
-    INT64_FIELD(v)
+    INT64_FIELD(count)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbItemDeleteManyModel)
