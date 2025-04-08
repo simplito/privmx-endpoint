@@ -143,7 +143,7 @@ public:
     static void rtrim(std::string& data);
 
     /**
-     * Generate random number on full range of int64_t
+     * Generate random number for 0 to MAX_INT64
      */
     static int64_t generateRandomNumber();
 };

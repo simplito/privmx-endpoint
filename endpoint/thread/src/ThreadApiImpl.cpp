@@ -109,9 +109,10 @@ std::string ThreadApiImpl::_createThreadEx(
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, _createThreadEx)
     auto threadKey = _keyProvider->generateKey();
-    auto threadDIO = _connection.getImpl()->createDIO(
+    std::string threadId = utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
+    auto threadDIO = _connection.getImpl()->createDIOForNewContainer(
         contextId,
-        utils::Utils::getNowTimestampStr() + "-" + utils::Hex::from(crypto::Crypto::randomBytes(8))
+        threadId
     );
     auto threadCCN = _keyProvider->generateContainerControlNumber();
     ThreadDataToEncryptV5 threadDataToEncrypt {
@@ -121,7 +122,7 @@ std::string ThreadApiImpl::_createThreadEx(
         .dio = threadDIO
     };
     auto create_thread_model = utils::TypedObjectFactory::createNewObject<server::ThreadCreateModel>();
-    create_thread_model.threadId(threadDIO.containerId);
+    create_thread_model.threadId(threadId);
     create_thread_model.contextId(contextId);
     create_thread_model.keyId(threadKey.id);
     create_thread_model.data(_threadDataEncryptorV5.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
@@ -134,6 +135,7 @@ std::string ThreadApiImpl::_createThreadEx(
             threadCCN
         )
     );
+
     create_thread_model.users(mapUsers(users));
     create_thread_model.managers(mapUsers(managers));
     if (type.length() > 0) {
@@ -198,6 +200,7 @@ void ThreadApiImpl::updateThread(
     auto threadCCN = decryptThreadInternalMeta(currentThreadEntry, currentThreadKey);
     for(auto key : threadKeys) {
         if(key.statusCode != 0 || (key.dataStructureVersion == 2 && key.containerControlNumber != threadCCN)) {
+
             throw ThreadEncryptionKeyValidationException();
         }
     }
@@ -386,7 +389,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
     core::ListQueryMapper::map(model, pagingQuery);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting messageList)
     auto messagesList = _serverApi.threadMessagesGet(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting thread)
     auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     auto messages = decryptAndConvertMessagesDataToMessages(thread, messagesList.messages());
@@ -1233,8 +1236,8 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
                     auto thread_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(thread_data_entry.data());
                     auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
                     if(
-                        dio.containerId != thread.id() ||
                         dio.contextId != thread.contextId() ||
+                        dio.containerId != thread.id() ||
                         dio.creatorUserId != thread.lastModifier() ||
                         abs(dio.timestamp - thread.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
                     ) {
@@ -1263,8 +1266,8 @@ uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message) {
                     auto encData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV5>(message_data);
                     auto dio = _messageDataEncryptorV5.getDIOAndAssertIntegrity(encData);
                     if(
-                        dio.containerId != message.threadId() ||
                         dio.contextId != message.contextId() ||
+                        dio.containerId != message.threadId() ||
                         dio.creatorUserId != (message.updates().size() == 0 ? message.author() : message.updates().get(message.updates().size()-1).author()) ||
                         abs(dio.timestamp - (message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate())) > TIMESTAMP_ALLOWED_DELTA
                     ) {

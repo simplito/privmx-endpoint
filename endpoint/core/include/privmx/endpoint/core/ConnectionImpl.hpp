@@ -65,6 +65,7 @@ public:
     }
     std::string getMyUserId(const std::string& contextId);
     DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId);
+    DataIntegrityObject createDIOForNewContainer(const std::string& contextId, const std::string& containerId);
     DataIntegrityObject createPublicDIO(const std::string& contextId, const std::string& containerId, const crypto::PublicKey& pubKey);
 
 

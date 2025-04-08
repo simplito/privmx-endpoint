@@ -113,9 +113,10 @@ std::string InboxApiImpl::createInbox(
 
     auto storeId = (_storeApi.getImpl())->createStoreEx(contextId, users, managers, emptyBuf, randNameAsBuf,  INBOX_TYPE_FILTER_FLAG, policiesWithItems);
     auto threadId = (_threadApi.getImpl())->createThreadEx(contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policiesWithItems);
-    auto inboxDIO = _connection.getImpl()->createDIO(
+    auto inboxId = utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
+    auto inboxDIO = _connection.getImpl()->createDIOForNewContainer(
         contextId,
-        utils::Utils::getNowTimestampStr() + "-" + utils::Hex::from(crypto::Crypto::randomBytes(8))
+        inboxId
     );
     auto inboxCCN = _keyProvider->generateContainerControlNumber();
     InboxDataProcessorModelV5 inboxDataIn {
@@ -135,7 +136,7 @@ std::string InboxApiImpl::createInbox(
     };
 
     auto createInboxModel = Factory::createObject<inbox::server::InboxCreateModel>();
-    createInboxModel.inboxId(inboxDIO.containerId);
+    createInboxModel.inboxId(inboxId);
     createInboxModel.contextId(contextId);
     createInboxModel.users(InboxDataHelper::mapUsers(users));
     createInboxModel.managers(InboxDataHelper::mapUsers(managers));
@@ -155,8 +156,8 @@ std::string InboxApiImpl::createInbox(
         createInboxModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems.value()));
     }
 
-    auto inboxId = _serverApi->inboxCreate(createInboxModel).inboxId();
-    return inboxId;
+    auto result = _serverApi->inboxCreate(createInboxModel);
+    return result.inboxId();
 }
 
 
@@ -1067,7 +1068,11 @@ InboxDeletedEventData InboxApiImpl::convertInboxDeletedEventData(const server::I
 std::string InboxApiImpl::readInboxIdFromMessageKeyId(const std::string& keyId) {
     _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
-    return utils::Utils::split(trimmedKeyId, "-")[1];
+    std::vector<std::string> tmp = utils::Utils::split(trimmedKeyId, "-");
+    if(tmp.size() == 2+4) {
+        return tmp[1]+"-"+tmp[2]+"-"+tmp[3]+"-"+tmp[4]+"-"+tmp[5];
+    }
+    return tmp[1];
 }
 
 std::string InboxApiImpl::readMessageIdFromFileKeyId(const std::string& keyId) {
@@ -1118,8 +1123,8 @@ uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
                 auto inbox_data = utils::TypedObjectFactory::createObjectFromVar<server::InboxData>(inbox_data_entry.data());
                 auto dio = _inboxDataProcessorV5.getDIOAndAssertIntegrity(inbox_data);
                 if(
-                    dio.containerId != inbox.id() ||
                     dio.contextId != inbox.contextId() ||
+                    dio.containerId != inbox.id() ||
                     dio.creatorUserId != inbox.lastModifier() ||
                     abs(dio.timestamp - inbox.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
                 ) {
