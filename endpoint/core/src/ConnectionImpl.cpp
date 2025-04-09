@@ -200,6 +200,18 @@ DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, cons
     };
 }
 
+DataIntegrityObject ConnectionImpl::createDIOForNewContainer(const std::string& contextId, const std::string& containerId) {
+    int64_t randomId = Utils::generateRandomNumber();
+    return core::DataIntegrityObject{
+        .creatorUserId = getMyUserId(contextId),
+        .creatorPubKey = _userPrivKey.getPublicKey().toBase58DER(),
+        .contextId = contextId,
+        .containerId = contextId + ":" + containerId,
+        .timestamp = privmx::utils::Utils::getNowTimestamp(),
+        .randomId = randomId
+    };
+}
+
 DataIntegrityObject ConnectionImpl::createPublicDIO(const std::string& contextId, const std::string& containerId, const crypto::PublicKey& pubKey) {
     int64_t randomId = Utils::generateRandomNumber();
     return core::DataIntegrityObject{

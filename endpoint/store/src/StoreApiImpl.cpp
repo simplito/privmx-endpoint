@@ -104,9 +104,10 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
             const std::optional<core::ContainerPolicy>& policies) {
     PRIVMX_DEBUG_TIME_START(PlatformStore, _storeCreateEx)
     auto storeKey = _keyProvider->generateKey();
-    auto storeDIO = _connection.getImpl()->createDIO(
+    std::string storeId = utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
+    auto storeDIO = _connection.getImpl()->createDIOForNewContainer(
         contextId,
-        utils::Utils::getNowTimestampStr() + "-" + utils::Hex::from(crypto::Crypto::randomBytes(8))
+        storeId
     );
     auto storeCCN = _keyProvider->generateContainerControlNumber();
     StoreDataToEncryptV5 storeDataToEncrypt {
@@ -118,7 +119,7 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
     // auto new_store_data = utils::TypedObjectFactory::createNewObject<dynamic::StoreData>();
     // new_store_data.name(name);
     auto storeCreateModel = utils::TypedObjectFactory::createNewObject<server::StoreCreateModel>();
-    storeCreateModel.storeId(storeDIO.containerId);
+    storeCreateModel.storeId(storeId);
     storeCreateModel.contextId(contextId);
     storeCreateModel.keyId(storeKey.id);
     storeCreateModel.data(_storeDataEncryptorV5.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
@@ -149,9 +150,9 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
     storeCreateModel.users(usersList);
     storeCreateModel.managers(managersList);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeCreateEx, data encrypted)
-    auto storeId = _serverApi->storeCreate(storeCreateModel).storeId();
+    auto result = _serverApi->storeCreate(storeCreateModel);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeCreate, data send)
-    return storeId;
+    return result.storeId();
 
 }
 
@@ -1060,7 +1061,9 @@ DecryptedFileMetaV5 StoreApiImpl::decryptFileMetaV5(server::File file, const cor
     try {
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(file.meta());
         if(encKey.statusCode != 0) {
-            return _fileMetaEncryptorV5.extractPublic(encryptedFileMeta);
+            auto tmp =  _fileMetaEncryptorV5.extractPublic(encryptedFileMeta);
+            tmp.statusCode = encKey.statusCode;
+            return tmp;
         } else {
             return _fileMetaEncryptorV5.decrypt(encryptedFileMeta, encKey.key);
         }
@@ -1367,8 +1370,8 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
                     auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
                     auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
                     if(
-                        dio.containerId != store.id() ||
                         dio.contextId != store.contextId() ||
+                        dio.containerId != store.id() ||
                         dio.creatorUserId != store.lastModifier() ||
                         abs(dio.timestamp - store.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
                     ) {
@@ -1396,9 +1399,9 @@ uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file) {
                 {
                     auto fileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(file.meta());
                     auto dio = _fileMetaEncryptorV5.getDIOAndAssertIntegrity(fileMeta);
-                    if(
-                        dio.containerId != file.storeId() ||
+                    if( 
                         dio.contextId != file.contextId() ||
+                        dio.containerId != file.storeId() ||
                         dio.creatorUserId != file.lastModifier() ||
                         abs(dio.timestamp - file.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
                     ) {

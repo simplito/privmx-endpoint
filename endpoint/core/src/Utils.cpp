@@ -60,9 +60,13 @@ void Utils::rtrim(std::string& data) {
 int64_t Utils::generateRandomNumber() {
     int64_t result = 0;
     auto resultStr = privmx::crypto::Crypto::randomBytes(8);
-    for(size_t i = 0; i < resultStr.length(); i++) {
+    for(size_t i = 0; i < resultStr.length()-1; i++) {
         uint8_t c = resultStr[i];
         result = (result << 8) | c;
     }
+    //make sure to keep positive 
+    result = (result << 7) | ((uint8_t)resultStr[resultStr.length()-1] & 0x7F);
+
+    // std::cout << result << std::endl;
     return result;
 }
