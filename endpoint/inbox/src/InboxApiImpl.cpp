@@ -1069,7 +1069,7 @@ std::string InboxApiImpl::readInboxIdFromMessageKeyId(const std::string& keyId) 
     _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
     std::vector<std::string> tmp = utils::Utils::split(trimmedKeyId, "-");
-    if(tmp.size() == 2+4) {
+    if(tmp.size() == 1+1+4) {
         return tmp[1]+"-"+tmp[2]+"-"+tmp[3]+"-"+tmp[4]+"-"+tmp[5];
     }
     return tmp[1];
@@ -1078,7 +1078,11 @@ std::string InboxApiImpl::readInboxIdFromMessageKeyId(const std::string& keyId) 
 std::string InboxApiImpl::readMessageIdFromFileKeyId(const std::string& keyId) {
     _fileKeyIdFormatValidator.assertKeyIdFormat(keyId);
     std::string trimmedKeyId = keyId.substr(1, keyId.size() - 2);
-    return utils::Utils::split(trimmedKeyId, "-")[3];
+    std::vector<std::string> tmp = utils::Utils::split(trimmedKeyId, "-");
+    if(tmp.size() == 1+3+4+4) {
+        return tmp[6]+"-"+tmp[7]+"-"+tmp[8]+"-"+tmp[9]+"-"+tmp[10]+":"+tmp[11];
+    }
+    return tmp[3];
 }
 
 void InboxApiImpl::deleteMessageAndFiles(const thread::server::Message& message) {
