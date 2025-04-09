@@ -127,8 +127,7 @@ private:
     std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
     Store decryptAndConvertStoreDataToStore(server::Store store);
-    int64_t decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
-    int64_t decryptStoreInternalMeta(server::Store store);
+    std::string decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateStoreDataIntegrity(server::Store store);
     core::DecryptedEncKey getStoreCurrentEncKey(server::Store store);
 

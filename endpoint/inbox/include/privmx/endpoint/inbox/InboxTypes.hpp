@@ -72,7 +72,7 @@ struct InboxDataResultV4 : public core::DecryptedVersionedData {
 
 struct InboxPrivateDataV5 {
     core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
+    core::Buffer internalMeta;
     core::DataIntegrityObject dio;
 };
 

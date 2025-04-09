@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/TimestampValidator.hpp>
 
 #include "privmx/endpoint/thread/DynamicTypes.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
@@ -118,7 +119,7 @@ std::string ThreadApiImpl::_createThreadEx(
     ThreadDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(threadCCN)),
+        .internalMeta = core::Buffer::from(threadCCN),
         .dio = threadDIO
     };
     auto create_thread_model = utils::TypedObjectFactory::createNewObject<server::ThreadCreateModel>();
@@ -227,7 +228,7 @@ void ThreadApiImpl::updateThread(
             threadKeys,
             usersToAddMissingKey, 
             updateThreadDio, 
-            threadKeys[0].containerControlNumber
+            threadCCN
         );
         for(auto t: tmp) keys.add(t);
     }
@@ -260,7 +261,7 @@ void ThreadApiImpl::updateThread(
     ThreadDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(threadCCN)),
+        .internalMeta = core::Buffer::from(threadCCN),
         .dio = threadDIO
     };
     model.data(_threadDataEncryptorV5.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
@@ -818,7 +819,7 @@ std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx:
             auto threadDIO = std::get<1>(tmp);
             threadsDIO.push_back(threadDIO);
             //find duplication
-            std::string fullRandomId =  std::to_string(threadDIO.randomId) + "-" + std::to_string(threadDIO.timestamp);
+            std::string fullRandomId = threadDIO.randomId + "-" + std::to_string(threadDIO.timestamp);
             if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                 duplication_check.insert(std::make_pair(fullRandomId, true));
             } else {
@@ -1104,7 +1105,7 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
                 result.push_back(std::get<0>(tmp));
                 auto messageDIO = std::get<1>(tmp);
                 //find duplication
-                std::string fullRandomId =  std::to_string(messageDIO.randomId) + "-" + std::to_string(messageDIO.timestamp);
+                std::string fullRandomId =  messageDIO.randomId + "-" + std::to_string(messageDIO.timestamp);
                 if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                     duplication_check.insert(std::make_pair(fullRandomId, true));
                 } else {
@@ -1181,22 +1182,21 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message mes
     }
 }
 
-int64_t ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
+std::string ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(threadEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
-                return 0;
+                return std::string();
             case 5:
-                return std::stoll(decryptThreadV5(threadEntry, encKey).internalMeta.stdString());
+                return decryptThreadV5(threadEntry, encKey).internalMeta.stdString();
             }
         } 
     } else if (threadEntry.data().isString()) {
-        return 0;
+        return std::string();
     }
     throw UnknowThreadFormatException();
-    return 0;
 }
 
 core::DecryptedEncKey ThreadApiImpl::getThreadCurrentEncKey(server::ThreadInfo thread) {
@@ -1239,7 +1239,7 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
                         dio.contextId != thread.contextId() ||
                         dio.containerId != thread.id() ||
                         dio.creatorUserId != thread.lastModifier() ||
-                        abs(dio.timestamp - thread.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
+                        !core::TimestampValidator::validate(dio.timestamp, thread.lastModificationDate())
                     ) {
                         return ThreadDataIntegrityException().getCode();
                     }
@@ -1269,7 +1269,7 @@ uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message) {
                         dio.contextId != message.contextId() ||
                         dio.containerId != message.threadId() ||
                         dio.creatorUserId != (message.updates().size() == 0 ? message.author() : message.updates().get(message.updates().size()-1).author()) ||
-                        abs(dio.timestamp - (message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate())) > TIMESTAMP_ALLOWED_DELTA
+                        !core::TimestampValidator::validate(dio.timestamp, (message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate()))
                     ) {
                         return MessageDataIntegrityException().getCode();
                     }

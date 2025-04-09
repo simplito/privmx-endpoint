@@ -108,7 +108,7 @@ private:
     std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     std::vector<Thread> decryptAndConvertThreadsDataToThreads(utils::List<server::ThreadInfo> threads);
     Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread);
-    int64_t decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    std::string decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     core::DecryptedEncKey getThreadCurrentEncKey(server::ThreadInfo thread);
 

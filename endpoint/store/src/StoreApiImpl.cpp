@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/TimestampValidator.hpp>
 
 #include <privmx/endpoint/store/StoreException.hpp>
 #include "privmx/endpoint/store/DynamicTypes.hpp"
@@ -113,7 +114,7 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
     StoreDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(storeCCN)),
+        .internalMeta = core::Buffer::from(storeCCN),
         .dio = storeDIO
     };
     // auto new_store_data = utils::TypedObjectFactory::createNewObject<dynamic::StoreData>();
@@ -227,7 +228,7 @@ void StoreApiImpl::updateStore(
             new_users, 
             storeKey, 
             updateStoreDio,
-            storeKeys[0].containerControlNumber
+            storeCCN
         );
     } else {
         // find key with corresponding keyId 
@@ -240,7 +241,7 @@ void StoreApiImpl::updateStore(
             storeKeys,
             usersToAddMissingKey, 
             updateStoreDio, 
-            storeKeys[0].containerControlNumber
+            storeCCN
         );
         for(auto t: tmp) keys.add(t);
     }
@@ -269,7 +270,7 @@ void StoreApiImpl::updateStore(
     StoreDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(storeCCN)),
+        .internalMeta = core::Buffer::from(storeCCN),
         .dio = updateStoreDio
     };
     model.data(_storeDataEncryptorV5.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
@@ -903,7 +904,7 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
             auto storeDIO = std::get<1>(tmp);
             storesDIO.push_back(storeDIO);
             //find duplication
-            std::string fullRandomId =  std::to_string(storeDIO.randomId) + "-" + std::to_string(storeDIO.timestamp);
+            std::string fullRandomId = storeDIO.randomId + "-" + std::to_string(storeDIO.timestamp);
             if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                 duplication_check.insert(std::make_pair(fullRandomId, true));
             } else {
@@ -971,28 +972,22 @@ core::DecryptedEncKey StoreApiImpl::getStoreCurrentEncKey(server::Store store) {
     return key;
 }
 
-int64_t StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+std::string StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
 
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(storeEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4:
-                    return 0;
+                    return std::string();
                 case 5:
-                    return std::stoll(decryptStoreV5(storeEntry, encKey).internalMeta.stdString());
+                    return decryptStoreV5(storeEntry, encKey).internalMeta.stdString();
             }
         }
     } else if (storeEntry.data().isString()) {
-        return 0;
+        return std::string();
     }
     throw UnknowStoreFormatException();
-}
-
-int64_t StoreApiImpl::decryptStoreInternalMeta(server::Store store) {
-    auto store_data_entry = store.data().get(store.data().size()-1);
-    auto key = _keyProvider->getKeyAndVerify(store.keys(), store_data_entry.keyId(), {.contextId=store.contextId(), .containerId=store.id()});
-    return decryptStoreInternalMeta(store_data_entry, key);
 }
 
 // OLD CODE
@@ -1187,7 +1182,7 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
                 result.push_back(std::get<0>(tmp));
                 auto fileDIO = std::get<1>(tmp);
                 //find duplication
-                std::string fullRandomId =  std::to_string(fileDIO.randomId) + "-" + std::to_string(fileDIO.timestamp);
+                std::string fullRandomId = fileDIO.randomId + "-" + std::to_string(fileDIO.timestamp);
                 if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                     duplication_check.insert(std::make_pair(fullRandomId, true));
                 } else {
@@ -1373,7 +1368,7 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
                         dio.contextId != store.contextId() ||
                         dio.containerId != store.id() ||
                         dio.creatorUserId != store.lastModifier() ||
-                        abs(dio.timestamp - store.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
+                        !core::TimestampValidator::validate(dio.timestamp, store.lastModificationDate())
                     ) {
                         return StoreDataIntegrityException().getCode();
                     }
@@ -1403,7 +1398,7 @@ uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file) {
                         dio.contextId != file.contextId() ||
                         dio.containerId != file.storeId() ||
                         dio.creatorUserId != file.lastModifier() ||
-                        abs(dio.timestamp - file.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
+                        !core::TimestampValidator::validate(dio.timestamp, file.lastModificationDate())
                     ) {
                         return FileDataIntegrityException().getCode();;
                     }

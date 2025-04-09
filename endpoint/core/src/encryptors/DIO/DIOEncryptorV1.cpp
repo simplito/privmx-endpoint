@@ -26,6 +26,9 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.creatorPublicKey(dio.creatorPubKey);
     dioJSON.contextId(dio.contextId);
     dioJSON.containerId(dio.containerId);
+    if (dio.itemId.has_value()) {
+        dioJSON.itemId(dio.itemId.value());
+    }
     dioJSON.timestamp(dio.timestamp);
     dioJSON.randomId(dio.randomId);
     auto dioJSONfieldChecksums = privmx::utils::TypedObjectFactory::createNewMap<std::string>();
@@ -50,6 +53,10 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     for(auto  a: dioJSON.fieldChecksums()) {
         fieldChecksums.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));
     }
+    std::optional<std::string> itemId = std::nullopt;
+    if(!dioJSON.itemIdEmpty()) {
+        itemId =  dioJSON.itemId();
+    }
 
     return ExpandedDataIntegrityObject{
         DataIntegrityObject{
@@ -58,7 +65,8 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .contextId=dioJSON.contextId(),
             .containerId=dioJSON.containerId(),
             .timestamp=dioJSON.timestamp(),
-            .randomId=dioJSON.randomId()
+            .randomId=dioJSON.randomId(),
+            .itemId=itemId
         },
         .structureVersion=dioJSON.structureVersion(),
         .fieldChecksums=fieldChecksums
