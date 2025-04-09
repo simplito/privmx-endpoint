@@ -444,6 +444,10 @@ void KvdbApiImpl::deleteItem(const std::string& kvdbId, const std::string& key) 
     _serverApi.kvdbItemDelete(model);
 }
 
+void KvdbApiImpl::deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys) {
+
+}
+
 void KvdbApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
     if(!_kvdbSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
         return;

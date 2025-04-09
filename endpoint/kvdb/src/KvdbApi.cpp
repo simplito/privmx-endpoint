@@ -47,7 +47,8 @@ void KvdbApi::validateEndpoint() {
     if(!_impl) throw NotInitializedException();
 }
 
-std::string KvdbApi::createKvdb(const std::string& contextId, 
+std::string KvdbApi::createKvdb(
+    const std::string& contextId, 
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers, 
     const core::Buffer& publicMeta, 
