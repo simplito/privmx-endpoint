@@ -18,6 +18,7 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp"
+#include "privmx/endpoint/core/DynamicTypes.hpp"
 namespace privmx {
 namespace endpoint {
 namespace core {
@@ -27,7 +28,7 @@ public:
     std::string signAndEncode(const core::ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& autorKey);
     core::ExpandedDataIntegrityObject decodeAndVerify(const std::string& signedDio);
 private:
-    void assertDataFormat(const server::DataIntegrityObject& dioJSON);
+    void assertDataFormat(const dynamic::DataIntegrityObject& dioJSON);
     DataInnerEncryptorV4 _dataEncryptor;
 };
 

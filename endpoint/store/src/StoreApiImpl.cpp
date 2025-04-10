@@ -853,7 +853,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
 
 std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(storeEntry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(storeEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
@@ -999,7 +999,7 @@ core::DecryptedEncKey StoreApiImpl::getStoreCurrentEncKey(server::Store store) {
 std::string StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
 
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(storeEntry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(storeEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4:
@@ -1149,7 +1149,7 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
 
 std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey) {
     if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(file.meta());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(file.meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
@@ -1294,7 +1294,7 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file) {
 dynamic::InternalStoreFileMeta StoreApiImpl::decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey) {
     if(encKey.statusCode == 0) {
         if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-            auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(file.meta());
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(file.meta());
             if (!versioned.versionEmpty()) {
                 switch (versioned.version()) {
                     case 4:
@@ -1391,7 +1391,7 @@ void StoreApiImpl::assertFileExist(const std::string& fileId) {
 uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
     auto store_data_entry = store.data().get(store.data().size()-1);
     if (store_data_entry.data().type()  == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(store_data_entry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(store_data_entry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
@@ -1421,7 +1421,7 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
 
 uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file) {
     if (file.meta().type()  == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(file.meta());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(file.meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:

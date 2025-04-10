@@ -153,7 +153,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptKeysAndVe
         DecryptedEncKeyV2 decryptedEncKey;
         decryptedEncKey.statusCode = 0;
         if(key.second.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-            auto versioned = utils::TypedObjectFactory::createObjectFromVar<server::VersionedData>(key.second.data());
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(key.second.data());
             if(versioned.versionEmpty()) {
                 throw UnknownEncryptionKeyVersionException();
             } else if(versioned.version() == 2) { 

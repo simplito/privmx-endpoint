@@ -96,13 +96,13 @@ namespace server {
         VAR_FIELD(policy)
     };
 
-    ENDPOINT_CLIENT_TYPE_INHERIT(PrivateDataV4, core::server::VersionedData)
+    ENDPOINT_CLIENT_TYPE_INHERIT(PrivateDataV4, core::dynamic::VersionedData)
         STRING_FIELD(privateMeta)
         STRING_FIELD(internalMeta)
         STRING_FIELD(authorPubKey)
     TYPE_END
 
-    ENDPOINT_CLIENT_TYPE_INHERIT(PublicDataV4, core::server::VersionedData)
+    ENDPOINT_CLIENT_TYPE_INHERIT(PublicDataV4, core::dynamic::VersionedData)
         STRING_FIELD(publicMeta)
         OBJECT_PTR_FIELD(publicMetaObject)
         STRING_FIELD(authorPubKey)
@@ -110,14 +110,14 @@ namespace server {
         STRING_FIELD(inboxKeyId)
     TYPE_END
 
-    ENDPOINT_CLIENT_TYPE_INHERIT(PrivateDataV5, core::server::VersionedData)
+    ENDPOINT_CLIENT_TYPE_INHERIT(PrivateDataV5, core::dynamic::VersionedData)
         STRING_FIELD(privateMeta)
         STRING_FIELD(internalMeta)
         STRING_FIELD(authorPubKey)
         STRING_FIELD(dio)
     TYPE_END
 
-    ENDPOINT_CLIENT_TYPE_INHERIT(PublicDataV5, core::server::VersionedData)
+    ENDPOINT_CLIENT_TYPE_INHERIT(PublicDataV5, core::dynamic::VersionedData)
         STRING_FIELD(publicMeta)
         OBJECT_PTR_FIELD(publicMetaObject)
         STRING_FIELD(authorPubKey)

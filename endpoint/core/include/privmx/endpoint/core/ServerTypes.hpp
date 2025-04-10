@@ -15,35 +15,14 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/TypesMacros.hpp"
+#include "privmx/endpoint/core/DynamicTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 namespace server {
 
-ENDPOINT_CLIENT_TYPE(VersionedData)
-    INT64_FIELD(version)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
-    STRING_FIELD(creatorUserId)
-    STRING_FIELD(creatorPublicKey)
-    STRING_FIELD(contextId)
-    STRING_FIELD(containerId)
-    STRING_FIELD(itemId)
-    INT64_FIELD(timestamp)
-    STRING_FIELD(randomId)
-    MAP_FIELD(fieldChecksums, std::string)
-    INT64_FIELD(structureVersion)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(EncryptionKey)
-    STRING_FIELD(id)
-    STRING_FIELD(key)
-    STRING_FIELD(containerControlNumber)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKeyEntryDataV2, VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKeyEntryDataV2, dynamic::VersionedData)
     STRING_FIELD(encryptedKey) // encrypted EncryptionKey
     STRING_FIELD(dio) // signed and encoded in base64 DataIntegrityObject
 TYPE_END

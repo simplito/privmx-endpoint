@@ -170,7 +170,7 @@ ENDPOINT_SERVER_TYPE(ThreadStatsEventData)
     STRING_FIELD(type)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV4, core::server::VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV4, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -179,7 +179,7 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV4, core::server::VersionedData
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV5, core::server::VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV5, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -189,7 +189,7 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV5, core::server::VersionedData
     STRING_FIELD(dio)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV4, core::server::VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV4, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -197,7 +197,7 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV4, core::server::VersionedData)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV5, core::server::VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV5, core::dynamic::VersionedData)
     INT64_FIELD(version)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)

@@ -699,7 +699,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
     InboxPublicViewData result;
 
     if (publicView.publicData().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(publicView.publicData());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(publicView.publicData());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4:
@@ -739,7 +739,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
 
 std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inboxEntry.data().meta());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
@@ -863,7 +863,7 @@ inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbo
 
 std::string InboxApiImpl::decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inboxEntry.data().meta());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
@@ -1157,7 +1157,7 @@ void InboxApiImpl::assertInboxExist(const std::string& inboxId) {
 
 uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
     auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
-    auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inbox_data_entry.data().meta());
+    auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inbox_data_entry.data().meta());
     if (!versioned.versionEmpty()) {
         switch (versioned.version()) {
         case 4:

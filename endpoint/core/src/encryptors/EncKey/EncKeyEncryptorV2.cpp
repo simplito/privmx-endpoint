@@ -13,6 +13,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include "privmx/endpoint/core/DynamicTypes.hpp"
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/utils/Utils.hpp>
 #include <privmx/crypto/Crypto.hpp>
@@ -24,7 +25,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
 ) {
     auto result = privmx::utils::TypedObjectFactory::createNewObject<server::EncryptedKeyEntryDataV2>();
     result.version(2);
-    auto keyToEncrypt = privmx::utils::TypedObjectFactory::createNewObject<server::EncryptionKey>();
+    auto keyToEncrypt = privmx::utils::TypedObjectFactory::createNewObject<dynamic::EncryptionKey>();
     keyToEncrypt.id(key.id);
     keyToEncrypt.key(utils::Base64::from(key.key));
     keyToEncrypt.containerControlNumber(key.containerControlNumber);
@@ -49,7 +50,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
         ) {
             throw InvalidDataIntegrityObjectChecksumException();
         }
-        auto decryptedKey = privmx::utils::TypedObjectFactory::createObjectFromVar<server::EncryptionKey>(
+        auto decryptedKey = privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::EncryptionKey>(
             crypto::EciesEncryptor::decryptObjectFromBase64(decryptionKey, encryptedEncKey.encryptedKey(), privmx::crypto::PublicKey::fromBase58DER(result.dio.creatorPubKey))
         );
         if(decryptedKey.idEmpty() || decryptedKey.keyEmpty()) {

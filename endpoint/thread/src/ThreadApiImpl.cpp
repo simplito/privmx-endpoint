@@ -750,7 +750,7 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo th
 
 std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(threadEntry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(threadEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
@@ -1034,7 +1034,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
     // If data is not string, then data is object and has version field
     // Solution with data as object is newer than data as base64 string
     if (message.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(message.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(message.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4: {
@@ -1196,7 +1196,7 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message mes
 
 std::string ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(threadEntry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(threadEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
@@ -1238,7 +1238,7 @@ void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
 uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
     if (thread_data_entry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(thread_data_entry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(thread_data_entry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
@@ -1268,7 +1268,7 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
 uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message) {
     auto message_data = message.data();
     if (message_data.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(message_data);
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(message_data);
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:

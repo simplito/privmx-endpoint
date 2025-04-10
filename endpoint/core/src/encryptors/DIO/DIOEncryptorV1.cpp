@@ -20,7 +20,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     if(dio.creatorPubKey != autorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
-    auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<server::DataIntegrityObject>();
+    auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<dynamic::DataIntegrityObject>();
     dioJSON.version(1);
     dioJSON.creatorUserId(dio.creatorUserId);
     dioJSON.creatorPublicKey(dio.creatorPubKey);
@@ -41,7 +41,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
 }
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
     auto dioAndSignature = _dataEncryptor.extractDataWithSignature(_dataEncryptor.decode(signedDio));
-    server::DataIntegrityObject dioJSON = privmx::utils::TypedObjectFactory::createObjectFromVar<server::DataIntegrityObject>(
+    dynamic::DataIntegrityObject dioJSON = privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::DataIntegrityObject>(
        privmx::utils::Utils::parseJsonObject(dioAndSignature.data.stdString())
     );
     assertDataFormat(dioJSON);
@@ -73,7 +73,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     };
 }
 
-void DIOEncryptorV1::assertDataFormat(const server::DataIntegrityObject& dioJSON) {
+void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {
     if (dioJSON.versionEmpty() ||
         dioJSON.version() != 1 ||
         dioJSON.creatorUserIdEmpty() ||
