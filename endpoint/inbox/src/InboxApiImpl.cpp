@@ -114,7 +114,7 @@ std::string InboxApiImpl::createInbox(
 
     auto storeId = (_storeApi.getImpl())->createStoreEx(contextId, users, managers, emptyBuf, randNameAsBuf,  INBOX_TYPE_FILTER_FLAG, policiesWithItems);
     auto threadId = (_threadApi.getImpl())->createThreadEx(contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policiesWithItems);
-    auto inboxId = utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
+    auto inboxId = core::EndpointUtils::generateId();
     auto inboxDIO = _connection.getImpl()->createDIOForNewContainer(
         contextId,
         inboxId
@@ -238,10 +238,6 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     auto eccKey = crypto::ECC::fromPrivateKey(inboxKey.key);
     auto privateKey = crypto::PrivateKey(eccKey);
     auto pubKey = privateKey.getPublicKey();
-    auto inboxDIO = _connection.getImpl()->createDIO(
-        currentInbox.contextId(),
-        inboxId
-    );
     InboxDataProcessorModelV5 inboxDataIn {
         .storeId = currentInboxData.storeId(),
         .threadId = currentInboxData.threadId(),
@@ -249,7 +245,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         .privateData = {
             .privateMeta = privateMeta,
             .internalMeta = core::Buffer::from(inboxCCN),
-            .dio = inboxDIO
+            .dio = updateInboxDio
         },
         .publicData = {
             .publicMeta = publicMeta,
@@ -433,6 +429,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto inboxDIO = _connection.getImpl()->createPublicDIO(
         "",
         handle->inboxId,
+        std::nullopt,
         _userPrivKeyECC.getPublicKey()
     );
     //update Key
@@ -755,7 +752,8 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
                             .contextId = inbox.contextId(),
                             .containerId = inbox.id(),
                             .timestamp = inbox.lastModificationDate(),
-                            .randomId = 0
+                            .randomId = 0,
+                            .itemId = std::nullopt
                         }
                         
                     );

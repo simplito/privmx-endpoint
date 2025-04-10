@@ -24,7 +24,6 @@ void EventChannelManager::subscribeFor(std::string channel) {
     } else {
         Poco::JSON::Object::Ptr model = new Poco::JSON::Object();
         model->set("channel", channel);
-        std::cout << channel << std::endl;
         _gateway->request("subscribeToChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
         _eventMiddleware->emitNotificationEvent("subscribe", INTERNAL_EVENT_CHANNEL_NAME, model);
         _map.set(channel, 1);

@@ -105,7 +105,7 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
             const std::optional<core::ContainerPolicy>& policies) {
     PRIVMX_DEBUG_TIME_START(PlatformStore, _storeCreateEx)
     auto storeKey = _keyProvider->generateKey();
-    std::string storeId = utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
+    std::string storeId = core::EndpointUtils::generateId();
     auto storeDIO = _connection.getImpl()->createDIOForNewContainer(
         contextId,
         storeId
@@ -537,10 +537,22 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     internalFileMeta.chunkSize(data.chunkSize);
     internalFileMeta.key(utils::Base64::from(data.key));
     internalFileMeta.hmac(utils::Base64::from(data.hmac));
-    auto fileDIO = _connection.getImpl()->createDIO(
-        store.contextId(),
-        handle->getStoreId()
-    );
+    auto fileId = core::EndpointUtils::generateId();
+    privmx::endpoint::core::DataIntegrityObject fileDIO;
+    if (handle->getFileId().empty()) {
+        fileDIO = _connection.getImpl()->createDIOForNewItem(
+            store.contextId(),
+            handle->getStoreId(),
+            fileId
+        );
+    } else {
+        fileId = handle->getFileId();
+        fileDIO = _connection.getImpl()->createDIO(
+            store.contextId(),
+            handle->getStoreId(),
+            fileId
+        );
+    }
     store::FileMetaToEncryptV5 fileMeta {
         .publicMeta = handle->getPublicMeta(),
         .privateMeta = handle->getPrivateMeta(),
@@ -554,6 +566,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
         // create file
         auto storeFileCreateModel = utils::TypedObjectFactory::createNewObject<server::StoreFileCreateModel>();
         storeFileCreateModel.fileIndex(0);
+        storeFileCreateModel.fileId(fileId);
         storeFileCreateModel.storeId(handle->getStoreId());
         storeFileCreateModel.meta(encryptedMeta.asVar());
         storeFileCreateModel.keyId(key.id);
@@ -563,7 +576,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
         // update file
         auto storeFileWriteModel = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModel>();
         storeFileWriteModel.fileIndex(0);
-        storeFileWriteModel.fileId(handle->getFileId());
+        storeFileWriteModel.fileId(fileId);
         storeFileWriteModel.meta(encryptedMeta.asVar());
         storeFileWriteModel.keyId(key.id);
         storeFileWriteModel.requestId(data.requestId);
@@ -852,7 +865,8 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                             .contextId = store.contextId(),
                             .containerId = store.id(),
                             .timestamp = store.lastModificationDate(),
-                            .randomId = 0
+                            .randomId = 0,
+                            .itemId = std::nullopt
                         }
                     );
                 }
@@ -871,7 +885,8 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                 .contextId = store.contextId(),
                 .containerId = store.id(),
                 .timestamp = store.lastModificationDate(),
-                .randomId = 0
+                .randomId = 0,
+                .itemId = std::nullopt
             }
         );
     }
@@ -1138,7 +1153,8 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                             .contextId = file.contextId(),
                             .containerId = file.id(),
                             .timestamp = file.lastModificationDate(),
-                            .randomId = 0
+                            .randomId = 0,
+                            .itemId = file.id()
                         }
                     );
                 }
@@ -1158,7 +1174,8 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                 .contextId = file.contextId(),
                 .containerId = file.id(),
                 .timestamp = file.lastModificationDate(),
-                .randomId = 0
+                .randomId = 0,
+                .itemId = file.id()
             }
         );
     }
@@ -1312,7 +1329,8 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     auto key = getStoreCurrentEncKey(store);
     auto fileDIO = _connection.getImpl()->createDIO(
         file.contextId(),
-        file.storeId()
+        file.storeId(),
+        file.id()
     );
     store::FileMetaToEncryptV5 fileMeta {
         .publicMeta = publicMeta,
@@ -1397,6 +1415,7 @@ uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file) {
                     if( 
                         dio.contextId != file.contextId() ||
                         dio.containerId != file.storeId() ||
+                        !dio.itemId.has_value() || dio.itemId.value() != file.id() ||
                         dio.creatorUserId != file.lastModifier() ||
                         !core::TimestampValidator::validate(dio.timestamp, file.lastModificationDate())
                     ) {
