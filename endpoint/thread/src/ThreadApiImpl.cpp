@@ -189,24 +189,27 @@ void ThreadApiImpl::updateThread(
     bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
 
     // read all key to check if all key belongs to this thread
-    auto threadKeys {_keyProvider->getAllKeysAndVerify(currentThread.keys(), {.contextId=currentThread.contextId(), .containerId=threadId})};
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=currentThread.contextId(), .containerId=threadId};
+    keyProviderRequest.addAll(currentThread.keys(), location);
+    auto threadKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     auto currentThreadEntry = currentThread.data().get(currentThread.data().size()-1);
     core::DecryptedEncKey currentThreadKey;
     for (auto key : threadKeys) {
-        if (currentThreadEntry.keyId() == key.id) {
-            currentThreadKey = key;
+        if (currentThreadEntry.keyId() == key.first) {
+            currentThreadKey = key.second;
             break;
         }
     }
     auto threadCCN = decryptThreadInternalMeta(currentThreadEntry, currentThreadKey);
     for(auto key : threadKeys) {
-        if(key.statusCode != 0 || (key.dataStructureVersion == 2 && key.containerControlNumber != threadCCN)) {
+        if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.containerControlNumber != threadCCN)) {
 
             throw ThreadEncryptionKeyValidationException();
         }
     }
     // setting thread Key adding new users
-    core::EncKey threadKey;
+    core::EncKey threadKey = currentThreadKey;
     core::DataIntegrityObject updateThreadDio = _connection.getImpl()->createDIO(currentThread.contextId(), threadId);
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
@@ -217,11 +220,6 @@ void ThreadApiImpl::updateThread(
             updateThreadDio,
             threadCCN
         );
-    } else {
-        // find key with corresponding keyId 
-        for(size_t i = 0; i < threadKeys.size(); i++) {
-            threadKey = threadKeys[i];
-        }
     }
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
@@ -797,23 +795,25 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
 
 std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx::utils::List<server::ThreadInfo> threads) {
     std::vector<Thread> result;
-    std::vector<core::DecryptedEncKeyV2> keys;
-    //create verification request for keys
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    //create request to KeyProvider for keys
     for (size_t i = 0; i < threads.size(); i++) {
         auto thread = threads.get(i);
+        core::EncKeyLocation location{.contextId=thread.contextId(), .containerId=thread.id()};
         auto thread_data_entry = thread.data().get(thread.data().size()-1);
-        auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), {.contextId=thread.contextId(), .containerId=thread.id(), .enableVerificationRequest=false});
-        keys.push_back(key);
+        keyProviderRequest.addOne(thread.keys(), thread_data_entry.keyId(), location);
     }
-    //send verification request and update key statuscode
-    _keyProvider->validateUserData(keys);
-    //
+    //send request to KeyProvider
+    auto threadsKeys {_keyProvider->getKeysAndVerify(keyProviderRequest)};
     std::vector<core::DataIntegrityObject> threadsDIO;
     std::map<std::string, bool> duplication_check;
-    for (size_t i = 0; i < threads.size(); i++) {
-        auto thread = threads.get(i);
+    for (auto thread: threads) {
         try {
-            auto tmp = decryptAndConvertThreadDataToThread(thread, thread.data().get(thread.data().size()-1), keys[i]);
+            auto tmp = decryptAndConvertThreadDataToThread(
+                thread, 
+                thread.data().get(thread.data().size()-1), 
+                threadsKeys.at({.contextId=thread.contextId(), .containerId=thread.id()}).at(thread.data().get(thread.data().size()-1).keyId())
+            );
             result.push_back(std::get<0>(tmp));
             auto threadDIO = std::get<1>(tmp);
             threadsDIO.push_back(threadDIO);
@@ -857,7 +857,10 @@ std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx:
 
 Thread ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
-    auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), {.contextId=thread.contextId(), .containerId=thread.id()});
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=thread.contextId(), .containerId=thread.id()};
+    keyProviderRequest.addOne(thread.keys(), thread_data_entry.keyId(), location);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(thread_data_entry.keyId());
     Thread result;
     core::DataIntegrityObject threadDIO;
     std::tie(result, threadDIO) = decryptAndConvertThreadDataToThread(thread, thread_data_entry, key);
@@ -1096,7 +1099,11 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
     for (auto message : messages) {
         keyIds.insert(message.keyId());
     }
-    auto keyMap = _keyProvider->getKeysAndVerify(thread.keys(), keyIds, {.contextId=thread.contextId(), .containerId=thread.id()});
+
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=thread.contextId(), .containerId=thread.id()};
+    keyProviderRequest.addMany(thread.keys(), keyIds, location);
+    auto keyMap = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
     std::vector<Message> result;
     std::map<std::string, bool> duplication_check;
     for (auto message : messages) {
@@ -1148,7 +1155,10 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
 
 Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::ThreadInfo thread, server::Message message) {
     auto keyId = message.keyId();
-    auto encKey = _keyProvider->getKeyAndVerify(thread.keys(), keyId, {.contextId=thread.contextId(), .containerId=thread.id()});
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=thread.contextId(), .containerId=thread.id()};
+    keyProviderRequest.addOne(thread.keys(), keyId, location);
+    auto encKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(keyId);
     _messageKeyIdFormatValidator.assertKeyIdFormat(keyId);
     Message result;
     core::DataIntegrityObject messageDIO;
@@ -1203,10 +1213,10 @@ std::string ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry th
 
 core::DecryptedEncKey ThreadApiImpl::getThreadCurrentEncKey(server::ThreadInfo thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
-    auto key = _keyProvider->getKeyAndVerify(thread.keys(), thread_data_entry.keyId(), 
-        {.contextId=thread.contextId(), .containerId=thread.id()}
-    );
-    return key;
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=thread.contextId(), .containerId=thread.id()};
+    keyProviderRequest.addOne(thread.keys(), thread_data_entry.keyId(), location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(thread_data_entry.keyId());
 }
 
 server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::string& threadId) {
