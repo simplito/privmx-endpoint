@@ -77,7 +77,7 @@ struct std::hash<privmx::endpoint::core::EncKeyLocation> {
     {
         std::size_t h1 = std::hash<std::string>{}(encKeyLocation.contextId);
         std::size_t h2 = std::hash<std::string>{}(encKeyLocation.containerId);
-        return h1 ^ (h2 << 1); // or use boost::hash_combine
+        return h1 ^ (h2 << 1);
     }
 };
 
