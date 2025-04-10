@@ -10,6 +10,9 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/EndpointUtils.hpp"
+#include <privmx/utils/Utils.hpp>
+#include <privmx/crypto/Crypto.hpp>
+
 
 using namespace privmx::endpoint::core;
 
@@ -67,4 +70,8 @@ std::vector<std::string> EndpointUtils::usersWithPubKeyToIds(std::vector<core::U
         ids.push_back(user.userId);
     }
     return ids;
+}
+
+std::string EndpointUtils::generateId() {
+   return utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
 }

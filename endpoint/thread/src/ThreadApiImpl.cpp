@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/TimestampValidator.hpp>
 
 #include "privmx/endpoint/thread/DynamicTypes.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
@@ -109,7 +110,7 @@ std::string ThreadApiImpl::_createThreadEx(
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, _createThreadEx)
     auto threadKey = _keyProvider->generateKey();
-    std::string threadId = utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
+    std::string threadId = core::EndpointUtils::generateId();
     auto threadDIO = _connection.getImpl()->createDIOForNewContainer(
         contextId,
         threadId
@@ -118,7 +119,7 @@ std::string ThreadApiImpl::_createThreadEx(
     ThreadDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(threadCCN)),
+        .internalMeta = core::Buffer::from(threadCCN),
         .dio = threadDIO
     };
     auto create_thread_model = utils::TypedObjectFactory::createNewObject<server::ThreadCreateModel>();
@@ -227,13 +228,11 @@ void ThreadApiImpl::updateThread(
             threadKeys,
             usersToAddMissingKey, 
             updateThreadDio, 
-            threadKeys[0].containerControlNumber
+            threadCCN
         );
         for(auto t: tmp) keys.add(t);
     }
     auto model = utils::TypedObjectFactory::createNewObject<server::ThreadUpdateModel>();
-
-
     auto usersList = utils::TypedObjectFactory::createNewList<std::string>();
     for (auto user: users) {
         usersList.add(user.userId);
@@ -242,7 +241,6 @@ void ThreadApiImpl::updateThread(
     for (auto x: managers) {
         managersList.add(x.userId);
     }
-
     model.id(threadId);
     model.keyId(threadKey.id);
     model.keys(keys);
@@ -253,15 +251,11 @@ void ThreadApiImpl::updateThread(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    auto threadDIO = _connection.getImpl()->createDIO(
-        currentThread.contextId(),
-        threadId
-    );
     ThreadDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(threadCCN)),
-        .dio = threadDIO
+        .internalMeta = core::Buffer::from(threadCCN),
+        .dio = updateThreadDio
     };
     model.data(_threadDataEncryptorV5.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
 
@@ -404,12 +398,15 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
     auto msgKey = getThreadCurrentEncKey(thread);
+    auto messageId = core::EndpointUtils::generateId();
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
+    send_message_model.messageId(messageId);
     send_message_model.threadId(thread.id());
     send_message_model.keyId(msgKey.id);
-    auto messageDIO = _connection.getImpl()->createDIO(
+    auto messageDIO = _connection.getImpl()->createDIOForNewItem(
         thread.contextId(),
-        threadId
+        threadId,
+        messageId
     );
     MessageDataToEncryptV5 messageData {
         .publicMeta = publicMeta,
@@ -456,7 +453,8 @@ void ThreadApiImpl::updateMessage(
     send_message_model.keyId(msgKey.id);
     auto messageDIO = _connection.getImpl()->createDIO(
         message.contextId(),
-        message.threadId()
+        message.threadId(),
+        message.id()
     );
     MessageDataToEncryptV5 messageData {
         .publicMeta = publicMeta,
@@ -767,7 +765,8 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                             .contextId = thread.contextId(),
                             .containerId = thread.id(),
                             .timestamp = thread.lastModificationDate(),
-                            .randomId = 0
+                            .randomId = 0,
+                            .itemId = std::nullopt
                         }
                     );
                 }
@@ -786,7 +785,8 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                 .contextId = thread.contextId(),
                 .containerId = thread.id(),
                 .timestamp = thread.lastModificationDate(),
-                .randomId = 0
+                .randomId = 0,
+                .itemId = std::nullopt
             }
         );
     }
@@ -818,7 +818,7 @@ std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx:
             auto threadDIO = std::get<1>(tmp);
             threadsDIO.push_back(threadDIO);
             //find duplication
-            std::string fullRandomId =  std::to_string(threadDIO.randomId) + "-" + std::to_string(threadDIO.timestamp);
+            std::string fullRandomId = threadDIO.randomId + "-" + std::to_string(threadDIO.timestamp);
             if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                 duplication_check.insert(std::make_pair(fullRandomId, true));
             } else {
@@ -1044,7 +1044,8 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                         .contextId = message.contextId(),
                         .containerId = message.threadId(),
                         .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
-                        .randomId = 0
+                        .randomId = 0,
+                        .itemId = message.id()
                     }
                 );
             }
@@ -1067,7 +1068,8 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .contextId = message.contextId(),
                     .containerId = message.threadId(),
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
-                    .randomId = 0
+                    .randomId = 0,
+                    .itemId = message.id()
                 }
             );
         }
@@ -1079,7 +1081,8 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                 .contextId = message.contextId(),
                 .containerId = message.threadId(),
                 .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
-                .randomId = 0
+                .randomId = 0,
+                .itemId = message.id()
             }
         );
     }
@@ -1104,7 +1107,7 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
                 result.push_back(std::get<0>(tmp));
                 auto messageDIO = std::get<1>(tmp);
                 //find duplication
-                std::string fullRandomId =  std::to_string(messageDIO.randomId) + "-" + std::to_string(messageDIO.timestamp);
+                std::string fullRandomId =  messageDIO.randomId + "-" + std::to_string(messageDIO.timestamp);
                 if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                     duplication_check.insert(std::make_pair(fullRandomId, true));
                 } else {
@@ -1181,22 +1184,21 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message mes
     }
 }
 
-int64_t ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
+std::string ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(threadEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
-                return 0;
+                return std::string();
             case 5:
-                return std::stoll(decryptThreadV5(threadEntry, encKey).internalMeta.stdString());
+                return decryptThreadV5(threadEntry, encKey).internalMeta.stdString();
             }
         } 
     } else if (threadEntry.data().isString()) {
-        return 0;
+        return std::string();
     }
     throw UnknowThreadFormatException();
-    return 0;
 }
 
 core::DecryptedEncKey ThreadApiImpl::getThreadCurrentEncKey(server::ThreadInfo thread) {
@@ -1239,7 +1241,7 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
                         dio.contextId != thread.contextId() ||
                         dio.containerId != thread.id() ||
                         dio.creatorUserId != thread.lastModifier() ||
-                        abs(dio.timestamp - thread.lastModificationDate()) > TIMESTAMP_ALLOWED_DELTA
+                        !core::TimestampValidator::validate(dio.timestamp, thread.lastModificationDate())
                     ) {
                         return ThreadDataIntegrityException().getCode();
                     }
@@ -1268,8 +1270,9 @@ uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message) {
                     if(
                         dio.contextId != message.contextId() ||
                         dio.containerId != message.threadId() ||
+                        !dio.itemId.has_value() || dio.itemId.value() != message.id() ||
                         dio.creatorUserId != (message.updates().size() == 0 ? message.author() : message.updates().get(message.updates().size()-1).author()) ||
-                        abs(dio.timestamp - (message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate())) > TIMESTAMP_ALLOWED_DELTA
+                        !core::TimestampValidator::validate(dio.timestamp, (message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate()))
                     ) {
                         return MessageDataIntegrityException().getCode();
                     }

@@ -30,8 +30,9 @@ ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
     STRING_FIELD(creatorPublicKey)
     STRING_FIELD(contextId)
     STRING_FIELD(containerId)
+    STRING_FIELD(itemId)
     INT64_FIELD(timestamp)
-    INT64_FIELD(randomId)
+    STRING_FIELD(randomId)
     MAP_FIELD(fieldChecksums, std::string)
     INT64_FIELD(structureVersion)
 TYPE_END
@@ -39,7 +40,7 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(EncryptionKey)
     STRING_FIELD(id)
     STRING_FIELD(key)
-    INT64_FIELD(containerControlNumber)
+    STRING_FIELD(containerControlNumber)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKeyEntryDataV2, VersionedData)

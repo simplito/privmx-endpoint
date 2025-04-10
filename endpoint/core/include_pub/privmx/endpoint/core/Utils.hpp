@@ -141,11 +141,6 @@ public:
      * @param data string to check
      */
     static void rtrim(std::string& data);
-
-    /**
-     * Generate random number for 0 to MAX_INT64
-     */
-    static int64_t generateRandomNumber();
 };
 
 }  // namespace core

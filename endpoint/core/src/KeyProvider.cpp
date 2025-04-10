@@ -17,7 +17,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 
 #include "privmx/endpoint/core/KeyProvider.hpp"
-#include "privmx/endpoint/core/Utils.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -30,8 +29,8 @@ EncKey KeyProvider::generateKey() {
     };
 }
 
-int64_t KeyProvider::generateContainerControlNumber() {
-    return Utils::generateRandomNumber();
+std::string KeyProvider::generateContainerControlNumber() {
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
 }
 
 DecryptedEncKeyV2 KeyProvider::getKeyAndVerify(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyV2IntegrityValidationData& integrityValidationData) {
@@ -72,7 +71,7 @@ std::vector<DecryptedEncKeyV2> KeyProvider::getAllKeysAndVerify(const utils::Lis
     return result;
 }
 
-privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std::vector<UserWithPubKey>& users, const EncKey& key, const DataIntegrityObject& dio, int64_t containerControlNumber) {
+privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std::vector<UserWithPubKey>& users, const EncKey& key, const DataIntegrityObject& dio, std::string containerControlNumber) {
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
     for (auto user : users) {
         server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
@@ -94,7 +93,7 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std:
     return result;
 }
 
-privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(const std::vector<DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, int64_t containerControlNumber) {
+privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(const std::vector<DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, std::string containerControlNumber) {
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
     for (auto missingKey : missingKeys) {
         if(missingKey.statusCode != 0) continue;
@@ -129,7 +128,7 @@ std::vector<DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::List<ser
             decryptedEncKey.id = key.keyId();
             decryptedEncKey.key = _encKeyEncryptorV1.decrypt(key.data(), _key);
             decryptedEncKey.dataStructureVersion = 1;
-            decryptedEncKey.containerControlNumber = 0;
+            decryptedEncKey.containerControlNumber = "";
             result.push_back(decryptedEncKey);
         } else {
             decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
@@ -142,8 +141,7 @@ std::vector<DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::List<ser
 }
 
 void KeyProvider::validateData(std::vector<DecryptedEncKeyV2>& decryptedKeys, const EncKeyV2IntegrityValidationData& integrityValidationData) {
-
-    std::optional<int64_t> containerControlNumber = std::nullopt;
+    std::optional<std::string> containerControlNumber = std::nullopt;
     //create data validation request
     for(size_t i = 0; i<decryptedKeys.size();i++) {
         if(decryptedKeys[i].statusCode == 0 && decryptedKeys[i].dataStructureVersion == 2)  {
@@ -185,12 +183,12 @@ void KeyProvider::validateUserData(std::vector<DecryptedEncKeyV2>& decryptedKeys
 
 
 void KeyProvider::validateKeyForDuplication(std::vector<DecryptedEncKeyV2>& keys) {
-    std::map<std::pair<int64_t, int64_t>, size_t> duplicateMap;
+    std::map<std::pair<std::string, int64_t>, size_t> duplicateMap;
     for(size_t i = 0; i < keys.size(); i++ ) {
         if(keys[i].statusCode != 0 || keys[i].dio.creatorPubKey == "") continue;
         auto keyNonce = keys[i].dio.randomId;
         auto keyTimestamp = keys[i].dio.timestamp;
-        std::pair<std::pair<int64_t, int64_t>, size_t> val = std::make_pair(std::make_pair(keyNonce,keyTimestamp), i);
+        std::pair<std::pair<std::string, int64_t>, size_t> val = std::make_pair(std::make_pair(keyNonce,keyTimestamp), i);
         auto ret = duplicateMap.insert(val);
         if(ret.second==false) {
             auto e = DataIntegrityObjectDuplicatedException();

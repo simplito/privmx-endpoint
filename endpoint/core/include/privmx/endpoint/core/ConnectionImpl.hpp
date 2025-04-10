@@ -64,9 +64,11 @@ public:
         return _userVerifier;    
     }
     std::string getMyUserId(const std::string& contextId);
-    DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId);
+    DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId = std::nullopt);
     DataIntegrityObject createDIOForNewContainer(const std::string& contextId, const std::string& containerId);
-    DataIntegrityObject createPublicDIO(const std::string& contextId, const std::string& containerId, const crypto::PublicKey& pubKey);
+    DataIntegrityObject createDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId);
+    DataIntegrityObject createPublicDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId, const crypto::PublicKey& pubKey);
+    DataIntegrityObject createPublicDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId, const crypto::PublicKey& pubKey);
 
 
 private:

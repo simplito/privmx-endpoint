@@ -237,6 +237,7 @@ TYPE_END
 
 
 ENDPOINT_SERVER_TYPE(StoreFileCreateModel)
+    STRING_FIELD(fileId)     
     STRING_FIELD(storeId)     
     STRING_FIELD(requestId)        // request.RequestId
     INT64_FIELD(fileIndex)

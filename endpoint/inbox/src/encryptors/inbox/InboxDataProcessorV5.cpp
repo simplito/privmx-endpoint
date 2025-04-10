@@ -37,10 +37,8 @@ server::InboxData InboxDataProcessorV5::packForServer(const InboxDataProcessorMo
     serverPrivateData.version(5);
     serverPrivateData.privateMeta(_dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey));
     privateDataMapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(serverPrivateData.privateMeta())));
-    if (plainData.privateData.internalMeta.has_value()) {
-        serverPrivateData.internalMeta(_dataEncryptor.signAndEncryptAndEncode(plainData.privateData.internalMeta.value(), authorPrivateKey, inboxKey));
-        privateDataMapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta())));
-    }
+    serverPrivateData.internalMeta(_dataEncryptor.signAndEncryptAndEncode(plainData.privateData.internalMeta, authorPrivateKey, inboxKey));
+    privateDataMapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta())));
     serverPrivateData.authorPubKey(authorPubKeyECC);
     core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .structureVersion=5, .fieldChecksums=privateDataMapOfDataSha256};
     serverPrivateData.dio(_DIOEncryptor.signAndEncode(privateDataExpandedDio, authorPrivateKey));
@@ -121,9 +119,7 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV5.authorPubKey());
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.privateMeta(), authorPublicKeyECC, inboxKey);
-        result.internalMeta = privateDataV5.internalMetaEmpty() ? 
-            std::nullopt : 
-            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.internalMeta(), authorPublicKeyECC, inboxKey));
+        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.internalMeta(), authorPublicKeyECC, inboxKey);
         result.authorPubKey = privateDataV5.authorPubKey();
 
     }  catch (const privmx::endpoint::core::Exception& e) {
@@ -150,10 +146,8 @@ core::DataIntegrityObject InboxDataProcessorV5::getDIOAndAssertIntegrity(const s
     if (
         dio.structureVersion != 5 ||
         dio.creatorPubKey != encryptedPrivateData.authorPubKey() ||
-        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.privateMeta()) || (
-            !encryptedPrivateData.internalMetaEmpty() &&
-            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.internalMeta())
-        )
+        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.privateMeta()) || 
+        dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.internalMeta())
     ) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
