@@ -59,7 +59,7 @@ public:
 private:
     struct StreamEncKey {
         core::EncKey key;
-        std::chrono::_V2::system_clock::time_point creation_time;
+        std::chrono::system_clock::time_point creation_time;
         std::chrono::duration<int64_t, std::milli> TTL;
     };
 
