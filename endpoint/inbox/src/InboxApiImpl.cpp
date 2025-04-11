@@ -190,24 +190,29 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         }
     }
     bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-    auto inboxKeys {_keyProvider->getAllKeysAndVerify(currentInbox.keys(), {.contextId=currentInbox.contextId(), .containerId=inboxId})};
+    
+    // read all key to check if all key belongs to this inbox
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=currentInbox.contextId(), .containerId=inboxId};
+    keyProviderRequest.addAll(currentInbox.keys(), location);
+    auto inboxKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     auto currentInboxEntry = currentInbox.data().get(currentInbox.data().size()-1);
-    core::DecryptedEncKey currentThreadKey;
+    core::DecryptedEncKey currentInboxKey;
     for (auto key : inboxKeys) {
-        if (currentInboxEntry.keyId() == key.id) {
-            currentThreadKey = key;
+        if (currentInboxEntry.keyId() == key.first) {
+            currentInboxKey = key.second;
             break;
         }
     }
-    auto inboxCCN = decryptInboxInternalMeta(currentInboxEntry, currentThreadKey);
+    auto inboxCCN = decryptInboxInternalMeta(currentInboxEntry, currentInboxKey);
     for(auto key : inboxKeys) {
-        if(key.statusCode != 0 || (key.dataStructureVersion == 2 && key.containerControlNumber != inboxCCN)) {
+        if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.containerControlNumber != inboxCCN)) {
             throw InboxEncryptionKeyValidationException();
         }
     }
     
-    // setting thread Key adding new users
-    core::EncKey inboxKey;
+    // setting inbox Key adding new users
+    core::EncKey inboxKey = currentInboxKey;
     core::DataIntegrityObject updateInboxDio = _connection.getImpl()->createDIO(currentInbox.contextId(), inboxId);
     privmx::utils::List<core::server::KeyEntrySet> keysList = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
@@ -218,11 +223,6 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
             updateInboxDio,
             inboxCCN
         );
-    } else {
-        // find key with corresponding keyId 
-        for(size_t i = 0; i < inboxKeys.size(); i++) {
-            inboxKey = inboxKeys[i];
-        }
     }
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
@@ -699,7 +699,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
     InboxPublicViewData result;
 
     if (publicView.publicData().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(publicView.publicData());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(publicView.publicData());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4:
@@ -739,7 +739,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
 
 std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inboxEntry.data().meta());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
@@ -752,7 +752,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
                             .contextId = inbox.contextId(),
                             .containerId = inbox.id(),
                             .timestamp = inbox.lastModificationDate(),
-                            .randomId = 0,
+                            .randomId = std::string(),
                             .itemId = std::nullopt
                         }
                         
@@ -772,24 +772,26 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
 
 std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxs(utils::List<inbox::server::Inbox> inboxes) {
     std::vector<Inbox> result;
-    std::vector<core::DecryptedEncKeyV2> keys;
-    //create verification request for keys
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    //create request to KeyProvider for keys
     for (size_t i = 0; i < inboxes.size(); i++) {
         auto inbox = inboxes.get(i);
+        core::EncKeyLocation location{.contextId=inbox.contextId(), .containerId=inbox.id()};
         auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
-        auto key = _keyProvider->getKeyAndVerify(inbox.keys(), inbox_data_entry.keyId(), {.contextId=inbox.contextId(), .containerId=inbox.id(), .enableVerificationRequest=false});
-        keys.push_back(key);
+        keyProviderRequest.addOne(inbox.keys(), inbox_data_entry.keyId(), location);
     }
-    //send verification request and update key statuscode
-    _keyProvider->validateUserData(keys);
-    //
+    //send request to KeyProvider
+    auto storesKeys {_keyProvider->getKeysAndVerify(keyProviderRequest)};
     std::vector<core::DataIntegrityObject> inboxesDIO;
     std::map<std::string, bool> duplication_check;
     for (size_t i = 0; i < inboxes.size(); i++) {
         auto inbox = inboxes.get(i);
         try {;
-
-            auto tmp = decryptAndConvertInboxDataToInbox(inbox, inbox.data().get(inbox.data().size()-1), keys[i]);
+            auto tmp = decryptAndConvertInboxDataToInbox(
+                inbox, 
+                inbox.data().get(inbox.data().size()-1), 
+                storesKeys.at({.contextId=inbox.contextId(), .containerId=inbox.id()}).at(inbox.data().get(inbox.data().size()-1).keyId())
+            );
             result.push_back(std::get<0>(tmp));
             auto inboxDIO = std::get<1>(tmp);
             inboxesDIO.push_back(inboxDIO);
@@ -833,7 +835,10 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxs(utils::Lis
 
 inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox) {
     auto entry = getInboxCurrentDataEntry(inbox);
-    auto key = _keyProvider->getKeyAndVerify(inbox.keys(), entry.keyId(), {.contextId=inbox.contextId(), .containerId=inbox.id()});
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=inbox.contextId(), .containerId=inbox.id()};
+    keyProviderRequest.addOne(inbox.keys(), entry.keyId(), location);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(entry.keyId());
     inbox::Inbox result;
     core::DataIntegrityObject inboxDIO;
     std::tie(result, inboxDIO) = decryptAndConvertInboxDataToInbox(inbox, entry, key);
@@ -858,7 +863,7 @@ inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbo
 
 std::string InboxApiImpl::decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inboxEntry.data().meta());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 4: {
@@ -897,7 +902,10 @@ InboxEntryResult InboxApiImpl::decryptInboxEntry(const privmx::endpoint::inbox::
 
         auto serializer = inbox::InboxEntriesDataEncryptorSerializer::Ptr(new inbox::InboxEntriesDataEncryptorSerializer());
         auto msgPublicData = serializer->unpackMessagePublicOnly(msgData);
-        auto encKey = _keyProvider->getKeyAndVerify(inbox.keys(), msgPublicData.usedInboxKeyId, {.contextId=inbox.contextId(), .containerId=inbox.id()});
+        core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+        core::EncKeyLocation location{.contextId=inbox.contextId(), .containerId=inbox.id()};
+        keyProviderRequest.addOne(inbox.keys(), msgPublicData.usedInboxKeyId, location);
+        auto encKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(msgPublicData.usedInboxKeyId);
         auto eccKey = crypto::ECC::fromPrivateKey(encKey.key);
         auto privKeyECC = crypto::PrivateKey(eccKey);
         auto decrypted = serializer->unpackMessage(msgData, privKeyECC);
@@ -1149,7 +1157,7 @@ void InboxApiImpl::assertInboxExist(const std::string& inboxId) {
 
 uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
     auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
-    auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(inbox_data_entry.data().meta());
+    auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inbox_data_entry.data().meta());
     if (!versioned.versionEmpty()) {
         switch (versioned.version()) {
         case 4:

@@ -59,14 +59,26 @@ struct DecryptedEncKeyV2 : public DecryptedEncKey {
     std::string containerControlNumber;
 };
 
-struct EncKeyV2IntegrityValidationData {
+struct EncKeyLocation {
     std::string contextId;
     std::string containerId;
-    bool enableVerificationRequest = true;
+    bool operator==(const EncKeyLocation &other) const {
+        return (contextId == other.contextId && containerId == other.containerId);
+    }
 };
 
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
+
+template<>
+struct std::hash<privmx::endpoint::core::EncKeyLocation> {
+    std::size_t operator()(const privmx::endpoint::core::EncKeyLocation& encKeyLocation) const noexcept
+    {
+        std::size_t h1 = std::hash<std::string>{}(encKeyLocation.contextId);
+        std::size_t h2 = std::hash<std::string>{}(encKeyLocation.containerId);
+        return h1 ^ (h2 << 1);
+    }
+};
 
 #endif  // _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_

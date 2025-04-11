@@ -20,6 +20,72 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
+
+void KeyDecryptionAndVerificationRequest::addOne(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyLocation& location) {
+    if(_completed) {
+        throw KeyProviderRequestCompletedException();
+    }
+    server::KeyEntry keyToDecrypt = utils::TypedObjectFactory::createNewObject<server::KeyEntry>();
+    for (auto key : keys) {
+        if (key.keyId() == keyId) {
+            keyToDecrypt = key;
+            break;
+        }
+    }
+    if(auto search = requestData.find(location); search != requestData.end()) {
+        search->second.add(keyToDecrypt.keyId(), keyToDecrypt);
+    } else {
+        utils::Map<server::KeyEntry> toDecrypt = utils::TypedObjectFactory::createNewMap<server::KeyEntry>();
+        toDecrypt.add(keyToDecrypt.keyId(), keyToDecrypt);
+        requestData.insert(std::make_pair(location, toDecrypt));
+    }
+}
+
+void KeyDecryptionAndVerificationRequest::addMany(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyLocation& location) {
+    if(_completed) {
+        throw KeyProviderRequestCompletedException();
+    }
+    if(_completed) {
+        throw KeyProviderRequestCompletedException();
+    }
+    utils::List<server::KeyEntry> keysToDecrypt = utils::TypedObjectFactory::createNewList<server::KeyEntry>();
+    for (auto key : keys) {
+        if(std::find(keyIds.begin(), keyIds.end(), key.keyId()) != keyIds.end()) {
+            keysToDecrypt.add(key);
+        }
+    }
+    if(auto search = requestData.find(location); search != requestData.end()) {
+        for(auto keyToDecrypt : keysToDecrypt) {
+            search->second.add(keyToDecrypt.keyId(), keyToDecrypt);
+        }
+    } else {
+        utils::Map<server::KeyEntry> toDecrypt = utils::TypedObjectFactory::createNewMap<server::KeyEntry>();
+        for(auto keyToDecrypt : keysToDecrypt) {
+            toDecrypt.add(keyToDecrypt.keyId(), keyToDecrypt);
+        }
+        requestData.insert(std::make_pair(location, toDecrypt));
+    }
+}
+void KeyDecryptionAndVerificationRequest::addAll(const utils::List<server::KeyEntry>& keys, const EncKeyLocation& location) {
+    if(_completed) {
+        throw KeyProviderRequestCompletedException();
+    }
+    if(auto search = requestData.find(location); search != requestData.end()) {
+        for(auto key : keys) {
+            search->second.add(key.keyId(), key);
+        }
+    } else {
+        utils::Map<server::KeyEntry> toDecrypt = utils::TypedObjectFactory::createNewMap<server::KeyEntry>();
+        for(auto key : keys) {
+            toDecrypt.add(key.keyId(), key);
+        }
+        requestData.insert(std::make_pair(location, toDecrypt));
+    }
+}
+void KeyDecryptionAndVerificationRequest::markAsCompleted() {
+    _completed = true;
+}
+
 KeyProvider::KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifierInterface>()> getUserVerifier) : _key(key), _getUserVerifier(getUserVerifier) {}
 
 EncKey KeyProvider::generateKey() {
@@ -33,41 +99,13 @@ std::string KeyProvider::generateContainerControlNumber() {
     return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
 }
 
-DecryptedEncKeyV2 KeyProvider::getKeyAndVerify(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyV2IntegrityValidationData& integrityValidationData) {
-    utils::List<server::KeyEntry> toDecrypt = utils::TypedObjectFactory::createNewList<server::KeyEntry>();
-    for (auto key : keys) {
-        if (key.keyId() == keyId) {
-            toDecrypt.add(key);
-        }
+std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> KeyProvider::getKeysAndVerify(const KeyDecryptionAndVerificationRequest& request) {
+    std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> result;
+    for (auto locationKeyMap : request.requestData) {
+        auto locationResult = decryptKeysAndVerify(locationKeyMap.second, locationKeyMap.first);
+        result.insert(std::make_pair(locationKeyMap.first, locationResult));
     }
-    if(toDecrypt.size()!=1) {
-        throw NoUserEntryForGivenKeyIdException();
-    }
-    auto result = decryptKeysAndVerify(toDecrypt, integrityValidationData);
-    return result.at(0);
-    
-}
-
-std::map<std::string, DecryptedEncKeyV2> KeyProvider::getKeysAndVerify(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyV2IntegrityValidationData& integrityValidationData) {
-    utils::List<server::KeyEntry> toDecrypt = utils::TypedObjectFactory::createNewList<server::KeyEntry>();
-    for (auto key: keys) {
-        if(std::find(keyIds.begin(), keyIds.end(), key.keyId()) != keyIds.end()) {
-            toDecrypt.add(key);
-        }
-    }
-    if(toDecrypt.size() == 0) return std::map<std::string, DecryptedEncKeyV2>();
-    auto decrypted = decryptKeysAndVerify(toDecrypt, integrityValidationData);
-    validateKeyForDuplication(decrypted);
-    std::map<std::string, DecryptedEncKeyV2> result;
-    for (auto key: decrypted) {
-        result.insert(std::make_pair(key.id,key));
-    }
-    return result;
-}
-
-std::vector<DecryptedEncKeyV2> KeyProvider::getAllKeysAndVerify(const utils::List<server::KeyEntry>& serverKeys, const EncKeyV2IntegrityValidationData& integrityValidationData) {
-    auto result = decryptKeysAndVerify(serverKeys, integrityValidationData);
-    validateKeyForDuplication(result);
+    verifyUserData(result);
     return result;
 }
 
@@ -93,9 +131,10 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std:
     return result;
 }
 
-privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(const std::vector<DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, std::string containerControlNumber) {
+privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, std::string containerControlNumber) {
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
-    for (auto missingKey : missingKeys) {
+    for (auto t : missingKeys) {
+        auto missingKey = t.second;
         if(missingKey.statusCode != 0) continue;
         for (auto user : users) {
             server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
@@ -108,92 +147,94 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUs
     return result;
 }
 
-std::vector<DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::List<server::KeyEntry> keys, const EncKeyV2IntegrityValidationData& integrityValidationData) {
-    std::vector<DecryptedEncKeyV2> result;
+std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::Map<server::KeyEntry> keys, const EncKeyLocation& location) {
+    std::unordered_map<std::string, DecryptedEncKeyV2> result;
     for(auto key : keys) {
         DecryptedEncKeyV2 decryptedEncKey;
         decryptedEncKey.statusCode = 0;
-        if(key.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-            auto versioned = utils::TypedObjectFactory::createObjectFromVar<server::VersionedData>(key.data());
+        if(key.second.data().type() == typeid(Poco::JSON::Object::Ptr)) {
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(key.second.data());
             if(versioned.versionEmpty()) {
                 throw UnknownEncryptionKeyVersionException();
             } else if(versioned.version() == 2) { 
                 DecryptedEncKeyV2 decryptedEncKey = _encKeyEncryptorV2.decrypt(
-                    utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKeyEntryDataV2>(key.data()),
+                    utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKeyEntryDataV2>(key.second.data()),
                     _key
                 );
-                result.push_back(decryptedEncKey);
+                result.insert(std::make_pair(key.first,decryptedEncKey));
             }
-        } else if(key.data().isString()) {
-            decryptedEncKey.id = key.keyId();
-            decryptedEncKey.key = _encKeyEncryptorV1.decrypt(key.data(), _key);
+        } else if(key.second.data().isString()) {
+            decryptedEncKey.id = key.second.keyId();
+            decryptedEncKey.key = _encKeyEncryptorV1.decrypt(key.second.data(), _key);
             decryptedEncKey.dataStructureVersion = 1;
             decryptedEncKey.containerControlNumber = "";
-            result.push_back(decryptedEncKey);
+            result.insert(std::make_pair(key.first, decryptedEncKey));
         } else {
             decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
-            result.push_back(decryptedEncKey);
+            result.insert(std::make_pair(key.first, decryptedEncKey));
         }
-        
     }
-    validateData(result, integrityValidationData);
+    verifyData(result, location);
+    if(result.size() > 1) {
+        verifyForDuplication(result);
+    }
     return result;
 }
 
-void KeyProvider::validateData(std::vector<DecryptedEncKeyV2>& decryptedKeys, const EncKeyV2IntegrityValidationData& integrityValidationData) {
+void KeyProvider::verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location) {
     std::optional<std::string> containerControlNumber = std::nullopt;
     //create data validation request
-    for(size_t i = 0; i<decryptedKeys.size();i++) {
-        if(decryptedKeys[i].statusCode == 0 && decryptedKeys[i].dataStructureVersion == 2)  {
+    for(auto it = decryptedKeys.begin(); it != decryptedKeys.end(); ++it) {
+        if(it->second.statusCode == 0 && it->second.dataStructureVersion == 2)  {
             if(!containerControlNumber.has_value()) {
-                containerControlNumber = decryptedKeys[i].containerControlNumber;
+                containerControlNumber = it->second.containerControlNumber;
             }
-            if (decryptedKeys[i].dio.contextId != integrityValidationData.contextId ||
-                decryptedKeys[i].dio.containerId != integrityValidationData.containerId ||
-                decryptedKeys[i].containerControlNumber != containerControlNumber.value()
+            if (it->second.dio.contextId != location.contextId ||
+                it->second.dio.containerId != location.containerId ||
+                it->second.containerControlNumber != containerControlNumber.value()
             ) {
-                decryptedKeys[i].statusCode = EncryptionKeyContainerValidationException().getCode();
+                it->second.statusCode = EncryptionKeyContainerValidationException().getCode();
             }
         }
     }
-    if(integrityValidationData.enableVerificationRequest) validateUserData(decryptedKeys);
 }
 
-void KeyProvider::validateUserData(std::vector<DecryptedEncKeyV2>& decryptedKeys) {
-    std::vector<size_t> tmp;
+void KeyProvider::verifyForDuplication(std::unordered_map<std::string, DecryptedEncKeyV2>& keys) {
+    std::map<std::pair<std::string, int64_t>, std::string> duplicateMap;
+    for(auto it = keys.begin(); it != keys.end(); ++it) {
+        if(it->second.statusCode != 0 || it->second.dio.creatorPubKey == "") continue;
+        auto keyNonce = it->second.dio.randomId;
+        auto keyTimestamp = it->second.dio.timestamp;
+        std::pair<std::pair<std::string, int64_t>, std::string> val = std::make_pair(std::make_pair(keyNonce,keyTimestamp), it->first);
+        auto ret = duplicateMap.insert(val);
+        if(ret.second==false) {
+            auto e = DataIntegrityObjectDuplicatedException();
+            it->second.statusCode = e.getCode();
+            keys[ret.first->second].statusCode = e.getCode();
+        }
+    }
+}
+
+void KeyProvider::verifyUserData(std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys) {
+    std::vector<std::pair<EncKeyLocation,std::string>> tmp;
     std::vector<VerificationRequest> verificationRequest;
-    for(size_t i = 0; i<decryptedKeys.size();i++) {
-        if(decryptedKeys[i].statusCode == 0 && decryptedKeys[i].dataStructureVersion == 2)  {
-            tmp.push_back(i);
-            verificationRequest.push_back(VerificationRequest{
-                .contextId = decryptedKeys[i].dio.contextId,
-                .senderId = decryptedKeys[i].dio.creatorUserId,
-                .senderPubKey = decryptedKeys[i].dio.creatorPubKey,
-                .date = decryptedKeys[i].dio.timestamp
-            });
+    for(auto loc = decryptedKeys.begin(); loc != decryptedKeys.end(); ++loc) {
+        for(auto it = loc->second.begin(); it != loc->second.end(); ++it) {
+            if(it->second.statusCode == 0 && it->second.dataStructureVersion == 2)  {
+                tmp.push_back(std::make_pair(loc->first, it->first));
+                verificationRequest.push_back(VerificationRequest{
+                    .contextId = it->second.dio.contextId,
+                    .senderId = it->second.dio.creatorUserId,
+                    .senderPubKey = it->second.dio.creatorPubKey,
+                    .date = it->second.dio.timestamp
+                });
+            }
         }
     }
     auto verificationResult = _getUserVerifier()->verify(verificationRequest);
     for(size_t i = 0; i < verificationResult.size(); i++) {
         if(verificationResult[i] == false) {
-            decryptedKeys[tmp[i]].statusCode = UserVerificationFailureException().getCode();
+            decryptedKeys[tmp[i].first][tmp[i].second].statusCode = UserVerificationFailureException().getCode();
         }
     }  
-}
-
-
-void KeyProvider::validateKeyForDuplication(std::vector<DecryptedEncKeyV2>& keys) {
-    std::map<std::pair<std::string, int64_t>, size_t> duplicateMap;
-    for(size_t i = 0; i < keys.size(); i++ ) {
-        if(keys[i].statusCode != 0 || keys[i].dio.creatorPubKey == "") continue;
-        auto keyNonce = keys[i].dio.randomId;
-        auto keyTimestamp = keys[i].dio.timestamp;
-        std::pair<std::pair<std::string, int64_t>, size_t> val = std::make_pair(std::make_pair(keyNonce,keyTimestamp), i);
-        auto ret = duplicateMap.insert(val);
-        if(ret.second==false) {
-            auto e = DataIntegrityObjectDuplicatedException();
-            keys[i].statusCode = e.getCode();
-            keys[ret.first->second].statusCode = e.getCode();
-        }
-    }
 }
