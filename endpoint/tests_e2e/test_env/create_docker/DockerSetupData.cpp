@@ -18,6 +18,8 @@
 #include <privmx/endpoint/store/StoreVarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
 #include <privmx/endpoint/inbox/InboxVarSerializer.hpp>
+#include <privmx/endpoint/kvdb/KvdbApi.hpp>
+#include <privmx/endpoint/kvdb/KvdbVarSerializer.hpp>
 
 using namespace std;
 using namespace privmx;
@@ -73,6 +75,7 @@ int main(int argc, char** argv) {
         endpoint::thread::ThreadApi threadApi = endpoint::thread::ThreadApi::create(connection);
         endpoint::store::StoreApi storeApi = endpoint::store::StoreApi::create(connection);
         endpoint::inbox::InboxApi inboxApi = endpoint::inbox::InboxApi::create(connection, threadApi, storeApi);
+        endpoint::kvdb::KvdbApi kvdbApi = endpoint::kvdb::KvdbApi::create(connection);
         const std::vector<endpoint::core::UserWithPubKey> users_1 = {
             endpoint::core::UserWithPubKey{.userId=user_1_Id, .pubKey=user_1_PubKey}
         };
@@ -174,6 +177,36 @@ int main(int argc, char** argv) {
             inbox_3_privateMeta,
             std::nullopt
         );
+        //kvdb_1
+        auto kvdb_1_publicMeta = endpoint::core::Buffer::from("test_kvdb_1_publicMeta");
+        auto kvdb_1_privateMeta = endpoint::core::Buffer::from("test_kvdb_1_privateMeta");
+        auto kvdb_1_id = kvdbApi.createKvdb(
+            context_1_Id,
+            users_1,
+            users_1,
+            kvdb_1_publicMeta,
+            kvdb_1_privateMeta
+        );
+        //kvdb_2
+        auto kvdb_2_publicMeta = endpoint::core::Buffer::from("test_kvdb_2_publicMeta");
+        auto kvdb_2_privateMeta = endpoint::core::Buffer::from("test_kvdb_2_privateMeta");
+        auto kvdb_2_id = kvdbApi.createKvdb(
+            context_1_Id,
+            users_1_2,
+            users_1_2,
+            kvdb_2_publicMeta,
+            kvdb_2_privateMeta
+        );
+        //kvdb_3
+        auto kvdb_3_publicMeta = endpoint::core::Buffer::from("test_kvdb_3_publicMeta");
+        auto kvdb_3_privateMeta = endpoint::core::Buffer::from("test_kvdb_3_privateMeta");
+        auto kvdb_3_id = kvdbApi.createKvdb(
+            context_1_Id,
+            users_1_2,
+            users_1,
+            kvdb_3_publicMeta,
+            kvdb_3_privateMeta
+        );
         //message_1
         auto message_1_publicMeta = endpoint::core::Buffer::from("test_message_1_publicMeta");
         auto message_1_privateMeta = endpoint::core::Buffer::from("test_message_1_privateMeta");
@@ -226,6 +259,33 @@ int main(int argc, char** argv) {
         std::string entry_2_data = "message_from_inboxSendCommit_2";
         auto inbox_2_handle = inboxApi.prepareEntry(inbox_1_id, endpoint::core::Buffer::from(entry_2_data), {}, std::nullopt);
         inboxApi.sendEntry(inbox_2_handle);
+        //item_1
+        auto item_1_publicMeta = endpoint::core::Buffer::from("test_item_1_publicMeta");
+        auto item_1_privateMeta = endpoint::core::Buffer::from("test_item_1_privateMeta");
+        auto item_1_data = endpoint::core::Buffer::from("item_value_1");
+        auto item_1_key = "item_key_1";
+        kvdbApi.setItem(
+            kvdb_1_id,
+            item_1_key,
+            item_1_publicMeta,
+            item_1_privateMeta,
+            item_1_data,
+            0
+        );
+        //item_2
+        auto item_2_publicMeta = endpoint::core::Buffer::from("test_item_2_publicMeta");
+        auto item_2_privateMeta = endpoint::core::Buffer::from("test_item_2_privateMeta");
+        auto item_2_data = endpoint::core::Buffer::from("item_value_2");
+        auto item_2_key = "item_key_2";
+        kvdbApi.setItem(
+            kvdb_2_id,
+            item_2_key,
+            item_2_publicMeta,
+            item_2_privateMeta,
+            item_2_data,
+            0
+        );
+
 
 
         auto thread_1_server_data = threadApi.getThread(thread_1_id);
