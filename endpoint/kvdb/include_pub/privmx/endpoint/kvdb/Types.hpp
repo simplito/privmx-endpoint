@@ -147,6 +147,11 @@ struct Item {
     std::string authorPubKey;
 
     /**
+     * version number (changes on every on existing item)
+     */
+    int64_t version;
+
+    /**
      * status code of retrieval and decryption of the Kvdb
      */
     int64_t statusCode;

@@ -178,7 +178,7 @@ void KvdbApi::deleteItem(const std::string& kvdbId, const std::string& key) {
     }
 }
 
-void KvdbApi::deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys) {
+std::map<std::string, bool> KvdbApi::deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {

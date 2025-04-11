@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
@@ -40,7 +41,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers, 
         const core::Buffer& publicMeta, 
         const core::Buffer& privateMeta, 
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
     void updateKvdb(const std::string& kvdbId, 
         const std::vector<core::UserWithPubKey>& users,
@@ -50,7 +51,7 @@ public:
         const int64_t version, 
         const bool force, 
         const bool forceGenerateNewKey, 
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
     void deleteKvdb(const std::string& kvdbId);
     Kvdb getKvdb(const std::string& kvdbId);
@@ -61,7 +62,7 @@ public:
     core::PagingList<Item> listItem(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery);
     void setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
     void deleteItem(const std::string& kvdbId, const std::string& key);
-    std::vector<bool> deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys);
+    std::map<std::string, bool> deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys);
 
     void subscribeForKvdbEvents();
     void unsubscribeFromKvdbEvents();

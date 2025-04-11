@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/TimestampValidator.hpp>
 
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
 #include "privmx/endpoint/kvdb/ServerTypes.hpp"
@@ -89,19 +90,20 @@ std::string KvdbApiImpl::createKvdbEx(
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, _createKvdbEx)
     auto kvdbKey = _keyProvider->generateKey();
-    auto kvdbDIO = _connection.getImpl()->createDIO(
+    auto kvdbId = core::EndpointUtils::generateId();
+    auto kvdbDIO = _connection.getImpl()->createDIOForNewContainer(
         contextId,
-        utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8))
+        kvdbId
     );
     auto kvdbCCN = _keyProvider->generateContainerControlNumber();
     KvdbDataToEncryptV5 kvdbDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(kvdbCCN)),
+        .internalMeta = core::Buffer::from(kvdbCCN),
         .dio = kvdbDIO
     };
     auto create_kvdb_model = utils::TypedObjectFactory::createNewObject<server::KvdbCreateModel>();
-    create_kvdb_model.kvdbId(kvdbDIO.containerId);
+    create_kvdb_model.kvdbId(kvdbId);
     create_kvdb_model.contextId(contextId);
     create_kvdb_model.keyId(kvdbKey.id);
     create_kvdb_model.data(_kvdbDataEncryptorV5.encrypt(kvdbDataToEncrypt, _userPrivKey, kvdbKey.key).asVar());
@@ -166,23 +168,26 @@ void KvdbApiImpl::updateKvdb(
     bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
 
     // read all key to check if all key belongs to this kvdb
-    auto kvdbKeys {_keyProvider->getAllKeysAndVerify(currentKvdb.keys(), {.contextId=currentKvdb.contextId(), .containerId=kvdbId})};
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=currentKvdb.contextId(), .containerId=kvdbId};
+    keyProviderRequest.addAll(currentKvdb.keys(), location);
+    auto kvdbKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     auto currentKvdbEntry = currentKvdb.data().get(currentKvdb.data().size()-1);
     core::DecryptedEncKey currentKvdbKey;
     for (auto key : kvdbKeys) {
-        if (currentKvdbEntry.keyId() == key.id) {
-            currentKvdbKey = key;
+        if (currentKvdbEntry.keyId() == key.first) {
+            currentKvdbKey = key.second;
             break;
         }
     }
     auto kvdbCCN = decryptKvdbInternalMeta(currentKvdbEntry, currentKvdbKey);
     for(auto key : kvdbKeys) {
-        if(key.statusCode != 0 || (key.dataStructureVersion == 2 && key.containerControlNumber != kvdbCCN)) {
+        if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.containerControlNumber != kvdbCCN)) {
             throw KvdbEncryptionKeyValidationException();
         }
     }
     // setting kvdb Key adding new users
-    core::EncKey kvdbKey;
+    core::EncKey kvdbKey = currentKvdbKey;
     core::DataIntegrityObject updateKvdbDio = _connection.getImpl()->createDIO(currentKvdb.contextId(), kvdbId);
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
@@ -193,11 +198,6 @@ void KvdbApiImpl::updateKvdb(
             updateKvdbDio,
             kvdbCCN
         );
-    } else {
-        // find key with corresponding keyId 
-        for(size_t i = 0; i < kvdbKeys.size(); i++) {
-            kvdbKey = kvdbKeys[i];
-        }
     }
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
@@ -230,15 +230,11 @@ void KvdbApiImpl::updateKvdb(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    auto kvdbDIO = _connection.getImpl()->createDIO(
-        currentKvdb.contextId(),
-        kvdbId
-    );
     KvdbDataToEncryptV5 kvdbDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(std::to_string(kvdbCCN)),
-        .dio = kvdbDIO
+        .internalMeta = core::Buffer::from(kvdbCCN),
+        .dio = updateKvdbDio
     };
     model.data(_kvdbDataEncryptorV5.encrypt(kvdbDataToEncrypt, _userPrivKey, kvdbKey.key).asVar());
 
@@ -419,9 +415,10 @@ void KvdbApiImpl::setItem(const std::string& kvdbId, const std::string& key, con
     send_item_model.kvdbItemKey(key);
     send_item_model.version(version);
     send_item_model.keyId(msgKey.id);
-    auto itemDIO = _connection.getImpl()->createDIO(
+    privmx::endpoint::core::DataIntegrityObject itemDIO = _connection.getImpl()->createDIO(
         kvdb.contextId(),
-        kvdbId
+        kvdbId,
+        key
     );
     ItemDataToEncryptV5 itemData {
         .publicMeta = publicMeta,
@@ -444,8 +441,19 @@ void KvdbApiImpl::deleteItem(const std::string& kvdbId, const std::string& key) 
     _serverApi.kvdbItemDelete(model);
 }
 
-void KvdbApiImpl::deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys) {
-
+std::map<std::string, bool> KvdbApiImpl::deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys) {
+    auto model = utils::TypedObjectFactory::createNewObject<server::KvdbItemDeleteManyModel>();
+    model.kvdbId(kvdbId);
+    model.kvdbItemKeys(utils::TypedObjectFactory::createNewList<std::string>());
+    for(auto key : keys) {
+    model.kvdbItemKeys().add(key);
+    }
+    auto deleteStatuses = _serverApi.kvdbItemDeleteMany(model).results();
+    std::map<std::string, bool> result;
+    for(auto deleteStatus : deleteStatuses) {
+        result.insert(std::make_pair(deleteStatus.kvdbItemKey(), deleteStatus.status() == "OK"));
+    }
+    return result;
 }
 
 void KvdbApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
@@ -636,7 +644,7 @@ Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, co
 
 std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     if (kvdbEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(kvdbEntry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(kvdbEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 5: {
@@ -653,28 +661,31 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDa
 
 std::vector<Kvdb> KvdbApiImpl::decryptAndConvertKvdbsDataToKvdbs(privmx::utils::List<server::KvdbInfo> kvdbs) {
     std::vector<Kvdb> result;
-    std::vector<core::DecryptedEncKeyV2> keys;
-    //create verification request for keys
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    //create request to KeyProvider for keys
     for (size_t i = 0; i < kvdbs.size(); i++) {
         auto kvdb = kvdbs.get(i);
+        core::EncKeyLocation location{.contextId=kvdb.contextId(), .containerId=kvdb.id()};
         auto kvdb_data_entry = kvdb.data().get(kvdb.data().size()-1);
-        auto key = _keyProvider->getKeyAndVerify(kvdb.keys(), kvdb_data_entry.keyId(), {.contextId=kvdb.contextId(), .containerId=kvdb.id(), .enableVerificationRequest=false});
-        keys.push_back(key);
+        keyProviderRequest.addOne(kvdb.keys(), kvdb_data_entry.keyId(), location);
     }
-    //send verification request and update key statuscode
-    _keyProvider->validateUserData(keys);
-    //
+    //send request to KeyProvider
+    auto kvdbKeys {_keyProvider->getKeysAndVerify(keyProviderRequest)};
     std::vector<core::DataIntegrityObject> kvdbsDIO;
     std::map<std::string, bool> duplication_check;
     for (size_t i = 0; i < kvdbs.size(); i++) {
         auto kvdb = kvdbs.get(i);
         try {
-            auto tmp = decryptAndConvertKvdbDataToKvdb(kvdb, kvdb.data().get(kvdb.data().size()-1), keys[i]);
+            auto tmp = decryptAndConvertKvdbDataToKvdb(
+                kvdb, 
+                kvdb.data().get(kvdb.data().size()-1), 
+                kvdbKeys.at({.contextId=kvdb.contextId(), .containerId=kvdb.id()}).at(kvdb.data().get(kvdb.data().size()-1).keyId())
+            );
             result.push_back(std::get<0>(tmp));
             auto kvdbDIO = std::get<1>(tmp);
             kvdbsDIO.push_back(kvdbDIO);
             //find duplication
-            std::string fullRandomId =  std::to_string(kvdbDIO.randomId) + "-" + std::to_string(kvdbDIO.timestamp);
+            std::string fullRandomId = kvdbDIO.randomId + "-" + std::to_string(kvdbDIO.timestamp);
             if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                 duplication_check.insert(std::make_pair(fullRandomId, true));
             } else {
@@ -713,10 +724,13 @@ std::vector<Kvdb> KvdbApiImpl::decryptAndConvertKvdbsDataToKvdbs(privmx::utils::
 
 Kvdb KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb) {
     auto kvdb_data_entry = kvdb.data().get(kvdb.data().size()-1);
-    auto key = _keyProvider->getKeyAndVerify(kvdb.keys(), kvdb_data_entry.keyId(), {.contextId=kvdb.contextId(), .containerId=kvdb.id()});
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=kvdb.contextId(), .containerId=kvdb.id()};
+    keyProviderRequest.addOne(kvdb.keys(), kvdb_data_entry.keyId(), location);
+    auto encKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(kvdb_data_entry.keyId());
     Kvdb result;
     core::DataIntegrityObject kvdbDIO;
-    std::tie(result, kvdbDIO) = decryptAndConvertKvdbDataToKvdb(kvdb, kvdb_data_entry, key);
+    std::tie(result, kvdbDIO) = decryptAndConvertKvdbDataToKvdb(kvdb, kvdb_data_entry, encKey);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
     verifierInput.push_back({
@@ -758,7 +772,7 @@ Item KvdbApiImpl::convertDecryptedItemDataV5ToItem(server::KvdbItemInfo item, De
     Item ret {
         .info = {
             .kvdbId = item.kvdbId(),
-            .key = item.keyId(),
+            .key = item.kvdbItemKey(),
             .createDate = item.createDate(),
             .author = item.author(),
         },
@@ -766,6 +780,7 @@ Item KvdbApiImpl::convertDecryptedItemDataV5ToItem(server::KvdbItemInfo item, De
         .privateMeta = itemData.privateMeta,
         .data = itemData.data,
         .authorPubKey = itemData.authorPubKey,
+        .version = item.version(),
         .statusCode = itemData.statusCode
     };
     return ret;
@@ -775,7 +790,7 @@ std::tuple<Item, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertItemDa
     // If data is not string, then data is object and has version field
     // Solution with data as object is newer than data as base64 string
     if (item.kvdbItemValue().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(item.kvdbItemValue());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(item.kvdbItemValue());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
                 case 5: {
@@ -794,7 +809,10 @@ std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInf
     for (auto item : items) {
         keyIds.insert(item.keyId());
     }
-    auto keyMap = _keyProvider->getKeysAndVerify(kvdb.keys(), keyIds, {.contextId=kvdb.contextId(), .containerId=kvdb.id()});
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=kvdb.contextId(), .containerId=kvdb.id()};
+    keyProviderRequest.addMany(kvdb.keys(), keyIds, location);
+    auto keyMap = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
     std::vector<Item> result;
     std::map<std::string, bool> duplication_check;
     for (auto item : items) {
@@ -805,7 +823,7 @@ std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInf
                 result.push_back(std::get<0>(tmp));
                 auto itemDIO = std::get<1>(tmp);
                 //find duplication
-                std::string fullRandomId =  std::to_string(itemDIO.randomId) + "-" + std::to_string(itemDIO.timestamp);
+                std::string fullRandomId = itemDIO.randomId + "-" + std::to_string(itemDIO.timestamp);
                 if(duplication_check.find(fullRandomId) == duplication_check.end()) {
                     duplication_check.insert(std::make_pair(fullRandomId, true));
                 } else {
@@ -846,7 +864,10 @@ std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInf
 
 Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbInfo kvdb, server::KvdbItemInfo item) {
     auto keyId = item.keyId();
-    auto encKey = _keyProvider->getKeyAndVerify(kvdb.keys(), keyId, {.contextId=kvdb.contextId(), .containerId=kvdb.id()});
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=kvdb.contextId(), .containerId=kvdb.id()};
+    keyProviderRequest.addOne(kvdb.keys(), keyId, location);
+    auto encKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(keyId);
     Item result;
     core::DataIntegrityObject itemDIO;
     std::tie(result, itemDIO) = decryptAndConvertItemDataToItem(item, encKey);
@@ -881,15 +902,15 @@ Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbItemInfo item) {
     }
 }
 
-int64_t KvdbApiImpl::decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
+std::string KvdbApiImpl::decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     if (kvdbEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(kvdbEntry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(kvdbEntry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
                 return 0;
             case 5:
-                return std::stoll(decryptKvdbV5(kvdbEntry, encKey).internalMeta.stdString());
+                return decryptKvdbV5(kvdbEntry, encKey).internalMeta.stdString();
             }
         } 
     } else if (kvdbEntry.data().isString()) {
@@ -901,10 +922,10 @@ int64_t KvdbApiImpl::decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, co
 
 core::DecryptedEncKey KvdbApiImpl::getKvdbCurrentEncKey(server::KvdbInfo kvdb) {
     auto kvdb_data_entry = kvdb.data().get(kvdb.data().size()-1);
-    auto key = _keyProvider->getKeyAndVerify(kvdb.keys(), kvdb_data_entry.keyId(), 
-        {.contextId=kvdb.contextId(), .containerId=kvdb.id()}
-    );
-    return key;
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=kvdb.contextId(), .containerId=kvdb.id()};
+    keyProviderRequest.addOne(kvdb.keys(), kvdb_data_entry.keyId(), location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(kvdb_data_entry.keyId());
 }
 
 server::KvdbInfo KvdbApiImpl::getRawKvdbFromCacheOrBridge(const std::string& kvdbId) {
@@ -926,7 +947,7 @@ void KvdbApiImpl::assertKvdbExist(const std::string& kvdbId) {
 uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
     auto kvdb_data_entry = kvdb.data().get(kvdb.data().size()-1);
     if (kvdb_data_entry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(kvdb_data_entry.data());
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(kvdb_data_entry.data());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
@@ -936,11 +957,11 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
                     auto kvdb_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbDataV5>(kvdb_data_entry.data());
                     auto dio = _kvdbDataEncryptorV5.getDIOAndAssertIntegrity(kvdb_data);
                     if(
-                        dio.containerId != kvdb.id() ||
                         dio.contextId != kvdb.contextId() ||
-                        dio.creatorUserId != kvdb.lastModifier()
-                        // check timestamp
-                    ) {
+                        dio.containerId != kvdb.id() ||
+                        dio.creatorUserId != kvdb.lastModifier() ||
+                        !core::TimestampValidator::validate(dio.timestamp, kvdb.lastModificationDate())
+                    ) { 
                         return KvdbDataIntegrityException().getCode();
                     }
                     return 0;
@@ -956,7 +977,7 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
 uint32_t KvdbApiImpl::validateItemDataIntegrity(server::KvdbItemInfo item) {
     auto item_data = item.kvdbItemValue();
     if (item_data.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::server::VersionedData>(item_data);
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(item_data);
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
             case 4:
@@ -965,11 +986,16 @@ uint32_t KvdbApiImpl::validateItemDataIntegrity(server::KvdbItemInfo item) {
                 {
                     auto encData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedItemDataV5>(item_data);
                     auto dio = _itemDataEncryptorV5.getDIOAndAssertIntegrity(encData);
+                    std::cout << dio.containerId << " " << item.kvdbId() << std::endl;
+                    std::cout << dio.contextId << " " << item.contextId() << std::endl;
+                    std::cout << dio.itemId.value() << " " << item.kvdbItemKey() << std::endl;
+                    std::cout << dio.creatorUserId << " " << item.lastModifier() << std::endl;
                     if(
                         dio.containerId != item.kvdbId() ||
                         dio.contextId != item.contextId() ||
-                        dio.creatorUserId != item.lastModifier()
-                        // check timestamp
+                        !dio.itemId.has_value() || dio.itemId.value() != item.kvdbItemKey() ||
+                        dio.creatorUserId != item.lastModifier() ||
+                        !core::TimestampValidator::validate(dio.timestamp, item.lastModificationDate())
                     ) {
                         return ItemDataIntegrityException().getCode();
                     }

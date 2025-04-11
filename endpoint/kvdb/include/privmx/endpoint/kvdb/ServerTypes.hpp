@@ -47,7 +47,7 @@ ENDPOINT_SERVER_TYPE(KvdbInfo)
     INT64_FIELD(lastItemDate)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbDataV5, core::server::VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbDataV5, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -135,7 +135,7 @@ ENDPOINT_SERVER_TYPE(KvdbItemInfo)
     STRING_FIELD(lastModifier)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedItemDataV5, core::server::VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedItemDataV5, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -203,7 +203,7 @@ ENDPOINT_CLIENT_TYPE(KvdbListItemsResult)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbItemDeleteManyModel)
-    OBJECT_FIELD(kvdb, KvdbInfo)
+    STRING_FIELD(kvdbId)
     LIST_FIELD(kvdbItemKeys, std::string)
 TYPE_END
 
