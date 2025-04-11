@@ -763,7 +763,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                             .contextId = thread.contextId(),
                             .containerId = thread.id(),
                             .timestamp = thread.lastModificationDate(),
-                            .randomId = 0,
+                            .randomId = std::string(),
                             .itemId = std::nullopt
                         }
                     );
@@ -783,7 +783,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                 .contextId = thread.contextId(),
                 .containerId = thread.id(),
                 .timestamp = thread.lastModificationDate(),
-                .randomId = 0,
+                .randomId = std::string(),
                 .itemId = std::nullopt
             }
         );
@@ -1047,7 +1047,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                         .contextId = message.contextId(),
                         .containerId = message.threadId(),
                         .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
-                        .randomId = 0,
+                        .randomId = std::string(),
                         .itemId = message.id()
                     }
                 );
@@ -1071,7 +1071,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .contextId = message.contextId(),
                     .containerId = message.threadId(),
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
-                    .randomId = 0,
+                    .randomId = std::string(),
                     .itemId = message.id()
                 }
             );
@@ -1084,7 +1084,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                 .contextId = message.contextId(),
                 .containerId = message.threadId(),
                 .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
-                .randomId = 0,
+                .randomId = std::string(),
                 .itemId = message.id()
             }
         );

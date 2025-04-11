@@ -49,10 +49,6 @@ public:
     EncKey generateKey();
     std::string generateContainerControlNumber();
     std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(const KeyDecryptionAndVerificationRequest& request);
-
-    // DecryptedEncKeyV2 getKeyAndVerify(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyV2IntegrityValidationData& integrityValidationData);
-    // std::map<std::string,DecryptedEncKeyV2> getKeysAndVerify(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyV2IntegrityValidationData& integrityValidationData);
-    // std::vector<DecryptedEncKeyV2> getAllKeysAndVerify(const utils::List<server::KeyEntry>& serverKeys, const EncKeyV2IntegrityValidationData& integrityValidationData);
     privmx::utils::List<server::KeyEntrySet> prepareKeysList(const std::vector<UserWithPubKey>& users, const EncKey& key, const DataIntegrityObject& dio, std::string containerControlNumber);
     privmx::utils::List<server::KeyEntrySet> prepareMissingKeysForNewUsers(const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, std::string containerControlNumber);
     

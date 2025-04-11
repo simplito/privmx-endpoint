@@ -752,7 +752,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
                             .contextId = inbox.contextId(),
                             .containerId = inbox.id(),
                             .timestamp = inbox.lastModificationDate(),
-                            .randomId = 0,
+                            .randomId = std::string(),
                             .itemId = std::nullopt
                         }
                         

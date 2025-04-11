@@ -866,7 +866,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                             .contextId = store.contextId(),
                             .containerId = store.id(),
                             .timestamp = store.lastModificationDate(),
-                            .randomId = 0,
+                            .randomId = std::string(),
                             .itemId = std::nullopt
                         }
                     );
@@ -886,7 +886,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                 .contextId = store.contextId(),
                 .containerId = store.id(),
                 .timestamp = store.lastModificationDate(),
-                .randomId = 0,
+                .randomId = std::string(),
                 .itemId = std::nullopt
             }
         );
@@ -1162,7 +1162,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                             .contextId = file.contextId(),
                             .containerId = file.id(),
                             .timestamp = file.lastModificationDate(),
-                            .randomId = 0,
+                            .randomId = std::string(),
                             .itemId = file.id()
                         }
                     );
@@ -1183,7 +1183,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                 .contextId = file.contextId(),
                 .containerId = file.id(),
                 .timestamp = file.lastModificationDate(),
-                .randomId = 0,
+                .randomId = std::string(),
                 .itemId = file.id()
             }
         );
