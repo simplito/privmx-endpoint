@@ -801,7 +801,7 @@ std::tuple<Item, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertItemDa
         } 
     }
     auto e = UnknowItemFormatException();
-    return std::make_tuple(Item{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+    return std::make_tuple(Item{{},{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
 }
 
 std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInfo kvdb, utils::List<server::KvdbItemInfo> items) {
@@ -830,10 +830,10 @@ std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInf
                     result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(Item{{},{},{},{},{},.statusCode = statusCode});
+                result.push_back(Item{{},{},{},{},{},{},.statusCode = statusCode});
             }
         } catch (const core::Exception& e) {
-            result.push_back(Item{{},{},{},{},{},.statusCode = e.getCode()});
+            result.push_back(Item{{},{},{},{},{},{},.statusCode = e.getCode()});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -894,11 +894,11 @@ Item KvdbApiImpl::decryptAndConvertItemDataToItem(server::KvdbItemInfo item) {
         auto kvdb = getRawKvdbFromCacheOrBridge(item.kvdbId());
         return decryptAndConvertItemDataToItem(kvdb, item);
     } catch (const core::Exception& e) {
-        return Item{{},{},{},{},{},.statusCode = e.getCode()};
+        return Item{{},{},{},{},{},{},.statusCode = e.getCode()};
     } catch (const privmx::utils::PrivmxException& e) {
-        return Item{{},{},{},{},{},.statusCode = e.getCode()};
+        return Item{{},{},{},{},{},{},.statusCode = e.getCode()};
     } catch (...) {
-        return Item{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
+        return Item{{},{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
     }
 }
 
