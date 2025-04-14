@@ -25,9 +25,12 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.creatorUserId(dio.creatorUserId);
     dioJSON.creatorPublicKey(dio.creatorPubKey);
     dioJSON.contextId(dio.contextId);
-    dioJSON.containerId(dio.containerId);
-    if (dio.itemId.has_value()) {
-        dioJSON.itemId(dio.itemId.value());
+    dioJSON.resourceId(dio.resourceId);
+    if (dio.containerId.has_value()) {
+        dioJSON.itemId(dio.containerId.value());
+    }
+    if (dio.containerResourceId.has_value()) {
+        dioJSON.itemId(dio.containerResourceId.value());
     }
     dioJSON.timestamp(dio.timestamp);
     dioJSON.randomId(dio.randomId);
@@ -53,9 +56,13 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     for(auto  a: dioJSON.fieldChecksums()) {
         fieldChecksums.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));
     }
-    std::optional<std::string> itemId = std::nullopt;
-    if(!dioJSON.itemIdEmpty()) {
-        itemId =  dioJSON.itemId();
+    std::optional<std::string> containerId = std::nullopt;
+    if(!dioJSON.containerIdEmpty()) {
+        containerId =  dioJSON.containerId();
+    }
+    std::optional<std::string> containerResourceId = std::nullopt;
+    if(!dioJSON.containerResourceIdEmpty()) {
+        containerResourceId = dioJSON.containerResourceId();
     }
 
     return ExpandedDataIntegrityObject{
@@ -63,10 +70,11 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .creatorUserId=dioJSON.creatorUserId(),
             .creatorPubKey=dioJSON.creatorPublicKey(),
             .contextId=dioJSON.contextId(),
-            .containerId=dioJSON.containerId(),
+            .resourceId=dioJSON.resourceId(),
             .timestamp=dioJSON.timestamp(),
             .randomId=dioJSON.randomId(),
-            .itemId=itemId
+            .containerId=containerId,
+            .containerResourceId=containerResourceId
         },
         .structureVersion=dioJSON.structureVersion(),
         .fieldChecksums=fieldChecksums
@@ -74,14 +82,14 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
 }
 
 void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {
-    if (dioJSON.versionEmpty() ||
-        dioJSON.version() != 1 ||
-        dioJSON.creatorUserIdEmpty() ||
+    if (dioJSON.versionEmpty()          ||
+        dioJSON.version() != 1          ||
+        dioJSON.creatorUserIdEmpty()    ||
         dioJSON.creatorPublicKeyEmpty() ||
-        dioJSON.contextIdEmpty() ||
-        dioJSON.containerIdEmpty() ||
-        dioJSON.randomIdEmpty() ||
-        dioJSON.timestampEmpty() ||
+        dioJSON.contextIdEmpty()        ||
+        dioJSON.resourceIdEmpty()       ||
+        dioJSON.randomIdEmpty()         ||
+        dioJSON.timestampEmpty()        ||
         dioJSON.fieldChecksumsEmpty()
     ) {
         throw MalformedDataIntegrityObjectException();

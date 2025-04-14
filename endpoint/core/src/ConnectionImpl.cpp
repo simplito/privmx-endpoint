@@ -187,25 +187,19 @@ std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
     return _contextProvider->get(contextId).container.userId();
 }
 
-DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId) {
-    return createDIOExt(contextId, containerId, itemId);
+DataIntegrityObject ConnectionImpl::createDIO(
+    const std::string& contextId, 
+    const std::string& resourceId, 
+    const std::optional<std::string>& containerId, 
+    const std::optional<std::string>& containerResourceId
+) {
+    return createDIOExt(contextId, resourceId, containerId, containerResourceId);
 }
 
-DataIntegrityObject ConnectionImpl::createDIOForNewContainer(const std::string& contextId, const std::string& containerId) {
-    return createDIO(contextId,  contextId + ":" + containerId);
+DataIntegrityObject ConnectionImpl::createPublicDIO(const std::string& contextId, const std::string& resourceId, const std::optional<std::string>& containerId, const std::optional<std::string>& containerResourceId, const crypto::PublicKey& pubKey) {
+    return createDIOExt(contextId, resourceId, containerId, containerResourceId, "<anonymous>", pubKey);
 }
 
-DataIntegrityObject ConnectionImpl::createDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId) {
-    return createDIO(contextId,  containerId, containerId + ":" + itemId);
-}
-
-DataIntegrityObject ConnectionImpl::createPublicDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId, const crypto::PublicKey& pubKey) {
-    return createDIOExt(contextId, containerId, itemId, "<anonymous>", pubKey);
-}
-
-DataIntegrityObject ConnectionImpl::createPublicDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId, const crypto::PublicKey& pubKey) {
-    return createPublicDIO(contextId,  containerId, containerId + ":" + itemId, pubKey);
-}
 
 std::string ConnectionImpl::generateDIORandomId() {
     return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
@@ -213,8 +207,9 @@ std::string ConnectionImpl::generateDIORandomId() {
 
 DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::string& contextId, 
-    const std::string& containerId, 
-    const std::optional<std::string>& itemId, 
+    const std::string& resourceId, 
+    const std::optional<std::string>& containerId, 
+    const std::optional<std::string>& containerResourceId,
     const std::optional<std::string>& creatorUserId,
     const std::optional<crypto::PublicKey>& creatorPublicKey
 ) {
@@ -222,9 +217,10 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .creatorUserId = creatorUserId.has_value() ? creatorUserId.value() : getMyUserId(contextId),
         .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
         .contextId = contextId,
-        .containerId = containerId,
+        .resourceId = resourceId,
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
         .randomId = generateDIORandomId(),
-        .itemId = itemId
+        .containerId = containerId,
+        .containerResourceId = containerResourceId
     };
 }

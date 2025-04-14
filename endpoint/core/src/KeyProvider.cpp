@@ -190,7 +190,7 @@ void KeyProvider::verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>&
                 containerControlNumber = it->second.containerControlNumber;
             }
             if (it->second.dio.contextId != location.contextId ||
-                it->second.dio.containerId != location.containerId ||
+                it->second.dio.resourceId != location.resourceId ||
                 it->second.containerControlNumber != containerControlNumber.value()
             ) {
                 it->second.statusCode = EncryptionKeyContainerValidationException().getCode();

@@ -64,19 +64,28 @@ public:
         return _userVerifier;    
     }
     std::string getMyUserId(const std::string& contextId);
-    DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId = std::nullopt);
-    DataIntegrityObject createDIOForNewContainer(const std::string& contextId, const std::string& containerId);
-    DataIntegrityObject createDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId);
-    DataIntegrityObject createPublicDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId, const crypto::PublicKey& pubKey);
-    DataIntegrityObject createPublicDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId, const crypto::PublicKey& pubKey);
+    DataIntegrityObject createDIO(
+        const std::string& contextId, 
+        const std::string& resourceId, 
+        const std::optional<std::string>& containerId, 
+        const std::optional<std::string>& containerResourceId
+    );
+    DataIntegrityObject createPublicDIO(
+        const std::string& contextId, 
+        const std::string& resourceId, 
+        const std::optional<std::string>& containerId, 
+        const std::optional<std::string>& containerResourceId,
+        const crypto::PublicKey& pubKey
+    );
 
 
 private:
     std::string generateDIORandomId();
     DataIntegrityObject createDIOExt(
         const std::string& contextId, 
-        const std::string& containerId, 
-        const std::optional<std::string>& itemId = std::nullopt, 
+        const std::string& resourceId, 
+        const std::optional<std::string>& containerId, 
+        const std::optional<std::string>& containerResourceId,
         const std::optional<std::string>& creatorUserId = std::nullopt,
         const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
     );

@@ -30,10 +30,11 @@ struct DataIntegrityObject {
     std::string creatorUserId;
     std::string creatorPubKey;
     std::string contextId;
-    std::string containerId;
+    std::string resourceId;
     int64_t timestamp;
     std::string randomId;
-    std::optional<std::string> itemId;
+    std::optional<std::string> containerId;
+    std::optional<std::string> containerResourceId;
 };
 
 struct DecryptedVersionedData {
@@ -48,24 +49,27 @@ struct ExpandedDataIntegrityObject : public DataIntegrityObject {
     std::unordered_map<std::string, std::string> fieldChecksums;
 };
 
+struct EncKeyLocation {
+    std::string contextId;
+    std::string resourceId;
+    std::string userId;
+    bool operator==(const EncKeyLocation &other) const {
+        return (contextId == other.contextId && resourceId == other.resourceId && userId == other.userId);
+    }
+};
 
 struct EncKeyV2ToEncrypt : public EncKey {
     DataIntegrityObject dio;
-    std::string containerControlNumber;
+    EncKeyLocation location;
+    std::string secret;
 };
 
 struct DecryptedEncKeyV2 : public DecryptedEncKey {
     ExpandedDataIntegrityObject dio;
-    std::string containerControlNumber;
+    std::string secret;
 };
 
-struct EncKeyLocation {
-    std::string contextId;
-    std::string containerId;
-    bool operator==(const EncKeyLocation &other) const {
-        return (contextId == other.contextId && containerId == other.containerId);
-    }
-};
+
 
 }  // namespace core
 }  // namespace endpoint
@@ -76,8 +80,9 @@ struct std::hash<privmx::endpoint::core::EncKeyLocation> {
     std::size_t operator()(const privmx::endpoint::core::EncKeyLocation& encKeyLocation) const noexcept
     {
         std::size_t h1 = std::hash<std::string>{}(encKeyLocation.contextId);
-        std::size_t h2 = std::hash<std::string>{}(encKeyLocation.containerId);
-        return h1 ^ (h2 << 1);
+        std::size_t h2 = std::hash<std::string>{}(encKeyLocation.resourceId);
+        std::size_t h3 = std::hash<std::string>{}(encKeyLocation.userId);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
     }
 };
 
