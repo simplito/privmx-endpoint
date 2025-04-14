@@ -77,7 +77,8 @@ private:
         const std::string& contextId, 
         const std::string& containerId, 
         const std::optional<std::string>& itemId = std::nullopt, 
-        const std::optional<std::string>& creatorUserId = std::nullopt
+        const std::optional<std::string>& creatorUserId = std::nullopt,
+        const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
     );
     int64_t generateConnectionId();
 

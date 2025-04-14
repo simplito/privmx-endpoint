@@ -102,7 +102,7 @@ std::string KeyProvider::generateContainerControlNumber() {
 std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> KeyProvider::getKeysAndVerify(const KeyDecryptionAndVerificationRequest& request) {
     std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> result;
     for (auto locationKeyMap : request.requestData) {
-        auto locationResult = decryptKeysAndVerify(locationKeyMap.second, locationKeyMap.first);
+        auto locationResult = decryptAndVerifyKeys(locationKeyMap.second, locationKeyMap.first);
         result.insert(std::make_pair(locationKeyMap.first, locationResult));
     }
     verifyUserData(result);

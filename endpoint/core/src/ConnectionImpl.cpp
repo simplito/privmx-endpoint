@@ -192,7 +192,7 @@ DataIntegrityObject ConnectionImpl::createDIO(const std::string& contextId, cons
 }
 
 DataIntegrityObject ConnectionImpl::createDIOForNewContainer(const std::string& contextId, const std::string& containerId) {
-    return createDIO(contextId,  contextId + ":" + containerId, std::nullopt);
+    return createDIO(contextId,  contextId + ":" + containerId);
 }
 
 DataIntegrityObject ConnectionImpl::createDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId) {
@@ -200,7 +200,7 @@ DataIntegrityObject ConnectionImpl::createDIOForNewItem(const std::string& conte
 }
 
 DataIntegrityObject ConnectionImpl::createPublicDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId, const crypto::PublicKey& pubKey) {
-    return createDIOExt(contextId, containerId, itemId, "<anonymous>");
+    return createDIOExt(contextId, containerId, itemId, "<anonymous>", pubKey);
 }
 
 DataIntegrityObject ConnectionImpl::createPublicDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId, const crypto::PublicKey& pubKey) {
@@ -214,12 +214,13 @@ std::string ConnectionImpl::generateDIORandomId() {
 DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::string& contextId, 
     const std::string& containerId, 
-    const std::optional<std::string>& itemId = std::nullopt, 
-    const std::optional<std::string>& creatorUserId = std::nullopt
+    const std::optional<std::string>& itemId, 
+    const std::optional<std::string>& creatorUserId,
+    const std::optional<crypto::PublicKey>& creatorPublicKey
 ) {
     return core::DataIntegrityObject{
         .creatorUserId = creatorUserId.has_value() ? creatorUserId.value() : getMyUserId(contextId),
-        .creatorPubKey = _userPrivKey.getPublicKey().toBase58DER(),
+        .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
         .contextId = contextId,
         .containerId = containerId,
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
