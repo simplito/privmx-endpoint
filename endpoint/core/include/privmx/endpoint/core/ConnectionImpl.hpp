@@ -72,6 +72,13 @@ public:
 
 
 private:
+    std::string generateDIORandomId();
+    DataIntegrityObject createDIOExt(
+        const std::string& contextId, 
+        const std::string& containerId, 
+        const std::optional<std::string>& itemId = std::nullopt, 
+        const std::optional<std::string>& creatorUserId = std::nullopt
+    );
     int64_t generateConnectionId();
 
     const int64_t _connectionId;

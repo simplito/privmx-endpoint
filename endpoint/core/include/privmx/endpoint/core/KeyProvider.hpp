@@ -53,7 +53,7 @@ public:
     privmx::utils::List<server::KeyEntrySet> prepareMissingKeysForNewUsers(const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, std::string containerControlNumber);
     
 private:
-    std::unordered_map<std::string, DecryptedEncKeyV2> decryptKeysAndVerify(utils::Map<server::KeyEntry> keys, const EncKeyLocation& location);
+    std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyKeys(utils::Map<server::KeyEntry> keys, const EncKeyLocation& location);
     void verifyForDuplication(std::unordered_map<std::string, DecryptedEncKeyV2>& keys);
     void verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location);
     void verifyUserData(std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys);

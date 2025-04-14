@@ -124,7 +124,7 @@ private:
     InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::Inbox convertInboxV5(const inbox::server::Inbox& inboxRaw, const InboxDataResultV5& inboxData);
     std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Inbox> decryptAndConvertInboxesDataToInboxs(utils::List<inbox::server::Inbox> inboxes);
+    std::vector<Inbox> decryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes);
     inbox::Inbox decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);
     std::string decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::Inbox inbox);

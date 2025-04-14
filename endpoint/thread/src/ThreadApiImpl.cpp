@@ -289,10 +289,14 @@ Thread ThreadApiImpl::_getThreadEx(const std::string& threadId, const std::strin
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, data send)
     auto statusCode = validateThreadDataIntegrity(thread);
     if(statusCode != 0) {
-        if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValueAndStatus(thread, core::DataIntegrityStatus::ValidationFailed);
+        if(type == THREAD_TYPE_FILTER_FLAG) {
+            _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationFailed});
+        }
         return Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
     } else {
-        if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValueAndStatus(thread, core::DataIntegrityStatus::ValidationSucceed);
+        if(type == THREAD_TYPE_FILTER_FLAG) {
+            _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationSucceed});
+        }
     }
     auto result = decryptAndConvertThreadDataToThread(thread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, data decrypted)
@@ -325,9 +329,13 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
         auto statusCode = validateThreadDataIntegrity(thread);
         threads.push_back(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
         if(statusCode == 0) {
-            if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValueAndStatus(thread ,core::DataIntegrityStatus::ValidationSucceed);
+            if(type == THREAD_TYPE_FILTER_FLAG) {
+                _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationSucceed});
+            }
         } else {
-            if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValueAndStatus(thread ,core::DataIntegrityStatus::ValidationFailed);
+            if(type == THREAD_TYPE_FILTER_FLAG) {
+                _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationFailed});
+            }
             threadsList.threads().remove(i);
             i--;
         }

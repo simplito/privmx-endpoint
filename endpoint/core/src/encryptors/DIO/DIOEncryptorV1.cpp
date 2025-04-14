@@ -16,8 +16,8 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& autorKey) {
-    if(dio.creatorPubKey != autorKey.getPublicKey().toBase58DER()) {
+std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& authorKey) {
+    if(dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
     auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<dynamic::DataIntegrityObject>();
@@ -37,7 +37,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     }
     dioJSON.fieldChecksums(dioJSONfieldChecksums);
     dioJSON.structureVersion(dio.structureVersion);
-    return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), autorKey));
+    return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), authorKey));
 }
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
     auto dioAndSignature = _dataEncryptor.extractDataWithSignature(_dataEncryptor.decode(signedDio));

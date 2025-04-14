@@ -103,7 +103,6 @@ public:
     void unsubscribeFromStoreEvents();
     void subscribeForFileEvents(const std::string& storeId);
     void unsubscribeFromFileEvents(const std::string& storeId);
-    //For Inbox
     FileDecryptionParams getFileDecryptionParams(const server::File& file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
 private:

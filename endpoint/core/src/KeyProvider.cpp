@@ -147,7 +147,7 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUs
     return result;
 }
 
-std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptKeysAndVerify(utils::Map<server::KeyEntry> keys, const EncKeyLocation& location) {
+std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerifyKeys(utils::Map<server::KeyEntry> keys, const EncKeyLocation& location) {
     std::unordered_map<std::string, DecryptedEncKeyV2> result;
     for(auto key : keys) {
         DecryptedEncKeyV2 decryptedEncKey;

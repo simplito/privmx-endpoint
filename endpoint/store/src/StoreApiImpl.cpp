@@ -304,10 +304,14 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, data send)
     auto statusCode = validateStoreDataIntegrity(store);
     if(statusCode != 0) {
-        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store, core::DataIntegrityStatus::ValidationFailed);
+        if(type == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationFailed});
+        }
         return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
     } else {
-        if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store, core::DataIntegrityStatus::ValidationSucceed);
+        if(type == STORE_TYPE_FILTER_FLAG) {
+            _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
+        }
     }
     auto result = decryptAndConvertStoreDataToStore(store);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, _getStoreEx, data decrypted)
@@ -340,9 +344,13 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
         auto statusCode = validateStoreDataIntegrity(store);
         stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
         if(statusCode == 0) {
-            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store ,core::DataIntegrityStatus::ValidationSucceed);
+            if(type == STORE_TYPE_FILTER_FLAG) {
+                _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
+            }
         } else {
-            if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValueAndStatus(store ,core::DataIntegrityStatus::ValidationFailed);
+            if(type == STORE_TYPE_FILTER_FLAG) {
+                _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationFailed});
+            }
             storesList.stores().remove(i);
             i--;
         }

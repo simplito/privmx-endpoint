@@ -71,7 +71,6 @@ InboxApiImpl::InboxApiImpl(
         [&](const std::string& id) {
             auto model = Factory::createObject<server::InboxGetModel>();
             model.id(id);
-            // model.type(INBOX_TYPE_FILTER_FLAG);
             return _serverApi->inboxGet(model).inbox();
         },
         std::bind(&InboxApiImpl::validateInboxDataIntegrity, this, std::placeholders::_1)
@@ -319,10 +318,10 @@ Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& t
     _inboxProvider.updateByValue(inbox);
     auto statusCode = validateInboxDataIntegrity(inbox);
     if(statusCode != 0) {
-        _inboxProvider.updateByValueAndStatus(inbox, core::DataIntegrityStatus::ValidationFailed);
+        _inboxProvider.updateByValueAndStatus(privmx::endpoint::inbox::InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationFailed});
         return Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
     } else {
-       _inboxProvider.updateByValueAndStatus(inbox, core::DataIntegrityStatus::ValidationSucceed);
+        _inboxProvider.updateByValueAndStatus(privmx::endpoint::inbox::InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationSucceed});
     }
     auto result = decryptAndConvertInboxDataToInbox(inbox);
     PRIVMX_DEBUG_TIME_STOP(PlatformInbox, _getInboxEx, data decrypted)
@@ -346,14 +345,14 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
         auto statusCode = validateInboxDataIntegrity(inbox);
         inboxes.push_back(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
         if(statusCode == 0) {
-            _inboxProvider.updateByValueAndStatus(inbox ,core::DataIntegrityStatus::ValidationSucceed);
+            _inboxProvider.updateByValueAndStatus(InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationSucceed});
         } else {
-            _inboxProvider.updateByValueAndStatus(inbox ,core::DataIntegrityStatus::ValidationFailed);
+            _inboxProvider.updateByValueAndStatus(InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationFailed});
             inboxesRaw.remove(i);
             i--;
         }
     }
-    auto tmp = decryptAndConvertInboxesDataToInboxs(inboxesRaw);
+    auto tmp = decryptAndConvertInboxesDataToInboxes(inboxesRaw);
     for(size_t j = 0, i = 0; i < inboxes.size(); i++) {
         if(inboxes[i].statusCode == 0) {
             inboxes[i] = tmp[j];
@@ -731,7 +730,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
             }
         }
     }
-    auto e = UnknowInboxFormatException();
+    auto e = UnknownInboxFormatException();
     result.statusCode = e.getCode();
     return result;
 }
@@ -765,12 +764,12 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
             }
         }
     }
-    auto e = UnknowInboxFormatException();
+    auto e = UnknownInboxFormatException();
     return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode()}, core::DataIntegrityObject());
 }
 
 
-std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxs(utils::List<inbox::server::Inbox> inboxes) {
+std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes) {
     std::vector<Inbox> result;
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     //create request to KeyProvider for keys
@@ -876,7 +875,7 @@ std::string InboxApiImpl::decryptInboxInternalMeta(inbox::server::InboxDataEntry
             }
         }
     }
-    throw UnknowInboxFormatException();
+    throw UnknownInboxFormatException();
 }
 
 inbox::server::InboxMessageServer InboxApiImpl::unpackInboxOrigMessage(const std::string& serialized) {
@@ -1178,5 +1177,5 @@ uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
             }
         }
     } 
-    return UnknowInboxFormatException().getCode();
+    return UnknownInboxFormatException().getCode();
 }
