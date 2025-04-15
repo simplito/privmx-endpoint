@@ -52,21 +52,20 @@ struct ExpandedDataIntegrityObject : public DataIntegrityObject {
 struct EncKeyLocation {
     std::string contextId;
     std::string resourceId;
-    std::string userId;
     bool operator==(const EncKeyLocation &other) const {
-        return (contextId == other.contextId && resourceId == other.resourceId && userId == other.userId);
+        return (contextId == other.contextId && resourceId == other.resourceId);
     }
 };
 
 struct EncKeyV2ToEncrypt : public EncKey {
     DataIntegrityObject dio;
     EncKeyLocation location;
-    std::string secret;
+    std::string secretHash;
 };
 
 struct DecryptedEncKeyV2 : public DecryptedEncKey {
     ExpandedDataIntegrityObject dio;
-    std::string secret;
+    std::string secretHash;
 };
 
 
@@ -81,8 +80,7 @@ struct std::hash<privmx::endpoint::core::EncKeyLocation> {
     {
         std::size_t h1 = std::hash<std::string>{}(encKeyLocation.contextId);
         std::size_t h2 = std::hash<std::string>{}(encKeyLocation.resourceId);
-        std::size_t h3 = std::hash<std::string>{}(encKeyLocation.userId);
-        return h1 ^ (h2 << 1) ^ (h3 << 2);
+        return h1 ^ (h2 << 1);
     }
 };
 

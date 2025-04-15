@@ -60,6 +60,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(Store)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(creator)
@@ -78,7 +79,7 @@ ENDPOINT_SERVER_TYPE(Store)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreCreateModel)
-    STRING_FIELD(storeId)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
@@ -111,6 +112,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(File)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     INT64_FIELD(version)
     STRING_FIELD(contextId)
     STRING_FIELD(storeId)
@@ -237,7 +239,7 @@ TYPE_END
 
 
 ENDPOINT_SERVER_TYPE(StoreFileCreateModel)
-    STRING_FIELD(fileId)     
+    STRING_FIELD(resourceId)
     STRING_FIELD(storeId)     
     STRING_FIELD(requestId)        // request.RequestId
     INT64_FIELD(fileIndex)
@@ -262,7 +264,7 @@ ENDPOINT_SERVER_TYPE(StoreFileReadResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreFileWriteModel)
-    STRING_FIELD(fileId)     
+    STRING_FIELD(fileId)
     STRING_FIELD(requestId)
     INT64_FIELD(fileIndex)
     VAR_FIELD(meta) // meta: unknown

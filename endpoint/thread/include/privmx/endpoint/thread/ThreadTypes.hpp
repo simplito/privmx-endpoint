@@ -28,20 +28,20 @@ struct MessageDataToEncryptV4 {
     std::optional<core::Buffer> internalMeta;
 };
 
-struct MessageDataToEncryptV5 {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    core::Buffer data;
-    std::optional<core::Buffer> internalMeta;
-    core::DataIntegrityObject dio;
-};
-
 struct DecryptedMessageDataV4 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
+};
+
+struct MessageDataToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer data;
+    std::optional<core::Buffer> internalMeta;
+    core::DataIntegrityObject dio;
 };
 
 struct DecryptedMessageDataV5 : public core::DecryptedVersionedData {
@@ -59,14 +59,6 @@ struct ThreadDataToEncryptV4 {
     std::optional<core::Buffer> internalMeta;
 };
 
-struct ThreadDataToEncryptV5 {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    core::Buffer internalMeta;
-    core::DataIntegrityObject dio;
-};
-
-
 struct DecryptedThreadDataV4 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
@@ -74,10 +66,23 @@ struct DecryptedThreadDataV4 : public core::DecryptedVersionedData {
     std::string authorPubKey;
 };
 
+struct ThreadInternalMetaV5 {
+    std::string secret;
+    std::string resourceId;
+    std::string randomId;
+};
+
+struct ThreadDataToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    ThreadInternalMetaV5 internalMeta;
+    core::DataIntegrityObject dio;
+};
+
 struct DecryptedThreadDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer internalMeta;
+    ThreadInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };

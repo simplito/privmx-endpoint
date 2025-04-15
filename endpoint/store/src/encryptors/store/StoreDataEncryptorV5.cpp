@@ -32,8 +32,11 @@ server::EncryptedStoreDataV5 StoreDataEncryptorV5::encrypt(const StoreDataToEncr
         result.publicMetaObjectClear();
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(storeData.privateMeta, authorPrivateKey, encryptionKey));
-    fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
-    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(storeData.internalMeta, authorPrivateKey, encryptionKey));
+    auto internalMeta = utils::TypedObjectFactory::createNewObject<dynamic::StoreInternalMetaV5>();
+    internalMeta.secret(storeData.internalMeta.secret);
+    internalMeta.resourceId(storeData.internalMeta.resourceId);
+    internalMeta.randomId(storeData.internalMeta.randomId);
+    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, encryptionKey));
     fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
     core::ExpandedDataIntegrityObject expandedDio = {storeData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
@@ -59,7 +62,9 @@ DecryptedStoreDataV5 StoreDataEncryptorV5::decrypt(
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedStoreData.privateMeta(), authorPublicKey, encryptionKey);
-        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedStoreData.internalMeta(), authorPublicKey, encryptionKey);
+        auto internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedStoreData.internalMeta(), authorPublicKey, encryptionKey).stdString();
+        auto internalMetaJSON = utils::TypedObjectFactory::createObjectFromVar<dynamic::StoreInternalMetaV5>(utils::Utils::parseJsonObject(internalMeta));
+        result.internalMeta = StoreInternalMetaV5{.secret=internalMetaJSON.secret(), .resourceId=internalMetaJSON.resourceId(), .randomId=internalMetaJSON.randomId()};
         result.authorPubKey = encryptedStoreData.authorPubKey();   
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();

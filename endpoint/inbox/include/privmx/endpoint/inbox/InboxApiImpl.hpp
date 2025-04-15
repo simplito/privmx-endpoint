@@ -126,7 +126,7 @@ private:
     std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     std::vector<Inbox> decryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes);
     inbox::Inbox decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);
-    std::string decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    InboxInternalMetaV5 decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::Inbox inbox);
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
     uint32_t validateInboxDataIntegrity(server::Inbox inbox);

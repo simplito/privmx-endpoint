@@ -95,7 +95,7 @@ EncKey KeyProvider::generateKey() {
     };
 }
 
-std::string KeyProvider::generateContainerControlNumber() {
+std::string KeyProvider::generateSecret() {
     return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
 }
 
@@ -109,42 +109,69 @@ std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKe
     return result;
 }
 
-privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(const std::vector<UserWithPubKey>& users, const EncKey& key, const DataIntegrityObject& dio, std::string containerControlNumber) {
+privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareKeysList(
+    const std::vector<UserWithPubKey>& users, 
+    const EncKey& key, 
+    const DataIntegrityObject& dio, 
+    const EncKeyLocation& location, 
+    const std::string& containerSecret
+) {
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
     for (auto user : users) {
-        server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
-        key_entry_set.user(user.userId);
-        key_entry_set.keyId(key.id);
-        key_entry_set.data(
-            _encKeyEncryptorV2.encrypt(
-                EncKeyV2ToEncrypt{
-                    key, 
-                    .dio=dio, 
-                    .containerControlNumber = containerControlNumber
-                }, 
-                crypto::PublicKey::fromBase58DER(user.pubKey), 
-                _key
-            )
-        );
-        result.add(key_entry_set);
+        result.add(createKeyEntrySet(user, key, dio, location, containerSecret));
     }    
     return result;
 }
 
-privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, const std::vector<UserWithPubKey>& users, const DataIntegrityObject& dio, std::string containerControlNumber) {
+privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(
+    const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, 
+    const std::vector<UserWithPubKey>& users, 
+    const DataIntegrityObject& dio, 
+    const EncKeyLocation& location, 
+    const std::string& containerSecret
+) {
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
     for (auto t : missingKeys) {
-        auto missingKey = t.second;
-        if(missingKey.statusCode != 0) continue;
+        auto key = t.second;
+        if(key.statusCode != 0) continue;
         for (auto user : users) {
-            server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
-            key_entry_set.user(user.userId);
-            key_entry_set.keyId(missingKey.id);
-            key_entry_set.data(_encKeyEncryptorV2.encrypt(EncKeyV2ToEncrypt{EncKey{.id=missingKey.id, .key=missingKey.key}, .dio=dio, .containerControlNumber = containerControlNumber}, crypto::PublicKey::fromBase58DER(user.pubKey), _key));
-            result.add(key_entry_set);
+            result.add(createKeyEntrySet(user, key, dio, location, containerSecret));
         }
     }
     return result;
+}
+
+server::KeyEntrySet KeyProvider::createKeyEntrySet(
+    const UserWithPubKey& user,
+    const EncKey& key, 
+    const DataIntegrityObject& dio, 
+    const EncKeyLocation& location, 
+    const std::string& containerSecret
+) {
+    server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
+    key_entry_set.user(user.userId);
+    key_entry_set.keyId(key.id);
+    key_entry_set.data(_encKeyEncryptorV2.encrypt(
+        EncKeyV2ToEncrypt{
+            EncKey{.id=key.id, .key=key.key}, 
+            .dio=dio, 
+            .location = location,
+            .secretHash = privmx::crypto::Crypto::sha256(containerSecret + location.contextId + location.resourceId)
+        }, 
+        crypto::PublicKey::fromBase58DER(user.pubKey), _key)
+    );
+    return key_entry_set;
+}
+
+
+bool KeyProvider::verifyKeysSecret(const std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location, const std::string& containerSecret) {
+    auto keySecretHash = privmx::crypto::Crypto::sha256(containerSecret + location.contextId + location.resourceId);
+    for(auto key : decryptedKeys) {
+        if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.secretHash != keySecretHash)) {
+            return 0;
+        }
+    }
+    return true;
 }
 
 std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerifyKeys(utils::Map<server::KeyEntry> keys, const EncKeyLocation& location) {
@@ -167,7 +194,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
             decryptedEncKey.id = key.second.keyId();
             decryptedEncKey.key = _encKeyEncryptorV1.decrypt(key.second.data(), _key);
             decryptedEncKey.dataStructureVersion = 1;
-            decryptedEncKey.containerControlNumber = "";
+            decryptedEncKey.secretHash = "";
             result.insert(std::make_pair(key.first, decryptedEncKey));
         } else {
             decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
@@ -182,16 +209,16 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
 }
 
 void KeyProvider::verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location) {
-    std::optional<std::string> containerControlNumber = std::nullopt;
+    std::optional<std::string> secretHash = std::nullopt;
     //create data validation request
     for(auto it = decryptedKeys.begin(); it != decryptedKeys.end(); ++it) {
         if(it->second.statusCode == 0 && it->second.dataStructureVersion == 2)  {
-            if(!containerControlNumber.has_value()) {
-                containerControlNumber = it->second.containerControlNumber;
+            if(!secretHash.has_value()) {
+                secretHash = it->second.secretHash;
             }
             if (it->second.dio.contextId != location.contextId ||
                 it->second.dio.resourceId != location.resourceId ||
-                it->second.containerControlNumber != containerControlNumber.value()
+                it->second.secretHash != secretHash.value()
             ) {
                 it->second.statusCode = EncryptionKeyContainerValidationException().getCode();
             }

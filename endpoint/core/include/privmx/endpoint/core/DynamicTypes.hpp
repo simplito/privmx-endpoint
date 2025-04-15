@@ -42,7 +42,6 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(EncryptionKey)
     STRING_FIELD(id)
     STRING_FIELD(key)
-    STRING_FIELD(containerControlNumber)
 TYPE_END
 
 

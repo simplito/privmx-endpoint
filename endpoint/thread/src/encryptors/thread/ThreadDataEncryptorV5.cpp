@@ -33,7 +33,11 @@ server::EncryptedThreadDataV5 ThreadDataEncryptorV5::encrypt(const ThreadDataToE
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(threadData.privateMeta, authorPrivateKey, encryptionKey));
     fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
-    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(threadData.internalMeta, authorPrivateKey, encryptionKey));
+    auto internalMeta = utils::TypedObjectFactory::createNewObject<dynamic::ThreadInternalMetaV5>();
+    internalMeta.secret(threadData.internalMeta.secret);
+    internalMeta.resourceId(threadData.internalMeta.resourceId);
+    internalMeta.randomId(threadData.internalMeta.randomId);
+    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, encryptionKey));
     fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
     core::ExpandedDataIntegrityObject expandedDio = {threadData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
@@ -58,7 +62,9 @@ DecryptedThreadDataV5 ThreadDataEncryptorV5::decrypt(const server::EncryptedThre
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedThreadData.privateMeta(), authorPublicKey, encryptionKey);
-        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedThreadData.internalMeta(), authorPublicKey, encryptionKey);
+        auto internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedThreadData.internalMeta(), authorPublicKey, encryptionKey).stdString();
+        auto internalMetaJSON = utils::TypedObjectFactory::createObjectFromVar<dynamic::ThreadInternalMetaV5>(utils::Utils::parseJsonObject(internalMeta));
+        result.internalMeta = ThreadInternalMetaV5{.secret=internalMetaJSON.secret(), .resourceId=internalMetaJSON.resourceId(), .randomId=internalMetaJSON.randomId()};
         result.authorPubKey = encryptedThreadData.authorPubKey();   
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();

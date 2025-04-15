@@ -108,7 +108,7 @@ private:
     std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     std::vector<Thread> decryptAndConvertThreadsDataToThreads(utils::List<server::ThreadInfo> threads);
     Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread);
-    std::string decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    ThreadInternalMetaV5 decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     core::DecryptedEncKey getThreadCurrentEncKey(server::ThreadInfo thread);
 
@@ -124,7 +124,7 @@ private:
     std::vector<Message> decryptAndConvertMessagesDataToMessages(server::ThreadInfo thread, utils::List<server::Message> messages);
     Message decryptAndConvertMessageDataToMessage(server::ThreadInfo thread, server::Message message);
     Message decryptAndConvertMessageDataToMessage(server::Message message);
-    uint32_t validateMessageDataIntegrity(server::Message message);
+    uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);
 
     void assertThreadExist(const std::string& threadId);
     privfs::RpcGateway::Ptr _gateway;

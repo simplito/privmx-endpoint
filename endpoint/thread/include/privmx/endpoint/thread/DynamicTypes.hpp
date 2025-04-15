@@ -78,6 +78,12 @@ ENDPOINT_CLIENT_TYPE_INHERIT(MessageDataV3Signed, IMessageDataSigned)
     OBJECT_FIELD(data, MessageDataV3)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(ThreadInternalMetaV5)
+    STRING_FIELD(secret)
+    STRING_FIELD(resourceId)
+    STRING_FIELD(randomId)
+TYPE_END
+
 
 } // dynamic
 } // thread

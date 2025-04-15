@@ -82,6 +82,7 @@ namespace server {
             INIT_LIST(keys, privmx::endpoint::core::types::KeyEntry)
         }
         STRING_FIELD(id)
+        STRING_FIELD(resourceId)
         STRING_FIELD(contextId)
         INT64_FIELD(createDate)
         STRING_FIELD(creator)
@@ -137,7 +138,7 @@ namespace server {
             INIT_LIST(keys, privmx::endpoint::core::types::KeyEntrySet)
             INIT_OBJECT(data, InboxData)
         }
-        STRING_FIELD(inboxId)
+        STRING_FIELD(resourceId)
         STRING_FIELD(contextId)
         LIST_FIELD(users, std::string) //cloud userId
         LIST_FIELD(managers, std::string) //cloud userId
@@ -263,6 +264,7 @@ namespace server {
         void initialize() override {
         }
         STRING_FIELD(inboxId)
+        STRING_FIELD(resourceId)
         INT64_FIELD(version)
         VAR_FIELD(publicData)
     };

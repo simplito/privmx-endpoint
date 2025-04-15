@@ -67,15 +67,15 @@ public:
     DataIntegrityObject createDIO(
         const std::string& contextId, 
         const std::string& resourceId, 
-        const std::optional<std::string>& containerId, 
-        const std::optional<std::string>& containerResourceId
+        const std::optional<std::string>& containerId = std::nullopt,
+        const std::optional<std::string>& containerResourceId = std::nullopt
     );
     DataIntegrityObject createPublicDIO(
         const std::string& contextId, 
-        const std::string& resourceId, 
-        const std::optional<std::string>& containerId, 
-        const std::optional<std::string>& containerResourceId,
-        const crypto::PublicKey& pubKey
+        const std::string& resourceId,
+        const crypto::PublicKey& pubKey,
+        const std::optional<std::string>& containerId = std::nullopt, 
+        const std::optional<std::string>& containerResourceId = std::nullopt
     );
 
 

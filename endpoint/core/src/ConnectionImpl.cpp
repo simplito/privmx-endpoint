@@ -196,7 +196,13 @@ DataIntegrityObject ConnectionImpl::createDIO(
     return createDIOExt(contextId, resourceId, containerId, containerResourceId);
 }
 
-DataIntegrityObject ConnectionImpl::createPublicDIO(const std::string& contextId, const std::string& resourceId, const std::optional<std::string>& containerId, const std::optional<std::string>& containerResourceId, const crypto::PublicKey& pubKey) {
+DataIntegrityObject ConnectionImpl::createPublicDIO(
+    const std::string& contextId, 
+    const std::string& resourceId, 
+    const crypto::PublicKey& pubKey, 
+    const std::optional<std::string>& containerId, 
+    const std::optional<std::string>& containerResourceId
+) {
     return createDIOExt(contextId, resourceId, containerId, containerResourceId, "<anonymous>", pubKey);
 }
 

@@ -126,7 +126,7 @@ private:
     std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
     Store decryptAndConvertStoreDataToStore(server::Store store);
-    std::string decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    StoreInternalMetaV5 decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateStoreDataIntegrity(server::Store store);
     core::DecryptedEncKey getStoreCurrentEncKey(server::Store store);
 
@@ -147,7 +147,7 @@ private:
     File decryptAndConvertFileDataToFileInfo(server::File file);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::Store store, server::File file);
-    uint32_t validateFileDataIntegrity(server::File file);
+    uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
