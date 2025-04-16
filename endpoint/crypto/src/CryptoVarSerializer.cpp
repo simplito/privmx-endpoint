@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/crypto/CryptoVarSerializer.hpp"
+#include "privmx/endpoint/crypto/ExtKeyVarSerializer.hpp"
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
@@ -29,7 +30,7 @@ Poco::Dynamic::Var VarSerializer::serialize<crypto::BIP39_t>(const crypto::BIP39
     return obj;
 }
 
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<crypto::ExtKey>(const crypto::ExtKey& val) {
-    return val;
-}
+// template<>
+// Poco::Dynamic::Var VarSerializer::serialize<crypto::ExtKey>(const crypto::ExtKey& val) {
+//     return val;
+// }

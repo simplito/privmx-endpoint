@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOVARSERIALIZER_HPP_
-#define _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOVARSERIALIZER_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEYVARSERIALIZER_HPP_
+#define _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEYVARSERIALIZER_HPP_
 
 #include <Poco/Dynamic/Var.h>
 
@@ -25,13 +25,10 @@ namespace endpoint {
 namespace core {
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<crypto::BIP39_t>(const crypto::BIP39_t& val);
-
-// template<>
-// Poco::Dynamic::Var VarSerializer::serialize<crypto::ExtKey>(const crypto::ExtKey& val);
+Poco::Dynamic::Var VarSerializer::serialize<crypto::ExtKey>(const crypto::ExtKey& val);
 
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOVARSERIALIZER_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEYVARSERIALIZER_HPP_

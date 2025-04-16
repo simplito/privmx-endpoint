@@ -18,6 +18,7 @@ limitations under the License.
 #include "privmx/endpoint/core/VarSerializer.hpp"
 #include "privmx/endpoint/crypto/CryptoApi.hpp"
 #include "privmx/endpoint/crypto/CryptoVarSerializer.hpp"
+#include "privmx/endpoint/crypto/ExtKeyVarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
