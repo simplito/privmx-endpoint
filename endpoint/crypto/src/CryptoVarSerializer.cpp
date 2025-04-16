@@ -24,12 +24,7 @@ Poco::Dynamic::Var VarSerializer::serialize<crypto::BIP39_t>(const crypto::BIP39
         obj->set("__type", "crypto$BIP39_t");
     }
     obj->set("mnemonic", serialize(val.mnemonic));
-    obj->set("ext_key", serialize(val.ext_key));
     obj->set("entropy", serialize(val.entropy));
     return obj;
 }
 
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<crypto::ExtKey>(const crypto::ExtKey& val) {
-    return val;
-}
