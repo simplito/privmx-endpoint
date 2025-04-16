@@ -193,7 +193,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     
     // read all key to check if all key belongs to this inbox
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=currentInbox.contextId(), .containerId=inboxId};
+    core::EncKeyLocation location{.contextId=currentInbox.contextId(), .resourceId=currentInbox.resourceId()};
     keyProviderRequest.addAll(currentInbox.keys(), location);
     auto inboxKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     auto currentInboxEntry = currentInbox.data().get(currentInbox.data().size()-1);
@@ -204,13 +204,14 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
             break;
         }
     }
-    auto inboxCCN = decryptInboxInternalMeta(currentInboxEntry, currentInboxKey);
-    for(auto key : inboxKeys) {
-        if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.containerControlNumber != inboxCCN)) {
-            throw InboxEncryptionKeyValidationException();
-        }
+    auto inboxInternalMeta = decryptInboxInternalMeta(currentInboxEntry, currentInboxKey);
+    if(currentInboxKey.dataStructureVersion != 2) {
+        //force update all keys if thread keys is in older version
+        usersToAddMissingKey = new_users;
     }
-    
+    if(_keyProvider->verifyKeysSecret(inboxKeys, location, inboxInternalMeta.secret)) {
+        throw InboxEncryptionKeyValidationException();
+    }
     // setting inbox Key adding new users
     core::EncKey inboxKey = currentInboxKey;
     core::DataIntegrityObject updateInboxDio = _connection.getImpl()->createDIO(currentInbox.contextId(), inboxId);
@@ -221,15 +222,17 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
             new_users, 
             inboxKey, 
             updateInboxDio,
-            inboxCCN
+            location,
+            inboxInternalMeta.secret
         );
     }
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             inboxKeys,
             usersToAddMissingKey, 
-            updateInboxDio, 
-            inboxCCN
+            updateInboxDio,
+            location,
+            inboxInternalMeta.secret
         );
         for(auto t: tmp) keysList.add(t);
     }
@@ -244,7 +247,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         .filesConfig = getFilesConfigOptOrDefault(fileConfig),
         .privateData = {
             .privateMeta = privateMeta,
-            .internalMeta = core::Buffer::from(inboxCCN),
+            .internalMeta = InboxInternalMetaV5{.secret=inboxInternalMeta.secret, .resourceId=currentInbox.resourceId(), .randomId=updateInboxDio.randomId},
             .dio = updateInboxDio
         },
         .publicData = {
