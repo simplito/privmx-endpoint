@@ -368,7 +368,7 @@ Item KvdbApiImpl::getItem(const std::string& kvdbId, const std::string& key) {
     return result;
 }
 
-core::PagingList<std::string> KvdbApiImpl::listItemKeys(const std::string& kvdbId, const kvdb::KeysPagingQuery& pagingQuery) {
+core::PagingList<std::string> KvdbApiImpl::listItemsKey(const std::string& kvdbId, const kvdb::KeysPagingQuery& pagingQuery) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listItemKeys)
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListKeysModel>();
     model.kvdbId(kvdbId);
@@ -387,7 +387,7 @@ core::PagingList<std::string> KvdbApiImpl::listItemKeys(const std::string& kvdbI
     });
 }
 
-core::PagingList<Item> KvdbApiImpl::listItem(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery) {
+core::PagingList<Item> KvdbApiImpl::listItems(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listItem)
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListItemsModel>();
     model.kvdbId(kvdbId);
