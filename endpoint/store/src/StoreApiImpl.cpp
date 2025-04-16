@@ -797,7 +797,8 @@ Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::comp
         .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
         .policy = {},
         .filesCount = store.files(),
-        .statusCode = statusCode
+        .statusCode = statusCode,
+        .dataStructureVersion = 1
     };
 }
 
@@ -825,7 +826,8 @@ Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, cons
         .privateMeta = storeData.privateMeta,
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
-        .statusCode = storeData.statusCode
+        .statusCode = storeData.statusCode,
+        .dataStructureVersion = 4
     };
     return result;
 }
@@ -854,7 +856,8 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
         .privateMeta = storeData.privateMeta,
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
-        .statusCode = storeData.statusCode
+        .statusCode = storeData.statusCode,
+        .dataStructureVersion = 5
     };
     return result;
 }
@@ -1117,7 +1120,8 @@ File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::comp
         .privateMeta = core::Buffer::from(utils::Utils::stringifyVar(storeFileMeta)),
         .size = storeFileMeta.sizeOpt(0),
         .authorPubKey = storeFileMeta.authorEmpty() ? "" : storeFileMeta.author().pubKeyOpt(""),
-        .statusCode = storeFileMeta.statusCodeOpt(0)
+        .statusCode = storeFileMeta.statusCodeOpt(0),
+        .dataStructureVersion = 1
     };
     return result;
 }
@@ -1135,7 +1139,8 @@ File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const Dec
         .privateMeta = fileData.privateMeta,
         .size = fileData.fileSize,
         .authorPubKey = fileData.authorPubKey,
-        .statusCode = fileData.statusCode
+        .statusCode = fileData.statusCode,
+        .dataStructureVersion = 4
     };
 }
 
@@ -1153,7 +1158,8 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
         .privateMeta = fileData.privateMeta,
         .size = internalMeta.size(),
         .authorPubKey = fileData.authorPubKey,
-        .statusCode = fileData.statusCode
+        .statusCode = fileData.statusCode,
+        .dataStructureVersion = 5
     };
 }
 

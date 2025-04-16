@@ -127,6 +127,11 @@ struct Inbox {
      * status code of retrieval and decryption of the Inbox
      */
     int64_t statusCode;
+
+    /**
+     * encrypted dataStructure version of Inbox
+     */
+    int64_t dataStructureVersion;
 };
 
 /**
@@ -167,6 +172,11 @@ struct InboxEntry {
      * status code of retrieval and decryption of the Inbox entry
      */
     int64_t statusCode;
+
+    /**
+     * encrypted dataStructure version of Entry
+     */
+    int64_t dataStructureVersion;
 };
 
 }  // namespace inbox
