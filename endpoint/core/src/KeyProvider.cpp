@@ -148,6 +148,7 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
     const EncKeyLocation& location, 
     const std::string& containerSecret
 ) {
+    auto keySecret = crypto::Crypto::randomBytes(8);
     server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
     key_entry_set.user(user.userId);
     key_entry_set.keyId(key.id);
@@ -156,7 +157,8 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
             EncKey{.id=key.id, .key=key.key}, 
             .dio=dio, 
             .location = location,
-            .secretHash = privmx::crypto::Crypto::sha256(containerSecret + location.contextId + location.resourceId)
+            .keySecret = keySecret,
+            .secretHash = privmx::crypto::Crypto::sha256(keySecret + containerSecret + location.contextId + location.resourceId)
         }, 
         crypto::PublicKey::fromBase58DER(user.pubKey), _key)
     );
@@ -165,8 +167,8 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
 
 
 bool KeyProvider::verifyKeysSecret(const std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location, const std::string& containerSecret) {
-    auto keySecretHash = privmx::crypto::Crypto::sha256(containerSecret + location.contextId + location.resourceId);
     for(auto key : decryptedKeys) {
+        auto keySecretHash = privmx::crypto::Crypto::sha256(key.second.keySecret + containerSecret + location.contextId + location.resourceId);
         if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.secretHash != keySecretHash)) {
             return 0;
         }
@@ -209,16 +211,11 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
 }
 
 void KeyProvider::verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location) {
-    std::optional<std::string> secretHash = std::nullopt;
     //create data validation request
     for(auto it = decryptedKeys.begin(); it != decryptedKeys.end(); ++it) {
         if(it->second.statusCode == 0 && it->second.dataStructureVersion == 2)  {
-            if(!secretHash.has_value()) {
-                secretHash = it->second.secretHash;
-            }
             if (it->second.dio.contextId != location.contextId ||
-                it->second.dio.resourceId != location.resourceId ||
-                it->second.secretHash != secretHash.value()
+                it->second.dio.resourceId != location.resourceId
             ) {
                 it->second.statusCode = EncryptionKeyContainerValidationException().getCode();
             }

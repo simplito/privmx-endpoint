@@ -30,7 +30,6 @@ ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
     STRING_FIELD(creatorPublicKey)
     STRING_FIELD(contextId)
     STRING_FIELD(resourceId)
-    STRING_FIELD(itemId)
     INT64_FIELD(timestamp)
     STRING_FIELD(randomId)
     STRING_FIELD(containerId)
@@ -42,6 +41,7 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(EncryptionKey)
     STRING_FIELD(id)
     STRING_FIELD(key)
+    STRING_FIELD(keySecret)
 TYPE_END
 
 

@@ -220,12 +220,12 @@ void StoreApiImpl::updateStore(
         //force update all keys if thread keys is in older version
         usersToAddMissingKey = new_users;
     }
-    if(_keyProvider->verifyKeysSecret(storeKeys, location, storeInternalMeta.secret)) {
+    if(!_keyProvider->verifyKeysSecret(storeKeys, location, storeInternalMeta.secret)) {
         throw StoreEncryptionKeyValidationException();
     }
     // setting store Key adding new users
     core::EncKey storeKey = currentStoreKey;
-    core::DataIntegrityObject updateStoreDio = _connection.getImpl()->createDIO(currentStore.contextId(), storeId);
+    core::DataIntegrityObject updateStoreDio = _connection.getImpl()->createDIO(currentStore.contextId(), currentStore.resourceId());
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
         storeKey = _keyProvider->generateKey();
@@ -381,6 +381,14 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto serverFileResult = _serverApi->storeFileGet(storeFileGetModel);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet, data send)
     if(serverFileResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFileResult.store());
+    if(validateStoreDataIntegrity(serverFileResult.store()) != 0) throw StoreDataIntegrityException();
+    auto statusCode = validateFileDataIntegrity(serverFileResult.file(), serverFileResult.store().resourceId());
+    if(statusCode != 0) {
+        PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data integrity validation failed)
+        File result;
+        result.statusCode = statusCode;
+        return result;
+    }
     auto ret {decryptAndConvertFileDataToFileInfo(serverFileResult.store(), serverFileResult.file())};
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileGet, data decrypted)
     return ret;
@@ -558,9 +566,9 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     auto fileId = core::EndpointUtils::generateId();
     privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
         store.contextId(),
+        handle->getResourceId(),
         handle->getStoreId(),
-        handle->getFileId().empty() ? core::EndpointUtils::generateId() : handle->getFileId(),
-        handle->getResourceId()
+        store.resourceId()
     );
     store::FileMetaToEncryptV5 fileMeta {
         .publicMeta = handle->getPublicMeta(),
@@ -1401,64 +1409,78 @@ void StoreApiImpl::assertFileExist(const std::string& fileId) {
 }
 
 uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
-    auto store_data_entry = store.data().get(store.data().size()-1);
-    if (store_data_entry.data().type()  == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(store_data_entry.data());
-        if (!versioned.versionEmpty()) {
-            switch (versioned.version()) {
-            case 4:
-                return 0;
-            case 5: 
-                {
-                    auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
-                    auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
-                    if(
-                        dio.contextId != store.contextId() ||
-                        dio.resourceId != store.resourceId() ||
-                        dio.creatorUserId != store.lastModifier() ||
-                        !core::TimestampValidator::validate(dio.timestamp, store.lastModificationDate())
-                    ) {
-                        return StoreDataIntegrityException().getCode();
-                    }
+    try {
+        auto store_data_entry = store.data().get(store.data().size()-1);
+        if (store_data_entry.data().type()  == typeid(Poco::JSON::Object::Ptr)) {
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(store_data_entry.data());
+            if (!versioned.versionEmpty()) {
+                switch (versioned.version()) {
+                case 4:
                     return 0;
+                case 5: 
+                    {
+                        auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
+                        auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
+                        if(
+                            dio.contextId != store.contextId() ||
+                            dio.resourceId != store.resourceId() ||
+                            dio.creatorUserId != store.lastModifier() ||
+                            !core::TimestampValidator::validate(dio.timestamp, store.lastModificationDate())
+                        ) {
+                            return StoreDataIntegrityException().getCode();
+                        }
+                        return 0;
+                    }
                 }
             }
-        } 
+        } else if(store_data_entry.data().isString()) {
+            return 0;
+        }
         return UnknowStoreFormatException().getCode();
-    } else if(store_data_entry.data().isString()) {
-        return 0;
-    }
-    return UnknowStoreFormatException().getCode();
+    } catch (const core::Exception& e) {
+        return e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        return e.getCode();
+    } catch (...) {
+        return ENDPOINT_CORE_EXCEPTION_CODE;
+    } 
 }
 
 uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file, const std::string& storeResourceId) {
-    if (file.meta().type()  == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(file.meta());
-        if (!versioned.versionEmpty()) {
-            switch (versioned.version()) {
-            case 4:
-                return 0;
-            case 5: 
-                {
-                    auto fileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(file.meta());
-                    auto dio = _fileMetaEncryptorV5.getDIOAndAssertIntegrity(fileMeta);
-                    if( 
-                        dio.contextId != file.contextId() ||
-                        dio.resourceId != file.resourceId() ||
-                        !dio.containerId.has_value() || dio.containerId.value() != file.storeId() ||
-                        !dio.containerResourceId.has_value() || dio.containerResourceId.value() != storeResourceId ||
-                        dio.creatorUserId != file.lastModifier() ||
-                        !core::TimestampValidator::validate(dio.timestamp, file.lastModificationDate())
-                    ) {
-                        return FileDataIntegrityException().getCode();;
-                    }
+    try {
+        if (file.meta().type()  == typeid(Poco::JSON::Object::Ptr)) {
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(file.meta());
+            if (!versioned.versionEmpty()) {
+                switch (versioned.version()) {
+                case 4:
                     return 0;
+                case 5: 
+                    {
+                        auto fileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(file.meta());
+                        auto dio = _fileMetaEncryptorV5.getDIOAndAssertIntegrity(fileMeta);
+                        if( 
+                            dio.contextId != file.contextId() ||
+                            dio.resourceId != file.resourceId() ||
+                            !dio.containerId.has_value() || dio.containerId.value() != file.storeId() ||
+                            !dio.containerResourceId.has_value() || dio.containerResourceId.value() != storeResourceId ||
+                            dio.creatorUserId != file.lastModifier() ||
+                            !core::TimestampValidator::validate(dio.timestamp, file.lastModificationDate())
+                        ) {
+                            return FileDataIntegrityException().getCode();;
+                        }
+                        return 0;
+                    }
                 }
             }
-        } 
-        return UnknowStoreFormatException().getCode();
-    } else if(file.meta().isString()) {
-        return 0;
-    }
+        } else if(file.meta().isString()) {
+            return 0;
+        }
+    } catch (const core::Exception& e) {
+        return e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        return e.getCode();
+    } catch (...) {
+        return ENDPOINT_CORE_EXCEPTION_CODE;
+    } 
     return UnknowStoreFormatException().getCode();
 }

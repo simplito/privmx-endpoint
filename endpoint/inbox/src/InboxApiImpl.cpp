@@ -209,7 +209,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         //force update all keys if thread keys is in older version
         usersToAddMissingKey = new_users;
     }
-    if(_keyProvider->verifyKeysSecret(inboxKeys, location, inboxInternalMeta.secret)) {
+    if(!_keyProvider->verifyKeysSecret(inboxKeys, location, inboxInternalMeta.secret)) {
         throw InboxEncryptionKeyValidationException();
     }
     // setting inbox Key adding new users
@@ -710,7 +710,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
                     {
                         auto publicData {_inboxDataProcessorV4.unpackPublicOnly(publicView.publicData())};
                         result.inboxId = publicView.inboxId();
-                        result.resourceId= publicView.resourceId();
+                        result.resourceId = "";
                         result.version = publicView.version();
                         result.dataStructureVersion = publicData.dataStructureVersion;
                         result.authorPubKey = publicData.authorPubKey;
@@ -724,7 +724,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
                     {
                         auto publicData {_inboxDataProcessorV5.unpackPublicOnly(publicView.publicData())};
                         result.inboxId = publicView.inboxId();
-                        result.resourceId= publicView.resourceId();
+                        result.resourceId = "";
                         result.version = publicView.version();
                         result.dataStructureVersion = publicData.dataStructureVersion;
                         result.authorPubKey = publicData.authorPubKey;
@@ -1163,27 +1163,35 @@ void InboxApiImpl::assertInboxExist(const std::string& inboxId) {
 }
 
 uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
-    auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
-    auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inbox_data_entry.data().meta());
-    if (!versioned.versionEmpty()) {
-        switch (versioned.version()) {
-        case 4:
-            return 0;
-        case 5: 
-            {
-                auto inbox_data = utils::TypedObjectFactory::createObjectFromVar<server::InboxData>(inbox_data_entry.data());
-                auto dio = _inboxDataProcessorV5.getDIOAndAssertIntegrity(inbox_data);
-                if(
-                    dio.contextId != inbox.contextId() ||
-                    dio.containerId != inbox.id() ||
-                    dio.creatorUserId != inbox.lastModifier() ||
-                    !core::TimestampValidator::validate(dio.timestamp, inbox.lastModificationDate())
-                ) {
-                    return InboxDataIntegrityException().getCode();
-                }
+    try {
+        auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
+        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inbox_data_entry.data().meta());
+        if (!versioned.versionEmpty()) {
+            switch (versioned.version()) {
+            case 4:
                 return 0;
+            case 5: 
+                {
+                    auto inbox_data = utils::TypedObjectFactory::createObjectFromVar<server::InboxData>(inbox_data_entry.data());
+                    auto dio = _inboxDataProcessorV5.getDIOAndAssertIntegrity(inbox_data);
+                    if(
+                        dio.contextId != inbox.contextId() ||
+                        dio.resourceId != inbox.resourceId() ||
+                        dio.creatorUserId != inbox.lastModifier() ||
+                        !core::TimestampValidator::validate(dio.timestamp, inbox.lastModificationDate())
+                    ) {
+                        return InboxDataIntegrityException().getCode();
+                    }
+                    return 0;
+                }
             }
-        }
+        } 
+    } catch (const core::Exception& e) {
+        return e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        return e.getCode();
+    } catch (...) {
+        return ENDPOINT_CORE_EXCEPTION_CODE;
     } 
     return UnknownInboxFormatException().getCode();
 }

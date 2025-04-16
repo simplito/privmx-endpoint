@@ -27,10 +27,10 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.contextId(dio.contextId);
     dioJSON.resourceId(dio.resourceId);
     if (dio.containerId.has_value()) {
-        dioJSON.itemId(dio.containerId.value());
+        dioJSON.containerId(dio.containerId.value());
     }
     if (dio.containerResourceId.has_value()) {
-        dioJSON.itemId(dio.containerResourceId.value());
+        dioJSON.containerResourceId(dio.containerResourceId.value());
     }
     dioJSON.timestamp(dio.timestamp);
     dioJSON.randomId(dio.randomId);

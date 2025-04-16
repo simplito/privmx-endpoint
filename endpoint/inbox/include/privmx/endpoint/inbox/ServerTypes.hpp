@@ -264,7 +264,6 @@ namespace server {
         void initialize() override {
         }
         STRING_FIELD(inboxId)
-        STRING_FIELD(resourceId)
         INT64_FIELD(version)
         VAR_FIELD(publicData)
     };

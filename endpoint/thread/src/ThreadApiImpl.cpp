@@ -208,7 +208,7 @@ void ThreadApiImpl::updateThread(
         //force update all keys if thread keys is in older version
         usersToAddMissingKey = new_users;
     }
-    if(_keyProvider->verifyKeysSecret(threadKeys, location, threadInternalMeta.secret)) {
+    if(!_keyProvider->verifyKeysSecret(threadKeys, location, threadInternalMeta.secret)) {
         throw ThreadEncryptionKeyValidationException();
     }
     // setting thread Key adding new users
@@ -367,22 +367,16 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data recived);
     privmx::endpoint::thread::server::ThreadInfo thread;
     Message result;
-    try {
-        PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
-        thread = getRawThreadFromCacheOrBridge(message.threadId());
-        PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, decrypting message)
-        auto statusCode = validateMessageDataIntegrity(message, thread.resourceId());
-        if(statusCode != 0) {
-            PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data integrity validation failed)
-            result.statusCode = statusCode;
-            return result;
-        }
-        result = decryptAndConvertMessageDataToMessage(thread, message);
-    } catch (const core::Exception& e) {
-        PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted failed)
-        result.statusCode = e.getCode();
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting thread)
+    thread = getRawThreadFromCacheOrBridge(message.threadId());
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, decrypting message)
+    auto statusCode = validateMessageDataIntegrity(message, thread.resourceId());
+    if(statusCode != 0) {
+        PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data integrity validation failed)
+        result.statusCode = statusCode;
         return result;
     }
+    result = decryptAndConvertMessageDataToMessage(thread, message);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
     return result;
 }
@@ -463,8 +457,9 @@ void ThreadApiImpl::updateMessage(
     send_message_model.keyId(msgKey.id);
     auto messageDIO = _connection.getImpl()->createDIO(
         message.contextId(),
+        message.resourceId(),
         message.threadId(),
-        message.id()
+        thread.resourceId()
     );
     MessageDataToEncryptV5 messageData {
         .publicMeta = publicMeta,
@@ -1253,64 +1248,81 @@ void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
 }
 
 uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
-    auto thread_data_entry = thread.data().get(thread.data().size()-1);
-    if (thread_data_entry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(thread_data_entry.data());
-        if (!versioned.versionEmpty()) {
-            switch (versioned.version()) {
-            case 4:
-                return 0;
-            case 5: 
-                {
-                    auto thread_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(thread_data_entry.data());
-                    auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
-                    if(
-                        dio.contextId != thread.contextId() ||
-                        dio.resourceId != thread.resourceId() ||
-                        dio.creatorUserId != thread.lastModifier() ||
-                        !core::TimestampValidator::validate(dio.timestamp, thread.lastModificationDate())
-                    ) {
-                        return ThreadDataIntegrityException().getCode();
-                    }
+    try {
+        auto thread_data_entry = thread.data().get(thread.data().size()-1);
+        if (thread_data_entry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(thread_data_entry.data());
+            if (!versioned.versionEmpty()) {
+                switch (versioned.version()) {
+                case 4:
                     return 0;
+                case 5: 
+                    {
+                        auto thread_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(thread_data_entry.data());
+                        auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
+                        if(
+                            dio.contextId != thread.contextId() ||
+                            dio.resourceId != thread.resourceId() ||
+                            dio.creatorUserId != thread.lastModifier() ||
+                            !core::TimestampValidator::validate(dio.timestamp, thread.lastModificationDate())
+                        ) {
+                            return ThreadDataIntegrityException().getCode();
+                        }
+                        return 0;
+                    }
                 }
-            }
-        } 
-    } else if(thread_data_entry.data().isString()) {
-        return 0;
-    }
+            } 
+        } else if(thread_data_entry.data().isString()) {
+            return 0;
+        }
+    } catch (const core::Exception& e) {
+        return e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        return e.getCode();
+    } catch (...) {
+        return ENDPOINT_CORE_EXCEPTION_CODE;
+    } 
     return UnknowThreadFormatException().getCode();
+    
 }
 
 uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId) {
-    auto message_data = message.data();
-    if (message_data.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(message_data);
-        if (!versioned.versionEmpty()) {
-            switch (versioned.version()) {
-            case 4:
-                return 0;
-            case 5: 
-                {
-                    auto encData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV5>(message_data);
-                    auto dio = _messageDataEncryptorV5.getDIOAndAssertIntegrity(encData);
-                    if(
-                        dio.contextId != message.contextId() ||
-                        dio.resourceId != message.resourceId() ||
-                        !dio.containerId.has_value() || dio.containerId.value() != message.threadId() ||
-                        !dio.containerResourceId.has_value() || dio.containerResourceId.value() != threadResourceId ||
-                        dio.creatorUserId != (message.updates().size() == 0 ? message.author() : message.updates().get(message.updates().size()-1).author()) ||
-                        !core::TimestampValidator::validate(dio.timestamp, (message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate()))
-                    ) {
-                        return MessageDataIntegrityException().getCode();
-                    }
+    try {
+        auto message_data = message.data();
+        if (message_data.type() == typeid(Poco::JSON::Object::Ptr)) {
+            auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(message_data);
+            if (!versioned.versionEmpty()) {
+                switch (versioned.version()) {
+                case 4:
                     return 0;
+                case 5: 
+                    {
+                        auto encData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV5>(message_data);
+                        auto dio = _messageDataEncryptorV5.getDIOAndAssertIntegrity(encData);
+                        if(
+                            dio.contextId != message.contextId() ||
+                            dio.resourceId != message.resourceId() ||
+                            !dio.containerId.has_value() || dio.containerId.value() != message.threadId() ||
+                            !dio.containerResourceId.has_value() || dio.containerResourceId.value() != threadResourceId ||
+                            dio.creatorUserId != (message.updates().size() == 0 ? message.author() : message.updates().get(message.updates().size()-1).author()) ||
+                            !core::TimestampValidator::validate(dio.timestamp, (message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate()))
+                        ) {
+                            return MessageDataIntegrityException().getCode();
+                        }
+                        return 0;
+                    }
                 }
             }
+        } else if(message_data.isString()) {
+            return 0;
         }
-    } else if(message_data.isString()) {
-        return 0;
-    }
+    } catch (const core::Exception& e) {
+        return e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        return e.getCode();
+    } catch (...) {
+        return ENDPOINT_CORE_EXCEPTION_CODE;
+    } 
     return UnknowMessageFormatException().getCode();
 }
 

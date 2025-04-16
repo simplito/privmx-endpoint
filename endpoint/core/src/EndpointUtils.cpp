@@ -12,6 +12,8 @@ limitations under the License.
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include <privmx/utils/Utils.hpp>
 #include <privmx/crypto/Crypto.hpp>
+#include <Poco/UUID.h>
+#include <Poco/UUIDGenerator.h>
 
 
 using namespace privmx::endpoint::core;
@@ -73,5 +75,5 @@ std::vector<std::string> EndpointUtils::usersWithPubKeyToIds(std::vector<core::U
 }
 
 std::string EndpointUtils::generateId() {
-   return utils::Utils::getNowTimestampStr() + utils::Hex::from(crypto::Crypto::randomBytes(8));
+   return Poco::UUIDGenerator().createRandom().toString();
 }

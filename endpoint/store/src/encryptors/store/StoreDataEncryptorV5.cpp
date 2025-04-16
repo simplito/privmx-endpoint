@@ -32,6 +32,7 @@ server::EncryptedStoreDataV5 StoreDataEncryptorV5::encrypt(const StoreDataToEncr
         result.publicMetaObjectClear();
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(storeData.privateMeta, authorPrivateKey, encryptionKey));
+    fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
     auto internalMeta = utils::TypedObjectFactory::createNewObject<dynamic::StoreInternalMetaV5>();
     internalMeta.secret(storeData.internalMeta.secret);
     internalMeta.resourceId(storeData.internalMeta.resourceId);

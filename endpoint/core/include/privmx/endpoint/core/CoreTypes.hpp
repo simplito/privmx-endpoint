@@ -60,11 +60,13 @@ struct EncKeyLocation {
 struct EncKeyV2ToEncrypt : public EncKey {
     DataIntegrityObject dio;
     EncKeyLocation location;
+    std::string keySecret;
     std::string secretHash;
 };
 
 struct DecryptedEncKeyV2 : public DecryptedEncKey {
     ExpandedDataIntegrityObject dio;
+    std::string keySecret;
     std::string secretHash;
 };
 

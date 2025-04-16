@@ -28,6 +28,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
     auto keyToEncrypt = privmx::utils::TypedObjectFactory::createNewObject<dynamic::EncryptionKey>();
     keyToEncrypt.id(key.id);
     keyToEncrypt.key(utils::Base64::from(key.key));
+    keyToEncrypt.keySecret(utils::Base64::from(key.keySecret));
     result.encryptedKey(crypto::EciesEncryptor::encryptObjectToBase64(encryptionKey, keyToEncrypt, authorPrivateKey));
     std::unordered_map<std::string, std::string> fieldChecksums;
     fieldChecksums.insert(std::make_pair("encryptedKey",privmx::crypto::Crypto::sha256(result.encryptedKey())));
@@ -59,6 +60,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
         result.id = decryptedKey.id();
         result.key = utils::Base64::toString(decryptedKey.key());
         result.secretHash = expandedDio.fieldChecksums.at("secret");
+        result.keySecret = utils::Base64::toString(decryptedKey.keySecret());
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
