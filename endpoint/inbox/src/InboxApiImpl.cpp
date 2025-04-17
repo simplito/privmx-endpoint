@@ -172,6 +172,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     // get current inbox
     auto currentInbox = getRawInboxFromCacheOrBridge(inboxId);
     auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data();
+    auto currentInboxResourceId = currentInbox.resourceIdOpt(core::EndpointUtils::generateId());
 
     // extract current users info
     auto usersVec {core::EndpointUtils::listToVector<std::string>(currentInbox.users())};
@@ -193,7 +194,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     
     // read all key to check if all key belongs to this inbox
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=currentInbox.contextId(), .resourceId=currentInbox.resourceId()};
+    core::EncKeyLocation location{.contextId=currentInbox.contextId(), .resourceId=currentInboxResourceId};
     keyProviderRequest.addAll(currentInbox.keys(), location);
     auto inboxKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     auto currentInboxEntry = currentInbox.data().get(currentInbox.data().size()-1);
@@ -214,7 +215,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     }
     // setting inbox Key adding new users
     core::EncKey inboxKey = currentInboxKey;
-    core::DataIntegrityObject updateInboxDio = _connection.getImpl()->createDIO(currentInbox.contextId(), inboxId);
+    core::DataIntegrityObject updateInboxDio = _connection.getImpl()->createDIO(currentInbox.contextId(), currentInboxResourceId);
     privmx::utils::List<core::server::KeyEntrySet> keysList = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
     if(needNewKey) {
         inboxKey = _keyProvider->generateKey();
@@ -247,7 +248,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
         .filesConfig = getFilesConfigOptOrDefault(fileConfig),
         .privateData = {
             .privateMeta = privateMeta,
-            .internalMeta = InboxInternalMetaV5{.secret=inboxInternalMeta.secret, .resourceId=currentInbox.resourceId(), .randomId=updateInboxDio.randomId},
+            .internalMeta = InboxInternalMetaV5{.secret=inboxInternalMeta.secret, .resourceId=currentInboxResourceId, .randomId=updateInboxDio.randomId},
             .dio = updateInboxDio
         },
         .publicData = {
@@ -259,6 +260,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
 
     auto inboxUpdateModel = Factory::createObject<inbox::server::InboxUpdateModel>();
     inboxUpdateModel.id(inboxId);
+    inboxUpdateModel.resourceId(currentInboxResourceId);
     inboxUpdateModel.users(InboxDataHelper::mapUsers(users));
     inboxUpdateModel.managers(InboxDataHelper::mapUsers(managers));
     inboxUpdateModel.data(_inboxDataProcessorV5.packForServer(inboxDataIn, _userPrivKey, inboxKey.key));
@@ -429,13 +431,6 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto inboxPubKeyECC = privmx::crypto::PublicKey::fromBase58DER(publicData.inboxEntriesPubKeyBase58DER);// keys to encrypt message (generated or taken from param)
     auto _userPrivKeyECC = (handle->userPrivKey.has_value() ? privmx::crypto::PrivateKey::fromWIF(handle->userPrivKey.value()) : _userPrivKey);
     auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
-    auto inboxDIO = _connection.getImpl()->createPublicDIO(
-        "",
-        core::EndpointUtils::generateId(),
-        _userPrivKeyECC.getPublicKey(),
-        handle->inboxId,
-        handle->inboxResourceId
-    );
     //update Key
     std::string filesMetaKey;
     bool hasFiles = !handle->inboxFileHandles.empty();
@@ -467,15 +462,28 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
         }
         for (auto fileInfo : commitSentInfo.filesInfo) {
             fileIndex++;
-            auto encryptedFileMeta = _fileMetaEncryptorV5.encrypt(prepareMeta(fileInfo, inboxDIO), _userPrivKeyECC, filesMetaKey);
-            inboxFiles.add(Factory::createInboxFile(fileIndex, encryptedFileMeta.asVar()));
+            auto fileDIO = _connection.getImpl()->createPublicDIO(
+                "",
+                core::EndpointUtils::generateId(),
+                _userPrivKeyECC.getPublicKey(),
+                handle->inboxId,
+                handle->inboxResourceId
+            );
+            auto encryptedFileMeta = _fileMetaEncryptorV4.encrypt(prepareMeta(fileInfo), _userPrivKeyECC, filesMetaKey);
+            inboxFiles.add(Factory::createInboxFile(fileIndex, encryptedFileMeta.asVar(), fileDIO.resourceId));
         }
         requestId = commitSentInfo.filesInfo[0].fileSendResult.requestId;
     }
 
     auto serializer = InboxEntriesDataEncryptorSerializer::Ptr(new InboxEntriesDataEncryptorSerializer());
+    auto messageDIO = _connection.getImpl()->createPublicDIO(
+        "",
+        core::EndpointUtils::generateId(),
+        _userPrivKeyECC.getPublicKey(),
+        handle->inboxId,
+        handle->inboxResourceId
+    );
     auto serializedMessage = serializer->packMessage(modelForSerializer, _userPrivKeyECC, inboxPubKeyECC);
-
     // prepare server model
     auto model = Factory::createObject<inbox::server::InboxSendModel>();
     if (hasFiles) {
@@ -484,6 +492,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     model.files(inboxFiles);
     model.inboxId(handle->inboxId);
     model.message(serializedMessage);
+    model.resourceId(messageDIO.resourceId);
     model.version(1);
     _serverApi->inboxSend(model);
 }
@@ -624,7 +633,7 @@ std::string InboxApiImpl::closeFile(const int64_t handle) {
     return handlePtr->getFileId();
 }
 
-store::FileMetaToEncryptV5 InboxApiImpl::prepareMeta(const privmx::endpoint::inbox::CommitFileInfo& commitFileInfo, privmx::endpoint::core::DataIntegrityObject fileDIO) {
+store::FileMetaToEncryptV4 InboxApiImpl::prepareMeta(const privmx::endpoint::inbox::CommitFileInfo& commitFileInfo) {
     auto internalFileMeta = Factory::createObject<store::dynamic::InternalStoreFileMeta>();
     internalFileMeta.version(5);
     internalFileMeta.size(commitFileInfo.size);
@@ -632,11 +641,12 @@ store::FileMetaToEncryptV5 InboxApiImpl::prepareMeta(const privmx::endpoint::inb
     internalFileMeta.chunkSize(commitFileInfo.fileSendResult.chunkSize);
     internalFileMeta.key(utils::Base64::from(commitFileInfo.fileSendResult.key));
     internalFileMeta.hmac(utils::Base64::from(commitFileInfo.fileSendResult.hmac));
-    store::FileMetaToEncryptV5 fileMetaToEncrypt = {
+    store::FileMetaToEncryptV4 fileMetaToEncrypt = {
         .publicMeta = commitFileInfo.publicMeta,
         .privateMeta = commitFileInfo.privateMeta,
-        .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.asVar())),
-        .dio = fileDIO
+        .fileSize = commitFileInfo.size,
+        .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.asVar()))
+        // .dio = fileDIO
     };
     return fileMetaToEncrypt;
 }
@@ -651,7 +661,7 @@ InboxDataResultV4 InboxApiImpl::decryptInboxV4(inbox::server::InboxDataEntry inb
     return _inboxDataProcessorV4.unpackAll(inboxEntry.data(), encKey.key);
 }
 
-Inbox InboxApiImpl::convertInboxV4(const inbox::server::Inbox& inboxRaw, const InboxDataResultV4& inboxData) {
+Inbox InboxApiImpl::convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData) {
     inbox::Inbox ret {
         .inboxId = inboxRaw.id(),
         .contextId = inboxRaw.contextId(),
@@ -675,7 +685,7 @@ InboxDataResultV5 InboxApiImpl::decryptInboxV5(inbox::server::InboxDataEntry inb
     return _inboxDataProcessorV5.unpackAll(inboxEntry.data(), encKey.key);
 }
 
-Inbox InboxApiImpl::convertInboxV5(const inbox::server::Inbox& inboxRaw, const InboxDataResultV5& inboxData) {
+Inbox InboxApiImpl::convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData) {
     inbox::Inbox ret {
         .inboxId = inboxRaw.id(),
         .contextId = inboxRaw.contextId(),
@@ -743,33 +753,36 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
 }
 
 
-std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
+uint32_t InboxApiImpl::getInboxEntryDataStructureVersion(inbox::server::InboxDataEntry inboxEntry) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
-        if (!versioned.versionEmpty()) {
-            switch (versioned.version()) {
-                case 4: {
-                    auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);
-                    return std::make_tuple(
-                        convertInboxV4(inbox, decryptedInboxData),
-                        core::DataIntegrityObject{
-                            .creatorUserId = inbox.lastModifier(),
-                            .creatorPubKey = decryptedInboxData.privateData.authorPubKey,
-                            .contextId = inbox.contextId(),
-                            .resourceId = inbox.resourceId(),
-                            .timestamp = inbox.lastModificationDate(),
-                            .randomId = std::string(),
-                            .containerId = std::nullopt,
-                            .containerResourceId = std::nullopt
-                        }
-                        
-                    );
+        return versioned.versionOpt(0);
+    }
+    return 0;
+}
+
+std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
+    switch (getInboxEntryDataStructureVersion(inboxEntry)) {
+        case 4: {
+            auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);
+            return std::make_tuple(
+                convertInboxV4(inbox, decryptedInboxData),
+                core::DataIntegrityObject{
+                    .creatorUserId = inbox.lastModifier(),
+                    .creatorPubKey = decryptedInboxData.privateData.authorPubKey,
+                    .contextId = inbox.contextId(),
+                    .resourceId = inbox.resourceIdOpt(""),
+                    .timestamp = inbox.lastModificationDate(),
+                    .randomId = std::string(),
+                    .containerId = std::nullopt,
+                    .containerResourceId = std::nullopt
                 }
-                case 5: {
-                    auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
-                    return std::make_tuple(convertInboxV5(inbox, decryptedInboxData), decryptedInboxData.privateData.dio);
-                }
-            }
+                
+            );
+        }
+        case 5: {
+            auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
+            return std::make_tuple(convertInboxV5(inbox, decryptedInboxData), decryptedInboxData.privateData.dio);
         }
     }
     auto e = UnknownInboxFormatException();
@@ -783,7 +796,7 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxes(utils::Li
     //create request to KeyProvider for keys
     for (size_t i = 0; i < inboxes.size(); i++) {
         auto inbox = inboxes.get(i);
-        core::EncKeyLocation location{.contextId=inbox.contextId(), .resourceId=inbox.resourceId()};
+        core::EncKeyLocation location{.contextId=inbox.contextId(), .resourceId=inbox.resourceIdOpt("")};
         auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
         keyProviderRequest.addOne(inbox.keys(), inbox_data_entry.keyId(), location);
     }
@@ -797,7 +810,7 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxes(utils::Li
             auto tmp = decryptAndConvertInboxDataToInbox(
                 inbox, 
                 inbox.data().get(inbox.data().size()-1), 
-                storesKeys.at({.contextId=inbox.contextId(), .resourceId=inbox.resourceId()}).at(inbox.data().get(inbox.data().size()-1).keyId())
+                storesKeys.at({.contextId=inbox.contextId(), .resourceId=inbox.resourceIdOpt("")}).at(inbox.data().get(inbox.data().size()-1).keyId())
             );
             result.push_back(std::get<0>(tmp));
             auto inboxDIO = std::get<1>(tmp);
@@ -843,7 +856,7 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxes(utils::Li
 inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox) {
     auto entry = getInboxCurrentDataEntry(inbox);
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=inbox.contextId(), .resourceId=inbox.resourceId()};
+    core::EncKeyLocation location{.contextId=inbox.contextId(), .resourceId=inbox.resourceIdOpt("")};
     keyProviderRequest.addOne(inbox.keys(), entry.keyId(), location);
     auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(entry.keyId());
     inbox::Inbox result;
@@ -869,18 +882,13 @@ inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbo
 
 
 InboxInternalMetaV5 InboxApiImpl::decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
-    if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
-        if (!versioned.versionEmpty()) {
-            switch (versioned.version()) {
-                case 4: {
-                    return InboxInternalMetaV5();
-                }
-                case 5: {
-                    auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
-                    return decryptedInboxData.privateData.internalMeta;
-                }
-            }
+    switch (getInboxEntryDataStructureVersion(inboxEntry)) {
+        case 4: {
+            return InboxInternalMetaV5();
+        }
+        case 5: {
+            auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
+            return decryptedInboxData.privateData.internalMeta;
         }
     }
     throw UnknownInboxFormatException();
@@ -900,7 +908,7 @@ inbox::server::InboxMessageServer InboxApiImpl::unpackInboxOrigMessage(const std
     return message;
 }
 
-InboxEntryResult InboxApiImpl::decryptInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message) {
+InboxEntryResult InboxApiImpl::decryptInboxEntry(inbox::server::Inbox inbox, thread::server::Message message) {
     InboxEntryResult result;
     result.statusCode = 0;
     try {
@@ -910,7 +918,7 @@ InboxEntryResult InboxApiImpl::decryptInboxEntry(const privmx::endpoint::inbox::
         auto serializer = inbox::InboxEntriesDataEncryptorSerializer::Ptr(new inbox::InboxEntriesDataEncryptorSerializer());
         auto msgPublicData = serializer->unpackMessagePublicOnly(msgData);
         core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-        core::EncKeyLocation location{.contextId=inbox.contextId(), .resourceId=inbox.resourceId()};
+        core::EncKeyLocation location{.contextId=inbox.contextId(), .resourceId=inbox.resourceIdOpt("")};
         keyProviderRequest.addOne(inbox.keys(), msgPublicData.usedInboxKeyId, location);
         auto encKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(msgPublicData.usedInboxKeyId);
         auto eccKey = crypto::ECC::fromPrivateKey(encKey.key);
@@ -937,14 +945,14 @@ InboxEntryResult InboxApiImpl::getEmptyResultWithStatusCode(const int64_t status
     return result;
 }
 
-std::vector<std::string> InboxApiImpl::getFilesIdsFromServerMessage(const privmx::endpoint::inbox::server::InboxMessageServer& serverMessage) {
+std::vector<std::string> InboxApiImpl::getFilesIdsFromServerMessage(inbox::server::InboxMessageServer serverMessage) {
     if (serverMessage.filesEmpty()) {
         return {};
     }
     return listToVector<std::string>(serverMessage.files());
 }
 
-inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message, const inbox::InboxEntryResult& inboxEntry) {
+inbox::InboxEntry InboxApiImpl::convertInboxEntry(inbox::server::Inbox inbox, thread::server::Message message, const inbox::InboxEntryResult& inboxEntry) {
     inbox::InboxEntry result;
     result.entryId = message.id();
     result.inboxId = inbox.id();
@@ -981,7 +989,7 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(const privmx::endpoint::inbox:
     return result;
 }
 
-inbox::InboxEntry InboxApiImpl::decryptAndConvertInboxEntryDataToInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message) {
+inbox::InboxEntry InboxApiImpl::decryptAndConvertInboxEntryDataToInboxEntry(inbox::server::Inbox inbox, thread::server::Message message) {
     auto inboxEntry = decryptInboxEntry(inbox, message);
     return convertInboxEntry(inbox, message, inboxEntry);
 }
@@ -1107,7 +1115,7 @@ void InboxApiImpl::processDisconnectedEvent() {
    _inboxProvider.invalidate();
 }
 
-InboxDeletedEventData InboxApiImpl::convertInboxDeletedEventData(const server::InboxDeletedEventData& data) {
+InboxDeletedEventData InboxApiImpl::convertInboxDeletedEventData(server::InboxDeletedEventData data) {
     return InboxDeletedEventData {
        .inboxId = data.inboxId()
    };
@@ -1126,7 +1134,7 @@ std::string InboxApiImpl::readMessageIdFromFileKeyId(const std::string& keyId) {
     return tmp[3];
 }
 
-void InboxApiImpl::deleteMessageAndFiles(const thread::server::Message& message) {
+void InboxApiImpl::deleteMessageAndFiles(thread::server::Message message) {
     auto publicMeta = unpackInboxOrigMessage(message.data());
     for(auto fileId : publicMeta.files()) {
         _storeApi.deleteFile(fileId);
@@ -1159,18 +1167,15 @@ void InboxApiImpl::assertInboxExist(const std::string& inboxId) {
 uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
     try {
         auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inbox_data_entry.data().meta());
-        if (!versioned.versionEmpty()) {
-            switch (versioned.version()) {
-            case 4:
-                return 0;
-            case 5: 
-                {
+            switch (getInboxEntryDataStructureVersion(inbox_data_entry)) {
+                case 4:
+                    return 0;
+                case 5: {
                     auto inbox_data = utils::TypedObjectFactory::createObjectFromVar<server::InboxData>(inbox_data_entry.data());
                     auto dio = _inboxDataProcessorV5.getDIOAndAssertIntegrity(inbox_data);
                     if(
                         dio.contextId != inbox.contextId() ||
-                        dio.resourceId != inbox.resourceId() ||
+                        dio.resourceId != inbox.resourceIdOpt("") ||
                         dio.creatorUserId != inbox.lastModifier() ||
                         !core::TimestampValidator::validate(dio.timestamp, inbox.lastModificationDate())
                     ) {
@@ -1179,7 +1184,6 @@ uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
                     return 0;
                 }
             }
-        } 
     } catch (const core::Exception& e) {
         return e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {

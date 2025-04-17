@@ -31,7 +31,7 @@ public:
     static store::server::FileDefinition createStoreFileDefinition(const uint64_t& fileSize, const uint64_t& checksumSize);
     static store::server::StoreFileGetModel createStoreFileGetModel(const std::string& fileId);
     static store::server::StoreFileGetManyModel createStoreFileGetManyModel(const std::string& storeId, const std::vector<std::string>& filesIds, const bool failOnError);
-    static inbox::server::InboxFile createInboxFile(const Poco::Int64& fileIndex, const Poco::Dynamic::Var& meta);
+    static inbox::server::InboxFile createInboxFile(const Poco::Int64& fileIndex, const Poco::Dynamic::Var& meta, const std::string resourceId);
 
     template <typename T = utils::TypedObject>
     static T createObject() {

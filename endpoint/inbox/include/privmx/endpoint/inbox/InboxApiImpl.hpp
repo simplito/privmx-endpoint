@@ -120,9 +120,10 @@ private:
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
     InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    inbox::Inbox convertInboxV4(const inbox::server::Inbox& inboxRaw, const InboxDataResultV4& inboxData);
+    inbox::Inbox convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData);
     InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    inbox::Inbox convertInboxV5(const inbox::server::Inbox& inboxRaw, const InboxDataResultV5& inboxData);
+    inbox::Inbox convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData);
+    uint32_t getInboxEntryDataStructureVersion(inbox::server::InboxDataEntry inboxEntry);
     std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     std::vector<Inbox> decryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes);
     inbox::Inbox decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);
@@ -131,24 +132,24 @@ private:
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
     uint32_t validateInboxDataIntegrity(server::Inbox inbox);
 
-    InboxEntryResult decryptInboxEntry(const inbox::server::Inbox& inbox, const thread::server::Message& message);
-    inbox::InboxEntry convertInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message, const inbox::InboxEntryResult& inboxEntry);
-    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(const privmx::endpoint::inbox::server::Inbox& inbox, const thread::server::Message& message);
-    store::FileMetaToEncryptV5 prepareMeta(const inbox::CommitFileInfo& commitFileInfo, privmx::endpoint::core::DataIntegrityObject fileDIO);
+    InboxEntryResult decryptInboxEntry(inbox::server::Inbox inbox, thread::server::Message message);
+    inbox::InboxEntry convertInboxEntry(inbox::server::Inbox inbox, thread::server::Message message, const inbox::InboxEntryResult& inboxEntry);
+    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(inbox::server::Inbox inbox, thread::server::Message message);
+    store::FileMetaToEncryptV4 prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
 
     void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    InboxDeletedEventData convertInboxDeletedEventData(const server::InboxDeletedEventData& data);
+    InboxDeletedEventData convertInboxDeletedEventData(server::InboxDeletedEventData data);
 
     int64_t createInboxFileHandleForRead(const store::server::File& file);
 
     std::string readInboxIdFromMessageKeyId(const std::string& keyId);
     std::string readMessageIdFromFileKeyId(const std::string& keyId);
-    void deleteMessageAndFiles(const thread::server::Message& message);
+    void deleteMessageAndFiles(thread::server::Message message);
     thread::server::Message getServerMessage(const std::string& messageId);
     InboxEntryResult getEmptyResultWithStatusCode(const int64_t statusCode);
-    std::vector<std::string> getFilesIdsFromServerMessage(const privmx::endpoint::inbox::server::InboxMessageServer& serverMessage);
+    std::vector<std::string> getFilesIdsFromServerMessage(inbox::server::InboxMessageServer serverMessage);
     void assertInboxExist(const std::string& inboxId);
 
     template <typename T = std::string>
