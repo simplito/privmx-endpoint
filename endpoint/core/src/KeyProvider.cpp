@@ -96,7 +96,7 @@ EncKey KeyProvider::generateKey() {
 }
 
 std::string KeyProvider::generateSecret() {
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
 }
 
 std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> KeyProvider::getKeysAndVerify(const KeyDecryptionAndVerificationRequest& request) {
@@ -148,7 +148,7 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
     const EncKeyLocation& location, 
     const std::string& containerSecret
 ) {
-    auto keySecret = crypto::Crypto::randomBytes(8);
+    auto keySecret = generateSecret();
     server::KeyEntrySet key_entry_set = utils::TypedObjectFactory::createNewObject<server::KeyEntrySet>();
     key_entry_set.user(user.userId);
     key_entry_set.keyId(key.id);
@@ -158,7 +158,7 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
             .dio=dio, 
             .location = location,
             .keySecret = keySecret,
-            .secretHash = privmx::crypto::Crypto::sha256(keySecret + containerSecret + location.contextId + location.resourceId)
+            .secretHash = privmx::crypto::Crypto::hmacSha256(containerSecret ,keySecret + location.contextId + location.resourceId)
         }, 
         crypto::PublicKey::fromBase58DER(user.pubKey), _key)
     );
@@ -168,7 +168,7 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
 
 bool KeyProvider::verifyKeysSecret(const std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location, const std::string& containerSecret) {
     for(auto key : decryptedKeys) {
-        auto keySecretHash = privmx::crypto::Crypto::sha256(key.second.keySecret + containerSecret + location.contextId + location.resourceId);
+        auto keySecretHash = privmx::crypto::Crypto::hmacSha256(containerSecret, key.second.keySecret + location.contextId + location.resourceId);
         if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.secretHash != keySecretHash)) {
             return 0;
         }
