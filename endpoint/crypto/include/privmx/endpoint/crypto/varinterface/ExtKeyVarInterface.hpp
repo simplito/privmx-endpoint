@@ -16,7 +16,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/VarDeserializer.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
-#include "privmx/endpoint/crypto/ExtKeyVarSerializer.hpp"
+#include "privmx/endpoint/crypto/ExtKey.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -43,6 +43,9 @@ public:
 
     ExtKeyVarInterface(const crypto::ExtKey& extKey, const core::VarSerializer& serializer)
         : _extKey(std::move(extKey)), _serializer(serializer) {}
+
+    ExtKeyVarInterface(const core::VarSerializer& serializer)
+        : _serializer(serializer) {}
 
     Poco::Dynamic::Var fromSeed(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var fromBase58(const Poco::Dynamic::Var& args);

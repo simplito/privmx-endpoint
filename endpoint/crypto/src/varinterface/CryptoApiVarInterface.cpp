@@ -125,7 +125,12 @@ Poco::Dynamic::Var CryptoApiVarInterface::generateBip39(const Poco::Dynamic::Var
     auto strength = _deserializer.deserialize<int64_t>(argsArr->get(0), "strength");
     auto password = _deserializer.deserialize<std::string>(argsArr->get(1), "password");
     auto result = _cryptoApi.generateBip39(strength, password);
-    return _serializer.serialize(result);
+    auto serialized = _serializer.serialize(result);
+
+    auto extKeyVar = new ExtKeyVarInterface(result.ext_key, getSerializerOptions());
+    Poco::JSON::Object::Ptr obj = serialized.extract<Poco::JSON::Object::Ptr>();
+    obj->set("extKey", (int64_t)extKeyVar);
+    return obj;
 }
 
 Poco::Dynamic::Var CryptoApiVarInterface::fromMnemonic(const Poco::Dynamic::Var& args) {
@@ -133,7 +138,12 @@ Poco::Dynamic::Var CryptoApiVarInterface::fromMnemonic(const Poco::Dynamic::Var&
     auto mnemonic = _deserializer.deserialize<std::string>(argsArr->get(0), "mnemonic");
     auto password = _deserializer.deserialize<std::string>(argsArr->get(1), "password");
     auto result = _cryptoApi.fromMnemonic(mnemonic, password);
-    return _serializer.serialize(result);
+    auto serialized = _serializer.serialize(result);
+
+    auto extKeyVar = new ExtKeyVarInterface(result.ext_key, getSerializerOptions());
+    Poco::JSON::Object::Ptr obj = serialized.extract<Poco::JSON::Object::Ptr>();
+    obj->set("extKey", (int64_t)extKeyVar);
+    return obj;
 }
 
 Poco::Dynamic::Var CryptoApiVarInterface::fromEntropy(const Poco::Dynamic::Var& args) {
@@ -141,7 +151,12 @@ Poco::Dynamic::Var CryptoApiVarInterface::fromEntropy(const Poco::Dynamic::Var& 
     auto entropy = _deserializer.deserialize<core::Buffer>(argsArr->get(0), "entropy");
     auto password = _deserializer.deserialize<std::string>(argsArr->get(1), "password");
     auto result = _cryptoApi.fromEntropy(entropy, password);
-    return _serializer.serialize(result);
+    auto serialized = _serializer.serialize(result);
+
+    auto extKeyVar = new ExtKeyVarInterface(result.ext_key, getSerializerOptions());
+    Poco::JSON::Object::Ptr obj = serialized.extract<Poco::JSON::Object::Ptr>();
+    obj->set("extKey", (int64_t)extKeyVar);
+    return obj;
 }
 
 Poco::Dynamic::Var CryptoApiVarInterface::entropyToMnemonic(const Poco::Dynamic::Var& args) {

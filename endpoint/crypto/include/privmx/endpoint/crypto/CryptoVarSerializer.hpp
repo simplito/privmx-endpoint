@@ -18,7 +18,6 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/crypto/Types.hpp"
-#include "privmx/endpoint/crypto/ExtKey.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -26,6 +25,9 @@ namespace core {
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<crypto::BIP39_t>(const crypto::BIP39_t& val);
+
+// template<>
+// Poco::Dynamic::Var VarSerializer::serialize<crypto::ExtKey>(const crypto::ExtKey& val);
 
 }  // namespace core
 }  // namespace endpoint

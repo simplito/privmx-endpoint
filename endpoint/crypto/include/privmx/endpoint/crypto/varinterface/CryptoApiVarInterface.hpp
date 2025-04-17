@@ -18,7 +18,8 @@ limitations under the License.
 #include "privmx/endpoint/core/VarSerializer.hpp"
 #include "privmx/endpoint/crypto/CryptoApi.hpp"
 #include "privmx/endpoint/crypto/CryptoVarSerializer.hpp"
-#include "privmx/endpoint/crypto/ExtKeyVarSerializer.hpp"
+#include "privmx/endpoint/crypto/varinterface/ExtKeyVarInterface.hpp"
+#include "privmx/endpoint/core/VarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -69,6 +70,11 @@ public:
     Poco::Dynamic::Var mnemonicToSeed(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+
+    const core::VarSerializer::Options& getSerializerOptions() const {
+        return _serializer.getOptions();
+    }
+
 
 private:
     static std::map<METHOD, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
