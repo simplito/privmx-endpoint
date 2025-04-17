@@ -20,5 +20,5 @@ void FileKeyIdFormatValidator::assertKeyIdFormat(const std::string& keyId) {
 }
 
 bool FileKeyIdFormatValidator::isKeyIdFormatValid(const std::string& keyId) {
-    return hasExtendedKeyIdFormat(keyId, "inboxmsg", 3+numberOfHyphenInContextId+numberOfHyphenInContextId ) ? true : hasExtendedKeyIdFormat(keyId, "inboxmsg", 3);
+    return hasExtendedKeyIdFormat(keyId, "inboxmsg", 3);
 }

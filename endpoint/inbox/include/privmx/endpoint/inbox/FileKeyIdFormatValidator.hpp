@@ -24,8 +24,6 @@ class FileKeyIdFormatValidator : public core::KeyIdFormatValidator {
 public:
     void assertKeyIdFormat(const std::string& keyId) override;
     bool isKeyIdFormatValid(const std::string& keyId) override;
-private:
-    const size_t numberOfHyphenInContextId = 4;
 };
 
 } // inbox
