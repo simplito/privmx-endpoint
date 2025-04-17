@@ -92,6 +92,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreUpdateModel)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
     VAR_FIELD(data)
