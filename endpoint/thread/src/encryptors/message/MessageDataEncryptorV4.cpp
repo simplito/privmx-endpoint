@@ -15,6 +15,7 @@ limitations under the License.
 #include "privmx/utils/Debug.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
+#include "privmx/endpoint/thread/Constants.hpp"
 
 
 using namespace privmx::endpoint;
@@ -24,7 +25,7 @@ server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageData
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedMessageDataV4>();
-    result.version(4);
+    result.version(MessageDataStructVersion::VERSION_4);
     result.publicMeta(_dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(messageData.publicMeta.stdString()));
@@ -46,7 +47,7 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
     const server::EncryptedMessageDataV4& encryptedMessageData, const std::string& encryptionKey) {
     DecryptedMessageDataV4 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 4;
+    result.dataStructureVersion = MessageDataStructVersion::VERSION_4;
     try {
         validateVersion(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey());
@@ -76,7 +77,7 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
 }
 
 void MessageDataEncryptorV4::validateVersion(const server::EncryptedMessageDataV4& encryptedMessageData) {
-    if (encryptedMessageData.version() != 4) {
-        throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version()) + " expected version: 4");
+    if (encryptedMessageData.version() != MessageDataStructVersion::VERSION_4) {
+        throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version()) + " expected version: " + std::to_string(MessageDataStructVersion::VERSION_4));
     }
 }

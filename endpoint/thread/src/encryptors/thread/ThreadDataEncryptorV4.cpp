@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
+#include "privmx/endpoint/thread/Constants.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
@@ -21,7 +22,7 @@ server::EncryptedThreadDataV4 ThreadDataEncryptorV4::encrypt(const ThreadDataToE
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedThreadDataV4>();
-    result.version(4);
+    result.version(ThreadDataStructVersion::VERSION_4);
     result.publicMeta(_dataEncryptor.signAndEncode(threadData.publicMeta, authorPrivateKey));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(threadData.publicMeta.stdString()));
@@ -42,7 +43,7 @@ DecryptedThreadDataV4 ThreadDataEncryptorV4::decrypt(
     const server::EncryptedThreadDataV4& encryptedThreadData, const std::string& encryptionKey) {
     DecryptedThreadDataV4 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 4;
+    result.dataStructureVersion = ThreadDataStructVersion::VERSION_4;
     try {
         validateVersion(encryptedThreadData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedThreadData.authorPubKey());
@@ -71,7 +72,7 @@ DecryptedThreadDataV4 ThreadDataEncryptorV4::decrypt(
 }
 
 void ThreadDataEncryptorV4::validateVersion(const server::EncryptedThreadDataV4& encryptedThreadData) {
-    if (encryptedThreadData.version() != 4) {
-        throw InvalidEncryptedThreadDataVersionException(std::to_string(encryptedThreadData.version()) + " expected version: 4");
+    if (encryptedThreadData.version() != ThreadDataStructVersion::VERSION_4) {
+        throw InvalidEncryptedThreadDataVersionException(std::to_string(encryptedThreadData.version()) + " expected version: " + std::to_string(ThreadDataStructVersion::VERSION_4));
     }
 }

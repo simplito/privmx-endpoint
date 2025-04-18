@@ -14,6 +14,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
+#include "privmx/endpoint/store/Constants.hpp"
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
@@ -22,7 +23,7 @@ store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::Fil
                                                                 const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<store::server::EncryptedFileMetaV4>();
     {
-    result.version(4);
+    result.version(FileDataStructVersion::VERSION_4);
     result.publicMeta(_dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(fileMeta.publicMeta.stdString()));
@@ -43,7 +44,7 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::Enc
                                                       const std::string& encryptionKey) {
     DecryptedFileMetaV4 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 4;
+    result.dataStructureVersion = FileDataStructVersion::VERSION_4;
     try {
         validateVersion(encryptedFileMeta);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedFileMeta.authorPubKey());
@@ -71,7 +72,7 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::Enc
 }
 
 void FileMetaEncryptorV4::validateVersion(const store::server::EncryptedFileMetaV4& encryptedFileMeta) {
-    if (encryptedFileMeta.version() != 4) {
+    if (encryptedFileMeta.version() != FileDataStructVersion::VERSION_4) {
         throw InvalidEncryptedStoreFileMetaVersionException();
     }
 }

@@ -46,6 +46,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/inbox/InboxProvider.hpp"
+#include "privmx/endpoint/inbox/Constants.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -123,7 +124,7 @@ private:
     inbox::Inbox convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData);
     InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::Inbox convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData);
-    uint32_t getInboxEntryDataStructureVersion(inbox::server::InboxDataEntry inboxEntry);
+    InboxDataStructVersion getInboxEntryDataStructureVersion(inbox::server::InboxDataEntry inboxEntry);
     std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     std::vector<Inbox> decryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes);
     inbox::Inbox decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);

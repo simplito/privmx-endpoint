@@ -13,6 +13,7 @@ limitations under the License.
 #include "privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/CoreConstants.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -21,7 +22,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
         throw DataIntegrityObjectMismatchEncKeyException();
     }
     auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<dynamic::DataIntegrityObject>();
-    dioJSON.version(1);
+    dioJSON.version(DataIntegrityObjectDataStructVersion::VERSION_1);
     dioJSON.creatorUserId(dio.creatorUserId);
     dioJSON.creatorPublicKey(dio.creatorPubKey);
     dioJSON.contextId(dio.contextId);
@@ -82,14 +83,14 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
 }
 
 void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {
-    if (dioJSON.versionEmpty()          ||
-        dioJSON.version() != 1          ||
-        dioJSON.creatorUserIdEmpty()    ||
-        dioJSON.creatorPublicKeyEmpty() ||
-        dioJSON.contextIdEmpty()        ||
-        dioJSON.resourceIdEmpty()       ||
-        dioJSON.randomIdEmpty()         ||
-        dioJSON.timestampEmpty()        ||
+    if (dioJSON.versionEmpty()                                                 ||
+        dioJSON.version() != DataIntegrityObjectDataStructVersion::VERSION_1   ||
+        dioJSON.creatorUserIdEmpty()                                           ||
+        dioJSON.creatorPublicKeyEmpty()                                        ||
+        dioJSON.contextIdEmpty()                                               ||
+        dioJSON.resourceIdEmpty()                                              ||
+        dioJSON.randomIdEmpty()                                                ||
+        dioJSON.timestampEmpty()                                               ||
         dioJSON.fieldChecksumsEmpty()
     ) {
         throw MalformedDataIntegrityObjectException();
