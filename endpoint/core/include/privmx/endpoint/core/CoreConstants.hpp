@@ -19,18 +19,18 @@ namespace endpoint {
 namespace core {
 
 
-enum DataIntegrityObjectDataStructVersion : int64_t {
+enum DataIntegrityObjectDataSchemaVersion : int64_t {
    UNKNOWN = 0,
    VERSION_1 = 1
 };
-constexpr static DataIntegrityObjectDataStructVersion CURRENT_DATA_INTEGRITY_OBJECT_DATA_STRUCT_VERSION = DataIntegrityObjectDataStructVersion::VERSION_1;
+constexpr static DataIntegrityObjectDataSchemaVersion CURRENT_DATA_INTEGRITY_OBJECT_DATA_SCHEMA_VERSION = DataIntegrityObjectDataSchemaVersion::VERSION_1;
 
-enum EncryptionKeyDataStructVersion : int64_t {
+enum EncryptionKeyDataSchemaVersion : int64_t {
    UNKNOWN = 0,
    VERSION_1 = 1,
    VERSION_2 = 2
 };
-constexpr static EncryptionKeyDataStructVersion CURRENT_ENCRYPTION_KEY_DATA_STRUCT_VERSION = EncryptionKeyDataStructVersion::VERSION_2;
+constexpr static EncryptionKeyDataSchemaVersion CURRENT_ENCRYPTION_KEY_DATA_SCHEMA_VERSION = EncryptionKeyDataSchemaVersion::VERSION_2;
 
 
 }  // namespace core

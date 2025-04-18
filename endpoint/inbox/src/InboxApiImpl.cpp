@@ -493,7 +493,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     model.inboxId(handle->inboxId);
     model.message(serializedMessage);
     model.resourceId(messageDIO.resourceId);
-    model.version(EntryDataStructVersion::VERSION_1);
+    model.version(EntryDataSchemaVersion::VERSION_1);
     _serverApi->inboxSend(model);
 }
 
@@ -753,25 +753,25 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
 }
 
 
-InboxDataStructVersion InboxApiImpl::getInboxEntryDataStructureVersion(inbox::server::InboxDataEntry inboxEntry) {
+InboxDataSchemaVersion InboxApiImpl::getInboxEntryDataStructureVersion(inbox::server::InboxDataEntry inboxEntry) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
-        auto version = versioned.versionOpt(InboxDataStructVersion::UNKNOWN);
+        auto version = versioned.versionOpt(InboxDataSchemaVersion::UNKNOWN);
         switch (version) {
-            case InboxDataStructVersion::VERSION_4:
-                return InboxDataStructVersion::VERSION_4;
-            case InboxDataStructVersion::VERSION_5:
-                return InboxDataStructVersion::VERSION_5;
+            case InboxDataSchemaVersion::VERSION_4:
+                return InboxDataSchemaVersion::VERSION_4;
+            case InboxDataSchemaVersion::VERSION_5:
+                return InboxDataSchemaVersion::VERSION_5;
             default:
-                return InboxDataStructVersion::UNKNOWN;
+                return InboxDataSchemaVersion::UNKNOWN;
         }
     }
-    return InboxDataStructVersion::UNKNOWN;
+    return InboxDataSchemaVersion::UNKNOWN;
 }
 
 std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     switch (getInboxEntryDataStructureVersion(inboxEntry)) {
-        case InboxDataStructVersion::VERSION_4: {
+        case InboxDataSchemaVersion::VERSION_4: {
             auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);
             return std::make_tuple(
                 convertInboxV4(inbox, decryptedInboxData),
@@ -788,7 +788,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
                 
             );
         }
-        case InboxDataStructVersion::VERSION_5: {
+        case InboxDataSchemaVersion::VERSION_5: {
             auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
             return std::make_tuple(convertInboxV5(inbox, decryptedInboxData), decryptedInboxData.privateData.dio);
         }
@@ -891,10 +891,10 @@ inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbo
 
 InboxInternalMetaV5 InboxApiImpl::decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     switch (getInboxEntryDataStructureVersion(inboxEntry)) {
-        case InboxDataStructVersion::VERSION_4: {
+        case InboxDataSchemaVersion::VERSION_4: {
             return InboxInternalMetaV5();
         }
-        case InboxDataStructVersion::VERSION_5: {
+        case InboxDataSchemaVersion::VERSION_5: {
             auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
             return decryptedInboxData.privateData.internalMeta;
         }
@@ -1176,9 +1176,9 @@ uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
     try {
         auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
             switch (getInboxEntryDataStructureVersion(inbox_data_entry)) {
-                case InboxDataStructVersion::VERSION_4:
+                case InboxDataSchemaVersion::VERSION_4:
                     return 0;
-                case InboxDataStructVersion::VERSION_5: {
+                case InboxDataSchemaVersion::VERSION_5: {
                     auto inbox_data = utils::TypedObjectFactory::createObjectFromVar<server::InboxData>(inbox_data_entry.data());
                     auto dio = _inboxDataProcessorV5.getDIOAndAssertIntegrity(inbox_data);
                     if(

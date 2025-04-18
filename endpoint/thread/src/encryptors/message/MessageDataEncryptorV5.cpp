@@ -26,7 +26,7 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(const MessageData
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedMessageDataV5>();
-    result.version(MessageDataStructVersion::VERSION_5);
+    result.version(MessageDataSchemaVersion::VERSION_5);
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey));
     fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
@@ -44,7 +44,7 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(const MessageData
         fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     }
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    core::ExpandedDataIntegrityObject expandedDio = {messageData.dio, .structureVersion=MessageDataStructVersion::VERSION_5, .fieldChecksums=fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {messageData.dio, .structureVersion=MessageDataSchemaVersion::VERSION_5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result;
 }
@@ -53,7 +53,7 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
     const server::EncryptedMessageDataV5& encryptedMessageData, const std::string& encryptionKey) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = MessageDataStructVersion::VERSION_5;
+    result.dataStructureVersion = MessageDataSchemaVersion::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey());
@@ -85,7 +85,7 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
 DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = MessageDataStructVersion::VERSION_5;
+    result.dataStructureVersion = MessageDataSchemaVersion::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey());
@@ -113,7 +113,7 @@ core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const
     assertDataFormat(encryptedMessageData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedMessageData.dio());
     if (
-        dio.structureVersion != MessageDataStructVersion::VERSION_5 ||
+        dio.structureVersion != MessageDataSchemaVersion::VERSION_5 ||
         dio.creatorPubKey != encryptedMessageData.authorPubKey() ||
         dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.publicMeta()) ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.privateMeta()) ||
@@ -129,7 +129,7 @@ core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const
 
 void MessageDataEncryptorV5::assertDataFormat(const server::EncryptedMessageDataV5& encryptedMessageData) {
     if (encryptedMessageData.versionEmpty() ||
-        encryptedMessageData.version() != MessageDataStructVersion::VERSION_5 ||
+        encryptedMessageData.version() != MessageDataSchemaVersion::VERSION_5 ||
         encryptedMessageData.publicMetaEmpty() ||
         encryptedMessageData.privateMetaEmpty() ||
         encryptedMessageData.authorPubKeyEmpty() ||

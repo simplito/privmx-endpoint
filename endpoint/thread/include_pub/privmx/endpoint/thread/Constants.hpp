@@ -18,22 +18,22 @@ namespace privmx {
 namespace endpoint {
 namespace thread {
 
-enum ThreadDataStructVersion : int64_t {
+enum ThreadDataSchemaVersion : int64_t {
    UNKNOWN = 0,
    VERSION_1 = 1,
    VERSION_4 = 4,
    VERSION_5 = 5
 };
-constexpr static ThreadDataStructVersion CURRENT_THREAD_DATA_STRUCT_VERSION = ThreadDataStructVersion::VERSION_5;
+constexpr static ThreadDataSchemaVersion CURRENT_THREAD_DATA_SCHEMA_VERSION = ThreadDataSchemaVersion::VERSION_5;
 
-enum MessageDataStructVersion : int64_t {
+enum MessageDataSchemaVersion : int64_t {
    UNKNOWN = 0,
    VERSION_2 = 2,
    VERSION_3 = 3,
    VERSION_4 = 4,
    VERSION_5 = 5
 };
-constexpr static MessageDataStructVersion CURRENT_MESSAGE_DATA_STRUCT_VERSION = MessageDataStructVersion::VERSION_5;
+constexpr static MessageDataSchemaVersion CURRENT_MESSAGE_DATA_SCHEMA_VERSION = MessageDataSchemaVersion::VERSION_5;
 
 }  // namespace thread
 }  // namespace endpoint

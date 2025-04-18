@@ -179,7 +179,7 @@ bool KeyProvider::verifyKeysSecret(const std::unordered_map<std::string, Decrypt
         auto keySecretHash = privmx::crypto::Crypto::hmacSha256(containerSecret, key.second.keySecret + location.contextId + location.resourceId);
         if (   
             key.second.statusCode != 0 ||
-            (key.second.dataStructureVersion == EncryptionKeyDataStructVersion::VERSION_2 && key.second.secretHash != keySecretHash)
+            (key.second.dataStructureVersion == EncryptionKeyDataSchemaVersion::VERSION_2 && key.second.secretHash != keySecretHash)
         ) {
             return false;
         }
@@ -196,7 +196,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
             auto versioned = utils::TypedObjectFactory::createObjectFromVar<dynamic::VersionedData>(key.second.data());
             if(versioned.versionEmpty()) {
                 throw UnknownEncryptionKeyVersionException();
-            } else if(versioned.version() == EncryptionKeyDataStructVersion::VERSION_2) { 
+            } else if(versioned.version() == EncryptionKeyDataSchemaVersion::VERSION_2) { 
                 DecryptedEncKeyV2 decryptedEncKey = _encKeyEncryptorV2.decrypt(
                     utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKeyEntryDataV2>(key.second.data()),
                     _key
@@ -206,7 +206,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
         } else if(key.second.data().isString()) {
             decryptedEncKey.id = key.second.keyId();
             decryptedEncKey.key = _encKeyEncryptorV1.decrypt(key.second.data(), _key);
-            decryptedEncKey.dataStructureVersion = EncryptionKeyDataStructVersion::VERSION_1;
+            decryptedEncKey.dataStructureVersion = EncryptionKeyDataSchemaVersion::VERSION_1;
             decryptedEncKey.secretHash = "";
             result.insert(std::make_pair(key.first, decryptedEncKey));
         } else {
@@ -224,7 +224,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
 void KeyProvider::verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location) {
     //create data validation request
     for(auto it = decryptedKeys.begin(); it != decryptedKeys.end(); ++it) {
-        if(it->second.statusCode == 0 && it->second.dataStructureVersion == EncryptionKeyDataStructVersion::VERSION_2)  {
+        if(it->second.statusCode == 0 && it->second.dataStructureVersion == EncryptionKeyDataSchemaVersion::VERSION_2)  {
             if (it->second.dio.contextId != location.contextId ||
                 it->second.dio.resourceId != location.resourceId
             ) {
@@ -255,7 +255,7 @@ void KeyProvider::verifyUserData(std::unordered_map<EncKeyLocation,std::unordere
     std::vector<VerificationRequest> verificationRequest;
     for(auto loc = decryptedKeys.begin(); loc != decryptedKeys.end(); ++loc) {
         for(auto it = loc->second.begin(); it != loc->second.end(); ++it) {
-            if(it->second.statusCode == 0 && it->second.dataStructureVersion == EncryptionKeyDataStructVersion::VERSION_2)  {
+            if(it->second.statusCode == 0 && it->second.dataStructureVersion == EncryptionKeyDataSchemaVersion::VERSION_2)  {
                 tmp.push_back(std::make_pair(loc->first, it->first));
                 verificationRequest.push_back(VerificationRequest{
                     .contextId = it->second.dio.contextId,

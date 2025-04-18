@@ -22,7 +22,7 @@ server::EncryptedStoreDataV4 StoreDataEncryptorV4::encrypt(const StoreDataToEncr
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedStoreDataV4>();
-    result.version(StoreDataStructVersion::VERSION_4);
+    result.version(StoreDataSchemaVersion::VERSION_4);
     result.publicMeta(_dataEncryptor.signAndEncode(plainData.publicMeta, authorPrivateKey));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(plainData.publicMeta.stdString()));
@@ -43,7 +43,7 @@ DecryptedStoreDataV4 StoreDataEncryptorV4::decrypt(
     const server::EncryptedStoreDataV4& encryptedData, const std::string& encryptionKey) {
     DecryptedStoreDataV4 result;
     result.statusCode = 0;
-    result.dataStructureVersion = StoreDataStructVersion::VERSION_4;
+    result.dataStructureVersion = StoreDataSchemaVersion::VERSION_4;
     try {
         validateVersion(encryptedData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey());
@@ -72,7 +72,7 @@ DecryptedStoreDataV4 StoreDataEncryptorV4::decrypt(
 }
 
 void StoreDataEncryptorV4::validateVersion(const server::EncryptedStoreDataV4& encryptedData) {
-    if (encryptedData.version() != StoreDataStructVersion::VERSION_4) {
+    if (encryptedData.version() != StoreDataSchemaVersion::VERSION_4) {
         throw InvalidEncryptedStoreDataVersionException();
     }
 }

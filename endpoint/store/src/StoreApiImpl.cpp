@@ -567,8 +567,8 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     auto fileId = core::EndpointUtils::generateId();
     Poco::Dynamic::Var encryptedMetaVar;
     switch (getStoreEntryDataStructureVersion(store.data().get(store.data().size()-1))) {
-        case StoreDataStructVersion::VERSION_1:
-        case StoreDataStructVersion::VERSION_4: {
+        case StoreDataSchemaVersion::VERSION_1:
+        case StoreDataSchemaVersion::VERSION_4: {
             store::FileMetaToEncryptV4 fileMeta {
                 .publicMeta = handle->getPublicMeta(),
                 .privateMeta = handle->getPrivateMeta(),
@@ -578,7 +578,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
             encryptedMetaVar = _fileMetaEncryptorV4.encrypt(fileMeta, _userPrivKey, key.key).asVar();
             break;
         }
-        case StoreDataStructVersion::VERSION_5: {
+        case StoreDataSchemaVersion::VERSION_5: {
             privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
                 store.contextId(),
                 handle->getResourceId(),
@@ -883,27 +883,27 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
     return result;
 }
 
-StoreDataStructVersion StoreApiImpl::getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry) {
+StoreDataSchemaVersion StoreApiImpl::getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry) {
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(storeEntry.data());
-        auto version = versioned.versionOpt(StoreDataStructVersion::UNKNOWN);
+        auto version = versioned.versionOpt(StoreDataSchemaVersion::UNKNOWN);
         switch (version) {
-            case StoreDataStructVersion::VERSION_4:
-                return StoreDataStructVersion::VERSION_4;
-            case StoreDataStructVersion::VERSION_5:
-                return StoreDataStructVersion::VERSION_5;
+            case StoreDataSchemaVersion::VERSION_4:
+                return StoreDataSchemaVersion::VERSION_4;
+            case StoreDataSchemaVersion::VERSION_5:
+                return StoreDataSchemaVersion::VERSION_5;
             default:
-                return StoreDataStructVersion::UNKNOWN;
+                return StoreDataSchemaVersion::UNKNOWN;
         }
     } else if (storeEntry.data().isString()) {
-        return StoreDataStructVersion::VERSION_1;
+        return StoreDataSchemaVersion::VERSION_1;
     }
-    return StoreDataStructVersion::UNKNOWN;
+    return StoreDataSchemaVersion::UNKNOWN;
 }
 
 std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     switch (getStoreEntryDataStructureVersion(storeEntry)) {
-        case StoreDataStructVersion::VERSION_1: {
+        case StoreDataSchemaVersion::VERSION_1: {
             return std::make_tuple(
                 convertStoreDataV1ToStore(store, decryptStoreV1(storeEntry, encKey)), 
                 core::DataIntegrityObject{
@@ -918,7 +918,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                 }
             );
         }
-        case StoreDataStructVersion::VERSION_4: {
+        case StoreDataSchemaVersion::VERSION_4: {
             auto decryptedStoreData = decryptStoreV4(storeEntry, encKey);
             return std::make_tuple(
                 convertDecryptedStoreDataV4ToStore(store, decryptedStoreData),
@@ -934,7 +934,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                 }
             );
         }
-        case StoreDataStructVersion::VERSION_5: {
+        case StoreDataSchemaVersion::VERSION_5: {
             auto decryptedStoreData = decryptStoreV5(storeEntry, encKey);
             return std::make_tuple(convertDecryptedStoreDataV5ToStore(store, decryptedStoreData), decryptedStoreData.dio);
         }
@@ -1045,11 +1045,11 @@ core::DecryptedEncKey StoreApiImpl::getStoreCurrentEncKey(server::Store store) {
 StoreInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
 
     switch (getStoreEntryDataStructureVersion(storeEntry)) {
-        case StoreDataStructVersion::VERSION_1:
+        case StoreDataSchemaVersion::VERSION_1:
             return StoreInternalMetaV5();
-        case StoreDataStructVersion::VERSION_4:
+        case StoreDataSchemaVersion::VERSION_4:
             return StoreInternalMetaV5();
-        case StoreDataStructVersion::VERSION_5:
+        case StoreDataSchemaVersion::VERSION_5:
             return decryptStoreV5(storeEntry, encKey).internalMeta;
     }
     throw UnknowStoreFormatException();
@@ -1188,27 +1188,27 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
     };
 }
 
-FileDataStructVersion StoreApiImpl::getFileDataStructureVersion(server::File file) {
+FileDataSchemaVersion StoreApiImpl::getFileDataStructureVersion(server::File file) {
     if (file.meta().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(file.meta());
-        auto version = versioned.versionOpt(FileDataStructVersion::UNKNOWN);
+        auto version = versioned.versionOpt(FileDataSchemaVersion::UNKNOWN);
         switch (version) {
-            case FileDataStructVersion::VERSION_4:
-                return FileDataStructVersion::VERSION_4;
-            case FileDataStructVersion::VERSION_5:
-                return FileDataStructVersion::VERSION_5;
+            case FileDataSchemaVersion::VERSION_4:
+                return FileDataSchemaVersion::VERSION_4;
+            case FileDataSchemaVersion::VERSION_5:
+                return FileDataSchemaVersion::VERSION_5;
             default:
-                return FileDataStructVersion::UNKNOWN;
+                return FileDataSchemaVersion::UNKNOWN;
         }
     } else if (file.meta().isString()) {
-        return FileDataStructVersion::VERSION_1;
+        return FileDataSchemaVersion::VERSION_1;
     }
-    return FileDataStructVersion::UNKNOWN;
+    return FileDataSchemaVersion::UNKNOWN;
 }
 
 std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey) {
     switch (getFileDataStructureVersion(file)) {
-        case FileDataStructVersion::VERSION_1: {
+        case FileDataSchemaVersion::VERSION_1: {
             auto decryptedFile = decryptStoreFileV1(file, encKey).meta;
             return std::make_tuple(
                 convertStoreFileMetaV1ToFile(file, decryptedFile),
@@ -1224,7 +1224,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                 }
             );
         }
-        case FileDataStructVersion::VERSION_4: {
+        case FileDataSchemaVersion::VERSION_4: {
             auto decryptedFile = decryptFileMetaV4(file, encKey);
             return std::make_tuple(
                 convertDecryptedFileMetaV4ToFile(file, decryptedFile),
@@ -1240,7 +1240,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                 }
             );
         }
-        case FileDataStructVersion::VERSION_5: {
+        case FileDataSchemaVersion::VERSION_5: {
             auto decryptedFile = decryptFileMetaV5(file, encKey);
             return std::make_tuple(convertDecryptedFileMetaV5ToFile(file, decryptFileMetaV5(file, encKey)), decryptedFile.dio);
         }
@@ -1351,7 +1351,7 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file) {
 dynamic::InternalStoreFileMeta StoreApiImpl::decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey) {
     if(encKey.statusCode == 0) {
         switch (getFileDataStructureVersion(file)) {
-            case FileDataStructVersion::VERSION_1: {
+            case FileDataSchemaVersion::VERSION_1: {
                 auto decryptedFile = decryptStoreFileV1(file, encKey);
                 auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
                 internalFileMeta.version(1);
@@ -1362,11 +1362,11 @@ dynamic::InternalStoreFileMeta StoreApiImpl::decryptFileInternalMeta(server::Fil
                 internalFileMeta.hmac(utils::Base64::from(decryptedFile.meta.hmac()));
                 return internalFileMeta;
             }
-            case FileDataStructVersion::VERSION_4:
+            case FileDataSchemaVersion::VERSION_4:
                 return utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(
                     utils::Utils::parseJson(decryptFileMetaV4(file, encKey).internalMeta.stdString())
                 );
-            case FileDataStructVersion::VERSION_5:
+            case FileDataSchemaVersion::VERSION_5:
                 return utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(
                     utils::Utils::parseJson(decryptFileMetaV5(file, encKey).internalMeta.stdString())
                 );
@@ -1402,8 +1402,8 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     auto fileInternalMeta = decryptFileInternalMeta(store, file);
     auto internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileInternalMeta));
     switch (getStoreEntryDataStructureVersion(store.data().get(store.data().size()-1))) {
-        case StoreDataStructVersion::VERSION_1:
-        case StoreDataStructVersion::VERSION_4: {
+        case StoreDataSchemaVersion::VERSION_1:
+        case StoreDataSchemaVersion::VERSION_4: {
             store::FileMetaToEncryptV4 fileMeta {
                 .publicMeta = publicMeta,
                 .privateMeta = privateMeta,
@@ -1413,7 +1413,7 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
             encryptedMetaVar = _fileMetaEncryptorV4.encrypt(fileMeta, _userPrivKey, key.key).asVar();
             break;
         }
-        case StoreDataStructVersion::VERSION_5: {
+        case StoreDataSchemaVersion::VERSION_5: {
             privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
                 file.contextId(),
                 file.resourceIdOpt(core::EndpointUtils::generateId()),
@@ -1464,11 +1464,11 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
     try {
         auto store_data_entry = store.data().get(store.data().size()-1);
         switch (getStoreEntryDataStructureVersion(store_data_entry)) {
-            case StoreDataStructVersion::VERSION_1:
+            case StoreDataSchemaVersion::VERSION_1:
                 return 0;
-            case StoreDataStructVersion::VERSION_4:
+            case StoreDataSchemaVersion::VERSION_4:
                 return 0;
-            case StoreDataStructVersion::VERSION_5: {
+            case StoreDataSchemaVersion::VERSION_5: {
                 auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
                 auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
                 if(
@@ -1495,11 +1495,11 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
 uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file, const std::string& storeResourceId) {
     try {
         switch (getFileDataStructureVersion(file)) {
-            case FileDataStructVersion::VERSION_1:
+            case FileDataSchemaVersion::VERSION_1:
                 return 0;
-            case FileDataStructVersion::VERSION_4:
+            case FileDataSchemaVersion::VERSION_4:
                 return 0;
-            case FileDataStructVersion::VERSION_5: {
+            case FileDataSchemaVersion::VERSION_5: {
                 auto fileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(file.meta());
                 auto dio = _fileMetaEncryptorV5.getDIOAndAssertIntegrity(fileMeta);
                 if( 
