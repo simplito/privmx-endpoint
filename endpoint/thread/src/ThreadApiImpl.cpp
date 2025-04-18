@@ -729,7 +729,8 @@ Thread ThreadApiImpl::convertThreadDataV1ToThread(server::ThreadInfo threadInfo,
         .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
         .policy = {},
         .messagesCount = threadInfo.messages(),
-        .statusCode = statusCode
+        .statusCode = statusCode,
+        .dataStructureVersion = 1
     };
 }
 
@@ -758,7 +759,8 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(server::ThreadInfo th
         .privateMeta = threadData.privateMeta,
         .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
         .messagesCount = threadInfo.messages(),
-        .statusCode = threadData.statusCode
+        .statusCode = threadData.statusCode,
+        .dataStructureVersion = 4
     };
 }
 
@@ -787,7 +789,8 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo th
         .privateMeta = threadData.privateMeta,
         .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
         .messagesCount = threadInfo.messages(),
-        .statusCode = threadData.statusCode
+        .statusCode = threadData.statusCode,
+        .dataStructureVersion = 5
     };
 }
 
@@ -1025,7 +1028,8 @@ Message ThreadApiImpl::convertMessageDataV2ToMessage(server::Message message, dy
         .privateMeta = core::Buffer::from(privmx::utils::Utils::stringify(privateMeta)),
         .data = core::Buffer::from(data),
         .authorPubKey = messageData.author().pubKey(),
-        .statusCode = messageData.statusCodeOpt(0)
+        .statusCode = messageData.statusCodeOpt(0),
+        .dataStructureVersion = 2
     };
     return ret;
 }
@@ -1042,7 +1046,8 @@ Message ThreadApiImpl::convertMessageDataV3ToMessage(server::Message message, dy
         .privateMeta = core::Buffer::from(messageData.privateMetaOpt(Pson::BinaryString())),
         .data = core::Buffer::from(messageData.dataOpt(Pson::BinaryString())),
         .authorPubKey = std::string(),
-        .statusCode = messageData.statusCodeOpt(0)
+        .statusCode = messageData.statusCodeOpt(0),
+        .dataStructureVersion = 3
     };
     return ret;
 }
@@ -1059,7 +1064,8 @@ Message ThreadApiImpl::convertDecryptedMessageDataV4ToMessage(server::Message me
         .privateMeta = messageData.privateMeta,
         .data = messageData.data,
         .authorPubKey = messageData.authorPubKey,
-        .statusCode = messageData.statusCode
+        .statusCode = messageData.statusCode,
+        .dataStructureVersion = 4
     };
     return ret;
 }
@@ -1076,7 +1082,8 @@ Message ThreadApiImpl::convertDecryptedMessageDataV5ToMessage(server::Message me
         .privateMeta = messageData.privateMeta,
         .data = messageData.data,
         .authorPubKey = messageData.authorPubKey,
-        .statusCode = messageData.statusCode
+        .statusCode = messageData.statusCode,
+        .dataStructureVersion = 5
     };
     return ret;
 }

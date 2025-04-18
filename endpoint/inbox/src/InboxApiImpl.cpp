@@ -676,7 +676,8 @@ Inbox InboxApiImpl::convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDat
         .privateMeta = inboxData.privateData.privateMeta,
         .filesConfig = inboxData.filesConfig,
         .policy = core::Factory::parsePolicyServerObjectWithoutItem(inboxRaw.policy()),
-        .statusCode = inboxData.statusCode
+        .statusCode = inboxData.statusCode,
+        .dataStructureVersion = 4
     };
     return ret;
 }
@@ -700,7 +701,8 @@ Inbox InboxApiImpl::convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDat
         .privateMeta = inboxData.privateData.privateMeta,
         .filesConfig = inboxData.filesConfig,
         .policy = core::Factory::parsePolicyServerObjectWithoutItem(inboxRaw.policy()),
-        .statusCode = inboxData.statusCode
+        .statusCode = inboxData.statusCode,
+        .dataStructureVersion = 5
     };
     return ret;
 }
@@ -986,6 +988,7 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(inbox::server::Inbox inbox, th
             result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
         }   
     }
+    result.dataStructureVersion = 1;
     return result;
 }
 
