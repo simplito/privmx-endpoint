@@ -26,6 +26,8 @@ void KeyDecryptionAndVerificationRequest::addOne(const utils::List<server::KeyEn
         throw KeyProviderRequestCompletedException();
     }
     server::KeyEntry keyToDecrypt = utils::TypedObjectFactory::createNewObject<server::KeyEntry>();
+    keyToDecrypt.keyId(keyId);
+    keyToDecrypt.data(Poco::Dynamic::Var());
     for (auto key : keys) {
         if (key.keyId() == keyId) {
             keyToDecrypt = key;
@@ -41,10 +43,7 @@ void KeyDecryptionAndVerificationRequest::addOne(const utils::List<server::KeyEn
     }
 }
 
-void KeyDecryptionAndVerificationRequest::addMany(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyLocation& location) {
-    if(_completed) {
-        throw KeyProviderRequestCompletedException();
-    }
+void KeyDecryptionAndVerificationRequest::addMany(const utils::List<server::KeyEntry>& keys, std::set<std::string> keyIds, const EncKeyLocation& location) {
     if(_completed) {
         throw KeyProviderRequestCompletedException();
     }
@@ -52,7 +51,14 @@ void KeyDecryptionAndVerificationRequest::addMany(const utils::List<server::KeyE
     for (auto key : keys) {
         if(std::find(keyIds.begin(), keyIds.end(), key.keyId()) != keyIds.end()) {
             keysToDecrypt.add(key);
+            keyIds.erase(key.keyId());
         }
+    }
+    for(std::string keyId : keyIds) {
+        server::KeyEntry keyToDecrypt = utils::TypedObjectFactory::createNewObject<server::KeyEntry>();
+        keyToDecrypt.keyId(keyId);
+        keyToDecrypt.data(Poco::Dynamic::Var());
+        keysToDecrypt.add(keyToDecrypt);
     }
     if(auto search = requestData.find(location); search != requestData.end()) {
         for(auto keyToDecrypt : keysToDecrypt) {
@@ -66,6 +72,7 @@ void KeyDecryptionAndVerificationRequest::addMany(const utils::List<server::KeyE
         requestData.insert(std::make_pair(location, toDecrypt));
     }
 }
+
 void KeyDecryptionAndVerificationRequest::addAll(const utils::List<server::KeyEntry>& keys, const EncKeyLocation& location) {
     if(_completed) {
         throw KeyProviderRequestCompletedException();

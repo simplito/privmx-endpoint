@@ -33,7 +33,7 @@ class KeyDecryptionAndVerificationRequest {
 public:
     KeyDecryptionAndVerificationRequest() = default;
     void addOne(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyLocation& location);
-    void addMany(const utils::List<server::KeyEntry>& keys, const std::set<std::string>& keyIds, const EncKeyLocation& location);
+    void addMany(const utils::List<server::KeyEntry>& keys, std::set<std::string> keyIds, const EncKeyLocation& location);
     void addAll(const utils::List<server::KeyEntry>& keys, const EncKeyLocation& location);
     void markAsCompleted();
     std::unordered_map<EncKeyLocation, utils::Map<server::KeyEntry>> requestData;
