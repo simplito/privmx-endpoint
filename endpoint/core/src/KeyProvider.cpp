@@ -177,7 +177,7 @@ bool KeyProvider::verifyKeysSecret(const std::unordered_map<std::string, Decrypt
     for(auto key : decryptedKeys) {
         auto keySecretHash = privmx::crypto::Crypto::hmacSha256(containerSecret, key.second.keySecret + location.contextId + location.resourceId);
         if(key.second.statusCode != 0 || (key.second.dataStructureVersion == 2 && key.second.secretHash != keySecretHash)) {
-            return 0;
+            return false;
         }
     }
     return true;
