@@ -129,9 +129,9 @@ struct Inbox {
     int64_t statusCode;
 
     /**
-     * encrypted dataStructure version of Inbox
+     * Version of the Inbox data structure and how it is encoded/encrypted
      */
-    int64_t dataStructureVersion;
+    int64_t schemaVersion;
 };
 
 /**
@@ -174,9 +174,9 @@ struct InboxEntry {
     int64_t statusCode;
 
     /**
-     * encrypted dataStructure version of Entry
+     * Version of the Entry data structure and how it is encoded/encrypted
      */
-    int64_t dataStructureVersion;
+    int64_t schemaVersion;
 };
 
 }  // namespace inbox

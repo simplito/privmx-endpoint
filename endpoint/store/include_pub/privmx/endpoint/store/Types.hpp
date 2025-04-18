@@ -70,9 +70,9 @@ struct File {
     int64_t statusCode;
 
     /**
-     * encrypted dataStructure version of File
+     * Version of the file data structure and how it is encoded/encrypted
      */
-    int64_t dataStructureVersion;
+    int64_t schemaVersion;
 };
 
 
@@ -157,9 +157,9 @@ struct Store {
     int64_t statusCode;
 
     /**
-     * encrypted dataStructure version of Store
+     * Version of the Store data structure and how it is encoded/encrypted
      */
-    int64_t dataStructureVersion;
+    int64_t schemaVersion;
 };
 
 

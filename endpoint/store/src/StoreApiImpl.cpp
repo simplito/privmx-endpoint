@@ -822,7 +822,7 @@ Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::comp
         .policy = {},
         .filesCount = store.files(),
         .statusCode = statusCode,
-        .dataStructureVersion = 1
+        .schemaVersion = 1
     };
 }
 
@@ -851,7 +851,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, cons
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
         .statusCode = storeData.statusCode,
-        .dataStructureVersion = 4
+        .schemaVersion = 4
     };
     return result;
 }
@@ -881,7 +881,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
         .statusCode = storeData.statusCode,
-        .dataStructureVersion = 5
+        .schemaVersion = 5
     };
     return result;
 }
@@ -1144,7 +1144,7 @@ File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::comp
         .size = storeFileMeta.sizeOpt(0),
         .authorPubKey = storeFileMeta.authorEmpty() ? "" : storeFileMeta.author().pubKeyOpt(""),
         .statusCode = storeFileMeta.statusCodeOpt(0),
-        .dataStructureVersion = 1
+        .schemaVersion = 1
     };
     return result;
 }
@@ -1163,7 +1163,7 @@ File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const Dec
         .size = fileData.fileSize,
         .authorPubKey = fileData.authorPubKey,
         .statusCode = fileData.statusCode,
-        .dataStructureVersion = 4
+        .schemaVersion = 4
     };
 }
 
@@ -1182,7 +1182,7 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
         .size = internalMeta.size(),
         .authorPubKey = fileData.authorPubKey,
         .statusCode = fileData.statusCode,
-        .dataStructureVersion = 5
+        .schemaVersion = 5
     };
 }
 

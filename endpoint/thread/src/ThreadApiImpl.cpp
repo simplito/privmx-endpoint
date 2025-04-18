@@ -730,7 +730,7 @@ Thread ThreadApiImpl::convertThreadDataV1ToThread(server::ThreadInfo threadInfo,
         .policy = {},
         .messagesCount = threadInfo.messages(),
         .statusCode = statusCode,
-        .dataStructureVersion = 1
+        .schemaVersion = 1
     };
 }
 
@@ -760,7 +760,7 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(server::ThreadInfo th
         .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
         .messagesCount = threadInfo.messages(),
         .statusCode = threadData.statusCode,
-        .dataStructureVersion = 4
+        .schemaVersion = 4
     };
 }
 
@@ -790,7 +790,7 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo th
         .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
         .messagesCount = threadInfo.messages(),
         .statusCode = threadData.statusCode,
-        .dataStructureVersion = 5
+        .schemaVersion = 5
     };
 }
 
@@ -1029,7 +1029,7 @@ Message ThreadApiImpl::convertMessageDataV2ToMessage(server::Message message, dy
         .data = core::Buffer::from(data),
         .authorPubKey = messageData.author().pubKey(),
         .statusCode = messageData.statusCodeOpt(0),
-        .dataStructureVersion = 2
+        .schemaVersion = 2
     };
     return ret;
 }
@@ -1047,7 +1047,7 @@ Message ThreadApiImpl::convertMessageDataV3ToMessage(server::Message message, dy
         .data = core::Buffer::from(messageData.dataOpt(Pson::BinaryString())),
         .authorPubKey = std::string(),
         .statusCode = messageData.statusCodeOpt(0),
-        .dataStructureVersion = 3
+        .schemaVersion = 3
     };
     return ret;
 }
@@ -1065,7 +1065,7 @@ Message ThreadApiImpl::convertDecryptedMessageDataV4ToMessage(server::Message me
         .data = messageData.data,
         .authorPubKey = messageData.authorPubKey,
         .statusCode = messageData.statusCode,
-        .dataStructureVersion = 4
+        .schemaVersion = 4
     };
     return ret;
 }
@@ -1083,7 +1083,7 @@ Message ThreadApiImpl::convertDecryptedMessageDataV5ToMessage(server::Message me
         .data = messageData.data,
         .authorPubKey = messageData.authorPubKey,
         .statusCode = messageData.statusCode,
-        .dataStructureVersion = 5
+        .schemaVersion = 5
     };
     return ret;
 }

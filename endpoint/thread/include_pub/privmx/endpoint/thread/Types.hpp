@@ -69,9 +69,9 @@ struct Message {
     int64_t statusCode;
 
     /**
-     * encrypted dataStructure version of Message
+     * Version of the Message data structure and how it is encoded/encrypted
      */
-    int64_t dataStructureVersion;
+    int64_t schemaVersion;
 };
 
 
@@ -156,9 +156,9 @@ struct Thread {
     int64_t statusCode;
 
     /**
-     * encrypted dataStructure version of Thread
+     * Version of the Thread data structure and how it is encoded/encrypted
      */
-    int64_t dataStructureVersion;
+    int64_t schemaVersion;
 };
 
 
