@@ -92,7 +92,7 @@ bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::st
 InternalContextEvent EventApiImpl::extractInternalEventData(const Poco::JSON::Object::Ptr& eventData) {
     auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
     auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedInternalContextEvent>(raw.eventData());
-    auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key());
+    auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key(), crypto::PublicKey::fromBase58DER(raw.author().pub()));
     auto decryptedData =  _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData(), _userPrivKey.getPublicKey(), encKey);
     return InternalContextEvent{.type=rawEventData.type(), .data=decryptedData};
 }
@@ -140,7 +140,7 @@ void EventApiImpl::emitEventEx(const std::string& contextId, const std::vector<c
     for (auto user : users) {
         server::UserKey userKey = utils::TypedObjectFactory::createNewObject<server::UserKey>();
         userKey.id(user.userId);
-        userKey.key(privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), encryptionKey));
+        userKey.key(privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), encryptionKey, _userPrivKey));
         userKeys.add(userKey);
     }
     server::ContextEmitCustomEventModel model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextEmitCustomEventModel>();

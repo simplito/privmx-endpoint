@@ -40,7 +40,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
     _userPrivKey = key;
-    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key));
+    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
     _eventChannelManager = std::make_shared<EventChannelManager>(_gateway, _eventMiddleware);
@@ -48,6 +48,11 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _eventMiddleware->addConnectedEventListener([&] {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
+    });
+    _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
+        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextGetModel>();
+        model.id(id);
+        return utils::TypedObjectFactory::createObjectFromVar<server::ContextGetResult>(_gateway->request("context.contextGet", model)).context();
     });
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
@@ -78,6 +83,8 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = false;
     auto key = privmx::crypto::PrivateKey::generateRandom();
+    _userPrivKey = key;
+    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
     _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware =
@@ -87,6 +94,12 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     _eventMiddleware->addConnectedEventListener([&] {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
+    });
+    _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
+        auto context = privmx::utils::TypedObjectFactory::createNewObject<server::ContextInfo>();
+        context.contextId(id);
+        context.userId("<anonymous>");
+        return context;
     });
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
@@ -168,4 +181,52 @@ void ConnectionImpl::disconnect() {
 
 int64_t ConnectionImpl::generateConnectionId() {
     return reinterpret_cast<std::intptr_t>(this);
+}
+
+std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
+    return _contextProvider->get(contextId).container.userId();
+}
+
+DataIntegrityObject ConnectionImpl::createDIO(
+    const std::string& contextId, 
+    const std::string& resourceId, 
+    const std::optional<std::string>& containerId, 
+    const std::optional<std::string>& containerResourceId
+) {
+    return createDIOExt(contextId, resourceId, containerId, containerResourceId);
+}
+
+DataIntegrityObject ConnectionImpl::createPublicDIO(
+    const std::string& contextId, 
+    const std::string& resourceId, 
+    const crypto::PublicKey& pubKey, 
+    const std::optional<std::string>& containerId, 
+    const std::optional<std::string>& containerResourceId
+) {
+    return createDIOExt(contextId, resourceId, containerId, containerResourceId, "<anonymous>", pubKey);
+}
+
+
+std::string ConnectionImpl::generateDIORandomId() {
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
+}
+
+DataIntegrityObject ConnectionImpl::createDIOExt(
+    const std::string& contextId, 
+    const std::string& resourceId, 
+    const std::optional<std::string>& containerId, 
+    const std::optional<std::string>& containerResourceId,
+    const std::optional<std::string>& creatorUserId,
+    const std::optional<crypto::PublicKey>& creatorPublicKey
+) {
+    return core::DataIntegrityObject{
+        .creatorUserId = creatorUserId.has_value() ? creatorUserId.value() : getMyUserId(contextId),
+        .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
+        .contextId = contextId,
+        .resourceId = resourceId,
+        .timestamp = privmx::utils::Utils::getNowTimestamp(),
+        .randomId = generateDIORandomId(),
+        .containerId = containerId,
+        .containerResourceId = containerResourceId
+    };
 }

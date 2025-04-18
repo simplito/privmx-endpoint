@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/Utils.hpp"
 #include <privmx/utils/Utils.hpp>
+#include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint::core;
 

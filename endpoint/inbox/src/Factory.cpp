@@ -22,10 +22,11 @@ store::server::FileDefinition Factory::createStoreFileDefinition(const uint64_t&
     return model;
 }
 
-inbox::server::InboxFile Factory::createInboxFile(const Poco::Int64& fileIndex, const Poco::Dynamic::Var& meta) {
+inbox::server::InboxFile Factory::createInboxFile(const Poco::Int64& fileIndex, const Poco::Dynamic::Var& meta, const std::string resourceId) {
     auto model {Factory::createObject<inbox::server::InboxFile>()};
     model.fileIndex(fileIndex);
     model.meta(meta);
+    model.resourceId(resourceId);
     return model;
 }
 

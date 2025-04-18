@@ -4,7 +4,7 @@
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
-#include <privmx/endpoint/core/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include "privmx/endpoint/event/ServerApi.hpp"
 #include "privmx/endpoint/event/EventTypes.hpp"

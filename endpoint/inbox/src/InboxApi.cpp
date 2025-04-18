@@ -31,6 +31,7 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
     std::shared_ptr<store::RequestApi> requestApi {new store::RequestApi(connectionImpl->getGateway())};
     std::shared_ptr<ServerApi> serverApi {new ServerApi(connectionImpl->getGateway())};;
     std::shared_ptr<InboxApiImpl> impl(new InboxApiImpl(
+        connection,
         threadApi,
         storeApi,
         connectionImpl->getKeyProvider(),

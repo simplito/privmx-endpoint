@@ -408,6 +408,7 @@ TEST_F(StoreTest, createStore) {
             storeId
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.publicMeta.stdString(), "public");
     EXPECT_EQ(store.privateMeta.stdString(), "private");
@@ -444,6 +445,7 @@ TEST_F(StoreTest, createStore) {
             storeId
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.publicMeta.stdString(), "public");
     EXPECT_EQ(store.privateMeta.stdString(), "private");
@@ -591,6 +593,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_1.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_1.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 2);
@@ -641,6 +644,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_1.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_1.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 3);
@@ -688,6 +692,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_2.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_2.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 2);
@@ -730,6 +735,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_2.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_2.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 3);
@@ -771,6 +777,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_3.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_3.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 2);

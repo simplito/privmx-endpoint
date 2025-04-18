@@ -29,8 +29,9 @@ limitations under the License.
 #include "privmx/endpoint/core/HandleManager.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/Types.hpp"
-#include <privmx/endpoint/core/UserVerifierInterface.hpp>
-#include <privmx/endpoint/core/DefaultUserVerifierInterface.hpp>
+#include "privmx/endpoint/core/UserVerifierInterface.hpp"
+#include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
+#include "privmx/endpoint/core/ContextProvider.hpp"
 #include <mutex>
 #include <shared_mutex>
 
@@ -62,8 +63,32 @@ public:
         std::shared_lock lock(_mutex);
         return _userVerifier;    
     }
+    std::string getMyUserId(const std::string& contextId);
+    DataIntegrityObject createDIO(
+        const std::string& contextId, 
+        const std::string& resourceId, 
+        const std::optional<std::string>& containerId = std::nullopt,
+        const std::optional<std::string>& containerResourceId = std::nullopt
+    );
+    DataIntegrityObject createPublicDIO(
+        const std::string& contextId, 
+        const std::string& resourceId,
+        const crypto::PublicKey& pubKey,
+        const std::optional<std::string>& containerId = std::nullopt, 
+        const std::optional<std::string>& containerResourceId = std::nullopt
+    );
+
 
 private:
+    std::string generateDIORandomId();
+    DataIntegrityObject createDIOExt(
+        const std::string& contextId, 
+        const std::string& resourceId, 
+        const std::optional<std::string>& containerId, 
+        const std::optional<std::string>& containerResourceId,
+        const std::optional<std::string>& creatorUserId = std::nullopt,
+        const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
+    );
     int64_t generateConnectionId();
 
     const int64_t _connectionId;
@@ -76,6 +101,7 @@ private:
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifierInterface> _userVerifier;
+    std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
 };
 
