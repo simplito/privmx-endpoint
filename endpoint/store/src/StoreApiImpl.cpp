@@ -312,7 +312,7 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
         if(type == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationFailed});
         }
-        return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
+        return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
     } else {
         if(type == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -347,7 +347,7 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
         auto store = storesList.stores().get(i);
         if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
         auto statusCode = validateStoreDataIntegrity(store);
-        stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
+        stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}});
         if(statusCode == 0) {
             if(type == STORE_TYPE_FILTER_FLAG) {
                 _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -935,7 +935,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
         }
     }
     auto e = UnknowStoreFormatException();
-    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, core::DataIntegrityObject());
+    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
 }
 
 std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List<server::Store> stores) {
@@ -971,7 +971,7 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
                 result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result.push_back(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
+            result.push_back(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}});
             storesDIO.push_back(core::DataIntegrityObject());
 
         }
@@ -1236,7 +1236,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
         }
     }
     auto e = UnknowFileFormatException();
-    return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+    return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode(), {}}, core::DataIntegrityObject());
 }
 
 std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files) {
@@ -1265,10 +1265,10 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
                     result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(File{{},{},{},{},{},.statusCode = statusCode});
+                result.push_back(File{{},{},{},{},{},.statusCode = statusCode, {}});
             }
         } catch (const core::Exception& e) {
-            result.push_back(File{{},{},{},{},{},.statusCode = e.getCode()});
+            result.push_back(File{{},{},{},{},{},.statusCode = e.getCode(), {}});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -1330,11 +1330,11 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file) {
         auto store = getRawStoreFromCacheOrBridge(file.storeId());
         return decryptAndConvertFileDataToFileInfo(store, file);
     } catch (const core::Exception& e) {
-        return File{{},{},{},{},{},.statusCode = e.getCode()};
+        return File{{},{},{},{},{},.statusCode = e.getCode(), {}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return File{{},{},{},{},{},.statusCode = e.getCode()};
+        return File{{},{},{},{},{},.statusCode = e.getCode(), {}};
     } catch (...) {
-        return File{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
+        return File{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE, {}};
     }
 }
 

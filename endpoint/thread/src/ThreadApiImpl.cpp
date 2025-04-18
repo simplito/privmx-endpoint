@@ -299,7 +299,7 @@ Thread ThreadApiImpl::_getThreadEx(const std::string& threadId, const std::strin
         if(type == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationFailed});
         }
-        return Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
+        return Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
     } else {
         if(type == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -334,7 +334,7 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
         auto thread = threadsList.threads().get(i);
         if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValue(thread);
         auto statusCode = validateThreadDataIntegrity(thread);
-        threads.push_back(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
+        threads.push_back(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}});
         if(statusCode == 0) {
             if(type == THREAD_TYPE_FILTER_FLAG) {
                 _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -524,7 +524,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
             if(statusCode == 0) {
                 data = decryptAndConvertThreadDataToThread(raw); 
             } else {
-                data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
+                data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
             }
             std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
             event->channel = channel;
@@ -540,7 +540,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
             if(statusCode == 0) {
                 data = decryptAndConvertThreadDataToThread(raw); 
             } else {
-                data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
+                data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
             }
             std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
             event->channel = channel;
@@ -843,7 +843,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
         }            
     }
     auto e = UnknowThreadFormatException();
-    return std::make_tuple(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, core::DataIntegrityObject());
+    return std::make_tuple(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
 }
 
 
@@ -879,7 +879,7 @@ std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx:
                 result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result.push_back(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
+            result.push_back(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}});
             threadsDIO.push_back(core::DataIntegrityObject{});
         }
     }
@@ -1163,7 +1163,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
         }
     } 
     auto e = UnknowMessageFormatException();
-    return std::make_tuple(Message{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+    return std::make_tuple(Message{{},{},{},{},{},.statusCode = e.getCode(), {}}, core::DataIntegrityObject());
 }
 
 std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(server::ThreadInfo thread, utils::List<server::Message> messages) {
@@ -1193,10 +1193,10 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
                     result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(Message{{},{},{},{},{},.statusCode = statusCode});
+                result.push_back(Message{{},{},{},{},{},.statusCode = statusCode, {}});
             }
         } catch (const core::Exception& e) {
-            result.push_back(Message{{},{},{},{},{},.statusCode = e.getCode()});
+            result.push_back(Message{{},{},{},{},{},.statusCode = e.getCode(), {}});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -1258,11 +1258,11 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message mes
         auto thread = getRawThreadFromCacheOrBridge(message.threadId());
         return decryptAndConvertMessageDataToMessage(thread, message);
     } catch (const core::Exception& e) {
-        return Message{{},{},{},{},{},.statusCode = e.getCode()};
+        return Message{{},{},{},{},{},.statusCode = e.getCode(), {}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return Message{{},{},{},{},{},.statusCode = e.getCode()};
+        return Message{{},{},{},{},{},.statusCode = e.getCode(), {}};
     } catch (...) {
-        return Message{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
+        return Message{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE, {}};
     }
 }
 
