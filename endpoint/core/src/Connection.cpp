@@ -22,9 +22,10 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 Connection Connection::connect(const std::string& userPrivKey, const std::string& solutionId,
-                                       const std::string& platformUrl) {
+                                const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
     Validator::validatePrivKeyWIF(userPrivKey, "field:userPrivKey ");
     Validator::validateId(solutionId, "field:solutionId ");
+    Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
         impl->connect(userPrivKey, solutionId, platformUrl);
@@ -35,8 +36,9 @@ Connection Connection::connect(const std::string& userPrivKey, const std::string
     }
 }
 
-Connection Connection::connectPublic(const std::string& solutionId, const std::string& platformUrl) {
-    Validator::validateId(solutionId, "field:solutionId ");
+Connection Connection::connectPublic(const std::string& solutionId, const std::string& platformUrl, 
+                                        const PKIVerificationOptions& verificationOptions) {
+    Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
         impl->connectPublic(solutionId, platformUrl);

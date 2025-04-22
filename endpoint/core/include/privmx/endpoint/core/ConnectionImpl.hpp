@@ -42,8 +42,17 @@ namespace core {
 class ConnectionImpl {
 public:
     ConnectionImpl();
-    void connect(const std::string& userPrivKey, const std::string& solutionId, const std::string& platformUrl);
-    void connectPublic(const std::string& solutionId, const std::string& platformUrl);
+    void connect(
+        const std::string& userPrivKey,
+        const std::string& solutionId,
+        const std::string& platformUrl,
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
+    );
+    void connectPublic(
+        const std::string& solutionId,
+        const std::string& platformUrl,
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
+    );
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
     std::vector<UserInfo> getContextUsers(const std::string& contextId);
@@ -95,6 +104,7 @@ private:
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::string _host;
+    BridgeIdentity _bridgeIdentity;
     rpc::ServerConfig _serverConfig;
     std::shared_ptr<KeyProvider> _keyProvider;
     std::shared_ptr<EventMiddleware> _eventMiddleware;
