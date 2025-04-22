@@ -18,18 +18,22 @@ namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-enum InboxDataSchemaVersion : int64_t {
-   UNKNOWN = 0,
-   VERSION_4 = 4,
-   VERSION_5 = 5
-};
-constexpr static InboxDataSchemaVersion CURRENT_INBOX_DATA_SCHEMA_VERSION = InboxDataSchemaVersion::VERSION_5;
+namespace InboxDataSchema {
+   enum Version : int64_t {
+      UNKNOWN = 0,
+      VERSION_4 = 4,
+      VERSION_5 = 5
+   };
+}
+constexpr static InboxDataSchema::Version CURRENT_INBOX_DATA_SCHEMA_VERSION = InboxDataSchema::Version::VERSION_5;
 
-enum EntryDataSchemaVersion : int64_t {
-   UNKNOWN = 0,
-   VERSION_1 = 1
-};
-constexpr static EntryDataSchemaVersion CURRENT_ENTRY_DATA_SCHEMA_VERSION = EntryDataSchemaVersion::VERSION_1;
+namespace EntryDataSchema {
+   enum Version : int64_t {
+      UNKNOWN = 0,
+      VERSION_1 = 1
+   };
+}
+constexpr static EntryDataSchema::Version CURRENT_ENTRY_DATA_SCHEMA_VERSION = EntryDataSchema::Version::VERSION_1;
 
 }  // namespace inbox
 }  // namespace endpoint

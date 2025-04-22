@@ -18,19 +18,23 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+namespace DataIntegrityObjectDataSchema {
+   enum Version : int64_t {
+      UNKNOWN = 0,
+      VERSION_1 = 1
+   };
+}
+constexpr static DataIntegrityObjectDataSchema::Version CURRENT_DATA_INTEGRITY_OBJECT_DATA_SCHEMA_VERSION = DataIntegrityObjectDataSchema::Version::VERSION_1;
 
-enum DataIntegrityObjectDataSchemaVersion : int64_t {
-   UNKNOWN = 0,
-   VERSION_1 = 1
-};
-constexpr static DataIntegrityObjectDataSchemaVersion CURRENT_DATA_INTEGRITY_OBJECT_DATA_SCHEMA_VERSION = DataIntegrityObjectDataSchemaVersion::VERSION_1;
 
-enum EncryptionKeyDataSchemaVersion : int64_t {
-   UNKNOWN = 0,
-   VERSION_1 = 1,
-   VERSION_2 = 2
-};
-constexpr static EncryptionKeyDataSchemaVersion CURRENT_ENCRYPTION_KEY_DATA_SCHEMA_VERSION = EncryptionKeyDataSchemaVersion::VERSION_2;
+namespace EncryptionKeyDataSchema {
+   enum Version : int64_t {
+      UNKNOWN = 0,
+      VERSION_1 = 1,
+      VERSION_2 = 2
+   };
+}
+constexpr static EncryptionKeyDataSchema::Version CURRENT_ENCRYPTION_KEY_DATA_SCHEMA_VERSION = EncryptionKeyDataSchema::Version::VERSION_2;
 
 
 }  // namespace core

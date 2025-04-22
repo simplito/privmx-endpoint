@@ -19,21 +19,25 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-enum StoreDataSchemaVersion : int64_t {
-   UNKNOWN = 0,
-   VERSION_1 = 1,
-   VERSION_4 = 4,
-   VERSION_5 = 5
-};
-constexpr static StoreDataSchemaVersion CURRENT_STORE_DATA_SCHEMA_VERSION = StoreDataSchemaVersion::VERSION_5;
+namespace StoreDataSchema {
+   enum Version : int64_t {
+      UNKNOWN = 0,
+      VERSION_1 = 1,
+      VERSION_4 = 4,
+      VERSION_5 = 5
+   };
+}
+constexpr static StoreDataSchema::Version CURRENT_STORE_DATA_SCHEMA_VERSION = StoreDataSchema::Version::VERSION_5;
 
-enum FileDataSchemaVersion : int64_t {
-   UNKNOWN = 0,
-   VERSION_1 = 1,
-   VERSION_4 = 4,
-   VERSION_5 = 5
-};
-constexpr static FileDataSchemaVersion CURRENT_FILE_DATA_SCHEMA_VERSION = FileDataSchemaVersion::VERSION_5;
+namespace FileDataSchema {
+   enum Version : int64_t {
+      UNKNOWN = 0,
+      VERSION_1 = 1,
+      VERSION_4 = 4,
+      VERSION_5 = 5
+   };
+}
+constexpr static FileDataSchema::Version CURRENT_FILE_DATA_SCHEMA_VERSION = FileDataSchema::Version::VERSION_5;
 
 }  // namespace store
 }  // namespace endpoint

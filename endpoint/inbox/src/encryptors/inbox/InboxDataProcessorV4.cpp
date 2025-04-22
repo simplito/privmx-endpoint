@@ -22,7 +22,7 @@ server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorMo
                                                                      const std::string& inboxKey) {
     
     auto serverPublicData = utils::TypedObjectFactory::createNewObject<server::PublicDataV4>();
-    serverPublicData.version(InboxDataSchemaVersion::VERSION_4);
+    serverPublicData.version(InboxDataSchema::Version::VERSION_4);
     serverPublicData.publicMeta(_dataEncryptor.signAndEncode(plainData.publicData.publicMeta, authorPrivateKey));
     try {
         serverPublicData.publicMetaObject(utils::Utils::parseJsonObject(plainData.publicData.publicMeta.stdString()));
@@ -35,7 +35,7 @@ server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorMo
     serverPublicData.inboxKeyId(plainData.publicData.inboxEntriesKeyId);
 
     auto serverPrivateData = utils::TypedObjectFactory::createNewObject<server::PrivateDataV4>();
-    serverPrivateData.version(InboxDataSchemaVersion::VERSION_4);
+    serverPrivateData.version(InboxDataSchema::Version::VERSION_4);
     serverPrivateData.privateMeta(
         _dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey));
     if (plainData.privateData.internalMeta.has_value()) {
@@ -56,7 +56,7 @@ server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorMo
 
 InboxDataResultV4 InboxDataProcessorV4::unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey) {
     InboxDataResultV4 result;
-    result.dataStructureVersion = InboxDataSchemaVersion::VERSION_4;
+    result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
     result.storeId = encryptedData.storeId();
     result.threadId = encryptedData.threadId();
     result.filesConfig = InboxDataHelper::fileConfigFromTypedObject(encryptedData.fileConfig());
@@ -79,7 +79,7 @@ InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublicOnly(const Poco::Dyn
 InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic::Var& publicData) {
 
     InboxPublicDataV4AsResult result;
-    result.dataStructureVersion = InboxDataSchemaVersion::VERSION_4;
+    result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
     result.statusCode = 0;
     try {
         validateVersion(publicData);
@@ -113,7 +113,7 @@ InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
     const server::InboxData& encryptedData, const std::string& inboxKey) {
 
     InboxPrivateDataV4AsResult result;
-    result.dataStructureVersion = InboxDataSchemaVersion::VERSION_4;
+    result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
     result.statusCode = 0;
     try {
         validateVersion(encryptedData.meta());
@@ -138,7 +138,7 @@ InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
 
 void InboxDataProcessorV4::validateVersion(const Poco::Dynamic::Var& data) {
     Poco::JSON::Object::Ptr obj = data.extract<Poco::JSON::Object::Ptr>();
-    if (obj->get("version") != InboxDataSchemaVersion::VERSION_4) {
+    if (obj->get("version").convert<Poco::Int64>() != InboxDataSchema::Version::VERSION_4) {
         throw InvalidEncryptedInboxDataVersionException();
     }
 }

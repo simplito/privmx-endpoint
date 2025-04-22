@@ -25,7 +25,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
         const privmx::crypto::PublicKey& encryptionKey, const crypto::PrivateKey& authorPrivateKey
 ) {
     auto result = privmx::utils::TypedObjectFactory::createNewObject<server::EncryptedKeyEntryDataV2>();
-    result.version(EncryptionKeyDataSchemaVersion::VERSION_2);
+    result.version(EncryptionKeyDataSchema::Version::VERSION_2);
     auto keyToEncrypt = privmx::utils::TypedObjectFactory::createNewObject<dynamic::EncryptionKey>();
     keyToEncrypt.id(key.id);
     keyToEncrypt.key(utils::Base64::from(key.key));
@@ -36,7 +36,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
     fieldChecksums.insert(std::make_pair("secretHash",key.secretHash));
     ExpandedDataIntegrityObject expandedDio = ExpandedDataIntegrityObject{
         key.dio, 
-        .structureVersion=EncryptionKeyDataSchemaVersion::VERSION_2, 
+        .structureVersion=EncryptionKeyDataSchema::Version::VERSION_2, 
         .fieldChecksums=fieldChecksums
     };
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
@@ -46,7 +46,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
 DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryDataV2& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey) {
     DecryptedEncKeyV2 result;
     result.statusCode = 0;
-    result.dataStructureVersion = EncryptionKeyDataSchemaVersion::VERSION_2;
+    result.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_2;
     try {
         assertDataFormat(encryptedEncKey);
         ExpandedDataIntegrityObject expandedDio = _DIOEncryptor.decodeAndVerify(encryptedEncKey.dio());
@@ -78,7 +78,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
 
 void EncKeyEncryptorV2::assertDataFormat(const server::EncryptedKeyEntryDataV2& encryptedEncKey) {
     if (encryptedEncKey.versionEmpty()                                          || 
-        encryptedEncKey.version() != EncryptionKeyDataSchemaVersion::VERSION_2  || 
+        encryptedEncKey.version() != EncryptionKeyDataSchema::Version::VERSION_2  || 
         encryptedEncKey.encryptedKeyEmpty()                                     ||
         encryptedEncKey.dioEmpty()
     ) {

@@ -22,7 +22,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
         throw DataIntegrityObjectMismatchEncKeyException();
     }
     auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<dynamic::DataIntegrityObject>();
-    dioJSON.version(DataIntegrityObjectDataSchemaVersion::VERSION_1);
+    dioJSON.version(DataIntegrityObjectDataSchema::Version::VERSION_1);
     dioJSON.creatorUserId(dio.creatorUserId);
     dioJSON.creatorPublicKey(dio.creatorPubKey);
     dioJSON.contextId(dio.contextId);
@@ -84,7 +84,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
 
 void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {
     if (dioJSON.versionEmpty()                                                 ||
-        dioJSON.version() != DataIntegrityObjectDataSchemaVersion::VERSION_1   ||
+        dioJSON.version() != DataIntegrityObjectDataSchema::Version::VERSION_1 ||
         dioJSON.creatorUserIdEmpty()                                           ||
         dioJSON.creatorPublicKeyEmpty()                                        ||
         dioJSON.contextIdEmpty()                                               ||

@@ -22,7 +22,7 @@ server::EncryptedThreadDataV4 ThreadDataEncryptorV4::encrypt(const ThreadDataToE
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedThreadDataV4>();
-    result.version(ThreadDataSchemaVersion::VERSION_4);
+    result.version(ThreadDataSchema::Version::VERSION_4);
     result.publicMeta(_dataEncryptor.signAndEncode(threadData.publicMeta, authorPrivateKey));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(threadData.publicMeta.stdString()));
@@ -43,7 +43,7 @@ DecryptedThreadDataV4 ThreadDataEncryptorV4::decrypt(
     const server::EncryptedThreadDataV4& encryptedThreadData, const std::string& encryptionKey) {
     DecryptedThreadDataV4 result;
     result.statusCode = 0;
-    result.dataStructureVersion = ThreadDataSchemaVersion::VERSION_4;
+    result.dataStructureVersion = ThreadDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedThreadData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedThreadData.authorPubKey());
@@ -72,7 +72,7 @@ DecryptedThreadDataV4 ThreadDataEncryptorV4::decrypt(
 }
 
 void ThreadDataEncryptorV4::validateVersion(const server::EncryptedThreadDataV4& encryptedThreadData) {
-    if (encryptedThreadData.version() != ThreadDataSchemaVersion::VERSION_4) {
-        throw InvalidEncryptedThreadDataVersionException(std::to_string(encryptedThreadData.version()) + " expected version: " + std::to_string(ThreadDataSchemaVersion::VERSION_4));
+    if (encryptedThreadData.version() != ThreadDataSchema::Version::VERSION_4) {
+        throw InvalidEncryptedThreadDataVersionException(std::to_string(encryptedThreadData.version()) + " expected version: " + std::to_string(ThreadDataSchema::Version::VERSION_4));
     }
 }

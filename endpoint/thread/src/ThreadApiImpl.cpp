@@ -411,8 +411,10 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     send_message_model.threadId(thread.id());
     send_message_model.keyId(msgKey.id);
     switch (getThreadEntryDataStructureVersion(thread.data().get(thread.data().size()-1))) {
-        case ThreadDataSchemaVersion::VERSION_1:
-        case ThreadDataSchemaVersion::VERSION_4: {
+        case ThreadDataSchema::Version::UNKNOWN: 
+            throw UnknowThreadFormatException();
+        case ThreadDataSchema::Version::VERSION_1:
+        case ThreadDataSchema::Version::VERSION_4: {
             MessageDataToEncryptV4 messageData {
                 .publicMeta = publicMeta,
                 .privateMeta = privateMeta,
@@ -423,7 +425,7 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
             send_message_model.data(encryptedMessageData.asVar());
             break;
         }
-        case ThreadDataSchemaVersion::VERSION_5: {
+        case ThreadDataSchema::Version::VERSION_5: {
             auto messageDIO = _connection.getImpl()->createDIO(
                 thread.contextId(),
                 resourceId,
@@ -475,8 +477,10 @@ void ThreadApiImpl::updateMessage(
     send_message_model.messageId(messageId);
     send_message_model.keyId(msgKey.id);
     switch (getThreadEntryDataStructureVersion(thread.data().get(thread.data().size()-1))) {
-        case ThreadDataSchemaVersion::VERSION_1:
-        case ThreadDataSchemaVersion::VERSION_4: {
+        case ThreadDataSchema::Version::UNKNOWN: 
+            throw UnknowThreadFormatException();
+        case ThreadDataSchema::Version::VERSION_1:
+        case ThreadDataSchema::Version::VERSION_4: {
             MessageDataToEncryptV4 messageData {
                 .publicMeta = publicMeta,
                 .privateMeta = privateMeta,
@@ -487,7 +491,7 @@ void ThreadApiImpl::updateMessage(
             send_message_model.data(encryptedMessageData.asVar());
             break;
         }
-        case ThreadDataSchemaVersion::VERSION_5: {
+        case ThreadDataSchema::Version::VERSION_5: {
             auto messageDIO = _connection.getImpl()->createDIO(
                 message.contextId(),
                 message.resourceIdOpt(""),
@@ -676,11 +680,11 @@ DecryptedThreadDataV4 ThreadApiImpl::decryptThreadV4(server::Thread2DataEntry th
         auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV4>(threadEntry.data());
         return _threadDataEncryptorV4.decrypt(encryptedThreadData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedThreadDataV4{{.dataStructureVersion = ThreadDataSchemaVersion::VERSION_4, .statusCode = e.getCode()}, {},{},{},{}};
+        return DecryptedThreadDataV4{{.dataStructureVersion = ThreadDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedThreadDataV4{{.dataStructureVersion = ThreadDataSchemaVersion::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
+        return DecryptedThreadDataV4{{.dataStructureVersion = ThreadDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
     } catch (...) {
-        return DecryptedThreadDataV4{{.dataStructureVersion = ThreadDataSchemaVersion::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
+        return DecryptedThreadDataV4{{.dataStructureVersion = ThreadDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
     }
 }
 
@@ -694,11 +698,11 @@ DecryptedThreadDataV5 ThreadApiImpl::decryptThreadV5(server::Thread2DataEntry th
         }
         return _threadDataEncryptorV5.decrypt(encryptedThreadData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedThreadDataV5{{.dataStructureVersion = ThreadDataSchemaVersion::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
+        return DecryptedThreadDataV5{{.dataStructureVersion = ThreadDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedThreadDataV5{{.dataStructureVersion = ThreadDataSchemaVersion::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+        return DecryptedThreadDataV5{{.dataStructureVersion = ThreadDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
     } catch (...) {
-        return DecryptedThreadDataV5{{.dataStructureVersion = ThreadDataSchemaVersion::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+        return DecryptedThreadDataV5{{.dataStructureVersion = ThreadDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
 }
 
@@ -791,27 +795,29 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo th
     };
 }
 
-ThreadDataSchemaVersion ThreadApiImpl::getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry) {
+ThreadDataSchema::Version ThreadApiImpl::getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(threadEntry.data());
-        auto version = versioned.versionOpt(MessageDataSchemaVersion::UNKNOWN);
+        auto version = versioned.versionOpt(MessageDataSchema::Version::UNKNOWN);
         switch (version) {
-            case ThreadDataSchemaVersion::VERSION_4:
-                return ThreadDataSchemaVersion::VERSION_4;
-            case ThreadDataSchemaVersion::VERSION_5:
-                return ThreadDataSchemaVersion::VERSION_5;
+            case ThreadDataSchema::Version::VERSION_4:
+                return ThreadDataSchema::Version::VERSION_4;
+            case ThreadDataSchema::Version::VERSION_5:
+                return ThreadDataSchema::Version::VERSION_5;
             default:
-                return ThreadDataSchemaVersion::UNKNOWN;
+                return ThreadDataSchema::Version::UNKNOWN;
         }
     } else if (threadEntry.data().isString()) {
-        return ThreadDataSchemaVersion::VERSION_1;
+        return ThreadDataSchema::Version::VERSION_1;
     }
-    return ThreadDataSchemaVersion::UNKNOWN;
+    return ThreadDataSchema::Version::UNKNOWN;
 }
 
 std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     switch (getThreadEntryDataStructureVersion(threadEntry)) {
-        case ThreadDataSchemaVersion::VERSION_1: {
+        case ThreadDataSchema::Version::UNKNOWN: 
+            throw UnknowThreadFormatException();
+        case ThreadDataSchema::Version::VERSION_1: {
             return std::make_tuple(
                 convertThreadDataV1ToThread(thread, decryptThreadV1(threadEntry, encKey)),
                 core::DataIntegrityObject{
@@ -826,7 +832,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                 }
             );
         }
-        case ThreadDataSchemaVersion::VERSION_4: {
+        case ThreadDataSchema::Version::VERSION_4: {
             auto decryptedThreadData = decryptThreadV4(threadEntry, encKey);
             return std::make_tuple(
                 convertDecryptedThreadDataV4ToThread(thread, decryptedThreadData), 
@@ -842,7 +848,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                 }
             );
         }
-        case ThreadDataSchemaVersion::VERSION_5: {
+        case ThreadDataSchema::Version::VERSION_5: {
             auto decryptedThreadData = decryptThreadV5(threadEntry, encKey);
             return std::make_tuple(convertDecryptedThreadDataV5ToThread(thread, decryptedThreadData), decryptedThreadData.dio);
         }            
@@ -991,11 +997,11 @@ DecryptedMessageDataV4 ThreadApiImpl::decryptMessageDataV4(server::Message messa
         auto encryptedMessageData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV4>(message.data());
         return _messageDataEncryptorV4.decrypt(encryptedMessageData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchemaVersion::VERSION_4, .statusCode = e.getCode()}, {},{},{},{},{}};
+        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchemaVersion::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
     } catch (...) {
-        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchemaVersion::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
 }
 
@@ -1009,11 +1015,11 @@ DecryptedMessageDataV5 ThreadApiImpl::decryptMessageDataV5(server::Message messa
         }
         return _messageDataEncryptorV5.decrypt(encryptedMessageData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchemaVersion::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
+        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchemaVersion::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
+        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
     } catch (...) {
-        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchemaVersion::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
+        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
     }
 }
 
@@ -1090,34 +1096,38 @@ Message ThreadApiImpl::convertDecryptedMessageDataV5ToMessage(server::Message me
 }
 
 
-MessageDataSchemaVersion ThreadApiImpl::getMessagesDataStructureVersion(server::Message message) {
+MessageDataSchema::Version ThreadApiImpl::getMessagesDataStructureVersion(server::Message message) {
     // If data is not string, then data is object and has version field
     // Solution with data as object is newer than data as base64 string
     if (message.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(message.data());
-        auto version = versioned.versionOpt(MessageDataSchemaVersion::UNKNOWN);
+        auto version = versioned.versionOpt(MessageDataSchema::Version::UNKNOWN);
         switch (version) {
-            case MessageDataSchemaVersion::VERSION_4:
-                return MessageDataSchemaVersion::VERSION_4;
-            case MessageDataSchemaVersion::VERSION_5:
-                return MessageDataSchemaVersion::VERSION_5;
+            case MessageDataSchema::Version::VERSION_4:
+                return MessageDataSchema::Version::VERSION_4;
+            case MessageDataSchema::Version::VERSION_5:
+                return MessageDataSchema::Version::VERSION_5;
             default:
-                return MessageDataSchemaVersion::UNKNOWN;
+                return MessageDataSchema::Version::UNKNOWN;
         }
     } else if (message.data().isString()) {
         // Temporary Solution need better way to dif V3 from V2
         if(core::DataEncryptorUtil::hasSign(utils::Base64::toString(message.data()))) {
-            return MessageDataSchemaVersion::VERSION_3;
+            return MessageDataSchema::Version::VERSION_3;
         } else {
-            return MessageDataSchemaVersion::VERSION_2;
+            return MessageDataSchema::Version::VERSION_2;
         }
     }
-    return MessageDataSchemaVersion::UNKNOWN;
+    return MessageDataSchema::Version::UNKNOWN;
 }
 
 std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey) {
     switch (getMessagesDataStructureVersion(message)) {
-        case MessageDataSchemaVersion::VERSION_2: {
+        case MessageDataSchema::Version::UNKNOWN: {
+            auto e = UnknowMessageFormatException();
+            return std::make_tuple(Message{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+        }
+        case MessageDataSchema::Version::VERSION_2: {
             return std::make_tuple(
                 convertMessageDataV2ToMessage(message,  decryptMessageDataV2(message, encKey)), 
                 core::DataIntegrityObject{
@@ -1132,7 +1142,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                 }
             );
         }
-        case MessageDataSchemaVersion::VERSION_3: {
+        case MessageDataSchema::Version::VERSION_3: {
             return std::make_tuple(
                 convertMessageDataV3ToMessage(message,  decryptMessageDataV3(message, encKey)), 
                 core::DataIntegrityObject{
@@ -1147,7 +1157,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                 }
             );
         }
-        case MessageDataSchemaVersion::VERSION_4: {
+        case MessageDataSchema::Version::VERSION_4: {
             auto decryptedMessage = decryptMessageDataV4(message, encKey);
             return std::make_tuple(
                 convertDecryptedMessageDataV4ToMessage(message, decryptedMessage), 
@@ -1163,7 +1173,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                 }
             );
         }
-        case MessageDataSchemaVersion::VERSION_5: {
+        case MessageDataSchema::Version::VERSION_5: {
             auto decryptedMessage = decryptMessageDataV5(message, encKey);
             return std::make_tuple(
                 convertDecryptedMessageDataV5ToMessage(message, decryptedMessage), 
@@ -1277,11 +1287,13 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message mes
 
 ThreadInternalMetaV5 ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     switch (getThreadEntryDataStructureVersion(threadEntry)) {
-        case ThreadDataSchemaVersion::VERSION_1:
+        case ThreadDataSchema::Version::UNKNOWN:
+            throw UnknowThreadFormatException();
+        case ThreadDataSchema::Version::VERSION_1:
             return ThreadInternalMetaV5();
-        case ThreadDataSchemaVersion::VERSION_4:
+        case ThreadDataSchema::Version::VERSION_4:
             return ThreadInternalMetaV5();
-        case ThreadDataSchemaVersion::VERSION_5:
+        case ThreadDataSchema::Version::VERSION_5:
             return decryptThreadV5(threadEntry, encKey).internalMeta;
     }
     throw UnknowThreadFormatException();
@@ -1315,11 +1327,13 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
     try {
         switch (getThreadEntryDataStructureVersion(thread_data_entry)) {
-            case ThreadDataSchemaVersion::VERSION_1:
+            case ThreadDataSchema::Version::UNKNOWN:
+                return UnknowThreadFormatException().getCode();
+            case ThreadDataSchema::Version::VERSION_1:
                 return 0;
-            case ThreadDataSchemaVersion::VERSION_4:
+            case ThreadDataSchema::Version::VERSION_4:
                 return 0;
-            case ThreadDataSchemaVersion::VERSION_5: {
+            case ThreadDataSchema::Version::VERSION_5: {
                 auto thread_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(thread_data_entry.data());
                 auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
                 if(
@@ -1347,13 +1361,15 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
 uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId) {
     try {
         switch (getMessagesDataStructureVersion(message)) {
-            case MessageDataSchemaVersion::VERSION_2:
+            case MessageDataSchema::Version::UNKNOWN:
+                return UnknowMessageFormatException().getCode();
+            case MessageDataSchema::Version::VERSION_2:
                 return 0;
-            case MessageDataSchemaVersion::VERSION_3:
+            case MessageDataSchema::Version::VERSION_3:
                 return 0;
-            case MessageDataSchemaVersion::VERSION_4:
+            case MessageDataSchema::Version::VERSION_4:
                 return 0;
-            case MessageDataSchemaVersion::VERSION_5: {
+            case MessageDataSchema::Version::VERSION_5: {
                 auto encData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV5>(message.data());
                 auto dio = _messageDataEncryptorV5.getDIOAndAssertIntegrity(encData);
                 if(

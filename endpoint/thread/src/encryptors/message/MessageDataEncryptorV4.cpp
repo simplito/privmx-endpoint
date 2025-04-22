@@ -25,7 +25,7 @@ server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageData
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedMessageDataV4>();
-    result.version(MessageDataSchemaVersion::VERSION_4);
+    result.version(MessageDataSchema::Version::VERSION_4);
     result.publicMeta(_dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(messageData.publicMeta.stdString()));
@@ -47,7 +47,7 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
     const server::EncryptedMessageDataV4& encryptedMessageData, const std::string& encryptionKey) {
     DecryptedMessageDataV4 result;
     result.statusCode = 0;
-    result.dataStructureVersion = MessageDataSchemaVersion::VERSION_4;
+    result.dataStructureVersion = MessageDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey());
@@ -77,7 +77,7 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
 }
 
 void MessageDataEncryptorV4::validateVersion(const server::EncryptedMessageDataV4& encryptedMessageData) {
-    if (encryptedMessageData.version() != MessageDataSchemaVersion::VERSION_4) {
-        throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version()) + " expected version: " + std::to_string(MessageDataSchemaVersion::VERSION_4));
+    if (encryptedMessageData.version() != MessageDataSchema::Version::VERSION_4) {
+        throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version()) + " expected version: " + std::to_string(MessageDataSchema::Version::VERSION_4));
     }
 }

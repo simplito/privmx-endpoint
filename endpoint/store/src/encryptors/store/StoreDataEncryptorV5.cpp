@@ -23,7 +23,7 @@ server::EncryptedStoreDataV5 StoreDataEncryptorV5::encrypt(const StoreDataToEncr
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedStoreDataV5>();
-    result.version(StoreDataSchemaVersion::VERSION_5);
+    result.version(StoreDataSchema::Version::VERSION_5);
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(storeData.publicMeta, authorPrivateKey));
     fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
@@ -41,7 +41,7 @@ server::EncryptedStoreDataV5 StoreDataEncryptorV5::encrypt(const StoreDataToEncr
     result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, encryptionKey));
     fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    core::ExpandedDataIntegrityObject expandedDio = {storeData.dio, .structureVersion=StoreDataSchemaVersion::VERSION_5, .fieldChecksums=fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {storeData.dio, .structureVersion=StoreDataSchema::Version::VERSION_5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result;
 }
@@ -50,7 +50,7 @@ DecryptedStoreDataV5 StoreDataEncryptorV5::decrypt(
     const server::EncryptedStoreDataV5& encryptedStoreData, const std::string& encryptionKey) {
     DecryptedStoreDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = StoreDataSchemaVersion::VERSION_5;
+    result.dataStructureVersion = StoreDataSchema::Version::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedStoreData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedStoreData.authorPubKey());
@@ -81,7 +81,7 @@ DecryptedStoreDataV5 StoreDataEncryptorV5::decrypt(
 DecryptedStoreDataV5 StoreDataEncryptorV5::extractPublic(const server::EncryptedStoreDataV5& encryptedStoreData) {
     DecryptedStoreDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = StoreDataSchemaVersion::VERSION_5;
+    result.dataStructureVersion = StoreDataSchema::Version::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedStoreData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedStoreData.authorPubKey());
@@ -109,7 +109,7 @@ core::DataIntegrityObject StoreDataEncryptorV5::getDIOAndAssertIntegrity(const s
     assertDataFormat(encryptedStoreData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedStoreData.dio());
     if (
-        dio.structureVersion != StoreDataSchemaVersion::VERSION_5 ||
+        dio.structureVersion != StoreDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedStoreData.authorPubKey() ||
         dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.publicMeta()) ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedStoreData.privateMeta()) || 
@@ -122,11 +122,11 @@ core::DataIntegrityObject StoreDataEncryptorV5::getDIOAndAssertIntegrity(const s
 
 void StoreDataEncryptorV5::assertDataFormat(const server::EncryptedStoreDataV5& encryptedStoreData) {
     if (encryptedStoreData.versionEmpty() ||
-        encryptedStoreData.version() != StoreDataSchemaVersion::VERSION_5 ||
+        encryptedStoreData.version() != StoreDataSchema::Version::VERSION_5 ||
         encryptedStoreData.publicMetaEmpty() ||
         encryptedStoreData.privateMetaEmpty() ||
         encryptedStoreData.authorPubKeyEmpty()
     ) {
-        throw InvalidEncryptedStoreDataVersionException(std::to_string(encryptedStoreData.version()) + " expected version: " + std::to_string(StoreDataSchemaVersion::VERSION_5));
+        throw InvalidEncryptedStoreDataVersionException(std::to_string(encryptedStoreData.version()) + " expected version: " + std::to_string(StoreDataSchema::Version::VERSION_5));
     }
 }
