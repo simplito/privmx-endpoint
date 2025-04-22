@@ -130,7 +130,7 @@ template<>
 class StructValidator<PKIVerificationOptions> {
 public:
     static void validate(const PKIVerificationOptions& value, const std::string& stack_trace = "");
-    static std::string getReadableType() { return "VerificationOptions"; }
+    static std::string getReadableType() { return "PKIVerificationOptions"; }
 };
 
 }  // namespace core
