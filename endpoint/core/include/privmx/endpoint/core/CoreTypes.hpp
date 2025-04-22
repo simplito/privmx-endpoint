@@ -21,6 +21,12 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+struct BridgeIdentity {
+    std::string bridgeUrl;
+    std::optional<std::string> publicKey;
+    std::optional<std::string> instanceId;
+};
+
 struct EncKey {
     std::string id;
     std::string key;
@@ -69,8 +75,6 @@ struct DecryptedEncKeyV2 : public DecryptedEncKey {
     std::string keySecret;
     std::string secretHash;
 };
-
-
 
 }  // namespace core
 }  // namespace endpoint
