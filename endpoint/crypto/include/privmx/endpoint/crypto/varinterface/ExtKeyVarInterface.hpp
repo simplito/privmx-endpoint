@@ -66,6 +66,9 @@ public:
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
+    const core::VarSerializer::Options& getSerializerOptions() const {
+        return _serializer.getOptions();
+    }
 private:
     static std::map<METHOD, Poco::Dynamic::Var (ExtKeyVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 

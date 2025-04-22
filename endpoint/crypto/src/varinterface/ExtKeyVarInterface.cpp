@@ -40,7 +40,7 @@ Poco::Dynamic::Var ExtKeyVarInterface::fromSeed(const Poco::Dynamic::Var& args) 
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto seed = _deserializer.deserialize<core::Buffer>(argsArr->get(0), "seed");
     auto extKey = crypto::ExtKey::fromSeed(seed);
-    auto service = new ExtKeyVarInterface(extKey, core::VarSerializer::Options{.addType=false, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    auto service = new ExtKeyVarInterface(extKey, getSerializerOptions());
     return (int64_t)service;
 }
 
@@ -48,13 +48,13 @@ Poco::Dynamic::Var ExtKeyVarInterface::fromBase58(const Poco::Dynamic::Var& args
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto base58 = _deserializer.deserialize<std::string>(argsArr->get(0), "base58");
     auto extKey = crypto::ExtKey::fromBase58(base58);
-    auto service = new ExtKeyVarInterface(extKey, core::VarSerializer::Options{.addType=false, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    auto service = new ExtKeyVarInterface(extKey, getSerializerOptions());
     return (int64_t)service;}
 
 Poco::Dynamic::Var ExtKeyVarInterface::generateRandom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 0);
     auto extKey = crypto::ExtKey::generateRandom();
-    auto service = new ExtKeyVarInterface(extKey, core::VarSerializer::Options{.addType=false, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    auto service = new ExtKeyVarInterface(extKey, getSerializerOptions());
     return (int64_t)service;
 }
 
@@ -62,7 +62,7 @@ Poco::Dynamic::Var ExtKeyVarInterface::derive(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto index = _deserializer.deserialize<int64_t>(argsArr->get(0), "index");
     auto extKey = _extKey.derive(index);
-    auto service = new ExtKeyVarInterface(extKey, core::VarSerializer::Options{.addType=false, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    auto service = new ExtKeyVarInterface(extKey, getSerializerOptions());
     return (int64_t)service;
 }
 
@@ -70,7 +70,7 @@ Poco::Dynamic::Var ExtKeyVarInterface::deriveHardened(const Poco::Dynamic::Var& 
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto index = _deserializer.deserialize<int64_t>(argsArr->get(0), "index");
     auto extKey = _extKey.deriveHardened(index);
-    auto service = new ExtKeyVarInterface(extKey, core::VarSerializer::Options{.addType=false, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    auto service = new ExtKeyVarInterface(extKey, getSerializerOptions());
     return (int64_t)service;
 }
 
