@@ -67,6 +67,11 @@ struct Message {
      * status code of retrieval and decryption of the message
      */
     int64_t statusCode;
+
+    /**
+     * Version of the Message data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 
@@ -149,6 +154,11 @@ struct Thread {
      * status code of retrieval and decryption of the Thread
      */
     int64_t statusCode;
+
+    /**
+     * Version of the Thread data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 
