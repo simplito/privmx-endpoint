@@ -824,7 +824,7 @@ Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::comp
         .policy = {},
         .filesCount = store.files(),
         .statusCode = statusCode,
-        .schemaVersion = 1
+        .schemaVersion = StoreDataSchema::VERSION_1
     };
 }
 
@@ -853,7 +853,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, cons
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
         .statusCode = storeData.statusCode,
-        .schemaVersion = 4
+        .schemaVersion = StoreDataSchema::VERSION_4
     };
     return result;
 }
@@ -883,7 +883,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
         .statusCode = storeData.statusCode,
-        .schemaVersion = 5
+        .schemaVersion = StoreDataSchema::VERSION_5
     };
     return result;
 }
@@ -1159,7 +1159,7 @@ File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::comp
         .size = storeFileMeta.sizeOpt(0),
         .authorPubKey = storeFileMeta.authorEmpty() ? "" : storeFileMeta.author().pubKeyOpt(""),
         .statusCode = storeFileMeta.statusCodeOpt(0),
-        .schemaVersion = 1
+        .schemaVersion = FileDataSchema::VERSION_1
     };
     return result;
 }
@@ -1178,7 +1178,7 @@ File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const Dec
         .size = fileData.fileSize,
         .authorPubKey = fileData.authorPubKey,
         .statusCode = fileData.statusCode,
-        .schemaVersion = 4
+        .schemaVersion = FileDataSchema::VERSION_4
     };
 }
 
@@ -1197,7 +1197,7 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
         .size = internalMeta.size(),
         .authorPubKey = fileData.authorPubKey,
         .statusCode = fileData.statusCode,
-        .schemaVersion = 5
+        .schemaVersion = FileDataSchema::VERSION_5
     };
 }
 
