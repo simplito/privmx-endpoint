@@ -123,3 +123,12 @@ ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynami
     return result;
 }
 
+template<>
+VerificationOptions VarDeserializer::deserialize<VerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    VerificationOptions result {};
+    result.publicKey = deserializeOptional<std::string>(obj->get("publicKey"), name + ".get");
+    result.instanceId = deserializeOptional<std::string>(obj->get("instanceId"), name + ".update");
+    return result;
+}

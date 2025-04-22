@@ -126,6 +126,13 @@ public:
     static std::string getReadableType() { return "LibPlatformDisconnectedEvent"; }
 };
 
+template<>
+class StructValidator<VerificationOptions> {
+public:
+    static void validate(const VerificationOptions& value, const std::string& stack_trace = "");
+    static std::string getReadableType() { return "VerificationOptions"; }
+};
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

@@ -25,6 +25,7 @@ Connection Connection::connect(const std::string& userPrivKey, const std::string
                                 const std::string& platformUrl, const VerificationOptions& verificationOptions) {
     Validator::validatePrivKeyWIF(userPrivKey, "field:userPrivKey ");
     Validator::validateId(solutionId, "field:solutionId ");
+    Validator::validateClass<VerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
         impl->connect(userPrivKey, solutionId, platformUrl);
@@ -37,7 +38,7 @@ Connection Connection::connect(const std::string& userPrivKey, const std::string
 
 Connection Connection::connectPublic(const std::string& solutionId, const std::string& platformUrl, 
                                         const VerificationOptions& verificationOptions) {
-    Validator::validateId(solutionId, "field:solutionId ");
+    Validator::validateClass<VerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
         impl->connectPublic(solutionId, platformUrl);
