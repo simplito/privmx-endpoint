@@ -312,7 +312,7 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
         if(type == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationFailed});
         }
-        return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode};
+        return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
     } else {
         if(type == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -347,7 +347,7 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
         auto store = storesList.stores().get(i);
         if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
         auto statusCode = validateStoreDataIntegrity(store);
-        stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode});
+        stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}});
         if(statusCode == 0) {
             if(type == STORE_TYPE_FILTER_FLAG) {
                 _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -823,7 +823,8 @@ Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::comp
         .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
         .policy = {},
         .filesCount = store.files(),
-        .statusCode = statusCode
+        .statusCode = statusCode,
+        .schemaVersion = 1
     };
 }
 
@@ -851,7 +852,8 @@ Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, cons
         .privateMeta = storeData.privateMeta,
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
-        .statusCode = storeData.statusCode
+        .statusCode = storeData.statusCode,
+        .schemaVersion = 4
     };
     return result;
 }
@@ -880,7 +882,8 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
         .privateMeta = storeData.privateMeta,
         .policy = core::Factory::parsePolicyServerObject(store.policy()), 
         .filesCount = store.files(),
-        .statusCode = storeData.statusCode
+        .statusCode = storeData.statusCode,
+        .schemaVersion = 5
     };
     return result;
 }
@@ -946,7 +949,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
         }
     }
     auto e = UnknowStoreFormatException();
-    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, core::DataIntegrityObject());
+    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
 }
 
 std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List<server::Store> stores) {
@@ -982,7 +985,7 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
                 result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result.push_back(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()});
+            result.push_back(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}});
             storesDIO.push_back(core::DataIntegrityObject());
 
         }
@@ -1155,7 +1158,8 @@ File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::comp
         .privateMeta = core::Buffer::from(utils::Utils::stringifyVar(storeFileMeta)),
         .size = storeFileMeta.sizeOpt(0),
         .authorPubKey = storeFileMeta.authorEmpty() ? "" : storeFileMeta.author().pubKeyOpt(""),
-        .statusCode = storeFileMeta.statusCodeOpt(0)
+        .statusCode = storeFileMeta.statusCodeOpt(0),
+        .schemaVersion = 1
     };
     return result;
 }
@@ -1173,7 +1177,8 @@ File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const Dec
         .privateMeta = fileData.privateMeta,
         .size = fileData.fileSize,
         .authorPubKey = fileData.authorPubKey,
-        .statusCode = fileData.statusCode
+        .statusCode = fileData.statusCode,
+        .schemaVersion = 4
     };
 }
 
@@ -1191,7 +1196,8 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
         .privateMeta = fileData.privateMeta,
         .size = internalMeta.size(),
         .authorPubKey = fileData.authorPubKey,
-        .statusCode = fileData.statusCode
+        .statusCode = fileData.statusCode,
+        .schemaVersion = 5
     };
 }
 
@@ -1257,7 +1263,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
         }
     }
     auto e = UnknowFileFormatException();
-    return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+    return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode(), {}}, core::DataIntegrityObject());
 }
 
 std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files) {
@@ -1286,10 +1292,10 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
                     result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(File{{},{},{},{},{},.statusCode = statusCode});
+                result.push_back(File{{},{},{},{},{},.statusCode = statusCode, {}});
             }
         } catch (const core::Exception& e) {
-            result.push_back(File{{},{},{},{},{},.statusCode = e.getCode()});
+            result.push_back(File{{},{},{},{},{},.statusCode = e.getCode(), {}});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -1351,11 +1357,11 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file) {
         auto store = getRawStoreFromCacheOrBridge(file.storeId());
         return decryptAndConvertFileDataToFileInfo(store, file);
     } catch (const core::Exception& e) {
-        return File{{},{},{},{},{},.statusCode = e.getCode()};
+        return File{{},{},{},{},{},.statusCode = e.getCode(), {}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return File{{},{},{},{},{},.statusCode = e.getCode()};
+        return File{{},{},{},{},{},.statusCode = e.getCode(), {}};
     } catch (...) {
-        return File{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
+        return File{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE, {}};
     }
 }
 
