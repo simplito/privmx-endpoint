@@ -775,7 +775,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
     switch (getInboxDataEntryStructureVersion(inboxEntry)) {
         case InboxDataSchema::Version::UNKNOWN: {
             auto e = UnknownInboxFormatException();
-            return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode()}, core::DataIntegrityObject());
+            return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode(),{}}, core::DataIntegrityObject());
         }
         case InboxDataSchema::Version::VERSION_4: {
             auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);

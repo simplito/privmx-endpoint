@@ -910,7 +910,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
     switch (getStoreEntryDataStructureVersion(storeEntry)) {
         case StoreDataSchema::Version::UNKNOWN: {
             auto e = UnknowStoreFormatException();
-            return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode()}, core::DataIntegrityObject());
+            return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(),{}}, core::DataIntegrityObject());
         }
         case StoreDataSchema::Version::VERSION_1: {
             return std::make_tuple(
@@ -1223,7 +1223,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
     switch (getFileDataStructureVersion(file)) {
         case FileDataSchema::Version::UNKNOWN: {
             auto e = UnknowFileFormatException();
-            return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+            return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode(),{}}, core::DataIntegrityObject());
         }
         case FileDataSchema::Version::VERSION_1: {
             auto decryptedFile = decryptStoreFileV1(file, encKey).meta;

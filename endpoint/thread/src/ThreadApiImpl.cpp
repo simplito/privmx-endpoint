@@ -1132,7 +1132,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
     switch (getMessagesDataStructureVersion(message)) {
         case MessageDataSchema::Version::UNKNOWN: {
             auto e = UnknowMessageFormatException();
-            return std::make_tuple(Message{{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+            return std::make_tuple(Message{{},{},{},{},{},.statusCode = e.getCode(),{}}, core::DataIntegrityObject());
         }
         case MessageDataSchema::Version::VERSION_2: {
             return std::make_tuple(
