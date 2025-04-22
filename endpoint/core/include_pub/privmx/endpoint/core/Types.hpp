@@ -175,15 +175,15 @@ struct ContainerPolicy : public ContainerPolicyWithoutItem {
 /**
  * Options used to verify if Bridge on given url is the one you expect.
  */
-struct VerificationOptions {
+struct PKIVerificationOptions {
     /** 
      * Bridge public Key.
      */
-    std::optional<std::string> publicKey;
+    std::optional<std::string> bridgePubKey;
     /** 
      * Bridge instance Id given by PKI.
      */
-    std::optional<std::string> instanceId;
+    std::optional<std::string> bridgeInstanceId;
 };
 
 }  // namespace core

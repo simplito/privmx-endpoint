@@ -46,12 +46,12 @@ public:
         const std::string& userPrivKey,
         const std::string& solutionId,
         const std::string& platformUrl,
-        const VerificationOptions& verificationOptions = VerificationOptions()
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
     );
     void connectPublic(
         const std::string& solutionId,
         const std::string& platformUrl,
-        const VerificationOptions& verificationOptions = VerificationOptions()
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
     );
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);

@@ -127,9 +127,9 @@ public:
 };
 
 template<>
-class StructValidator<VerificationOptions> {
+class StructValidator<PKIVerificationOptions> {
 public:
-    static void validate(const VerificationOptions& value, const std::string& stack_trace = "");
+    static void validate(const PKIVerificationOptions& value, const std::string& stack_trace = "");
     static std::string getReadableType() { return "VerificationOptions"; }
 };
 

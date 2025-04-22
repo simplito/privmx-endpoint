@@ -28,7 +28,7 @@ public:
      * @return Connection object
      */
     static Connection connect(const std::string& userPrivKey, const std::string& solutionId,
-                              const std::string& bridgeUrl, const VerificationOptions& verificationOptions = VerificationOptions());
+                              const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
 
     /**
      * Connects to the PrivMX Bridge Server as a guest user.
@@ -39,7 +39,7 @@ public:
      * @return Connection object
      */                                     
     static Connection connectPublic(const std::string& solutionId, const std::string& bridgeUrl, 
-                                    const VerificationOptions& verificationOptions = VerificationOptions());
+                                    const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
     
     /**
      * //doc-gen:ignore

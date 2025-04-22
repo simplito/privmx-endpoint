@@ -22,8 +22,8 @@ namespace endpoint {
 namespace core {
 
 struct BridgeIdentity {
-    std::string bridgeUrl;
-    std::optional<std::string> publicKey;
+    std::string url;
+    std::optional<std::string> pubKey;
     std::optional<std::string> instanceId;
 };
 

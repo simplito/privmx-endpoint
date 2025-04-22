@@ -28,7 +28,7 @@ ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
 }
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
-                             const std::string& platformUrl, const VerificationOptions& verificationOptions) {
+                             const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
     PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
     rpc::ConnectionOptions options;
     auto port = Poco::URI(platformUrl).getPort();
@@ -36,9 +36,9 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = true;
     _bridgeIdentity = BridgeIdentity{
-        .bridgeUrl=options.url, 
-        .publicKey=verificationOptions.publicKey, 
-        .instanceId=verificationOptions.instanceId
+        .url=options.url, 
+        .pubKey=verificationOptions.bridgePubKey, 
+        .instanceId=verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::fromWIF(userPrivKey);
     _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
@@ -79,7 +79,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
-void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl, const VerificationOptions& verificationOptions) {
+void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
     // TODO: solutionId is reserved for future use
     PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
     rpc::ConnectionOptions options;
@@ -88,9 +88,9 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = false;
     _bridgeIdentity = BridgeIdentity{
-        .bridgeUrl=options.url, 
-        .publicKey=verificationOptions.publicKey, 
-        .instanceId=verificationOptions.instanceId
+        .url=options.url, 
+        .pubKey=verificationOptions.bridgePubKey, 
+        .instanceId=verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::generateRandom();
     _userPrivKey = key;

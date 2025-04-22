@@ -85,7 +85,7 @@ template<>
 ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
-VerificationOptions VarDeserializer::deserialize<VerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name);
+PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name);
 
 }  // namespace core
 }  // namespace endpoint

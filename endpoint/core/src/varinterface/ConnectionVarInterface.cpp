@@ -29,9 +29,9 @@ Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& arg
     auto userPrivKey = _deserializer.deserialize<std::string>(argsArr->get(0), "userPrivKey");
     auto solutionId = _deserializer.deserialize<std::string>(argsArr->get(1), "solutionId");
     auto platformUrl = _deserializer.deserialize<std::string>(argsArr->get(2), "platformUrl");
-    auto verificationOptions = VerificationOptions();
+    auto verificationOptions = PKIVerificationOptions();
     if(args.size() >= 4) {
-        verificationOptions = _deserializer.deserialize<VerificationOptions>(argsArr->get(3), "verificationOptions");
+        verificationOptions = _deserializer.deserialize<PKIVerificationOptions>(argsArr->get(3), "verificationOptions");
     }
     _connection = Connection::connect(userPrivKey, solutionId, platformUrl, verificationOptions);
     return {};
@@ -41,9 +41,9 @@ Poco::Dynamic::Var ConnectionVarInterface::connectPublic(const Poco::Dynamic::Va
     auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 2, 3);
     auto solutionId = _deserializer.deserialize<std::string>(argsArr->get(0), "solutionId");
     auto platformUrl = _deserializer.deserialize<std::string>(argsArr->get(1), "platformUrl");
-    auto verificationOptions = VerificationOptions();
+    auto verificationOptions = PKIVerificationOptions();
     if(args.size() >= 3) {
-        verificationOptions = _deserializer.deserialize<VerificationOptions>(argsArr->get(2), "verificationOptions");
+        verificationOptions = _deserializer.deserialize<PKIVerificationOptions>(argsArr->get(2), "verificationOptions");
     }
     _connection = Connection::connectPublic(solutionId, platformUrl, verificationOptions);
     return {};
