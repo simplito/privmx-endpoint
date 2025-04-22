@@ -40,6 +40,19 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     }
     dioJSON.fieldChecksums(dioJSONfieldChecksums);
     dioJSON.structureVersion(dio.structureVersion);
+    auto bridgeIdentity = privmx::utils::TypedObjectFactory::createNewObject<dynamic::BridgeIdentity>();
+    bridgeIdentity.url(dio.bridgeIdentity.url);
+    if(dio.bridgeIdentity.pubKey.has_value()) {
+        bridgeIdentity.pubKey(dio.bridgeIdentity.pubKey.value());
+    } else {
+        bridgeIdentity.pubKeyEmpty();
+    }
+    if(dio.bridgeIdentity.instanceId.has_value()) {
+        bridgeIdentity.instanceId(dio.bridgeIdentity.instanceId.value());
+    } else {
+        bridgeIdentity.instanceIdEmpty();
+    }
+    dioJSON.bridgeIdentity(bridgeIdentity);
     return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), authorKey));
 }
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
@@ -74,7 +87,12 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .timestamp=dioJSON.timestamp(),
             .randomId=dioJSON.randomId(),
             .containerId=containerId,
-            .containerResourceId=containerResourceId
+            .containerResourceId=containerResourceId,
+            .bridgeIdentity= BridgeIdentity{
+                .url=dioJSON.bridgeIdentity().url(),
+                .pubKey=dioJSON.bridgeIdentity().pubKeyOptional(),
+                .instanceId=dioJSON.bridgeIdentity().instanceIdOptional()
+            }
         },
         .structureVersion=dioJSON.structureVersion(),
         .fieldChecksums=fieldChecksums
@@ -90,6 +108,7 @@ void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSO
         dioJSON.resourceIdEmpty()       ||
         dioJSON.randomIdEmpty()         ||
         dioJSON.timestampEmpty()        ||
+        dioJSON.bridgeIdentityEmpty()   ||
         dioJSON.fieldChecksumsEmpty()
     ) {
         throw MalformedDataIntegrityObjectException();
