@@ -229,6 +229,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::optional<std::string>& creatorUserId,
     const std::optional<crypto::PublicKey>& creatorPublicKey
 ) {
+    
     return core::DataIntegrityObject{
         .creatorUserId = creatorUserId.has_value() ? creatorUserId.value() : getMyUserId(contextId),
         .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
@@ -237,6 +238,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
         .randomId = generateDIORandomId(),
         .containerId = containerId,
-        .containerResourceId = containerResourceId
+        .containerResourceId = containerResourceId,
+        .bridgeIdentity = _bridgeIdentity
     };
 }
