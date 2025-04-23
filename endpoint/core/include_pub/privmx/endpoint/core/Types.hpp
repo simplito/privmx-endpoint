@@ -186,6 +186,24 @@ struct PKIVerificationOptions {
     std::optional<std::string> bridgeInstanceId;
 };
 
+/**
+ * Data send by client to all data informing where was it send
+ */
+struct BridgeIdentity {
+    /**
+     * Url of bridge
+     */
+    std::string url;
+    /** 
+     * Bridge public Key.
+     */
+    std::optional<std::string> pubKey;
+    /** 
+     * Bridge instance Id given by PKI.
+     */
+    std::optional<std::string> instanceId;
+};
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

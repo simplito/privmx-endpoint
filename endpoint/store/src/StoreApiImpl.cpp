@@ -981,11 +981,12 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
     std::vector<core::VerificationRequest> verifierInput {};
     for (size_t i = 0; i < result.size(); i++) {
         if(result[i].statusCode == 0) {
-            verifierInput.push_back({
+            verifierInput.push_back(core::VerificationRequest{
                 .contextId = result[i].contextId,
                 .senderId = result[i].lastModifier,
                 .senderPubKey = storesDIO[i].creatorPubKey,
-                .date = result[i].lastModificationDate
+                .date = result[i].lastModificationDate,
+                .bridgeIdentity = storesDIO[i].bridgeIdentity
             });
         }
     }
@@ -1015,11 +1016,12 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
     std::tie(result, storeDIO) = decryptAndConvertStoreDataToStore(store, store_data_entry, key);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
-    verifierInput.push_back({
+    verifierInput.push_back(core::VerificationRequest{
         .contextId = result.contextId,
         .senderId = result.lastModifier,
         .senderPubKey = storeDIO.creatorPubKey,
-        .date = result.lastModificationDate
+        .date = result.lastModificationDate,
+        .bridgeIdentity = storeDIO.bridgeIdentity
     });
     std::vector<bool> verified;
     try {
@@ -1253,6 +1255,7 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
     keyProviderRequest.addMany(store.keys(), keyIds, location);
     auto keyMap = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
     std::vector<File> result;
+    std::vector<core::DataIntegrityObject> filesDIO;
     std::map<std::string, bool> duplication_check;
     for (auto file : files) {
         try {
@@ -1261,6 +1264,7 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
                 auto tmp = decryptAndConvertFileDataToFileInfo(file,  keyMap.at(file.keyId()));
                 result.push_back(std::get<0>(tmp));
                 auto fileDIO = std::get<1>(tmp);
+                filesDIO.push_back(fileDIO);
                 //find duplication
                 std::string fullRandomId = fileDIO.randomId + "-" + std::to_string(fileDIO.timestamp);
                 if(duplication_check.find(fullRandomId) == duplication_check.end()) {
@@ -1276,13 +1280,14 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
-    for (auto file: result) {
-        if(file.statusCode == 0) {
-            verifierInput.push_back({
+    for (size_t i = 0; i < result.size(); i++) {
+        if(result[i].statusCode == 0) {
+            verifierInput.push_back(core::VerificationRequest{
                 .contextId = store.contextId(),
-                .senderId = file.info.author,
-                .senderPubKey = file.authorPubKey,
-                .date = file.info.createDate
+                .senderId = result[i].info.author,
+                .senderPubKey = result[i].authorPubKey,
+                .date = result[i].info.createDate,
+                .bridgeIdentity = filesDIO[i].bridgeIdentity
             });
         }
     }
@@ -1313,11 +1318,12 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::Store store, serv
     std::tie(result, fileDIO) = decryptAndConvertFileDataToFileInfo(file, encKey);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
-        verifierInput.push_back({
+        verifierInput.push_back(core::VerificationRequest{
             .contextId = store.contextId(),
             .senderId = result.info.author,
             .senderPubKey = result.authorPubKey,
-            .date = result.info.createDate
+            .date = result.info.createDate,
+            .bridgeIdentity = fileDIO.bridgeIdentity
         });
     std::vector<bool> verified;
     try {

@@ -16,16 +16,11 @@ limitations under the License.
 #include <string>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace core {
-
-struct BridgeIdentity {
-    std::string url;
-    std::optional<std::string> pubKey;
-    std::optional<std::string> instanceId;
-};
 
 struct EncKey {
     std::string id;
