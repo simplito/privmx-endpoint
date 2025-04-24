@@ -28,7 +28,7 @@ Connection Connection::connect(const std::string& userPrivKey, const std::string
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
-        impl->connect(userPrivKey, solutionId, platformUrl);
+        impl->connect(userPrivKey, solutionId, platformUrl, verificationOptions);
         return Connection(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -41,7 +41,7 @@ Connection Connection::connectPublic(const std::string& solutionId, const std::s
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
-        impl->connectPublic(solutionId, platformUrl);
+        impl->connectPublic(solutionId, platformUrl, verificationOptions);
         return Connection(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);

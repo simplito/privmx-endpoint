@@ -41,7 +41,7 @@ struct DataIntegrityObject {
     std::string randomId;
     std::optional<std::string> containerId;
     std::optional<std::string> containerResourceId;
-    BridgeIdentity bridgeIdentity;
+    std::optional<BridgeIdentity> bridgeIdentity;
 };
 
 struct DecryptedVersionedData {

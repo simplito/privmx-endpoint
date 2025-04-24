@@ -818,7 +818,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                     .randomId = std::string(),
                     .containerId = std::nullopt,
                     .containerResourceId = std::nullopt,
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -835,7 +835,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                     .randomId = std::string(),
                     .containerId = std::nullopt,
                     .containerResourceId = std::nullopt,
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1122,7 +1122,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .randomId = std::string(),
                     .containerId = message.threadId(),
                     .containerResourceId = std::string(),
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1138,7 +1138,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .randomId = std::string(),
                     .containerId = message.threadId(),
                     .containerResourceId = std::string(),
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1155,7 +1155,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .randomId = std::string(),
                     .containerId = message.threadId(),
                     .containerResourceId = std::string(),
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
