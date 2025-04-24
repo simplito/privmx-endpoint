@@ -46,6 +46,10 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(FrameMacsAreNotEqualException, RpcException, "Fra
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidNextReadStateException, RpcException, "Invalid next read state", 0x0019)
 DECLARE_PRIVMX_EXCEPTION_CHILD(WriteStateIsNotInitializedException, RpcException, "Write state is not initialized", 0x001A)
 DECLARE_PRIVMX_EXCEPTION_CHILD(TicketHandshakeErrorException, RpcException, "Ticket handshake error", 0x001B)
+
+DECLARE_PRIVMX_EXCEPTION_CHILD(TimeDifferenceBetweenServerAndClientBiggerThenAllowedException, RpcException, "Time difference between server and client bigger then allowed", 0x001C)
+DECLARE_PRIVMX_EXCEPTION_CHILD(ServerChallengeFailedException, RpcException, "Server challenge failed", 0x001D)
+DECLARE_PRIVMX_EXCEPTION_CHILD(ServerChallengeMissingSignatureException, RpcException, "Server challenge failed", 0x001D)
 } // rpc
 } // privmx
 

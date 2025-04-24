@@ -50,6 +50,7 @@ void ConnectionClient::processHandshakePacket(const Var& packet) {
         ECDHE ecdhe(_ecdhe_private_key.value(), public_key);
         string secret = ecdhe.getSecret();
         extractServerConfig(packet);
+        extractAndValidateChallenge(packet);
         _ecdhe_private_key = nullopt;
         setPreMasterSecret(secret);
     } else if (type == "ecdhex") {
@@ -59,6 +60,7 @@ void ConnectionClient::processHandshakePacket(const Var& packet) {
         string key = packet.extract<Object::Ptr>()->getValue<BinaryString>("key");
         _host = packet.extract<Object::Ptr>()->getValue<std::string>("host");
         extractServerConfig(packet);
+        extractAndValidateChallenge(packet);
         PublicKey public_key = PublicKey::fromDER(key);
         ECDHE ecdhe(_ecdhex_private_key.value(), public_key);
         string secret = ecdhe.getSecret();
@@ -94,7 +96,11 @@ inline string ConnectionClient::getClientAgent() {
     return _options.agent;
 }
 
-void ConnectionClient::ecdheHandshake(const PrivateKey& key, const std::optional<std::string>& solution) {
+void ConnectionClient::ecdheHandshake(
+    const PrivateKey& key, 
+    const std::optional<std::string>& solution, 
+    const std::optional<crypto::PublicKey>& serverPubKey
+) {
     _ecdhe_private_key = key;
     string public_key = _ecdhe_private_key.value().getPublicKey().toDER();
     Object::Ptr packet = new Object();
@@ -104,10 +110,19 @@ void ConnectionClient::ecdheHandshake(const PrivateKey& key, const std::optional
     if (solution.has_value()) {
         packet->set("solution", solution.value());
     }
+    if (serverPubKey.has_value()) {
+        _serverPubKey = serverPubKey.value();
+        _serverChallenge = utils::Hex::from(crypto::Crypto::randomBytes(32));
+        packet->set("challenge", _serverChallenge);
+    }
     send(_pson_encoder.encode(packet), ContentType::HANDSHAKE);
 }
 
-void ConnectionClient::ecdhexHandshake(const PrivateKey& key, const std::optional<std::string>& solution) {
+void ConnectionClient::ecdhexHandshake(
+    const PrivateKey& key, 
+    const std::optional<std::string>& solution, 
+    const std::optional<crypto::PublicKey>& serverPubKey
+) {
     _ecdhex_private_key = key;
     string timestamp = Utils::getNowTimestampStr();
     string nonce = Base64::from(Crypto::randomBytes(32));
@@ -123,6 +138,11 @@ void ConnectionClient::ecdhexHandshake(const PrivateKey& key, const std::optiona
     packet->set("signature", Base64::from(signature));
     if (solution.has_value()) {
         packet->set("solution", solution.value());
+    }
+    if (serverPubKey.has_value()) {
+        _serverPubKey = serverPubKey.value();
+        _serverChallenge = utils::Hex::from(crypto::Crypto::randomBytes(32));
+        packet->set("challenge", _serverChallenge);
     }
     send(_pson_encoder.encode(packet), ContentType::HANDSHAKE);
 }
@@ -335,4 +355,22 @@ void ConnectionClient::validateSessionResponse(const Var& packet) {
 void ConnectionClient::extractServerConfig(const Var& packet) {
     Object::Ptr obj = packet.extract<Object::Ptr>();
     _serverConfig.requestChunkSize = obj->getObject("config")->getValue<size_t>("requestChunkSize");
+}
+
+void ConnectionClient::extractAndValidateChallenge(const Var& packet) {
+    Object::Ptr obj = packet.extract<Object::Ptr>();
+    if(_serverPubKey.has_value()) {
+        if(!obj->has("signature") || obj->get("signature").isEmpty()) {
+            throw ServerChallengeMissingSignatureException();
+        }
+        int64_t serverTimestamp = obj->getObject("signature")->getValue<int64_t>("timestamp");
+        if (abs(utils::Utils::getNowTimestamp() - serverTimestamp) > allowedTimeDifference) {
+            throw TimeDifferenceBetweenServerAndClientBiggerThenAllowedException("Allowed time difference with server is " + std::to_string(allowedTimeDifference) + "ms");
+        }
+        std::string challengeResult = utils::Hex::toString(obj->getObject("signature")->getValue<std::string>("challenge"));
+        auto result = _serverPubKey.value().verifyCompactSignature(crypto::Crypto::sha256(_serverChallenge + ";" + std::to_string(serverTimestamp)), challengeResult);
+        if(!result) {
+            throw ServerChallengeFailedException();
+        }   
+    }
 }

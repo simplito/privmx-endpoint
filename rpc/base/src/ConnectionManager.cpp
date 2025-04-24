@@ -25,7 +25,7 @@ AuthorizedConnection::Ptr ConnectionManager::createEcdheConnection(const EcdheOp
     auto full_options = fillOptions(options);
     auto key = auth.key.value_or(crypto::PrivateKey::generateRandom());
     AuthorizedConnection::Ptr connection = new AuthorizedConnection(full_options);
-    connection->ecdheConnect(key, auth.solution);
+    connection->ecdheConnect(key, auth.solution, auth.serverPubKey);
     connection->init();
     return connection;
 }
@@ -33,7 +33,7 @@ AuthorizedConnection::Ptr ConnectionManager::createEcdheConnection(const EcdheOp
 AuthorizedConnection::Ptr ConnectionManager::createEcdhexConnection(const EcdhexOptions& auth, const ConnectionOptions& options) {
     auto full_options = fillOptions(options);
     AuthorizedConnection::Ptr connection = new AuthorizedConnection(full_options);
-    connection->ecdhexConnect(auth.key, auth.solution);
+    connection->ecdhexConnect(auth.key, auth.solution, auth.serverPubKey);
     connection->init();
     return connection;
 }

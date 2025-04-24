@@ -23,6 +23,7 @@ class TimestampValidator {
 public:
     static bool validate(int64_t clinetTimestamp, int64_t serverTimestamp);
 private:
+    // this delta i selected on base rpc delta and possible network lag and request handling
     static constexpr int64_t TIMESTAMP_ALLOWED_DELTA = 5*60*1000; // in miliseconds
 };
 } // core
