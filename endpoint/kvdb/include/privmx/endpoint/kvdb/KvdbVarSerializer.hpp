@@ -34,10 +34,10 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::ServerItemInfo>(const kvdb::ServerItemInfo& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::Item>(const kvdb::Item& val);
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry >(const kvdb::KvdbEntry & val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<kvdb::Item>>(const core::PagingList<kvdb::Item>& val);
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<kvdb::KvdbEntry >>(const core::PagingList<kvdb::KvdbEntry >& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEventData>(const kvdb::KvdbDeletedEventData& val);

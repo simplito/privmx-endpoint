@@ -52,7 +52,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEncryptionKeyValidationExc
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, AlreadySubscribedException, "Already subscribed", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, NotSubscribedException, "Cannot unsubscribe if not subscribed", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknowKvdbFormatException, "Unknow kvdb format", 0x000F)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknowItemFormatException, "Unknow item format", 0x0010)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknownKvdbEntryFormatException, "Unknow item format", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbDataIntegrityException, "Failed kvdb data integrity check", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, ItemDataIntegrityException, "Failed item data integrity check", 0x0012)
 

@@ -59,15 +59,15 @@ public:
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
     core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const kvdb::KvdbKeysPagingQuery& pagingQuery);
-    core::PagingList<Item> listEntries(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery);
+    core::PagingList<KvdbEntry> listEntries(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery);
     void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
     void deleteEntry(const std::string& kvdbId, const std::string& key);
     std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
 
     void subscribeForKvdbEvents();
     void unsubscribeFromKvdbEvents();
-    void subscribeForEntriesEvents(std::string kvdbId);
-    void unsubscribeFromEntriesEvents(std::string kvdbId);
+    void subscribeForEntryEvents(std::string kvdbId);
+    void unsubscribeFromEntryEvents(std::string kvdbId);
 
     std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
 private:

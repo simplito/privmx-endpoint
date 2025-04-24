@@ -24,10 +24,10 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class ItemDataEncryptorV5 {
+class EntryDataEncryptorV5 {
 public:
     server::EncryptedKvdbEntryDataV5 encrypt(
-        const ItemDataToEncryptV5& messageData,
+        const KvdbEntryDataToEncryptV5& messageData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );

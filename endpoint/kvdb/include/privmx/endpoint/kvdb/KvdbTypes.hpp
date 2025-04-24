@@ -22,7 +22,7 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-struct ItemDataToEncryptV5 {
+struct KvdbEntryDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;

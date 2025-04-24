@@ -26,7 +26,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/ServerApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataEncryptorV5.hpp"
-#include "privmx/endpoint/kvdb/encryptors/item/EntryDataEncryptorV5.hpp"
+#include "privmx/endpoint/kvdb/encryptors/entry/EntryDataEncryptorV5.hpp"
 #include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/kvdb/KvdbProvider.hpp"
@@ -72,7 +72,7 @@ public:
     core::PagingList<Kvdb> listKvdbsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
-    core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery);
+    core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const kvdb::KvdbKeysPagingQuery& pagingQuery);
     core::PagingList<KvdbEntry> listEntries(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery);
     void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
     void deleteEntry(const std::string& kvdbId, const std::string& key);
@@ -80,8 +80,8 @@ public:
 
     void subscribeForKvdbEvents();
     void unsubscribeFromKvdbEvents();
-    void subscribeForEntriesEvents(std::string kvdbId);
-    void unsubscribeFromEntriesEvents(std::string kvdbId);
+    void subscribeForEntryEvents(std::string kvdbId);
+    void unsubscribeFromEntryEvents(std::string kvdbId);
 private:
     std::string createKvdbEx(
         const std::string& contextId, 
@@ -108,12 +108,12 @@ private:
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
     core::DecryptedEncKey getKvdbCurrentEncKey(server::KvdbInfo kvdb);
 
-    DecryptedKvdbEntryDataV5 decryptEntryDataV5(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey);
-    Entry convertDecryptedKvdbEntryDataV5ToEntry(server::KvdbEntryInfo item, DecryptedKvdbEntryDataV5 itemData);
-    std::tuple<Entry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey);
-    std::vector<Entry> decryptAndConvertEntriesDataToEntries(server::KvdbInfo kvdb, utils::List<server::KvdbEntryInfo> items);
-    Entry decryptAndConvertEntryDataToEntry(server::KvdbInfo kvdb, server::KvdbEntryInfo item);
-    Entry decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item);
+    DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey);
+    KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo item, DecryptedKvdbEntryDataV5 itemData);
+    std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey);
+    std::vector<KvdbEntry> decryptAndConvertKvdbEntriesDataToKvdbEntries(server::KvdbInfo kvdb, utils::List<server::KvdbEntryInfo> items);
+    KvdbEntry decryptAndConvertEntryDataToEntry(server::KvdbInfo kvdb, server::KvdbEntryInfo item);
+    KvdbEntry decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item);
     uint32_t validateEntryDataIntegrity(server::KvdbEntryInfo item);
     
     void assertKvdbExist(const std::string& kvdbId);

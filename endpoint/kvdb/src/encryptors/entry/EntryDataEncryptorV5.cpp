@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/kvdb/encryptors/item/ItemDataEncryptorV5.hpp"
+#include "privmx/endpoint/kvdb/encryptors/entry/EntryDataEncryptorV5.hpp"
 #include "privmx/utils/Utils.hpp"
 #include "privmx/utils/Debug.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
@@ -20,7 +20,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-server::EncryptedKvdbEntryDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEncryptV5& messageData,
+server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(const KvdbEntryDataToEncryptV5& messageData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedKvdbEntryDataV5>();
@@ -47,7 +47,7 @@ server::EncryptedKvdbEntryDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEn
     return result;
 }
 
-DecryptedKvdbEntryDataV5 ItemDataEncryptorV5::decrypt(
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
     const server::EncryptedKvdbEntryDataV5& encryptedItemData, const std::string& encryptionKey) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
@@ -80,7 +80,7 @@ DecryptedKvdbEntryDataV5 ItemDataEncryptorV5::decrypt(
     return result;
 }
 
-DecryptedKvdbEntryDataV5 ItemDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = 5;
@@ -107,7 +107,7 @@ DecryptedKvdbEntryDataV5 ItemDataEncryptorV5::extractPublic(const server::Encryp
     return result;
 }
 
-core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
+core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
     assertDataFormat(encryptedItemData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedItemData.dio());
     if (
@@ -125,7 +125,7 @@ core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const se
     return dio;
 }
 
-void ItemDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
+void EntryDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
     if (encryptedItemData.versionEmpty() ||
         encryptedItemData.version() != 5 ||
         encryptedItemData.publicMetaEmpty() ||

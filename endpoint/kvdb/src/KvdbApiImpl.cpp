@@ -334,7 +334,7 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
         PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, getting kvdb)
         kvdb = getRawKvdbFromCacheOrBridge(kvdbId);
         PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, decrypting item)
-        auto statusCode = validateItemDataIntegrity(item);
+        auto statusCode = validateEntryDataIntegrity(item);
         if(statusCode != 0) {
             PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, getEntry, data integrity validation failed)
             result.statusCode = statusCode;
@@ -377,7 +377,7 @@ core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kv
     auto itemsList = _serverApi.kvdbListKeys(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
     std::vector<std::string> keys;
-    for(auto key : itemsList.kvdbEntriesKeys()) {
+    for(auto key : itemsList.kvdbEntryKeys()) {
         keys.push_back(key);
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, listEntriesKeys, data decrypted)
@@ -397,7 +397,7 @@ core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
     auto kvdb = itemsList.kvdb();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
-    auto items = decryptAndConvertEntriesDataToEntries(kvdb, itemsList.kvdbEntries());
+    auto items = decryptAndConvertKvdbEntriesDataToKvdbEntries(kvdb, itemsList.kvdbEntries());
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, listEntriesKeys, data decrypted)
     return core::PagingList<KvdbEntry>({
         .totalAvailable = itemsList.count(),
@@ -786,7 +786,7 @@ KvdbEntry KvdbApiImpl::convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEn
     return ret;
 }
 
-std::tuple<Item, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey) {
+std::tuple<KvdbEntry, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey) {
     // If data is not string, then data is object and has version field
     // Solution with data as object is newer than data as base64 string
     if (item.kvdbEntryValue().type() == typeid(Poco::JSON::Object::Ptr)) {
@@ -800,11 +800,11 @@ std::tuple<Item, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertEntryD
             }
         } 
     }
-    auto e = UnknowItemFormatException();
-    return std::make_tuple(Item{{},{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
+    auto e = UnknownKvdbEntryFormatException();
+    return std::make_tuple(KvdbEntry{{},{},{},{},{},{},.statusCode = e.getCode()}, core::DataIntegrityObject());
 }
 
-std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInfo kvdb, utils::List<server::KvdbEntryInfo> items) {
+std::vector<KvdbEntry> KvdbApiImpl::decryptAndConvertKvdbEntriesDataToKvdbEntries(server::KvdbInfo kvdb, utils::List<server::KvdbEntryInfo> items) {
    std::set<std::string> keyIds;
     for (auto item : items) {
         keyIds.insert(item.keyId());
@@ -813,11 +813,11 @@ std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInf
     core::EncKeyLocation location{.contextId=kvdb.contextId(), .containerId=kvdb.id()};
     keyProviderRequest.addMany(kvdb.keys(), keyIds, location);
     auto keyMap = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
-    std::vector<Item> result;
+    std::vector<KvdbEntry> result;
     std::map<std::string, bool> duplication_check;
     for (auto item : items) {
         try {
-            auto statusCode = validateItemDataIntegrity(item);
+            auto statusCode = validateEntryDataIntegrity(item);
             if(statusCode == 0) {
                 auto tmp = decryptAndConvertEntryDataToEntry(item, keyMap.at(item.keyId()));
                 result.push_back(std::get<0>(tmp));
@@ -830,10 +830,10 @@ std::vector<Item> KvdbApiImpl::decryptAndConvertItemsDataToItems(server::KvdbInf
                     result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(Item{{},{},{},{},{},{},.statusCode = statusCode});
+                result.push_back(KvdbEntry{{},{},{},{},{},{},.statusCode = statusCode});
             }
         } catch (const core::Exception& e) {
-            result.push_back(Item{{},{},{},{},{},{},.statusCode = e.getCode()});
+            result.push_back(KvdbEntry{{},{},{},{},{},{},.statusCode = e.getCode()});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -894,11 +894,11 @@ KvdbEntry KvdbApiImpl::decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo i
         auto kvdb = getRawKvdbFromCacheOrBridge(item.kvdbId());
         return decryptAndConvertEntryDataToEntry(kvdb, item);
     } catch (const core::Exception& e) {
-        return Item{{},{},{},{},{},{},.statusCode = e.getCode()};
+        return KvdbEntry{{},{},{},{},{},{},.statusCode = e.getCode()};
     } catch (const privmx::utils::PrivmxException& e) {
-        return Item{{},{},{},{},{},{},.statusCode = e.getCode()};
+        return KvdbEntry{{},{},{},{},{},{},.statusCode = e.getCode()};
     } catch (...) {
-        return Item{{},{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
+        return KvdbEntry{{},{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE};
     }
 }
 
@@ -974,7 +974,7 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
     return UnknowKvdbFormatException().getCode();
 }
 
-uint32_t KvdbApiImpl::validateItemDataIntegrity(server::KvdbEntryInfo item) {
+uint32_t KvdbApiImpl::validateEntryDataIntegrity(server::KvdbEntryInfo item) {
     auto item_data = item.kvdbEntryValue();
     if (item_data.type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(item_data);
@@ -1006,7 +1006,7 @@ uint32_t KvdbApiImpl::validateItemDataIntegrity(server::KvdbEntryInfo item) {
     } else if(item_data.isString()) {
         return 0;
     }
-    return UnknowItemFormatException().getCode();
+    return UnknownKvdbEntryFormatException().getCode();
 }
 
 

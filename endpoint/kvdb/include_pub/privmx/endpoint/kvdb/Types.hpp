@@ -157,7 +157,7 @@ struct KvdbEntry {
     int64_t statusCode;
 };
 
-struct KvdbKeyPagingQuery {
+struct KvdbKeysPagingQuery {
     /**
      * number of elements to skip from result
      */
