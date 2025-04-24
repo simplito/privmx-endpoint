@@ -41,7 +41,11 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         .instanceId=verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::fromWIF(userPrivKey);
-    _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
+    if(verificationOptions.bridgePubKey.has_value()) {
+        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId, crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value()));
+    } else {
+        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
+    }
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
     _userPrivKey = key;

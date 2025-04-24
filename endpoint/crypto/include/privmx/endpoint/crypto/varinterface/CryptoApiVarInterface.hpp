@@ -44,7 +44,8 @@ public:
         FromEntropy = 13,
         EntropyToMnemonic = 14,
         MnemonicToEntropy = 15,
-        MnemonicToSeed = 16
+        MnemonicToSeed = 16,
+        ConvertPGPKeyToBase58DERKey = 17
     };
 
     CryptoApiVarInterface(const core::VarSerializer& serializer)
@@ -68,6 +69,7 @@ public:
     Poco::Dynamic::Var entropyToMnemonic(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var mnemonicToEntropy(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var mnemonicToSeed(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var convertPGPKeyToBase58DERKey(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
