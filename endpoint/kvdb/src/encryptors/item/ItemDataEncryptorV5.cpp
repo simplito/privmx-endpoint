@@ -20,10 +20,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-server::EncryptedItemDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEncryptV5& messageData,
+server::EncryptedKvdbEntryDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEncryptV5& messageData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
-    auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedItemDataV5>();
+    auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedKvdbEntryDataV5>();
     result.version(5);
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey));
@@ -47,9 +47,9 @@ server::EncryptedItemDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEncrypt
     return result;
 }
 
-DecryptedItemDataV5 ItemDataEncryptorV5::decrypt(
-    const server::EncryptedItemDataV5& encryptedItemData, const std::string& encryptionKey) {
-    DecryptedItemDataV5 result;
+DecryptedKvdbEntryDataV5 ItemDataEncryptorV5::decrypt(
+    const server::EncryptedKvdbEntryDataV5& encryptedItemData, const std::string& encryptionKey) {
+    DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = 5;
     try {
@@ -80,8 +80,8 @@ DecryptedItemDataV5 ItemDataEncryptorV5::decrypt(
     return result;
 }
 
-DecryptedItemDataV5 ItemDataEncryptorV5::extractPublic(const server::EncryptedItemDataV5& encryptedItemData) {
-    DecryptedItemDataV5 result;
+DecryptedKvdbEntryDataV5 ItemDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
+    DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = 5;
     try {
@@ -107,7 +107,7 @@ DecryptedItemDataV5 ItemDataEncryptorV5::extractPublic(const server::EncryptedIt
     return result;
 }
 
-core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedItemDataV5& encryptedItemData) {
+core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
     assertDataFormat(encryptedItemData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedItemData.dio());
     if (
@@ -125,7 +125,7 @@ core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const se
     return dio;
 }
 
-void ItemDataEncryptorV5::assertDataFormat(const server::EncryptedItemDataV5& encryptedItemData) {
+void ItemDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
     if (encryptedItemData.versionEmpty() ||
         encryptedItemData.version() != 5 ||
         encryptedItemData.publicMetaEmpty() ||

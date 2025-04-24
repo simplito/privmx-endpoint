@@ -13,7 +13,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::kvdb;
 
-void Mapper::map(server::KvdbListItemsModel obj, const ItemsPagingQuery& listQuery) {
+void Mapper::map(server::KvdbListEntriesModel obj, const KvdbEntryPagingQuery& listQuery) {
     obj.sortOrder(listQuery.sortOrder);
     obj.limit(listQuery.limit);
     obj.skip(listQuery.skip);
@@ -31,7 +31,7 @@ void Mapper::map(server::KvdbListItemsModel obj, const ItemsPagingQuery& listQue
     }
 }
 
-void Mapper::map(server::KvdbListKeysModel obj, const KeysPagingQuery& listQuery) {
+void Mapper::map(server::KvdbListKeysModel obj, const KvdbKeysPagingQuery& listQuery) {
     obj.sortOrder(listQuery.sortOrder);
     obj.limit(listQuery.limit);
     obj.skip(listQuery.skip);
@@ -50,10 +50,10 @@ KvdbDeletedEventData Mapper::mapToKvdbDeletedEventData(const server::KvdbDeleted
     return {.kvdbId = data.kvdbId()};
 }
 
-KvdbDeletedItemEventData Mapper::mapToKvdbDeletedItemEventData(const server::KvdbDeletedItemEventData& data) {
-    return {.kvdbId = data.kvdbId(), .kvdbItemKey = data.kvdbItemKey()};
+KvdbDeletedEntryEventData Mapper::mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData& data) {
+    return {.kvdbId = data.kvdbId(), .kvdbEntryKey = data.kvdbEntryKey()};
 }
 
 KvdbStatsEventData Mapper::mapToKvdbStatsEventData(const server::KvdbStatsEventData& data) {
-    return {.kvdbId = data.kvdbId(), .lastItemDate = data.lastItemDate(), .items = data.items()};
+    return {.kvdbId = data.kvdbId(), .lastEntryDate = data.lastEntryDate(), .items = data.items()};
 }

@@ -46,7 +46,7 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsEventData>(const kvdb::KvdbStatsEventData& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedItemEventData>(const kvdb::KvdbDeletedItemEventData& val);
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEntryEventData>(const kvdb::KvdbDeletedEntryEventData& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbCreatedEvent>(const kvdb::KvdbCreatedEvent& val);
@@ -61,13 +61,13 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsChangedEvent>(const kvdb::KvdbStatsChangedEvent& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbNewItemEvent>(const kvdb::KvdbNewItemEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbNewEntryEvent>(const kvdb::KvdbNewEntryEvent& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbItemUpdatedEvent>(const kvdb::KvdbItemUpdatedEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryUpdatedEvent>(const kvdb::KvdbEntryUpdatedEvent& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbItemDeletedEvent>(const kvdb::KvdbItemDeletedEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(const kvdb::KvdbEntryDeletedEvent& val);
 
 }  // namespace core
 }  // namespace endpoint

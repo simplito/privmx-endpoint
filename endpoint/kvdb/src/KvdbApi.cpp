@@ -122,67 +122,67 @@ core::PagingList<Kvdb> KvdbApi::listKvdbs(const std::string& contextId, const co
     }
 }
 
-Item KvdbApi::getItem(const std::string& kvdbId, const std::string& key) {
+KvdbEntry KvdbApi::getEntry(const std::string& kvdbId, const std::string& key) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
-        return _impl->getItem(kvdbId, key);
+        return _impl->getEntry(kvdbId, key);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-core::PagingList<std::string> KvdbApi::listItemsKey(const std::string& kvdbId, const kvdb::KeysPagingQuery& pagingQuery) {
+core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId, const kvdb::KvdbKeysPagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validateClass<kvdb::KeysPagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validateClass<kvdb::KvdbEntryPagingQuery>(pagingQuery, "field:pagingQuery ");
     try {
-        return _impl->listItemsKey(kvdbId, pagingQuery);
+        return _impl->listEntriesKeys(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-core::PagingList<Item> KvdbApi::listItems(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery) {
+core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validateClass<kvdb::ItemsPagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validateClass<kvdb::KvdbEntryPagingQuery>(pagingQuery, "field:pagingQuery ");
     try {
-        return _impl->listItems(kvdbId, pagingQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void KvdbApi::setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
-    validateEndpoint();
-    core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return _impl->setItem(kvdbId, key, publicMeta, privateMeta, data, version);
+        return _impl->listEntries(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void KvdbApi::deleteItem(const std::string& kvdbId, const std::string& key) {
+void KvdbApi::setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
-        return _impl->deleteItem(kvdbId, key);
+        return _impl->setEntry(kvdbId, key, publicMeta, privateMeta, data, version);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-std::map<std::string, bool> KvdbApi::deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys) {
+void KvdbApi::deleteEntry(const std::string& kvdbId, const std::string& key) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
-        return _impl->deleteItems(kvdbId, keys);
+        return _impl->deleteEntry(kvdbId, key);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::map<std::string, bool> KvdbApi::deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys) {
+    validateEndpoint();
+    core::Validator::validateId(kvdbId, "field:kvdbId ");
+    try {
+        return _impl->deleteEntries(kvdbId, keys);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -207,21 +207,21 @@ void KvdbApi::unsubscribeFromKvdbEvents() {
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-void KvdbApi::subscribeForItemEvents(std::string kvdbId) {
+void KvdbApi::subscribeForEntriesEvents(std::string kvdbId) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
-        return _impl->subscribeForItemEvents(kvdbId);
+        return _impl->subscribeForEntriesEvents(kvdbId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-void KvdbApi::unsubscribeFromItemEvents(std::string kvdbId) {
+void KvdbApi::unsubscribeFromEntriesEvents(std::string kvdbId) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
-        return _impl->unsubscribeFromItemEvents(kvdbId);
+        return _impl->unsubscribeFromEntriesEvents(kvdbId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

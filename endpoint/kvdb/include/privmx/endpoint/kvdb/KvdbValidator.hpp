@@ -22,19 +22,19 @@ namespace endpoint {
 namespace core {
 
 template<>
-class StructValidator<kvdb::ItemsPagingQuery>
+class StructValidator<kvdb::KvdbEntryPagingQuery>
 {
 public:
-    static void validate(const kvdb::ItemsPagingQuery& value, const std::string& stack_trace = "");
-    static std::string getReadableType() {return "ItemsPagingQuery";}
+    static void validate(const kvdb::KvdbEntryPagingQuery& value, const std::string& stack_trace = "");
+    static std::string getReadableType() {return "KvdbEntryPagingQuery";}
 };
 
 template<>
-class StructValidator<kvdb::KeysPagingQuery>
+class StructValidator<kvdb::KvdbKeysPagingQuery>
 {
 public:
-    static void validate(const kvdb::KeysPagingQuery& value, const std::string& stack_trace = "");
-    static std::string getReadableType() {return "KeysPagingQuery";}
+    static void validate(const kvdb::KvdbKeysPagingQuery& value, const std::string& stack_trace = "");
+    static std::string getReadableType() {return "KvdbKeysPagingQuery";}
 };
 
 } // core

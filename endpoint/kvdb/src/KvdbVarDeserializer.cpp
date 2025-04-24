@@ -21,7 +21,7 @@ using namespace privmx::endpoint::core;
 
 
 template<>
-kvdb::ItemsPagingQuery core::VarDeserializer::deserialize<kvdb::ItemsPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
+kvdb::KvdbEntryPagingQuery core::VarDeserializer::deserialize<kvdb::KvdbEntryPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
     core::TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {.skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),
@@ -35,7 +35,7 @@ kvdb::ItemsPagingQuery core::VarDeserializer::deserialize<kvdb::ItemsPagingQuery
 }
 
 template<>
-kvdb::KeysPagingQuery core::VarDeserializer::deserialize<kvdb::KeysPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
+kvdb::KvdbKeysPagingQuery core::VarDeserializer::deserialize<kvdb::KvdbKeysPagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
     core::TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {.skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),

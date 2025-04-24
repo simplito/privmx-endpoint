@@ -107,20 +107,20 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsEventData>(const kvdb
         obj->set("__type", "kvdb$KvdbStatsEventData");
     }
     obj->set("kvdbId", serialize(val.kvdbId));
-    obj->set("lastItemDate", serialize(val.lastItemDate));
+    obj->set("lastEntryDate", serialize(val.lastEntryDate));
     obj->set("items", serialize(val.items));
     return obj;
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedItemEventData>(
-    const kvdb::KvdbDeletedItemEventData& val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEntryEventData>(
+    const kvdb::KvdbDeletedEntryEventData& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbDeletedItemEventData");
+        obj->set("__type", "kvdb$KvdbDeletedEntryEventData");
     }
     obj->set("kvdbId", serialize(val.kvdbId));
-    obj->set("kvdbItemKey", serialize(val.kvdbItemKey));
+    obj->set("kvdbEntryKey", serialize(val.kvdbEntryKey));
     return obj;
 }
 
@@ -178,10 +178,10 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsChangedEvent>(const k
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbNewItemEvent>(const kvdb::KvdbNewItemEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbNewEntryEvent>(const kvdb::KvdbNewEntryEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbNewItemEvent");
+        obj->set("__type", "kvdb$KvdbNewEntryEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
@@ -191,10 +191,10 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbNewItemEvent>(const kvdb::
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbItemUpdatedEvent>(const kvdb::KvdbItemUpdatedEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryUpdatedEvent>(const kvdb::KvdbEntryUpdatedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbItemUpdatedEvent");
+        obj->set("__type", "kvdb$KvdbEntryUpdatedEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
@@ -204,11 +204,11 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbItemUpdatedEvent>(const kv
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbItemDeletedEvent>(
-    const kvdb::KvdbItemDeletedEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(
+    const kvdb::KvdbEntryDeletedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbItemDeletedEvent");
+        obj->set("__type", "kvdb$KvdbEntryDeletedEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));

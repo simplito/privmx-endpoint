@@ -34,12 +34,12 @@ public:
     server::KvdbDeleteManyResult kvdbDeleteMany(server::KvdbDeleteManyModel model);
     server::KvdbGetResult kvdbGet(server::KvdbGetModel model);
     server::KvdbListResult kvdbList(server::KvdbListModel model);
-    server::KvdbItemGetResult kvdbItemGet(server::KvdbItemGetModel model);
-    void kvdbItemSet(server::KvdbItemSetModel model);
-    void kvdbItemDelete(server::KvdbItemDeleteModel model);
+    server::KvdbEntryGetResult kvdbEntryGet(server::KvdbEntryGetModel model);
+    void kvdbEntrySet(server::KvdbEntrySetModel model);
+    void kvdbEntryDelete(server::KvdbEntryDeleteModel model);
     server::KvdbListKeysResult kvdbListKeys(server::KvdbListKeysModel model);
-    server::KvdbListItemsResult kvdbListItems(server::KvdbListItemsModel model);
-    server::KvdbItemDeleteManyResult kvdbItemDeleteMany(server::KvdbItemDeleteManyModel model);
+    server::KvdbListItemsResult kvdbListItems(server::KvdbListEntriesModel model);
+    server::KvdbEntryDeleteManyResult kvdbEntryDeleteMany(server::KvdbEntryDeleteManyModel model);
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object

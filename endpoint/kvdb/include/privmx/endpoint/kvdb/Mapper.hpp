@@ -22,11 +22,11 @@ namespace kvdb {
 
 class Mapper {
 public:
-    static void map(server::KvdbListItemsModel obj, const ItemsPagingQuery& listQuery);
-    static void map(server::KvdbListKeysModel obj, const KeysPagingQuery& listQuery);
+    static void map(server::KvdbListEntriesModel obj, const KvdbEntryPagingQuery& listQuery);
+    static void map(server::KvdbListKeysModel obj, const KvdbKeysPagingQuery& listQuery);
 
     static KvdbDeletedEventData mapToKvdbDeletedEventData(const server::KvdbDeletedEventData& data);
-    static KvdbDeletedItemEventData mapToKvdbDeletedItemEventData(const server::KvdbDeletedItemEventData& data);
+    static KvdbDeletedEntryEventData mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData& data);
     static KvdbStatsEventData mapToKvdbStatsEventData(const server::KvdbStatsEventData& data);
 };
 

@@ -44,7 +44,7 @@ ENDPOINT_SERVER_TYPE(KvdbInfo)
     STRING_FIELD(type)
     VAR_FIELD(policy)
     INT64_FIELD(items)
-    INT64_FIELD(lastItemDate)
+    INT64_FIELD(lastEntryDate)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbDataV5, core::dynamic::VersionedData)
@@ -122,9 +122,9 @@ TYPE_END
 
 // KVDB ITEM
 
-ENDPOINT_SERVER_TYPE(KvdbItemInfo)
-    STRING_FIELD(kvdbItemKey)
-    VAR_FIELD(kvdbItemValue)
+ENDPOINT_SERVER_TYPE(KvdbEntryInfo)
+    STRING_FIELD(kvdbEntryKey)
+    VAR_FIELD(kvdbEntryValue)
     STRING_FIELD(kvdbId)
     INT64_FIELD(version)
     STRING_FIELD(contextId)
@@ -135,7 +135,7 @@ ENDPOINT_SERVER_TYPE(KvdbItemInfo)
     STRING_FIELD(lastModifier)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedItemDataV5, core::dynamic::VersionedData)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbEntryDataV5, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -145,26 +145,26 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedItemDataV5, core::dynamic::VersionedData)
     STRING_FIELD(dio)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbItemGetModel)
+ENDPOINT_CLIENT_TYPE(KvdbEntryGetModel)
     STRING_FIELD(kvdbId)
-    STRING_FIELD(kvdbItemKey)
+    STRING_FIELD(kvdbEntryKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbItemGetResult)
-    OBJECT_FIELD(kvdbItem, KvdbItemInfo)
+ENDPOINT_CLIENT_TYPE(KvdbEntryGetResult)
+    OBJECT_FIELD(kvdbEntry, KvdbEntryInfo)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbItemSetModel)
+ENDPOINT_CLIENT_TYPE(KvdbEntrySetModel)
     STRING_FIELD(kvdbId)
-    STRING_FIELD(kvdbItemKey)
-    VAR_FIELD(kvdbItemValue)
+    STRING_FIELD(kvdbEntryKey)
+    VAR_FIELD(kvdbEntryValue)
     STRING_FIELD(keyId)
     INT64_FIELD(version)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbItemDeleteModel)
+ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteModel)
     STRING_FIELD(kvdbId)
-    STRING_FIELD(kvdbItemKey)
+    STRING_FIELD(kvdbEntryKey)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbListKeysModel)
@@ -180,11 +180,11 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbListKeysResult)
     OBJECT_FIELD(kvdb, KvdbInfo)
-    LIST_FIELD(kvdbItemKeys, std::string)
+    LIST_FIELD(kvdbEntryKeys, std::string)
     INT64_FIELD(count)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbListItemsModel)
+ENDPOINT_CLIENT_TYPE(KvdbListEntriesModel)
     STRING_FIELD(kvdbId)
     STRING_FIELD(lastKey)
     STRING_FIELD(prefix)
@@ -198,22 +198,22 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbListItemsResult)
     OBJECT_FIELD(kvdb, KvdbInfo)
-    LIST_FIELD(kvdbItems, KvdbItemInfo)
+    LIST_FIELD(kvdbEntries, KvdbEntryInfo)
     INT64_FIELD(count)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbItemDeleteManyModel)
+ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteManyModel)
     STRING_FIELD(kvdbId)
-    LIST_FIELD(kvdbItemKeys, std::string)
+    LIST_FIELD(kvdbEntryKeys, std::string)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbItemDeleteStatus)
-    STRING_FIELD(kvdbItemKey)
+ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteStatus)
+    STRING_FIELD(kvdbEntryKey)
     STRING_FIELD(status)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbItemDeleteManyResult)
-    LIST_FIELD(results, KvdbItemDeleteStatus)
+ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteManyResult)
+    LIST_FIELD(results, KvdbEntryDeleteStatus)
 TYPE_END
 
 // EVENTS
@@ -223,8 +223,8 @@ ENDPOINT_CLIENT_TYPE(KvdbDeletedEventData)
     STRING_FIELD(type)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbDeletedItemEventData)
-    STRING_FIELD(kvdbItemKey)
+ENDPOINT_CLIENT_TYPE(KvdbDeletedEntryEventData)
+    STRING_FIELD(kvdbEntryKey)
     STRING_FIELD(kvdbId)
 TYPE_END
 
@@ -232,7 +232,7 @@ ENDPOINT_CLIENT_TYPE(KvdbStatsEventData)
     STRING_FIELD(kvdbId)
     STRING_FIELD(contextId)
     STRING_FIELD(type)
-    INT64_FIELD(lastItemDate)
+    INT64_FIELD(lastEntryDate)
     INT64_FIELD(items)
 
 TYPE_END

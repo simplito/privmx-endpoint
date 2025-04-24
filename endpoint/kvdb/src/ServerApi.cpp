@@ -40,28 +40,28 @@ server::KvdbListResult ServerApi::kvdbList(server::KvdbListModel model) {
     return request<server::KvdbListResult>("kvdbList", model);
 }
 
-server::KvdbItemGetResult ServerApi::kvdbItemGet(server::KvdbItemGetModel model) {
-    return request<server::KvdbItemGetResult>("kvdbItemGet", model);
+server::KvdbEntryGetResult ServerApi::kvdbEntryGet(server::KvdbEntryGetModel model) {
+    return request<server::KvdbEntryGetResult>("kvdbEntryGet", model);
 }
 
-void ServerApi::kvdbItemSet(server::KvdbItemSetModel model) {
-    request("kvdbItemSet", model);
+void ServerApi::kvdbEntrySet(server::KvdbEntrySetModel model) {
+    request("kvdbEntrySet", model);
 }
 
-void ServerApi::kvdbItemDelete(server::KvdbItemDeleteModel model) {
-    request("kvdbItemDelete", model);
+void ServerApi::kvdbEntryDelete(server::KvdbEntryDeleteModel model) {
+    request("kvdbEntryDelete", model);
 }
 
 server::KvdbListKeysResult ServerApi::kvdbListKeys(server::KvdbListKeysModel model) {
     return request<server::KvdbListKeysResult>("kvdbListKeys", model);
 }
 
-server::KvdbListItemsResult ServerApi::kvdbListItems(server::KvdbListItemsModel model) {
+server::KvdbListItemsResult ServerApi::kvdbListItems(server::KvdbListEntriesModel model) {
     return request<server::KvdbListItemsResult>("kvdbListItems", model);
 }
 
-server::KvdbItemDeleteManyResult ServerApi::kvdbItemDeleteMany(server::KvdbItemDeleteManyModel model) {
-    return request<server::KvdbItemDeleteManyResult>("kvdbItemDeleteMany", model);
+server::KvdbEntryDeleteManyResult ServerApi::kvdbEntryDeleteMany(server::KvdbEntryDeleteManyModel model) {
+    return request<server::KvdbEntryDeleteManyResult>("kvdbEntryDeleteMany", model);
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object

@@ -57,17 +57,17 @@ public:
     Kvdb getKvdb(const std::string& kvdbId);
     core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
-    Item getItem(const std::string& kvdbId, const std::string& key);
-    core::PagingList<std::string> listItemsKey(const std::string& kvdbId, const kvdb::KeysPagingQuery& pagingQuery);
-    core::PagingList<Item> listItems(const std::string& kvdbId, const kvdb::ItemsPagingQuery& pagingQuery);
-    void setItem(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
-    void deleteItem(const std::string& kvdbId, const std::string& key);
-    std::map<std::string, bool> deleteItems(const std::string& kvdbId, const std::vector<std::string>& keys);
+    KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
+    core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const kvdb::KvdbKeysPagingQuery& pagingQuery);
+    core::PagingList<Item> listEntries(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery);
+    void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
+    void deleteEntry(const std::string& kvdbId, const std::string& key);
+    std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
 
     void subscribeForKvdbEvents();
     void unsubscribeFromKvdbEvents();
-    void subscribeForItemEvents(std::string kvdbId);
-    void unsubscribeFromItemEvents(std::string kvdbId);
+    void subscribeForEntriesEvents(std::string kvdbId);
+    void unsubscribeFromEntriesEvents(std::string kvdbId);
 
     std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
 private:

@@ -30,7 +30,7 @@ struct ItemDataToEncryptV5 {
     core::DataIntegrityObject dio;
 };
 
-struct DecryptedItemDataV5 : public core::DecryptedVersionedData {
+struct DecryptedKvdbEntryDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;

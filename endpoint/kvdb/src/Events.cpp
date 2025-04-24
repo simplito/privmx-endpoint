@@ -32,16 +32,16 @@ std::string KvdbDeletedEvent::toJSON() const {
     return core::JsonSerializer<KvdbDeletedEvent>::serialize(*this);
 }
 
-std::string KvdbNewItemEvent::toJSON() const {
-    return core::JsonSerializer<KvdbNewItemEvent>::serialize(*this);
+std::string KvdbNewEntryEvent::toJSON() const {
+    return core::JsonSerializer<KvdbNewEntryEvent>::serialize(*this);
 }
 
-std::string KvdbItemUpdatedEvent::toJSON() const {
-    return core::JsonSerializer<KvdbItemUpdatedEvent>::serialize(*this);
+std::string KvdbEntryUpdatedEvent::toJSON() const {
+    return core::JsonSerializer<KvdbEntryUpdatedEvent>::serialize(*this);
 }
 
-std::string KvdbItemDeletedEvent::toJSON() const {
-    return core::JsonSerializer<KvdbItemDeletedEvent>::serialize(*this);
+std::string KvdbEntryDeletedEvent::toJSON() const {
+    return core::JsonSerializer<KvdbEntryDeletedEvent>::serialize(*this);
 }
 
 std::string KvdbStatsChangedEvent::toJSON() const {
@@ -60,15 +60,15 @@ std::shared_ptr<core::SerializedEvent> KvdbDeletedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<core::SerializedEvent> KvdbNewItemEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> KvdbNewEntryEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<core::SerializedEvent> KvdbItemUpdatedEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> KvdbEntryUpdatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<core::SerializedEvent> KvdbItemDeletedEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> KvdbEntryDeletedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
@@ -143,15 +143,15 @@ KvdbStatsChangedEvent Events::extractKvdbStatsEvent(const core::EventHolder& eve
     }
 }
 
-bool Events::isKvdbNewItemEvent(const core::EventHolder& handler) {
+bool Events::isKvdbNewEntryEvent(const core::EventHolder& handler) {
     return handler.type() == "kvdbNewItem";
 }
 
-KvdbNewItemEvent Events::extractKvdbNewItemEvent(const core::EventHolder& handler) {
+KvdbNewEntryEvent Events::extractKvdbNewEntryEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<KvdbNewItemEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<KvdbNewEntryEvent>(handler.get());
         if (!event) {
-            throw CannotExtractKvdbNewItemEventException();
+            throw CannotExtractKvdbNewEntryEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
@@ -160,15 +160,15 @@ KvdbNewItemEvent Events::extractKvdbNewItemEvent(const core::EventHolder& handle
     }
 }
 
-bool Events::isKvdbItemUpdatedEvent(const core::EventHolder& handler) {
+bool Events::isKvdbEntryUpdatedEvent(const core::EventHolder& handler) {
     return handler.type() == "kvdbUpdatedItem";
 }
 
-KvdbItemUpdatedEvent Events::extractKvdbItemUpdatedEvent(const core::EventHolder& handler) {
+KvdbEntryUpdatedEvent Events::extractKvdbEntryUpdatedEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<KvdbItemUpdatedEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<KvdbEntryUpdatedEvent>(handler.get());
         if (!event) {
-            throw CannotExtractKvdbItemUpdatedEventException();
+            throw CannotExtractKvdbEntryUpdatedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
@@ -177,15 +177,15 @@ KvdbItemUpdatedEvent Events::extractKvdbItemUpdatedEvent(const core::EventHolder
     }
 }
 
-bool Events::isKvdbItemDeletedEvent(const core::EventHolder& handler) {
-    return handler.type() == "kvdbItemDeleted";
+bool Events::isKvdbEntryDeletedEvent(const core::EventHolder& handler) {
+    return handler.type() == "kvdbEntryDeleted";
 }
 
-KvdbItemDeletedEvent Events::extractKvdbItemDeletedEvent(const core::EventHolder& handler) {
+KvdbEntryDeletedEvent Events::extractKvdbEntryDeletedEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<KvdbItemDeletedEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<KvdbEntryDeletedEvent>(handler.get());
         if (!event) {
-            throw CannotExtractKvdbDeletedItemEventException();
+            throw CannotExtractKvdbDeletedEntryEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

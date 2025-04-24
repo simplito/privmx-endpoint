@@ -15,7 +15,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-void StructValidator<kvdb::ItemsPagingQuery>::validate(const kvdb::ItemsPagingQuery& value, const std::string& stack_trace) {
+void StructValidator<kvdb::KvdbEntryPagingQuery>::validate(const kvdb::KvdbEntryPagingQuery& value, const std::string& stack_trace) {
     Validator::validateSortOrder(value.sortOrder, stack_trace + ".sortOrder");
     if (value.sortBy.has_value()) {
         if(value.sortBy != "createDate" && value.sortBy != "itemKey" && value.sortBy != "lastModificationDate") {
@@ -24,7 +24,7 @@ void StructValidator<kvdb::ItemsPagingQuery>::validate(const kvdb::ItemsPagingQu
     }
 }
 
-void StructValidator<kvdb::KeysPagingQuery>::validate(const kvdb::KeysPagingQuery& value, const std::string& stack_trace) {
+void StructValidator<kvdb::KvdbKeysPagingQuery>::validate(const kvdb::KvdbKeysPagingQuery& value, const std::string& stack_trace) {
     Validator::validateSortOrder(value.sortOrder, stack_trace + ".sortOrder");
     if (value.sortBy.has_value()) {
         if(value.sortBy != "createDate" && value.sortBy != "itemKey" && value.sortBy != "lastModificationDate") {
