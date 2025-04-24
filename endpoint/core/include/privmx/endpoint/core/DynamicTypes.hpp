@@ -25,6 +25,12 @@ ENDPOINT_CLIENT_TYPE(VersionedData)
     INT64_FIELD(version)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(BridgeIdentity)
+    STRING_FIELD(url)
+    STRING_FIELD(pubKey)
+    STRING_FIELD(instanceId)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
     STRING_FIELD(creatorUserId)
     STRING_FIELD(creatorPublicKey)
@@ -36,6 +42,7 @@ ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
     STRING_FIELD(containerResourceId)
     MAP_FIELD(fieldChecksums, std::string)
     INT64_FIELD(structureVersion)
+    OBJECT_FIELD(bridgeIdentity, BridgeIdentity)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(EncryptionKey)
