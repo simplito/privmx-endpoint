@@ -42,6 +42,9 @@ public:
     template<typename T>
     Poco::Dynamic::Var serialize(const std::optional<T>& value);
 
+    const Options& getOptions() const {
+        return _options;
+    }
 private:
     const Options _options;
 };

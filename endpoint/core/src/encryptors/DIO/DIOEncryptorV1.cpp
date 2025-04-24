@@ -41,14 +41,14 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.fieldChecksums(dioJSONfieldChecksums);
     dioJSON.structureVersion(dio.structureVersion);
     auto bridgeIdentity = privmx::utils::TypedObjectFactory::createNewObject<dynamic::BridgeIdentity>();
-    bridgeIdentity.url(dio.bridgeIdentity.url);
-    if(dio.bridgeIdentity.pubKey.has_value()) {
-        bridgeIdentity.pubKey(dio.bridgeIdentity.pubKey.value());
+    bridgeIdentity.url(dio.bridgeIdentity->url);
+    if(dio.bridgeIdentity->pubKey.has_value()) {
+        bridgeIdentity.pubKey(dio.bridgeIdentity->pubKey.value());
     } else {
         bridgeIdentity.pubKeyEmpty();
     }
-    if(dio.bridgeIdentity.instanceId.has_value()) {
-        bridgeIdentity.instanceId(dio.bridgeIdentity.instanceId.value());
+    if(dio.bridgeIdentity->instanceId.has_value()) {
+        bridgeIdentity.instanceId(dio.bridgeIdentity->instanceId.value());
     } else {
         bridgeIdentity.instanceIdEmpty();
     }

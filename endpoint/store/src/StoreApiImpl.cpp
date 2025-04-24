@@ -910,7 +910,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                 .randomId = std::string(),
                 .containerId = std::nullopt,
                 .containerResourceId = std::nullopt,
-                .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                .bridgeIdentity = std::nullopt
             }
         );
         }
@@ -927,7 +927,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                     .randomId = std::string(),
                     .containerId = std::nullopt,
                     .containerResourceId = std::nullopt,
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1215,7 +1215,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                     .randomId = std::string(),
                     .containerId = file.storeId(),
                     .containerResourceId = std::string(),
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1232,7 +1232,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                     .randomId = std::string(),
                     .containerId = file.storeId(),
                     .containerResourceId = std::string(),
-                    .bridgeIdentity = _connection.getImpl()->getBridgeIdentity()
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }

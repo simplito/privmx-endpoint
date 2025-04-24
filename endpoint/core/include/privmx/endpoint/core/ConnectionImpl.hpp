@@ -57,7 +57,6 @@ public:
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
     std::vector<UserInfo> getContextUsers(const std::string& contextId);
     void disconnect();
-    const BridgeIdentity& getBridgeIdentity() const { return _bridgeIdentity; }
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
     const privmx::crypto::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
     const std::string& getHost() const { return _host; }
