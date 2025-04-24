@@ -29,7 +29,7 @@ struct VerificationRequest {
     /**
      * Bridge Identity 
      */
-    const BridgeIdentity bridgeIdentity;
+    const std::optional<BridgeIdentity> bridgeIdentity;
 };
 
 /**
