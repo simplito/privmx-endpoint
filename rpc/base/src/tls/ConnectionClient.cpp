@@ -370,7 +370,7 @@ void ConnectionClient::extractAndValidateChallenge(const Var& packet) {
             );
         }
         std::string challengeResult = utils::Hex::toString(obj->getObject("signature")->getValue<std::string>("challenge"));
-        auto result = _serverPubKey.value().verifyCompactSignature(crypto::Crypto::sha256(_serverChallenge + ";" + std::to_string(serverTimestamp)), challengeResult);
+        auto result = _serverPubKey.value().verifyCompactSignatureWithHash((_serverChallenge + ";" + std::to_string(serverTimestamp)), challengeResult);
         if(!result) {
             throw ServerChallengeFailedException();
         }   
