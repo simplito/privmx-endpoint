@@ -45,7 +45,7 @@ public:
         EntropyToMnemonic = 14,
         MnemonicToEntropy = 15,
         MnemonicToSeed = 16,
-        ConvertPGPKeyToBase58DERKey = 17
+        ConvertPGPAsn1KeyToBase58DERKey = 17
     };
 
     CryptoApiVarInterface(const core::VarSerializer& serializer)

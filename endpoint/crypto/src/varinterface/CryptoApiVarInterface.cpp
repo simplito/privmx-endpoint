@@ -35,7 +35,8 @@ std::map<CryptoApiVarInterface::METHOD, Poco::Dynamic::Var (CryptoApiVarInterfac
                                         {FromEntropy, &CryptoApiVarInterface::fromEntropy},
                                         {EntropyToMnemonic, &CryptoApiVarInterface::entropyToMnemonic},
                                         {MnemonicToEntropy, &CryptoApiVarInterface::mnemonicToEntropy},
-                                        {MnemonicToSeed, &CryptoApiVarInterface::mnemonicToSeed}};
+                                        {MnemonicToSeed, &CryptoApiVarInterface::mnemonicToSeed},
+                                        {ConvertPGPAsn1KeyToBase58DERKey, &CryptoApiVarInterface::convertPGPAsn1KeyToBase58DERKey}};
 
 
 Poco::Dynamic::Var CryptoApiVarInterface::create(const Poco::Dynamic::Var& args) {
