@@ -55,5 +55,5 @@ KvdbDeletedEntryEventData Mapper::mapToKvdbDeletedEntryEventData(const server::K
 }
 
 KvdbStatsEventData Mapper::mapToKvdbStatsEventData(const server::KvdbStatsEventData& data) {
-    return {.kvdbId = data.kvdbId(), .lastEntryDate = data.lastEntryDate(), .items = data.items()};
+    return {.kvdbId = data.kvdbId(), .lastEntryDate = data.lastEntryDate(), .entries = data.entries()};
 }

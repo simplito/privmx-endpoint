@@ -70,9 +70,9 @@ struct Kvdb {
     core::Buffer privateMeta;
 
     /**
-     * total number of items in the Kvdb
+     * total number of entries in the Kvdb
      */
-    int64_t items;
+    int64_t entries;
 
     /**
      * timestamp of last new item

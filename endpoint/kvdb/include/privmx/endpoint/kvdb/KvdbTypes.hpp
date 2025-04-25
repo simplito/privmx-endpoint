@@ -39,17 +39,23 @@ struct DecryptedKvdbEntryDataV5 : public core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
+struct KvdbInternalMetaV5 {
+    std::string secret;
+    std::string resourceId;
+    std::string randomId;
+};
+
 struct KvdbDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer internalMeta;
+    KvdbInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
 };
 
 struct DecryptedKvdbDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer internalMeta;
+    KvdbInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };

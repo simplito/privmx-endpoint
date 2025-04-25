@@ -36,9 +36,9 @@ struct  KvdbStatsEventData {
     int64_t lastEntryDate;
 
     /**
-     * updated number of items in the Kvdb
+     * updated number of entries in the Kvdb
      */
-    int64_t items;
+    int64_t entries;
 };
 
 /**
@@ -52,7 +52,7 @@ struct KvdbDeletedEntryEventData {
     std::string kvdbId;
 
     /**
-     * Key of deleted Item
+     * Key of deleted Entry
      */
     std::string kvdbEntryKey;
 };

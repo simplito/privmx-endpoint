@@ -30,6 +30,8 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/kvdb/KvdbProvider.hpp"
+#include "privmx/endpoint/kvdb/Constants.hpp"
+
 
 namespace privmx {
 namespace endpoint {
@@ -101,20 +103,22 @@ private:
 
     DecryptedKvdbDataV5 decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     Kvdb convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const DecryptedKvdbDataV5& kvdbData);
+    KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     std::vector<Kvdb> decryptAndConvertKvdbsDataToKvdbs(utils::List<server::KvdbInfo> kvdbs);
     Kvdb decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
-    std::string decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
+    KvdbInternalMetaV5 decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
     core::DecryptedEncKey getKvdbCurrentEncKey(server::KvdbInfo kvdb);
 
-    DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey);
-    KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo item, DecryptedKvdbEntryDataV5 itemData);
-    std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item, const core::DecryptedEncKey& encKey);
-    std::vector<KvdbEntry> decryptAndConvertKvdbEntriesDataToKvdbEntries(server::KvdbInfo kvdb, utils::List<server::KvdbEntryInfo> items);
-    KvdbEntry decryptAndConvertEntryDataToEntry(server::KvdbInfo kvdb, server::KvdbEntryInfo item);
-    KvdbEntry decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo item);
-    uint32_t validateEntryDataIntegrity(server::KvdbEntryInfo item);
+    DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
+    KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo entry, DecryptedKvdbEntryDataV5 entryData);
+    KvdbEntryDataSchema::Version getMessagesDataStructureVersion(server::KvdbEntryInfo entry);
+    std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
+    std::vector<KvdbEntry> decryptAndConvertKvdbEntriesDataToKvdbEntries(server::KvdbInfo kvdb, utils::List<server::KvdbEntryInfo> entries);
+    KvdbEntry decryptAndConvertEntryDataToEntry(server::KvdbInfo kvdb, server::KvdbEntryInfo entry);
+    KvdbEntry decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry);
+    uint32_t validateEntryDataIntegrity(server::KvdbEntryInfo entry, const std::string& kvdbResourceId);
     
     void assertKvdbExist(const std::string& kvdbId);
     privfs::RpcGateway::Ptr _gateway;
@@ -128,7 +132,7 @@ private:
     bool _subscribeForKvdb;
     core::SubscriptionHelper _kvdbSubscriptionHelper;
     KvdbDataEncryptorV5 _kvdbDataEncryptorV5;
-    EntryDataEncryptorV5 _itemDataEncryptorV5;
+    EntryDataEncryptorV5 _entryDataEncryptorV5;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     inline static const std::string KVDB_TYPE_FILTER_FLAG = "kvdb";
 };

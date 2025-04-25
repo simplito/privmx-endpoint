@@ -30,6 +30,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(KvdbInfo)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(creator)
@@ -43,7 +44,7 @@ ENDPOINT_SERVER_TYPE(KvdbInfo)
     INT64_FIELD(version)
     STRING_FIELD(type)
     VAR_FIELD(policy)
-    INT64_FIELD(items)
+    INT64_FIELD(entries)
     INT64_FIELD(lastEntryDate)
 TYPE_END
 
@@ -57,7 +58,7 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbDataV5, core::dynamic::VersionedData)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(KvdbCreateModel)
-    STRING_FIELD(kvdbId)
+    STRING_FIELD(resourceId)
     STRING_FIELD(type)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
@@ -74,6 +75,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(KvdbUpdateModel)
     STRING_FIELD(kvdbId)
+    STRING_FIELD(resourceId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
     VAR_FIELD(data)
@@ -120,7 +122,7 @@ ENDPOINT_SERVER_TYPE(KvdbListResult)
     INT64_FIELD(count)
 TYPE_END
 
-// KVDB ITEM
+// KVDB ENTRY
 
 ENDPOINT_SERVER_TYPE(KvdbEntryInfo)
     STRING_FIELD(kvdbEntryKey)
@@ -189,7 +191,6 @@ ENDPOINT_CLIENT_TYPE(KvdbListEntriesModel)
     STRING_FIELD(lastKey)
     STRING_FIELD(prefix)
     STRING_FIELD(sortBy)
-
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(sortOrder)
@@ -233,7 +234,7 @@ ENDPOINT_CLIENT_TYPE(KvdbStatsEventData)
     STRING_FIELD(contextId)
     STRING_FIELD(type)
     INT64_FIELD(lastEntryDate)
-    INT64_FIELD(items)
+    INT64_FIELD(entries)
 
 TYPE_END
 
