@@ -86,7 +86,7 @@ std::string CryptoApiImpl::convertPEMKeytoWIFKey(const std::string& keyPEM) {
     return KeyConverter::cryptoKeyConvertPEMToWIF(keyPEM);
 }
 
-std::string CryptoApiImpl::convertPGPKeyToBase58DERKey(const std::string& keyPGP) {
+std::string CryptoApiImpl::convertPGPAsn1KeyToBase58DERKey(const std::string& keyPGP) {
     return KeyConverter::cryptoKeyConvertPGPToBase58DER(keyPGP);
 }
 

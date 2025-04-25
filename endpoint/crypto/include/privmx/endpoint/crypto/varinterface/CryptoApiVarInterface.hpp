@@ -69,7 +69,7 @@ public:
     Poco::Dynamic::Var entropyToMnemonic(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var mnemonicToEntropy(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var mnemonicToSeed(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var convertPGPKeyToBase58DERKey(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var convertPGPAsn1KeyToBase58DERKey(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

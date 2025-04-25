@@ -118,9 +118,9 @@ std::string CryptoApi::convertPEMKeytoWIFKey(const std::string& pemKey) {
     }
 }
 
-std::string CryptoApi::convertPGPKeyToBase58DERKey(const std::string& pgpKey) {
+std::string CryptoApi::convertPGPAsn1KeyToBase58DERKey(const std::string& pgpKey) {
     try {
-        return _impl->convertPGPKeyToBase58DERKey(pgpKey);
+        return _impl->convertPGPAsn1KeyToBase58DERKey(pgpKey);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

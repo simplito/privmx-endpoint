@@ -63,7 +63,7 @@ std::string KeyConverter::cryptoKeyConvertPGPToBase58DER(const std::string& keyP
     std::size_t controlsumBegin = data.find("=");
     std::string base64 = data.substr(0, controlsumBegin);
     auto decoded = utils::Base64::toString(base64);
-    std::string extractedKeyDer {decoded.substr(16, 81)};
+    std::string extractedKeyDer {decoded.substr(16, 65)};
     auto pub = privmx::crypto::PublicKey::fromDER(extractedKeyDer);
     return pub.toBase58DER();
 }

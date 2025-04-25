@@ -125,7 +125,7 @@ public:
      * @param pemKey public key to convert
      * @return private key in base58DER format
      */
-    std::string convertPGPKeyToBase58DERKey(const std::string& pgpKey);
+    std::string convertPGPAsn1KeyToBase58DERKey(const std::string& pgpKey);
 
     /**
      * Generates ECC key and BIP-39 mnemonic from a password using BIP-39.
