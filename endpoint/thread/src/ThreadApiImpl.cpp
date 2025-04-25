@@ -902,11 +902,12 @@ std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx:
     std::vector<core::VerificationRequest> verifierInput {};
     for (size_t i = 0; i < result.size(); i++) {
         if(result[i].statusCode == 0) {
-            verifierInput.push_back({
+            verifierInput.push_back(core::VerificationRequest{
                 .contextId = result[i].contextId,
                 .senderId = result[i].lastModifier,
                 .senderPubKey = threadsDIO[i].creatorPubKey,
-                .date = result[i].lastModificationDate
+                .date = result[i].lastModificationDate,
+                .bridgeIdentity = threadsDIO[i].bridgeIdentity
             });
         }
     }
@@ -936,11 +937,12 @@ Thread ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thr
     std::tie(result, threadDIO) = decryptAndConvertThreadDataToThread(thread, thread_data_entry, key);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
-    verifierInput.push_back({
+    verifierInput.push_back(core::VerificationRequest{
         .contextId = result.contextId,
         .senderId = result.lastModifier,
         .senderPubKey = threadDIO.creatorPubKey,
-        .date = result.lastModificationDate
+        .date = result.lastModificationDate,
+        .bridgeIdentity = threadDIO.bridgeIdentity
     });
     std::vector<bool> verified;
     try {
@@ -1208,6 +1210,7 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
     keyProviderRequest.addMany(thread.keys(), keyIds, location);
     auto keyMap = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
     std::vector<Message> result;
+    std::vector<core::DataIntegrityObject> messagesDIO;
     std::map<std::string, bool> duplication_check;
     for (auto message : messages) {
         try {
@@ -1216,6 +1219,7 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
                 auto tmp = decryptAndConvertMessageDataToMessage(message, keyMap.at(message.keyId()));
                 result.push_back(std::get<0>(tmp));
                 auto messageDIO = std::get<1>(tmp);
+                messagesDIO.push_back(messageDIO);
                 //find duplication
                 std::string fullRandomId =  messageDIO.randomId + "-" + std::to_string(messageDIO.timestamp);
                 if(duplication_check.find(fullRandomId) == duplication_check.end()) {
@@ -1231,13 +1235,14 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
-    for (auto message: result) {
-        if(message.statusCode == 0) {
-            verifierInput.push_back({
+    for (size_t i = 0; i < result.size(); i++) {
+        if(result[i].statusCode == 0) {
+            verifierInput.push_back(core::VerificationRequest{
                 .contextId = thread.contextId(),
-                .senderId = message.info.author,
-                .senderPubKey = message.authorPubKey,
-                .date = message.info.createDate
+                .senderId = result[i].info.author,
+                .senderPubKey = result[i].authorPubKey,
+                .date = result[i].info.createDate,
+                .bridgeIdentity = messagesDIO[i].bridgeIdentity
             });
         }
     }
@@ -1268,11 +1273,12 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::ThreadInfo 
     std::tie(result, messageDIO) = decryptAndConvertMessageDataToMessage(message, encKey);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
-        verifierInput.push_back({
+        verifierInput.push_back(core::VerificationRequest{
             .contextId = thread.contextId(),
             .senderId = result.info.author,
             .senderPubKey = result.authorPubKey,
-            .date = result.info.createDate
+            .date = result.info.createDate,
+            .bridgeIdentity = messageDIO.bridgeIdentity
         });
     std::vector<bool> verified;
     try {

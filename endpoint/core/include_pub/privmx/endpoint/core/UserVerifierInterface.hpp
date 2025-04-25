@@ -3,6 +3,7 @@
 
 #include <string>
 #include <optional>
+#include "privmx/endpoint/core/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -25,6 +26,10 @@ struct VerificationRequest {
      * The data creation date
      */
     const int64_t date;
+    /**
+     * Bridge Identity.
+     */
+    const std::optional<BridgeIdentity> bridgeIdentity;
 };
 
 /**

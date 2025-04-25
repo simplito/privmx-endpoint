@@ -261,7 +261,8 @@ void KeyProvider::verifyUserData(std::unordered_map<EncKeyLocation,std::unordere
                     .contextId = it->second.dio.contextId,
                     .senderId = it->second.dio.creatorUserId,
                     .senderPubKey = it->second.dio.creatorPubKey,
-                    .date = it->second.dio.timestamp
+                    .date = it->second.dio.timestamp,
+                    .bridgeIdentity = it->second.dio.bridgeIdentity
                 });
             }
         }
