@@ -12,6 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV5.hpp"
 
 #include "privmx/endpoint/inbox/InboxException.hpp"
+#include "privmx/endpoint/inbox/DynamicTypes.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
@@ -37,7 +38,11 @@ server::InboxData InboxDataProcessorV5::packForServer(const InboxDataProcessorMo
     serverPrivateData.version(5);
     serverPrivateData.privateMeta(_dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey));
     privateDataMapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(serverPrivateData.privateMeta())));
-    serverPrivateData.internalMeta(_dataEncryptor.signAndEncryptAndEncode(plainData.privateData.internalMeta, authorPrivateKey, inboxKey));
+    auto internalMeta = utils::TypedObjectFactory::createNewObject<dynamic::InboxInternalMetaV5>();
+    internalMeta.secret(plainData.privateData.internalMeta.secret);
+    internalMeta.resourceId(plainData.privateData.internalMeta.resourceId);
+    internalMeta.randomId(plainData.privateData.internalMeta.randomId);
+    serverPrivateData.internalMeta(_dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, inboxKey));
     privateDataMapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta())));
     serverPrivateData.authorPubKey(authorPubKeyECC);
     core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .structureVersion=5, .fieldChecksums=privateDataMapOfDataSha256};
@@ -119,7 +124,9 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV5.authorPubKey());
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.privateMeta(), authorPublicKeyECC, inboxKey);
-        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.internalMeta(), authorPublicKeyECC, inboxKey);
+        auto internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.internalMeta(), authorPublicKeyECC, inboxKey).stdString();
+        auto internalMetaJSON = utils::TypedObjectFactory::createObjectFromVar<dynamic::InboxInternalMetaV5>(utils::Utils::parseJsonObject(internalMeta));
+        result.internalMeta = InboxInternalMetaV5{.secret=internalMetaJSON.secret(), .resourceId=internalMetaJSON.resourceId(), .randomId=internalMetaJSON.randomId()};
         result.authorPubKey = privateDataV5.authorPubKey();
 
     }  catch (const privmx::endpoint::core::Exception& e) {

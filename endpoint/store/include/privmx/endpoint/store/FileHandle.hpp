@@ -30,18 +30,20 @@ namespace store {
 class FileHandle
 {
 public:
-    FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, uint64_t fileSize);
+    FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, const std::string& resourceId, uint64_t fileSize);
     virtual ~FileHandle() = default;
     virtual bool isReadHandle() const { return false; }
     virtual bool isWriteHandle() const { return false; }
     int64_t getId();
     std::string getStoreId();
     std::string getFileId();
+    std::string getResourceId();
     uint64_t getSize();
 protected:
     const int64_t _id;
     std::string _storeId;
     std::string _fileId;
+    std::string _resourceId;
     uint64_t _size;
 };
 
@@ -51,6 +53,7 @@ public:
     FileReadHandle(
         int64_t id, 
         const std::string& fileId,
+        const std::string& resourceId, 
         uint64_t fileSize,
         uint64_t serverFileSize,
         size_t chunkSize,
@@ -75,6 +78,7 @@ public:
         int64_t id,
         const std::string& storeId,
         const std::string& fileId,
+        const std::string& resourceId,
         uint64_t size,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
@@ -106,6 +110,7 @@ public:
     FileHandleManager(std::shared_ptr<core::HandleManager> handleManager, const std::string& labelPrefix = "");
     std::shared_ptr<FileReadHandle> createFileReadHandle(
         const std::string& fileId,
+        const std::string& resourceId, 
         uint64_t fileSize,
         uint64_t serverFileSize,
         size_t chunkSize,
@@ -118,6 +123,7 @@ public:
     std::shared_ptr<FileWriteHandle> createFileWriteHandle(
         const std::string& storeId,
         const std::string& fileId,
+        const std::string& resourceId,
         uint64_t size,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,

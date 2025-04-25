@@ -23,7 +23,7 @@ namespace thread {
 namespace server {
 
 ENDPOINT_SERVER_TYPE(ThreadCreateModel)
-    STRING_FIELD(threadId)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
@@ -36,6 +36,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadUpdateModel)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
     VAR_FIELD(data)
@@ -53,6 +54,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadInfo)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(creator)
@@ -98,7 +100,7 @@ ENDPOINT_SERVER_TYPE(ThreadListResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessageSendModel)
-    STRING_FIELD(messageId)
+    STRING_FIELD(resourceId)
     STRING_FIELD(threadId)
     VAR_FIELD(data)
     STRING_FIELD(keyId)
@@ -120,6 +122,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(Message)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     INT64_FIELD(version)
     STRING_FIELD(contextId)
     STRING_FIELD(threadId)

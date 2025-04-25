@@ -25,7 +25,7 @@ namespace core {
 
 class DIOEncryptorV1 {
 public:
-    std::string signAndEncode(const core::ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& autorKey);
+    std::string signAndEncode(const core::ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& authorKey);
     core::ExpandedDataIntegrityObject decodeAndVerify(const std::string& signedDio);
 private:
     void assertDataFormat(const dynamic::DataIntegrityObject& dioJSON);

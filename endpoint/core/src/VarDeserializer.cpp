@@ -123,3 +123,12 @@ ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynami
     return result;
 }
 
+template<>
+PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    PKIVerificationOptions result {};
+    result.bridgePubKey = deserializeOptional<std::string>(obj->get("bridgePubKey"), name + ".get");
+    result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".update");
+    return result;
+}

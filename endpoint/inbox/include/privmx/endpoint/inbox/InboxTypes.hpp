@@ -28,6 +28,7 @@ struct InboxPublicViewData : public core::DecryptedVersionedData {
     std::string inboxEntriesPubKeyBase58DER;
     std::string inboxEntriesKeyId;
     std::string inboxId;
+    std::string resourceId;
     int64_t version;
 };
 
@@ -70,9 +71,15 @@ struct InboxDataResultV4 : public core::DecryptedVersionedData {
 
 // V5
 
+struct InboxInternalMetaV5 {
+    std::string secret;
+    std::string resourceId;
+    std::string randomId;
+};
+
 struct InboxPrivateDataV5 {
     core::Buffer privateMeta;
-    core::Buffer internalMeta;
+    InboxInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
 };
 
@@ -105,7 +112,6 @@ struct InboxDataResultV5 : public core::DecryptedVersionedData {
     InboxPublicDataV5AsResult publicData;
     InboxPrivateDataV5AsResult privateData;
 };
-
 
 } // inbox
 } // endpoint
