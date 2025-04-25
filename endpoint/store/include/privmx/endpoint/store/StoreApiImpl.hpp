@@ -43,6 +43,7 @@ limitations under the License.
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/StoreProvider.hpp"
+#include "privmx/endpoint/store/Constants.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -123,7 +124,7 @@ private:
     Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
     Store convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData);
     Store convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData);
-    uint32_t getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry);
+    StoreDataSchema::Version getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry);
     std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
     Store decryptAndConvertStoreDataToStore(server::Store store);
@@ -143,7 +144,7 @@ private:
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
-    uint32_t getFileDataStructureVersion(server::File file);
+    FileDataSchema::Version getFileDataStructureVersion(server::File file);
     std::vector<File> decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files);
     File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
     File decryptAndConvertFileDataToFileInfo(server::File file);

@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
+#include "privmx/endpoint/thread/Constants.hpp"
 #include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint;
@@ -22,7 +23,7 @@ server::EncryptedThreadDataV5 ThreadDataEncryptorV5::encrypt(const ThreadDataToE
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedThreadDataV5>();
-    result.version(5);
+    result.version(ThreadDataSchema::Version::VERSION_5);
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(threadData.publicMeta, authorPrivateKey));
     fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
@@ -40,7 +41,7 @@ server::EncryptedThreadDataV5 ThreadDataEncryptorV5::encrypt(const ThreadDataToE
     result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, encryptionKey));
     fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    core::ExpandedDataIntegrityObject expandedDio = {threadData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {threadData.dio, .structureVersion=ThreadDataSchema::Version::VERSION_5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result;
 }
@@ -48,7 +49,7 @@ server::EncryptedThreadDataV5 ThreadDataEncryptorV5::encrypt(const ThreadDataToE
 DecryptedThreadDataV5 ThreadDataEncryptorV5::decrypt(const server::EncryptedThreadDataV5& encryptedThreadData, const std::string& encryptionKey) {
     DecryptedThreadDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = ThreadDataSchema::Version::VERSION_5;
     try {  
         result.dio = getDIOAndAssertIntegrity(encryptedThreadData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedThreadData.authorPubKey());
@@ -80,7 +81,7 @@ DecryptedThreadDataV5 ThreadDataEncryptorV5::decrypt(const server::EncryptedThre
 DecryptedThreadDataV5 ThreadDataEncryptorV5::extractPublic(const server::EncryptedThreadDataV5& encryptedThreadData) {
     DecryptedThreadDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = ThreadDataSchema::Version::VERSION_5;
     try {  
         result.dio = getDIOAndAssertIntegrity(encryptedThreadData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedThreadData.authorPubKey());
@@ -109,7 +110,7 @@ core::DataIntegrityObject ThreadDataEncryptorV5::getDIOAndAssertIntegrity(const 
     auto encryptedDIO = encryptedThreadData.dio();
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedDIO);
     if (
-        dio.structureVersion != 5 ||
+        dio.structureVersion != ThreadDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedThreadData.authorPubKey() ||
         dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.publicMeta()) ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedThreadData.privateMeta()) ||
@@ -122,13 +123,13 @@ core::DataIntegrityObject ThreadDataEncryptorV5::getDIOAndAssertIntegrity(const 
 
 void ThreadDataEncryptorV5::assertDataFormat(const server::EncryptedThreadDataV5& encryptedThreadData) {
     if (encryptedThreadData.versionEmpty() ||
-        encryptedThreadData.version() != 5 ||
+        encryptedThreadData.version() != ThreadDataSchema::Version::VERSION_5 ||
         encryptedThreadData.publicMetaEmpty() ||
         encryptedThreadData.privateMetaEmpty() ||
         encryptedThreadData.internalMetaEmpty() ||
         encryptedThreadData.authorPubKeyEmpty() ||
         encryptedThreadData.dioEmpty()
     ) {
-        throw InvalidEncryptedThreadDataVersionException(std::to_string(encryptedThreadData.version()) + " expected version: 5");
+        throw InvalidEncryptedThreadDataVersionException(std::to_string(encryptedThreadData.version()) + " expected version: " + std::to_string(ThreadDataSchema::Version::VERSION_5));
     }
 }

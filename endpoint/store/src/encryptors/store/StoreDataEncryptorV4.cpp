@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
+#include "privmx/endpoint/store/Constants.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -21,7 +22,7 @@ server::EncryptedStoreDataV4 StoreDataEncryptorV4::encrypt(const StoreDataToEncr
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedStoreDataV4>();
-    result.version(4);
+    result.version(StoreDataSchema::Version::VERSION_4);
     result.publicMeta(_dataEncryptor.signAndEncode(plainData.publicMeta, authorPrivateKey));
     try {
         result.publicMetaObject(utils::Utils::parseJsonObject(plainData.publicMeta.stdString()));
@@ -42,7 +43,7 @@ DecryptedStoreDataV4 StoreDataEncryptorV4::decrypt(
     const server::EncryptedStoreDataV4& encryptedData, const std::string& encryptionKey) {
     DecryptedStoreDataV4 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 4;
+    result.dataStructureVersion = StoreDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey());
@@ -71,7 +72,7 @@ DecryptedStoreDataV4 StoreDataEncryptorV4::decrypt(
 }
 
 void StoreDataEncryptorV4::validateVersion(const server::EncryptedStoreDataV4& encryptedData) {
-    if (encryptedData.version() != 4) {
+    if (encryptedData.version() != StoreDataSchema::Version::VERSION_4) {
         throw InvalidEncryptedStoreDataVersionException();
     }
 }
