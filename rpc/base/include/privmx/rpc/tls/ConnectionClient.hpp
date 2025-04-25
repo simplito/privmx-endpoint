@@ -93,7 +93,8 @@ private:
     // Challenge
     std::optional<crypto::PublicKey> _serverPubKey;
     std::string _serverChallenge;
-    static constexpr int64_t allowedTimeDifference = 150*1000; // in ms
+    
+    static constexpr int64_t ALLOWED_TIME_DIFFERENCE_BETWEEN_SERVER_AND_CLIENT = 150*1000; // in ms
 };
 
 } // rpc

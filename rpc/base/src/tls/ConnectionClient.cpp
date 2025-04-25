@@ -364,8 +364,10 @@ void ConnectionClient::extractAndValidateChallenge(const Var& packet) {
             throw ServerChallengeMissingSignatureException();
         }
         int64_t serverTimestamp = obj->getObject("signature")->getValue<int64_t>("timestamp");
-        if (abs(utils::Utils::getNowTimestamp() - serverTimestamp) > allowedTimeDifference) {
-            throw TimeDifferenceBetweenServerAndClientBiggerThenAllowedException("Allowed time difference with server is " + std::to_string(allowedTimeDifference) + "ms");
+        if (!utils::Utils::validateTimestamps(utils::Utils::getNowTimestamp(), serverTimestamp, ALLOWED_TIME_DIFFERENCE_BETWEEN_SERVER_AND_CLIENT)) {
+            throw TimeDifferenceBetweenServerAndClientBiggerThanAllowedException(
+                "Allowed time difference with server is " + std::to_string(ALLOWED_TIME_DIFFERENCE_BETWEEN_SERVER_AND_CLIENT) + "ms"
+            );
         }
         std::string challengeResult = utils::Hex::toString(obj->getObject("signature")->getValue<std::string>("challenge"));
         auto result = _serverPubKey.value().verifyCompactSignature(crypto::Crypto::sha256(_serverChallenge + ";" + std::to_string(serverTimestamp)), challengeResult);
