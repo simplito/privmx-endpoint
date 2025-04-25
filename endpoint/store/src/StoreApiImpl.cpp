@@ -923,7 +923,8 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                     .timestamp = store.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = std::nullopt,
-                    .containerResourceId = std::nullopt
+                    .containerResourceId = std::nullopt,
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -939,7 +940,8 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
                     .timestamp = store.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = std::nullopt,
-                    .containerResourceId = std::nullopt
+                    .containerResourceId = std::nullopt,
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1237,7 +1239,8 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                     .timestamp = file.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = file.storeId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1253,7 +1256,8 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
                     .timestamp = file.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = file.storeId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }

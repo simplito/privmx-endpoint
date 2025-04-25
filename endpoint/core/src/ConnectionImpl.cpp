@@ -28,13 +28,18 @@ ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
 }
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
-                             const std::string& platformUrl) {
+                             const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
     PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
     rpc::ConnectionOptions options;
     auto port = Poco::URI(platformUrl).getPort();
     options.host = Poco::URI(platformUrl).getHost() + ":" + std::to_string(port);
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = true;
+    _bridgeIdentity = BridgeIdentity{
+        .url=options.url, 
+        .pubKey=verificationOptions.bridgePubKey, 
+        .instanceId=verificationOptions.bridgeInstanceId
+    };
     auto key = privmx::crypto::PrivateKey::fromWIF(userPrivKey);
     _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
@@ -74,7 +79,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
-void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl) {
+void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
     // TODO: solutionId is reserved for future use
     PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
     rpc::ConnectionOptions options;
@@ -82,6 +87,11 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     options.host = Poco::URI(platformUrl).getHost() + ":" + std::to_string(port);
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = false;
+    _bridgeIdentity = BridgeIdentity{
+        .url=options.url, 
+        .pubKey=verificationOptions.bridgePubKey, 
+        .instanceId=verificationOptions.bridgeInstanceId
+    };
     auto key = privmx::crypto::PrivateKey::generateRandom();
     _userPrivKey = key;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
@@ -219,6 +229,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::optional<std::string>& creatorUserId,
     const std::optional<crypto::PublicKey>& creatorPublicKey
 ) {
+    
     return core::DataIntegrityObject{
         .creatorUserId = creatorUserId.has_value() ? creatorUserId.value() : getMyUserId(contextId),
         .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
@@ -227,6 +238,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
         .randomId = generateDIORandomId(),
         .containerId = containerId,
-        .containerResourceId = containerResourceId
+        .containerResourceId = containerResourceId,
+        .bridgeIdentity = _bridgeIdentity
     };
 }

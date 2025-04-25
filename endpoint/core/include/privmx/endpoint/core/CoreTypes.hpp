@@ -21,6 +21,12 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+struct BridgeIdentity {
+    std::string url;
+    std::optional<std::string> pubKey;
+    std::optional<std::string> instanceId;
+};
+
 struct EncKey {
     std::string id;
     std::string key;
@@ -35,6 +41,7 @@ struct DataIntegrityObject {
     std::string randomId;
     std::optional<std::string> containerId;
     std::optional<std::string> containerResourceId;
+    std::optional<BridgeIdentity> bridgeIdentity;
 };
 
 struct DecryptedVersionedData {
@@ -69,8 +76,6 @@ struct DecryptedEncKeyV2 : public DecryptedEncKey {
     std::string keySecret;
     std::string secretHash;
 };
-
-
 
 }  // namespace core
 }  // namespace endpoint

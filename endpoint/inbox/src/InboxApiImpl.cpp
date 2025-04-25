@@ -789,7 +789,8 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
                     .timestamp = inbox.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = std::nullopt,
-                    .containerResourceId = std::nullopt
+                    .containerResourceId = std::nullopt,
+                    .bridgeIdentity = std::nullopt
                 }
                 
             );

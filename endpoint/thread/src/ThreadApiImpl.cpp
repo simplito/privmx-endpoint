@@ -831,7 +831,8 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                     .timestamp = thread.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = std::nullopt,
-                    .containerResourceId = std::nullopt
+                    .containerResourceId = std::nullopt,
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -847,7 +848,8 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                     .timestamp = thread.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = std::nullopt,
-                    .containerResourceId = std::nullopt
+                    .containerResourceId = std::nullopt,
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1145,7 +1147,8 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
                     .randomId = std::string(),
                     .containerId = message.threadId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1160,7 +1163,8 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
                     .randomId = std::string(),
                     .containerId = message.threadId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
@@ -1176,7 +1180,8 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
                     .randomId = std::string(),
                     .containerId = message.threadId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }

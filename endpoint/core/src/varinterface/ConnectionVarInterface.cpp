@@ -25,19 +25,27 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
                                          {GetContextUsers, &ConnectionVarInterface::getContextUsers}};
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
-    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3, 4);
     auto userPrivKey = _deserializer.deserialize<std::string>(argsArr->get(0), "userPrivKey");
     auto solutionId = _deserializer.deserialize<std::string>(argsArr->get(1), "solutionId");
     auto platformUrl = _deserializer.deserialize<std::string>(argsArr->get(2), "platformUrl");
-    _connection = Connection::connect(userPrivKey, solutionId, platformUrl);
+    auto verificationOptions = PKIVerificationOptions();
+    if(args.size() >= 4) {
+        verificationOptions = _deserializer.deserialize<PKIVerificationOptions>(argsArr->get(3), "verificationOptions");
+    }
+    _connection = Connection::connect(userPrivKey, solutionId, platformUrl, verificationOptions);
     return {};
 }
 
 Poco::Dynamic::Var ConnectionVarInterface::connectPublic(const Poco::Dynamic::Var& args) {
-    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 2, 3);
     auto solutionId = _deserializer.deserialize<std::string>(argsArr->get(0), "solutionId");
     auto platformUrl = _deserializer.deserialize<std::string>(argsArr->get(1), "platformUrl");
-    _connection = Connection::connectPublic(solutionId, platformUrl);
+    auto verificationOptions = PKIVerificationOptions();
+    if(args.size() >= 3) {
+        verificationOptions = _deserializer.deserialize<PKIVerificationOptions>(argsArr->get(2), "verificationOptions");
+    }
+    _connection = Connection::connectPublic(solutionId, platformUrl, verificationOptions);
     return {};
 }
 
