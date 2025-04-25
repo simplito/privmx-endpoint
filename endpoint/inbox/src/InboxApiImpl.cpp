@@ -493,7 +493,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     model.inboxId(handle->inboxId);
     model.message(serializedMessage);
     model.resourceId(messageDIO.resourceId);
-    model.version(1);
+    model.version(EntryDataSchema::Version::VERSION_1);
     _serverApi->inboxSend(model);
 }
 
@@ -677,7 +677,7 @@ Inbox InboxApiImpl::convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDat
         .filesConfig = inboxData.filesConfig,
         .policy = core::Factory::parsePolicyServerObjectWithoutItem(inboxRaw.policy()),
         .statusCode = inboxData.statusCode,
-        .schemaVersion = 4
+        .schemaVersion = InboxDataSchema::VERSION_4
     };
     return ret;
 }
@@ -702,7 +702,7 @@ Inbox InboxApiImpl::convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDat
         .filesConfig = inboxData.filesConfig,
         .policy = core::Factory::parsePolicyServerObjectWithoutItem(inboxRaw.policy()),
         .statusCode = inboxData.statusCode,
-        .schemaVersion = 5
+        .schemaVersion = InboxDataSchema::VERSION_5
     };
     return ret;
 }
@@ -718,7 +718,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(publicView.publicData());
         if (!versioned.versionEmpty()) {
             switch (versioned.version()) {
-                case 4:
+                case InboxDataSchema::Version::VERSION_4:
                     {
                         auto publicData {_inboxDataProcessorV4.unpackPublicOnly(publicView.publicData())};
                         result.inboxId = publicView.inboxId();
@@ -732,7 +732,7 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
                         result.statusCode = publicData.statusCode;
                         return result;
                     }
-                case 5:
+                case InboxDataSchema::Version::VERSION_5:
                     {
                         auto publicData {_inboxDataProcessorV5.unpackPublicOnly(publicView.publicData())};
                         result.inboxId = publicView.inboxId();
@@ -755,17 +755,29 @@ InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inbo
 }
 
 
-uint32_t InboxApiImpl::getInboxEntryDataStructureVersion(inbox::server::InboxDataEntry inboxEntry) {
+InboxDataSchema::Version InboxApiImpl::getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry inboxEntry) {
     if (inboxEntry.data().meta().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(inboxEntry.data().meta());
-        return versioned.versionOpt(0);
+        auto version = versioned.versionOpt(InboxDataSchema::Version::UNKNOWN);
+        switch (version) {
+            case InboxDataSchema::Version::VERSION_4:
+                return InboxDataSchema::Version::VERSION_4;
+            case InboxDataSchema::Version::VERSION_5:
+                return InboxDataSchema::Version::VERSION_5;
+            default:
+                return InboxDataSchema::Version::UNKNOWN;
+        }
     }
-    return 0;
+    return InboxDataSchema::Version::UNKNOWN;
 }
 
 std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
-    switch (getInboxEntryDataStructureVersion(inboxEntry)) {
-        case 4: {
+    switch (getInboxDataEntryStructureVersion(inboxEntry)) {
+        case InboxDataSchema::Version::UNKNOWN: {
+            auto e = UnknownInboxFormatException();
+            return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode(),{}}, core::DataIntegrityObject());
+        }
+        case InboxDataSchema::Version::VERSION_4: {
             auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);
             return std::make_tuple(
                 convertInboxV4(inbox, decryptedInboxData),
@@ -783,7 +795,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
                 
             );
         }
-        case 5: {
+        case InboxDataSchema::Version::VERSION_5: {
             auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
             return std::make_tuple(convertInboxV5(inbox, decryptedInboxData), decryptedInboxData.privateData.dio);
         }
@@ -885,11 +897,13 @@ inbox::Inbox InboxApiImpl::decryptAndConvertInboxDataToInbox(inbox::server::Inbo
 
 
 InboxInternalMetaV5 InboxApiImpl::decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
-    switch (getInboxEntryDataStructureVersion(inboxEntry)) {
-        case 4: {
+    switch (getInboxDataEntryStructureVersion(inboxEntry)) {
+        case InboxDataSchema::Version::UNKNOWN:
+            throw UnknownInboxFormatException();
+        case InboxDataSchema::Version::VERSION_4: {
             return InboxInternalMetaV5();
         }
-        case 5: {
+        case InboxDataSchema::Version::VERSION_5: {
             auto decryptedInboxData = decryptInboxV5(inboxEntry, encKey);
             return decryptedInboxData.privateData.internalMeta;
         }
@@ -989,7 +1003,7 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(inbox::server::Inbox inbox, th
             result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
         }   
     }
-    result.schemaVersion = 1;
+    result.schemaVersion = EntryDataSchema::Version::VERSION_1;
     return result;
 }
 
@@ -1171,10 +1185,12 @@ void InboxApiImpl::assertInboxExist(const std::string& inboxId) {
 uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
     try {
         auto inbox_data_entry = inbox.data().get(inbox.data().size()-1);
-            switch (getInboxEntryDataStructureVersion(inbox_data_entry)) {
-                case 4:
+            switch (getInboxDataEntryStructureVersion(inbox_data_entry)) {
+                case InboxDataSchema::Version::UNKNOWN:
+                    return UnknownInboxFormatException().getCode();
+                case InboxDataSchema::Version::VERSION_4:
                     return 0;
-                case 5: {
+                case InboxDataSchema::Version::VERSION_5: {
                     auto inbox_data = utils::TypedObjectFactory::createObjectFromVar<server::InboxData>(inbox_data_entry.data());
                     auto dio = _inboxDataProcessorV5.getDIOAndAssertIntegrity(inbox_data);
                     if(
