@@ -27,7 +27,7 @@ struct VerificationRequest {
      */
     const int64_t date;
     /**
-     * Bridge Identity 
+     * Bridge Identity.
      */
     const std::optional<BridgeIdentity> bridgeIdentity;
 };

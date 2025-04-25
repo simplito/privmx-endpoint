@@ -191,7 +191,7 @@ struct PKIVerificationOptions {
  */
 struct BridgeIdentity {
     /**
-     * Url of bridge
+     * Bridge URL.
      */
     std::string url;
     /** 
