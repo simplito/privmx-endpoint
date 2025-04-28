@@ -107,8 +107,8 @@ TEST_F(KvdbTest, getKvdb) {
     EXPECT_EQ(kvdb.lastModificationDate, reader->getInt64("Kvdb_1.lastModificationDate"));
     EXPECT_EQ(kvdb.lastModifier, reader->getString("Kvdb_1.lastModifier"));
     EXPECT_EQ(kvdb.version, reader->getInt64("Kvdb_1.version"));
-    EXPECT_EQ(kvdb.lastItemDate, reader->getInt64("Kvdb_1.lastItemDate"));
-    EXPECT_EQ(kvdb.items, reader->getInt64("Kvdb_1.items"));
+    EXPECT_EQ(kvdb.lastEntryDate, reader->getInt64("Kvdb_1.lastEntryDate"));
+    EXPECT_EQ(kvdb.entries, reader->getInt64("Kvdb_1.entries"));
     EXPECT_EQ(kvdb.statusCode, 0);
     EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_1.publicMeta_inHex")));
     EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_1.uploaded_publicMeta_inHex")));
@@ -187,7 +187,7 @@ TEST_F(KvdbTest, listKvdbs_incorrect_input_data) {
     }, core::Exception);
 }
 
-TEST_F(KvdbTest, listKvdb_correct_input_data) {
+TEST_F(KvdbTest, listKvdbs_correct_input_data) {
     core::PagingList<kvdb::Kvdb> listKvdbs;
     // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
@@ -224,8 +224,8 @@ TEST_F(KvdbTest, listKvdb_correct_input_data) {
         EXPECT_EQ(kvdb.lastModificationDate, reader->getInt64("Kvdb_3.lastModificationDate"));
         EXPECT_EQ(kvdb.lastModifier, reader->getString("Kvdb_3.lastModifier"));
         EXPECT_EQ(kvdb.version, reader->getInt64("Kvdb_3.version"));
-        EXPECT_EQ(kvdb.lastItemDate, reader->getInt64("Kvdb_3.lastItemDate"));
-        EXPECT_EQ(kvdb.items, reader->getInt64("Kvdb_3.items"));
+        EXPECT_EQ(kvdb.lastEntryDate, reader->getInt64("Kvdb_3.lastEntryDate"));
+        EXPECT_EQ(kvdb.entries, reader->getInt64("Kvdb_3.entries"));
         EXPECT_EQ(kvdb.statusCode, 0);
         EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_3.publicMeta_inHex")));
         EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_3.uploaded_publicMeta_inHex")));
@@ -266,8 +266,8 @@ TEST_F(KvdbTest, listKvdb_correct_input_data) {
         EXPECT_EQ(kvdb.lastModificationDate, reader->getInt64("Kvdb_2.lastModificationDate"));
         EXPECT_EQ(kvdb.lastModifier, reader->getString("Kvdb_2.lastModifier"));
         EXPECT_EQ(kvdb.version, reader->getInt64("Kvdb_2.version"));
-        EXPECT_EQ(kvdb.lastItemDate, reader->getInt64("Kvdb_2.lastItemDate"));
-        EXPECT_EQ(kvdb.items, reader->getInt64("Kvdb_2.items"));
+        EXPECT_EQ(kvdb.lastEntryDate, reader->getInt64("Kvdb_2.lastEntryDate"));
+        EXPECT_EQ(kvdb.entries, reader->getInt64("Kvdb_2.entries"));
         EXPECT_EQ(kvdb.statusCode, 0);
         EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_2.publicMeta_inHex")));
         EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_2.uploaded_publicMeta_inHex")));
@@ -296,8 +296,8 @@ TEST_F(KvdbTest, listKvdb_correct_input_data) {
         EXPECT_EQ(kvdb.lastModificationDate, reader->getInt64("Kvdb_3.lastModificationDate"));
         EXPECT_EQ(kvdb.lastModifier, reader->getString("Kvdb_3.lastModifier"));
         EXPECT_EQ(kvdb.version, reader->getInt64("Kvdb_3.version"));
-        EXPECT_EQ(kvdb.lastItemDate, reader->getInt64("Kvdb_3.lastItemDate"));
-        EXPECT_EQ(kvdb.items, reader->getInt64("Kvdb_3.items"));
+        EXPECT_EQ(kvdb.lastEntryDate, reader->getInt64("Kvdb_3.lastEntryDate"));
+        EXPECT_EQ(kvdb.entries, reader->getInt64("Kvdb_3.entries"));
         EXPECT_EQ(kvdb.statusCode, 0);
         EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_3.publicMeta_inHex")));
         EXPECT_EQ(kvdb.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Kvdb_3.uploaded_publicMeta_inHex")));
@@ -745,11 +745,10 @@ TEST_F(KvdbTest, deleteKvdb) {
     }, core::Exception);
 }
 
-
-TEST_F(KvdbTest, getItem) {
+TEST_F(KvdbTest, getEntry) {
     // incorrect key
     EXPECT_THROW({
-        kvdbApi->getItem(
+        kvdbApi->getEntry(
             reader->getString("Kvdb_1.kvdbId"),
             reader->getString("Context_1.contextId")
         );
@@ -777,36 +776,35 @@ TEST_F(KvdbTest, getItem) {
             true
         );
     });
-    kvdb::Item item;
+    kvdb::KvdbEntry entry;
     EXPECT_NO_THROW({
-        item = kvdbApi->getItem(
+        entry = kvdbApi->getEntry(
             reader->getString("Kvdb_1.kvdbId"),
             reader->getString("Item_2.info_key")
         );
     });
-    EXPECT_EQ(item.info.kvdbId, reader->getString("Item_2.info_kvdbId"));
-    EXPECT_EQ(item.info.key, reader->getString("Item_2.info_key"));
-    EXPECT_EQ(item.info.createDate, reader->getInt64("Item_2.info_createDate"));
-    EXPECT_EQ(item.info.author, reader->getString("Item_2.info_author"));
-    EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.publicMeta_inHex")));
-    EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.privateMeta_inHex")));
-    EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.data_inHex")));
-    EXPECT_EQ(item.statusCode, 0);
+    EXPECT_EQ(entry.info.kvdbId, reader->getString("Item_2.info_kvdbId"));
+    EXPECT_EQ(entry.info.key, reader->getString("Item_2.info_key"));
+    EXPECT_EQ(entry.info.createDate, reader->getInt64("Item_2.info_createDate"));
+    EXPECT_EQ(entry.info.author, reader->getString("Item_2.info_author"));
+    EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.publicMeta_inHex")));
+    EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.privateMeta_inHex")));
+    EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.data_inHex")));
+    EXPECT_EQ(entry.statusCode, 0);
     EXPECT_EQ(
-        privmx::utils::Utils::stringifyVar(_serializer.serialize(item)),
+        privmx::utils::Utils::stringifyVar(_serializer.serialize(entry)),
         reader->getString("Item_2.JSON_data")
     );
-    EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_publicMeta_inHex")));
-    EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_privateMeta_inHex")));
-    EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_data_inHex")));
+    EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_publicMeta_inHex")));
+    EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_privateMeta_inHex")));
+    EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_data_inHex")));
 }
 
-
-TEST_F(KvdbTest, listItemsKey_incorrect_input_data) {
+TEST_F(KvdbTest, listEntriesKeys_incorrect_input_data) {
     // incorrect kvdbId
     EXPECT_THROW({
-        kvdbApi->listItemsKey(
-            reader->getString("Item_2.info_itemId"),
+        kvdbApi->listEntriesKeys(
+            reader->getString("Item_2.info_entryId"),
             {
                 .skip=0, 
                 .limit=1, 
@@ -816,7 +814,7 @@ TEST_F(KvdbTest, listItemsKey_incorrect_input_data) {
     }, core::Exception);
     // limit < 0
     EXPECT_THROW({
-        kvdbApi->listItemsKey(
+        kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -827,7 +825,7 @@ TEST_F(KvdbTest, listItemsKey_incorrect_input_data) {
     }, core::Exception);
     // limit == 0
     EXPECT_THROW({
-        kvdbApi->listItemsKey(
+        kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -838,7 +836,7 @@ TEST_F(KvdbTest, listItemsKey_incorrect_input_data) {
     }, core::Exception);
     // incorrect sortOrder
     EXPECT_THROW({
-        kvdbApi->listItemsKey(
+        kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -849,11 +847,11 @@ TEST_F(KvdbTest, listItemsKey_incorrect_input_data) {
     }, core::Exception);
 }
 
-TEST_F(KvdbTest, listItemsKey_correct_input_data) {
-    core::PagingList<std::string> listItemsKey;
+TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
+    core::PagingList<std::string> listEntriesKeys;
     // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
-        listItemsKey = kvdbApi->listItemsKey(
+        listEntriesKeys = kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=4, 
@@ -862,11 +860,11 @@ TEST_F(KvdbTest, listItemsKey_correct_input_data) {
             }
         );
     });
-    EXPECT_EQ(listItemsKey.totalAvailable, 2);
-    EXPECT_EQ(listItemsKey.readItems.size(), 0);
+    EXPECT_EQ(listEntriesKeys.totalAvailable, 2);
+    EXPECT_EQ(listEntriesKeys.readItems.size(), 0);
     // {.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
-        listItemsKey = kvdbApi->listItemsKey(
+        listEntriesKeys = kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=1, 
@@ -875,11 +873,11 @@ TEST_F(KvdbTest, listItemsKey_correct_input_data) {
             }
         );
     });
-    EXPECT_EQ(listItemsKey.totalAvailable, 2);
-    EXPECT_EQ(listItemsKey.readItems.size(), 1);
-    if(listItemsKey.readItems.size() >= 1) {
-        auto item = listItemsKey.readItems[0];
-        EXPECT_EQ(item, reader->getString("Item_1.info_key"));
+    EXPECT_EQ(listEntriesKeys.totalAvailable, 2);
+    EXPECT_EQ(listEntriesKeys.readItems.size(), 1);
+    if(listEntriesKeys.readItems.size() >= 1) {
+        auto entry = listEntriesKeys.readItems[0];
+        EXPECT_EQ(entry, reader->getString("Item_1.info_key"));
     }
     // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on kvdb
     EXPECT_NO_THROW({
@@ -905,7 +903,7 @@ TEST_F(KvdbTest, listItemsKey_correct_input_data) {
         );
     });
     EXPECT_NO_THROW({
-        listItemsKey = kvdbApi->listItemsKey(
+        listEntriesKeys = kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -914,23 +912,23 @@ TEST_F(KvdbTest, listItemsKey_correct_input_data) {
             }
         );
     });
-    EXPECT_EQ(listItemsKey.totalAvailable, 2);
-    EXPECT_EQ(listItemsKey.readItems.size(), 2);
-    if(listItemsKey.readItems.size() >= 1) {
-        auto item = listItemsKey.readItems[0];
-        EXPECT_EQ(item, reader->getString("Item_1.info_key"));
+    EXPECT_EQ(listEntriesKeys.totalAvailable, 2);
+    EXPECT_EQ(listEntriesKeys.readItems.size(), 2);
+    if(listEntriesKeys.readItems.size() >= 1) {
+        auto entry = listEntriesKeys.readItems[0];
+        EXPECT_EQ(entry, reader->getString("Item_1.info_key"));
     }
-    if(listItemsKey.readItems.size() >= 2) {
-        auto item = listItemsKey.readItems[1];
-        EXPECT_EQ(item, reader->getString("Item_2.info_key"));
+    if(listEntriesKeys.readItems.size() >= 2) {
+        auto entry = listEntriesKeys.readItems[1];
+        EXPECT_EQ(entry, reader->getString("Item_2.info_key"));
     }
 }
 
-TEST_F(KvdbTest, listItems_incorrect_input_data) {
+TEST_F(KvdbTest, listEntries_incorrect_input_data) {
     // incorrect kvdbId
     EXPECT_THROW({
-        kvdbApi->listItems(
-            reader->getString("Item_2.info_itemId"),
+        kvdbApi->listEntries(
+            reader->getString("Item_2.info_entryId"),
             {
                 .skip=0, 
                 .limit=1, 
@@ -940,7 +938,7 @@ TEST_F(KvdbTest, listItems_incorrect_input_data) {
     }, core::Exception);
     // limit < 0
     EXPECT_THROW({
-        kvdbApi->listItems(
+        kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -951,7 +949,7 @@ TEST_F(KvdbTest, listItems_incorrect_input_data) {
     }, core::Exception);
     // limit == 0
     EXPECT_THROW({
-        kvdbApi->listItems(
+        kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -962,7 +960,7 @@ TEST_F(KvdbTest, listItems_incorrect_input_data) {
     }, core::Exception);
     // incorrect sortOrder
     EXPECT_THROW({
-        kvdbApi->listItems(
+        kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -973,11 +971,11 @@ TEST_F(KvdbTest, listItems_incorrect_input_data) {
     }, core::Exception);
 }
 
-TEST_F(KvdbTest, listItems_correct_input_data) {
-    core::PagingList<kvdb::Item> listItems;
+TEST_F(KvdbTest, listEntries_correct_input_data) {
+    core::PagingList<kvdb::KvdbEntry> listEntries;
     // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
-        listItems = kvdbApi->listItems(
+        listEntries = kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=4, 
@@ -986,11 +984,11 @@ TEST_F(KvdbTest, listItems_correct_input_data) {
             }
         );
     });
-    EXPECT_EQ(listItems.totalAvailable, 2);
-    EXPECT_EQ(listItems.readItems.size(), 0);
+    EXPECT_EQ(listEntries.totalAvailable, 2);
+    EXPECT_EQ(listEntries.readItems.size(), 0);
     // {.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
-        listItems = kvdbApi->listItems(
+        listEntries = kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=1, 
@@ -999,25 +997,25 @@ TEST_F(KvdbTest, listItems_correct_input_data) {
             }
         );
     });
-    EXPECT_EQ(listItems.totalAvailable, 2);
-    EXPECT_EQ(listItems.readItems.size(), 1);
-    if(listItems.readItems.size() >= 1) {
-        auto item = listItems.readItems[0];
-        EXPECT_EQ(item.info.kvdbId, reader->getString("Item_1.info_kvdbId"));
-        EXPECT_EQ(item.info.key, reader->getString("Item_1.info_key"));
-        EXPECT_EQ(item.info.createDate, reader->getInt64("Item_1.info_createDate"));
-        EXPECT_EQ(item.info.author, reader->getString("Item_1.info_author"));
-        EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.publicMeta_inHex")));
-        EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.privateMeta_inHex")));
-        EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.data_inHex")));
-        EXPECT_EQ(item.statusCode, 0);
+    EXPECT_EQ(listEntries.totalAvailable, 2);
+    EXPECT_EQ(listEntries.readItems.size(), 1);
+    if(listEntries.readItems.size() >= 1) {
+        auto entry = listEntries.readItems[0];
+        EXPECT_EQ(entry.info.kvdbId, reader->getString("Item_1.info_kvdbId"));
+        EXPECT_EQ(entry.info.key, reader->getString("Item_1.info_key"));
+        EXPECT_EQ(entry.info.createDate, reader->getInt64("Item_1.info_createDate"));
+        EXPECT_EQ(entry.info.author, reader->getString("Item_1.info_author"));
+        EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.publicMeta_inHex")));
+        EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.privateMeta_inHex")));
+        EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.data_inHex")));
+        EXPECT_EQ(entry.statusCode, 0);
         EXPECT_EQ(
-            privmx::utils::Utils::stringifyVar(_serializer.serialize(item)),
+            privmx::utils::Utils::stringifyVar(_serializer.serialize(entry)),
             reader->getString("Item_1.JSON_data")
         );
-        EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_publicMeta_inHex")));
-        EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_privateMeta_inHex")));
-        EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_data_inHex")));
+        EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_publicMeta_inHex")));
+        EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_privateMeta_inHex")));
+        EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_data_inHex")));
     }
     // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on kvdb
     EXPECT_NO_THROW({
@@ -1043,7 +1041,7 @@ TEST_F(KvdbTest, listItems_correct_input_data) {
         );
     });
     EXPECT_NO_THROW({
-        listItems = kvdbApi->listItems(
+        listEntries = kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
             {
                 .skip=0, 
@@ -1052,51 +1050,50 @@ TEST_F(KvdbTest, listItems_correct_input_data) {
             }
         );
     });
-    EXPECT_EQ(listItems.totalAvailable, 2);
-    EXPECT_EQ(listItems.readItems.size(), 2);
-    if(listItems.readItems.size() >= 1) {
-        auto item = listItems.readItems[0];
-        EXPECT_EQ(item.info.kvdbId, reader->getString("Item_1.info_kvdbId"));
-        EXPECT_EQ(item.info.key, reader->getString("Item_1.info_key"));
-        EXPECT_EQ(item.info.createDate, reader->getInt64("Item_1.info_createDate"));
-        EXPECT_EQ(item.info.author, reader->getString("Item_1.info_author"));
-        EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.publicMeta_inHex")));
-        EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.privateMeta_inHex")));
-        EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.data_inHex")));
-        EXPECT_EQ(item.statusCode, 0);
+    EXPECT_EQ(listEntries.totalAvailable, 2);
+    EXPECT_EQ(listEntries.readItems.size(), 2);
+    if(listEntries.readItems.size() >= 1) {
+        auto entry = listEntries.readItems[0];
+        EXPECT_EQ(entry.info.kvdbId, reader->getString("Item_1.info_kvdbId"));
+        EXPECT_EQ(entry.info.key, reader->getString("Item_1.info_key"));
+        EXPECT_EQ(entry.info.createDate, reader->getInt64("Item_1.info_createDate"));
+        EXPECT_EQ(entry.info.author, reader->getString("Item_1.info_author"));
+        EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.publicMeta_inHex")));
+        EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.privateMeta_inHex")));
+        EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.data_inHex")));
+        EXPECT_EQ(entry.statusCode, 0);
         EXPECT_EQ(
-            privmx::utils::Utils::stringifyVar(_serializer.serialize(item)),
+            privmx::utils::Utils::stringifyVar(_serializer.serialize(entry)),
             reader->getString("Item_1.JSON_data")
         );
-        EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_publicMeta_inHex")));
-        EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_privateMeta_inHex")));
-        EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_data_inHex")));
+        EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_publicMeta_inHex")));
+        EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_privateMeta_inHex")));
+        EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_1.uploaded_data_inHex")));
     }
-    if(listItems.readItems.size() >= 2) {
-        auto item = listItems.readItems[1];
-        EXPECT_EQ(item.info.kvdbId, reader->getString("Item_2.info_kvdbId"));
-        EXPECT_EQ(item.info.key, reader->getString("Item_2.info_key"));
-        EXPECT_EQ(item.info.createDate, reader->getInt64("Item_2.info_createDate"));
-        EXPECT_EQ(item.info.author, reader->getString("Item_2.info_author"));
-        EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.publicMeta_inHex")));
-        EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.privateMeta_inHex")));
-        EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.data_inHex")));
-        EXPECT_EQ(item.statusCode, 0);
+    if(listEntries.readItems.size() >= 2) {
+        auto entry = listEntries.readItems[1];
+        EXPECT_EQ(entry.info.kvdbId, reader->getString("Item_2.info_kvdbId"));
+        EXPECT_EQ(entry.info.key, reader->getString("Item_2.info_key"));
+        EXPECT_EQ(entry.info.createDate, reader->getInt64("Item_2.info_createDate"));
+        EXPECT_EQ(entry.info.author, reader->getString("Item_2.info_author"));
+        EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.publicMeta_inHex")));
+        EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.privateMeta_inHex")));
+        EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.data_inHex")));
+        EXPECT_EQ(entry.statusCode, 0);
         EXPECT_EQ(
-            privmx::utils::Utils::stringifyVar(_serializer.serialize(item)),
+            privmx::utils::Utils::stringifyVar(_serializer.serialize(entry)),
             reader->getString("Item_2.JSON_data")
         );
-        EXPECT_EQ(item.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_publicMeta_inHex")));
-        EXPECT_EQ(item.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_privateMeta_inHex")));
-        EXPECT_EQ(item.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_data_inHex")));
+        EXPECT_EQ(entry.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_publicMeta_inHex")));
+        EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_privateMeta_inHex")));
+        EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Item_2.uploaded_data_inHex")));
     }
 }
 
-
-TEST_F(KvdbTest, deleteItem) {
+TEST_F(KvdbTest, deleteEntry) {
     // incorrect key
     EXPECT_THROW({
-        kvdbApi->deleteItem(
+        kvdbApi->deleteEntry(
             reader->getString("Kvdb_1.kvdbId"),
             reader->getString("Kvdb_1.kvdbId")
         );
@@ -1132,7 +1129,7 @@ TEST_F(KvdbTest, deleteItem) {
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({
-        kvdbApi->deleteItem(
+        kvdbApi->deleteEntry(
             reader->getString("Kvdb_1.kvdbId"),
             reader->getString("Item_2.info_key")
         );
@@ -1202,7 +1199,7 @@ TEST_F(KvdbTest, deleteItem) {
     disconnect();
     connectAs(ConnectionType::User1);
     EXPECT_NO_THROW({
-        kvdbApi->deleteItem(
+        kvdbApi->deleteEntry(
             reader->getString("Kvdb_1.kvdbId"),
             reader->getString("Item_2.info_key")
         );
@@ -1211,9 +1208,156 @@ TEST_F(KvdbTest, deleteItem) {
     connectAs(ConnectionType::User2);
     // as manager no created by me
     EXPECT_NO_THROW({
-        kvdbApi->deleteItem(
+        kvdbApi->deleteEntry(
             reader->getString("Kvdb_1.kvdbId"),
             reader->getString("Item_1.info_key")
         );
     });
+}
+
+TEST_F(KvdbTest, SetEntry) {
+    kvdb::KvdbEntry entry;
+    //Creating new entry
+    EXPECT_NO_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_2.kvdbId"),
+            "kvdb_entry_key",
+            core::Buffer::from("kvdb_entry_1_publicMeta"),
+            core::Buffer::from("kvdb_entry_1_privateMeta"),
+            core::Buffer::from("kvdb_entry_1_data"),
+            0
+        );
+    });
+    EXPECT_NO_THROW({
+        entry = kvdbApi->getEntry(
+            reader->getString("Kvdb_2.kvdbId"),
+            "kvdb_entry_key"
+        );
+    });
+    EXPECT_EQ(entry.info.kvdbId, reader->getString("Kvdb_2.kvdbId"));
+    EXPECT_EQ(entry.info.key, "kvdb_entry_key");
+    EXPECT_EQ(entry.version, 1);
+    EXPECT_EQ(entry.publicMeta.stdString(), "kvdb_entry_1_publicMeta");
+    EXPECT_EQ(entry.privateMeta.stdString(), "kvdb_entry_1_privateMeta");
+    EXPECT_EQ(entry.data.stdString(), "kvdb_entry_1_data");
+    EXPECT_EQ(entry.statusCode, 0);
+
+    //Updating existing entry
+    //incorrect version number
+    EXPECT_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_2.kvdbId"),
+            "kvdb_entry_key",
+            core::Buffer::from("kvdb_entry_1_publicMeta"),
+            core::Buffer::from("kvdb_entry_1_privateMeta"),
+            core::Buffer::from("kvdb_entry_1_data"),
+            0
+        );
+    }, core::Exception);
+    //correct version number
+    EXPECT_NO_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_2.kvdbId"),
+            "kvdb_entry_key_v2",
+            core::Buffer::from("kvdb_entry_1_publicMeta"),
+            core::Buffer::from("kvdb_entry_1_privateMeta"),
+            core::Buffer::from("kvdb_entry_1_data_v2"),
+            1
+        );
+    });
+    EXPECT_NO_THROW({
+        entry = kvdbApi->getEntry(
+            reader->getString("Kvdb_2.kvdbId"),
+            "kvdb_entry_key"
+        );
+    });
+    EXPECT_EQ(entry.info.kvdbId, reader->getString("Kvdb_2.kvdbId"));
+    EXPECT_EQ(entry.info.key, "kvdb_entry_key");
+    EXPECT_EQ(entry.version, 2);
+    EXPECT_EQ(entry.publicMeta.stdString(), "kvdb_entry_1_publicMeta");
+    EXPECT_EQ(entry.privateMeta.stdString(), "kvdb_entry_1_privateMeta");
+    EXPECT_EQ(entry.data.stdString(), "kvdb_entry_1_data_v2");
+    EXPECT_EQ(entry.statusCode, 0);
+    // Modifing by other user
+    disconnect();
+    connectAs(ConnectionType::User2);
+    //Access denied
+    EXPECT_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            reader->getString("KvdbEntry_1.info_key"),
+            core::Buffer::from("kvdb_entry_1_publicMeta"),
+            core::Buffer::from("kvdb_entry_1_privateMeta"),
+            core::Buffer::from("kvdb_entry_1_data"),
+            1
+        );
+    }, core::Exception);
+    // User2 modifing User1 
+    EXPECT_NO_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_2.kvdbId"),
+            "kvdb_entry_key",
+            core::Buffer::from("kvdb_entry_1_publicMeta"),
+            core::Buffer::from("kvdb_entry_1_privateMeta"),
+            core::Buffer::from("kvdb_entry_1_data_v3"),
+            2
+        );
+    });
+    EXPECT_NO_THROW({
+        entry = kvdbApi->getEntry(
+            reader->getString("Kvdb_2.kvdbId"),
+            "kvdb_entry_key"
+        );
+    });
+    EXPECT_EQ(entry.info.kvdbId, reader->getString("Kvdb_2.kvdbId"));
+    EXPECT_EQ(entry.info.key, "kvdb_entry_key");
+    EXPECT_EQ(entry.version, 3);
+    EXPECT_EQ(entry.publicMeta.stdString(), "kvdb_entry_1_publicMeta");
+    EXPECT_EQ(entry.privateMeta.stdString(), "kvdb_entry_1_privateMeta");
+    EXPECT_EQ(entry.data.stdString(), "kvdb_entry_1_data_v3");
+    EXPECT_EQ(entry.statusCode, 0);
+}
+
+TEST_F(KvdbTest, deleteEntries) {
+    //nothing to delete
+    EXPECT_NO_THROW({
+        kvdbApi->deleteEntries(
+            reader->getString("Kvdb_1.kvdbId"),
+            std::vector<std::string>()
+        );
+    });
+    // one not exist
+    EXPECT_THROW({
+        kvdbApi->deleteEntries(
+            reader->getString("Kvdb_1.kvdbId"),
+            std::vector<std::string>({"Error", reader->getString("KvdbEntry_1.info_key")})
+        );
+    }, core::Exception);
+    //check if entry exist
+    EXPECT_NO_THROW({
+        kvdbApi->getEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            reader->getString("KvdbEntry_1.info_key")
+        );
+    });
+    //delete entries
+    EXPECT_NO_THROW({
+        kvdbApi->deleteEntries(
+            reader->getString("Kvdb_1.kvdbId"),
+            std::vector<std::string>({reader->getString("KvdbEntry_1.info_key"), reader->getString("KvdbEntry_2.info_key")})
+        );
+    });
+    //check if entries not exist
+    EXPECT_THROW({
+        kvdbApi->getEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            reader->getString("KvdbEntry_1.info_key")
+        );
+    }, core::Exception);
+    EXPECT_THROW({
+        kvdbApi->getEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            reader->getString("KvdbEntry_2.info_key")
+        );
+    }, core::Exception);
 }
