@@ -122,6 +122,8 @@ void WebSocketNotify::notifier() {
 }
 
 void WebSocketNotify::cancelNotifier() {
-    notifier_cancellation_token->cancel();
+    if(!notifier_cancellation_token.isNull()) {
+        notifier_cancellation_token->cancel();
+    }
     data_to_notify = true;
 }
