@@ -21,6 +21,12 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+struct BridgeIdentity {
+    std::string url;
+    std::optional<std::string> pubKey;
+    std::optional<std::string> instanceId;
+};
+
 struct EncKey {
     std::string id;
     std::string key;
@@ -30,10 +36,12 @@ struct DataIntegrityObject {
     std::string creatorUserId;
     std::string creatorPubKey;
     std::string contextId;
-    std::string containerId;
+    std::string resourceId;
     int64_t timestamp;
     std::string randomId;
-    std::optional<std::string> itemId;
+    std::optional<std::string> containerId;
+    std::optional<std::string> containerResourceId;
+    std::optional<BridgeIdentity> bridgeIdentity;
 };
 
 struct DecryptedVersionedData {
@@ -48,23 +56,25 @@ struct ExpandedDataIntegrityObject : public DataIntegrityObject {
     std::unordered_map<std::string, std::string> fieldChecksums;
 };
 
+struct EncKeyLocation {
+    std::string contextId;
+    std::string resourceId;
+    bool operator==(const EncKeyLocation &other) const {
+        return (contextId == other.contextId && resourceId == other.resourceId);
+    }
+};
 
 struct EncKeyV2ToEncrypt : public EncKey {
     DataIntegrityObject dio;
-    std::string containerControlNumber;
+    EncKeyLocation location;
+    std::string keySecret;
+    std::string secretHash;
 };
 
 struct DecryptedEncKeyV2 : public DecryptedEncKey {
     ExpandedDataIntegrityObject dio;
-    std::string containerControlNumber;
-};
-
-struct EncKeyLocation {
-    std::string contextId;
-    std::string containerId;
-    bool operator==(const EncKeyLocation &other) const {
-        return (contextId == other.contextId && containerId == other.containerId);
-    }
+    std::string keySecret;
+    std::string secretHash;
 };
 
 }  // namespace core
@@ -76,7 +86,7 @@ struct std::hash<privmx::endpoint::core::EncKeyLocation> {
     std::size_t operator()(const privmx::endpoint::core::EncKeyLocation& encKeyLocation) const noexcept
     {
         std::size_t h1 = std::hash<std::string>{}(encKeyLocation.contextId);
-        std::size_t h2 = std::hash<std::string>{}(encKeyLocation.containerId);
+        std::size_t h2 = std::hash<std::string>{}(encKeyLocation.resourceId);
         return h1 ^ (h2 << 1);
     }
 };

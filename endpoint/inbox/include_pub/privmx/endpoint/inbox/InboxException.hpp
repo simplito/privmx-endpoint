@@ -58,7 +58,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, WritingToEntryInteruptedWritt
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, HandleIsUsedInInboxHandleException, "Handle is used in inbox handle", 0x0015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InvalidFileReadHandleException, "Invalid file handle: handle is not FILE_READ_HANDLE", 0x0016)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InvalidFileWriteHandleException, "Invalid file handle: handle is not FILE_WRITE_HANDLE", 0x0017)
-DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, UnknowInboxFormatException, "Unknow Inbox format", 0x0020)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, UnknownInboxFormatException, "Unknown Inbox format", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxDataIntegrityException, "Failed inbox data integrity check", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxEncryptionKeyValidationException, "Failed inbox encryption key validation", 0x0022)
 

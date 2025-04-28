@@ -40,6 +40,11 @@ ENDPOINT_CLIENT_TYPE(StoreFileMetaV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(StoreInternalMetaV5)
+    STRING_FIELD(secret)
+    STRING_FIELD(resourceId)
+    STRING_FIELD(randomId)
+TYPE_END
 
 class BlobPropertyBag : public utils::TypedObject
 {
@@ -114,6 +119,8 @@ namespace compat_v1 {
         OBJECT_FIELD(thumb, StoreThumbMeta)  // thumb?: {size: number; mimetype: string;}
     TYPE_END
 }
+
+
 
 } // dynamic
 } // store

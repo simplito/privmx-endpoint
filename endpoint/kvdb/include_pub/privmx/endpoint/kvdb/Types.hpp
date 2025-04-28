@@ -70,14 +70,14 @@ struct Kvdb {
     core::Buffer privateMeta;
 
     /**
-     * total number of items in the Kvdb
+     * total number of entries in the Kvdb
      */
-    int64_t items;
+    int64_t entries;
 
     /**
      * timestamp of last new item
      */
-    int64_t lastItemDate;
+    int64_t lastEntryDate;
 
     /**
      * Kvdb's policies
@@ -119,7 +119,7 @@ struct ServerItemInfo {
 /**
  * Holds all available information about a Item.
  */
-struct Item {
+struct KvdbEntry {
 
     /**
      * Item information created by server
@@ -157,7 +157,7 @@ struct Item {
     int64_t statusCode;
 };
 
-struct KeysPagingQuery {
+struct KvdbKeysPagingQuery {
     /**
      * number of elements to skip from result
      */
@@ -189,7 +189,7 @@ struct KeysPagingQuery {
     std::optional<std::string> prefix;
 };
 
-struct ItemsPagingQuery {
+struct KvdbEntryPagingQuery {
     /**
      * number of elements to skip from result
      */

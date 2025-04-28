@@ -29,6 +29,7 @@ constexpr uint64_t CHUNK_PADDING = 16;
 
 struct FileDecryptionParams {
     std::string fileId;
+    std::string resourceId;
     uint64_t sizeOnServer;
     uint64_t originalSize;
     int64_t cipherType;
@@ -88,13 +89,6 @@ struct StoreDataToEncryptV4 {
     std::optional<core::Buffer> internalMeta;
 };
 
-struct StoreDataToEncryptV5 {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    core::Buffer internalMeta;
-    core::DataIntegrityObject dio;
-};
-
 struct DecryptedStoreDataV4 : core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
@@ -102,10 +96,23 @@ struct DecryptedStoreDataV4 : core::DecryptedVersionedData {
     std::string authorPubKey;
 };
 
+struct StoreInternalMetaV5 {
+    std::string secret;
+    std::string resourceId;
+    std::string randomId;
+};
+
+struct StoreDataToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    StoreInternalMetaV5 internalMeta;
+    core::DataIntegrityObject dio;
+};
+
 struct DecryptedStoreDataV5 : core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer internalMeta;
+    StoreInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };

@@ -42,21 +42,21 @@ public:
             cachedValue.value() : ContainerInfo{.container=_getterFunction(containerId), .status=core::DataIntegrityStatus::NotValidated};
         if(data.status == DataIntegrityStatus::NotValidated) {
             data.status = _validatorFunction(data.container) == 0 ? DataIntegrityStatus::ValidationSucceed : DataIntegrityStatus::ValidationFailed;
-            updateByValueAndStatus(data.container, data.status);
+            updateByValueAndStatus(data);
         } 
         return data;
     }
     inline void update(const ID& containerId) {
         const VALUE& container = _getterFunction(containerId);
-        updateByValueAndStatus(container, DataIntegrityStatus::NotValidated);
+        updateByValueAndStatus(ContainerInfo{.container=container, .status=DataIntegrityStatus::NotValidated});
     }
     inline void updateByValue(const VALUE& container) {
-        updateByValueAndStatus(container, core::DataIntegrityStatus::NotValidated);
+        updateByValueAndStatus(ContainerInfo{.container=container, .status=DataIntegrityStatus::NotValidated});
     }
-    inline void updateByValueAndStatus(const VALUE& container, const DataIntegrityStatus& status) {
+    inline void updateByValueAndStatus(const ContainerInfo& info) {
         std::shared_lock<std::shared_mutex> lock(_update_mutex);
-        if(isNewerOrSameAsInStorage(container)) {
-            _storage.set(getID(container), ContainerInfo{.container=container, .status = status});
+        if(isNewerOrSameAsInStorage(info.container)) {
+            _storage.set(getID(info.container), info);
         }
     }
     inline void invalidateByContainerId(const ID& containerId) {

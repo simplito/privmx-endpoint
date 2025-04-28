@@ -13,21 +13,25 @@ limitations under the License.
 #include "privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/CoreConstants.hpp"
 
 using namespace privmx::endpoint::core;
 
-std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& autorKey) {
-    if(dio.creatorPubKey != autorKey.getPublicKey().toBase58DER()) {
+std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& authorKey) {
+    if(dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
     auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<dynamic::DataIntegrityObject>();
-    dioJSON.version(1);
+    dioJSON.version(DataIntegrityObjectDataSchema::Version::VERSION_1);
     dioJSON.creatorUserId(dio.creatorUserId);
     dioJSON.creatorPublicKey(dio.creatorPubKey);
     dioJSON.contextId(dio.contextId);
-    dioJSON.containerId(dio.containerId);
-    if (dio.itemId.has_value()) {
-        dioJSON.itemId(dio.itemId.value());
+    dioJSON.resourceId(dio.resourceId);
+    if (dio.containerId.has_value()) {
+        dioJSON.containerId(dio.containerId.value());
+    }
+    if (dio.containerResourceId.has_value()) {
+        dioJSON.containerResourceId(dio.containerResourceId.value());
     }
     dioJSON.timestamp(dio.timestamp);
     dioJSON.randomId(dio.randomId);
@@ -37,7 +41,20 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     }
     dioJSON.fieldChecksums(dioJSONfieldChecksums);
     dioJSON.structureVersion(dio.structureVersion);
-    return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), autorKey));
+    auto bridgeIdentity = privmx::utils::TypedObjectFactory::createNewObject<dynamic::BridgeIdentity>();
+    bridgeIdentity.url(dio.bridgeIdentity->url);
+    if(dio.bridgeIdentity->pubKey.has_value()) {
+        bridgeIdentity.pubKey(dio.bridgeIdentity->pubKey.value());
+    } else {
+        bridgeIdentity.pubKeyEmpty();
+    }
+    if(dio.bridgeIdentity->instanceId.has_value()) {
+        bridgeIdentity.instanceId(dio.bridgeIdentity->instanceId.value());
+    } else {
+        bridgeIdentity.instanceIdEmpty();
+    }
+    dioJSON.bridgeIdentity(bridgeIdentity);
+    return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), authorKey));
 }
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
     auto dioAndSignature = _dataEncryptor.extractDataWithSignature(_dataEncryptor.decode(signedDio));
@@ -53,9 +70,13 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     for(auto  a: dioJSON.fieldChecksums()) {
         fieldChecksums.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));
     }
-    std::optional<std::string> itemId = std::nullopt;
-    if(!dioJSON.itemIdEmpty()) {
-        itemId =  dioJSON.itemId();
+    std::optional<std::string> containerId = std::nullopt;
+    if(!dioJSON.containerIdEmpty()) {
+        containerId =  dioJSON.containerId();
+    }
+    std::optional<std::string> containerResourceId = std::nullopt;
+    if(!dioJSON.containerResourceIdEmpty()) {
+        containerResourceId = dioJSON.containerResourceId();
     }
 
     return ExpandedDataIntegrityObject{
@@ -63,10 +84,16 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .creatorUserId=dioJSON.creatorUserId(),
             .creatorPubKey=dioJSON.creatorPublicKey(),
             .contextId=dioJSON.contextId(),
-            .containerId=dioJSON.containerId(),
+            .resourceId=dioJSON.resourceId(),
             .timestamp=dioJSON.timestamp(),
             .randomId=dioJSON.randomId(),
-            .itemId=itemId
+            .containerId=containerId,
+            .containerResourceId=containerResourceId,
+            .bridgeIdentity= BridgeIdentity{
+                .url=dioJSON.bridgeIdentity().url(),
+                .pubKey=dioJSON.bridgeIdentity().pubKeyOptional(),
+                .instanceId=dioJSON.bridgeIdentity().instanceIdOptional()
+            }
         },
         .structureVersion=dioJSON.structureVersion(),
         .fieldChecksums=fieldChecksums
@@ -74,14 +101,15 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
 }
 
 void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {
-    if (dioJSON.versionEmpty() ||
-        dioJSON.version() != 1 ||
-        dioJSON.creatorUserIdEmpty() ||
-        dioJSON.creatorPublicKeyEmpty() ||
-        dioJSON.contextIdEmpty() ||
-        dioJSON.containerIdEmpty() ||
-        dioJSON.randomIdEmpty() ||
-        dioJSON.timestampEmpty() ||
+    if (dioJSON.versionEmpty()                                                 ||
+        dioJSON.version() != DataIntegrityObjectDataSchema::Version::VERSION_1 ||
+        dioJSON.creatorUserIdEmpty()                                           ||
+        dioJSON.creatorPublicKeyEmpty()                                        ||
+        dioJSON.contextIdEmpty()                                               ||
+        dioJSON.resourceIdEmpty()                                              ||
+        dioJSON.randomIdEmpty()                                                ||
+        dioJSON.timestampEmpty()                                               ||
+        dioJSON.bridgeIdentityEmpty()                                          ||
         dioJSON.fieldChecksumsEmpty()
     ) {
         throw MalformedDataIntegrityObjectException();

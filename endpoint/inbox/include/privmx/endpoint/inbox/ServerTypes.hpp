@@ -82,6 +82,7 @@ namespace server {
             INIT_LIST(keys, privmx::endpoint::core::types::KeyEntry)
         }
         STRING_FIELD(id)
+        STRING_FIELD(resourceId)
         STRING_FIELD(contextId)
         INT64_FIELD(createDate)
         STRING_FIELD(creator)
@@ -137,7 +138,7 @@ namespace server {
             INIT_LIST(keys, privmx::endpoint::core::types::KeyEntrySet)
             INIT_OBJECT(data, InboxData)
         }
-        STRING_FIELD(inboxId)
+        STRING_FIELD(resourceId)
         STRING_FIELD(contextId)
         LIST_FIELD(users, std::string) //cloud userId
         LIST_FIELD(managers, std::string) //cloud userId
@@ -168,6 +169,7 @@ namespace server {
             INIT_OBJECT(data, InboxData)
         }
         STRING_FIELD(id)
+        STRING_FIELD(resourceId)
         LIST_FIELD(users, std::string) //cloud userId
         LIST_FIELD(managers, std::string) //cloud userId
         OBJECT_FIELD(data, InboxData)
@@ -229,6 +231,7 @@ namespace server {
         INT64_FIELD(fileIndex)
         INT64_FIELD(thumbIndex)
         VAR_FIELD(meta)
+        STRING_FIELD(resourceId)
     };
 
     class InboxSendModel : public utils::TypedObject
@@ -239,6 +242,7 @@ namespace server {
             INIT_LIST(files, InboxFile) // ?
         }
         STRING_FIELD(inboxId)
+        STRING_FIELD(resourceId)
         STRING_FIELD(message) // ?
         STRING_FIELD(requestId)
         LIST_FIELD(files, InboxFile) // ?

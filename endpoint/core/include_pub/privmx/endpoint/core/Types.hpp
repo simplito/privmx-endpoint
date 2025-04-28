@@ -172,6 +172,20 @@ struct ContainerPolicy : public ContainerPolicyWithoutItem {
     std::optional<ItemPolicy> item;
 };
 
+/**
+ * Options used to verify if Bridge on given url is the one you expect.
+ */
+struct PKIVerificationOptions {
+    /** 
+     * Bridge public Key.
+     */
+    std::optional<std::string> bridgePubKey;
+    /** 
+     * Bridge instance Id given by PKI.
+     */
+    std::optional<std::string> bridgeInstanceId;
+};
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

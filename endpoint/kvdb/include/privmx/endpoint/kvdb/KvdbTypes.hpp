@@ -22,7 +22,7 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-struct ItemDataToEncryptV5 {
+struct KvdbEntryDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;
@@ -30,7 +30,7 @@ struct ItemDataToEncryptV5 {
     core::DataIntegrityObject dio;
 };
 
-struct DecryptedItemDataV5 : public core::DecryptedVersionedData {
+struct DecryptedKvdbEntryDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;
@@ -39,17 +39,23 @@ struct DecryptedItemDataV5 : public core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
+struct KvdbInternalMetaV5 {
+    std::string secret;
+    std::string resourceId;
+    std::string randomId;
+};
+
 struct KvdbDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer internalMeta;
+    KvdbInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
 };
 
 struct DecryptedKvdbDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer internalMeta;
+    KvdbInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };

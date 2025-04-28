@@ -323,6 +323,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(thread_1_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "messagesCount = " << thread_1_server_data.messagesCount << std::endl;
             iniFileWriter << "statusCode = " << thread_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << thread_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(thread_1_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(thread_1_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(thread_1_privateMeta.stdString()) << std::endl;
@@ -340,6 +341,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(thread_2_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "messagesCount = " << thread_2_server_data.messagesCount << std::endl;
             iniFileWriter << "statusCode = " << thread_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << thread_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(thread_2_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(thread_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(thread_2_privateMeta.stdString()) << std::endl;
@@ -356,7 +358,8 @@ int main(int argc, char** argv) {
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(thread_3_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(thread_3_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "messagesCount = " << thread_3_server_data.messagesCount << std::endl;
-            iniFileWriter << "statusCode = " << thread_2_server_data.statusCode << std::endl;
+            iniFileWriter << "statusCode = " << thread_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << thread_3_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(thread_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(thread_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(thread_3_privateMeta.stdString()) << std::endl;
@@ -374,6 +377,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(store_1_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "filesCount = " << store_1_server_data.filesCount << std::endl;
             iniFileWriter << "statusCode = " << store_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << store_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(store_1_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(store_1_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(store_1_privateMeta.stdString()) << std::endl;
@@ -391,6 +395,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(store_2_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "filesCount = " << store_2_server_data.filesCount << std::endl;
             iniFileWriter << "statusCode = " << store_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << store_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(store_2_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(store_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(store_2_privateMeta.stdString()) << std::endl;
@@ -408,6 +413,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(store_3_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "filesCount = " << store_3_server_data.filesCount << std::endl;
             iniFileWriter << "statusCode = " << store_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << store_3_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(store_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(store_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(store_3_privateMeta.stdString()) << std::endl;
@@ -423,6 +429,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(inbox_1_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(inbox_1_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "statusCode = " << inbox_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << inbox_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(inbox_1_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(inbox_1_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(inbox_1_privateMeta.stdString()) << std::endl;
@@ -442,6 +449,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "filesConfig_maxFileSize = " << inbox_2_server_data.filesConfig.value().maxFileSize << std::endl;
             iniFileWriter << "filesConfig_maxWholeUploadSize = " << inbox_2_server_data.filesConfig.value().maxWholeUploadSize << std::endl;
             iniFileWriter << "statusCode = " << inbox_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << inbox_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(inbox_2_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(inbox_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(inbox_2_privateMeta.stdString()) << std::endl;
@@ -457,6 +465,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(inbox_3_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(inbox_3_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "statusCode = " << inbox_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << inbox_3_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(inbox_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(inbox_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(inbox_3_privateMeta.stdString()) << std::endl;
@@ -473,6 +482,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "data_inHex = " << utils::Hex::from(message_1_server_data.data.stdString()) << std::endl;
             iniFileWriter << "authorPubKey = " << message_1_server_data.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << message_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << message_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(message_1_server_data)) << std::endl;
 
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(message_1_publicMeta.stdString()) << std::endl;
@@ -489,6 +499,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "data_inHex = " << utils::Hex::from(message_2_server_data.data.stdString()) << std::endl;
             iniFileWriter << "authorPubKey = " << message_2_server_data.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << message_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << message_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(message_2_server_data)) << std::endl;
 
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(message_2_publicMeta.stdString()) << std::endl;
@@ -505,6 +516,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "size = " << file_1_server_metaData.size << std::endl;
             iniFileWriter << "authorPubKey = " << file_1_server_metaData.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << file_1_server_metaData.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << file_1_server_metaData.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(file_1_server_metaData)) << std::endl;
 
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(file_1_publicMeta) << std::endl;
@@ -522,6 +534,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "size = " << file_2_server_metaData.size << std::endl;
             iniFileWriter << "authorPubKey = " << file_2_server_metaData.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << file_2_server_metaData.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << file_2_server_metaData.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(file_2_server_metaData)) << std::endl;
 
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(file_2_publicMeta) << std::endl;
@@ -536,12 +549,14 @@ int main(int argc, char** argv) {
             iniFileWriter << "authorPubKey = " << entry_1_server_data.authorPubKey << std::endl;
             iniFileWriter << "createDate = " << entry_1_server_data.createDate << std::endl;
             iniFileWriter << "statusCode = " << entry_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << entry_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "file_0_info_storeId = " << entry_1_server_data.files[0].info.storeId << std::endl;
             iniFileWriter << "file_0_info_fileId = " << entry_1_server_data.files[0].info.fileId << std::endl;
             iniFileWriter << "file_0_info_createDate = " << entry_1_server_data.files[0].info.createDate << std::endl;
             iniFileWriter << "file_0_info_author = " << entry_1_server_data.files[0].info.author << std::endl;
             iniFileWriter << "file_0_authorPubKey = " << entry_1_server_data.files[0].authorPubKey << std::endl;
             iniFileWriter << "file_0_statusCode = " << entry_1_server_data.files[0].statusCode << std::endl;
+            iniFileWriter << "file_0_schemaVersion = " << entry_1_server_data.files[0].schemaVersion << std::endl;
             iniFileWriter << "file_0_publicMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[0].publicMeta.stdString()) << std::endl;
             iniFileWriter << "file_0_privateMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[0].privateMeta.stdString()) << std::endl;
             iniFileWriter << "file_0_size = " << entry_1_server_data.files[0].size << std::endl;
@@ -552,6 +567,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "file_1_info_author = " << entry_1_server_data.files[1].info.author << std::endl;
             iniFileWriter << "file_1_authorPubKey = " << entry_1_server_data.files[1].authorPubKey << std::endl;
             iniFileWriter << "file_1_statusCode = " << entry_1_server_data.files[1].statusCode << std::endl;
+            iniFileWriter << "file_0_schemaVersion = " << entry_1_server_data.files[1].schemaVersion << std::endl;
             iniFileWriter << "file_1_publicMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[1].publicMeta.stdString()) << std::endl;
             iniFileWriter << "file_1_privateMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[1].privateMeta.stdString()) << std::endl;
             iniFileWriter << "file_1_size = " << entry_1_server_data.files[1].size << std::endl;
@@ -574,6 +590,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "authorPubKey = " << entry_2_server_data.authorPubKey << std::endl;
             iniFileWriter << "createDate = " << entry_2_server_data.createDate << std::endl;
             iniFileWriter << "statusCode = " << entry_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << entry_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(entry_2_server_data)) << std::endl;
 
             iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(entry_2_data) << std::endl;

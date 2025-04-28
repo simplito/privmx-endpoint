@@ -33,18 +33,18 @@ struct  KvdbStatsEventData {
     /**
      * timestamp of the most recent Kvdb item
      */
-    int64_t lastItemDate;
+    int64_t lastEntryDate;
 
     /**
-     * updated number of items in the Kvdb
+     * updated number of entries in the Kvdb
      */
-    int64_t items;
+    int64_t entries;
 };
 
 /**
- * Holds information of `KvdbDeletedItemEvent`.
+ * Holds information of `KvdbDeletedEntryEvent`.
  */
-struct KvdbDeletedItemEventData {
+struct KvdbDeletedEntryEventData {
 
     /**
      * Kvdb ID
@@ -52,9 +52,9 @@ struct KvdbDeletedItemEventData {
     std::string kvdbId;
 
     /**
-     * Key of deleted Item
+     * Key of deleted Entry
      */
-    std::string kvdbItemKey;
+    std::string kvdbEntryKey;
 };
 
 struct KvdbCreatedEvent : public core::Event {
@@ -171,12 +171,12 @@ struct KvdbStatsChangedEvent : public core::Event {
 /**
  * Holds data of event that arrives when Kvdb message is created.
  */
-struct KvdbNewItemEvent : public core::Event {
+struct KvdbNewEntryEvent : public core::Event {
     
     /**
      * Event constructor
      */
-    KvdbNewItemEvent() : core::Event("kvdbNewItem") {}
+    KvdbNewEntryEvent() : core::Event("kvdbNewItem") {}
 
     /**
      * Get Event as JSON string
@@ -193,18 +193,18 @@ struct KvdbNewItemEvent : public core::Event {
     /**
      * detailed information about Item
      */
-    kvdb::Item data;
+    kvdb::KvdbEntry data;
 };
 
 /**
  * Holds data of event that arrives when Kvdb message is updated.
  */
-struct KvdbItemUpdatedEvent : public core::Event {
+struct KvdbEntryUpdatedEvent : public core::Event {
     
     /**
      * Event constructor
      */
-    KvdbItemUpdatedEvent() : core::Event("kvdbUpdatedItem") {}
+    KvdbEntryUpdatedEvent() : core::Event("kvdbUpdatedItem") {}
 
     /**
      * Get Event as JSON string
@@ -221,18 +221,18 @@ struct KvdbItemUpdatedEvent : public core::Event {
     /**
      * detailed information about Item
      */
-    kvdb::Item data;
+    kvdb::KvdbEntry data;
 };
 
 /**
  * Holds data of event that arrives when Kvdb message is deleted.
  */
-struct KvdbItemDeletedEvent : public core::Event {
+struct KvdbEntryDeletedEvent : public core::Event {
     
     /**
      * Event constructor
      */
-    KvdbItemDeletedEvent() : core::Event("kvdbItemDeleted") {}
+    KvdbEntryDeletedEvent() : core::Event("kvdbEntryDeleted") {}
 
     /**
      * Get Event as JSON string
@@ -249,7 +249,7 @@ struct KvdbItemDeletedEvent : public core::Event {
     /**
      * event data
      */
-    KvdbDeletedItemEventData data;
+    KvdbDeletedEntryEventData data;
 };
 
 /**
@@ -323,52 +323,52 @@ public:
     static KvdbStatsChangedEvent extractKvdbStatsEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'KvdbNewItemEvent' 
+     * Checks whether event held in the 'EventHolder' is an 'KvdbNewEntryEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'KvdbNewItemEvent', else otherwise
+     * @return true for 'KvdbNewEntryEvent', else otherwise
      */
-    static bool isKvdbNewItemEvent(const core::EventHolder& eventHolder);
+    static bool isKvdbNewEntryEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'KvdbNewItemEvent' 
+     * Gets Event held in the 'EventHolder' as an 'KvdbNewEntryEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'KvdbNewItemEvent' object
+     * @return 'KvdbNewEntryEvent' object
      */
-    static KvdbNewItemEvent extractKvdbNewItemEvent(const core::EventHolder& eventHolder);
+    static KvdbNewEntryEvent extractKvdbNewEntryEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'KvdbItemUpdatedEvent' 
+     * Checks whether event held in the 'EventHolder' is an 'KvdbEntryUpdatedEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'KvdbItemUpdatedEvent', else otherwise
+     * @return true for 'KvdbEntryUpdatedEvent', else otherwise
      */
-    static bool isKvdbItemUpdatedEvent(const core::EventHolder& eventHolder);
+    static bool isKvdbEntryUpdatedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'KvdbItemUpdatedEvent' 
+     * Gets Event held in the 'EventHolder' as an 'KvdbEntryUpdatedEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'KvdbItemUpdatedEvent' object
+     * @return 'KvdbEntryUpdatedEvent' object
      */
-    static KvdbItemUpdatedEvent extractKvdbItemUpdatedEvent(const core::EventHolder& eventHolder);
+    static KvdbEntryUpdatedEvent extractKvdbEntryUpdatedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'KvdbItemDeletedEvent' 
+     * Checks whether event held in the 'EventHolder' is an 'KvdbEntryDeletedEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'KvdbItemDeletedEvent', else otherwise
+     * @return true for 'KvdbEntryDeletedEvent', else otherwise
      */
-    static bool isKvdbItemDeletedEvent(const core::EventHolder& eventHolder);
+    static bool isKvdbEntryDeletedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'KvdbItemDeletedEvent' 
+     * Gets Event held in the 'EventHolder' as an 'KvdbEntryDeletedEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'KvdbItemDeletedEvent' object
+     * @return 'KvdbEntryDeletedEvent' object
      */
-    static KvdbItemDeletedEvent extractKvdbItemDeletedEvent(const core::EventHolder& eventHolder);
+    static KvdbEntryDeletedEvent extractKvdbEntryDeletedEvent(const core::EventHolder& eventHolder);
 };
 
 }  // namespace kvdb

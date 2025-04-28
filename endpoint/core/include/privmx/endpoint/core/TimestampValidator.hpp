@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <algorithm>
 
-#define TIMESTAMP_ALLOWED_DELTA 5*60*1000 // in miliseconds
 
 namespace privmx {
 namespace endpoint {
@@ -23,6 +22,8 @@ namespace core {
 class TimestampValidator {
 public:
     static bool validate(int64_t clinetTimestamp, int64_t serverTimestamp);
+private:
+    static constexpr int64_t TIMESTAMP_ALLOWED_DELTA = 5*60*1000; // in miliseconds
 };
 } // core
 } // endpoint

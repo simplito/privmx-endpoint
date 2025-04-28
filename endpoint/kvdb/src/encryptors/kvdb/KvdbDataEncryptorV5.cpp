@@ -13,6 +13,8 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
+#include "privmx/endpoint/kvdb/DynamicTypes.hpp"
+#include "privmx/endpoint/kvdb/Constants.hpp"
 #include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint;
@@ -22,7 +24,7 @@ server::EncryptedKvdbDataV5 KvdbDataEncryptorV5::encrypt(const KvdbDataToEncrypt
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
     auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedKvdbDataV5>();
-    result.version(5);
+    result.version(KvdbDataSchema::Version::VERSION_5);
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(kvdbData.publicMeta, authorPrivateKey));
     fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
@@ -33,7 +35,11 @@ server::EncryptedKvdbDataV5 KvdbDataEncryptorV5::encrypt(const KvdbDataToEncrypt
     }
     result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(kvdbData.privateMeta, authorPrivateKey, encryptionKey));
     fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta())));
-    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(kvdbData.internalMeta, authorPrivateKey, encryptionKey));
+    auto internalMeta = utils::TypedObjectFactory::createNewObject<dynamic::KvdbInternalMetaV5>();
+    internalMeta.secret(kvdbData.internalMeta.secret);
+    internalMeta.resourceId(kvdbData.internalMeta.resourceId);
+    internalMeta.randomId(kvdbData.internalMeta.randomId);
+    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, encryptionKey));
     fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta())));
     result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
     core::ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
@@ -44,7 +50,7 @@ server::EncryptedKvdbDataV5 KvdbDataEncryptorV5::encrypt(const KvdbDataToEncrypt
 DecryptedKvdbDataV5 KvdbDataEncryptorV5::decrypt(const server::EncryptedKvdbDataV5& encryptedKvdbData, const std::string& encryptionKey) {
     DecryptedKvdbDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = KvdbDataSchema::Version::VERSION_5;
     try {  
         result.dio = getDIOAndAssertIntegrity(encryptedKvdbData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedKvdbData.authorPubKey());
@@ -58,8 +64,10 @@ DecryptedKvdbDataV5 KvdbDataEncryptorV5::decrypt(const server::EncryptedKvdbData
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedKvdbData.privateMeta(), authorPublicKey, encryptionKey);
-        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedKvdbData.internalMeta(), authorPublicKey, encryptionKey);
-        result.authorPubKey = encryptedKvdbData.authorPubKey();   
+        auto internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedKvdbData.internalMeta(), authorPublicKey, encryptionKey).stdString();
+        auto internalMetaJSON = utils::TypedObjectFactory::createObjectFromVar<dynamic::KvdbInternalMetaV5>(utils::Utils::parseJsonObject(internalMeta));
+        result.internalMeta = KvdbInternalMetaV5{.secret=internalMetaJSON.secret(), .resourceId=internalMetaJSON.resourceId(), .randomId=internalMetaJSON.randomId()};
+        result.authorPubKey = encryptedKvdbData.authorPubKey();    
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
@@ -74,7 +82,7 @@ DecryptedKvdbDataV5 KvdbDataEncryptorV5::decrypt(const server::EncryptedKvdbData
 DecryptedKvdbDataV5 KvdbDataEncryptorV5::extractPublic(const server::EncryptedKvdbDataV5& encryptedKvdbData) {
     DecryptedKvdbDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = KvdbDataSchema::Version::VERSION_5;
     try {  
         result.dio = getDIOAndAssertIntegrity(encryptedKvdbData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedKvdbData.authorPubKey());
@@ -103,7 +111,7 @@ core::DataIntegrityObject KvdbDataEncryptorV5::getDIOAndAssertIntegrity(const se
     auto encryptedDIO = encryptedKvdbData.dio();
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedDIO);
     if (
-        dio.structureVersion != 5 ||
+        dio.structureVersion != KvdbDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedKvdbData.authorPubKey() ||
         dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.publicMeta()) ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedKvdbData.privateMeta()) ||
@@ -116,13 +124,13 @@ core::DataIntegrityObject KvdbDataEncryptorV5::getDIOAndAssertIntegrity(const se
 
 void KvdbDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbDataV5& encryptedKvdbData) {
     if (encryptedKvdbData.versionEmpty() ||
-        encryptedKvdbData.version() != 5 ||
+        encryptedKvdbData.version() != KvdbDataSchema::Version::VERSION_5 ||
         encryptedKvdbData.publicMetaEmpty() ||
         encryptedKvdbData.privateMetaEmpty() ||
         encryptedKvdbData.internalMetaEmpty() ||
         encryptedKvdbData.authorPubKeyEmpty() ||
         encryptedKvdbData.dioEmpty()
     ) {
-        throw InvalidEncryptedKvdbDataVersionException(std::to_string(encryptedKvdbData.version()) + " expected version: 5");
+        throw InvalidEncryptedKvdbDataVersionException(std::to_string(encryptedKvdbData.version()) + " expected version: " + std::to_string(KvdbDataSchema::Version::VERSION_5));
     }
 }

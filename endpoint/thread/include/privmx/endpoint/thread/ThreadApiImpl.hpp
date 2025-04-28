@@ -36,6 +36,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/thread/ThreadProvider.hpp"
+#include "privmx/endpoint/thread/Constants.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -105,10 +106,11 @@ private:
     Thread convertThreadDataV1ToThread(server::ThreadInfo threadInfo, dynamic::ThreadDataV1 threadData);
     Thread convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV4& threadData);
     Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV5& threadData);
+    ThreadDataSchema::Version getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry);
     std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     std::vector<Thread> decryptAndConvertThreadsDataToThreads(utils::List<server::ThreadInfo> threads);
     Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread);
-    std::string decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    ThreadInternalMetaV5 decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     core::DecryptedEncKey getThreadCurrentEncKey(server::ThreadInfo thread);
 
@@ -120,11 +122,12 @@ private:
     Message convertMessageDataV3ToMessage(server::Message message, dynamic::MessageDataV3 messageData);
     Message convertDecryptedMessageDataV4ToMessage(server::Message message, DecryptedMessageDataV4 messageData);
     Message convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData);
+    MessageDataSchema::Version getMessagesDataStructureVersion(server::Message message);
     std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey);
     std::vector<Message> decryptAndConvertMessagesDataToMessages(server::ThreadInfo thread, utils::List<server::Message> messages);
     Message decryptAndConvertMessageDataToMessage(server::ThreadInfo thread, server::Message message);
     Message decryptAndConvertMessageDataToMessage(server::Message message);
-    uint32_t validateMessageDataIntegrity(server::Message message);
+    uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);
 
     void assertThreadExist(const std::string& threadId);
     privfs::RpcGateway::Ptr _gateway;

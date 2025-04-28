@@ -12,6 +12,8 @@ limitations under the License.
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV5.hpp"
 
 #include "privmx/endpoint/inbox/InboxException.hpp"
+#include "privmx/endpoint/inbox/DynamicTypes.hpp"
+#include "privmx/endpoint/inbox/Constants.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
@@ -21,7 +23,7 @@ server::InboxData InboxDataProcessorV5::packForServer(const InboxDataProcessorMo
                                                                      const std::string& inboxKey) {
     
     auto serverPublicData = utils::TypedObjectFactory::createNewObject<server::PublicDataV5>();
-    serverPublicData.version(5);
+    serverPublicData.version(InboxDataSchema::Version::VERSION_5);
     serverPublicData.publicMeta(_dataEncryptor.signAndEncode(plainData.publicData.publicMeta, authorPrivateKey));
     try {
         serverPublicData.publicMetaObject(utils::Utils::parseJsonObject(plainData.publicData.publicMeta.stdString()));
@@ -34,13 +36,17 @@ server::InboxData InboxDataProcessorV5::packForServer(const InboxDataProcessorMo
     serverPublicData.inboxKeyId(plainData.publicData.inboxEntriesKeyId);
     std::unordered_map<std::string, std::string> privateDataMapOfDataSha256;
     auto serverPrivateData = utils::TypedObjectFactory::createNewObject<server::PrivateDataV5>();
-    serverPrivateData.version(5);
+    serverPrivateData.version(InboxDataSchema::Version::VERSION_5);
     serverPrivateData.privateMeta(_dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey));
     privateDataMapOfDataSha256.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(serverPrivateData.privateMeta())));
-    serverPrivateData.internalMeta(_dataEncryptor.signAndEncryptAndEncode(plainData.privateData.internalMeta, authorPrivateKey, inboxKey));
+    auto internalMeta = utils::TypedObjectFactory::createNewObject<dynamic::InboxInternalMetaV5>();
+    internalMeta.secret(plainData.privateData.internalMeta.secret);
+    internalMeta.resourceId(plainData.privateData.internalMeta.resourceId);
+    internalMeta.randomId(plainData.privateData.internalMeta.randomId);
+    serverPrivateData.internalMeta(_dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, inboxKey));
     privateDataMapOfDataSha256.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta())));
     serverPrivateData.authorPubKey(authorPubKeyECC);
-    core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .structureVersion=5, .fieldChecksums=privateDataMapOfDataSha256};
+    core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .structureVersion=InboxDataSchema::Version::VERSION_5, .fieldChecksums=privateDataMapOfDataSha256};
     serverPrivateData.dio(_DIOEncryptor.signAndEncode(privateDataExpandedDio, authorPrivateKey));
 
     auto serverInboxData = utils::TypedObjectFactory::createNewObject<server::InboxData>();
@@ -78,7 +84,7 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublicOnly(const Poco::Dyn
 InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic::Var& publicData) {
 
     InboxPublicDataV5AsResult result;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = InboxDataSchema::Version::VERSION_5;
     result.statusCode = 0;
     try {
         auto publicDataV5 = utils::TypedObjectFactory::createObjectFromVar<server::PublicDataV5>(publicData);
@@ -111,7 +117,7 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic
 InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
     const server::InboxData& encryptedData, const std::string& inboxKey) {
     InboxPrivateDataV5AsResult result;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = InboxDataSchema::Version::VERSION_5;
     result.statusCode = 0;
     try {
         auto privateDataV5 = utils::TypedObjectFactory::createObjectFromVar<server::PrivateDataV5>(encryptedData.meta());
@@ -119,7 +125,9 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV5.authorPubKey());
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.privateMeta(), authorPublicKeyECC, inboxKey);
-        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.internalMeta(), authorPublicKeyECC, inboxKey);
+        auto internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV5.internalMeta(), authorPublicKeyECC, inboxKey).stdString();
+        auto internalMetaJSON = utils::TypedObjectFactory::createObjectFromVar<dynamic::InboxInternalMetaV5>(utils::Utils::parseJsonObject(internalMeta));
+        result.internalMeta = InboxInternalMetaV5{.secret=internalMetaJSON.secret(), .resourceId=internalMetaJSON.resourceId(), .randomId=internalMetaJSON.randomId()};
         result.authorPubKey = privateDataV5.authorPubKey();
 
     }  catch (const privmx::endpoint::core::Exception& e) {
@@ -134,7 +142,7 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
 
 void InboxDataProcessorV5::validateVersion(const Poco::Dynamic::Var& data) {
     Poco::JSON::Object::Ptr obj = data.extract<Poco::JSON::Object::Ptr>();
-    if (obj->get("version") != 5) {
+    if (obj->get("version").convert<Poco::Int64>() != InboxDataSchema::Version::VERSION_5) {
         throw InvalidEncryptedInboxDataVersionException();
     }
 }
@@ -144,7 +152,7 @@ core::DataIntegrityObject InboxDataProcessorV5::getDIOAndAssertIntegrity(const s
     assertDataFormat(encryptedPrivateData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedPrivateData.dio());
     if (
-        dio.structureVersion != 5 ||
+        dio.structureVersion != InboxDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedPrivateData.authorPubKey() ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.privateMeta()) || 
         dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedPrivateData.internalMeta())
@@ -156,7 +164,7 @@ core::DataIntegrityObject InboxDataProcessorV5::getDIOAndAssertIntegrity(const s
 
 void InboxDataProcessorV5::assertDataFormat(const server::PrivateDataV5& encryptedPrivateData) {
     if (encryptedPrivateData.versionEmpty() ||
-        encryptedPrivateData.version() != 5 ||
+        encryptedPrivateData.version() != InboxDataSchema::Version::VERSION_5 ||
         encryptedPrivateData.privateMetaEmpty() ||
         encryptedPrivateData.authorPubKeyEmpty() ||
         encryptedPrivateData.dioEmpty()
@@ -167,7 +175,7 @@ void InboxDataProcessorV5::assertDataFormat(const server::PrivateDataV5& encrypt
 
 void InboxDataProcessorV5::assertDataFormat(const server::PublicDataV5& encryptedPublicData) {
     if (encryptedPublicData.versionEmpty() ||
-        encryptedPublicData.version() != 5 ||
+        encryptedPublicData.version() != InboxDataSchema::Version::VERSION_5 ||
         encryptedPublicData.publicMetaEmpty() ||
         encryptedPublicData.authorPubKeyEmpty() ||
         encryptedPublicData.inboxPubKeyEmpty() ||

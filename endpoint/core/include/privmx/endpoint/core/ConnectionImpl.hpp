@@ -42,8 +42,17 @@ namespace core {
 class ConnectionImpl {
 public:
     ConnectionImpl();
-    void connect(const std::string& userPrivKey, const std::string& solutionId, const std::string& platformUrl);
-    void connectPublic(const std::string& solutionId, const std::string& platformUrl);
+    void connect(
+        const std::string& userPrivKey,
+        const std::string& solutionId,
+        const std::string& platformUrl,
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
+    );
+    void connectPublic(
+        const std::string& solutionId,
+        const std::string& platformUrl,
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
+    );
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
     std::vector<UserInfo> getContextUsers(const std::string& contextId);
@@ -64,20 +73,38 @@ public:
         return _userVerifier;    
     }
     std::string getMyUserId(const std::string& contextId);
-    DataIntegrityObject createDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId = std::nullopt);
-    DataIntegrityObject createDIOForNewContainer(const std::string& contextId, const std::string& containerId);
-    DataIntegrityObject createDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId);
-    DataIntegrityObject createPublicDIO(const std::string& contextId, const std::string& containerId, const std::optional<std::string>& itemId, const crypto::PublicKey& pubKey);
-    DataIntegrityObject createPublicDIOForNewItem(const std::string& contextId, const std::string& containerId, const std::string& itemId, const crypto::PublicKey& pubKey);
+    DataIntegrityObject createDIO(
+        const std::string& contextId, 
+        const std::string& resourceId, 
+        const std::optional<std::string>& containerId = std::nullopt,
+        const std::optional<std::string>& containerResourceId = std::nullopt
+    );
+    DataIntegrityObject createPublicDIO(
+        const std::string& contextId, 
+        const std::string& resourceId,
+        const crypto::PublicKey& pubKey,
+        const std::optional<std::string>& containerId = std::nullopt, 
+        const std::optional<std::string>& containerResourceId = std::nullopt
+    );
 
 
 private:
+    std::string generateDIORandomId();
+    DataIntegrityObject createDIOExt(
+        const std::string& contextId, 
+        const std::string& resourceId, 
+        const std::optional<std::string>& containerId, 
+        const std::optional<std::string>& containerResourceId,
+        const std::optional<std::string>& creatorUserId = std::nullopt,
+        const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
+    );
     int64_t generateConnectionId();
 
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::string _host;
+    BridgeIdentity _bridgeIdentity;
     rpc::ServerConfig _serverConfig;
     std::shared_ptr<KeyProvider> _keyProvider;
     std::shared_ptr<EventMiddleware> _eventMiddleware;

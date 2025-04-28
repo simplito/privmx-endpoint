@@ -19,5 +19,5 @@ ContextProvider::ContextProvider(std::function<server::ContextInfo(std::string)>
 
 bool ContextProvider::isNewerOrSameAsInStorage([[maybe_unused]] const server::ContextInfo& container) {
     return true;
-    // in current version of context is differentiate between newer context and older 
+    // Currently there is no way to check whether context data were changed or not. This issue is adressed already with: PB-45 and the actual method will be updated as soon as the mentioned issue is resolved. 
 }

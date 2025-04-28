@@ -9,22 +9,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/kvdb/encryptors/item/ItemDataEncryptorV5.hpp"
+#include "privmx/endpoint/kvdb/encryptors/entry/EntryDataEncryptorV5.hpp"
 #include "privmx/utils/Utils.hpp"
 #include "privmx/utils/Debug.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
+#include "privmx/endpoint/kvdb/Constants.hpp"
 #include <privmx/crypto/Crypto.hpp>
 
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-server::EncryptedItemDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEncryptV5& messageData,
+server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(const KvdbEntryDataToEncryptV5& messageData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
-    auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedItemDataV5>();
-    result.version(5);
+    auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedKvdbEntryDataV5>();
+    result.version(KvdbEntryDataSchema::Version::VERSION_5);
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta(_dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey));
     fieldChecksums.insert(std::make_pair("publicMeta",privmx::crypto::Crypto::sha256(result.publicMeta())));
@@ -47,11 +48,11 @@ server::EncryptedItemDataV5 ItemDataEncryptorV5::encrypt(const ItemDataToEncrypt
     return result;
 }
 
-DecryptedItemDataV5 ItemDataEncryptorV5::decrypt(
-    const server::EncryptedItemDataV5& encryptedItemData, const std::string& encryptionKey) {
-    DecryptedItemDataV5 result;
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
+    const server::EncryptedKvdbEntryDataV5& encryptedItemData, const std::string& encryptionKey) {
+    DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedItemData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedItemData.authorPubKey());
@@ -80,10 +81,10 @@ DecryptedItemDataV5 ItemDataEncryptorV5::decrypt(
     return result;
 }
 
-DecryptedItemDataV5 ItemDataEncryptorV5::extractPublic(const server::EncryptedItemDataV5& encryptedItemData) {
-    DecryptedItemDataV5 result;
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
+    DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
-    result.dataStructureVersion = 5;
+    result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedItemData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedItemData.authorPubKey());
@@ -107,11 +108,11 @@ DecryptedItemDataV5 ItemDataEncryptorV5::extractPublic(const server::EncryptedIt
     return result;
 }
 
-core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedItemDataV5& encryptedItemData) {
+core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
     assertDataFormat(encryptedItemData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedItemData.dio());
     if (
-        dio.structureVersion != 5 ||
+        dio.structureVersion != KvdbEntryDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedItemData.authorPubKey() ||
         dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.publicMeta()) ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.privateMeta()) ||
@@ -125,15 +126,15 @@ core::DataIntegrityObject ItemDataEncryptorV5::getDIOAndAssertIntegrity(const se
     return dio;
 }
 
-void ItemDataEncryptorV5::assertDataFormat(const server::EncryptedItemDataV5& encryptedItemData) {
+void EntryDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
     if (encryptedItemData.versionEmpty() ||
-        encryptedItemData.version() != 5 ||
+        encryptedItemData.version() != KvdbEntryDataSchema::Version::VERSION_5 ||
         encryptedItemData.publicMetaEmpty() ||
         encryptedItemData.privateMetaEmpty() ||
         encryptedItemData.authorPubKeyEmpty() ||
         encryptedItemData.dataEmpty() ||
         encryptedItemData.dioEmpty()
     ) {
-        throw InvalidEncryptedItemDataVersionException(std::to_string(encryptedItemData.version()) + " expected version: 5");
+        throw InvalidEncryptedItemDataVersionException(std::to_string(encryptedItemData.version()) + " expected version: " + std::to_string(KvdbEntryDataSchema::Version::VERSION_5));
     }
 }
