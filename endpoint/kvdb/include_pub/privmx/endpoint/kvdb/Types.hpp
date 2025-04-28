@@ -88,6 +88,11 @@ struct Kvdb {
      * status code of retrieval and decryption of the Kvdb
      */
     int64_t statusCode;
+
+    /**
+     * Version of the Kvdb data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 
@@ -155,6 +160,11 @@ struct KvdbEntry {
      * status code of retrieval and decryption of the Kvdb
      */
     int64_t statusCode;
+
+    /**
+     * Version of the Entry data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 struct KvdbKeysPagingQuery {
