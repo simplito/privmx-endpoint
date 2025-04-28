@@ -801,7 +801,7 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo th
 ThreadDataSchema::Version ThreadApiImpl::getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(threadEntry.data());
-        auto version = versioned.versionOpt(MessageDataSchema::Version::UNKNOWN);
+        auto version = versioned.versionOpt(ThreadDataSchema::Version::UNKNOWN);
         switch (version) {
             case ThreadDataSchema::Version::VERSION_4:
                 return ThreadDataSchema::Version::VERSION_4;
@@ -818,8 +818,10 @@ ThreadDataSchema::Version ThreadApiImpl::getThreadEntryDataStructureVersion(serv
 
 std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     switch (getThreadEntryDataStructureVersion(threadEntry)) {
-        case ThreadDataSchema::Version::UNKNOWN: 
-            throw UnknowThreadFormatException();
+        case ThreadDataSchema::Version::UNKNOWN: {
+            auto e = UnknowThreadFormatException();
+            return std::make_tuple(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
+        }
         case ThreadDataSchema::Version::VERSION_1: {
             return std::make_tuple(
                 convertThreadDataV1ToThread(thread, decryptThreadV1(threadEntry, encKey)),
