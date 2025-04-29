@@ -48,6 +48,8 @@ target_link_libraries(privmxplatform_test_e2e_UtilsTest privmx privmxendpointcor
 # Kvdb
 add_executable(privmxplatform_test_e2e_KvdbTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/KvdbTest.cpp)
 target_link_libraries(privmxplatform_test_e2e_KvdbTest privmx privmxendpointcore privmxendpointkvdb Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
+add_executable(privmxplatform_test_e2e_KvdbModuleEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/KvdbModuleEventsTest.cpp)
+target_link_libraries(privmxplatform_test_e2e_KvdbModuleEventsTest privmx privmxendpointcore privmxendpointkvdb Poco::Foundation Poco::Util Threads::Threads GTest::GTest GTest::Main)
 ## Docker Setup
 add_executable(privmxplatform_test_e2e_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/test_env/create_docker/DockerSetupData.cpp)
 target_link_libraries(privmxplatform_test_e2e_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb Poco::Foundation Poco::Util Threads::Threads)

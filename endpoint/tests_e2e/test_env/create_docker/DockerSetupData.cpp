@@ -278,7 +278,7 @@ int main(int argc, char** argv) {
         auto kvdb_entry_2_data = endpoint::core::Buffer::from("kvdb_entry_value_2");
         auto kvdb_entry_2_key = "kvdb_entry_key_2";
         kvdbApi.setEntry(
-            kvdb_2_id,
+            kvdb_1_id,
             kvdb_entry_2_key,
             kvdb_entry_2_publicMeta,
             kvdb_entry_2_privateMeta,
@@ -305,7 +305,7 @@ int main(int argc, char** argv) {
         auto entry_1_server_data = inboxApi.listEntries(inbox_1_id, {.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
         auto entry_2_server_data = inboxApi.listEntries(inbox_1_id, {.skip=1, .limit=1, .sortOrder="asc"}).readItems[0];
         auto kvdb_entry_1_server_data = kvdbApi.getEntry(kvdb_1_id, kvdb_entry_1_key);
-        auto kvdb_entry_2_server_data = kvdbApi.getEntry(kvdb_2_id, kvdb_entry_2_key);
+        auto kvdb_entry_2_server_data = kvdbApi.getEntry(kvdb_1_id, kvdb_entry_2_key);
 
         //writing data to ini file
         fstream iniFileWriter;
@@ -649,7 +649,6 @@ int main(int argc, char** argv) {
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(entry_2_server_data)) << std::endl;
 
             iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(entry_2_data) << std::endl;
-            iniFileWriter.close();
             // KvdbEntry_1
             iniFileWriter << "[KvdbEntry_1]" << std::endl;
             iniFileWriter << "info_kvdbId = " << kvdb_entry_1_server_data.info.kvdbId << std::endl;
@@ -682,6 +681,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(kvdb_entry_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(kvdb_entry_2_privateMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(kvdb_entry_2_data.stdString()) << std::endl;
+            iniFileWriter.close();
             
         }
         iniFileWriter.open(iniFileJSONPath, ios::out | ios::trunc);
