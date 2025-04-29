@@ -144,7 +144,7 @@ KvdbStatsChangedEvent Events::extractKvdbStatsEvent(const core::EventHolder& eve
 }
 
 bool Events::isKvdbNewEntryEvent(const core::EventHolder& handler) {
-    return handler.type() == "kvdbNewItem";
+    return handler.type() == "kvdbNewEntry";
 }
 
 KvdbNewEntryEvent Events::extractKvdbNewEntryEvent(const core::EventHolder& handler) {
@@ -161,7 +161,7 @@ KvdbNewEntryEvent Events::extractKvdbNewEntryEvent(const core::EventHolder& hand
 }
 
 bool Events::isKvdbEntryUpdatedEvent(const core::EventHolder& handler) {
-    return handler.type() == "kvdbUpdatedItem";
+    return handler.type() == "kvdbEntryUpdated";
 }
 
 KvdbEntryUpdatedEvent Events::extractKvdbEntryUpdatedEvent(const core::EventHolder& handler) {

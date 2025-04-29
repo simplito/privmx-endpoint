@@ -74,7 +74,7 @@ ENDPOINT_SERVER_TYPE(KvdbCreateResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(KvdbUpdateModel)
-    STRING_FIELD(kvdbId)
+    STRING_FIELD(id)
     STRING_FIELD(resourceId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
