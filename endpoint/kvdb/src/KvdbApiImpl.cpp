@@ -225,7 +225,7 @@ void KvdbApiImpl::updateKvdb(
     for (auto x: managers) {
         managersList.add(x.userId);
     }
-    model.kvdbId(kvdbId);
+    model.id(kvdbId);
     model.resourceId(currentKvdbResourceId);
     model.keyId(kvdbKey.id);
     model.keys(keys);

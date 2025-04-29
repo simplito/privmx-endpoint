@@ -176,7 +176,7 @@ struct KvdbNewEntryEvent : public core::Event {
     /**
      * Event constructor
      */
-    KvdbNewEntryEvent() : core::Event("kvdbNewItem") {}
+    KvdbNewEntryEvent() : core::Event("kvdbNewEntry") {}
 
     /**
      * Get Event as JSON string
@@ -204,7 +204,7 @@ struct KvdbEntryUpdatedEvent : public core::Event {
     /**
      * Event constructor
      */
-    KvdbEntryUpdatedEvent() : core::Event("kvdbUpdatedItem") {}
+    KvdbEntryUpdatedEvent() : core::Event("kvdbEntryUpdated") {}
 
     /**
      * Get Event as JSON string
