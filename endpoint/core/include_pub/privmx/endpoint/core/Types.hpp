@@ -173,7 +173,7 @@ struct ContainerPolicy : public ContainerPolicyWithoutItem {
 };
 
 /**
- * Options used to verify if Bridge on given url is the one you expect.
+ * PrivMX Bridge server instance verification options using a PKI server.
  */
 struct PKIVerificationOptions {
     /** 

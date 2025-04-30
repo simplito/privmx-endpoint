@@ -24,6 +24,7 @@ public:
      * @param userPrivKey user's private key
      * @param solutionId ID of the Solution
      * @param bridgeUrl Bridge Server URL
+     * @param verificationOptions PrivMX Bridge server instance verification options using a PKI server
      * 
      * @return Connection object
      */
@@ -35,6 +36,7 @@ public:
      *
      * @param solutionId ID of the Solution
      * @param bridgeUrl Bridge Server URL
+     * @param verificationOptions PrivMX Bridge server instance verification options using a PKI server
      * 
      * @return Connection object
      */                                     
