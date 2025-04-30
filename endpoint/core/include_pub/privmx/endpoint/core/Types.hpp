@@ -87,11 +87,11 @@ struct UserWithPubKey {
 };
 
 /**
- * Contains Infomation about user
+ * Contains Information about user
  */
 struct UserInfo {
     /**
-     * User publicKey and usetId
+     * User publicKey and userId
      */
     UserWithPubKey user;
 
@@ -187,7 +187,7 @@ struct PKIVerificationOptions {
 };
 
 /**
- * Data send by client to all data informing where was it send
+ * Bridge server identification details.
  */
 struct BridgeIdentity {
     /**

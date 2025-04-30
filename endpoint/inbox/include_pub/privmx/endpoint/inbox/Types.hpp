@@ -14,12 +14,12 @@ namespace inbox {
  */
 struct FilesConfig {
     /**
-     * minimum numer of files required when sending inbox entry
+     * minimum number of files required when sending inbox entry
      */
     int64_t minCount;
 
     /**
-     * maximum numer of files allowed when sending inbox entry
+     * maximum number of files allowed when sending inbox entry
      */
     int64_t maxCount;
 
