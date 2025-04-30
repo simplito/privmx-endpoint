@@ -20,7 +20,7 @@ ExtKey ExtKey::fromSeed(const core::Buffer& seed) {
 }
 
 ExtKey ExtKey::fromBase58(const std::string& base58) {
-    return ExtKey(privmx::crypto::ExtKey::fromSeed(base58));
+    return ExtKey(privmx::crypto::ExtKey::fromBase58(base58));
 }
 
 ExtKey ExtKey::generateRandom() {
