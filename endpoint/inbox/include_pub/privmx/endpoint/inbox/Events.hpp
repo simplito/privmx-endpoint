@@ -118,7 +118,7 @@ struct InboxEntryCreatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * detailed information aboug InboxEntry
+     * detailed information about InboxEntry
      */
     inbox::InboxEntry data;
 };
