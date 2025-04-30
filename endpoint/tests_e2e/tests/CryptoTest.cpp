@@ -27,6 +27,29 @@ protected:
     std::shared_ptr<crypto::CryptoApi> cryptoApi;
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
+    // Consts
+    // Keys
+    std::string _PGPkey =
+    "-----BEGIN PGP PUBLIC KEY BLOCK-----\n"
+    "xk8EZ/jEchMFK4EEAAoCAwSEyo++5XMwfoPCwDUOEIsHtjS9uG1oSb+9cR0/nyJZ\n"
+    "cwm8oTdBqHcksITfIiKdyhGLPP3MvGGlpu4uevoM7cVZ\n"
+    "=LRYU\n"
+    "-----END PGP PUBLIC KEY BLOCK-----\n";
+    // BIP39
+    const std::string _BIP39_mnemonic = "segment machine okay tank speak giraffe exercise mixed awkward welcome carry wisdom";
+    const std::string _BIP39_entropy = privmx::utils::Hex::toString("c330b267eedd0cc453d47110df288bfe");
+    const std::string _BIP39_password = "password";
+    const std::string _BIP39_privatePartAsBase58_withoutPassword = "xprv9s21ZrQH143K2S9osSQbnVRZY3fgyJ36oxS35mPEPEkoaEXGRegy8HFavePnVqM6eUd9agxwJyrDmYoJ7BJtbwZrc5S63chmH5rD4rwejUA";
+    const std::string _BIP39_privatePartAsBase58_withPassword = "xprv9s21ZrQH143K3nFYh4axNfWq5k4xn8qspfzzZRS8u6D2awiBfe6Tc8Je3NjhXfz1YbjKCTMqPJUdBieU4k9sbZogccWe4PKHEWdxaVzyZE3";
+    const std::string _BIP39_publicPartAsBase58_withoutPassword = "xpub661MyMwAqRbcEvEGyTwc9dNJ65WBNkkxBBMdt9nqwaHnT2rQyC1Dg5a4mw6gJ1QUBBDq7YguV26kHuJgLNVBL3wBwLzhgUPQ85Er6Tn5Eq2";
+    const std::string _BIP39_publicPartAsBase58_withPassword = "xpub661MyMwAqRbcGGL1o67xjoTZdmuTBbZjBtvbMoqkTRk1Tk3LDBQi9vd7tdKFss79vRWUaX14biVwRDSYzJW4YkmH4LvkGq6zfsSctGxoidd";
+    const std::string _BIP39_seed_withoutPassword = privmx::utils::Hex::toString(
+        "69aee18924f7e6724a7598d49813cfa4eadd31b7671367c7f6de784479d75e1aa4904a498b75e9bcde322bd1011d205d3051ba43c3b4c3a3296451b1a36044f7"
+    );
+    const std::string _BIP39_seed_withPassword = privmx::utils::Hex::toString(
+        "b4d611c2a1cc7b8fccfb14623fb800bde4764388ff766673dccf54cc4b65d35cbc0ff296dde8b3246075458d75f7c4bc3e2c4242c2d4e1c2268e942f040ae943"
+    );
+
 };
 
 TEST_F(CryptoTest, verifySignature) {
@@ -126,7 +149,6 @@ TEST_F(CryptoTest, encryptDataSymmetric_decryptDataSymmetric) {
     EXPECT_EQ(decryptedData.stdString(), "data");
 }
 
-
 TEST_F(CryptoTest, convertPEMKeytoWIFKey) {
     std::string PEMkey;
     PEMkey += "-----BEGIN EC PRIVATE KEY-----\n";
@@ -142,4 +164,230 @@ TEST_F(CryptoTest, convertPEMKeytoWIFKey) {
         privmx::crypto::PrivateKey::fromWIF(keyInWIF);
     });
     EXPECT_EQ(keyInWIF, "KyASahKYZjCyKJBB7ixVQbrQ7o56Vxo2PJgCuTL3YLFGBqxfPFAC");
+}
+
+TEST_F(CryptoTest, convertPGPAsn1KeyToBase58DERKey) {
+    std::string keyInBase58DER;
+    EXPECT_NO_THROW({
+        keyInBase58DER = cryptoApi->convertPGPAsn1KeyToBase58DERKey(_PGPkey);
+    });
+    EXPECT_NO_THROW({
+        privmx::crypto::PublicKey::fromBase58DER(keyInBase58DER);
+    });
+    EXPECT_EQ(keyInBase58DER, "7qiWDFa1gEEiEowrBxrGNfKNV9oLtpYGTnZeQ7Y82CdJ7qBTPe");
+}
+
+TEST_F(CryptoTest, generateBip39) {
+    EXPECT_NO_THROW({
+        cryptoApi->generateBip39(128, _BIP39_password);
+    });;
+}
+
+TEST_F(CryptoTest, fromMnemonic) {
+    privmx::endpoint::crypto::BIP39_t bip39;
+    EXPECT_NO_THROW({
+        bip39 = cryptoApi->fromMnemonic(_BIP39_mnemonic);
+    });
+    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
+    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
+    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withoutPassword);
+
+    EXPECT_NO_THROW({
+        bip39 = cryptoApi->fromMnemonic(_BIP39_mnemonic, _BIP39_password);
+    });
+    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
+    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
+    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withPassword);
+}
+
+TEST_F(CryptoTest, fromEntropy) {
+    privmx::endpoint::crypto::BIP39_t bip39;
+    EXPECT_NO_THROW({
+        bip39 = cryptoApi->fromEntropy(core::Buffer::from(_BIP39_entropy));
+    });
+    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
+    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
+    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withoutPassword);
+
+    EXPECT_NO_THROW({
+        bip39 = cryptoApi->fromEntropy(core::Buffer::from(_BIP39_entropy), _BIP39_password);
+    });
+    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
+    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
+    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withPassword);
+}
+
+TEST_F(CryptoTest, entropyToMnemonic) {
+    std::string resultMnemonic;
+    EXPECT_NO_THROW({
+        resultMnemonic = cryptoApi->entropyToMnemonic(core::Buffer::from(_BIP39_entropy));
+    });
+    EXPECT_EQ(resultMnemonic, _BIP39_mnemonic);
+}
+
+TEST_F(CryptoTest, mnemonicToEntropy) {
+    std::string resultEntropy;
+    EXPECT_NO_THROW({
+        resultEntropy = cryptoApi->mnemonicToEntropy(_BIP39_mnemonic).stdString();
+    });
+    EXPECT_EQ(resultEntropy, _BIP39_entropy);
+}
+
+TEST_F(CryptoTest, mnemonicToSeed) {
+    std::string resultSeed;
+    EXPECT_NO_THROW({
+        resultSeed = cryptoApi->mnemonicToSeed(_BIP39_mnemonic).stdString();
+    });
+    EXPECT_EQ(resultSeed, _BIP39_seed_withoutPassword);
+    EXPECT_NO_THROW({
+        resultSeed = cryptoApi->mnemonicToSeed(_BIP39_mnemonic, _BIP39_password).stdString();
+    });
+    EXPECT_EQ(resultSeed, _BIP39_seed_withPassword);
+}
+
+TEST_F(CryptoTest, ExtKey_fromSeed) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withoutPassword));
+    });
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_fromBase58) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_privatePartAsBase58_withoutPassword);
+    });
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_privatePartAsBase58_withPassword);
+    });
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_publicPartAsBase58_withoutPassword);
+    });
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_publicPartAsBase58_withPassword);
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_derive_deriveHardened) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    EXPECT_NO_THROW({
+        privmx::endpoint::crypto::ExtKey derivedKey1 = ext_key.derive(8);
+        privmx::endpoint::crypto::ExtKey derivedKey2 = ext_key.derive(8);
+        EXPECT_EQ(derivedKey1.getPublicPartAsBase58(), derivedKey2.getPublicPartAsBase58());
+        EXPECT_EQ(derivedKey1.getPrivatePartAsBase58(), derivedKey2.getPrivatePartAsBase58());
+    });
+    EXPECT_NO_THROW({
+        privmx::endpoint::crypto::ExtKey derivedKey1 = ext_key.deriveHardened(8);
+        privmx::endpoint::crypto::ExtKey derivedKey2 = ext_key.deriveHardened(8);
+        EXPECT_EQ(derivedKey1.getPublicPartAsBase58(), derivedKey2.getPublicPartAsBase58());
+        EXPECT_EQ(derivedKey1.getPrivatePartAsBase58(), derivedKey2.getPrivatePartAsBase58());
+    });
+    EXPECT_NO_THROW({
+        privmx::endpoint::crypto::ExtKey derivedKey1 = ext_key.derive(8);
+        privmx::endpoint::crypto::ExtKey derivedKey2 = ext_key.deriveHardened(8);
+        EXPECT_TRUE(derivedKey1.getPublicPartAsBase58() != derivedKey2.getPublicPartAsBase58());
+        EXPECT_TRUE(derivedKey1.getPrivatePartAsBase58() != derivedKey2.getPrivatePartAsBase58());
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_getPrivatePartAsBase58) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    std::string privatePart;
+    EXPECT_NO_THROW({
+        privatePart = ext_key.getPrivatePartAsBase58();
+    });
+    EXPECT_EQ(privatePart, _BIP39_privatePartAsBase58_withPassword);
+}
+
+TEST_F(CryptoTest, ExtKey_getPublicPartAsBase58) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    std::string publicPart;
+    EXPECT_NO_THROW({
+        publicPart = ext_key.getPublicPartAsBase58();
+    });
+    EXPECT_EQ(publicPart, _BIP39_publicPartAsBase58_withPassword);
+}
+
+TEST_F(CryptoTest, ExtKey_getPrivateKey) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    EXPECT_NO_THROW({
+        ext_key.getPrivateKey();
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_getPublicKey) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    EXPECT_NO_THROW({
+        ext_key.getPublicKey();
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_getPrivateEncKey) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    EXPECT_NO_THROW({
+        ext_key.getPrivateEncKey();
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_getPublicKeyAsBase58Address) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    EXPECT_NO_THROW({
+        ext_key.getPublicKeyAsBase58Address();
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_getChainCode) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    EXPECT_NO_THROW({
+        ext_key.getChainCode();
+    });
+}
+
+TEST_F(CryptoTest, ExtKey_verifyCompactSignatureWithHash) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+    });
+    auto privateKey = privmx::crypto::PrivateKey::fromWIF(ext_key.getPrivateKey());
+    auto sign = privateKey.signToCompactSignatureWithHash("test");
+    EXPECT_TRUE(ext_key.verifyCompactSignatureWithHash(core::Buffer::from("test"), core::Buffer::from(sign)));
+}
+
+TEST_F(CryptoTest, ExtKey_isPrivate) {
+    privmx::endpoint::crypto::ExtKey ext_key;
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_privatePartAsBase58_withoutPassword);
+    });
+    EXPECT_TRUE(ext_key.isPrivate());
+    EXPECT_NO_THROW({
+        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_publicPartAsBase58_withoutPassword);
+    });
+    EXPECT_FALSE(ext_key.isPrivate());
 }
