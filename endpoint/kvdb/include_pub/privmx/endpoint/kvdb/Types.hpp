@@ -10,7 +10,7 @@ namespace endpoint {
 namespace kvdb {
 
 /**
- * Holds all available information about a Thread.
+ * Holds all available information about a Kvdb.
  */
 struct Kvdb {
 
@@ -75,7 +75,7 @@ struct Kvdb {
     int64_t entries;
 
     /**
-     * timestamp of last new item
+     * Timestamp of the last added entry
      */
     int64_t lastEntryDate;
 
@@ -85,7 +85,7 @@ struct Kvdb {
     core::ContainerPolicy policy;
 
     /**
-     * status code of retrieval and decryption of the Kvdb
+     * Retrieval and decryption status code
      */
     int64_t statusCode;
 
@@ -97,52 +97,52 @@ struct Kvdb {
 
 
 /**
- * Holds message's information created by server.
+ * Holds Kvdb entry's information created by the server
  */
-struct ServerItemInfo {
+struct ServerKvdbEntryInfo {
     /**
      * ID of the Kvdb
      */
     std::string kvdbId;
 
     /**
-     * Key of Item
+     * Kvdb entry's key
      */
     std::string key;
 
     /**
-     * Item's creation timestamp
+     * Entry's creation timestamp
      */
     int64_t createDate;
 
     /**
-     * ID of the user who created the message
+     * ID of the user who created the entry
      */
     std::string author;
 };
 
 /**
- * Holds all available information about a Item.
+ * Holds all available information about a Entry.
  */
 struct KvdbEntry {
 
     /**
-     * Item information created by server
+     * Entry information created by server
      */
-    ServerItemInfo info;
+    ServerKvdbEntryInfo info;
 
     /**
-     * Item public metadata
+     * Entry public metadata
      */
     core::Buffer publicMeta;
 
     /**
-     * Item private metadata
+     * Entry private metadata
      */
     core::Buffer privateMeta;
 
     /**
-     * Item data
+     * Entry data
      */
     core::Buffer data;
 
@@ -157,7 +157,7 @@ struct KvdbEntry {
     int64_t version;
 
     /**
-     * status code of retrieval and decryption of the Kvdb
+     * Retrieval and decryption status code
      */
     int64_t statusCode;
 

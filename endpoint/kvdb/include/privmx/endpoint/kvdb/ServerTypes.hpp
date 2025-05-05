@@ -197,7 +197,7 @@ ENDPOINT_CLIENT_TYPE(KvdbListEntriesModel)
     STRING_FIELD(query)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(KvdbListItemsResult)
+ENDPOINT_CLIENT_TYPE(KvdbListEntriesResult)
     OBJECT_FIELD(kvdb, KvdbInfo)
     LIST_FIELD(kvdbEntries, KvdbEntryInfo)
     INT64_FIELD(count)

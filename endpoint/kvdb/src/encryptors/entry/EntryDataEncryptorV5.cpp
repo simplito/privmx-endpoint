@@ -49,28 +49,28 @@ server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(const KvdbEntryDa
 }
 
 DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
-    const server::EncryptedKvdbEntryDataV5& encryptedItemData, const std::string& encryptionKey) {
+    const server::EncryptedKvdbEntryDataV5& encryptedEntryData, const std::string& encryptionKey) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedItemData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedItemData.authorPubKey());
-        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedItemData.publicMeta(), authorPublicKey);
-        if(!encryptedItemData.publicMetaObjectEmpty()) {
+        result.dio = getDIOAndAssertIntegrity(encryptedEntryData);
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedEntryData.authorPubKey());
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedEntryData.publicMeta(), authorPublicKey);
+        if(!encryptedEntryData.publicMetaObjectEmpty()) {
             auto tmp_1 = utils::Utils::stringify(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
-            auto tmp_2 = utils::Utils::stringify(encryptedItemData.publicMetaObject());
+            auto tmp_2 = utils::Utils::stringify(encryptedEntryData.publicMetaObject());
             if(tmp_1 != tmp_2) {
-                auto e = ItemPublicDataMismatchException();
+                auto e = KvdbEntryPublicDataMismatchException();
                 result.statusCode = e.getCode();
             }
         }
-        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedItemData.privateMeta(), authorPublicKey, encryptionKey);
-        result.data = _dataEncryptor.decodeAndDecryptAndVerify(encryptedItemData.data(), authorPublicKey, encryptionKey);
-        result.internalMeta = encryptedItemData.internalMetaEmpty() ? 
+        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedEntryData.privateMeta(), authorPublicKey, encryptionKey);
+        result.data = _dataEncryptor.decodeAndDecryptAndVerify(encryptedEntryData.data(), authorPublicKey, encryptionKey);
+        result.internalMeta = encryptedEntryData.internalMetaEmpty() ? 
             std::nullopt : 
-            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(encryptedItemData.internalMeta(), authorPublicKey, encryptionKey));
-        result.authorPubKey = encryptedItemData.authorPubKey();   
+            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(encryptedEntryData.internalMeta(), authorPublicKey, encryptionKey));
+        result.authorPubKey = encryptedEntryData.authorPubKey();   
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
@@ -81,23 +81,23 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
     return result;
 }
 
-DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedEntryData) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedItemData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedItemData.authorPubKey());
-        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedItemData.publicMeta(), authorPublicKey);
-        if(!encryptedItemData.publicMetaObjectEmpty()) {
+        result.dio = getDIOAndAssertIntegrity(encryptedEntryData);
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedEntryData.authorPubKey());
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedEntryData.publicMeta(), authorPublicKey);
+        if(!encryptedEntryData.publicMetaObjectEmpty()) {
             auto tmp_1 = utils::Utils::stringify(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
-            auto tmp_2 = utils::Utils::stringify(encryptedItemData.publicMetaObject());
+            auto tmp_2 = utils::Utils::stringify(encryptedEntryData.publicMetaObject());
             if(tmp_1 != tmp_2) {
-                auto e = ItemPublicDataMismatchException();
+                auto e = KvdbEntryPublicDataMismatchException();
                 result.statusCode = e.getCode();
             }
         }
-        result.authorPubKey = encryptedItemData.authorPubKey();   
+        result.authorPubKey = encryptedEntryData.authorPubKey();   
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
@@ -108,17 +108,17 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::Encry
     return result;
 }
 
-core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
-    assertDataFormat(encryptedItemData);
-    auto dio = _DIOEncryptor.decodeAndVerify(encryptedItemData.dio());
+core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedEntryData) {
+    assertDataFormat(encryptedEntryData);
+    auto dio = _DIOEncryptor.decodeAndVerify(encryptedEntryData.dio());
     if (
         dio.structureVersion != KvdbEntryDataSchema::Version::VERSION_5 ||
-        dio.creatorPubKey != encryptedItemData.authorPubKey() ||
-        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.publicMeta()) ||
-        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.privateMeta()) ||
-        dio.fieldChecksums.at("data") != privmx::crypto::Crypto::sha256(encryptedItemData.data()) || (
-            !encryptedItemData.internalMetaEmpty() &&
-            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedItemData.internalMeta())
+        dio.creatorPubKey != encryptedEntryData.authorPubKey() ||
+        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedEntryData.publicMeta()) ||
+        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedEntryData.privateMeta()) ||
+        dio.fieldChecksums.at("data") != privmx::crypto::Crypto::sha256(encryptedEntryData.data()) || (
+            !encryptedEntryData.internalMetaEmpty() &&
+            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedEntryData.internalMeta())
         )
     ) {
         throw core::InvalidDataIntegrityObjectChecksumException();
@@ -126,15 +126,15 @@ core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const s
     return dio;
 }
 
-void EntryDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedItemData) {
-    if (encryptedItemData.versionEmpty() ||
-        encryptedItemData.version() != KvdbEntryDataSchema::Version::VERSION_5 ||
-        encryptedItemData.publicMetaEmpty() ||
-        encryptedItemData.privateMetaEmpty() ||
-        encryptedItemData.authorPubKeyEmpty() ||
-        encryptedItemData.dataEmpty() ||
-        encryptedItemData.dioEmpty()
+void EntryDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedEntryData) {
+    if (encryptedEntryData.versionEmpty() ||
+        encryptedEntryData.version() != KvdbEntryDataSchema::Version::VERSION_5 ||
+        encryptedEntryData.publicMetaEmpty() ||
+        encryptedEntryData.privateMetaEmpty() ||
+        encryptedEntryData.authorPubKeyEmpty() ||
+        encryptedEntryData.dataEmpty() ||
+        encryptedEntryData.dioEmpty()
     ) {
-        throw InvalidEncryptedItemDataVersionException(std::to_string(encryptedItemData.version()) + " expected version: " + std::to_string(KvdbEntryDataSchema::Version::VERSION_5));
+        throw InvalidEncryptedKvdbEntryDataVersionException(std::to_string(encryptedEntryData.version()) + " expected version: " + std::to_string(KvdbEntryDataSchema::Version::VERSION_5));
     }
 }

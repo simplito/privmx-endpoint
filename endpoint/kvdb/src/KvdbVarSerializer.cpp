@@ -52,10 +52,10 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<kvdb::Kvdb>>(const 
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::ServerItemInfo>(const kvdb::ServerItemInfo& val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::ServerKvdbEntryInfo>(const kvdb::ServerKvdbEntryInfo& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "kvdb$ServerItemInfo");
+        obj->set("__type", "kvdb$ServerKvdbEntryInfo");
     }
     obj->set("kvdbId", serialize(val.kvdbId));
     obj->set("messageId", serialize(val.key));
@@ -65,10 +65,10 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::ServerItemInfo>(const kvdb::Se
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry >(const kvdb::KvdbEntry & val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry>(const kvdb::KvdbEntry & val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "kvdb$Item");
+        obj->set("__type", "kvdb$KvdbEntry");
     }
     obj->set("info", serialize(val.info));
     obj->set("publicMeta", serialize(val.publicMeta));
@@ -80,10 +80,10 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry >(const kvdb::KvdbEn
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<PagingList<kvdb::KvdbEntry >>(const PagingList<kvdb::KvdbEntry >& val) {
+Poco::Dynamic::Var VarSerializer::serialize<PagingList<kvdb::KvdbEntry>>(const PagingList<kvdb::KvdbEntry>& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "core$PagingList<kvdb$Item>");
+        obj->set("__type", "core$PagingList<kvdb$KvdbEntry>");
     }
     obj->set("totalAvailable", serialize(val.totalAvailable));
     obj->set("readItems", serialize(val.readItems));

@@ -56,8 +56,8 @@ server::KvdbListKeysResult ServerApi::kvdbListKeys(server::KvdbListKeysModel mod
     return request<server::KvdbListKeysResult>("kvdbListKeys", model);
 }
 
-server::KvdbListItemsResult ServerApi::kvdbListEntries(server::KvdbListEntriesModel model) {
-    return request<server::KvdbListItemsResult>("kvdbListEntries", model);
+server::KvdbListEntriesResult ServerApi::kvdbListEntries(server::KvdbListEntriesModel model) {
+    return request<server::KvdbListEntriesResult>("kvdbListEntries", model);
 }
 
 server::KvdbEntryDeleteManyResult ServerApi::kvdbEntryDeleteMany(server::KvdbEntryDeleteManyModel model) {

@@ -38,12 +38,12 @@ public:
     void kvdbEntrySet(server::KvdbEntrySetModel model);
     void kvdbEntryDelete(server::KvdbEntryDeleteModel model);
     server::KvdbListKeysResult kvdbListKeys(server::KvdbListKeysModel model);
-    server::KvdbListItemsResult kvdbListEntries(server::KvdbListEntriesModel model);
+    server::KvdbListEntriesResult kvdbListEntries(server::KvdbListEntriesModel model);
     server::KvdbEntryDeleteManyResult kvdbEntryDeleteMany(server::KvdbEntryDeleteManyModel model);
 private:
     template<typename T>
-    T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object
-    Poco::Dynamic::Var request(const std::string& method, Poco::JSON::Object::Ptr params); //Var
+    T request(const std::string& method, Poco::JSON::Object::Ptr params);
+    Poco::Dynamic::Var request(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
 };

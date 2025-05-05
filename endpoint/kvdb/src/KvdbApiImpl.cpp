@@ -410,8 +410,8 @@ void KvdbApiImpl::setEntry(const std::string& kvdbId, const std::string& key, co
         .internalMeta = std::nullopt,
         .dio = entryDIO
     };
-    auto encryptedItemData = _entryDataEncryptorV5.encrypt(entryData, _userPrivKey, msgKey.key);
-    send_entry_model.kvdbEntryValue(encryptedItemData.asVar());
+    auto encryptedEntryData = _entryDataEncryptorV5.encrypt(entryData, _userPrivKey, msgKey.key);
+    send_entry_model.kvdbEntryValue(encryptedEntryData.asVar());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, sendEntry, data encrypted)
     _serverApi.kvdbEntrySet(send_entry_model);
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, sendEntry, data send)
@@ -643,7 +643,7 @@ KvdbDataSchema::Version KvdbApiImpl::getKvdbDataEntryStructureVersion(server::Kv
 std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     switch (getKvdbDataEntryStructureVersion(kvdbEntry)) {
         case KvdbDataSchema::Version::UNKNOWN: {
-            auto e = UnknowKvdbFormatException();
+            auto e = UnknownKvdbFormatException();
             return std::make_tuple(Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
         }
         case KvdbDataSchema::Version::VERSION_5: {
@@ -651,7 +651,7 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDa
             return std::make_tuple(convertDecryptedKvdbDataV5ToKvdb(kvdb, decryptedKvdbData), decryptedKvdbData.dio);
         }
     }    
-    auto e = UnknowKvdbFormatException();
+    auto e = UnknownKvdbFormatException();
     return std::make_tuple(Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
 }
 
@@ -751,13 +751,13 @@ Kvdb KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb) {
 
 DecryptedKvdbEntryDataV5 KvdbApiImpl::decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedItemData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbEntryDataV5>(entry.kvdbEntryValue());
+        auto encryptedEntryData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbEntryDataV5>(entry.kvdbEntryValue());
         if(encKey.statusCode != 0) {
-            auto tmp = _entryDataEncryptorV5.extractPublic(encryptedItemData);
+            auto tmp = _entryDataEncryptorV5.extractPublic(encryptedEntryData);
             tmp.statusCode = encKey.statusCode;
             return tmp;
         }
-        return _entryDataEncryptorV5.decrypt(encryptedItemData, encKey.key);
+        return _entryDataEncryptorV5.decrypt(encryptedEntryData, encKey.key);
     } catch (const core::Exception& e) {
         return DecryptedKvdbEntryDataV5{{.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
@@ -808,8 +808,8 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertE
             return std::make_tuple(KvdbEntry{{},{},{},{},{},{},.statusCode = e.getCode(), {}}, core::DataIntegrityObject());
         }
         case KvdbEntryDataSchema::Version::VERSION_5: {
-            auto decryptItem = decryptKvdbEntryDataV5(entry, encKey);
-            return std::make_tuple(convertDecryptedKvdbEntryDataV5ToKvdbEntry(entry, decryptItem), decryptItem.dio);
+            auto decryptEntry = decryptKvdbEntryDataV5(entry, encKey);
+            return std::make_tuple(convertDecryptedKvdbEntryDataV5ToKvdbEntry(entry, decryptEntry), decryptEntry.dio);
         }
     }
     auto e = UnknownKvdbEntryFormatException();
@@ -921,11 +921,11 @@ KvdbEntry KvdbApiImpl::decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo e
 KvdbInternalMetaV5 KvdbApiImpl::decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     switch (getKvdbDataEntryStructureVersion(kvdbEntry)) {
         case KvdbDataSchema::Version::UNKNOWN:
-            throw UnknowKvdbFormatException();
+            throw UnknownKvdbFormatException();
         case KvdbDataSchema::Version::VERSION_5:
             return decryptKvdbV5(kvdbEntry, encKey).internalMeta;
     }
-    throw UnknowKvdbFormatException();
+    throw UnknownKvdbFormatException();
 }
 
 core::DecryptedEncKey KvdbApiImpl::getKvdbCurrentEncKey(server::KvdbInfo kvdb) {
@@ -957,7 +957,7 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
     try {
         switch (getKvdbDataEntryStructureVersion(kvdb_data_entry)) {
             case KvdbDataSchema::Version::UNKNOWN:
-                return UnknowKvdbFormatException().getCode();
+                return UnknownKvdbFormatException().getCode();
             case KvdbDataSchema::Version::VERSION_5: {
                 auto kvdb_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbDataV5>(kvdb_data_entry.data());
                 auto dio = _kvdbDataEncryptorV5.getDIOAndAssertIntegrity(kvdb_data);
@@ -979,7 +979,7 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
     } catch (...) {
         return ENDPOINT_CORE_EXCEPTION_CODE;
     } 
-    return UnknowKvdbFormatException().getCode();
+    return UnknownKvdbFormatException().getCode();
 }
 
 uint32_t KvdbApiImpl::validateEntryDataIntegrity(server::KvdbEntryInfo entry, const std::string& kvdbResourceId) {
@@ -998,7 +998,7 @@ uint32_t KvdbApiImpl::validateEntryDataIntegrity(server::KvdbEntryInfo entry, co
                     dio.creatorUserId != entry.lastModifier() ||
                     !core::TimestampValidator::validate(dio.timestamp, entry.lastModificationDate())
                 ) {
-                    return ItemDataIntegrityException().getCode();
+                    return KvdbEntryDataIntegrityException().getCode();
                 }
                 return 0;
             }

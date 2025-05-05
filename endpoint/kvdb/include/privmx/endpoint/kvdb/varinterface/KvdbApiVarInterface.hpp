@@ -63,13 +63,13 @@ public:
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
-    KvdbApi getApi() const { return _threadApi; }
+    KvdbApi getApi() const { return _kvdbApi; }
 
 private:
     static std::map<METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
-    KvdbApi _threadApi;
+    KvdbApi _kvdbApi;
     core::VarDeserializer _deserializer;
     core::VarSerializer _serializer;
 };

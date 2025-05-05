@@ -31,9 +31,9 @@ public:
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedKvdbEntryDataV5 decrypt(const server::EncryptedKvdbEntryDataV5& encryptedItemData, const std::string& encryptionKey);
-    DecryptedKvdbEntryDataV5 extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedItemData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedItemData);
+    DecryptedKvdbEntryDataV5 decrypt(const server::EncryptedKvdbEntryDataV5& encryptedEntryData, const std::string& encryptionKey);
+    DecryptedKvdbEntryDataV5 extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
 private:
     void assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedKvdbData);
     core::DataEncryptorV4 _dataEncryptor;

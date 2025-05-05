@@ -191,7 +191,7 @@ struct KvdbNewEntryEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
     
     /**
-     * detailed information about Item
+     * detailed information about KvdbEntry
      */
     kvdb::KvdbEntry data;
 };
@@ -219,7 +219,7 @@ struct KvdbEntryUpdatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
     
     /**
-     * detailed information about Item
+     * detailed information about KvdbEntry
      */
     kvdb::KvdbEntry data;
 };
