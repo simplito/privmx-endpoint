@@ -49,7 +49,12 @@ protected:
     const std::string _BIP39_seed_withPassword = privmx::utils::Hex::toString(
         "b4d611c2a1cc7b8fccfb14623fb800bde4764388ff766673dccf54cc4b65d35cbc0ff296dde8b3246075458d75f7c4bc3e2c4242c2d4e1c2268e942f040ae943"
     );
-
+    const std::string _BIP39_publicKeyBase58DER_withPassword = "67r77s6cs14ErtuLqCv4cgsHUm7dQTvGKx3Mb5DxSXCAUuPygY";
+    const std::string _BIP39_publicKeyBase58DERAddress_withPassword = "1NbGbcmEVw8nUsRmfeN6m1GQtJX62BwRyS";
+    const std::string _BIP39_privateKeyWIF_withPassword = "L4eMAP7f7PSGCY8fNVMv66JDczN6wDnGv4ZL2nwf4kTZxvmtp8D6";
+    const std::string _BIP39_chainCode_withPassword = privmx::utils::Hex::toString(
+        "acfe0e248220d8879beb8c2ba570098b118a5e3b20912cbcdb073422ca96fbd3"
+    );
 };
 
 TEST_F(CryptoTest, verifySignature) {
@@ -325,9 +330,11 @@ TEST_F(CryptoTest, ExtKey_getPrivateKey) {
     EXPECT_NO_THROW({
         ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
     });
+    std::string privateKey;
     EXPECT_NO_THROW({
-        ext_key.getPrivateKey();
+        privateKey = ext_key.getPrivateKey();
     });
+    EXPECT_EQ(privateKey, _BIP39_privateKeyWIF_withPassword);
 }
 
 TEST_F(CryptoTest, ExtKey_getPublicKey) {
@@ -335,9 +342,11 @@ TEST_F(CryptoTest, ExtKey_getPublicKey) {
     EXPECT_NO_THROW({
         ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
     });
+    std::string publicKey;
     EXPECT_NO_THROW({
-        ext_key.getPublicKey();
+        publicKey = ext_key.getPublicKey();
     });
+    EXPECT_EQ(publicKey,_BIP39_publicKeyBase58DER_withPassword);
 }
 
 TEST_F(CryptoTest, ExtKey_getPrivateEncKey) {
@@ -345,9 +354,12 @@ TEST_F(CryptoTest, ExtKey_getPrivateEncKey) {
     EXPECT_NO_THROW({
         ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
     });
+    core::Buffer privateEncKey;
     EXPECT_NO_THROW({
-        ext_key.getPrivateEncKey();
+        privateEncKey = ext_key.getPrivateEncKey();
     });
+    privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::fromWIF(_BIP39_privateKeyWIF_withPassword);
+    EXPECT_EQ(privateEncKey.stdString(),key.getPrivateEncKey());
 }
 
 TEST_F(CryptoTest, ExtKey_getPublicKeyAsBase58Address) {
@@ -355,9 +367,12 @@ TEST_F(CryptoTest, ExtKey_getPublicKeyAsBase58Address) {
     EXPECT_NO_THROW({
         ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
     });
+    std::string publicKeyAsBase58Address;
     EXPECT_NO_THROW({
-        ext_key.getPublicKeyAsBase58Address();
+        publicKeyAsBase58Address = ext_key.getPublicKeyAsBase58Address();
     });
+    
+    EXPECT_EQ(publicKeyAsBase58Address, _BIP39_publicKeyBase58DERAddress_withPassword);
 }
 
 TEST_F(CryptoTest, ExtKey_getChainCode) {
@@ -365,9 +380,11 @@ TEST_F(CryptoTest, ExtKey_getChainCode) {
     EXPECT_NO_THROW({
         ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
     });
+    core::Buffer chain_code;
     EXPECT_NO_THROW({
-        ext_key.getChainCode();
+        chain_code = ext_key.getChainCode();
     });
+    EXPECT_EQ(chain_code.stdString(),_BIP39_chainCode_withPassword);
 }
 
 TEST_F(CryptoTest, ExtKey_verifyCompactSignatureWithHash) {
