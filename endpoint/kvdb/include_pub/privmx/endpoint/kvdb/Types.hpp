@@ -147,7 +147,7 @@ struct KvdbEntry {
     core::Buffer data;
 
     /**
-     * public key of an author of the message
+     * public key of an author of the entry
      */
     std::string authorPubKey;
 
