@@ -69,6 +69,9 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryUpdatedEvent>(const k
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(const kvdb::KvdbEntryDeletedEvent& val);
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<std::string>>(const core::PagingList<std::string>& val);
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

@@ -218,4 +218,16 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(
     return obj;
 }
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<PagingList<std::string>>(const PagingList<std::string>& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$PagingList<kvdb$string>");
+    }
+    obj->set("totalAvailable", serialize(val.totalAvailable));
+    obj->set("readItems", serialize(val.readItems));
+    return obj;
+}
+
+
 

@@ -31,15 +31,16 @@ public:
         DeleteKvdb = 3,
         GetKvdb = 4,
         ListKvdbs = 5,
-        GetValue = 6,
-        ListValues = 7,
-        SendValue = 8,
-        DeleteValue = 9,
-        UpdateValue = 10,
-        SubscribeForKvdbEvents = 11,
-        UnsubscribeFromKvdbEvents = 12,
-        SubscribeForValueEvents = 13,
-        UnsubscribeFromValueEvents = 14
+        GetEntry = 6,
+        ListEntriesKeys = 7,
+        ListEntries = 8,
+        SetEntry = 9,
+        DeleteEntry = 10,
+        DeleteEntries = 11,
+        SubscribeForKvdbEvents = 12,
+        UnsubscribeFromKvdbEvents = 13,
+        SubscribeForEntryEvents = 14,
+        UnsubscribeFromEntryEvents = 15
     };
 
     KvdbApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -51,15 +52,16 @@ public:
     Poco::Dynamic::Var deleteKvdb(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getKvdb(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listKvdbs(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var getValue(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var listValues(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var sendValue(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var deleteValue(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var updateValue(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getEntry(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var listEntriesKeys(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var listEntries(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var setEntry(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var deleteEntry(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var deleteEntries(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeForKvdbEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromKvdbEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForValueEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromValueEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeForEntryEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

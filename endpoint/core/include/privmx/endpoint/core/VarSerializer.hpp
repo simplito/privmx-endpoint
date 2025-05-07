@@ -41,6 +41,8 @@ public:
     Poco::Dynamic::Var serialize(const std::vector<T>& value);
     template<typename T>
     Poco::Dynamic::Var serialize(const std::optional<T>& value);
+    template<typename T>
+    Poco::Dynamic::Var serialize(const std::map<std::string, T>& value);
 
     const Options& getOptions() const {
         return _options;
@@ -64,6 +66,15 @@ inline Poco::Dynamic::Var VarSerializer::serialize(const std::optional<T>& val) 
         return serialize(val.value());
     }
     return Poco::Dynamic::Var();
+}
+
+template<typename T>
+inline Poco::Dynamic::Var VarSerializer::serialize(const std::map<std::string, T>& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    for (const auto& item : val) {
+        obj->set(item.first, serialize(item.second));
+    }
+    return obj;
 }
 
 template<>
