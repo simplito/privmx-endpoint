@@ -59,7 +59,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::ServerKvdbEntryInfo>(const kvd
         obj->set("__type", "kvdb$ServerKvdbEntryInfo");
     }
     obj->set("kvdbId", serialize(val.kvdbId));
-    obj->set("messageId", serialize(val.key));
+    obj->set("key", serialize(val.key));
     obj->set("createDate", serialize(val.createDate));
     obj->set("author", serialize(val.author));
     return obj;
@@ -75,7 +75,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry>(const kvdb::KvdbEnt
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("data", serialize(val.data));
-    obj->set("authorPubKey", serialize(val.authorPubKey));
+    obj->set("version", serialize(val.version));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     return obj;
