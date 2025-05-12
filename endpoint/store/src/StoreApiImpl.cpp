@@ -444,11 +444,11 @@ int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer&
 int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
-    auto file = _serverApi->storeFileGet(storeFileGetModel).file();
+    auto result = _serverApi->storeFileGet(storeFileGetModel);
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
-        std::string(),
+        result.store().id(),
         fileId,
-        file.resourceIdOpt(""),
+        result.file().resourceIdOpt(""),
         (uint64_t)size,
         publicMeta,
         privateMeta,
