@@ -30,6 +30,8 @@ limitations under the License.
 #include "privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp"
 #include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
 #include "privmx/endpoint/crypto/varinterface/CryptoApiVarInterface.hpp"
+#include "privmx/endpoint/crypto/varinterface/ExtKeyVarInterface.hpp"
+#include "privmx/endpoint/core/varinterface/UtilsVarInterface.hpp"
 #include "privmx/endpoint/core/Config.hpp"
 
 using namespace privmx::endpoint;
@@ -70,35 +72,9 @@ int privmx_endpoint_setUserVerifier(Connection* ptr, privmx_user_verifier verifi
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
         return _ptr->setUserVerifier(
             [verifier](const Poco::Dynamic::Var& request) {
-                pson_value* res = nullptr;
-                pson_value* args = (pson_value*)(new Poco::Dynamic::Var(request)); // alock memory
-                try {
-                    verifier(args, &res);
-                } catch (...) {
-                    //memory leeks protection
-                    if(args != nullptr) { // free args memory
-                        delete (Poco::Dynamic::Var*)args; 
-                        args = nullptr;
-                    }
-                    if(res != nullptr) { // free res memory
-                        pson_free_value(res); 
-                        res = nullptr;
-                    }
-                    // rethrow captured exception
-                    std::exception_ptr e_ptr = std::current_exception();
-                    if(e_ptr) {
-                        std::rethrow_exception(e_ptr);
-                    }
-                }
-                if(args != nullptr) { // free args memory
-                    delete (Poco::Dynamic::Var*)args;
-                    args = nullptr;
-                }
+                pson_value* res;
+                verifier((pson_value*)(new Poco::Dynamic::Var(request)), &res);
                 const Poco::Dynamic::Var resVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(res));
-                if(res != nullptr) { // free res memory
-                    pson_free_value(res); 
-                    res = nullptr;
-                }
                 return resVal;
             }
         );
@@ -213,6 +189,25 @@ int privmx_endpoint_execCryptoApi(CryptoApi* ptr, int method, const pson_value* 
     });
 }
 
+int privmx_endpoint_newExtKey(ExtKey** outPtr) {
+    crypto::ExtKeyVarInterface* ptr = new crypto::ExtKeyVarInterface(core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    *outPtr = (ExtKey*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_freeExtKey(ExtKey* ptr) {
+    delete (crypto::ExtKeyVarInterface*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_execExtKey(ExtKey* ptr, int method, const pson_value* args, pson_value** res) {
+    return CApiExecutor::execFunc(res, [&]{
+        crypto::ExtKeyVarInterface* _ptr = (crypto::ExtKeyVarInterface*)ptr;
+        const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
+        return _ptr->exec((crypto::ExtKeyVarInterface::METHOD)method, argsVal);
+    });
+}
+
 int privmx_endpoint_newEventApi(Connection* connectionPtr, EventApi** outPtr) {
     core::ConnectionVarInterface* _connectionPtr = (core::ConnectionVarInterface*)connectionPtr;
     event::EventApiVarInterface* ptr = new event::EventApiVarInterface(_connectionPtr->getApi(), core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
@@ -230,6 +225,25 @@ int privmx_endpoint_execEventApi(EventApi* ptr, int method, const pson_value* ar
         event::EventApiVarInterface* _ptr = (event::EventApiVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((event::EventApiVarInterface::METHOD)method, argsVal);
+    });
+}
+
+int privmx_endpoint_newUtils(Utils** outPtr) {
+    core::UtilsVarInterface* ptr = new core::UtilsVarInterface(core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    *outPtr = (Utils*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_freeUtils(Utils* ptr) {
+    delete (core::UtilsVarInterface*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_execUtils(Utils* ptr, int method, const pson_value* args, pson_value** res) {
+    return CApiExecutor::execFunc(res, [&]{
+        core::UtilsVarInterface* _ptr = (core::UtilsVarInterface*)ptr;
+        const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
+        return _ptr->exec((core::UtilsVarInterface::METHOD)method, argsVal);
     });
 }
 

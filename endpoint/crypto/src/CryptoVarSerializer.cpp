@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/crypto/CryptoVarSerializer.hpp"
+#include "privmx/endpoint/crypto/varinterface/ExtKeyVarInterface.hpp"
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
@@ -23,6 +24,7 @@ Poco::Dynamic::Var VarSerializer::serialize<crypto::BIP39_t>(const crypto::BIP39
     if (_options.addType) {
         obj->set("__type", "crypto$BIP39_t");
     }
+    obj->set("ext_key", (int64_t)(new crypto::ExtKeyVarInterface(val.ext_key, getOptions())));
     obj->set("mnemonic", serialize(val.mnemonic));
     obj->set("entropy", serialize(val.entropy));
     return obj;
