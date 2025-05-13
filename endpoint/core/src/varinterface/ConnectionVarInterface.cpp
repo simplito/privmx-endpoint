@@ -13,7 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
-
+#include "privmx/endpoint/core/varinterface/VarUserVerifierInterface.hpp"
 using namespace privmx::endpoint::core;
 
 std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterface::*)(const Poco::Dynamic::Var&)>
@@ -73,6 +73,12 @@ Poco::Dynamic::Var ConnectionVarInterface::getContextUsers(const Poco::Dynamic::
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto result = _connection.getContextUsers(contextId);
     return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::setUserVerifier(const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback) {
+    std::shared_ptr<VarUserVerifierInterface> verifier = std::make_shared<VarUserVerifierInterface>(verifierCallback, _deserializer, _serializer);
+    _connection.setUserVerifier(verifier);
+    return {};
 }
 
 Poco::Dynamic::Var ConnectionVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
