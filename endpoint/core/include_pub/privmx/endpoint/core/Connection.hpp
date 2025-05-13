@@ -85,7 +85,7 @@ public:
      * The feature allows the developer to set up a callback for user verification. 
      * A developer can implement an interface and pass the implementation to the function. 
      * Each time data is read from the container, a callback will be triggered, allowing the developer to validate the sender in an external service,
-     * e.g. Developers Application Server or PKI Server
+     * e.g. Developer's Application Server or PKI Server.
      * @param verifier an implementation of the UserVerifierInterface
      * 
      */
