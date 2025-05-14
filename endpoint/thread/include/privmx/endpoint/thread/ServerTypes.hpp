@@ -210,21 +210,6 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV5, core::dynamic::VersionedData
     STRING_FIELD(dio)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(ThreadEmitCustomEventModel)
-    STRING_FIELD(threadId);
-    STRING_FIELD(channel);
-    STRING_FIELD(keyId);
-    VAR_FIELD(data);
-    LIST_FIELD(users, std::string);
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(ThreadCustomEventData)
-    STRING_FIELD(id);
-    STRING_FIELD(keyId);
-    VAR_FIELD(eventData);
-    OBJECT_FIELD(author, core::server::UserIdentity);
-TYPE_END
-
 } // server
 } // thread
 } // endpoint

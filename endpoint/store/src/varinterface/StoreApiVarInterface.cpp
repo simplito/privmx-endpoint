@@ -38,10 +38,7 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
                                        {SubscribeForStoreEvents, &StoreApiVarInterface::subscribeForStoreEvents},
                                        {UnsubscribeFromStoreEvents, &StoreApiVarInterface::unsubscribeFromStoreEvents},
                                        {SubscribeForFileEvents, &StoreApiVarInterface::subscribeForFileEvents},
-                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents},
-                                       {EmitEvent, &StoreApiVarInterface::emitEvent},
-                                       {SubscribeForStoreCustomEvents, &StoreApiVarInterface::subscribeForStoreCustomEvents},
-                                       {UnsubscribeFromStoreCustomEvents, &StoreApiVarInterface::unsubscribeFromStoreCustomEvents}};
+                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents}};
 
 
 
@@ -212,32 +209,6 @@ Poco::Dynamic::Var StoreApiVarInterface::updateFileMeta(const Poco::Dynamic::Var
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "privateMeta");
     _storeApi.updateFileMeta(fileId, publicMeta, privateMeta);
-    return {};
-}
-
-Poco::Dynamic::Var StoreApiVarInterface::emitEvent(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
-    auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "eventData");
-    auto usersIds = _deserializer.deserializeVector<std::string>(argsArr->get(3), "usersIds");
-    _storeApi.emitEvent(storeId, channelName, eventData, usersIds);
-    return {};
-}
-
-Poco::Dynamic::Var StoreApiVarInterface::subscribeForStoreCustomEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    _storeApi.subscribeForStoreCustomEvents(storeId, channelName);
-    return {};
-}
-
-Poco::Dynamic::Var StoreApiVarInterface::unsubscribeFromStoreCustomEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    _storeApi.unsubscribeFromStoreCustomEvents(storeId, channelName);
     return {};
 }
 

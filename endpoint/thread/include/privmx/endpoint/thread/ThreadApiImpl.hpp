@@ -82,10 +82,6 @@ public:
     void unsubscribeFromThreadEvents();
     void subscribeForMessageEvents(std::string threadId);
     void unsubscribeFromMessageEvents(std::string threadId);
-
-    void emitEvent(const std::string& threadId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds);
-    void subscribeForThreadCustomEvents(const std::string& threadId, const std::string& channelName);
-    void unsubscribeFromThreadCustomEvents(const std::string& threadId, const std::string& channelName);
 private:
     std::string _createThreadEx(
         const std::string& contextId, 

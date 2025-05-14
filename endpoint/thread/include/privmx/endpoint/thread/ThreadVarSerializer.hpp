@@ -70,8 +70,6 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadDeletedMessageEventDat
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageDeletedEvent>(const thread::ThreadMessageDeletedEvent& val);
 
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadCustomEvent>(const thread::ThreadCustomEvent& val);
 
 
 }  // namespace core

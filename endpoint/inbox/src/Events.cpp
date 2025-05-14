@@ -39,10 +39,6 @@ std::string InboxEntryDeletedEvent::toJSON() const {
    return core::JsonSerializer<InboxEntryDeletedEvent>::serialize(*this);
 }
 
-std::string InboxCustomEvent::toJSON() const {
-   return core::JsonSerializer<InboxCustomEvent>::serialize(*this);
-}
-
 std::shared_ptr<core::SerializedEvent> InboxCreatedEvent::serialize() const {
    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
@@ -147,23 +143,6 @@ InboxEntryDeletedEvent Events::extractInboxEntryDeletedEvent(const core::EventHo
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-bool Events::isInboxCustomEvent(const core::EventHolder& handler) {
-    return handler.type() == "inboxCustom";
-}
-
-InboxCustomEvent Events::extractInboxCustomEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<InboxCustomEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractInboxCustomEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 
 
 

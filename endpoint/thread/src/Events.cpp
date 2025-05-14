@@ -47,10 +47,6 @@ std::string ThreadStatsChangedEvent::toJSON() const {
     return core::JsonSerializer<ThreadStatsChangedEvent>::serialize(*this);
 }
 
-std::string ThreadCustomEvent::toJSON() const {
-    return core::JsonSerializer<ThreadCustomEvent>::serialize(*this);
-}
-
 std::shared_ptr<core::SerializedEvent> ThreadCreatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }

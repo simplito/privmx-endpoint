@@ -251,42 +251,6 @@ struct ThreadStatsChangedEvent : public core::Event {
 };
 
 /**
- * Holds data of event that arrives when custom thread event is emitted.
- */
-struct ThreadCustomEvent : public core::Event {
-    
-    /**
-     * Event constructor
-     */
-    ThreadCustomEvent() : core::Event("threadCustom") {}
-
-    /**
-     * Get Event as JSON string
-     * 
-     * @return JSON string
-     */
-    std::string toJSON() const override;
-
-    /**
-     * //doc-gen:ignore
-     */
-    std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
-    /**
-     * id of thread from which it was sent
-     */
-    std::string threadId;
-    /**
-     * id of user which sent it
-     */
-    std::string userId;
-    /**
-     * event data
-     */
-    core::Buffer data;
-};
-
-/**
  * 'Events' provides the helpers methods for module's events management.
  */
 class Events {
@@ -414,22 +378,6 @@ public:
      * @return 'ThreadMessageDeletedEvent' object
      */
     static ThreadMessageDeletedEvent extractThreadMessageDeletedEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Checks whether event held in the 'EventHolder' is an 'ThreadCustomEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'ThreadCustomEvent', else otherwise
-     */
-    static bool isThreadCustomEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Gets Event held in the 'EventHolder' as an 'ThreadCustomEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return 'ThreadCustomEvent' object
-     */
-    static ThreadCustomEvent extractThreadCustomEvent(const core::EventHolder& eventHolder);
 };
 
 }  // namespace thread
