@@ -75,8 +75,8 @@ public:
     void removeDisconnectedEventListener(int listener_id);
 
     //
-    void ecdheConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution);
-    void ecdhexConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution);
+    void ecdheConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey);
+    void ecdhexConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey);
     Poco::JSON::Object::Ptr srpConnect(const std::string& username, const std::string& password, GatewayProperties::Ptr properties);
     Poco::JSON::Object::Ptr keyConnect(const crypto::PrivateKey& private_key, GatewayProperties::Ptr properties);
     void sessionConnect(const SessionRestoreOptionsEx& options);

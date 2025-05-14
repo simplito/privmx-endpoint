@@ -53,8 +53,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, UnknowMessageFormatException
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadMessageUpdatedEventException, "Cannot extract ThreadMessageUpdatedEvent", 0x000F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadPublicDataMismatchException, "Thread public data mismatch", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, MessagePublicDataMismatchException, "Message public data mismatch", 0x0011)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadCustomEventException, "Cannot extract ThreadCustomEvent", 0x0013)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ForbiddenChannelNameException, "Forbidden channel name", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadDataIntegrityException, "Failed thread data integrity check", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, MessageDataIntegrityException, "Failed message data integrity check", 0x0015)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadEncryptionKeyValidationException, "Failed Thread encryption key validation", 0x0016)
 
 } // thread
 } // endpoint

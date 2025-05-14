@@ -213,3 +213,9 @@ void StructValidator<LibPlatformDisconnectedEvent>::validate(const LibPlatformDi
     Validator::validateEventType(value, "libPlatformDisconnected", stack_trace + ".type");
 }
 
+void StructValidator<PKIVerificationOptions>::validate(const PKIVerificationOptions& value, const std::string& stack_trace) {
+    if(value.bridgeInstanceId.has_value() && !value.bridgePubKey.has_value()) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PKIVerificationOptions, bridgePubKey cannot be Null, when bridgeInstanceId is not Null"));
+    }
+}
+

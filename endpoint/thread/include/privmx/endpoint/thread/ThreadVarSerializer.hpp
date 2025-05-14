@@ -74,7 +74,6 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadCustomEvent>(const thread::ThreadCustomEvent& val);
 
 
-
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

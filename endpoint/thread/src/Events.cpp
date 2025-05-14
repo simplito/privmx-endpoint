@@ -78,11 +78,6 @@ std::shared_ptr<core::SerializedEvent> ThreadMessageDeletedEvent::serialize() co
 std::shared_ptr<core::SerializedEvent> ThreadStatsChangedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
-
-std::shared_ptr<core::SerializedEvent> ThreadCustomEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
-}
-
 bool Events::isThreadCreatedEvent(const core::EventHolder& handler) {
     return handler.type() == "threadCreated";
 }
@@ -186,6 +181,10 @@ ThreadMessageUpdatedEvent Events::extractThreadMessageUpdatedEvent(const core::E
 }
 
 bool Events::isThreadDeletedMessageEvent(const core::EventHolder& handler) {
+    return isThreadMessageDeletedEvent(handler);
+}
+
+bool Events::isThreadMessageDeletedEvent(const core::EventHolder& handler) {
     return handler.type() == "threadMessageDeleted";
 }
 
@@ -194,23 +193,6 @@ ThreadMessageDeletedEvent Events::extractThreadMessageDeletedEvent(const core::E
         auto event = std::dynamic_pointer_cast<ThreadMessageDeletedEvent>(handler.get());
         if (!event) {
             throw CannotExtractThreadDeletedMessageEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-bool Events::isThreadCustomEvent(const core::EventHolder& handler) {
-    return handler.type() == "threadCustom";
-}
-
-ThreadCustomEvent Events::extractThreadCustomEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadCustomEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractThreadCustomEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

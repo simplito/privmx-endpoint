@@ -68,6 +68,11 @@ struct File {
      * status code of retrieval and decryption of the file
      */
     int64_t statusCode;
+
+    /**
+     * Version of the file data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 
@@ -150,6 +155,11 @@ struct Store {
      * status code of retrieval and decryption of the Store
      */
     int64_t statusCode;
+
+    /**
+     * Version of the Store data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 

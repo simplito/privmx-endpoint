@@ -17,6 +17,9 @@ limitations under the License.
 #include "privmx/endpoint/core/VarDeserializer.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
 #include "privmx/endpoint/crypto/CryptoApi.hpp"
+#include "privmx/endpoint/crypto/CryptoVarSerializer.hpp"
+#include "privmx/endpoint/crypto/varinterface/ExtKeyVarInterface.hpp"
+#include "privmx/endpoint/core/VarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -36,6 +39,13 @@ public:
         DecryptDataSymmetric = 8,
         ConvertPEMKeytoWIFKey = 9,
         VerifySignature = 10,
+        GenerateBip39 = 11,
+        FromMnemonic = 12,
+        FromEntropy = 13,
+        EntropyToMnemonic = 14,
+        MnemonicToEntropy = 15,
+        MnemonicToSeed = 16,
+        ConvertPGPAsn1KeyToBase58DERKey = 17
     };
 
     CryptoApiVarInterface(const core::VarSerializer& serializer)
@@ -51,10 +61,22 @@ public:
     Poco::Dynamic::Var generateKeySymmetric(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var encryptDataSymmetric(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var decryptDataSymmetric(const Poco::Dynamic::Var& args);
-
     Poco::Dynamic::Var convertPEMKeytoWIFKey(const Poco::Dynamic::Var& args);
 
+    Poco::Dynamic::Var generateBip39(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var fromMnemonic(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var fromEntropy(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var entropyToMnemonic(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var mnemonicToEntropy(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var mnemonicToSeed(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var convertPGPAsn1KeyToBase58DERKey(const Poco::Dynamic::Var& args);
+
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+
+    const core::VarSerializer::Options& getSerializerOptions() const {
+        return _serializer.getOptions();
+    }
+
 
 private:
     static std::map<METHOD, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;

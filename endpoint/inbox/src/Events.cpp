@@ -63,10 +63,6 @@ std::shared_ptr<core::SerializedEvent> InboxEntryDeletedEvent::serialize() const
    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<core::SerializedEvent> InboxCustomEvent::serialize() const {
-   return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
-}
-
 bool Events::isInboxCreatedEvent(const privmx::endpoint::core::EventHolder& eventHolder) {
     return eventHolder.type() == "inboxCreated";
 }
@@ -167,5 +163,8 @@ InboxCustomEvent Events::extractInboxCustomEvent(const core::EventHolder& handle
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
+
+
+
 
 

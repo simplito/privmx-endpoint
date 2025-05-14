@@ -46,9 +46,6 @@ public:
         UnsubscribeFromStoreEvents = 18,
         SubscribeForFileEvents = 19,
         UnsubscribeFromFileEvents = 20,
-        EmitEvent = 21,
-        SubscribeForStoreCustomEvents = 22,
-        UnsubscribeFromStoreCustomEvents = 23
     };
 
     StoreApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)

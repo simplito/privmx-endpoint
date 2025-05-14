@@ -35,8 +35,16 @@ class ConnectionClient : public ConnectionBase
 public:
     ConnectionClient(std::ostream& output, TicketsManager& tickets_manager, const ConnectionOptionsFull& options);
     void processHandshakePacket(const Poco::Dynamic::Var& packet) override;
-    void ecdheHandshake(const crypto::PrivateKey& key = crypto::PrivateKey::generateRandom(), const std::optional<std::string>& solution = std::nullopt);
-    void ecdhexHandshake(const crypto::PrivateKey& key, const std::optional<std::string>& solution);
+    void ecdheHandshake(
+        const crypto::PrivateKey& key = crypto::PrivateKey::generateRandom(),
+        const std::optional<std::string>& solution = std::nullopt, 
+        const std::optional<crypto::PublicKey>& serverPubKey = std::nullopt
+    );
+    void ecdhexHandshake(
+        const crypto::PrivateKey& key,
+        const std::optional<std::string>& solution, 
+        const std::optional<crypto::PublicKey>& serverPubKey
+    );
     void srpHandshake(const std::string& hashmail, const std::string& password, Poco::Int32 tickets = 1);
     void srpHandshake2(const std::string& username, const std::string& host, const std::string& password, Poco::Int32 tickets = 1, GatewayProperties::Ptr properties = nullptr);
     void keyHandshake(const std::string& private_key_buf, Poco::Int32 tickets = 1, const Poco::Dynamic::Var& properties = Poco::JSON::Object::Ptr(new Poco::JSON::Object()));
@@ -64,6 +72,7 @@ public:
 private:
     virtual std::string getClientAgent();
     void extractServerConfig(const Poco::Dynamic::Var& packet);
+    void extractAndValidateChallenge(const Poco::Dynamic::Var& packet) ;
 
     TicketsManager& _tickets_manager;
     Pson::Encoder _pson_encoder;
@@ -81,6 +90,11 @@ private:
     ConnectionOptionsFull _options;
     std::string _host;
     ServerConfig _serverConfig;
+    // Challenge
+    std::optional<crypto::PublicKey> _serverPubKey;
+    std::string _serverChallenge;
+    
+    static constexpr int64_t ALLOWED_TIME_DIFFERENCE_BETWEEN_SERVER_AND_CLIENT = 150*1000; // in ms
 };
 
 } // rpc

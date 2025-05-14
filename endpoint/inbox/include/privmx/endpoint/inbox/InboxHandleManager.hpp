@@ -41,6 +41,7 @@ struct CommitSendInfo {
 struct InboxHandle {
     const int64_t id;
     std::string inboxId;
+    std::string inboxResourceId;
     std::string data;
     std::vector<std::shared_ptr<store::FileWriteHandle>> inboxFileHandles;
     std::optional<std::string> userPrivKey;
@@ -53,6 +54,7 @@ public:
     InboxHandleManager(std::shared_ptr<core::HandleManager> handleManager);
     std::shared_ptr<InboxHandle> createInboxHandle(
         const std::string& inboxId,
+        const std::string& inboxResourceId,
         const std::string& data,
         const std::vector<int64_t>& inboxFileHandles,
         std::optional<std::string> userPrivKey

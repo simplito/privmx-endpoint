@@ -44,6 +44,7 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
                                        {UnsubscribeFromStoreCustomEvents, &StoreApiVarInterface::unsubscribeFromStoreCustomEvents}};
 
 
+
 Poco::Dynamic::Var StoreApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
     _storeApi = StoreApi::create(_connection);
