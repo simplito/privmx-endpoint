@@ -186,7 +186,6 @@ Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val) {
     return obj;
 }
 
-
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();

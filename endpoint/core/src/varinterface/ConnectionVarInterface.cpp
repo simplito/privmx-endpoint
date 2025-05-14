@@ -22,7 +22,8 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
                                          {GetConnectionId, &ConnectionVarInterface::getConnectionId},
                                          {ListContexts, &ConnectionVarInterface::listContexts},
                                          {Disconnect, &ConnectionVarInterface::disconnect},
-                                         {GetContextUsers, &ConnectionVarInterface::getContextUsers}};
+                                         {GetContextUsers, &ConnectionVarInterface::getContextUsers}
+                                        };
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
     auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3, 4);

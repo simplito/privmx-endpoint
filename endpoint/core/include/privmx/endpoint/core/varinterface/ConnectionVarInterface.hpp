@@ -30,7 +30,8 @@ public:
         GetConnectionId = 2,
         ListContexts = 3,
         Disconnect = 4,
-        GetContextUsers = 5
+        GetContextUsers = 5,
+        SetUserVerifier = 6
     };
     
 
