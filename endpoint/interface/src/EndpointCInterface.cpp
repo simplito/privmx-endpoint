@@ -70,7 +70,7 @@ int privmx_endpoint_setUserVerifier(Connection* ptr, privmx_user_verifier verifi
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
         return _ptr->setUserVerifier(
             [verifier](const Poco::Dynamic::Var& request) {
-                pson_value* res;
+                pson_value* res = nullptr;
                 pson_value* args = (pson_value*)(new Poco::Dynamic::Var(request)); // alock memory
                 try {
                     verifier(args, &res);
