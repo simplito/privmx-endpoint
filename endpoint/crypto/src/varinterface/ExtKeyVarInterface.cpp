@@ -49,7 +49,8 @@ Poco::Dynamic::Var ExtKeyVarInterface::fromBase58(const Poco::Dynamic::Var& args
     auto base58 = _deserializer.deserialize<std::string>(argsArr->get(0), "base58");
     auto extKey = crypto::ExtKey::fromBase58(base58);
     auto service = new ExtKeyVarInterface(extKey, getSerializerOptions());
-    return (int64_t)service;}
+    return (int64_t)service;
+}
 
 Poco::Dynamic::Var ExtKeyVarInterface::generateRandom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 0);
