@@ -73,8 +73,34 @@ int privmx_endpoint_setUserVerifier(Connection* ptr, privmx_user_verifier verifi
         return _ptr->setUserVerifier(
             [verifier](const Poco::Dynamic::Var& request) {
                 pson_value* res;
-                verifier((pson_value*)(new Poco::Dynamic::Var(request)), &res);
+                pson_value* args = (pson_value*)(new Poco::Dynamic::Var(request)); // alock memory
+                try {
+                    verifier(args, &res);
+                } catch (...) {
+                    //memory leeks protection
+                    if(args != nullptr) { // free args memory
+                        delete (Poco::Dynamic::Var*)args; 
+                        args = nullptr;
+                    }
+                    if(res != nullptr) { // free res memory
+                        pson_free_value(res); 
+                        res = nullptr;
+                    }
+                    // rethrow captured exception
+                    std::exception_ptr e_ptr = std::current_exception();
+                    if(e_ptr) {
+                        std::rethrow_exception(e_ptr);
+                    }
+                }
+                if(args != nullptr) { // free args memory
+                    delete (Poco::Dynamic::Var*)args;
+                    args = nullptr;
+                }
                 const Poco::Dynamic::Var resVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(res));
+                if(res != nullptr) { // free res memory
+                    pson_free_value(res); 
+                    res = nullptr;
+                }
                 return resVal;
             }
         );
