@@ -22,6 +22,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/UserVerifierInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -121,6 +122,12 @@ Poco::Dynamic::Var VarSerializer::serialize<UserWithPubKey>(const UserWithPubKey
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const VerificationRequest& val);
 
 }  // namespace core
 }  // namespace endpoint
