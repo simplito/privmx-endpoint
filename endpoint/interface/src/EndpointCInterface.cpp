@@ -65,6 +65,46 @@ int privmx_endpoint_freeConnection(Connection* ptr) {
     return 1;
 }
 
+int privmx_endpoint_setUserVerifier(Connection* ptr, privmx_user_verifier verifier, pson_value** res) {
+    return CApiExecutor::execFunc(res, [&]{
+        core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
+        return _ptr->setUserVerifier(
+            [verifier](const Poco::Dynamic::Var& request) {
+                pson_value* res;
+                pson_value* args = (pson_value*)(new Poco::Dynamic::Var(request)); // alock memory
+                try {
+                    verifier(args, &res);
+                } catch (...) {
+                    //memory leeks protection
+                    if(args != nullptr) { // free args memory
+                        delete (Poco::Dynamic::Var*)args; 
+                        args = nullptr;
+                    }
+                    if(res != nullptr) { // free res memory
+                        pson_free_value(res); 
+                        res = nullptr;
+                    }
+                    // rethrow captured exception
+                    std::exception_ptr e_ptr = std::current_exception();
+                    if(e_ptr) {
+                        std::rethrow_exception(e_ptr);
+                    }
+                }
+                if(args != nullptr) { // free args memory
+                    delete (Poco::Dynamic::Var*)args;
+                    args = nullptr;
+                }
+                const Poco::Dynamic::Var resVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(res));
+                if(res != nullptr) { // free res memory
+                    pson_free_value(res); 
+                    res = nullptr;
+                }
+                return resVal;
+            }
+        );
+    });
+}
+
 int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value* args, pson_value** res) {
     return CApiExecutor::execFunc(res, [&]{
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
