@@ -58,6 +58,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::Inbox>(const inbox::Inbox& va
     obj->set("lastModifier", serialize(val.lastModifier));
     obj->set("users", serialize(val.users));
     obj->set("managers", serialize(val.managers));
+    obj->set("shemaVersion", serialize(val.shemaVersion));
     obj->set("version", serialize(val.version));
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
@@ -89,6 +90,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntry>(const inbox::Inbo
     obj->set("files", serialize(val.files));
     obj->set("authorPubKey", serialize(val.authorPubKey));
     obj->set("createDate", serialize(val.createDate));
+    obj->set("shemaVersion", serialize(val.shemaVersion));
     return obj;
 }
 
