@@ -22,9 +22,11 @@ namespace thread {
 
 class ThreadProvider : public core::ContainerProvider<std::string, server::ThreadInfo> {
 public:
-    ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread);
-    void updateByValue(const server::ThreadInfo& container) override;
+    ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread, std::function<uint32_t(server::ThreadInfo)> validateThread);
     void updateStats(const server::ThreadStatsEventData& stats);
+protected:
+    bool isNewerOrSameAsInStorage(const server::ThreadInfo& container) override;
+    inline std::string getID(const server::ThreadInfo& container) override {return container.id();}
 };
 
 } // thread

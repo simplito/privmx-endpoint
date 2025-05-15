@@ -71,11 +71,6 @@ template<>
 PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    std::optional<std::string> query;
-    auto tmp = deserializeOptional<Poco::JSON::Object::Ptr>(obj->get("query"), name + ".query");
-    if(tmp.has_value()) {
-        query = privmx::utils::Utils::stringify(tmp.value());
-    }
     return {.skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),
             .limit = deserialize<int64_t>(obj->get("limit"), name + ".limit"),
             .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
@@ -128,3 +123,12 @@ ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynami
     return result;
 }
 
+template<>
+PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    PKIVerificationOptions result {};
+    result.bridgePubKey = deserializeOptional<std::string>(obj->get("bridgePubKey"), name + ".get");
+    result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".update");
+    return result;
+}

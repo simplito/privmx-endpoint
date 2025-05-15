@@ -408,6 +408,7 @@ TEST_F(StoreTest, createStore) {
             storeId
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.publicMeta.stdString(), "public");
     EXPECT_EQ(store.privateMeta.stdString(), "private");
@@ -444,6 +445,7 @@ TEST_F(StoreTest, createStore) {
             storeId
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.publicMeta.stdString(), "public");
     EXPECT_EQ(store.privateMeta.stdString(), "private");
@@ -591,6 +593,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_1.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_1.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 2);
@@ -641,6 +644,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_1.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_1.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 3);
@@ -688,6 +692,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_2.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_2.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 2);
@@ -730,6 +735,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_2.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_2.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 3);
@@ -771,6 +777,7 @@ TEST_F(StoreTest, updateStore_correct_data) {
             reader->getString("Store_3.storeId")
         );
     });
+    EXPECT_EQ(store.statusCode, 0);
     EXPECT_EQ(store.storeId, reader->getString("Store_3.storeId"));
     EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(store.version, 2);
@@ -1403,15 +1410,17 @@ TEST_F(StoreTest, createFile_writeToFile_closeFile) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 1024*1024*128);
-                int64_t readHandle;
-                EXPECT_NO_THROW({
-                    readHandle = storeApi->openFile(fileId);
-                });
+
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 1024*1024*128);
+            int64_t readHandle = 0;
+            EXPECT_NO_THROW({
+                readHandle = storeApi->openFile(fileId);
+            });
+            if(readHandle != 0) {
                 std::string total_data_read = "";
                 for(int i = 0; i < 1024*128; i++) {
                     total_data_read += storeApi->readFromFile(
@@ -1498,15 +1507,17 @@ TEST_F(StoreTest, updateFile_writeToFile_closeFile) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 1024*1024*128);
-                int64_t readHandle;
-                EXPECT_NO_THROW({
-                    readHandle = storeApi->openFile(fileId);
-                });
+            
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 1024*1024*128);
+            int64_t readHandle = 0;
+            EXPECT_NO_THROW({
+                readHandle = storeApi->openFile(fileId);
+            });
+            if(readHandle != 0) {
                 std::string total_data_read = "";
                 for(int i = 0; i < 1024*128; i++) {
                     total_data_read += storeApi->readFromFile(
@@ -1555,12 +1566,11 @@ TEST_F(StoreTest, createFile_with_size_0) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 0);
-            }
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 0);
         } else {
             std::cout << "closeFile Failed" << std::endl;
             FAIL();
@@ -1596,12 +1606,11 @@ TEST_F(StoreTest, updateFile_with_size_0) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 0);
-            }
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 0);
         } else {
             std::cout << "closeFile Failed" << std::endl;
             FAIL();
@@ -1634,12 +1643,11 @@ TEST_F(StoreTest, updateFileMeta) {
     EXPECT_NO_THROW({
         file = storeApi->getFile(reader->getString("File_1.info_fileId"));
     });
-    if(!file.info.fileId.empty()) {
-        EXPECT_EQ(file.info.fileId, reader->getString("File_1.info_fileId"));
-        EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-        EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-        EXPECT_EQ(file.size, reader->getInt64("File_1.size"));
-    }
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.info.fileId, reader->getString("File_1.info_fileId"));
+    EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+    EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(file.size, reader->getInt64("File_1.size"));
 }
 
 TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {

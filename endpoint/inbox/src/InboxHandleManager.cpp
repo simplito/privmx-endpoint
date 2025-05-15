@@ -22,6 +22,7 @@ InboxHandleManager::InboxHandleManager(std::shared_ptr<core::HandleManager> hand
 
 std::shared_ptr<InboxHandle> InboxHandleManager::createInboxHandle(
     const std::string& inboxId,
+    const std::string& inboxResourceId,
     const std::string& data,
     const std::vector<int64_t>& inboxFileHandles,
     std::optional<std::string> userPrivKey
@@ -36,6 +37,7 @@ std::shared_ptr<InboxHandle> InboxHandleManager::createInboxHandle(
     std::shared_ptr<InboxHandle> result = std::make_shared<InboxHandle>(InboxHandle{
         .id=id, 
         .inboxId=inboxId, 
+        .inboxResourceId=inboxResourceId, 
         .data=data, 
         .inboxFileHandles=fileHandles, 
         .userPrivKey=userPrivKey
@@ -109,7 +111,7 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandl
         uint64_t serverRequestChunkSize,
         std::shared_ptr<store::RequestApi> requestApi
 ) {
-    return _fileHandleManager.createFileWriteHandle(storeId, fileId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
+    return _fileHandleManager.createFileWriteHandle(storeId, fileId, std::string(), size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
 }
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {
@@ -130,7 +132,7 @@ std::shared_ptr<store::FileReadHandle> InboxHandleManager::createFileReadHandle(
         const std::string& fileHmac,
         std::shared_ptr<store::ServerApi> server
 ) {
-    return _fileHandleManager.createFileReadHandle(fileId, fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
+    return _fileHandleManager.createFileReadHandle(fileId, std::string(), fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
 }
 bool InboxHandleManager::isFileReadHandle(int64_t fileHandleId) {
     auto fileHandle = _fileHandleManager.getFileHandle(fileHandleId);

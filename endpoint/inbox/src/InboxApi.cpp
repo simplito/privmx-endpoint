@@ -31,6 +31,7 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
     std::shared_ptr<store::RequestApi> requestApi {new store::RequestApi(connectionImpl->getGateway())};
     std::shared_ptr<ServerApi> serverApi {new ServerApi(connectionImpl->getGateway())};;
     std::shared_ptr<InboxApiImpl> impl(new InboxApiImpl(
+        connection,
         threadApi,
         storeApi,
         connectionImpl->getKeyProvider(),
@@ -302,39 +303,6 @@ void InboxApi::unsubscribeFromEntryEvents(const std::string& inboxId) {
     core::Validator::validateId(inboxId, "field:inboxId ");
     try {
         return _impl->unsubscribeFromEntryEvents(inboxId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::emitEvent(const std::string& inboxId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->emitEvent(inboxId, channelName, eventData, usersIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::subscribeForInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->subscribeForInboxCustomEvents(inboxId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::unsubscribeFromInboxCustomEvents(const std::string& inboxId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->unsubscribeFromInboxCustomEvents(inboxId, channelName);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
