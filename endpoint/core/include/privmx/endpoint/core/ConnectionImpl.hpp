@@ -89,6 +89,7 @@ public:
 
 
 private:
+    void assertServerVersion();
     std::string generateDIORandomId();
     DataIntegrityObject createDIOExt(
         const std::string& contextId, 

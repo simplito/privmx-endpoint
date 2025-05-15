@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Constants.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -66,6 +67,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
+        assertServerVersion();
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
         std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
@@ -118,6 +120,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
+        assertServerVersion();
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
         std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
@@ -245,4 +248,11 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .containerResourceId = containerResourceId,
         .bridgeIdentity = _bridgeIdentity
     };
+}
+
+void ConnectionImpl::assertServerVersion() {
+    if(_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {
+        disconnect();
+        throw OldBridgeVersionException("Bridge version is " + (std::string)_serverConfig.serverVersion + " minimal required to work is " + MINIMUM_REQUIRED_BRIDGE_VERSION);
+    }
 }
