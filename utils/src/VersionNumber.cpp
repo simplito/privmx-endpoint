@@ -20,7 +20,7 @@ VersionNumber::VersionNumber(): _versionStr("unknown"), _versionInfo(std::vector
 VersionNumber::VersionNumber(const std::string& versionStr): _versionStr(versionStr) {
     std::regex versionRegex("^(?:(\\d+)\\.)+(\\d+)$");
     if(!std::regex_match(versionStr, versionRegex)) {
-        throw InvalidVersionFormatException();
+        throw InvalidVersionFormatException(versionStr);
     }
     // To Make processing easier in VersionDigit prepend a '.'
     std::stringstream versionStream(std::string(".") + versionStr);

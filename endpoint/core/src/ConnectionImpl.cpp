@@ -67,7 +67,6 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
-        assertServerVersion();
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
         std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
@@ -82,6 +81,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -120,7 +120,6 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     if (_gateway->isConnected()) {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
         _eventMiddleware->emitApiEvent(event);
-        assertServerVersion();
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
         std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
@@ -135,6 +134,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -253,6 +253,10 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
 void ConnectionImpl::assertServerVersion() {
     if(_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {
         disconnect();
-        throw OldBridgeVersionException("Bridge version is " + (std::string)_serverConfig.serverVersion + " minimal required to work is " + MINIMUM_REQUIRED_BRIDGE_VERSION);
+        throw ServerVersionMismatchException(
+            "Bridge Server current version: " + (std::string)_serverConfig.serverVersion + "\n" +
+            "PrivMX Ednpoint library current version: " + ENDPOINT_VERSION + "\n"
+            "Bridge Server minimal expected version: " + MINIMUM_REQUIRED_BRIDGE_VERSION
+        );
     }
 }
