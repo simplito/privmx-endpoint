@@ -29,6 +29,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/varinterface/ThreadApiVarInterface.hpp"
 #include "privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp"
 #include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
+#include "privmx/endpoint/kvdb/varinterface/KvdbApiVarInterface.hpp"
 #include "privmx/endpoint/crypto/varinterface/CryptoApiVarInterface.hpp"
 #include "privmx/endpoint/crypto/varinterface/ExtKeyVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/UtilsVarInterface.hpp"
@@ -193,6 +194,26 @@ int privmx_endpoint_execInboxApi(InboxApi* ptr, int method, const pson_value* ar
         inbox::InboxApiVarInterface* _ptr = (inbox::InboxApiVarInterface*)ptr;
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((inbox::InboxApiVarInterface::METHOD)method, argsVal);
+    });
+}
+
+int privmx_endpoint_newKvdbApi(Connection* connectionPtr, KvdbApi** outPtr) {
+    core::ConnectionVarInterface* _connectionPtr = (core::ConnectionVarInterface*)connectionPtr;
+    kvdb::KvdbApiVarInterface* ptr = new kvdb::KvdbApiVarInterface(_connectionPtr->getApi(), core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    *outPtr = (KvdbApi*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_freeKvdbApi(KvdbApi* ptr) {
+    delete (kvdb::KvdbApiVarInterface*)ptr;
+    return 1;
+}
+
+int privmx_endpoint_execKvdbApi(KvdbApi* ptr, int method, const pson_value* args, pson_value** res) {
+    return CApiExecutor::execFunc(res, [&]{
+        kvdb::KvdbApiVarInterface* _ptr = (kvdb::KvdbApiVarInterface*)ptr;
+        const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
+        return _ptr->exec((kvdb::KvdbApiVarInterface::METHOD)method, argsVal);
     });
 }
 
