@@ -45,6 +45,12 @@ int privmx_endpoint_newInboxApi(Connection* connectionPtr, ThreadApi* threadApi,
 int privmx_endpoint_freeInboxApi(InboxApi* ptr);
 int privmx_endpoint_execInboxApi(InboxApi* ptr, int method, const pson_value* args, pson_value** res);
 
+typedef struct KvdbApi KvdbApi;
+
+int privmx_endpoint_newKvdbApi(Connection* connectionPtr, KvdbApi** outPtr);
+int privmx_endpoint_freeKvdbApi(KvdbApi* ptr);
+int privmx_endpoint_execKvdbApi(KvdbApi* ptr, int method, const pson_value* args, pson_value** res);
+
 typedef struct CryptoApi CryptoApi;
 
 int privmx_endpoint_newCryptoApi(CryptoApi** outPtr);
