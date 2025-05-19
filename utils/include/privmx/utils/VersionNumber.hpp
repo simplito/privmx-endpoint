@@ -16,24 +16,11 @@ limitations under the License.
 #include <sstream>
 #include <vector>
 #include <iterator>
-
+#include <optional>
 namespace privmx {
 namespace utils {
 
 class VersionNumber {
-private:
-    std::string _versionStr;
-    std::vector<size_t> _versionInfo;
-    // An internal utility structure just used to make the std::copy in the constructor easy to write.
-    struct VersionDigit{
-        size_t value;
-        operator size_t() const {return value;}
-    };
-    friend std::istream& operator>>(std::istream& str, VersionNumber::VersionDigit& digit) {
-        str.get();
-        str >> digit.value;
-        return str;
-    }
 public:
     VersionNumber();
     VersionNumber(const std::string& versionStr);
@@ -41,6 +28,12 @@ public:
     bool operator>(VersionNumber const& rhs) const;
     bool operator==(VersionNumber const& rhs) const;
     operator std::string() const {return _versionStr;}
+private:
+    std::string _versionStr;
+    size_t _major;
+    size_t _minor;
+    std::optional<size_t> _build;
+    std::optional<std::string> _comment;
 };
 
 } // utils

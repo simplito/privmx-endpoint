@@ -11,43 +11,87 @@ limitations under the License.
 
 #include "privmx/utils/VersionNumber.hpp"
 #include "privmx/utils/PrivmxExtExceptions.hpp"
+#include "privmx/utils/Utils.hpp"
 #include <regex>
 
 using namespace privmx;
 using namespace privmx::utils;
 
-VersionNumber::VersionNumber(): _versionStr("unknown"), _versionInfo(std::vector<size_t>({})) {}
+VersionNumber::VersionNumber(): _versionStr("unknown"), _major(0), _minor(0) {}
 VersionNumber::VersionNumber(const std::string& versionStr): _versionStr(versionStr) {
-    std::regex versionRegex("^(?:(\\d+)\\.)+(\\d+)$");
+    std::regex versionRegex("^(\\d+\\.)(\\d+)(\\.)?(\\*|\\d+[0-9a-zA-Z\\-\\_]*)?$");
     if(!std::regex_match(versionStr, versionRegex)) {
         throw InvalidVersionFormatException(versionStr);
     }
     // To Make processing easier in VersionDigit prepend a '.'
-    std::stringstream versionStream(std::string(".") + versionStr);
-
-    // Copy all parts of the version number into the version Info vector.
-    std::copy(
-        std::istream_iterator<VersionDigit>(versionStream),
-        std::istream_iterator<VersionDigit>(),
-        std::back_inserter(_versionInfo)
-    );
+    try {
+        auto tmp = privmx::utils::Utils::split(versionStr, ".");
+        _major = std::stoul(tmp[0]);
+        _minor = std::stoul(tmp[1]);
+        if(tmp.size() == 3 && tmp[2] != "*") {
+            size_t pos;
+            _build = std::stoul(tmp[2], &pos);
+            if(pos != tmp[2].length()) {
+                _comment = tmp[2].substr(pos);
+            }
+        }
+    } catch (...) {
+        throw InvalidVersionFormatException(versionStr);
+    }
 }
 
 bool VersionNumber::operator<(VersionNumber const& rhs) const {
-    return std::lexicographical_compare(_versionInfo.begin(), _versionInfo.end(), rhs._versionInfo.begin(), rhs._versionInfo.end());
-} 
-bool VersionNumber::operator>(VersionNumber const& rhs) const {
-    return std::lexicographical_compare(rhs._versionInfo.begin(), rhs._versionInfo.end(), _versionInfo.begin(), _versionInfo.end());
-}
-bool VersionNumber::operator==(VersionNumber const& rhs) const {
-    if(rhs._versionInfo.size() != _versionInfo.size()) {
-        return false;
-    }
-    for(size_t i = 0; i < _versionInfo.size(); i++) {
-        if(rhs._versionInfo[i] != _versionInfo[i]) {
-            return false;
+    if(_major < rhs._major) {
+        return true;
+    } else if(_major == rhs._major) {
+        if(_minor < rhs._minor) {
+            return true;
+        } else if(_minor == rhs._minor) {
+            if(!_build.has_value() || (rhs._build.has_value() && _build.value() < rhs._build.value())) {
+                return true;
+            } else if(_build.has_value() && rhs._build.has_value() && _build.value() == rhs._build.value()) {
+                if(_comment.has_value() && rhs._comment.has_value()) {
+                    return std::lexicographical_compare(_comment.value().begin(), _comment.value().end(), rhs._comment.value().begin(), rhs._comment.value().end());
+                } else if(_comment.has_value()) {
+                    return true;
+                }
+            }
         }
     }
-    return true;
+    return false;
+} 
+bool VersionNumber::operator>(VersionNumber const& rhs) const {
+    if(_major > rhs._major) {
+        return true;
+    } else if(_major == rhs._major) {
+        if(_minor > rhs._minor) {
+            return true;
+        } else if(_minor == rhs._minor) {
+            if(!rhs._build.has_value() || (rhs._build.has_value() && _build.value() > rhs._build.value())) {
+                return true;
+            } else if(_build.has_value() && rhs._build.has_value() && _build.value() == rhs._build.value()) {
+                if(_comment.has_value() && rhs._comment.has_value()) {
+                    return std::lexicographical_compare(rhs._comment.value().begin(), rhs._comment.value().end(), _comment.value().begin(), _comment.value().end());
+                } else if(rhs._comment.has_value()) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+bool VersionNumber::operator==(VersionNumber const& rhs) const {
+    if (_major == rhs._major && _minor == rhs._minor) {
+        if (_build.has_value() && rhs._build.has_value() && _build == rhs._build) {
+            if (_comment.has_value() && rhs._comment.has_value() && _comment == rhs._comment) {
+                return true;
+            } else if (!_comment.has_value() && !rhs._comment.has_value()) {
+                return true;
+            }
+        } else if (!_build.has_value() && !rhs._build.has_value()) {
+            return true;
+        }
+    }
+    return false;
 }
 
