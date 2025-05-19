@@ -113,7 +113,7 @@ public:
     /**
      * Removes all trailing whitespace.
      *
-     * @param data 
+     * @param data string to trim
      * 
      * @return copy of string with removed trailing whitespace.
      */
@@ -138,7 +138,7 @@ public:
     /**
      * Removes all whitespace from the right of given string.
      *
-     * @param data string to check
+     * @param data reference to string
      */
     static void rtrim(std::string& data);
 };
