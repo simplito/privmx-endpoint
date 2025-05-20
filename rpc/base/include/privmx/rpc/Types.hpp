@@ -20,6 +20,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/utils/TypedObject.hpp>
 #include <privmx/utils/TypesMacros.hpp>
+#include <privmx/utils/VersionNumber.hpp>
 #include <privmx/rpc/channel/WebSocketChannel.hpp>
 
 namespace privmx {
@@ -43,6 +44,7 @@ using AdditionalLoginStepCallback = std::function<void(Poco::Dynamic::Var, Secon
 
 struct ServerConfig {
     size_t requestChunkSize;
+    privmx::utils::VersionNumber serverVersion;
 };
 
 struct ConnectionInfo
