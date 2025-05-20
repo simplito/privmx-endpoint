@@ -40,7 +40,7 @@ VersionNumber::VersionNumber(const std::string& versionStr): _versionStr(version
     }
 }
 
-bool VersionNumber::operator<(VersionNumber const& rhs) const {
+bool VersionNumber::operator<(const VersionNumber& rhs) const {
     if(_major < rhs._major) {
         return true;
     } else if(_major == rhs._major) {
@@ -60,26 +60,11 @@ bool VersionNumber::operator<(VersionNumber const& rhs) const {
     }
     return false;
 } 
-bool VersionNumber::operator>(VersionNumber const& rhs) const {
-    if(_major > rhs._major) {
-        return true;
-    } else if(_major == rhs._major) {
-        if(_minor > rhs._minor) {
-            return true;
-        } else if(_minor == rhs._minor) {
-            if(!rhs._build.has_value() || (rhs._build.has_value() && _build.value() > rhs._build.value())) {
-                return true;
-            } else if(_build.has_value() && rhs._build.has_value() && _build.value() == rhs._build.value()) {
-                if(_comment.has_value() && rhs._comment.has_value()) {
-                    return std::lexicographical_compare(rhs._comment.value().begin(), rhs._comment.value().end(), _comment.value().begin(), _comment.value().end());
-                } else if(rhs._comment.has_value()) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
+
+bool VersionNumber::operator>(const VersionNumber& rhs) const {
+    return rhs.operator<(*this);
 }
+
 bool VersionNumber::operator==(VersionNumber const& rhs) const {
     if (_major == rhs._major && _minor == rhs._minor) {
         if (_build.has_value() && rhs._build.has_value() && _build == rhs._build) {
