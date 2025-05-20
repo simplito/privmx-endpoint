@@ -75,16 +75,25 @@ TEST(VersionNumber, Comparator) {
         VersionNumber("1.1.1"),
     };
     for(size_t i = 0; i < testVersionsSorted.size(); i++) {
-        EXPECT_TRUE(testVersionsSorted[i] == testVersionsSorted[i]);
+        for(size_t j = 0; j < testVersionsSorted.size(); j++) {
+            if(i == j) {
+                EXPECT_TRUE(testVersionsSorted[i] == testVersionsSorted[i]);
+            } else {
+                EXPECT_FALSE(testVersionsSorted[i] == testVersionsSorted[j]);
+            }
+        }
     }
+
     for(size_t i = 0; i < testVersionsSorted.size(); i++) {
         for(size_t j = i+1; j < testVersionsSorted.size(); j++) {
             EXPECT_TRUE(testVersionsSorted[i] < testVersionsSorted[j]);
+            EXPECT_FALSE(testVersionsSorted[j] < testVersionsSorted[i]);
         }
     }
     for(size_t i = 1; i < testVersionsSorted.size(); i++) {
         for(int j = i-1; j >= 0; j--) {
             EXPECT_TRUE(testVersionsSorted[i] > testVersionsSorted[j]);
+            EXPECT_FALSE(testVersionsSorted[j] > testVersionsSorted[i]);
         }
     }
 }
