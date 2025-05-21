@@ -22,3 +22,7 @@ if(PRIVMX_WERROR)
     target_compile_options(privmxendpointkvdb PRIVATE -Werror)
 endif()
 set_target_properties(privmxendpointkvdb PROPERTIES COMPILE_DEFINITIONS "MINIMAL_BUILD")
+
+if(PRIVMX_BUILD_ENDPOINT_INTERFACE)
+    add_subdirectory(cinterface)
+endif(PRIVMX_BUILD_ENDPOINT_INTERFACE)
