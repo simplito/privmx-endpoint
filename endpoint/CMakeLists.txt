@@ -26,7 +26,6 @@ endif()
 
 option(PRIVMX_BUILD_ENDPOINT_INTERFACE "Build endpoint interface" OFF)
 if(PRIVMX_BUILD_ENDPOINT_INTERFACE)
-    # add_subdirectory(interface)
     add_subdirectory(interface/core)
     add_subdirectory(interface/event)
     add_subdirectory(interface/thread)
