@@ -14,103 +14,125 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 
-SubscriptionHelper::SubscriptionHelper(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& elementName) : 
+SubscriptionHelper::SubscriptionHelper(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& entryName) : 
     _eventChannelManager(eventChannelManager), 
     _moduleName(moduleName), 
-    _elementName(elementName),
-    _moduleFlag(false), 
+    _entryName(entryName),
     _subscriptionMap(utils::ThreadSaveMap<std::string, bool>()) {}
 
-bool SubscriptionHelper::hasSubscriptionForModule() {
-    return _moduleFlag;
+
+std::string SubscriptionHelper::getModuleEntryChannel(const std::string& moduleId) {
+    if(moduleId == "context") {
+        return _moduleName + "/item|contextId=" + moduleId;
+    }
+    return _moduleName + "/item|containerId=" + moduleId;
 }
 
-bool SubscriptionHelper::hasSubscriptionForElement(const std::string& elementId) {
-    return _subscriptionMap.get(_moduleName + "/" + elementId + "/" + _elementName).has_value();
+std::string SubscriptionHelper::getModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName) {
+    if(moduleId == "context") {
+        return _moduleName + "/custom/" + channelName + "|contextId=" + moduleId;
+    }
+    return _moduleName + "/custom/" + channelName + "|containerId=" + moduleId;
 }
 
-bool SubscriptionHelper::hasSubscriptionForElementCustom(const std::string& elementId, const std::string&  channelName) {
-    return _subscriptionMap.get(_moduleName + "/" + elementId + "/" + channelName).has_value();
-}
-
-bool SubscriptionHelper::hasSubscriptionForChannel(const std::string& fullChannel) {
-    if(fullChannel == _moduleName && _moduleFlag) return true;
-    return _subscriptionMap.get(fullChannel).has_value();
-}
-
-void SubscriptionHelper::subscribeForModule(bool silent) {
-    _eventChannelManager->subscribeFor(_moduleName);
+void SubscriptionHelper::subscribeFor(const std::string& channel, bool silent) {
+    _eventChannelManager->subscribeFor(channel);
     if(!silent) {
-        _moduleFlag = true;
-        _subscriptionMap.set(_moduleName, true);
+        _subscriptionMap.set(channel, true);
     }
 }
 
-void SubscriptionHelper::unsubscribeFromModule(bool silent) {
-    _eventChannelManager->unsubscribeFrom(_moduleName);
+void SubscriptionHelper::unsubscribeFor(const std::string& channel, bool silent) {
+    _eventChannelManager->unsubscribeFrom(channel);
     if(!silent) {
-        _moduleFlag = false;
         _subscriptionMap.erase(_moduleName);
     }
 }
 
-void SubscriptionHelper::subscribeForElement(const std::string& elementId, bool silent) {
-    _eventChannelManager->subscribeFor(_moduleName + "/" + elementId + "/" + _elementName);
-    if(!silent) _subscriptionMap.set(_moduleName + "/" + elementId + "/" + _elementName, true);
+bool SubscriptionHelper::hasSubscriptionForModule() {
+    return _subscriptionMap.get(_moduleName).has_value();
 }
 
-void SubscriptionHelper::unsubscribeFromElement(const std::string& elementId, bool silent) {
-    _eventChannelManager->unsubscribeFrom(_moduleName + "/" + elementId + "/" + _elementName);
-    if(!silent) _subscriptionMap.erase(_moduleName + "/" + elementId + "/" + _elementName);
+bool SubscriptionHelper::hasSubscriptionForModuleEntry(const std::string& moduleId) {
+    return _subscriptionMap.get(getModuleEntryChannel(moduleId)).has_value();
 }
 
-void SubscriptionHelper::subscribeForElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
-    _eventChannelManager->subscribeFor(_moduleName + "/" + elementId + "/" + channelName);
-    if(!silent) _subscriptionMap.set(_moduleName + "/" + elementId + "/" + channelName, true);
+bool SubscriptionHelper::hasSubscriptionForModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName) {
+    return _subscriptionMap.get(getModuleEntryCustomChannel(moduleId, channelName)).has_value();
 }
 
-void SubscriptionHelper::unsubscribeFromElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
-    _eventChannelManager->unsubscribeFrom(_moduleName + "/" + elementId + "/" + channelName);
-    if(!silent) _subscriptionMap.erase(_moduleName + "/" + elementId + "/" + channelName);
+bool SubscriptionHelper::hasSubscriptionForChannel(const std::string& fullChannel) {
+    return _subscriptionMap.get(fullChannel).has_value();
 }
 
-
-SubscriptionHelperExt::SubscriptionHelperExt(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& elementName) : 
-    _subscriptionHelper(eventChannelManager, moduleName, elementName), _moduleName(moduleName), _elementName(elementName), _map(utils::ThreadSaveMap<std::string, std::string>()) {}
-
-bool SubscriptionHelperExt::hasSubscriptionForElement(const std::string& elementId) {
-    return _map.get(_moduleName + "/" + elementId + "/" + _elementName).has_value();
+void SubscriptionHelper::subscribeForModule(bool silent) {
+    subscribeFor(_moduleName, silent);
 }
 
-bool SubscriptionHelperExt::hasSubscriptionForElementCustom(const std::string& elementId, const std::string&  channelName) {
-    return _map.get(_moduleName + "/" + elementId + "/" + channelName).has_value();
+void SubscriptionHelper::unsubscribeFromModule(bool silent) {
+    unsubscribeFor(_moduleName, silent);
+}
+
+void SubscriptionHelper::subscribeForModuleEntry(const std::string& moduleId, bool silent) {
+    subscribeFor(getModuleEntryChannel(moduleId), silent);
+}
+
+void SubscriptionHelper::unsubscribeFromModuleEntry(const std::string& moduleId, bool silent) {
+    unsubscribeFor(getModuleEntryChannel(moduleId), silent);
+}
+
+void SubscriptionHelper::subscribeForModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName, bool silent) {
+    subscribeFor(getModuleEntryCustomChannel(moduleId, channelName), silent);
+}
+
+void SubscriptionHelper::unsubscribeFromModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName, bool silent) {
+    unsubscribeFor(getModuleEntryCustomChannel(moduleId, channelName), silent);
+}
+
+SubscriptionHelperExt::SubscriptionHelperExt(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& entryName) : 
+    _subscriptionHelper(eventChannelManager, moduleName, entryName), _moduleName(moduleName), _entryName(entryName), _map(utils::ThreadSaveMap<std::string, std::string>()) {}
+
+std::string SubscriptionHelperExt::getModuleEntryChannel(const std::string& moduleId) {
+    return _moduleName + "/" + moduleId + "/" + _entryName;
+}
+
+std::string SubscriptionHelperExt::getModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName) {
+    return _moduleName + "/" + moduleId + "/" + channelName;
+}
+
+bool SubscriptionHelperExt::hasSubscriptionForModuleEntry(const std::string& moduleId) {
+    return _map.get(getModuleEntryChannel(moduleId)).has_value();
+}
+
+bool SubscriptionHelperExt::hasSubscriptionForModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName) {
+    return _map.get(getModuleEntryCustomChannel(moduleId, channelName)).has_value();
 }
 
 bool SubscriptionHelperExt::hasSubscriptionForChannel(const std::string& fullChannel) {
     return _map.get(fullChannel).has_value();
 }
 
-void SubscriptionHelperExt::subscribeForElement(const std::string& elementId, const std::string& parentModuleId,  bool silent) {
-    _subscriptionHelper.subscribeForElement(elementId);
-    if(!silent) _map.set(_moduleName + "/" + elementId + "/" + _elementName, parentModuleId);
+void SubscriptionHelperExt::subscribeForModuleEntry(const std::string& moduleId, const std::string& parentModuleId,  bool silent) {
+    _subscriptionHelper.subscribeForModuleEntry(moduleId);
+    if(!silent) _map.set(getModuleEntryChannel(moduleId), parentModuleId);
 }
 
-void SubscriptionHelperExt::unsubscribeFromElement(const std::string& elementId, bool silent) {
-    _subscriptionHelper.unsubscribeFromElement(elementId);
-    if(!silent) _map.erase(_moduleName + "/" + elementId + "/" + _elementName);
+void SubscriptionHelperExt::unsubscribeFromModuleEntry(const std::string& moduleId, bool silent) {
+    _subscriptionHelper.unsubscribeFromModuleEntry(moduleId);
+    if(!silent) _map.erase(getModuleEntryChannel(moduleId));
 }
 
-void SubscriptionHelperExt::subscribeForElementCustom(const std::string& elementId, const std::string& parentModuleId, const std::string&  channelName,  bool silent) {
-    _subscriptionHelper.subscribeForElementCustom(elementId, channelName);
-    if(!silent) _map.set(_moduleName + "/" + elementId + "/" + channelName, parentModuleId);
+void SubscriptionHelperExt::subscribeForModuleEntryCustomChannel(const std::string& moduleId, const std::string& parentModuleId, const std::string&  channelName,  bool silent) {
+    _subscriptionHelper.subscribeForModuleEntryCustomChannel(moduleId, channelName);
+    if(!silent) _map.set(getModuleEntryCustomChannel(moduleId, channelName), parentModuleId);
 }
 
-void SubscriptionHelperExt::unsubscribeFromElementCustom(const std::string& elementId, const std::string&  channelName, bool silent) {
-    _subscriptionHelper.unsubscribeFromElementCustom(elementId, channelName);
-    if(!silent) _map.erase(_moduleName + "/" + elementId + "/" + channelName);
+void SubscriptionHelperExt::unsubscribeFromModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName, bool silent) {
+    _subscriptionHelper.unsubscribeFromModuleEntryCustomChannel(moduleId, channelName);
+    if(!silent) _map.erase(getModuleEntryCustomChannel(moduleId, channelName));
 }
 
-std::string SubscriptionHelperExt::getParentModuleId(const std::string& elementId) {
-    auto tmp = _map.get(_moduleName + "/" + elementId + "/" + _elementName);
+std::string SubscriptionHelperExt::getParentModuleEntryId(const std::string& moduleId) {
+    auto tmp = _map.get(getModuleEntryChannel(moduleId));
     return tmp.has_value() ? tmp.value() : std::string();
 }

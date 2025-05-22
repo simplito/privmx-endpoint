@@ -62,7 +62,7 @@ ThreadApiImpl::ThreadApiImpl(
         std::bind(&ThreadApiImpl::validateThreadDataIntegrity, this, std::placeholders::_1)
     )),
     _subscribeForThread(false),
-    _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages")),
+    _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
@@ -624,18 +624,18 @@ void ThreadApiImpl::unsubscribeFromThreadEvents() {
 
 void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
     assertThreadExist(threadId);
-    if(_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
+    if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
         throw AlreadySubscribedException(threadId);
     }
-    _threadSubscriptionHelper.subscribeForElement(threadId);
+    _threadSubscriptionHelper.subscribeForModuleEntry(threadId);
 }
 
 void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
     assertThreadExist(threadId);
-    if(!_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
+    if(!_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
         throw NotSubscribedException(threadId);
     }
-    _threadSubscriptionHelper.unsubscribeFromElement(threadId);
+    _threadSubscriptionHelper.unsubscribeFromModuleEntry(threadId);
 }
 
 void ThreadApiImpl::processConnectedEvent() {

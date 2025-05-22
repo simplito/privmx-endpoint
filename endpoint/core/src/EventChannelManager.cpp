@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/EventChannelManager.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/utils/Debug.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -18,10 +19,13 @@ EventChannelManager::EventChannelManager(privfs::RpcGateway::Ptr gateway, std::s
     _gateway(gateway), _eventMiddleware(eventMiddleware) {}
 
 void EventChannelManager::subscribeFor(std::string channel) {
+    PRIVMX_DEBUG("EventChannelManager", "subscribeFor", channel)
     auto count = _map.get(channel);
     if(count.has_value() && count.value() > 0) {
+        PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribed on channel: " + count.value())
         _map.set(channel, count.value()+1);
     } else {
+        PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribing to channel")
         Poco::JSON::Object::Ptr model = new Poco::JSON::Object();
         model->set("channel", channel);
         _gateway->request("subscribeToChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
@@ -31,11 +35,14 @@ void EventChannelManager::subscribeFor(std::string channel) {
 }
 
 void EventChannelManager::unsubscribeFrom(std::string channel) {
+    PRIVMX_DEBUG("EventChannelManager", "unsubscribeFrom", channel)
     auto count = _map.get(channel);
     if(count.has_value()) {
         if(count.value() > 1) {
+            PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "unsubscribed on channel: " + count.value())
             _map.set(channel, count.value()-1);
         } else if (count.value() == 1) {
+            PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "unsubscribing to channel")
             Poco::JSON::Object::Ptr model = new Poco::JSON::Object();
             model->set("channel", channel);
             _gateway->request("unsubscribeFromChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET});

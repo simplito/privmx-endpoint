@@ -72,7 +72,7 @@ StoreApiImpl::StoreApiImpl(
         std::bind(&StoreApiImpl::validateStoreDataIntegrity, this, std::placeholders::_1)
     )),
     _subscribeForStore(false),
-    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
+    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store")),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
     _storeDataEncryptorV4(StoreDataEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
@@ -722,18 +722,18 @@ void StoreApiImpl::unsubscribeFromStoreEvents() {
 
 void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
     assertStoreExist(storeId);
-    if(_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
+    if(_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
         throw AlreadySubscribedException(storeId);
     }
-    _storeSubscriptionHelper.subscribeForElement(storeId);
+    _storeSubscriptionHelper.subscribeForModuleEntry(storeId);
 }
 
 void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
     assertStoreExist(storeId);
-    if(!_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
+    if(!_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
         throw NotSubscribedException(storeId);
     }
-    _storeSubscriptionHelper.unsubscribeFromElement(storeId);
+    _storeSubscriptionHelper.unsubscribeFromModuleEntry(storeId);
 }
 
 void StoreApiImpl::processConnectedEvent() {

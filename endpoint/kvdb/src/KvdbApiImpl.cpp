@@ -55,7 +55,7 @@ KvdbApiImpl::KvdbApiImpl(
         std::bind(&KvdbApiImpl::validateKvdbDataIntegrity, this, std::placeholders::_1)
     )),
     _subscribeForKvdb(false),
-    _kvdbSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "kvdb", "entries"))
+    _kvdbSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "kvdb"))
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
@@ -548,18 +548,18 @@ void KvdbApiImpl::unsubscribeFromKvdbEvents() {
 
 void KvdbApiImpl::subscribeForEntryEvents(std::string kvdbId) {
     assertKvdbExist(kvdbId);
-    if(_kvdbSubscriptionHelper.hasSubscriptionForElement(kvdbId)) {
+    if(_kvdbSubscriptionHelper.hasSubscriptionForModuleEntry(kvdbId)) {
         throw AlreadySubscribedException(kvdbId);
     }
-    _kvdbSubscriptionHelper.subscribeForElement(kvdbId);
+    _kvdbSubscriptionHelper.subscribeForModuleEntry(kvdbId);
 }
 
 void KvdbApiImpl::unsubscribeFromEntryEvents(std::string kvdbId) {
     assertKvdbExist(kvdbId);
-    if(!_kvdbSubscriptionHelper.hasSubscriptionForElement(kvdbId)) {
+    if(!_kvdbSubscriptionHelper.hasSubscriptionForModuleEntry(kvdbId)) {
         throw NotSubscribedException(kvdbId);
     }
-    _kvdbSubscriptionHelper.unsubscribeFromElement(kvdbId);
+    _kvdbSubscriptionHelper.unsubscribeFromModuleEntry(kvdbId);
 }
 
 void KvdbApiImpl::processConnectedEvent() {

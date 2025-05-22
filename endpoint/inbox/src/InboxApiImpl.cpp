@@ -77,8 +77,8 @@ InboxApiImpl::InboxApiImpl(
     )),
     _subscribeForInbox(false),
     _serverRequestChunkSize(serverRequestChunkSize),
-    _inboxSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "inbox", "entries")),
-    _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread", "messages")),
+    _inboxSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "inbox")),
+    _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "inbox", "entries"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
@@ -1058,7 +1058,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, [[maybe_unu
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadNewMessage") {
         auto raw = Factory::createObject<privmx::endpoint::thread::server::Message>(data); 
-        if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
+        if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(raw.threadId())) {
             auto inbox = getRawInboxFromCacheOrBridge(readInboxIdFromMessageKeyId(raw.keyId()));
             auto message = decryptAndConvertInboxEntryDataToInboxEntry(inbox, raw);
             std::shared_ptr<InboxEntryCreatedEvent> event(new InboxEntryCreatedEvent());
@@ -1068,8 +1068,8 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, [[maybe_unu
         }
     } else if (type == "threadDeletedMessage") {
         auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadDeletedMessageEventData>(data); 
-        if(_threadSubscriptionHelper.hasSubscriptionForElement(raw.threadId())) {
-            auto inboxId = _threadSubscriptionHelper.getParentModuleId(raw.threadId());
+        if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(raw.threadId())) {
+            auto inboxId = _threadSubscriptionHelper.getParentModuleEntryId(raw.threadId());
             std::shared_ptr<InboxEntryDeletedEvent> event(new InboxEntryDeletedEvent());
             event->channel = "inbox/" + inboxId + "/entries";
             event->data = {
@@ -1112,19 +1112,19 @@ void InboxApiImpl::unsubscribeFromInboxEvents() {
 void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
     auto inbox = getRawInboxFromCacheOrBridge(inboxId);
     auto inboxData = getInboxCurrentDataEntry(inbox).data();
-    if(_threadSubscriptionHelper.hasSubscriptionForElement(inboxData.threadId())) {
+    if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(inboxData.threadId())) {
         throw AlreadySubscribedException(inboxId);
     }
-    _threadSubscriptionHelper.subscribeForElement(inboxData.threadId(), inboxId);
+    _threadSubscriptionHelper.subscribeForModuleEntry(inboxData.threadId(), inboxId);
 }
 
 void InboxApiImpl::unsubscribeFromEntryEvents(const std::string& inboxId) {
     auto inbox = getRawInboxFromCacheOrBridge(inboxId);
     auto inboxData = getInboxCurrentDataEntry(inbox).data();
-    if(!_threadSubscriptionHelper.hasSubscriptionForElement(inboxData.threadId())) {
+    if(!_threadSubscriptionHelper.hasSubscriptionForModuleEntry(inboxData.threadId())) {
         throw NotSubscribedException(inboxId);
     }
-    _threadSubscriptionHelper.unsubscribeFromElement(inboxData.threadId());
+    _threadSubscriptionHelper.unsubscribeFromModuleEntry(inboxData.threadId());
 }
 
 void InboxApiImpl::processConnectedEvent() {

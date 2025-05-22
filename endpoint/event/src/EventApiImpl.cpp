@@ -14,6 +14,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/utils/Debug.hpp>
 
 #include "privmx/endpoint/event/EventApiImpl.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
@@ -26,7 +27,7 @@ EventApiImpl::EventApiImpl(const privmx::crypto::PrivateKey& userPrivKey, privfs
     _userPrivKey(userPrivKey),
     _serverApi(ServerApi(gateway)),
     _eventMiddleware(eventMiddleware),
-    _contextSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "context", "contexts")),
+    _contextSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "context")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
@@ -48,17 +49,17 @@ void EventApiImpl::emitEvent(const std::string& contextId, const std::vector<cor
 
 void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
-    if(_contextSubscriptionHelper.hasSubscriptionForElementCustom(contextId, channelName)) {
+    if(_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
         throw AlreadySubscribedException();
     }
-    _contextSubscriptionHelper.subscribeForElementCustom(contextId, channelName);
+    _contextSubscriptionHelper.subscribeForModuleEntryCustomChannel(contextId, channelName);
 }
 void EventApiImpl::unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
-    if(!_contextSubscriptionHelper.hasSubscriptionForElementCustom(contextId, channelName)) {
+    if(!_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
         throw NotSubscribedException();
     }
-    _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, channelName);
+    _contextSubscriptionHelper.unsubscribeFromModuleEntryCustomChannel(contextId, channelName);
 }
 
 void EventApiImpl::emitEventInternal(const std::string& contextId, InternalContextEvent event, const std::vector<core::UserWithPubKey>& users) {
@@ -71,6 +72,7 @@ void EventApiImpl::emitEventInternal(const std::string& contextId, InternalConte
 
 bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType) {
     //check if type == "custom" and channel == "context/<contextId>/internal"
+    
     if(type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
         if( !raw.idEmpty() && channel == "context/" + raw.id() + "/" INTERNAL_EVENT_CHANNEL_NAME && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
@@ -98,14 +100,15 @@ InternalContextEvent EventApiImpl::extractInternalEventData(const Poco::JSON::Ob
 }
 
 void EventApiImpl::subscribeForInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.subscribeForElementCustom(contextId, INTERNAL_EVENT_CHANNEL_NAME);
+    _contextSubscriptionHelper.subscribeForModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::unsubscribeFromInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, INTERNAL_EVENT_CHANNEL_NAME);
+    _contextSubscriptionHelper.unsubscribeFromModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
+    PRIVMX_DEBUG("EventApiImpl", "processNotificationEvent", type + ";" + channel + ";" + privmx::utils::Utils::stringify(data));
     if(type == "custom" && _contextSubscriptionHelper.hasSubscriptionForChannel(channel) && data->get("eventData").isString()) {
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
         if(channel == "context/" + rawEvent.id() + "/" INTERNAL_EVENT_CHANNEL_NAME) return;
