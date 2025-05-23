@@ -29,7 +29,7 @@ EventApiImpl::EventApiImpl(const privmx::crypto::PrivateKey& userPrivKey, privfs
     _contextSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "context", "contexts")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}) 
 {
-    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&EventApiImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&EventApiImpl::processDisconnectedEvent, this));
 }
@@ -105,7 +105,9 @@ void EventApiImpl::unsubscribeFromInternalEvents(const std::string& contextId) {
     _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
-void EventApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
+void EventApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    std::string channel = notification.channel;
+    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
     if(type == "custom" && _contextSubscriptionHelper.hasSubscriptionForChannel(channel) && data->get("eventData").isString()) {
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
         if(channel == "context/" + rawEvent.id() + "/" INTERNAL_EVENT_CHANNEL_NAME) return;

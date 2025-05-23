@@ -25,7 +25,7 @@ limitations under the License.
 #include <privmx/rpc/Types.hpp>
 #include <privmx/privfs/gateway/Types.hpp>
 #include <privmx/rpc/AuthorizedConnection.hpp>
-#include <privmx/rpc/EventDispatcher.hpp>
+#include <privmx/utils/EventDispatcher.hpp>
 #include <privmx/crypto/BIP39.hpp>
 
 namespace privmx {
