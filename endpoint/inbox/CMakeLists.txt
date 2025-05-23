@@ -22,7 +22,3 @@ if(PRIVMX_WERROR)
     target_compile_options(privmxendpointinbox PRIVATE -Werror)
 endif()
 set_target_properties(privmxendpointinbox PROPERTIES COMPILE_DEFINITIONS "MINIMAL_BUILD")
-
-if(PRIVMX_BUILD_ENDPOINT_INTERFACE)
-    add_subdirectory(cinterface)
-endif(PRIVMX_BUILD_ENDPOINT_INTERFACE)
