@@ -77,7 +77,7 @@ StoreApiImpl::StoreApiImpl(
     _storeDataEncryptorV4(StoreDataEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
-    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StoreApiImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StoreApiImpl::processDisconnectedEvent, this));
 }
@@ -620,7 +620,9 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     }
 }
 
-void StoreApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
+void StoreApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    std::string channel = notification.channel;
+    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
     if(!_storeSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
         return;
     }

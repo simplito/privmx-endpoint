@@ -96,7 +96,7 @@ private:
     );
     server::KvdbInfo getRawKvdbFromCacheOrBridge(const std::string& kvdbId);
 
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);

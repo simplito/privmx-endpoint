@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <optional>
 #include <string>
+#include <Poco/Dynamic/Var.h>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
@@ -70,6 +71,17 @@ struct DecryptedEncKeyV2 : public DecryptedEncKey {
     ExpandedDataIntegrityObject dio;
     std::string keySecret;
     std::string secretHash;
+};
+
+enum EventSource {
+    INTERNAL = 0,
+    SERVER = 1
+};
+struct NotificationEvent {
+    EventSource source;
+    std::string type;
+    std::string channel;
+    Poco::Dynamic::Var data;
 };
 
 }  // namespace core

@@ -115,7 +115,7 @@ private:
     core::PagingList<Store> _storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
 
     std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey> &users);
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     dynamic::compat_v1::StoreData decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);

@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <privmx/crypto/SRP.hpp>
 #include <privmx/rpc/channel/ChannelManager.hpp>
-#include <privmx/rpc/EventDispatcher.hpp>
 #include <privmx/rpc/Types.hpp>
 #include <privmx/rpc/tls/TicketsManager.hpp>
 #include <privmx/rpc/ClientEndpoint.hpp>
@@ -30,7 +29,6 @@ namespace rpc {
 struct NotificationEvent
 {
     std::string type;
-    std::string channel;
     Poco::JSON::Object::Ptr data;
 };
 
@@ -102,7 +100,6 @@ private:
     void activateUpdateTicketLoop();
 
     ChannelManager::Ptr _channel_manager;
-    EventDispatcher::Ptr _event_dispatcher;
     ConnectionOptionsFull _options;
     ConnectionInfo::Ptr _connection_info;
     std::atomic_bool _destroyed = false;

@@ -29,7 +29,7 @@ public:
     void subscribeForInternalEvents(const std::string& contextId);
     void unsubscribeFromInternalEvents(const std::string& contextId);
 private:
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     void emitEventEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::string &encryptionKey);
