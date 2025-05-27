@@ -25,15 +25,20 @@ namespace core {
 #define INTERNAL_EVENT_CHANNEL_NAME "internal"
 
 class EventChannelManager {
+
 public:
     EventChannelManager(privfs::RpcGateway::Ptr gateway, std::shared_ptr<EventMiddleware> eventMiddleware);
-    void subscribeFor(std::string channel);
+    std::string subscribeFor(std::string channel);
     void unsubscribeFrom(std::string channel);
 
 private:
+    struct Subscription {
+        uint64_t count;
+        std::string subscriptionId;
+    };
     privfs::RpcGateway::Ptr _gateway;
     std::shared_ptr<EventMiddleware> _eventMiddleware;
-    utils::ThreadSaveMap<std::string, uint64_t> _map;
+    utils::ThreadSaveMap<std::string, Subscription> _map;
 };
 
 }  // namespace core

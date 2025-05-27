@@ -440,13 +440,11 @@ std::map<std::string, bool> KvdbApiImpl::deleteEntries(const std::string& kvdbId
 }
 
 void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::string channel = notification.channel;
-    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    if(!_kvdbSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+    if(!_kvdbSubscriptionHelper.hasSubscription(notification.subscriptions) && notification.source != core::EventSource::INTERNAL) {
         return;
     }
     if (type == "kvdbCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
         if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
             _kvdbProvider.updateByValue(raw);
             auto statusCode = validateKvdbDataIntegrity(raw);
@@ -457,12 +455,12 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
                 data = Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
             }
             std::shared_ptr<KvdbCreatedEvent> event(new KvdbCreatedEvent());
-            event->channel = channel;
+            event->channel = "kvdb";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "kvdbUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
         if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
             _kvdbProvider.updateByValue(raw);
             auto statusCode = validateKvdbDataIntegrity(raw);
@@ -473,58 +471,60 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
                 data = Kvdb{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
             }
             std::shared_ptr<KvdbUpdatedEvent> event(new KvdbUpdatedEvent());
-            event->channel = channel;
+            event->channel = "kvdb";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "kvdbDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEventData>(notification.data);
         if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
             _kvdbProvider.invalidateByContainerId(raw.kvdbId());
             auto data = Mapper::mapToKvdbDeletedEventData(raw);
             std::shared_ptr<KvdbDeletedEvent> event(new KvdbDeletedEvent());
-            event->channel = channel;
+            event->channel = "kvdb";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "kvdbStats") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbStatsEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbStatsEventData>(notification.data);
         if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
             _kvdbProvider.updateStats(raw);
             auto data = Mapper::mapToKvdbStatsEventData(raw);
             std::shared_ptr<KvdbStatsChangedEvent> event(new KvdbStatsChangedEvent());
-            event->channel = channel;
+            event->channel = "kvdb";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "kvdbNewEntry") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryInfo>(notification.data);
         auto data = decryptAndConvertEntryDataToEntry(raw);
         std::shared_ptr<KvdbNewEntryEvent> event(new KvdbNewEntryEvent());
-        event->channel = channel;
+        event->channel = "kvdb/" + raw.kvdbId() + "/entries";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "kvdbUpdatedEntry") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryInfo>(notification.data);
         auto data = decryptAndConvertEntryDataToEntry(raw);
         std::shared_ptr<KvdbEntryUpdatedEvent> event(new KvdbEntryUpdatedEvent());
-        event->channel = channel;
+        event->channel = "kvdb/" + raw.kvdbId() + "/entries";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "kvdbDeletedEntry") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEntryEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEntryEventData>(notification.data);
         auto data = Mapper::mapToKvdbDeletedEntryEventData(raw);
         std::shared_ptr<KvdbEntryDeletedEvent> event(new KvdbEntryDeletedEvent());
-        event->channel = channel;
+        event->channel = "kvdb/" + raw.kvdbId() + "/entries";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
         if(channelName == "kvdb") {
             PRIVMX_DEBUG("KvdbApi", "Cache", "Enabled")
             _subscribeForKvdb = true;
         }
     } else if (type == "unsubscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
         if(channelName == "kvdb") {
             PRIVMX_DEBUG("KvdbApi", "Cache", "Disabled")

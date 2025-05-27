@@ -85,8 +85,28 @@ ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatus, UserIdentity)
     STRING_FIELD(status)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(RpcEvent)
+    STRING_FIELD(type) 
+    VAR_FIELD(data)
+    INT64_FIELD(version)
+    INT64_FIELD(timestamp)
+    LIST_FIELD(subscriptions, std::string)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
     LIST_FIELD(users, server::UserIdentityWithStatus)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UnsubscribeFromChannelsModel)
+    LIST_FIELD(subscriptionsIds, std::string)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelModel)
+    STRING_FIELD(channel)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelResult)
+    STRING_FIELD(subscriptionId)
 TYPE_END
 
 } // server

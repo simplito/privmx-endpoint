@@ -75,7 +75,7 @@ bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::st
     
     if(type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
-        if( !raw.idEmpty() && channel == "context/" + raw.id() + "/" INTERNAL_EVENT_CHANNEL_NAME && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
+        if( !raw.idEmpty() && channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + raw.id() && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
             auto rawEventDataJSON = raw.eventData().extract<Poco::JSON::Object::Ptr>();
             if(rawEventDataJSON->has("type")) {
                 if(!internalContextEventType.has_value()) {
@@ -92,11 +92,30 @@ bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::st
 }
 
 InternalContextEvent EventApiImpl::extractInternalEventData(const Poco::JSON::Object::Ptr& eventData) {
+    //it should be used after successful isInternalContextEvent
     auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
     auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedInternalContextEvent>(raw.eventData());
-    auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key(), crypto::PublicKey::fromBase58DER(raw.author().pub()));
-    auto decryptedData =  _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData(), _userPrivKey.getPublicKey(), encKey);
-    return InternalContextEvent{.type=rawEventData.type(), .data=decryptedData};
+    core::Buffer decryptedData;
+    int64_t statusCode = 0;
+    try {
+        auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(
+            _userPrivKey, 
+            raw.key(), 
+            crypto::PublicKey::fromBase58DER(raw.author().pub())
+        );
+        decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
+            rawEventData.encryptedData(), 
+            _userPrivKey.getPublicKey(), 
+            encKey
+        );
+    } catch (const privmx::endpoint::core::Exception& e) {
+        statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) {
+        statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
+    return InternalContextEvent{.type=rawEventData.type(), .data=decryptedData, .statusCode=statusCode};
 }
 
 void EventApiImpl::subscribeForInternalEvents(const std::string& contextId) {
@@ -108,26 +127,40 @@ void EventApiImpl::unsubscribeFromInternalEvents(const std::string& contextId) {
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::string channel = notification.channel;
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    if(type == "custom" && _contextSubscriptionHelper.hasSubscriptionForChannel(channel) && data->get("eventData").isString()) {
+    if(type == "custom" && _contextSubscriptionHelper.hasSubscription(notification.subscriptions) && data->get("eventData").isString()) {
+        std::string channel = _contextSubscriptionHelper.getChannel(notification.subscriptions);
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
-        if(channel == "context/" + rawEvent.id() + "/" INTERNAL_EVENT_CHANNEL_NAME) return;
-        auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(
-            _userPrivKey, 
-            rawEvent.key()
-        );
-        auto decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
-            rawEvent.eventData().convert<std::string>(), 
-            _userPrivKey.getPublicKey(), 
-            encKey
-        );
+        // fix if not internal check
+        if(channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id()) return;
+        core::Buffer decryptedData;
+        std::string customChannelName = "";
+        int64_t statusCode = 0;
+        try {
+            auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(
+                _userPrivKey, 
+                rawEvent.key()
+            );
+            decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
+                rawEvent.eventData().convert<std::string>(), 
+                _userPrivKey.getPublicKey(), 
+                encKey
+            );
+            customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
+        } catch (const privmx::endpoint::core::Exception& e) {
+            statusCode = e.getCode();
+        } catch (const privmx::utils::PrivmxException& e) {
+            statusCode = core::ExceptionConverter::convert(e).getCode();
+        } catch (...) {
+            statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
         std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
-        event->channel = channel;
+        event->channel = "context/" + rawEvent.id() + "/" + customChannelName;
         event->data = {
             .contextId = rawEvent.id(), 
             .userId = rawEvent.author().id(), 
-            .payload = decryptedData
+            .payload = decryptedData,
+            .statusCode = statusCode
         };
         _eventMiddleware->emitApiEvent(event);
     }

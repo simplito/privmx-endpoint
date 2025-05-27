@@ -248,10 +248,17 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
 }
 
 NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
+    std::vector<std::string> subscriptions;
+    auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
+    for(auto subscription : tmp.subscriptions()) {
+        subscriptions.push_back(subscription);
+    }
     return NotificationEvent{
         .source = EventSource::SERVER,
         .type = event.type,
-        .channel =  event.data->optValue<std::string>("channel", std::string()),
-        .data = event.data->getObject("data")
+        .data = tmp.data(),
+        .version = tmp.version(),
+        .timestamp = tmp.timestamp(),
+        .subscriptions = subscriptions
     };
 }

@@ -79,9 +79,15 @@ enum EventSource {
 };
 struct NotificationEvent {
     EventSource source;
+    // INTERNAL
+    // type, data, unused,  unused,    unused
+    // SERVER
+    // type, data, version, timestamp, subscriptions
     std::string type;
-    std::string channel;
     Poco::Dynamic::Var data;
+    int64_t version;
+    int64_t timestamp;
+    std::vector<std::string> subscriptions;
 };
 
 }  // namespace core

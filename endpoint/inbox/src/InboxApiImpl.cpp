@@ -1028,13 +1028,11 @@ inbox::FilesConfig InboxApiImpl::getFilesConfigOptOrDefault(const std::optional<
 }
 
 void InboxApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::string channel = notification.channel;
-    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    if(!(_inboxSubscriptionHelper.hasSubscriptionForChannel(channel) || _threadSubscriptionHelper.hasSubscriptionForChannel(channel)) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+    if(!(_inboxSubscriptionHelper.hasSubscription(notification.subscriptions) || _threadSubscriptionHelper.hasSubscription(notification.subscriptions)) && notification.source != core::EventSource::INTERNAL) {
         return;
     }
     if (type == "inboxCreated") {
-        auto raw = Factory::createObject<server::Inbox>(data);
+        auto raw = Factory::createObject<server::Inbox>(notification.data);
         _inboxProvider.updateByValue(raw);
         auto data = decryptAndConvertInboxDataToInbox(raw);
         std::shared_ptr<InboxCreatedEvent> event(new InboxCreatedEvent());
@@ -1042,7 +1040,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "inboxUpdated") {
-        auto raw = Factory::createObject<server::Inbox>(data);
+        auto raw = Factory::createObject<server::Inbox>(notification.data);
         _inboxProvider.updateByValue(raw);
         auto data = decryptAndConvertInboxDataToInbox(raw);
         std::shared_ptr<InboxUpdatedEvent> event(new InboxUpdatedEvent());
@@ -1050,7 +1048,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "inboxDeleted") {
-        auto raw = Factory::createObject<server::InboxDeletedEventData>(data);
+        auto raw = Factory::createObject<server::InboxDeletedEventData>(notification.data);
         _inboxProvider.invalidateByContainerId(raw.inboxId());
         auto data = convertInboxDeletedEventData(raw);
         std::shared_ptr<InboxDeletedEvent> event(new InboxDeletedEvent());
@@ -1058,7 +1056,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadNewMessage") {
-        auto raw = Factory::createObject<privmx::endpoint::thread::server::Message>(data); 
+        auto raw = Factory::createObject<privmx::endpoint::thread::server::Message>(notification.data); 
         if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(raw.threadId())) {
             auto inbox = getRawInboxFromCacheOrBridge(readInboxIdFromMessageKeyId(raw.keyId()));
             auto message = decryptAndConvertInboxEntryDataToInboxEntry(inbox, raw);
@@ -1068,7 +1066,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadDeletedMessage") {
-        auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadDeletedMessageEventData>(data); 
+        auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadDeletedMessageEventData>(notification.data); 
         if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(raw.threadId())) {
             auto inboxId = _threadSubscriptionHelper.getParentModuleEntryId(raw.threadId());
             std::shared_ptr<InboxEntryDeletedEvent> event(new InboxEntryDeletedEvent());
@@ -1080,12 +1078,14 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "subscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
         if(channel == "inbox") {
             PRIVMX_DEBUG("InboxApi", "Cache", "Enabled")
             _subscribeForInbox = true;
         }
     } else if (type == "unsubscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
         if(channel == "inbox") {
             PRIVMX_DEBUG("InboxApi", "Cache", "Disabled")

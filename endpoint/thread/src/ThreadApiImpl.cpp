@@ -516,13 +516,11 @@ void ThreadApiImpl::updateMessage(
 }
 
 void ThreadApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::string channel = notification.channel;
-    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    if(!_threadSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+    if(!_threadSubscriptionHelper.hasSubscription(notification.subscriptions) && notification.source != core::EventSource::INTERNAL) {
         return;
     }
     if (type == "threadCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValue(raw);
             auto statusCode = validateThreadDataIntegrity(raw);
@@ -533,12 +531,12 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
                 data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
             }
             std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValue(raw);
             auto statusCode = validateThreadDataIntegrity(raw);
@@ -549,58 +547,60 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
                 data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
             }
             std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.invalidateByContainerId(raw.threadId());
             auto data = Mapper::mapToThreadDeletedEventData(raw);
             std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadStats") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateStats(raw);
             auto data = Mapper::mapToThreadStatsEventData(raw);
             std::shared_ptr<ThreadStatsChangedEvent> event(new ThreadStatsChangedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadNewMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(notification.data);
         auto data = decryptAndConvertMessageDataToMessage(raw);
         std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
-        event->channel = channel;
+        event->channel = "thread/" + raw.threadId() + "/messages";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadUpdatedMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(notification.data);
         auto data = decryptAndConvertMessageDataToMessage(raw);
         std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
-        event->channel = channel;
+        event->channel = "thread/" + raw.threadId() + "/messages";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadDeletedMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(notification.data);
         auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
         std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
-        event->channel = channel;
+        event->channel = "thread/" + raw.threadId() + "/messages";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
         if(channelName == "thread") {
             PRIVMX_DEBUG("ThreadApi", "Cache", "Enabled")
             _subscribeForThread = true;
         }
     } else if (type == "unsubscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
         if(channelName == "thread") {
             PRIVMX_DEBUG("ThreadApi", "Cache", "Disabled")

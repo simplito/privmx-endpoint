@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/EventChannelManager.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/utils/Debug.hpp"
 
 using namespace privmx::endpoint::core;
@@ -18,46 +19,62 @@ using namespace privmx::endpoint::core;
 EventChannelManager::EventChannelManager(privfs::RpcGateway::Ptr gateway, std::shared_ptr<EventMiddleware> eventMiddleware) : 
     _gateway(gateway), _eventMiddleware(eventMiddleware) {}
 
-void EventChannelManager::subscribeFor(std::string channel) {
-    PRIVMX_DEBUG("EventChannelManager", "subscribeFor", channel)
-    auto count = _map.get(channel);
-    if(count.has_value() && count.value() > 0) {
-        PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribed on channel: " + count.value())
-        _map.set(channel, count.value()+1);
+std::string EventChannelManager::subscribeFor(std::string channel) {
+    auto subscription = _map.get(channel);
+    if(subscription.has_value() && subscription.value().count > 0) {
+        PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribed on channel: " + subscription.value().count)
+        subscription.value().count++;
+        _map.set(channel, subscription.value());
+        return subscription.value().subscriptionId;
     } else {
         PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribing to channel")
-        Poco::JSON::Object::Ptr model = new Poco::JSON::Object();
-        model->set("channel", channel);
-        _gateway->request("subscribeToChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
+        auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelModel>();
+        model.channel(channel);
+        auto value = privmx::utils::TypedObjectFactory::createObjectFromVar<server::SubscribeToChannelResult>(
+            _gateway->request("subscribeToChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET})
+        );
+        _map.set(channel, Subscription{.count = 1, .subscriptionId = value.subscriptionId()});
+        // send internal event 
+        Poco::JSON::Object::Ptr data = new Poco::JSON::Object();
+        data->set("channel", channel); 
         _eventMiddleware->emitNotificationEvent("subscribe", NotificationEvent{
             .source = EventSource::INTERNAL,
             .type = "subscribe",
-            .channel = channel,
-            .data = model
+            .data = data,
+            .version = 0,
+            .timestamp = 0,
+            .subscriptions = {}
         });
-        _map.set(channel, 1);
+        return value.subscriptionId();
     }
 }
 
 void EventChannelManager::unsubscribeFrom(std::string channel) {
-    PRIVMX_DEBUG("EventChannelManager", "unsubscribeFrom", channel)
-    auto count = _map.get(channel);
-    if(count.has_value()) {
-        if(count.value() > 1) {
-            PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "unsubscribed on channel: " + count.value())
-            _map.set(channel, count.value()-1);
-        } else if (count.value() == 1) {
+    auto subscription = _map.get(channel);
+    if(subscription.has_value()) {
+        if(subscription.value().count > 1) {
+            PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "unsubscribed on channel: " + subscription.value().count)
+            subscription.value().count--;
+            _map.set(channel, subscription.value());
+        } else if (subscription.value().count == 1) {
             PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "unsubscribing to channel")
-            Poco::JSON::Object::Ptr model = new Poco::JSON::Object();
-            model->set("channel", channel);
-            _gateway->request("unsubscribeFromChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
+            auto model = utils::TypedObjectFactory::createNewObject<server::UnsubscribeFromChannelsModel>();
+            auto subscriptionsIds = utils::TypedObjectFactory::createNewList<std::string>();
+            subscriptionsIds.add(subscription.value().subscriptionId);
+            model.subscriptionsIds(subscriptionsIds);
+            _gateway->request("unsubscribeFromChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
+            _map.erase(channel);
+            // send internal event 
+            Poco::JSON::Object::Ptr data = new Poco::JSON::Object();
+            data->set("channel", channel); 
             _eventMiddleware->emitNotificationEvent("unsubscribe", NotificationEvent{
                 .source = EventSource::INTERNAL,
                 .type = "unsubscribe",
-                .channel = channel,
-                .data = model
+                .data = data,
+                .version = 0,
+                .timestamp = 0,
+                .subscriptions = {}
             });
-            _map.erase(channel);
         } else {
             _map.erase(channel);
         }
