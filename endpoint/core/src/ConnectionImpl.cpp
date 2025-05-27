@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Constants.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -80,6 +81,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -132,6 +134,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -245,4 +248,15 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .containerResourceId = containerResourceId,
         .bridgeIdentity = _bridgeIdentity
     };
+}
+
+void ConnectionImpl::assertServerVersion() {
+    if(_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {
+        disconnect();
+        throw ServerVersionMismatchException(
+            "Bridge Server current version: " + (std::string)_serverConfig.serverVersion + "\n" +
+            "PrivMX Ednpoint library current version: " + ENDPOINT_VERSION + "\n"
+            "Bridge Server minimal expected version: " + MINIMUM_REQUIRED_BRIDGE_VERSION
+        );
+    }
 }
