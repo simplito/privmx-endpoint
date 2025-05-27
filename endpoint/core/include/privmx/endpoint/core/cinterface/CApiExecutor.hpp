@@ -19,7 +19,7 @@ limitations under the License.
 
 #include <privmx/utils/PrivmxException.hpp>
 
-#include "privmx/endpoint/interface/ExceptionHandler.hpp"
+#include "privmx/endpoint/core/cinterface/ExceptionHandler.hpp"
 
 namespace privmx {
 namespace endpoint {
