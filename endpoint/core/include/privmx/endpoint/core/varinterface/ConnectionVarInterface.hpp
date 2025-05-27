@@ -33,6 +33,7 @@ public:
         GetContextUsers = 5,
         SetUserVerifier = 6
     };
+    
 
     ConnectionVarInterface(const core::VarSerializer& serializer)
         : _serializer(serializer) {}
@@ -43,6 +44,7 @@ public:
     Poco::Dynamic::Var listContexts(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var disconnect(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getContextUsers(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var setUserVerifier(const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

@@ -17,7 +17,6 @@ public:
     };
 };
 
-
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

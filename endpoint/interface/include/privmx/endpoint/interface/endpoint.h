@@ -14,9 +14,11 @@ int privmx_endpoint_freeEventQueue(EventQueue* ptr);
 int privmx_endpoint_execEventQueue(EventQueue* ptr, int method, const pson_value* args, pson_value** res);
 
 typedef struct Connection Connection;
+typedef int (*privmx_user_verifier)(const pson_value* args, pson_value** res);
 
 int privmx_endpoint_newConnection(Connection** outPtr);
 int privmx_endpoint_freeConnection(Connection* ptr);
+int privmx_endpoint_setUserVerifier(Connection* ptr, privmx_user_verifier verifier, pson_value** res);
 int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value* args, pson_value** res);
 
 typedef struct BackendRequester BackendRequester;
@@ -49,11 +51,23 @@ int privmx_endpoint_newCryptoApi(CryptoApi** outPtr);
 int privmx_endpoint_freeCryptoApi(CryptoApi* ptr);
 int privmx_endpoint_execCryptoApi(CryptoApi* ptr, int method, const pson_value* args, pson_value** res);
 
+typedef struct ExtKey ExtKey;
+
+int privmx_endpoint_newExtKey(ExtKey** outPtr);
+int privmx_endpoint_freeExtKey(ExtKey* ptr);
+int privmx_endpoint_execExtKey(ExtKey* ptr, int method, const pson_value* args, pson_value** res);
+
 typedef struct EventApi EventApi;
 
 int privmx_endpoint_newEventApi(Connection* connectionPtr, EventApi** outPtr);
 int privmx_endpoint_freeEventApi(EventApi* ptr);
 int privmx_endpoint_execEventApi(EventApi* ptr, int method, const pson_value* args, pson_value** res);
+
+typedef struct Utils Utils;
+
+int privmx_endpoint_newUtils(Utils** outPtr);
+int privmx_endpoint_freeUtils(Utils* ptr);
+int privmx_endpoint_execUtils(Utils* ptr, int method, const pson_value* args, pson_value** res);
 
 int privmx_endpoint_setCertsPath(const char* certsPath);
 
