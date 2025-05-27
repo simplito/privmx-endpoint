@@ -22,6 +22,14 @@ namespace endpoint {
 namespace core {
 namespace server {
 
+ENDPOINT_CLIENT_TYPE(ServerEvent)
+    STRING_FIELD(type)
+    VAR_FIELD(data)
+    INT64_FIELD(timestamp)
+    INT64_FIELD(version)
+    LIST_FIELD(subscriptions, std::string)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKeyEntryDataV2, dynamic::VersionedData)
     STRING_FIELD(encryptedKey) // encrypted EncryptionKey
     STRING_FIELD(dio) // signed and encoded in base64 DataIntegrityObject

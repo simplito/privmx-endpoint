@@ -96,7 +96,7 @@ private:
     Thread _getThreadEx(const std::string& threadId, const std::string& type);
     core::PagingList<Thread> _listThreadsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);

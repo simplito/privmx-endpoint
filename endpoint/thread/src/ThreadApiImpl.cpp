@@ -65,7 +65,7 @@ ThreadApiImpl::ThreadApiImpl(
     _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
-    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&ThreadApiImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&ThreadApiImpl::processDisconnectedEvent, this));
 }
@@ -515,7 +515,9 @@ void ThreadApiImpl::updateMessage(
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, updateMessage, data send)
 }
 
-void ThreadApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
+void ThreadApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    std::string channel = notification.channel;
+    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
     if(!_threadSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
         return;
     }

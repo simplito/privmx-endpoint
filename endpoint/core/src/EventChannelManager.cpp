@@ -29,7 +29,12 @@ void EventChannelManager::subscribeFor(std::string channel) {
         Poco::JSON::Object::Ptr model = new Poco::JSON::Object();
         model->set("channel", channel);
         _gateway->request("subscribeToChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
-        _eventMiddleware->emitNotificationEvent("subscribe", INTERNAL_EVENT_CHANNEL_NAME, model);
+        _eventMiddleware->emitNotificationEvent("subscribe", NotificationEvent{
+            .source = EventSource::INTERNAL,
+            .type = "subscribe",
+            .channel = channel,
+            .data = model
+        });
         _map.set(channel, 1);
     }
 }
@@ -46,7 +51,12 @@ void EventChannelManager::unsubscribeFrom(std::string channel) {
             Poco::JSON::Object::Ptr model = new Poco::JSON::Object();
             model->set("channel", channel);
             _gateway->request("unsubscribeFromChannel", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
-            _eventMiddleware->emitNotificationEvent("unsubscribe", INTERNAL_EVENT_CHANNEL_NAME, model);
+            _eventMiddleware->emitNotificationEvent("unsubscribe", NotificationEvent{
+                .source = EventSource::INTERNAL,
+                .type = "unsubscribe",
+                .channel = channel,
+                .data = model
+            });
             _map.erase(channel);
         } else {
             _map.erase(channel);
