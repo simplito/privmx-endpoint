@@ -71,8 +71,11 @@ StoreApiImpl::StoreApiImpl(
         },
         std::bind(&StoreApiImpl::validateStoreDataIntegrity, this, std::placeholders::_1)
     )),
-    _subscribeForStore(false),
-    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store")),
+    _storeCreateSubscription(false),
+    _storeUpdateSubscription(false),
+    _storeDeleteSubscription(false),
+    _storeStatsSubscription(false),
+    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
     _storeDataEncryptorV4(StoreDataEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
@@ -692,18 +695,43 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
     } else if (type == "subscribe") {
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "store") {
-            PRIVMX_DEBUG("StoreApi", "Cache", "Enabled")
-            _subscribeForStore = true;
+        if(channel        == "store/create") {
+            _storeCreateSubscription = true;
+        } else if(channel == "store/update") {
+            _storeUpdateSubscription = true;
+        } else if(channel == "store/delete") {
+            _storeDeleteSubscription = true;
+        } else if(channel == "store/stats") {
+            _storeStatsSubscription  = true;
         }
+        PRIVMX_DEBUG(
+            "StoreApi", 
+            "CacheStatus", 
+            std::to_string(_storeCreateSubscription) + 
+            std::to_string(_storeUpdateSubscription) + 
+            std::to_string(_storeDeleteSubscription) + 
+            std::to_string(_storeStatsSubscription)
+        )
     } else if (type == "unsubscribe") {
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "store") {
-            PRIVMX_DEBUG("StoreApi", "Cache", "Disabled")
-            _subscribeForStore = false;
-            _storeProvider.invalidate();
+        if(channel        == "store/create") {
+            _storeCreateSubscription = false;
+        } else if(channel == "store/update") {
+            _storeUpdateSubscription = false;
+        } else if(channel == "store/delete") {
+            _storeDeleteSubscription = false;
+        } else if(channel == "store/stats") {
+            _storeStatsSubscription  = false;
         }
+        PRIVMX_DEBUG(
+            "StoreApi", 
+            "CacheStatus", 
+            std::to_string(_storeCreateSubscription) + 
+            std::to_string(_storeUpdateSubscription) + 
+            std::to_string(_storeDeleteSubscription) + 
+            std::to_string(_storeStatsSubscription)
+        )
     } 
 }
 
@@ -1473,7 +1501,9 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
 server::Store StoreApiImpl::getRawStoreFromCacheOrBridge(const std::string& storeId) {
     // useing _storeProvider only with STORE_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!_subscribeForStore) _storeProvider.update(storeId);
+    if(!(_storeCreateSubscription && _storeUpdateSubscription && _storeDeleteSubscription && _storeStatsSubscription)) {
+        _storeProvider.update(storeId);
+    }
     auto storeContainerInfo = _storeProvider.get(storeId);
     if(storeContainerInfo.status != core::DataIntegrityStatus::ValidationSucceed) {
         throw StoreDataIntegrityException();

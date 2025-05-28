@@ -54,8 +54,11 @@ KvdbApiImpl::KvdbApiImpl(
         },
         std::bind(&KvdbApiImpl::validateKvdbDataIntegrity, this, std::placeholders::_1)
     )),
-    _subscribeForKvdb(false),
-    _kvdbSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "kvdb"))
+    _kvdbCreateSubscription(false),
+    _kvdbUpdateSubscription(false),
+    _kvdbDeleteSubscription(false),
+    _kvdbStatsSubscription(false),
+    _kvdbSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "kvdb", "entries"))
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
@@ -518,19 +521,44 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "subscribe") {
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
-        if(channelName == "kvdb") {
-            PRIVMX_DEBUG("KvdbApi", "Cache", "Enabled")
-            _subscribeForKvdb = true;
+        std::string channel = data->has("channel") ? data->get("channel") : "";
+        if(channel        == "kvdb/create") {
+            _kvdbCreateSubscription = true;
+        } else if(channel == "kvdb/update") {
+            _kvdbUpdateSubscription = true;
+        } else if(channel == "kvdb/delete") {
+            _kvdbDeleteSubscription = true;
+        } else if(channel == "kvdb/stats") {
+            _kvdbStatsSubscription  = true;
         }
+        PRIVMX_DEBUG(
+            "StoreApi", 
+            "CacheStatus", 
+            std::to_string(_kvdbCreateSubscription) + 
+            std::to_string(_kvdbUpdateSubscription) + 
+            std::to_string(_kvdbDeleteSubscription) + 
+            std::to_string(_kvdbStatsSubscription)
+        )
     } else if (type == "unsubscribe") {
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
-        if(channelName == "kvdb") {
-            PRIVMX_DEBUG("KvdbApi", "Cache", "Disabled")
-            _subscribeForKvdb = false;
-            _kvdbProvider.invalidate();
+        std::string channel = data->has("channel") ? data->get("channel") : "";
+        if(channel        == "kvdb/create") {
+            _kvdbCreateSubscription = false;
+        } else if(channel == "kvdb/update") {
+            _kvdbUpdateSubscription = false;
+        } else if(channel == "kvdb/delete") {
+            _kvdbDeleteSubscription = false;
+        } else if(channel == "kvdb/stats") {
+            _kvdbStatsSubscription  = false;
         }
+        PRIVMX_DEBUG(
+            "StoreApi", 
+            "CacheStatus", 
+            std::to_string(_kvdbCreateSubscription) + 
+            std::to_string(_kvdbUpdateSubscription) + 
+            std::to_string(_kvdbDeleteSubscription) + 
+            std::to_string(_kvdbStatsSubscription)
+        )
     }
 }
 
@@ -941,7 +969,9 @@ core::DecryptedEncKey KvdbApiImpl::getKvdbCurrentEncKey(server::KvdbInfo kvdb) {
 server::KvdbInfo KvdbApiImpl::getRawKvdbFromCacheOrBridge(const std::string& kvdbId) {
     // useing kvdbProvider only with KVDB_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!_subscribeForKvdb) _kvdbProvider.update(kvdbId);
+    if(!(_kvdbCreateSubscription && _kvdbUpdateSubscription && _kvdbDeleteSubscription && _kvdbStatsSubscription)) {
+        _kvdbProvider.update(kvdbId);
+    }
     auto kvdbContainerInfo = _kvdbProvider.get(kvdbId);
     if(kvdbContainerInfo.status != core::DataIntegrityStatus::ValidationSucceed) {
         throw KvdbDataIntegrityException();

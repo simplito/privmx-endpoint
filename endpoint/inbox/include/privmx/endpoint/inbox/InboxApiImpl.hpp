@@ -176,7 +176,10 @@ private:
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     InboxProvider _inboxProvider;
-    bool _subscribeForInbox;
+    bool _inboxCreateSubscription;
+    bool _inboxUpdateSubscription;
+    bool _inboxDeleteSubscription;
+    bool _inboxStatsSubscription;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId, _messageDeleterId;
     size_t _serverRequestChunkSize;

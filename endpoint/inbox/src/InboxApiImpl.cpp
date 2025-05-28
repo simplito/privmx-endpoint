@@ -75,10 +75,13 @@ InboxApiImpl::InboxApiImpl(
         },
         std::bind(&InboxApiImpl::validateInboxDataIntegrity, this, std::placeholders::_1)
     )),
-    _subscribeForInbox(false),
+    _inboxCreateSubscription(false),
+    _inboxUpdateSubscription(false),
+    _inboxDeleteSubscription(false),
+    _inboxStatsSubscription(false),
     _serverRequestChunkSize(serverRequestChunkSize),
     _inboxSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "inbox")),
-    _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread")),
+    _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread", "messages")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "inbox", "entries"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -1080,18 +1083,43 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
     } else if (type == "subscribe") {
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "inbox") {
-            PRIVMX_DEBUG("InboxApi", "Cache", "Enabled")
-            _subscribeForInbox = true;
+        if(channel        == "inbox/create") {
+            _inboxCreateSubscription = false;
+        } else if(channel == "inbox/update") {
+            _inboxUpdateSubscription = false;
+        } else if(channel == "inbox/delete") {
+            _inboxDeleteSubscription = false;
+        } else if(channel == "inbox/stats") {
+            _inboxStatsSubscription  = false;
         }
+        PRIVMX_DEBUG(
+            "StoreApi", 
+            "CacheStatus", 
+            std::to_string(_inboxCreateSubscription) + 
+            std::to_string(_inboxUpdateSubscription) + 
+            std::to_string(_inboxDeleteSubscription) + 
+            std::to_string(_inboxStatsSubscription)
+        )
     } else if (type == "unsubscribe") {
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "inbox") {
-            PRIVMX_DEBUG("InboxApi", "Cache", "Disabled")
-            _subscribeForInbox = false;
-            _inboxProvider.invalidate();
+        if(channel        == "inbox/create") {
+            _inboxCreateSubscription = false;
+        } else if(channel == "inbox/update") {
+            _inboxUpdateSubscription = false;
+        } else if(channel == "inbox/delete") {
+            _inboxDeleteSubscription = false;
+        } else if(channel == "inbox/stats") {
+            _inboxStatsSubscription  = false;
         }
+        PRIVMX_DEBUG(
+            "StoreApi", 
+            "CacheStatus", 
+            std::to_string(_inboxCreateSubscription) + 
+            std::to_string(_inboxUpdateSubscription) + 
+            std::to_string(_inboxDeleteSubscription) + 
+            std::to_string(_inboxStatsSubscription)
+        )
     } 
 
 }
@@ -1172,7 +1200,9 @@ thread::server::Message InboxApiImpl::getServerMessage(const std::string& messag
 server::Inbox InboxApiImpl::getRawInboxFromCacheOrBridge(const std::string& inboxId) {
     // useing inboxProvider only with INBOX_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!_subscribeForInbox) _inboxProvider.update(inboxId);
+    if(!(_inboxCreateSubscription && _inboxUpdateSubscription && _inboxDeleteSubscription && _inboxStatsSubscription)) {
+        _inboxProvider.update(inboxId);
+    }
     auto inboxContainerInfo = _inboxProvider.get(inboxId);
     if(inboxContainerInfo.status != core::DataIntegrityStatus::ValidationSucceed) {
         throw InboxDataIntegrityException();

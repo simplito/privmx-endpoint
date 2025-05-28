@@ -101,12 +101,17 @@ ENDPOINT_CLIENT_TYPE(UnsubscribeFromChannelsModel)
     LIST_FIELD(subscriptionsIds, std::string)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(SubscribeToChannelModel)
-    STRING_FIELD(channel)
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelsModel)
+    LIST_FIELD(channels, std::string)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(SubscribeToChannelResult)
-    STRING_FIELD(subscriptionId)
+ENDPOINT_CLIENT_TYPE(Subscription)
+    STRING_FIELD(subscriptionId) 
+    STRING_FIELD(channel) 
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelsResult)
+    LIST_FIELD(subscriptions, Subscription)
 TYPE_END
 
 } // server

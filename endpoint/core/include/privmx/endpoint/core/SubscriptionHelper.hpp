@@ -46,8 +46,8 @@ public:
 private:
     std::string getModuleEntryChannel(const std::string& moduleId);
     std::string getModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName);
-    void subscribeFor(const std::string& channel);
-    void unsubscribeFor(const std::string& channel);
+    void subscribeFor(const std::vector<std::string>& channels);
+    void unsubscribeFor(const std::vector<std::string>& channels);
 
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::string _moduleName;
@@ -78,8 +78,6 @@ public:
 private:
     std::string getModuleEntryChannel(const std::string& moduleId);
     std::string getModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName);
-    void subscribeFor(const std::string& channel);
-    void unsubscribeFor(const std::string& channel);
 
     SubscriptionHelper _subscriptionHelper;
     std::string _moduleName;
