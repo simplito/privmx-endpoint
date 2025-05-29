@@ -129,7 +129,10 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
     KvdbProvider _kvdbProvider;
-    bool _subscribeForKvdb;
+    bool _kvdbCreateSubscription;
+    bool _kvdbUpdateSubscription;
+    bool _kvdbDeleteSubscription;
+    bool _kvdbStatsSubscription;
     core::SubscriptionHelper _kvdbSubscriptionHelper;
     KvdbDataEncryptorV5 _kvdbDataEncryptorV5;
     EntryDataEncryptorV5 _entryDataEncryptorV5;
