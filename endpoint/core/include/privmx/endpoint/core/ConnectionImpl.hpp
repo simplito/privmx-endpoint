@@ -89,7 +89,6 @@ public:
 
 
 private:
-    std::string generateDIORandomId();
     DataIntegrityObject createDIOExt(
         const std::string& contextId, 
         const std::string& resourceId, 

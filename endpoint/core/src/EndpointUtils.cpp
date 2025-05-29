@@ -77,3 +77,7 @@ std::vector<std::string> EndpointUtils::usersWithPubKeyToIds(std::vector<core::U
 std::string EndpointUtils::generateId() {
    return Poco::UUIDGenerator().createRandom().toString();
 }
+
+std::string EndpointUtils::generateDIORandomId() {
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
+}

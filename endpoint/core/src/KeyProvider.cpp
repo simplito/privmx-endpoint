@@ -16,6 +16,7 @@ limitations under the License.
 #include <privmx/endpoint/core/CoreException.hpp>
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/CoreConstants.hpp"
+#include "privmx/endpoint/core/EndpointUtils.hpp"
 
 #include "privmx/endpoint/core/KeyProvider.hpp"
 
@@ -141,9 +142,15 @@ privmx::utils::List<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUs
     utils::List<server::KeyEntrySet> result = utils::TypedObjectFactory::createNewList<server::KeyEntrySet>();
     for (auto t : missingKeys) {
         auto key = t.second;
+        DataIntegrityObject missingKeyDIO = dio;
+        if(key.dataStructureVersion == EncryptionKeyDataSchema::Version::VERSION_1) {
+            missingKeyDIO.randomId = EndpointUtils::generateDIORandomId();
+        } else {
+            missingKeyDIO.randomId = t.second.dio.randomId;
+        }
         if(key.statusCode != 0) continue;
         for (auto user : users) {
-            result.add(createKeyEntrySet(user, key, dio, location, containerSecret));
+            result.add(createKeyEntrySet(user, key, missingKeyDIO, location, containerSecret));
         }
     }
     return result;
