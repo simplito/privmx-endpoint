@@ -73,7 +73,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
-        _eventMiddleware->emitNotificationEvent(event.type, event.channel, event.data);
+        _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
     });
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
@@ -126,7 +126,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
-        _eventMiddleware->emitNotificationEvent(event.type, event.channel, event.data);
+        _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
     });
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
@@ -249,6 +249,14 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .bridgeIdentity = _bridgeIdentity
     };
 }
+
+NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
+    return NotificationEvent{
+        .source = EventSource::SERVER,
+        .type = event.type,
+        .channel =  event.data->optValue<std::string>("channel", std::string()),
+        .data = event.data->getObject("data")
+    };
 
 void ConnectionImpl::assertServerVersion() {
     if(_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {

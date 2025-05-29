@@ -57,7 +57,7 @@ KvdbApiImpl::KvdbApiImpl(
     _subscribeForKvdb(false),
     _kvdbSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "kvdb", "entries"))
 {
-    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&KvdbApiImpl::processDisconnectedEvent, this));
 }
@@ -439,7 +439,9 @@ std::map<std::string, bool> KvdbApiImpl::deleteEntries(const std::string& kvdbId
     return result;
 }
 
-void KvdbApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
+void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    std::string channel = notification.channel;
+    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
     if(!_kvdbSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
         return;
     }
