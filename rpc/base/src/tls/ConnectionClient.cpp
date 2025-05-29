@@ -355,6 +355,9 @@ void ConnectionClient::validateSessionResponse(const Var& packet) {
 void ConnectionClient::extractServerConfig(const Var& packet) {
     Object::Ptr obj = packet.extract<Object::Ptr>();
     _serverConfig.requestChunkSize = obj->getObject("config")->getValue<size_t>("requestChunkSize");
+    if(obj->getObject("config")->has("serverVersion")) {
+        _serverConfig.serverVersion = obj->getObject("config")->getValue<std::string>("serverVersion");
+    }
 }
 
 void ConnectionClient::extractAndValidateChallenge(const Var& packet) {

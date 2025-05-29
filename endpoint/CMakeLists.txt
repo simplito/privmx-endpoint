@@ -9,6 +9,7 @@ if(ENDPOINT_MINIMAL_BUILD)
 endif()
 
 option(PRIVMX_BUILD_ENDPOINT_ENDPOINT "Build endpoint endpoint" ON)
+option(PRIVMX_BUILD_ENDPOINT_INTERFACE "Build endpoint interface" OFF)
 message(STATUS "Build endpoint ping - PRIVMX_BUILD_ENDPOINT_ENDPOINT=${PRIVMX_BUILD_ENDPOINT_ENDPOINT}")
 if(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(core)
@@ -24,10 +25,6 @@ if(PRIVMX_ENABLE_TESTS_E2E)
     add_subdirectory(tests_e2e)
 endif()
 
-option(PRIVMX_BUILD_ENDPOINT_INTERFACE "Build endpoint interface" OFF)
-if(PRIVMX_BUILD_ENDPOINT_INTERFACE)
-    add_subdirectory(interface)
-endif(PRIVMX_BUILD_ENDPOINT_INTERFACE)
 
 if(PRIVMX_BUILD_CLI AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(programs/privmxcli)
