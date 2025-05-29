@@ -24,6 +24,7 @@ namespace event {
 struct InternalContextEvent {
     std::string type;
     privmx::endpoint::core::Buffer data;
+    int64_t statusCode;
 };
 
 

@@ -142,7 +142,10 @@ private:
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     ThreadProvider _threadProvider;
-    bool _subscribeForThread;
+    bool _threadCreateSubscription;
+    bool _threadUpdateSubscription;
+    bool _threadDeleteSubscription;
+    bool _threadStatsSubscription;
     core::SubscriptionHelper _threadSubscriptionHelper;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
