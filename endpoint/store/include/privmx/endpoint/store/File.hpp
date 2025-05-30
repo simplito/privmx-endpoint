@@ -55,6 +55,29 @@ private:
     std::shared_ptr<ServerSliceProvider> _serverSliceProvider;
 };
 
+class BlockProvider
+{
+public:
+    BlockProvider(std::shared_ptr<SliceProvider> sliceProvider, int64_t blockSize)
+        : _sliceProvider(std::move(sliceProvider)), _blockSize(blockSize) {}
+    std::string get(int64_t index, int64_t version, int64_t fileSize) { // warning: last chunk can be smaller than other!!
+        int64_t start = index * _blockSize;
+        int64_t end = (index + 1) * _blockSize;
+        if (start > fileSize) {
+            // throw;
+        }
+        if (end > fileSize) {
+            end = fileSize;
+        }
+        return _sliceProvider->get(start, end, version);
+    }
+
+private:
+    std::shared_ptr<SliceProvider> _sliceProvider;
+    int64_t _blockSize;
+};
+
+
 } // store
 } // endpoint
 } // privmx
