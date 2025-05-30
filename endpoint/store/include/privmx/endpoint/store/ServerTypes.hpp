@@ -286,6 +286,7 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(FileDefinition)
     INT64_FIELD(size)
     INT64_FIELD(checksumSize)
+    BOOL_FIELD(randomWrite)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(CreateRequestModel)

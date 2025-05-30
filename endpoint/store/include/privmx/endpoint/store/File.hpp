@@ -163,6 +163,82 @@ public:
 };
 
 
+class FileService
+{
+public:
+    FileService(std::shared_ptr<ServerApi> serverApi) : _serverApi(serverApi) {}
+    std::string createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
+        // creates an empty file
+        
+        // create request
+        auto createRequestModel = utils::TypedObjectFactory::createNewObject<server::CreateRequestModel>();
+        auto fileDefinitions = utils::TypedObjectFactory::createNewList<server::FileDefinition>();
+        auto fileDefinition = utils::TypedObjectFactory::createNewObject<server::FileDefinition>();
+        fileDefinition.size(0);
+        fileDefinition.checksumSize(0);
+        fileDefinition.randomWrite(true);
+        fileDefinitions.add(fileDefinition);
+        createRequestModel.files(fileDefinitions);
+        auto createRequestResult = _requestApi->createRequest(createRequestModel);
+
+        // commit file
+        server::CommitFileModel commitFileModel = utils::TypedObjectFactory::createNewObject<server::CommitFileModel>();
+        commitFileModel.requestId(createRequestResult.id());
+        commitFileModel.fileIndex(0);
+        commitFileModel.seq(0);
+        commitFileModel.checksum("");
+        _requestApi->commitFile(commitFileModel);
+
+        // create file
+        server::Store store = getRawStoreFromCacheOrBridge(storeId);
+
+        auto key = privmx::crypto::Crypto::randomBytes(32);
+        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(key);
+
+        auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
+        internalFileMeta.version(4);
+        internalFileMeta.size(0);
+        internalFileMeta.cipherType(1);
+        internalFileMeta.chunkSize(128 * 1024);
+        internalFileMeta.key(utils::Base64::from(key));
+        internalFileMeta.hmac(utils::Base64::from(hash->getTopHash()));
+
+        privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
+            store.contextId(),
+            handle->getResourceId(),
+            storeId,
+            store.resourceIdOpt("")
+        );
+        store::FileMetaToEncryptV5 fileMeta {
+            .publicMeta = handle->getPublicMeta(),
+            .privateMeta = handle->getPrivateMeta(),
+            .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.asVar())),
+            .dio = fileDIO
+        };
+        auto encryptedMetaVar = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key).asVar();
+
+        auto storeFileCreateModel = utils::TypedObjectFactory::createNewObject<server::StoreFileCreateModel>();
+        storeFileCreateModel.fileIndex(0);
+        storeFileCreateModel.resourceId(core::EndpointUtils::generateId());
+        storeFileCreateModel.storeId(storeId);
+        storeFileCreateModel.meta(encryptedMetaVar);
+        storeFileCreateModel.keyId(key.id);
+        storeFileCreateModel.requestId(createRequestResult.id());
+        return _serverApi->storeFileCreate(storeFileCreateModel).fileId();
+    }
+    std::shared_ptr<FileInterface> openFile() { // open or create and open
+        // create??
+    }
+    void deleteFile() {
+        // storeFileDelete
+    }
+    // void closeFile(); // w FileInterface jest close
+
+private:
+    std::shared_ptr<ServerApi> _serverApi;
+
+};
+
 } // store
 } // endpoint
 } // privmx
