@@ -43,6 +43,18 @@ private:
     std::string _fileId;
 };
 
+class SliceProvider
+{
+public:
+    SliceProvider(std::shared_ptr<ServerSliceProvider> serverSliceProvider) : _serverSliceProvider(std::move(serverSliceProvider)) {}
+    std::string get(int64_t start, int64_t end, int64_t version) {
+        return _serverSliceProvider->get(start, end, version);
+    }
+
+private:
+    std::shared_ptr<ServerSliceProvider> _serverSliceProvider;
+};
+
 } // store
 } // endpoint
 } // privmx
