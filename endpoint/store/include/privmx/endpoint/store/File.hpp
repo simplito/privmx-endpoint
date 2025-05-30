@@ -148,6 +148,21 @@ private:
     int64_t _version = 0;
 };
 
+class FileInterface
+{
+public:
+    virtual int64_t size() = 0;
+    virtual void seekg(const int64_t pos) = 0;
+    virtual void seekp(const int64_t pos) = 0;
+    virtual core::Buffer read(const int64_t length) = 0;
+    virtual void write(const core::Buffer& chunk) = 0;
+    virtual void truncate(const int64_t length) = 0;
+    virtual void close() = 0;
+    // virtual void sync() = 0;
+    // virtual void flush() = 0;
+};
+
+
 } // store
 } // endpoint
 } // privmx
