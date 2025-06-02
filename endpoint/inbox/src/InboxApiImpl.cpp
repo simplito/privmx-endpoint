@@ -325,7 +325,7 @@ Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& t
     auto statusCode = validateInboxDataIntegrity(inbox);
     if(statusCode != 0) {
         _inboxProvider.updateByValueAndStatus(privmx::endpoint::inbox::InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationFailed});
-        return convertServerKvdbToLibKvdb(inbox,{},{},{},statusCode);
+        return convertServerInboxToLibInbox(inbox,{},{},{},statusCode);
     } else {
         _inboxProvider.updateByValueAndStatus(privmx::endpoint::inbox::InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationSucceed});
     }
@@ -349,7 +349,7 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
         auto inbox = inboxesRaw.get(i);
         _inboxProvider.updateByValue(inbox);
         auto statusCode = validateInboxDataIntegrity(inbox);
-        inboxes.push_back(convertServerKvdbToLibKvdb(inbox,{},{},{},statusCode));
+        inboxes.push_back(convertServerInboxToLibInbox(inbox,{},{},{},statusCode));
         if(statusCode == 0) {
             _inboxProvider.updateByValueAndStatus(InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationSucceed});
         } else {
@@ -665,7 +665,7 @@ InboxDataResultV5 InboxApiImpl::decryptInboxV5(inbox::server::InboxDataEntry inb
     return _inboxDataProcessorV5.unpackAll(inboxEntry.data(), encKey.key);
 }
 
-inbox::Inbox InboxApiImpl::convertServerKvdbToLibKvdb(
+inbox::Inbox InboxApiImpl::convertServerInboxToLibInbox(
     inbox::server::Inbox inbox,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
@@ -693,7 +693,7 @@ inbox::Inbox InboxApiImpl::convertServerKvdbToLibKvdb(
 }
 
 Inbox InboxApiImpl::convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData) {
-    return convertServerKvdbToLibKvdb(
+    return convertServerInboxToLibInbox(
         inboxRaw,
         inboxData.publicData.publicMeta,
         inboxData.privateData.privateMeta,
@@ -704,7 +704,7 @@ Inbox InboxApiImpl::convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDat
 }
 
 Inbox InboxApiImpl::convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData) {
-    return convertServerKvdbToLibKvdb(
+    return convertServerInboxToLibInbox(
         inboxRaw,
         inboxData.publicData.publicMeta,
         inboxData.privateData.privateMeta,
@@ -782,7 +782,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
     switch (getInboxDataEntryStructureVersion(inboxEntry)) {
         case InboxDataSchema::Version::UNKNOWN: {
             auto e = UnknownInboxFormatException();
-            return std::make_tuple(convertServerKvdbToLibKvdb(inbox,{},{},{},e.getCode()), core::DataIntegrityObject());
+            return std::make_tuple(convertServerInboxToLibInbox(inbox,{},{},{},e.getCode()), core::DataIntegrityObject());
         }
         case InboxDataSchema::Version::VERSION_4: {
             auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);
@@ -808,7 +808,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
         }
     }
     auto e = UnknownInboxFormatException();
-    return std::make_tuple(convertServerKvdbToLibKvdb(inbox,{},{},{},e.getCode()), core::DataIntegrityObject());
+    return std::make_tuple(convertServerInboxToLibInbox(inbox,{},{},{},e.getCode()), core::DataIntegrityObject());
 }
 
 
@@ -845,7 +845,7 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxes(utils::Li
                 result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result.push_back(convertServerKvdbToLibKvdb(inbox,{},{},{},e.getCode()));
+            result.push_back(convertServerInboxToLibInbox(inbox,{},{},{},e.getCode()));
             inboxesDIO.push_back(core::DataIntegrityObject{});
         }
     }

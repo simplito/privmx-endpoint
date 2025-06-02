@@ -122,7 +122,7 @@ private:
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
     InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    inbox::Inbox convertServerKvdbToLibKvdb(
+    inbox::Inbox convertServerInboxToLibInbox(
         inbox::server::Inbox inbox,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
