@@ -121,8 +121,16 @@ private:
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
     InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    inbox::Inbox convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData);
     InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    inbox::Inbox convertServerKvdbToLibKvdb(
+        inbox::server::Inbox inbox,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const std::optional<privmx::endpoint::inbox::FilesConfig>& filesConfig = std::nullopt,
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = InboxDataSchema::Version::UNKNOWN
+    );
+    inbox::Inbox convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData);
     inbox::Inbox convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData);
     InboxDataSchema::Version getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry inboxEntry);
     std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
