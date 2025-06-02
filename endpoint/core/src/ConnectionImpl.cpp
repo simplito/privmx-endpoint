@@ -257,6 +257,7 @@ NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationE
         .channel =  event.data->optValue<std::string>("channel", std::string()),
         .data = event.data->getObject("data")
     };
+}
 
 void ConnectionImpl::assertServerVersion() {
     if(_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {
