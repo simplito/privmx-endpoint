@@ -117,12 +117,12 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
         );
         auto decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
             rawEvent.eventData().convert<std::string>(), 
-            _userPrivKey.getPublicKey(), 
+            crypto::PublicKey::fromBase58DER(rawEvent.author().pub()), 
             encKey
         );
         std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
         event->channel = channel;
-        event->data = {
+        event->data = ContextCustomEventData{
             .contextId = rawEvent.id(), 
             .userId = rawEvent.author().id(), 
             .payload = decryptedData
