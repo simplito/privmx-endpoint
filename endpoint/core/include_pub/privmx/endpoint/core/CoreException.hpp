@@ -60,6 +60,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidDataIntegrityObjectChec
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectMismatchEncKeyException, "User key does not match with author public key in data integrity object", 0x0016)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectInvalidSignatureException, "Invalid data integrity object signature", 0x0017)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, KeyProviderRequestCompletedException, "KeyProvider request completed", 0x0018)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedVerifierResponseException, "Malformed verifier response", 0x0019)
+
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)

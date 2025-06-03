@@ -14,7 +14,6 @@ limitations under the License.
 #include <cstdint>
 #include <privmx/rpc/Types.hpp>
 #include <privmx/utils/Debug.hpp>
-
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
@@ -25,7 +24,7 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
-    _userVerifier = std::make_shared<core::DefaultUserVerifierInterface>();
+    _userVerifier = std::make_shared<core::UserVerifier>(std::make_shared<core::DefaultUserVerifierInterface>());
 }
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
@@ -184,7 +183,7 @@ std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& context
 
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
     std::unique_lock lock(_mutex);
-    _userVerifier = verifier;
+    _userVerifier = std::make_shared<UserVerifier>(verifier);
 }
 
 void ConnectionImpl::disconnect() {
