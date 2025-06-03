@@ -9,6 +9,7 @@
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/KvdbVarSerializer.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 
 
@@ -185,6 +186,19 @@ TEST_F(KvdbTest, listKvdbs_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        kvdbApi->listKvdbs(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(KvdbTest, listKvdbs_correct_input_data) {
@@ -969,6 +983,21 @@ TEST_F(KvdbTest, listEntries_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        kvdbApi->listEntries(
+            reader->getString("Kvdb_1.kvdbId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="BLACH",
+                .sortBy=std::nullopt,
+                .lastKey=std::nullopt,
+                .prefix=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(KvdbTest, listEntries_correct_input_data) {
