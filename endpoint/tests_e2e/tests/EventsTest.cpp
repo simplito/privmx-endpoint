@@ -130,7 +130,6 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
         }
     });
     EXPECT_NO_THROW({
-        std::cout << event->connectionId << " " << connection->getConnectionId() << std::endl;
         EXPECT_EQ(event->type, "contextCustom");
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
         if(event::Events::isContextCustomEvent(event)) {
