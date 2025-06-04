@@ -704,6 +704,9 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
         } else if(channel == "store/stats") {
             _storeStatsSubscription  = true;
         }
+        if(_storeCreateSubscription && _storeUpdateSubscription && _storeDeleteSubscription && _storeStatsSubscription) {
+            _storeProvider.invalidate();
+        }
         PRIVMX_DEBUG(
             "StoreApi", 
             "CacheStatus", 
@@ -716,12 +719,16 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
         if(channel        == "store/create") {
+            _storeProvider.invalidate();
             _storeCreateSubscription = false;
         } else if(channel == "store/update") {
+            _storeProvider.invalidate();
             _storeUpdateSubscription = false;
         } else if(channel == "store/delete") {
+            _storeProvider.invalidate();
             _storeDeleteSubscription = false;
         } else if(channel == "store/stats") {
+            _storeProvider.invalidate();
             _storeStatsSubscription  = false;
         }
         PRIVMX_DEBUG(

@@ -607,6 +607,9 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         } else if(channelName == "thread/stats") {
             _threadStatsSubscription  = true;
         }
+        if(_threadCreateSubscription && _threadUpdateSubscription && _threadDeleteSubscription && _threadStatsSubscription) {
+            _threadProvider.invalidate();
+        }
         PRIVMX_DEBUG(
             "ThreadApi", 
             "CacheStatus", 
@@ -619,12 +622,16 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
         if(channelName        == "thread/create") {
+            _threadProvider.invalidate();
             _threadCreateSubscription = false;
         } else if(channelName == "thread/update") {
+            _threadProvider.invalidate();
             _threadUpdateSubscription = false;
         } else if(channelName == "thread/delete") {
+            _threadProvider.invalidate();
             _threadDeleteSubscription = false;
         } else if(channelName == "thread/stats") {
+            _threadProvider.invalidate();
             _threadStatsSubscription  = false;
         }
         PRIVMX_DEBUG(

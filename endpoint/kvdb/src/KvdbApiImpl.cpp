@@ -531,6 +531,9 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
         } else if(channel == "kvdb/stats") {
             _kvdbStatsSubscription  = true;
         }
+        if(_kvdbCreateSubscription && _kvdbUpdateSubscription && _kvdbDeleteSubscription && _kvdbStatsSubscription) {
+            _kvdbProvider.invalidate();
+        }
         PRIVMX_DEBUG(
             "StoreApi", 
             "CacheStatus", 
@@ -543,12 +546,16 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         std::string channel = data->has("channel") ? data->get("channel") : "";
         if(channel        == "kvdb/create") {
+            _kvdbProvider.invalidate();
             _kvdbCreateSubscription = false;
         } else if(channel == "kvdb/update") {
+            _kvdbProvider.invalidate();
             _kvdbUpdateSubscription = false;
         } else if(channel == "kvdb/delete") {
+            _kvdbProvider.invalidate();
             _kvdbDeleteSubscription = false;
         } else if(channel == "kvdb/stats") {
+            _kvdbProvider.invalidate();
             _kvdbStatsSubscription  = false;
         }
         PRIVMX_DEBUG(
