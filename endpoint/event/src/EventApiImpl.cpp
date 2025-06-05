@@ -143,7 +143,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
             );
             decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
                 rawEvent.eventData().convert<std::string>(), 
-                _userPrivKey.getPublicKey(), 
+                crypto::PublicKey::fromBase58DER(rawEvent.author().pub()),
                 encKey
             );
             customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
