@@ -85,6 +85,7 @@ public:
     static void validatePubKeyBase58DER(const std::string& value, const std::string& stack_trace = "");
     static void validateSignature(const std::string& value, const std::string& stack_trace = "");
     static void validateEventType(const Event& value, const std::string& type, const std::string& stack_trace = "");
+    static void validateJSON(const std::string& value, const std::string& stack_trace = "");
     template<typename T>
     static void validateClass(const T& value, const std::string& stack_trace = "") {
         StructValidator<T>::validate(value, stack_trace + StructValidator<T>::getReadableType());

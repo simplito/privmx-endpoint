@@ -186,6 +186,19 @@ TEST_F(StoreTest, listStores_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(StoreTest, listStores_correct_input_data) {
@@ -932,6 +945,19 @@ TEST_F(StoreTest, listFiles_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        storeApi->listFiles(
+            reader->getString("Store_1.storeId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(StoreTest, listFiles_correct_input_data) {
