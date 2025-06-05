@@ -18,6 +18,7 @@ limitations under the License.
 #include "privmx/endpoint/event/EventApiImpl.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
 #include "privmx/endpoint/event/Events.hpp"
+#include "privmx/endpoint/event/Constants.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
@@ -89,12 +90,27 @@ bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::st
     return false;
 }
 
-InternalContextEvent EventApiImpl::extractInternalEventData(const Poco::JSON::Object::Ptr& eventData) {
-    auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
-    auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedInternalContextEvent>(raw.eventData());
-    auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key(), crypto::PublicKey::fromBase58DER(raw.author().pub()));
-    auto decryptedData =  _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData(), _userPrivKey.getPublicKey(), encKey);
-    return InternalContextEvent{.type=rawEventData.type(), .data=decryptedData};
+DecryptedInternalContextEventDataV1 EventApiImpl::extractInternalEventData(const Poco::JSON::Object::Ptr& eventData) {
+    int64_t statusCode = 0;
+    std::string type;
+    core::Buffer decryptedData;
+    try {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
+        auto rawEventData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedInternalContextEvent>(raw.eventData());
+        auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_userPrivKey, raw.key(), crypto::PublicKey::fromBase58DER(raw.author().pub()));
+        decryptedData =  _dataEncryptor.decodeAndDecryptAndVerify(rawEventData.encryptedData(), _userPrivKey.getPublicKey(), encKey);
+        type = rawEventData.typeOpt("");
+    } catch (const privmx::endpoint::core::Exception& e) {
+        statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) {
+        statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
+    return DecryptedInternalContextEventDataV1{
+        InternalContextEventDataV1{.type=type, .data=decryptedData},
+        core::DecryptedVersionedData{.dataStructureVersion=EventDataSchema::Version::VERSION_1, .statusCode=statusCode}
+    };
 }
 
 void EventApiImpl::subscribeForInternalEvents(const std::string& contextId) {
@@ -111,21 +127,33 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
     if(type == "custom" && _contextSubscriptionHelper.hasSubscriptionForChannel(channel) && data->get("eventData").isString()) {
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
         if(channel == "context/" + rawEvent.id() + "/" INTERNAL_EVENT_CHANNEL_NAME) return;
-        auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(
-            _userPrivKey, 
-            rawEvent.key()
-        );
-        auto decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
-            rawEvent.eventData().convert<std::string>(), 
-            crypto::PublicKey::fromBase58DER(rawEvent.author().pub()), 
-            encKey
-        );
+        int64_t statusCode = 0;
+        core::Buffer decryptedData;
+        try {
+            auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(
+                _userPrivKey, 
+                rawEvent.key()
+            );
+            decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
+                rawEvent.eventData().convert<std::string>(), 
+                crypto::PublicKey::fromBase58DER(rawEvent.author().pub()),
+                encKey
+            );
+        } catch (const privmx::endpoint::core::Exception& e) {
+            statusCode = e.getCode();
+        } catch (const privmx::utils::PrivmxException& e) {
+            statusCode = core::ExceptionConverter::convert(e).getCode();
+        } catch (...) {
+            statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
         std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
         event->channel = channel;
         event->data = ContextCustomEventData{
             .contextId = rawEvent.id(), 
             .userId = rawEvent.author().id(), 
-            .payload = decryptedData
+            .payload = decryptedData,
+            .statusCode = statusCode,
+            .schemaVersion = EventDataSchema::Version::VERSION_1
         };
         _eventMiddleware->emitApiEvent(event);
     }
