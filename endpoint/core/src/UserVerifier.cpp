@@ -19,7 +19,7 @@ UserVerifier::UserVerifier(std::shared_ptr<UserVerifierInterface> userVerifier) 
 std::vector<bool> UserVerifier::verify(const std::vector<VerificationRequest>& request) {
     auto result = _userVerifier->verify(request);
     if(result.size() != request.size()) {
-        throw MalformedVerifierResponseException("VerificationResult size is " + std::to_string(result.size()) + " with is different from VerificationRequest size" + std::to_string(request.size()));
+        throw MalformedVerifierResponseException("VerificationResult size is " + std::to_string(result.size()) + " which is different from VerificationRequest size" + std::to_string(request.size()));
     }
     return result;
 };
