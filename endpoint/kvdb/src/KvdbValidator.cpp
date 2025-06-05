@@ -22,6 +22,9 @@ void StructValidator<kvdb::KvdbEntryPagingQuery>::validate(const kvdb::KvdbEntry
             throw InvalidParamsException(stack_trace + ".sortBy | " + ("Invalid sortBy, isn't 'createDate' or 'itemKey' or 'lastModificationDate', received '" + value.sortBy.value() + "'"));
         }
     }
+    if (value.queryAsJson.has_value()) {
+        Validator::validateJSON(value.queryAsJson.value(), stack_trace + ".queryAsJson");
+    }
 }
 
 void StructValidator<kvdb::KvdbKeysPagingQuery>::validate(const kvdb::KvdbKeysPagingQuery& value, const std::string& stack_trace) {

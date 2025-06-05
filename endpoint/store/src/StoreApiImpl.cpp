@@ -315,7 +315,7 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
         if(type == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationFailed});
         }
-        return Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
+        return convertServerStoreToLibStore(store, {}, {}, statusCode);
     } else {
         if(type == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -350,7 +350,7 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
         auto store = storesList.stores().get(i);
         if(type == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(store);
         auto statusCode = validateStoreDataIntegrity(store);
-        stores.push_back(Store{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}});
+        stores.push_back(convertServerStoreToLibStore(store, {}, {}, statusCode));
         if(statusCode == 0) {
             if(type == STORE_TYPE_FILTER_FLAG) {
                 _storeProvider.updateByValueAndStatus(StoreProvider::ContainerInfo{.container=store, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -832,96 +832,76 @@ DecryptedStoreDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEn
     }
 }
 
-Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData) {
+Store StoreApiImpl::convertServerStoreToLibStore(
+    server::Store store,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const int64_t& statusCode,
+    const int64_t& schemaVersion
+) {
     std::vector<std::string> users;
     std::vector<std::string> managers;
-    for (auto x : store.users()) {
-        users.push_back(x);
+    if(!store.usersEmpty()) {
+        for (auto x : store.users()) {
+            users.push_back(x);
+        }
     }
-    for (auto x : store.managers()) {
-        managers.push_back(x);
+    if(!store.managersEmpty()) {
+        for (auto x : store.managers()) {
+            managers.push_back(x);
+        }
     }
-    Poco::JSON::Object::Ptr privateMeta = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-    privateMeta->set("title", storeData.name());
-    int64_t statusCode = storeData.statusCodeOpt(0);
-    return {
-        .storeId = store.id(),
-        .contextId = store.contextId(),
-        .createDate = store.createDate(),
-        .creator = store.creator(),
-        .lastModificationDate = store.lastModificationDate(),
-        .lastFileDate = store.lastFileDate(),
-        .lastModifier = store.lastModifier(),
+    return Store{
+        .storeId = store.idOpt(std::string()),
+        .contextId = store.contextIdOpt(std::string()),
+        .createDate = store.createDateOpt(0),
+        .creator = store.creatorOpt(std::string()),
+        .lastModificationDate = store.lastModificationDateOpt(0),
+        .lastFileDate = store.lastFileDateOpt(0),
+        .lastModifier = store.lastModifierOpt(std::string()),
         .users = users,
         .managers = managers,
-        .version = store.version(),
-        .publicMeta = core::Buffer::from(""),
-        .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
-        .policy = {},
-        .filesCount = store.files(),
+        .version = store.versionOpt(0),
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(store.policyOpt(Poco::JSON::Object::Ptr(new Poco::JSON::Object))),
+        .filesCount = store.filesOpt(0),
         .statusCode = statusCode,
-        .schemaVersion = StoreDataSchema::VERSION_1
+        .schemaVersion = schemaVersion
     };
+}
+
+Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData) {
+    Poco::JSON::Object::Ptr privateMeta = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
+    privateMeta->set("title", storeData.name());
+    return convertServerStoreToLibStore(
+        store, 
+        core::Buffer::from(""),
+        core::Buffer::from(utils::Utils::stringify(privateMeta)),
+        storeData.statusCodeOpt(0),
+        StoreDataSchema::Version::VERSION_1
+
+    );
 }
 
 Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData) {
-    std::vector<std::string> users;
-    std::vector<std::string> managers;
-    for (auto x : store.users()) {
-        users.push_back(x);
-    }
-    for (auto x : store.managers()) {
-        managers.push_back(x);
-    }
-    Store result {
-        .storeId = store.id(),
-        .contextId = store.contextId(), 
-        .createDate = store.createDate(),
-        .creator = store.creator(),
-        .lastModificationDate = store.lastModificationDate(),
-        .lastFileDate = store.lastFileDate(),
-        .lastModifier = store.lastModifier(),
-        .users = users,
-        .managers = managers,
-        .version = store.version(),
-        .publicMeta = storeData.publicMeta,
-        .privateMeta = storeData.privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(store.policy()), 
-        .filesCount = store.files(),
-        .statusCode = storeData.statusCode,
-        .schemaVersion = StoreDataSchema::VERSION_4
-    };
-    return result;
+    return convertServerStoreToLibStore(
+        store, 
+        storeData.publicMeta,
+        storeData.privateMeta,
+        storeData.statusCode,
+        StoreDataSchema::Version::VERSION_4
+    );
 }
 
 Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData) {
-    std::vector<std::string> users;
-    std::vector<std::string> managers;
-    for (auto x : store.users()) {
-        users.push_back(x);
-    }
-    for (auto x : store.managers()) {
-        managers.push_back(x);
-    }
-    Store result {
-        .storeId = store.id(),
-        .contextId = store.contextId(), 
-        .createDate = store.createDate(),
-        .creator = store.creator(),
-        .lastModificationDate = store.lastModificationDate(),
-        .lastFileDate = store.lastFileDate(),
-        .lastModifier = store.lastModifier(),
-        .users = users,
-        .managers = managers,
-        .version = store.version(),
-        .publicMeta = storeData.publicMeta,
-        .privateMeta = storeData.privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(store.policy()), 
-        .filesCount = store.files(),
-        .statusCode = storeData.statusCode,
-        .schemaVersion = StoreDataSchema::VERSION_5
-    };
-    return result;
+    return convertServerStoreToLibStore(
+        store, 
+        storeData.publicMeta,
+        storeData.privateMeta,
+        storeData.statusCode,
+        StoreDataSchema::Version::VERSION_5
+    );
 }
 
 StoreDataSchema::Version StoreApiImpl::getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry) {
@@ -946,7 +926,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
     switch (getStoreEntryDataStructureVersion(storeEntry)) {
         case StoreDataSchema::Version::UNKNOWN: {
             auto e = UnknowStoreFormatException();
-            return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(),{}}, core::DataIntegrityObject());
+            return std::make_tuple(convertServerStoreToLibStore(store, {}, {}, e.getCode()), core::DataIntegrityObject());
         }
         case StoreDataSchema::Version::VERSION_1: {
             return std::make_tuple(
@@ -987,7 +967,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
         }
     }
     auto e = UnknowStoreFormatException();
-    return std::make_tuple(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
+    return std::make_tuple(convertServerStoreToLibStore(store, {}, {}, e.getCode()), core::DataIntegrityObject());
 }
 
 std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List<server::Store> stores) {
@@ -1023,7 +1003,7 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
                 result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result.push_back(Store{{},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}});
+            result.push_back(convertServerStoreToLibStore(store, {}, {}, e.getCode()));
             storesDIO.push_back(core::DataIntegrityObject());
 
         }
@@ -1186,59 +1166,79 @@ DecryptedFileMetaV5 StoreApiImpl::decryptFileMetaV5(server::File file, const cor
     }
 }
 
-File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta storeFileMeta) {
-    File result = {
+File StoreApiImpl::convertServerFileToLibFile(
+    server::File file,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const int64_t& size,
+    const std::string& authorPubKey,
+    const int64_t& statusCode,
+    const int64_t& schemaVersion
+) {
+    return File{
         .info = {
-            .storeId = file.storeId(),
-            .fileId = file.id(),
-            .createDate = file.created(),
-            .author = file.creator(),
+            .storeId = file.storeIdOpt(std::string()),
+            .fileId = file.idOpt(std::string()),
+            .createDate = file.createdOpt(0),
+            .author = file.creatorOpt(std::string()),
         },
-        .publicMeta = core::Buffer(),
-        .privateMeta = core::Buffer::from(utils::Utils::stringifyVar(storeFileMeta)),
-        .size = storeFileMeta.sizeOpt(0),
-        .authorPubKey = storeFileMeta.authorEmpty() ? "" : storeFileMeta.author().pubKeyOpt(""),
-        .statusCode = storeFileMeta.statusCodeOpt(0),
-        .schemaVersion = FileDataSchema::VERSION_1
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .size = size,
+        .authorPubKey = authorPubKey,
+        .statusCode = statusCode,
+        .schemaVersion = schemaVersion
     };
-    return result;
+}
+
+File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta storeFileMeta) {
+    return convertServerFileToLibFile(
+        file,
+        core::Buffer(),
+        core::Buffer::from(utils::Utils::stringifyVar(storeFileMeta)),
+        storeFileMeta.sizeOpt(0),
+        storeFileMeta.authorEmpty() ? "" : storeFileMeta.author().pubKeyOpt(""),
+        storeFileMeta.statusCodeOpt(0),
+        FileDataSchema::Version::VERSION_1
+    );
 }
 
 File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData) {
-    store::ServerFileInfo fileInfo = {
-        .storeId = file.storeId(),
-        .fileId = file.id(),
-        .createDate = file.created(),
-        .author = file.creator(),
-    };
-    return store::File {
-        .info = fileInfo,
-        .publicMeta = fileData.publicMeta,
-        .privateMeta = fileData.privateMeta,
-        .size = fileData.fileSize,
-        .authorPubKey = fileData.authorPubKey,
-        .statusCode = fileData.statusCode,
-        .schemaVersion = FileDataSchema::VERSION_4
-    };
+    return convertServerFileToLibFile(
+        file,
+        fileData.publicMeta,
+        fileData.privateMeta,
+        fileData.fileSize,
+        fileData.authorPubKey,
+        fileData.statusCode,
+        FileDataSchema::Version::VERSION_4
+    );
 }
 
 File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData) {
-    store::ServerFileInfo fileInfo = {
-        .storeId = file.storeId(),
-        .fileId = file.id(),
-        .createDate = file.created(),
-        .author = file.creator(),
-    };
-    auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileData.internalMeta.stdString()));
-    return store::File {
-        .info = fileInfo,
-        .publicMeta = fileData.publicMeta,
-        .privateMeta = fileData.privateMeta,
-        .size = internalMeta.size(),
-        .authorPubKey = fileData.authorPubKey,
-        .statusCode = fileData.statusCode,
-        .schemaVersion = FileDataSchema::VERSION_5
-    };
+    int64_t size = 0;
+    auto statusCode = fileData.statusCode;
+    if(statusCode == 0) {
+        try {
+            auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileData.internalMeta.stdString()));
+            size = internalMeta.size();
+        }  catch (const privmx::endpoint::core::Exception& e) {
+            statusCode = e.getCode();
+        } catch (const privmx::utils::PrivmxException& e) {
+            statusCode = core::ExceptionConverter::convert(e).getCode();
+        } catch (...) {
+            statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
+    }
+    return convertServerFileToLibFile(
+        file,
+        fileData.publicMeta,
+        fileData.privateMeta,
+        size,
+        fileData.authorPubKey,
+        statusCode,
+        FileDataSchema::Version::VERSION_5
+    );
 }
 
 FileDataSchema::Version StoreApiImpl::getFileDataStructureVersion(server::File file) {
@@ -1263,7 +1263,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
     switch (getFileDataStructureVersion(file)) {
         case FileDataSchema::Version::UNKNOWN: {
             auto e = UnknowFileFormatException();
-            return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode(),{}}, core::DataIntegrityObject());
+            return std::make_tuple(convertServerFileToLibFile(file,{},{},{},{},e.getCode()), core::DataIntegrityObject());
         }
         case FileDataSchema::Version::VERSION_1: {
             auto decryptedFile = decryptStoreFileV1(file, encKey).meta;
@@ -1305,7 +1305,7 @@ std::tuple<File, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertFileD
         }
     }
     auto e = UnknowFileFormatException();
-    return std::make_tuple(File{{},{},{},{},{},.statusCode = e.getCode(), {}}, core::DataIntegrityObject());
+    return std::make_tuple(convertServerFileToLibFile(file,{},{},{},{},e.getCode()), core::DataIntegrityObject());
 }
 
 std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files) {
@@ -1336,10 +1336,10 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
                     result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(File{{},{},{},{},{},.statusCode = statusCode, {}});
+                result.push_back(convertServerFileToLibFile(file,{},{},{},{},statusCode));
             }
         } catch (const core::Exception& e) {
-            result.push_back(File{{},{},{},{},{},.statusCode = e.getCode(), {}});
+            result.push_back(convertServerFileToLibFile(file,{},{},{},{},e.getCode()));
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
@@ -1403,11 +1403,11 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::File file) {
         auto store = getRawStoreFromCacheOrBridge(file.storeId());
         return decryptAndConvertFileDataToFileInfo(store, file);
     } catch (const core::Exception& e) {
-        return File{{},{},{},{},{},.statusCode = e.getCode(), {}};
+        return convertServerFileToLibFile(file,{},{},{},{},e.getCode());
     } catch (const privmx::utils::PrivmxException& e) {
-        return File{{},{},{},{},{},.statusCode = e.getCode(), {}};
+        return convertServerFileToLibFile(file,{},{},{},{},core::ExceptionConverter::convert(e).getCode());
     } catch (...) {
-        return File{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE, {}};
+        return convertServerFileToLibFile(file,{},{},{},{},ENDPOINT_CORE_EXCEPTION_CODE);
     }
 }
 

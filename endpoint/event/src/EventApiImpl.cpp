@@ -105,7 +105,7 @@ InternalContextEvent EventApiImpl::extractInternalEventData(const Poco::JSON::Ob
         );
         decryptedData = _dataEncryptor.decodeAndDecryptAndVerify(
             rawEventData.encryptedData(), 
-            _userPrivKey.getPublicKey(), 
+            crypto::PublicKey::fromBase58DER(raw.author().pub()), 
             encKey
         );
     } catch (const privmx::endpoint::core::Exception& e) {
@@ -156,7 +156,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
         }
         std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
         event->channel = "context/" + rawEvent.id() + "/" + customChannelName;
-        event->data = {
+        event->data = ContextCustomEventData{
             .contextId = rawEvent.id(), 
             .userId = rawEvent.author().id(), 
             .payload = decryptedData,
