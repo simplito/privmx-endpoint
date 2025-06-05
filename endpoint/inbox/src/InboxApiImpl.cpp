@@ -325,7 +325,7 @@ Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& t
     auto statusCode = validateInboxDataIntegrity(inbox);
     if(statusCode != 0) {
         _inboxProvider.updateByValueAndStatus(privmx::endpoint::inbox::InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationFailed});
-        return Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
+        return convertServerInboxToLibInbox(inbox,{},{},{},statusCode);
     } else {
         _inboxProvider.updateByValueAndStatus(privmx::endpoint::inbox::InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationSucceed});
     }
@@ -349,7 +349,7 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
         auto inbox = inboxesRaw.get(i);
         _inboxProvider.updateByValue(inbox);
         auto statusCode = validateInboxDataIntegrity(inbox);
-        inboxes.push_back(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}});
+        inboxes.push_back(convertServerInboxToLibInbox(inbox,{},{},{},statusCode));
         if(statusCode == 0) {
             _inboxProvider.updateByValueAndStatus(InboxProvider::ContainerInfo{.container=inbox, .status=core::DataIntegrityStatus::ValidationSucceed});
         } else {
@@ -661,50 +661,57 @@ InboxDataResultV4 InboxApiImpl::decryptInboxV4(inbox::server::InboxDataEntry inb
     return _inboxDataProcessorV4.unpackAll(inboxEntry.data(), encKey.key);
 }
 
-Inbox InboxApiImpl::convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData) {
-    inbox::Inbox ret {
-        .inboxId = inboxRaw.id(),
-        .contextId = inboxRaw.contextId(),
-        .createDate = inboxRaw.createDate(),
-        .creator = inboxRaw.creator(),
-        .lastModificationDate = inboxRaw.lastModificationDate(),
-        .lastModifier = inboxRaw.lastModifier(),
-        .users = listToVector<std::string>(inboxRaw.users()),
-        .managers = listToVector<std::string>(inboxRaw.managers()),
-        .version = inboxRaw.version(),
-        .publicMeta = inboxData.publicData.publicMeta,
-        .privateMeta = inboxData.privateData.privateMeta,
-        .filesConfig = inboxData.filesConfig,
-        .policy = core::Factory::parsePolicyServerObjectWithoutItem(inboxRaw.policy()),
-        .statusCode = inboxData.statusCode,
-        .schemaVersion = InboxDataSchema::VERSION_4
-    };
-    return ret;
-}
-
 InboxDataResultV5 InboxApiImpl::decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey) {
     return _inboxDataProcessorV5.unpackAll(inboxEntry.data(), encKey.key);
 }
 
-Inbox InboxApiImpl::convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData) {
-    inbox::Inbox ret {
-        .inboxId = inboxRaw.id(),
-        .contextId = inboxRaw.contextId(),
-        .createDate = inboxRaw.createDate(),
-        .creator = inboxRaw.creator(),
-        .lastModificationDate = inboxRaw.lastModificationDate(),
-        .lastModifier = inboxRaw.lastModifier(),
-        .users = listToVector<std::string>(inboxRaw.users()),
-        .managers = listToVector<std::string>(inboxRaw.managers()),
-        .version = inboxRaw.version(),
-        .publicMeta = inboxData.publicData.publicMeta,
-        .privateMeta = inboxData.privateData.privateMeta,
-        .filesConfig = inboxData.filesConfig,
-        .policy = core::Factory::parsePolicyServerObjectWithoutItem(inboxRaw.policy()),
-        .statusCode = inboxData.statusCode,
-        .schemaVersion = InboxDataSchema::VERSION_5
+inbox::Inbox InboxApiImpl::convertServerInboxToLibInbox(
+    inbox::server::Inbox inbox,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::optional<privmx::endpoint::inbox::FilesConfig>& filesConfig,
+    const int64_t& statusCode,
+    const int64_t& schemaVersion
+) {
+    return inbox::Inbox{
+        .inboxId = inbox.idOpt(std::string()),
+        .contextId = inbox.contextIdOpt(std::string()),
+        .createDate = inbox.createDateOpt(0),
+        .creator = inbox.creator(),
+        .lastModificationDate = inbox.lastModificationDateOpt(0),
+        .lastModifier = inbox.lastModifierOpt(std::string()),
+        .users = !inbox.usersEmpty() ? listToVector<std::string>(inbox.users()) : std::vector<std::string>(),
+        .managers = !inbox.managersEmpty() ? listToVector<std::string>(inbox.managers()) : std::vector<std::string>(),
+        .version = inbox.versionOpt(0),
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .filesConfig = filesConfig,
+        .policy = core::Factory::parsePolicyServerObject(inbox.policyOpt(Poco::JSON::Object::Ptr(new Poco::JSON::Object))),
+        .statusCode = statusCode,
+        .schemaVersion = schemaVersion
     };
-    return ret;
+}
+
+Inbox InboxApiImpl::convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData) {
+    return convertServerInboxToLibInbox(
+        inboxRaw,
+        inboxData.publicData.publicMeta,
+        inboxData.privateData.privateMeta,
+        inboxData.filesConfig,
+        inboxData.statusCode,
+        InboxDataSchema::VERSION_4
+    );
+}
+
+Inbox InboxApiImpl::convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData) {
+    return convertServerInboxToLibInbox(
+        inboxRaw,
+        inboxData.publicData.publicMeta,
+        inboxData.privateData.privateMeta,
+        inboxData.filesConfig,
+        inboxData.statusCode,
+        InboxDataSchema::VERSION_5
+    );
 }
 
 InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inboxId) {
@@ -775,7 +782,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
     switch (getInboxDataEntryStructureVersion(inboxEntry)) {
         case InboxDataSchema::Version::UNKNOWN: {
             auto e = UnknownInboxFormatException();
-            return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode(),{}}, core::DataIntegrityObject());
+            return std::make_tuple(convertServerInboxToLibInbox(inbox,{},{},{},e.getCode()), core::DataIntegrityObject());
         }
         case InboxDataSchema::Version::VERSION_4: {
             auto decryptedInboxData = decryptInboxV4(inboxEntry, encKey);
@@ -801,7 +808,7 @@ std::tuple<inbox::Inbox, core::DataIntegrityObject> InboxApiImpl::decryptAndConv
         }
     }
     auto e = UnknownInboxFormatException();
-    return std::make_tuple(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode =  e.getCode(), {}}, core::DataIntegrityObject());
+    return std::make_tuple(convertServerInboxToLibInbox(inbox,{},{},{},e.getCode()), core::DataIntegrityObject());
 }
 
 
@@ -838,7 +845,7 @@ std::vector<Inbox> InboxApiImpl::decryptAndConvertInboxesDataToInboxes(utils::Li
                 result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result.push_back(Inbox{ {},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}});
+            result.push_back(convertServerInboxToLibInbox(inbox,{},{},{},e.getCode()));
             inboxesDIO.push_back(core::DataIntegrityObject{});
         }
     }

@@ -103,6 +103,13 @@ private:
     dynamic::ThreadDataV1 decryptThreadV1(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     DecryptedThreadDataV4 decryptThreadV4(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     DecryptedThreadDataV5 decryptThreadV5(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    Thread convertServerThreadToLibThread(
+        server::ThreadInfo threadInfo,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = ThreadDataSchema::Version::UNKNOWN
+    );
     Thread convertThreadDataV1ToThread(server::ThreadInfo threadInfo, dynamic::ThreadDataV1 threadData);
     Thread convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV4& threadData);
     Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV5& threadData);
@@ -118,6 +125,15 @@ private:
     dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
     DecryptedMessageDataV4 decryptMessageDataV4(server::Message message, const core::DecryptedEncKey& encKey);
     DecryptedMessageDataV5 decryptMessageDataV5(server::Message message, const core::DecryptedEncKey& encKey);
+    Message convertServerMessageToLibMessage(
+        server::Message message,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const core::Buffer& data = core::Buffer(),
+        const std::string& authorPubKey = std::string(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = MessageDataSchema::Version::UNKNOWN
+    );
     Message convertMessageDataV2ToMessage(server::Message message, dynamic::MessageDataV2 messageData);
     Message convertMessageDataV3ToMessage(server::Message message, dynamic::MessageDataV3 messageData);
     Message convertDecryptedMessageDataV4ToMessage(server::Message message, DecryptedMessageDataV4 messageData);

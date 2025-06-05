@@ -102,6 +102,13 @@ private:
     utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 
     DecryptedKvdbDataV5 decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
+    Kvdb convertServerKvdbToLibKvdb(
+        server::KvdbInfo kvdb,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = KvdbDataSchema::Version::UNKNOWN
+    );
     Kvdb convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const DecryptedKvdbDataV5& kvdbData);
     KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
@@ -113,6 +120,15 @@ private:
 
     DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
     KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo entry, DecryptedKvdbEntryDataV5 entryData);
+    KvdbEntry convertServerKvdbEntryToLibKvdbEntry(
+        server::KvdbEntryInfo entry,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const core::Buffer& data = core::Buffer(),
+        const std::string& authorPubKey = std::string(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = KvdbEntryDataSchema::Version::UNKNOWN
+    );
     KvdbEntryDataSchema::Version getMessagesDataStructureVersion(server::KvdbEntryInfo entry);
     std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
     std::vector<KvdbEntry> decryptAndConvertKvdbEntriesDataToKvdbEntries(server::KvdbInfo kvdb, utils::List<server::KvdbEntryInfo> entries);
