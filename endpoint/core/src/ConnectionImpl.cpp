@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/EndpointUtils.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -220,11 +221,6 @@ DataIntegrityObject ConnectionImpl::createPublicDIO(
     return createDIOExt(contextId, resourceId, containerId, containerResourceId, "<anonymous>", pubKey);
 }
 
-
-std::string ConnectionImpl::generateDIORandomId() {
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
-}
-
 DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::string& contextId, 
     const std::string& resourceId, 
@@ -240,7 +236,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .contextId = contextId,
         .resourceId = resourceId,
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
-        .randomId = generateDIORandomId(),
+        .randomId = EndpointUtils::generateDIORandomId(),
         .containerId = containerId,
         .containerResourceId = containerResourceId,
         .bridgeIdentity = _bridgeIdentity
