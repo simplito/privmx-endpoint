@@ -13,21 +13,23 @@ limitations under the License.
 #include "privmx/endpoint/event/Constants.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/crypto/EciesEncryptor.hpp>
 
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
-DecryptedContextEventDataV1 OldEventDataDecryptor::decryptV1(const Poco::Dynamic::Var& data, const crypto::PublicKey& authorPublicKey, const std::string& encryptionKey) {
+DecryptedContextEventDataV1 OldEventDataDecryptor::decryptV1(const Poco::Dynamic::Var& data, const crypto::PublicKey& authorPublicKey, const std::string& encryptionKey, const crypto::PrivateKey& userPrivateKey) {
     DecryptedContextEventDataV1 result;
     result.statusCode = 0;
     result.dataStructureVersion = EventDataSchema::Version::VERSION_1;
     try {
         if(data.isString()) {
+            auto encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(userPrivateKey, encryptionKey);
             result.data = _dataEncryptor.decodeAndDecryptAndVerify(
                 data.convert<std::string>(), 
                 authorPublicKey,
-                encryptionKey
+                encKey
             );
         } else {
             result.statusCode = InvalidEncryptedEventDataVersionException().getCode();

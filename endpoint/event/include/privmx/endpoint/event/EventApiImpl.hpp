@@ -6,9 +6,13 @@
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
+#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/event/EventKeyProvider.hpp>
 #include "privmx/endpoint/event/ServerApi.hpp"
 #include "privmx/endpoint/event/EventTypes.hpp"
 #include "privmx/endpoint/event/Events.hpp"
+#include "privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp"
+#include "privmx/endpoint/event/encryptors/event/OldEventDataDecryptor.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -16,7 +20,7 @@ namespace event {
 
 class EventApiImpl {
 public:
-    EventApiImpl(const privmx::crypto::PrivateKey& userPrivKey, privfs::RpcGateway::Ptr gateway, std::shared_ptr<core::EventMiddleware> eventMiddleware, std::shared_ptr<core::EventChannelManager> eventChannelManager);
+    EventApiImpl(const core::Connection& connection, const privmx::crypto::PrivateKey& userPrivKey, privfs::RpcGateway::Ptr gateway, std::shared_ptr<core::EventMiddleware> eventMiddleware, std::shared_ptr<core::EventChannelManager> eventChannelManager);
     ~EventApiImpl();
 
     void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
@@ -34,13 +38,18 @@ private:
     void processDisconnectedEvent();
     void emitEventEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::string &encryptionKey);
     void validateChannelName(const std::string& channelName);
+    bool verifyDecryptedEventDataV5(const DecryptedEventDataV5& data);
+    core::Connection _connection;
     privmx::crypto::PrivateKey _userPrivKey;
     ServerApi _serverApi;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::SubscriptionHelper _contextSubscriptionHelper;
     core::DataEncryptorV4 _dataEncryptor;
     std::vector<std::string> _forbiddenChannelsNames;
+    EventKeyProvider _eventKeyProvider;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
+    EventDataEncryptorV5 _eventDataEncryptorV5;
+    OldEventDataDecryptor _oldEventDataDecryptor;
 };
 
 }  // namespace event

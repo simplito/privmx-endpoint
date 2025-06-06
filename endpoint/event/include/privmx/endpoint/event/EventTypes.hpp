@@ -31,6 +31,10 @@ struct DecryptedContextEventDataV1 :  public core::DecryptedVersionedData {
     privmx::endpoint::core::Buffer data;
 };
 
+struct DecryptedEventEncKeyV1 : public core::DecryptedVersionedData {
+    std::string key;
+};
+
 enum EventType {
     LIB_INTERNAL = 0,
     LIB_API = 1

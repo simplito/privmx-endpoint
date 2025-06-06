@@ -38,7 +38,7 @@ private:
     core::DIOEncryptorV1 _DIOEncryptor;
 };
 
-}  // namespace core
+}  // namespace event
 }  // namespace endpoint
 }  // namespace privmx
 
