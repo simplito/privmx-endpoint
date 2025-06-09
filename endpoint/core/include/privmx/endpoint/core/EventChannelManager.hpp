@@ -43,7 +43,8 @@ private:
     };
     privfs::RpcGateway::Ptr _gateway;
     std::shared_ptr<EventMiddleware> _eventMiddleware;
-    utils::ThreadSaveMap<std::string, SubscriptionCount> _map;
+    std::map<std::string, SubscriptionCount> _map;
+    std::shared_mutex _map_mutex;
 };
 
 }  // namespace core

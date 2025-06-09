@@ -22,14 +22,15 @@ EventChannelManager::EventChannelManager(privfs::RpcGateway::Ptr gateway, std::s
 std::vector<Subscription> EventChannelManager::subscribeFor(const std::vector<std::string>& channels) {
     std::vector<Subscription> result;
     std::vector<std::string> toSubscribe;
+    std::unique_lock<std::shared_mutex> lock(_map_mutex);
     for(size_t i = 0; i < channels.size(); ++i) {
+        // mutex shared lock
         auto channel = channels[i];
-        auto subscription = _map.get(channel);
-        if(subscription.has_value() && subscription.value().count > 0) {
-            PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribed on channel: " + channel + " " + std::to_string(subscription.value().count))
-            subscription.value().count++;
-            _map.set(channel, subscription.value());
-            result.push_back(Subscription{.subscriptionId=subscription.value().subscriptionId, .channel=channel});
+        auto subscription = _map.find(channel);
+        if(subscription != _map.end() && subscription->second.count > 0) {
+            PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribed on channel: " + channel + " " + std::to_string(subscription->second.count))
+            subscription->second.count++;
+            result.push_back(Subscription{.subscriptionId=subscription->second.subscriptionId, .channel=channel});
         } else {
             PRIVMX_DEBUG("EventChannelManager", "subscribeFor", "subscribing to channel: " + channel)
             toSubscribe.push_back(channel);
@@ -47,7 +48,7 @@ std::vector<Subscription> EventChannelManager::subscribeFor(const std::vector<st
             _gateway->request("subscribeToChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET})
         );
         for(auto subscription: value.subscriptions()) {
-            _map.set(subscription.channel(), SubscriptionCount{.count = 1, .subscriptionId = subscription.subscriptionId()});
+            _map[subscription.channel()] = SubscriptionCount{.count = 1, .subscriptionId = subscription.subscriptionId()};
             // send internal event 
             Poco::JSON::Object::Ptr data = new Poco::JSON::Object();
             data->set("channel", subscription.channel()); 
@@ -68,22 +69,23 @@ std::vector<Subscription> EventChannelManager::subscribeFor(const std::vector<st
 void EventChannelManager::unsubscribeFrom(const std::vector<std::string>& channels) {
     std::vector<std::string> toUnsubscribe;
     std::vector<std::string> unsubscribeChannels;
+    std::unique_lock<std::shared_mutex> lock(_map_mutex);
     for(size_t i = 0; i < channels.size(); ++i) {
         auto channel = channels[i];
-        auto subscription = _map.get(channel);
-        if(subscription.has_value() && subscription.value().count > 1) {
-            PRIVMX_DEBUG("EventChannelManager", "unsubscribeFrom", "unsubscribed on channel: " + channel + " " + std::to_string(subscription.value().count))
-            subscription.value().count--;
-            _map.set(channel, subscription.value());
-        } else if (subscription.value().count == 1) {
-            PRIVMX_DEBUG("EventChannelManager", "unsubscribeFrom", "unsubscribed to channel: " + channel)
-            toUnsubscribe.push_back(subscription.value().subscriptionId);
-            unsubscribeChannels.push_back(channel);
-        } else {
-            _map.erase(channel);
+        auto subscription = _map.find(channel);
+        if(subscription != _map.end()) {
+            if(subscription->second.count > 1) {
+                PRIVMX_DEBUG("EventChannelManager", "unsubscribeFrom", "unsubscribed on channel: " + channel + " " + std::to_string(subscription->second.count))
+                subscription->second.count--;
+            } else if (subscription->second.count == 1) {
+                PRIVMX_DEBUG("EventChannelManager", "unsubscribeFrom", "unsubscribed to channel: " + channel)
+                toUnsubscribe.push_back(subscription->second.subscriptionId);
+                unsubscribeChannels.push_back(channel);
+            } else {
+                _map.erase(channel);
+            }
         }
     }
-
     if(unsubscribeChannels.size() > 0) {
         PRIVMX_DEBUG("EventChannelManager", "unsubscribeFrom", "sending request to serwer")
         auto model = utils::TypedObjectFactory::createNewObject<server::UnsubscribeFromChannelsModel>();
