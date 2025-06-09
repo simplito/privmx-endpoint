@@ -14,22 +14,25 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-ThreadProvider::ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread) : core::ContainerProvider<std::string, server::ThreadInfo>(getThread) {}
+ThreadProvider::ThreadProvider(std::function<server::ThreadInfo(std::string)> getThread, std::function<uint32_t(server::ThreadInfo)> validateThread) 
+    : core::ContainerProvider<std::string, server::ThreadInfo>(getThread, validateThread) {}
     
-void ThreadProvider::updateByValue(const server::ThreadInfo& container) {
+bool ThreadProvider::isNewerOrSameAsInStorage(const server::ThreadInfo& container) {
     auto cached = _storage.get(container.id());
-    if(!cached.has_value()) {
-        _storage.set(container.id(), container);
-        return;
+    if (!cached.has_value()) {
+        return true;
     }
-    auto cached_container = cached.value();
-    if(container.version() > cached_container.version() || container.lastModificationDate() > cached_container.lastModificationDate()) {
-        _storage.set(container.id(), container);
+    auto cached_container = cached.value().container;
+    if (container.version() > cached_container.version() ||
+        (container.lastModificationDate() >= cached_container.lastModificationDate() && container.version() == cached_container.version())
+    ) {
+        return true;
     }
+    return false;
 }
 
 void ThreadProvider::updateStats(const server::ThreadStatsEventData& stats) {
-    auto threadInfo = this->get(stats.threadId());
+    auto threadInfo = this->get(stats.threadId()).container;
     threadInfo.messages(stats.messages());
     threadInfo.lastMsgDate(stats.lastMsgDate());
     updateByValue(threadInfo);

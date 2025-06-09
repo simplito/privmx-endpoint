@@ -20,7 +20,7 @@ ExtKey ExtKey::fromSeed(const core::Buffer& seed) {
 }
 
 ExtKey ExtKey::fromBase58(const std::string& base58) {
-    return ExtKey(privmx::crypto::ExtKey::fromSeed(base58));
+    return ExtKey(privmx::crypto::ExtKey::fromBase58(base58));
 }
 
 ExtKey ExtKey::generateRandom() {
@@ -48,8 +48,9 @@ ExtKey ExtKey::deriveHardened(uint32_t index) const {
 std::string ExtKey::getPrivatePartAsBase58() const {
     return _impl->getPrivatePartAsBase58();
 }
+
 std::string ExtKey::getPublicPartAsBase58() const {
-    return _impl->getPrivatePartAsBase58();
+    return _impl->getPublicPartAsBase58();
 }
 
 std::string ExtKey::getPrivateKey() const {

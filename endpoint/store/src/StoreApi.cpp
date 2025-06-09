@@ -291,36 +291,3 @@ void StoreApi::updateFileMeta(const std::string& fileId, const core::Buffer& pub
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-
-void StoreApi::emitEvent(const std::string& storeId, const std::string& channelName, const core::Buffer& eventData, const std::vector<std::string>& usersIds) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->emitEvent(storeId, channelName, eventData, usersIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::subscribeForStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->subscribeForStoreCustomEvents(storeId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::unsubscribeFromStoreCustomEvents(const std::string& storeId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->unsubscribeFromStoreCustomEvents(storeId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}

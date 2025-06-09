@@ -118,7 +118,7 @@ struct InboxEntryCreatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * detailed information aboug InboxEntry
+     * detailed information about InboxEntry
      */
     inbox::InboxEntry data;
 };
@@ -165,42 +165,6 @@ struct InboxEntryDeletedEvent : public core::Event {
      * event data
      */
     InboxEntryDeletedEventData data;
-};
-
-/**
- * Holds data of event that arrives when custom inbox event is emitted.
- */
-struct InboxCustomEvent : public core::Event {
-    
-    /**
-     * Event constructor
-     */
-    InboxCustomEvent() : core::Event("inboxCustom") {}
-
-    /**
-     * Get Event as JSON string
-     * 
-     * @return JSON string
-     */
-    std::string toJSON() const override;
-
-    /**
-     * //doc-gen:ignore
-     */
-    std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
-    /**
-     * id of inbox from which it was sent
-     */
-    std::string inboxId;
-    /**
-     * id of user which sent it
-     */
-    std::string userId;
-    /**
-     * event data
-     */
-    core::Buffer data;
 };
 
 /**
@@ -288,22 +252,6 @@ public:
      * @return 'InboxEntryDeletedEvent' object
      */
     static InboxEntryDeletedEvent extractInboxEntryDeletedEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Checks whether event held in the 'EventHolder' is an 'InboxCustomEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'InboxCustomEvent', else otherwise
-     */
-    static bool isInboxCustomEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Gets Event held in the 'EventHolder' as an 'InboxCustomEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return 'InboxCustomEvent' object
-     */
-    static InboxCustomEvent extractInboxCustomEvent(const core::EventHolder& eventHolder);
 };
 
 

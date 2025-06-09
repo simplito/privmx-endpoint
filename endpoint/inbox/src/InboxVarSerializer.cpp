@@ -58,6 +58,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::Inbox>(const inbox::Inbox& va
     obj->set("lastModifier", serialize(val.lastModifier));
     obj->set("users", serialize(val.users));
     obj->set("managers", serialize(val.managers));
+    obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("version", serialize(val.version));
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
@@ -89,6 +90,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntry>(const inbox::Inbo
     obj->set("files", serialize(val.files));
     obj->set("authorPubKey", serialize(val.authorPubKey));
     obj->set("createDate", serialize(val.createDate));
+    obj->set("schemaVersion", serialize(val.schemaVersion));
     return obj;
 }
 
@@ -190,19 +192,3 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEvent>(const
     obj->set("data", serialize(val.data));
     return obj;
 }
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxCustomEvent>(const inbox::InboxCustomEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "inbox$InboxCustomEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("data", serialize(val.data));
-    obj->set("inboxId", serialize(val.inboxId));
-    obj->set("userId", serialize(val.userId));
-    return obj;
-}
-

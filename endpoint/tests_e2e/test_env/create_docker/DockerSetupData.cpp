@@ -18,6 +18,8 @@
 #include <privmx/endpoint/store/StoreVarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
 #include <privmx/endpoint/inbox/InboxVarSerializer.hpp>
+#include <privmx/endpoint/kvdb/KvdbApi.hpp>
+#include <privmx/endpoint/kvdb/KvdbVarSerializer.hpp>
 
 using namespace std;
 using namespace privmx;
@@ -73,6 +75,7 @@ int main(int argc, char** argv) {
         endpoint::thread::ThreadApi threadApi = endpoint::thread::ThreadApi::create(connection);
         endpoint::store::StoreApi storeApi = endpoint::store::StoreApi::create(connection);
         endpoint::inbox::InboxApi inboxApi = endpoint::inbox::InboxApi::create(connection, threadApi, storeApi);
+        endpoint::kvdb::KvdbApi kvdbApi = endpoint::kvdb::KvdbApi::create(connection);
         const std::vector<endpoint::core::UserWithPubKey> users_1 = {
             endpoint::core::UserWithPubKey{.userId=user_1_Id, .pubKey=user_1_PubKey}
         };
@@ -174,6 +177,36 @@ int main(int argc, char** argv) {
             inbox_3_privateMeta,
             std::nullopt
         );
+        //kvdb_1
+        auto kvdb_1_publicMeta = endpoint::core::Buffer::from("test_kvdb_1_publicMeta");
+        auto kvdb_1_privateMeta = endpoint::core::Buffer::from("test_kvdb_1_privateMeta");
+        auto kvdb_1_id = kvdbApi.createKvdb(
+            context_1_Id,
+            users_1,
+            users_1,
+            kvdb_1_publicMeta,
+            kvdb_1_privateMeta
+        );
+        //kvdb_2
+        auto kvdb_2_publicMeta = endpoint::core::Buffer::from("test_kvdb_2_publicMeta");
+        auto kvdb_2_privateMeta = endpoint::core::Buffer::from("test_kvdb_2_privateMeta");
+        auto kvdb_2_id = kvdbApi.createKvdb(
+            context_1_Id,
+            users_1_2,
+            users_1_2,
+            kvdb_2_publicMeta,
+            kvdb_2_privateMeta
+        );
+        //kvdb_3
+        auto kvdb_3_publicMeta = endpoint::core::Buffer::from("test_kvdb_3_publicMeta");
+        auto kvdb_3_privateMeta = endpoint::core::Buffer::from("test_kvdb_3_privateMeta");
+        auto kvdb_3_id = kvdbApi.createKvdb(
+            context_1_Id,
+            users_1_2,
+            users_1,
+            kvdb_3_publicMeta,
+            kvdb_3_privateMeta
+        );
         //message_1
         auto message_1_publicMeta = endpoint::core::Buffer::from("test_message_1_publicMeta");
         auto message_1_privateMeta = endpoint::core::Buffer::from("test_message_1_privateMeta");
@@ -226,8 +259,32 @@ int main(int argc, char** argv) {
         std::string entry_2_data = "message_from_inboxSendCommit_2";
         auto inbox_2_handle = inboxApi.prepareEntry(inbox_1_id, endpoint::core::Buffer::from(entry_2_data), {}, std::nullopt);
         inboxApi.sendEntry(inbox_2_handle);
-
-
+        //kvdb_entry_1
+        auto kvdb_entry_1_publicMeta = endpoint::core::Buffer::from("test_kvdb_entry_1_publicMeta");
+        auto kvdb_entry_1_privateMeta = endpoint::core::Buffer::from("test_kvdb_entry_1_privateMeta");
+        auto kvdb_entry_1_data = endpoint::core::Buffer::from("kvdb_entry_value_1");
+        auto kvdb_entry_1_key = "kvdb_entry_key_1";
+        kvdbApi.setEntry(
+            kvdb_1_id,
+            kvdb_entry_1_key,
+            kvdb_entry_1_publicMeta,
+            kvdb_entry_1_privateMeta,
+            kvdb_entry_1_data,
+            0
+        );
+        //kvdb_entry_2
+        auto kvdb_entry_2_publicMeta = endpoint::core::Buffer::from("test_kvdb_entry_2_publicMeta");
+        auto kvdb_entry_2_privateMeta = endpoint::core::Buffer::from("test_kvdb_entry_2_privateMeta");
+        auto kvdb_entry_2_data = endpoint::core::Buffer::from("kvdb_entry_value_2");
+        auto kvdb_entry_2_key = "kvdb_entry_key_2";
+        kvdbApi.setEntry(
+            kvdb_1_id,
+            kvdb_entry_2_key,
+            kvdb_entry_2_publicMeta,
+            kvdb_entry_2_privateMeta,
+            kvdb_entry_2_data,
+            0
+        );
         auto thread_1_server_data = threadApi.getThread(thread_1_id);
         auto store_1_server_data = storeApi.getStore(store_1_id);
         auto thread_2_server_data = threadApi.getThread(thread_2_id);
@@ -237,6 +294,9 @@ int main(int argc, char** argv) {
         auto inbox_1_server_data = inboxApi.getInbox(inbox_1_id);
         auto inbox_2_server_data = inboxApi.getInbox(inbox_2_id);
         auto inbox_3_server_data = inboxApi.getInbox(inbox_3_id);
+        auto kvdb_1_server_data = kvdbApi.getKvdb(kvdb_1_id);
+        auto kvdb_2_server_data = kvdbApi.getKvdb(kvdb_2_id);
+        auto kvdb_3_server_data = kvdbApi.getKvdb(kvdb_3_id);
 
         auto message_1_server_data = threadApi.getMessage(message_1_id);
         auto message_2_server_data = threadApi.getMessage(message_2_id);
@@ -244,6 +304,8 @@ int main(int argc, char** argv) {
         auto file_2_server_metaData = storeApi.getFile(file_2_id);
         auto entry_1_server_data = inboxApi.listEntries(inbox_1_id, {.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
         auto entry_2_server_data = inboxApi.listEntries(inbox_1_id, {.skip=1, .limit=1, .sortOrder="asc"}).readItems[0];
+        auto kvdb_entry_1_server_data = kvdbApi.getEntry(kvdb_1_id, kvdb_entry_1_key);
+        auto kvdb_entry_2_server_data = kvdbApi.getEntry(kvdb_1_id, kvdb_entry_2_key);
 
         //writing data to ini file
         fstream iniFileWriter;
@@ -263,6 +325,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(thread_1_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "messagesCount = " << thread_1_server_data.messagesCount << std::endl;
             iniFileWriter << "statusCode = " << thread_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << thread_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(thread_1_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(thread_1_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(thread_1_privateMeta.stdString()) << std::endl;
@@ -280,6 +343,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(thread_2_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "messagesCount = " << thread_2_server_data.messagesCount << std::endl;
             iniFileWriter << "statusCode = " << thread_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << thread_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(thread_2_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(thread_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(thread_2_privateMeta.stdString()) << std::endl;
@@ -296,7 +360,8 @@ int main(int argc, char** argv) {
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(thread_3_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(thread_3_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "messagesCount = " << thread_3_server_data.messagesCount << std::endl;
-            iniFileWriter << "statusCode = " << thread_2_server_data.statusCode << std::endl;
+            iniFileWriter << "statusCode = " << thread_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << thread_3_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(thread_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(thread_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(thread_3_privateMeta.stdString()) << std::endl;
@@ -314,6 +379,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(store_1_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "filesCount = " << store_1_server_data.filesCount << std::endl;
             iniFileWriter << "statusCode = " << store_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << store_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(store_1_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(store_1_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(store_1_privateMeta.stdString()) << std::endl;
@@ -331,6 +397,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(store_2_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "filesCount = " << store_2_server_data.filesCount << std::endl;
             iniFileWriter << "statusCode = " << store_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << store_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(store_2_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(store_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(store_2_privateMeta.stdString()) << std::endl;
@@ -348,6 +415,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(store_3_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "filesCount = " << store_3_server_data.filesCount << std::endl;
             iniFileWriter << "statusCode = " << store_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << store_3_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(store_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(store_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(store_3_privateMeta.stdString()) << std::endl;
@@ -363,6 +431,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(inbox_1_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(inbox_1_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "statusCode = " << inbox_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << inbox_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(inbox_1_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(inbox_1_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(inbox_1_privateMeta.stdString()) << std::endl;
@@ -382,6 +451,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "filesConfig_maxFileSize = " << inbox_2_server_data.filesConfig.value().maxFileSize << std::endl;
             iniFileWriter << "filesConfig_maxWholeUploadSize = " << inbox_2_server_data.filesConfig.value().maxWholeUploadSize << std::endl;
             iniFileWriter << "statusCode = " << inbox_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << inbox_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(inbox_2_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(inbox_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(inbox_2_privateMeta.stdString()) << std::endl;
@@ -397,10 +467,66 @@ int main(int argc, char** argv) {
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(inbox_3_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(inbox_3_server_data.privateMeta.stdString()) << std::endl;
             iniFileWriter << "statusCode = " << inbox_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << inbox_3_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(inbox_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(inbox_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(inbox_3_privateMeta.stdString()) << std::endl;
 
+            //Kvdb_1
+            iniFileWriter << "[Kvdb_1]" << std::endl;
+            iniFileWriter << "kvdbId = " << kvdb_1_server_data.kvdbId << std::endl;
+            iniFileWriter << "contextId = " << kvdb_1_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << kvdb_1_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << kvdb_1_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << kvdb_1_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << kvdb_1_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << kvdb_1_server_data.version << std::endl;
+            iniFileWriter << "lastEntryDate = " << kvdb_1_server_data.lastEntryDate << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(kvdb_1_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(kvdb_1_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "entries = " << kvdb_1_server_data.entries << std::endl;
+            iniFileWriter << "statusCode = " << kvdb_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << kvdb_1_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(kvdb_1_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(kvdb_1_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(kvdb_1_privateMeta.stdString()) << std::endl;
+            //Kvdb_2
+            iniFileWriter << "[Kvdb_2]" << std::endl;
+            iniFileWriter << "kvdbId = " << kvdb_2_server_data.kvdbId << std::endl;
+            iniFileWriter << "contextId = " << kvdb_2_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << kvdb_2_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << kvdb_2_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << kvdb_2_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << kvdb_2_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << kvdb_2_server_data.version << std::endl;
+            iniFileWriter << "lastEntryDate = " << kvdb_2_server_data.lastEntryDate << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(kvdb_2_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(kvdb_2_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "entries = " << kvdb_2_server_data.entries << std::endl;
+            iniFileWriter << "statusCode = " << kvdb_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << kvdb_2_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(kvdb_2_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(kvdb_2_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(kvdb_2_privateMeta.stdString()) << std::endl;
+            //Kvdb_3
+            iniFileWriter << "[Kvdb_3]" << std::endl;
+            iniFileWriter << "kvdbId = " << kvdb_3_server_data.kvdbId << std::endl;
+            iniFileWriter << "contextId = " << kvdb_3_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << kvdb_3_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << kvdb_3_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << kvdb_3_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << kvdb_3_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << kvdb_3_server_data.version << std::endl;
+            iniFileWriter << "lastEntryDate = " << kvdb_3_server_data.lastEntryDate << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(kvdb_3_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(kvdb_3_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "entries = " << kvdb_3_server_data.entries << std::endl;
+            iniFileWriter << "statusCode = " << kvdb_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << kvdb_3_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(kvdb_3_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(kvdb_3_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(kvdb_3_privateMeta.stdString()) << std::endl;
+            
 
             //Message_1
             iniFileWriter << "[Message_1]" << std::endl;
@@ -413,8 +539,8 @@ int main(int argc, char** argv) {
             iniFileWriter << "data_inHex = " << utils::Hex::from(message_1_server_data.data.stdString()) << std::endl;
             iniFileWriter << "authorPubKey = " << message_1_server_data.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << message_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << message_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(message_1_server_data)) << std::endl;
-
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(message_1_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(message_1_privateMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(message_1_data.stdString()) << std::endl;
@@ -429,8 +555,8 @@ int main(int argc, char** argv) {
             iniFileWriter << "data_inHex = " << utils::Hex::from(message_2_server_data.data.stdString()) << std::endl;
             iniFileWriter << "authorPubKey = " << message_2_server_data.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << message_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << message_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(message_2_server_data)) << std::endl;
-
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(message_2_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(message_2_privateMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(message_2_data.stdString()) << std::endl;
@@ -445,6 +571,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "size = " << file_1_server_metaData.size << std::endl;
             iniFileWriter << "authorPubKey = " << file_1_server_metaData.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << file_1_server_metaData.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << file_1_server_metaData.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(file_1_server_metaData)) << std::endl;
 
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(file_1_publicMeta) << std::endl;
@@ -462,6 +589,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "size = " << file_2_server_metaData.size << std::endl;
             iniFileWriter << "authorPubKey = " << file_2_server_metaData.authorPubKey << std::endl;
             iniFileWriter << "statusCode = " << file_2_server_metaData.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << file_2_server_metaData.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(file_2_server_metaData)) << std::endl;
 
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(file_2_publicMeta) << std::endl;
@@ -476,12 +604,14 @@ int main(int argc, char** argv) {
             iniFileWriter << "authorPubKey = " << entry_1_server_data.authorPubKey << std::endl;
             iniFileWriter << "createDate = " << entry_1_server_data.createDate << std::endl;
             iniFileWriter << "statusCode = " << entry_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << entry_1_server_data.schemaVersion << std::endl;
             iniFileWriter << "file_0_info_storeId = " << entry_1_server_data.files[0].info.storeId << std::endl;
             iniFileWriter << "file_0_info_fileId = " << entry_1_server_data.files[0].info.fileId << std::endl;
             iniFileWriter << "file_0_info_createDate = " << entry_1_server_data.files[0].info.createDate << std::endl;
             iniFileWriter << "file_0_info_author = " << entry_1_server_data.files[0].info.author << std::endl;
             iniFileWriter << "file_0_authorPubKey = " << entry_1_server_data.files[0].authorPubKey << std::endl;
             iniFileWriter << "file_0_statusCode = " << entry_1_server_data.files[0].statusCode << std::endl;
+            iniFileWriter << "file_0_schemaVersion = " << entry_1_server_data.files[0].schemaVersion << std::endl;
             iniFileWriter << "file_0_publicMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[0].publicMeta.stdString()) << std::endl;
             iniFileWriter << "file_0_privateMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[0].privateMeta.stdString()) << std::endl;
             iniFileWriter << "file_0_size = " << entry_1_server_data.files[0].size << std::endl;
@@ -492,6 +622,7 @@ int main(int argc, char** argv) {
             iniFileWriter << "file_1_info_author = " << entry_1_server_data.files[1].info.author << std::endl;
             iniFileWriter << "file_1_authorPubKey = " << entry_1_server_data.files[1].authorPubKey << std::endl;
             iniFileWriter << "file_1_statusCode = " << entry_1_server_data.files[1].statusCode << std::endl;
+            iniFileWriter << "file_0_schemaVersion = " << entry_1_server_data.files[1].schemaVersion << std::endl;
             iniFileWriter << "file_1_publicMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[1].publicMeta.stdString()) << std::endl;
             iniFileWriter << "file_1_privateMeta_inHex = " << utils::Hex::from(entry_1_server_data.files[1].privateMeta.stdString()) << std::endl;
             iniFileWriter << "file_1_size = " << entry_1_server_data.files[1].size << std::endl;
@@ -514,10 +645,44 @@ int main(int argc, char** argv) {
             iniFileWriter << "authorPubKey = " << entry_2_server_data.authorPubKey << std::endl;
             iniFileWriter << "createDate = " << entry_2_server_data.createDate << std::endl;
             iniFileWriter << "statusCode = " << entry_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << entry_2_server_data.schemaVersion << std::endl;
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(entry_2_server_data)) << std::endl;
 
             iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(entry_2_data) << std::endl;
+            // KvdbEntry_1
+            iniFileWriter << "[KvdbEntry_1]" << std::endl;
+            iniFileWriter << "info_kvdbId = " << kvdb_entry_1_server_data.info.kvdbId << std::endl;
+            iniFileWriter << "info_key = " << kvdb_entry_1_server_data.info.key << std::endl;
+            iniFileWriter << "info_createDate = " << kvdb_entry_1_server_data.info.createDate << std::endl;
+            iniFileWriter << "info_author = " << kvdb_entry_1_server_data.info.author << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(kvdb_entry_1_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(kvdb_entry_1_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "data_inHex = " << utils::Hex::from(kvdb_entry_1_server_data.data.stdString()) << std::endl;
+            iniFileWriter << "authorPubKey = " << kvdb_entry_1_server_data.authorPubKey << std::endl;
+            iniFileWriter << "statusCode = " << kvdb_entry_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << kvdb_entry_1_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(kvdb_entry_1_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(kvdb_entry_1_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(kvdb_entry_1_privateMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(kvdb_entry_1_data.stdString()) << std::endl;
+            // KvdbEntry_2
+            iniFileWriter << "[KvdbEntry_2]" << std::endl;
+            iniFileWriter << "info_kvdbId = " << kvdb_entry_2_server_data.info.kvdbId << std::endl;
+            iniFileWriter << "info_key = " << kvdb_entry_2_server_data.info.key << std::endl;
+            iniFileWriter << "info_createDate = " << kvdb_entry_2_server_data.info.createDate << std::endl;
+            iniFileWriter << "info_author = " << kvdb_entry_2_server_data.info.author << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(kvdb_entry_2_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(kvdb_entry_2_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "data_inHex = " << utils::Hex::from(kvdb_entry_2_server_data.data.stdString()) << std::endl;
+            iniFileWriter << "authorPubKey = " << kvdb_entry_2_server_data.authorPubKey << std::endl;
+            iniFileWriter << "statusCode = " << kvdb_entry_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << kvdb_entry_2_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(kvdb_entry_2_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(kvdb_entry_2_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(kvdb_entry_2_privateMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_data_inHex = " << utils::Hex::from(kvdb_entry_2_data.stdString()) << std::endl;
             iniFileWriter.close();
+            
         }
         iniFileWriter.open(iniFileJSONPath, ios::out | ios::trunc);
         if(iniFileWriter.is_open()) {
@@ -585,6 +750,21 @@ int main(int argc, char** argv) {
             data_inbox_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(inbox_3_publicMeta.stdString()));
             data_inbox_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(inbox_3_privateMeta.stdString()));
             data->set("Inbox_3", data_inbox_3);
+            Poco::JSON::Object::Ptr data_kvdb_1 = new Poco::JSON::Object();
+            data_kvdb_1->set("server_data", (_serializer.serialize(kvdb_1_server_data)));
+            data_kvdb_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_1_publicMeta.stdString()));
+            data_kvdb_1->set("uploaded_privateMeta_inBase64", utils::Base64::from(kvdb_1_privateMeta.stdString()));
+            data->set("Kvdb_1", data_kvdb_1);
+            Poco::JSON::Object::Ptr data_kvdb_2 = new Poco::JSON::Object();
+            data_kvdb_2->set("server_data", (_serializer.serialize(kvdb_2_server_data)));
+            data_kvdb_2->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_2_publicMeta.stdString()));
+            data_kvdb_2->set("uploaded_privateMeta_inBase64", utils::Base64::from(kvdb_2_privateMeta.stdString()));
+            data->set("Kvdb_2", data_kvdb_2);
+            Poco::JSON::Object::Ptr data_kvdb_3 = new Poco::JSON::Object();
+            data_kvdb_3->set("server_data", (_serializer.serialize(kvdb_3_server_data)));
+            data_kvdb_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_3_publicMeta.stdString()));
+            data_kvdb_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(kvdb_3_privateMeta.stdString()));
+            data->set("Kvdb_3", data_kvdb_3);
 
 
             Poco::JSON::Object::Ptr data_message_1 = new Poco::JSON::Object();
@@ -632,6 +812,18 @@ int main(int argc, char** argv) {
             data_entry_2->set("uploaded_data_inBase64", utils::Base64::from(entry_2_data));
             data->set("Entry_2", data_entry_2);
 
+            Poco::JSON::Object::Ptr data_kvdb_entry_1 = new Poco::JSON::Object();
+            data_kvdb_entry_1->set("server_data", (_serializer.serialize(kvdb_entry_1_server_data)));
+            data_kvdb_entry_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_entry_1_publicMeta.stdString()));
+            data_kvdb_entry_1->set("uploaded_privateMeta_inBase64", utils::Base64::from(kvdb_entry_1_privateMeta.stdString()));
+            data_kvdb_entry_1->set("uploaded_data_inBase64", utils::Base64::from(kvdb_entry_1_data.stdString()));
+            data->set("KvdbEntry_1", data_kvdb_entry_1);
+            Poco::JSON::Object::Ptr data_kvdb_entry_2 = new Poco::JSON::Object();
+            data_kvdb_entry_2->set("server_data", (_serializer.serialize(kvdb_entry_2_server_data)));
+            data_kvdb_entry_2->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_entry_2_publicMeta.stdString()));
+            data_kvdb_entry_2->set("uploaded_privateMeta_inBase64", utils::Base64::from(kvdb_entry_2_privateMeta.stdString()));
+            data_kvdb_entry_2->set("uploaded_data_inBase64", utils::Base64::from(kvdb_entry_2_data.stdString()));
+            data->set("KvdbEntry_2", data_kvdb_entry_2);
 
             iniFileWriter << utils::Utils::stringify(data, true) << std::endl;
             iniFileWriter.close();

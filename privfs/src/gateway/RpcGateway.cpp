@@ -37,13 +37,13 @@ using namespace Poco::JSON;
 using Poco::Dynamic::Var;
 using rpc::MessageSendOptionsEx;
 
-RpcGateway::Ptr RpcGateway::createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution) {
-    auto connection = rpc::ConnectionManager::getInstance()->createEcdheConnection({.key = key, .solution = solution}, options);
+RpcGateway::Ptr RpcGateway::createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey) {
+    auto connection = rpc::ConnectionManager::getInstance()->createEcdheConnection({.key = key, .solution = solution, .serverPubKey = serverPubKey}, options);
     return new RpcGateway(connection, nullopt);
 }
 
-RpcGateway::Ptr RpcGateway::createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution) {
-    auto connection = rpc::ConnectionManager::getInstance()->createEcdhexConnection({.key = key, .solution = solution}, options);
+RpcGateway::Ptr RpcGateway::createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey) {
+    auto connection = rpc::ConnectionManager::getInstance()->createEcdhexConnection({.key = key, .solution = solution, .serverPubKey = serverPubKey}, options);
     return new RpcGateway(connection, nullopt);
 }
 

@@ -4,7 +4,7 @@
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
-#include <privmx/endpoint/core/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include "privmx/endpoint/event/ServerApi.hpp"
 #include "privmx/endpoint/event/EventTypes.hpp"
@@ -19,7 +19,7 @@ public:
     EventApiImpl(const privmx::crypto::PrivateKey& userPrivKey, privfs::RpcGateway::Ptr gateway, std::shared_ptr<core::EventMiddleware> eventMiddleware, std::shared_ptr<core::EventChannelManager> eventChannelManager);
     ~EventApiImpl();
 
-    void emitEvent(const std::string& contextId, const std::string& channelName, const core::Buffer& eventData, const std::vector<core::UserWithPubKey>& users);
+    void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
     void subscribeForCustomEvents(const std::string& contextId, const std::string& channelName);
     void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
 
@@ -29,10 +29,10 @@ public:
     void subscribeForInternalEvents(const std::string& contextId);
     void unsubscribeFromInternalEvents(const std::string& contextId);
 private:
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    void emitEventEx(const std::string& contextId, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::vector<core::UserWithPubKey>& users, const std::string &encryptionKey);
+    void emitEventEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::string &encryptionKey);
     void validateChannelName(const std::string& channelName);
     privmx::crypto::PrivateKey _userPrivKey;
     ServerApi _serverApi;

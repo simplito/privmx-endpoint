@@ -24,21 +24,24 @@ public:
      * @param userPrivKey user's private key
      * @param solutionId ID of the Solution
      * @param bridgeUrl Bridge Server URL
+     * @param verificationOptions PrivMX Bridge server instance verification options using a PKI server
      * 
      * @return Connection object
      */
     static Connection connect(const std::string& userPrivKey, const std::string& solutionId,
-                                      const std::string& bridgeUrl);
+                              const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
 
     /**
      * Connects to the PrivMX Bridge Server as a guest user.
      *
      * @param solutionId ID of the Solution
      * @param bridgeUrl Bridge Server URL
+     * @param verificationOptions PrivMX Bridge server instance verification options using a PKI server
      * 
      * @return Connection object
      */                                     
-    static Connection connectPublic(const std::string& solutionId, const std::string& bridgeUrl);
+    static Connection connectPublic(const std::string& solutionId, const std::string& bridgeUrl, 
+                                    const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
     
     /**
      * //doc-gen:ignore
@@ -82,7 +85,7 @@ public:
      * The feature allows the developer to set up a callback for user verification. 
      * A developer can implement an interface and pass the implementation to the function. 
      * Each time data is read from the container, a callback will be triggered, allowing the developer to validate the sender in an external service,
-     * e.g. Developers Application Server or PKI Server
+     * e.g. Developer's Application Server or PKI Server.
      * @param verifier an implementation of the UserVerifierInterface
      * 
      */

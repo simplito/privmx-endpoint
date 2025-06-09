@@ -20,8 +20,8 @@ limitations under the License.
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
 
-FileHandle::FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, uint64_t fileSize): 
-    _id(id), _storeId(storeId), _fileId(fileId), _size(fileSize) {}
+FileHandle::FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, const std::string& resourceId, uint64_t fileSize): 
+    _id(id), _storeId(storeId), _fileId(fileId), _resourceId(resourceId), _size(fileSize) {}
 
 std::string FileHandle::getStoreId() {
     return _storeId;
@@ -29,6 +29,10 @@ std::string FileHandle::getStoreId() {
 
 std::string FileHandle::getFileId() {
     return _fileId;
+}
+
+std::string FileHandle::getResourceId() {
+    return _resourceId;
 }
 
 uint64_t FileHandle::getSize() {
@@ -42,6 +46,7 @@ int64_t FileHandle::getId() {
 FileReadHandle::FileReadHandle(
     int64_t id, 
     const std::string& fileId,
+    const std::string& resourceId, 
     uint64_t fileSize,
     uint64_t serverFileSize,
     size_t chunkSize,
@@ -51,7 +56,7 @@ FileReadHandle::FileReadHandle(
     const std::string& fileHmac,
     std::shared_ptr<ServerApi> server
 ) 
-    : FileHandle(id, std::string(), fileId, fileSize) 
+    : FileHandle(id, std::string(), fileId, resourceId, fileSize) 
 {
     std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(server, ChunkReader::getEncryptedChunkSize(chunkSize), serverChunkSize, fileId, serverFileSize, fileVersion);
     std::shared_ptr<ChunkReader> chunkReader = std::make_shared<ChunkReader>(chunkDataProvider, chunkSize, fileKey, fileHmac);
@@ -88,6 +93,7 @@ FileWriteHandle::FileWriteHandle(
     int64_t id, 
     const std::string& storeId,
     const std::string& fileId,
+    const std::string& resourceId, 
     uint64_t size,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
@@ -95,7 +101,7 @@ FileWriteHandle::FileWriteHandle(
     uint64_t serverRequestChunkSize,
     std::shared_ptr<RequestApi> requestApi
 )
-    : FileHandle(id, storeId, fileId, size),
+    : FileHandle(id, storeId, fileId, resourceId, size),
     _publicMeta(publicMeta),
     _privateMeta(privateMeta),
     _stream(ChunkBufferedStream(chunkSize, size)),
@@ -147,6 +153,7 @@ FileHandleManager::FileHandleManager(std::shared_ptr<core::HandleManager> handle
 
 std::shared_ptr<FileReadHandle> FileHandleManager::createFileReadHandle(
     const std::string& fileId,
+    const std::string& resourceId, 
     uint64_t fileSize,
     uint64_t serverFileSize,
     size_t chunkSize,
@@ -157,7 +164,7 @@ std::shared_ptr<FileReadHandle> FileHandleManager::createFileReadHandle(
     std::shared_ptr<ServerApi> server
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileRead");
-    std::shared_ptr<FileReadHandle> result = std::make_shared<FileReadHandle>(id, fileId, fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
+    std::shared_ptr<FileReadHandle> result = std::make_shared<FileReadHandle>(id, fileId, resourceId, fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
     _map.set(id, result);
     return result;
 }
@@ -165,6 +172,7 @@ std::shared_ptr<FileReadHandle> FileHandleManager::createFileReadHandle(
 std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
     const std::string& storeId,
     const std::string& fileId,
+    const std::string& resourceId,
     uint64_t size,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
@@ -173,7 +181,7 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
     std::shared_ptr<RequestApi> requestApi
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileWrite");
-    std::shared_ptr<FileWriteHandle> result = std::make_shared<FileWriteHandle>(id, storeId, fileId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
+    std::shared_ptr<FileWriteHandle> result = std::make_shared<FileWriteHandle>(id, storeId, fileId, resourceId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
     _map.set(id, result);
     return result;
 }

@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_CRYPTO_ECIESENCRYPTOR_HPP_
 
 #include <string>
+#include <optional>
 #include <Poco/Dynamic/Var.h>
 #include <Poco/JSON/Object.h>
 
@@ -26,13 +27,13 @@ namespace crypto {
 class EciesEncryptor
 {
 public:
-    static Poco::JSON::Object::Ptr decryptObjectFromBase64(const PrivateKey& priv, const std::string& cipher_base64);
-    static std::string decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64);
-    static std::string decrypt(const PrivateKey& priv, const std::string& cipher);
+    static Poco::JSON::Object::Ptr decryptObjectFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    static std::string decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    static std::string decrypt(const PrivateKey& priv, const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
     static std::string decryptV0(const PrivateKey& priv, const PublicKey& pub, const std::string& cipher);
-    static std::string encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data);
-    static std::string encryptToBase64(const PublicKey& pub, const std::string& data);
-    static std::string encrypt(const PublicKey& pub, const std::string& data);
+    static std::string encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature);
+    static std::string encryptToBase64(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
+    static std::string encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
 };
 
 } // crypto
