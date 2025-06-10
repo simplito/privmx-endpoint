@@ -94,14 +94,14 @@ std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listDesktopRecording
    throw stream::NotImplementedException();
 }
 // int64_t id, DeviceType type, const std::string& params_JSON can be merged to one struct [Track info]
-void StreamApiImpl::trackAdd(int64_t streamId, DeviceType type, int64_t id, const std::string& params_JSON) {
-    switch (type) {
+void StreamApiImpl::trackAdd(int64_t streamId, const TrackParam& track) {
+    switch (track.type) {
         case DeviceType::Audio :
-            return trackAddAudio(streamId, id, params_JSON);
+            return trackAddAudio(streamId, track.id, track.params_JSON);
         case DeviceType::Video :
-            return trackAddVideo(streamId, id, params_JSON);
+            return trackAddVideo(streamId, track.id, track.params_JSON);
         case DeviceType::Desktop :
-            return trackAddDesktop(streamId, id, params_JSON);
+            return trackAddDesktop(streamId, track.id, track.params_JSON);
     }
 }
 
@@ -117,7 +117,7 @@ void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::strin
         throw IncorrectStreamIdException();
     }
     auto webrtc = webrtcOpt.value();
-    webrtc->AddTrack(audioTrack);
+    webrtc->AddAudioTrack(audioTrack, id);
 }
 
 void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
@@ -133,7 +133,7 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
         throw IncorrectStreamIdException();
     }
     auto webrtc = webrtcOpt.value();
-    webrtc->AddTrack(videoTrack);
+    webrtc->AddVideoTrack(videoTrack, id);
     // Start capture video
     videoCapturer->StartCapture();    
 }
@@ -141,6 +141,40 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
 void StreamApiImpl::trackAddDesktop(int64_t streamId, int64_t id, const std::string& params_JSON) {
     throw stream::NotImplementedException();
 }
+
+void StreamApiImpl::trackRemove(int64_t streamId, const Track& track) {
+    switch (track.type) {
+        case DeviceType::Audio :
+            return trackRemoveAudio(streamId, track.id);
+        case DeviceType::Video :
+            return trackRemoveVideo(streamId, track.id);
+        case DeviceType::Desktop :
+            return trackRemoveDesktop(streamId, track.id);
+    }
+}
+
+void StreamApiImpl::trackRemoveAudio(int64_t streamId, int64_t id) {
+    auto webrtcOpt = _streamDataMap.get(streamId);
+    if(!webrtcOpt.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    auto webrtc = webrtcOpt.value();
+    webrtc->RemoveAudioTrack(id);
+}
+
+void StreamApiImpl::trackRemoveVideo(int64_t streamId, int64_t id) {
+    auto webrtcOpt = _streamDataMap.get(streamId);
+    if(!webrtcOpt.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    auto webrtc = webrtcOpt.value();
+    webrtc->RemoveVideoTrack(id);
+}
+
+void StreamApiImpl::trackRemoveDesktop(int64_t streamId, int64_t id) {
+    throw stream::NotImplementedException();
+}
+
 
 // Publishing stream
 void StreamApiImpl::publishStream(int64_t streamId) {

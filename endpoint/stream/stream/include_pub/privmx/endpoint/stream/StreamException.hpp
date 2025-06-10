@@ -58,6 +58,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NetConnectionException, "Net
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, WebRTCException, "WebRTC error", 0x0009);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectStreamIdException, "Incorrect stream id", 0x000A);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamCacheException, "Incorrect Stream Cache state", 0x000B);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectTrackIdException, "Incorrect track id", 0x000C);
 
 
 } // stream

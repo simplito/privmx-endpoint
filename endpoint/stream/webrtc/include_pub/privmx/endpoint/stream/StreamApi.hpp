@@ -68,7 +68,8 @@ public:
     std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
     std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
 
-    void trackAdd(int64_t streamId, DeviceType type, int64_t id = 0, const std::string& params_JSON = "{}");
+    void trackAdd(int64_t streamId, const TrackParam& track);
+    void trackRemove(int64_t streamId, const Track& track);
     
     void publishStream(int64_t streamId);
 

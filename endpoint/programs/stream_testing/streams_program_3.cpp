@@ -116,9 +116,9 @@ int main(int argc, char** argv) {
         
         auto streamId = streamApi.createStream(streamRoomId);
         auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-        streamApi.trackAdd(streamId, stream::DeviceType::Audio);
+        streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
         auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
-        streamApi.trackAdd(streamId, stream::DeviceType::Video);
+        streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
         streamApi.publishStream(streamId);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         

@@ -34,6 +34,16 @@ enum DeviceType {
     Desktop
 };
 
+struct Track {
+    int64_t id;
+    DeviceType type;
+};
+
+struct TrackParam: public Track {
+    std::string params_JSON;
+};
+
+
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx

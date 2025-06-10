@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
         );
         auto streamId_1 = streamApi.createStream(streamRoomId);
         auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-        streamApi.trackAdd(streamId_1, stream::DeviceType::Audio);
+        streamApi.trackAdd(streamId_1, stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
         // auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
         // streamApi.trackAdd(streamId_1, stream::DeviceType::Video);
         streamApi.publishStream(streamId_1);

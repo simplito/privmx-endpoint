@@ -157,10 +157,21 @@ std::vector<std::pair<int64_t, std::string>> StreamApi::listDesktopRecordingDevi
     }
 }
 
-void StreamApi::trackAdd(int64_t streamId, DeviceType type, int64_t id, const std::string& params_JSON) {
+void StreamApi::trackAdd(int64_t streamId, const TrackParam& track) {
     validateEndpoint();
     try {
-        return _impl->trackAdd(streamId, type, id, params_JSON);
+        return _impl->trackAdd(streamId, track);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+
+void StreamApi::trackRemove(int64_t streamId, const Track& track) {
+    validateEndpoint();
+    try {
+        return _impl->trackRemove(streamId, track);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
