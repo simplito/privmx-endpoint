@@ -40,7 +40,8 @@ ThreadApiImpl::ThreadApiImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const core::Connection& connection
-) : _gateway(gateway),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection), 
+    _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
@@ -404,7 +405,7 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessage);
     auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
-    auto msgKey = getThreadCurrentEncKey(thread);
+    auto msgKey = getModuleCurrentEncKey(thread);
     auto resourceId = core::EndpointUtils::generateId();
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
     send_message_model.resourceId(resourceId);
@@ -472,7 +473,7 @@ void ThreadApiImpl::updateMessage(
     }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
-    auto msgKey = getThreadCurrentEncKey(thread);
+    auto msgKey = getModuleCurrentEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
     send_message_model.messageId(messageId);
     send_message_model.keyId(msgKey.id);
@@ -1299,14 +1300,6 @@ ThreadInternalMetaV5 ThreadApiImpl::decryptThreadInternalMeta(server::Thread2Dat
             return decryptThreadV5(threadEntry, encKey).internalMeta;
     }
     throw UnknowThreadFormatException();
-}
-
-core::DecryptedEncKey ThreadApiImpl::getThreadCurrentEncKey(server::ThreadInfo thread) {
-    auto thread_data_entry = thread.data().get(thread.data().size()-1);
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=thread.contextId(), .resourceId=thread.resourceIdOpt("")};
-    keyProviderRequest.addOne(thread.keys(), thread_data_entry.keyId(), location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(thread_data_entry.keyId());
 }
 
 server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::string& threadId) {
