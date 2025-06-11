@@ -108,7 +108,7 @@ private:
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     privmx::utils::ThreadSaveMap<uint64_t, std::shared_ptr<WebRTC>> _streamDataMap;
-    privmx::utils::ThreadSaveMap<uint64_t, privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>> _streamCapturers;
+    privmx::utils::ThreadSaveMap<uint64_t, privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>::Ptr> _streamCapturers;
 
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;

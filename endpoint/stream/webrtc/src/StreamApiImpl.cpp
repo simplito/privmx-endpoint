@@ -135,7 +135,14 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
     auto webrtc = webrtcOpt.value();
     webrtc->AddVideoTrack(videoTrack, id);
     // Start capture video
-    videoCapturer->StartCapture();    
+    auto capturers = _streamCapturers.get(streamId);
+    if(capturers.has_value()) {
+        capturers.value()->set(id, videoCapturer);
+    } else {
+        privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>::Ptr tmp = new privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>();
+        tmp->set(id, videoCapturer);
+        _streamCapturers.set(streamId, tmp);
+    }
 }
 
 void StreamApiImpl::trackAddDesktop(int64_t streamId, int64_t id, const std::string& params_JSON) {
@@ -169,16 +176,25 @@ void StreamApiImpl::trackRemoveVideo(int64_t streamId, int64_t id) {
     }
     auto webrtc = webrtcOpt.value();
     webrtc->RemoveVideoTrack(id);
+    auto capturers = _streamCapturers.get(streamId);
+    if(capturers.has_value()) {
+        capturers.value()->erase(id);
+    } 
 }
 
 void StreamApiImpl::trackRemoveDesktop(int64_t streamId, int64_t id) {
     throw stream::NotImplementedException();
 }
 
-
 // Publishing stream
 void StreamApiImpl::publishStream(int64_t streamId) {
     _api->publishStream(streamId);
+    auto capturers = _streamCapturers.get(streamId);
+    if(capturers.has_value()) {
+        capturers.value()->forAll([&]([[maybe_unused]]const int64_t& id, const libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>& videoCapturer) {
+            videoCapturer->StartCapture();
+        });
+    } 
 }
 
 // Joining to Stream
@@ -186,6 +202,7 @@ int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::ve
     int64_t streamId = generateNumericId();
     std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, _frameCryptorOptions, settings.OnFrame);
     _streamDataMap.set( streamId, peerConnectionWebRTC);
+   
     return _api->joinStream(streamRoomId, streamsId, settings.settings, streamId, peerConnectionWebRTC);
 }
 
@@ -236,6 +253,7 @@ int64_t StreamApiImpl::generateNumericId() {
 
 void StreamApiImpl::unpublishStream(int64_t streamId) {
     _api->unpublishStream(streamId);
+    _streamCapturers.erase(streamId);
     _streamDataMap.erase(streamId);
 
 }
