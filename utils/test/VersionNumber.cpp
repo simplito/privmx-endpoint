@@ -15,7 +15,6 @@ limitations under the License.
 
 #include <privmx/utils/VersionNumber.hpp>
 #include "privmx/utils/PrivmxExtExceptions.hpp"
-#include <gmpxx.h>
 
 using namespace std;
 
