@@ -37,12 +37,13 @@ limitations under the License.
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/thread/ThreadProvider.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
+#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-class ThreadApiImpl
+class ThreadApiImpl : protected core::ModuleBaseApi
 {
 public:
     ThreadApiImpl(
@@ -119,7 +120,6 @@ private:
     Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread);
     ThreadInternalMetaV5 decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
-    core::DecryptedEncKey getThreadCurrentEncKey(server::ThreadInfo thread);
 
     dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
     dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
