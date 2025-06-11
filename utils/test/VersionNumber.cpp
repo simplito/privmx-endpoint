@@ -16,7 +16,6 @@ limitations under the License.
 #include <privmx/utils/VersionNumber.hpp>
 #include "privmx/utils/PrivmxExtExceptions.hpp"
 
-
 using namespace std;
 
 namespace privmx {
