@@ -124,6 +124,8 @@ private:
     std::shared_ptr<StreamRoomData> getStreamRoomData(int64_t localStreamId);
     std::shared_ptr<StreamData> getStreamData(int64_t localStreamId, std::shared_ptr<StreamRoomData> room);
 
+    void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, int64_t localStreamId);
+
     std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::ConnectionImpl> _connection;
     privfs::RpcGateway::Ptr _gateway;
@@ -139,6 +141,7 @@ private:
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     privmx::utils::ThreadSaveMap<int64_t, std::string> _streamIdToRoomId;
+    privmx::utils::ThreadSaveMap<int64_t, int64_t> _sessionIdToStreamId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

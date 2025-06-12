@@ -198,6 +198,47 @@ ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
     LIST_FIELD(users, core::server::UserIdentity)
 TYPE_END
 
+// JANUS events data
+
+ENDPOINT_SERVER_TYPE(JanusEventData)
+    STRING_FIELD(janus)
+    INT64_FIELD(sender)
+    INT64_FIELD(session_id)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusJSEP)
+    STRING_FIELD(sdp)
+    STRING_FIELD(type)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusVideoRoomStream)
+    BOOL_FIELD(active)
+    INT64_FIELD(mid)
+    INT64_FIELD(mindex)
+    BOOL_FIELD(ready)
+    BOOL_FIELD(send)
+    STRING_FIELD(type)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusVideoRoom)
+    STRING_FIELD(videoroom)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(JanusVideoRoomUpdated, JanusVideoRoom)
+    INT64_FIELD(room)
+    LIST_FIELD(streams, JanusVideoRoomStream)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusPluginDataEvent)
+    VAR_FIELD(data)
+    STRING_FIELD(plugin)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(JanusPluginEvent, JanusEventData)
+    OBJECT_FIELD(jsep, JanusJSEP)
+    OBJECT_FIELD(plugindata, JanusPluginDataEvent)
+TYPE_END
+
 
 } // server
 } // stream

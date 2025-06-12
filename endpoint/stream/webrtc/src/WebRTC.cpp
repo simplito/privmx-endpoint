@@ -86,7 +86,7 @@ std::string WebRTC::createAnswerAndSetDescriptions(const std::string& sdp, const
     return sdp2;
 }
 
-void WebRTC::setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) {
+void WebRTC::setRemoteDescription(const std::string& sdp, const std::string& type) {
     _peerConnection->SetRemoteDescription(
         sdp, 
         type,

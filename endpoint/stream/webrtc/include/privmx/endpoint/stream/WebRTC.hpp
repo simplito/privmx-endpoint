@@ -15,6 +15,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 #include <functional>
+#include <atomic>
 
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
@@ -46,7 +47,8 @@ public:
     ~WebRTC();
     std::string createOfferAndSetLocalDescription() override;
     std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) override;
-    void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) override;
+    std::string negotiationNeeded();
+    void setRemoteDescription(const std::string& sdp, const std::string& type) override;
     void close() override;
     void updateKeys(const std::vector<Key>& keys) override;
     void AddAudioTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, int64_t id = 0);

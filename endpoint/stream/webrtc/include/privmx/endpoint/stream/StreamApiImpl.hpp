@@ -95,7 +95,22 @@ public:
     void dropBrokenFrames(bool enable);
 
 private:
-    
+    enum StreamStatus {
+        Offline = 0,
+        Online = 1
+    };
+    struct StreamData {
+        StreamData(
+            std::shared_ptr<WebRTC> _webrtc,
+            privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> _streamCapturers,
+            StreamStatus _status) : webrtc(_webrtc), streamCapturers(_streamCapturers), status(_status) {}
+        std::shared_ptr<WebRTC> webrtc;
+        privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> streamCapturers;
+        StreamStatus status;
+        std::mutex streamMutex;
+    };
+
+
     int64_t generateNumericId();
 
     void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
@@ -107,8 +122,8 @@ private:
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
-    privmx::utils::ThreadSaveMap<uint64_t, std::shared_ptr<WebRTC>> _streamDataMap;
-    privmx::utils::ThreadSaveMap<uint64_t, privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>::Ptr> _streamCapturers;
+    privmx::utils::ThreadSaveMap<uint64_t, std::shared_ptr<StreamData>> _streamDataMap;
+    
 
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
