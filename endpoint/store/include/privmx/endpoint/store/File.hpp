@@ -197,7 +197,7 @@ public:
             // ...
         }
         int64_t index2 = pos2index(offset + data.size() - 1);
-        auto chunk = _blockProvider->get(index, _version, _fileSize);
+        auto chunk = _blockProvider->get(index2, _version, _filesize);
     }
     void sync(); // void flush();
     void read(int64_t offset, int64_t size) {
@@ -206,11 +206,11 @@ public:
 
 private:
     void setChunk(int64_t index, int64_t chunkOffset, const std::string& data, int64_t version) {
-        if (chunkOffset + data.size() > chunkSize) {
+        if (chunkOffset + data.size() > _chunksize) {
             // throw
         }
         std::string newData;
-        if (chunkOffset > 0 || data.size() < chunkSize) {
+        if (chunkOffset > 0 || data.size() < _chunksize) {
             // TODO: check if exists or return ""
             std::string prevChunk = _blockProvider->get(index, version, _filesize);
             newData.append(prevChunk.substr(0, chunkOffset)); // prevChunk can be smaller than offset, then fill 0
