@@ -20,6 +20,105 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
+class Env
+{
+public:
+    Env(const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const std::shared_ptr<ServerApi>& serverApi,
+        const std::string& host,
+        const privmx::crypto::PrivateKey& userPrivKey,
+        const std::shared_ptr<RequestApi>& requestApi,
+        const std::shared_ptr<FileDataProvider>& fileDataProvider,
+        const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
+        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
+        const std::shared_ptr<core::HandleManager>& handleManager,
+        const core::Connection& connection,
+        size_t serverRequestChunkSize)
+        : _keyProvider(keyProvider),
+        _serverApi(serverApi),
+        _host(host),
+        _userPrivKey(userPrivKey),
+        _requestApi(requestApi),
+        _fileDataProvider(fileDataProvider),
+        _eventMiddleware(eventMiddleware),
+        _eventChannelManager(eventChannelManager),
+        _handleManager(handleManager),
+        _connection(connection),
+        _serverRequestChunkSize(serverRequestChunkSize) {}
+
+    std::shared_ptr<core::KeyProvider> _keyProvider;
+    std::shared_ptr<ServerApi> _serverApi;
+    std::string _host;
+    privmx::crypto::PrivateKey _userPrivKey;
+    std::shared_ptr<RequestApi> _requestApi;
+    std::shared_ptr<FileDataProvider> _fileDataProvider;
+    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
+    std::shared_ptr<core::EventChannelManager> _eventChannelManager;
+    std::shared_ptr<core::HandleManager> _handleManager;
+    core::Connection _connection;
+    size_t _serverRequestChunkSize;
+};
+
+struct FileId
+{
+    std::string contextId;
+    std::string resourceId;
+    std::string storeId;
+    std::string storeResourceId;
+};
+
+struct FileMeta
+{
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    dynamic::InternalStoreFileMeta internalFileMeta;
+};
+
+class MetaEncryptor
+{
+public:
+
+    struct EncryptedMeta
+    {
+        std::string keyId;
+        Poco::Dynamic::Var meta;
+    };
+
+    MetaEncryptor(std::shared_ptr<Env> env) : _env(std::move(env)) {}
+
+    EncryptedMeta encrypt(const FileId& fileId, const FileMeta& fileMeta) {
+        store::FileMetaToEncryptV5 metaToEncrypt {
+            .publicMeta = fileMeta.publicMeta,
+            .privateMeta = fileMeta.privateMeta,
+            .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.asVar())),
+            .dio = createDIO(fileId)
+        };
+        auto key = getKey(fileId);
+        return {key.id, FileMetaEncryptorV5().encrypt(metaToEncrypt, _env->_userPrivKey, key.key).asVar()};
+    }
+    // FileMeta decrypt(const FileId& fileId, const EncryptedMeta& encryptedMeta) {
+
+    // }
+
+private:
+    privmx::endpoint::core::DataIntegrityObject createDIO(const FileId& fileId) {
+        privmx::endpoint::core::DataIntegrityObject fileDIO = _env->_connection.getImpl()->createDIO(
+            fileId.contextId,
+            fileId.resourceId,
+            fileId.storeId,
+            fileId.storeResourceId
+        );
+        return fileDIO;
+    }
+
+    core::DecryptedEncKey getKey(const FileId& fileId) {
+        return _key;
+    }
+
+    std::shared_ptr<Env> _env;
+    core::DecryptedEncKey _key;
+};
+
 class ServerSliceProvider
 {
 public:
