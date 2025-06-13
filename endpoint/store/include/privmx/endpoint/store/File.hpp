@@ -15,6 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IHashList.hpp"
+#include "privmx/endpoint/store/HmacList.hpp"
 
 namespace privmx {
 namespace endpoint {
