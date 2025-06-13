@@ -224,6 +224,32 @@ private:
         _hashList->set(index, chunk.hmac);
         auto topHash = _hashList->getTopHash();
 
+        // update meta
+        _fileMeta.internalFileMeta.hmac(topHash);
+        // _fileMeta.internalFileMeta.size(newSize);
+
+        auto newMeta = _fileMetaEncryptor->encrypt(_fileId, _fileMeta);
+
+        // update file by operation
+        auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
+        operation1.type("file");
+        operation1.pos(_chunksize * index);
+        operation1.data(chunk.data);
+        operation1.truncate(false);
+
+        auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
+        operations.add(operation1);
+
+        auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
+        writeRequest.fileId(_file.id());
+        writeRequest.operations(operations);
+        writeRequest.meta(newMeta.meta);
+        writeRequest.keyId(newMeta.keyId);
+        writeRequest.version(_version);
+        writeRequest.force(false);
+
+        
+        _server->storeFileWrite(writeRequest);
          
     }
     // void addChunk(int64_t index, const std::string& data, int64_t version) {
@@ -245,6 +271,11 @@ private:
     std::shared_ptr<IHashList> _hashList;
     int64_t _filesize = 0;
     int64_t _version = 0;
+    int64_t _chunksize = 0; // TODO
+    FileId _fileId;
+    FileMeta _fileMeta;
+    std::shared_ptr<MetaEncryptor> _fileMetaEncryptor;
+    std::shared_ptr<ServerApi> _server;
 };
 
 class FileInterface
