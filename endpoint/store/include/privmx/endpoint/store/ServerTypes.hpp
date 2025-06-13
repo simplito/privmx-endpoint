@@ -273,6 +273,22 @@ ENDPOINT_SERVER_TYPE(StoreFileWriteModel)
     INT64_FIELD(thumbIndex)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StoreFileRandomWriteOperation)
+    STRING_FIELD(type)
+    INT64_FIELD(pos)
+    BINARYSTRING_FIELD(data)
+    BOOL_FIELD(truncate)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StoreFileWriteModelByOperations)
+    STRING_FIELD(fileId)
+    LIST_FIELD(operations, StoreFileRandomWriteOperation)
+    VAR_FIELD(meta) // meta: unknown
+    STRING_FIELD(keyId)
+    INT64_FIELD(version)
+    BOOL_FIELD(force)
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(StoreFileUpdateModel)
     STRING_FIELD(fileId)     
     VAR_FIELD(meta) // meta: unknown
