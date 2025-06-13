@@ -61,11 +61,13 @@ ThreadApiImpl::ThreadApiImpl(
         },
         std::bind(&ThreadApiImpl::validateThreadDataIntegrity, this, std::placeholders::_1)
     )),
-    _threadCreateSubscription(false),
-    _threadUpdateSubscription(false),
-    _threadDeleteSubscription(false),
-    _threadStatsSubscription(false),
-    _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages")),
+    _threadCache(false),
+    _threadSubscriptionHelper(core::SubscriptionHelper(
+        eventChannelManager, 
+        "thread", "messages", 
+        [&](){_threadProvider.invalidate();_threadCache=true;},
+        [&](){_threadCache=false;}
+    )),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -519,7 +521,11 @@ void ThreadApiImpl::updateMessage(
 }
 
 void ThreadApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(!_threadSubscriptionHelper.hasSubscription(notification.subscriptions) && notification.source != core::EventSource::INTERNAL) {
+    if(notification.source == core::EventSource::INTERNAL) {
+        _threadSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
+        return;
+    }
+    if(!_threadSubscriptionHelper.hasSubscription(notification.subscriptions)) {
         return;
     }
     if (type == "threadCreated") {
@@ -595,53 +601,6 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         event->channel = "thread/" + raw.threadId() + "/messages";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "subscribe") {
-        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
-        if(channelName        == "thread/create") {
-            _threadCreateSubscription = true;
-        } else if(channelName == "thread/update") {
-            _threadUpdateSubscription = true;
-        } else if(channelName == "thread/delete") {
-            _threadDeleteSubscription = true;
-        } else if(channelName == "thread/stats") {
-            _threadStatsSubscription  = true;
-        }
-        if(_threadCreateSubscription && _threadUpdateSubscription && _threadDeleteSubscription && _threadStatsSubscription) {
-            _threadProvider.invalidate();
-        }
-        PRIVMX_DEBUG(
-            "ThreadApi", 
-            "CacheStatus", 
-            std::to_string(_threadCreateSubscription) + 
-            std::to_string(_threadUpdateSubscription) + 
-            std::to_string(_threadDeleteSubscription) + 
-            std::to_string(_threadStatsSubscription)
-        )
-    } else if (type == "unsubscribe") {
-        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
-        if(channelName        == "thread/create") {
-            _threadProvider.invalidate();
-            _threadCreateSubscription = false;
-        } else if(channelName == "thread/update") {
-            _threadProvider.invalidate();
-            _threadUpdateSubscription = false;
-        } else if(channelName == "thread/delete") {
-            _threadProvider.invalidate();
-            _threadDeleteSubscription = false;
-        } else if(channelName == "thread/stats") {
-            _threadProvider.invalidate();
-            _threadStatsSubscription  = false;
-        }
-        PRIVMX_DEBUG(
-            "ThreadApi", 
-            "CacheStatus", 
-            std::to_string(_threadCreateSubscription) + 
-            std::to_string(_threadUpdateSubscription) + 
-            std::to_string(_threadDeleteSubscription) + 
-            std::to_string(_threadStatsSubscription)
-        )
     }
 }
 
@@ -1347,8 +1306,8 @@ core::DecryptedEncKey ThreadApiImpl::getThreadCurrentEncKey(server::ThreadInfo t
 server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::string& threadId) {
     // useing threadProvider only with THREAD_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!(_threadCreateSubscription && _threadUpdateSubscription && _threadDeleteSubscription && _threadStatsSubscription)) {
-        _threadProvider.update(threadId);
+    if(!_threadCache) {
+        _threadProvider.invalidate();
     }
     auto threadContainerInfo = _threadProvider.get(threadId);
     if(threadContainerInfo.status != core::DataIntegrityStatus::ValidationSucceed) {

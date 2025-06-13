@@ -54,11 +54,13 @@ KvdbApiImpl::KvdbApiImpl(
         },
         std::bind(&KvdbApiImpl::validateKvdbDataIntegrity, this, std::placeholders::_1)
     )),
-    _kvdbCreateSubscription(false),
-    _kvdbUpdateSubscription(false),
-    _kvdbDeleteSubscription(false),
-    _kvdbStatsSubscription(false),
-    _kvdbSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "kvdb", "entries"))
+    _kvdbCache(false),
+    _kvdbSubscriptionHelper(core::SubscriptionHelper(
+        eventChannelManager, 
+        "kvdb", "entries",
+        [&](){_kvdbProvider.invalidate();_kvdbCache=true;},
+        [&](){_kvdbCache=false;}
+    ))
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
@@ -443,7 +445,11 @@ std::map<std::string, bool> KvdbApiImpl::deleteEntries(const std::string& kvdbId
 }
 
 void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(!_kvdbSubscriptionHelper.hasSubscription(notification.subscriptions) && notification.source != core::EventSource::INTERNAL) {
+    if(notification.source == core::EventSource::INTERNAL) {
+        _kvdbSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
+        return;
+    }
+    if(!_kvdbSubscriptionHelper.hasSubscription(notification.subscriptions)) {
         return;
     }
     if (type == "kvdbCreated") {
@@ -519,53 +525,6 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
         event->channel = "kvdb/" + raw.kvdbId() + "/entries";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "subscribe") {
-        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel        == "kvdb/create") {
-            _kvdbCreateSubscription = true;
-        } else if(channel == "kvdb/update") {
-            _kvdbUpdateSubscription = true;
-        } else if(channel == "kvdb/delete") {
-            _kvdbDeleteSubscription = true;
-        } else if(channel == "kvdb/stats") {
-            _kvdbStatsSubscription  = true;
-        }
-        if(_kvdbCreateSubscription && _kvdbUpdateSubscription && _kvdbDeleteSubscription && _kvdbStatsSubscription) {
-            _kvdbProvider.invalidate();
-        }
-        PRIVMX_DEBUG(
-            "StoreApi", 
-            "CacheStatus", 
-            std::to_string(_kvdbCreateSubscription) + 
-            std::to_string(_kvdbUpdateSubscription) + 
-            std::to_string(_kvdbDeleteSubscription) + 
-            std::to_string(_kvdbStatsSubscription)
-        )
-    } else if (type == "unsubscribe") {
-        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel        == "kvdb/create") {
-            _kvdbProvider.invalidate();
-            _kvdbCreateSubscription = false;
-        } else if(channel == "kvdb/update") {
-            _kvdbProvider.invalidate();
-            _kvdbUpdateSubscription = false;
-        } else if(channel == "kvdb/delete") {
-            _kvdbProvider.invalidate();
-            _kvdbDeleteSubscription = false;
-        } else if(channel == "kvdb/stats") {
-            _kvdbProvider.invalidate();
-            _kvdbStatsSubscription  = false;
-        }
-        PRIVMX_DEBUG(
-            "StoreApi", 
-            "CacheStatus", 
-            std::to_string(_kvdbCreateSubscription) + 
-            std::to_string(_kvdbUpdateSubscription) + 
-            std::to_string(_kvdbDeleteSubscription) + 
-            std::to_string(_kvdbStatsSubscription)
-        )
     }
 }
 
@@ -1015,7 +974,7 @@ core::DecryptedEncKey KvdbApiImpl::getKvdbCurrentEncKey(server::KvdbInfo kvdb) {
 server::KvdbInfo KvdbApiImpl::getRawKvdbFromCacheOrBridge(const std::string& kvdbId) {
     // useing kvdbProvider only with KVDB_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!(_kvdbCreateSubscription && _kvdbUpdateSubscription && _kvdbDeleteSubscription && _kvdbStatsSubscription)) {
+    if(!_kvdbCache) {
         _kvdbProvider.update(kvdbId);
     }
     auto kvdbContainerInfo = _kvdbProvider.get(kvdbId);

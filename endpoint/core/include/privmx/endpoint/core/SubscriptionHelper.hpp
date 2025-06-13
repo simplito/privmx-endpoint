@@ -27,7 +27,9 @@ public:
     SubscriptionHelper(
         std::shared_ptr<EventChannelManager> eventChannelManager, 
         const std::string& moduleName, 
-        const std::string& entryName = "item"
+        const std::string& entryName = "item",
+        std::function<void()> onModuleSubscription = [](){},
+        std::function<void()> onModuleUnsubscription = [](){}
     );
     bool hasSubscriptionForModule();
     bool hasSubscriptionForModuleEntry(const std::string& moduleId);
@@ -42,6 +44,8 @@ public:
     void unsubscribeFromModuleEntry(const std::string& moduleId);
     void subscribeForModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName);
     void unsubscribeFromModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName);
+
+    void processSubscriptionNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     
 private:
     std::string getModuleEntryChannel(const std::string& moduleId);
@@ -52,6 +56,13 @@ private:
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::string _moduleName;
     std::string _entryName;
+
+    bool _moduleCreateSubscription;
+    bool _moduleUpdateSubscription;
+    bool _moduleDeleteSubscription;
+    bool _moduleStatsSubscription;
+    std::function<void()> _onModuleSubscription;
+    std::function<void()> _onModuleUnsubscription;
     // fast search
     utils::ThreadSaveMap<std::string, std::string> _channelSubscriptionMap; // channel -> subscriptionId 
     utils::ThreadSaveMap<std::string, std::string> _subscriptionMap;        // subscriptionId -> channel

@@ -75,12 +75,14 @@ InboxApiImpl::InboxApiImpl(
         },
         std::bind(&InboxApiImpl::validateInboxDataIntegrity, this, std::placeholders::_1)
     )),
-    _inboxCreateSubscription(false),
-    _inboxUpdateSubscription(false),
-    _inboxDeleteSubscription(false),
-    _inboxStatsSubscription(false),
+    _inboxCache(false),
     _serverRequestChunkSize(serverRequestChunkSize),
-    _inboxSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "inbox")),
+    _inboxSubscriptionHelper(core::SubscriptionHelper(
+        eventChannelManager, 
+        "inbox", "items", 
+        [&](){_inboxProvider.invalidate();_inboxCache=true;},
+        [&](){_inboxCache=false;}
+    )),
     _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread", "messages")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "inbox", "entries"}) 
 {
@@ -1038,7 +1040,11 @@ inbox::FilesConfig InboxApiImpl::getFilesConfigOptOrDefault(const std::optional<
 }
 
 void InboxApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(!(_inboxSubscriptionHelper.hasSubscription(notification.subscriptions) || _threadSubscriptionHelper.hasSubscription(notification.subscriptions)) && notification.source != core::EventSource::INTERNAL) {
+    if(notification.source == core::EventSource::INTERNAL) {
+        _inboxSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
+        return;
+    }
+    if(!(_inboxSubscriptionHelper.hasSubscription(notification.subscriptions) || _threadSubscriptionHelper.hasSubscription(notification.subscriptions))) {
         return;
     }
     if (type == "inboxCreated") {
@@ -1087,55 +1093,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             };
             _eventMiddleware->emitApiEvent(event);
         }
-    } else if (type == "subscribe") {
-        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel        == "inbox/create") {
-            _inboxCreateSubscription = false;
-        } else if(channel == "inbox/update") {
-            _inboxUpdateSubscription = false;
-        } else if(channel == "inbox/delete") {
-            _inboxDeleteSubscription = false;
-        } else if(channel == "inbox/stats") {
-            _inboxStatsSubscription  = false;
-        }
-        if(_inboxCreateSubscription && _inboxUpdateSubscription && _inboxDeleteSubscription && _inboxStatsSubscription) {
-            _inboxProvider.invalidate();
-        }
-        PRIVMX_DEBUG(
-            "StoreApi", 
-            "CacheStatus", 
-            std::to_string(_inboxCreateSubscription) + 
-            std::to_string(_inboxUpdateSubscription) + 
-            std::to_string(_inboxDeleteSubscription) + 
-            std::to_string(_inboxStatsSubscription)
-        )
-    } else if (type == "unsubscribe") {
-        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel        == "inbox/create") {
-            _inboxProvider.invalidate();
-            _inboxCreateSubscription = false;
-        } else if(channel == "inbox/update") {
-            _inboxUpdateSubscription = false;
-            _inboxProvider.invalidate();
-        } else if(channel == "inbox/delete") {
-            _inboxProvider.invalidate();
-            _inboxDeleteSubscription = false;
-        } else if(channel == "inbox/stats") {
-            _inboxProvider.invalidate();
-            _inboxStatsSubscription  = false;
-        }
-        PRIVMX_DEBUG(
-            "StoreApi", 
-            "CacheStatus", 
-            std::to_string(_inboxCreateSubscription) + 
-            std::to_string(_inboxUpdateSubscription) + 
-            std::to_string(_inboxDeleteSubscription) + 
-            std::to_string(_inboxStatsSubscription)
-        )
-    } 
-
+    }
 }
 
 void InboxApiImpl::subscribeForInboxEvents() {
@@ -1214,7 +1172,7 @@ thread::server::Message InboxApiImpl::getServerMessage(const std::string& messag
 server::Inbox InboxApiImpl::getRawInboxFromCacheOrBridge(const std::string& inboxId) {
     // useing inboxProvider only with INBOX_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!(_inboxCreateSubscription && _inboxUpdateSubscription && _inboxDeleteSubscription && _inboxStatsSubscription)) {
+    if(!_inboxCache) {
         _inboxProvider.update(inboxId);
     }
     auto inboxContainerInfo = _inboxProvider.get(inboxId);

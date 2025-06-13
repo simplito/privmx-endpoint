@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 
@@ -193,10 +194,7 @@ private:
     FileMetaEncryptor _fileMetaEncryptor;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     StoreProvider _storeProvider;
-    bool _storeCreateSubscription;
-    bool _storeUpdateSubscription;
-    bool _storeDeleteSubscription;
-    bool _storeStatsSubscription;
+    std::atomic_bool _storeCache;
     core::SubscriptionHelper _storeSubscriptionHelper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 

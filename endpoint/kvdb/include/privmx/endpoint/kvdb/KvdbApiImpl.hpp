@@ -15,6 +15,7 @@ limitations under the License.
 #include <memory>
 #include <optional>
 #include <string>
+#include <atomic>
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -145,10 +146,7 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
     KvdbProvider _kvdbProvider;
-    bool _kvdbCreateSubscription;
-    bool _kvdbUpdateSubscription;
-    bool _kvdbDeleteSubscription;
-    bool _kvdbStatsSubscription;
+    std::atomic_bool _kvdbCache;
     core::SubscriptionHelper _kvdbSubscriptionHelper;
     KvdbDataEncryptorV5 _kvdbDataEncryptorV5;
     EntryDataEncryptorV5 _entryDataEncryptorV5;

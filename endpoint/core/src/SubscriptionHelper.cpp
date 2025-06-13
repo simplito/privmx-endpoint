@@ -10,16 +10,30 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/SubscriptionHelper.hpp"
+#include <privmx/utils/Debug.hpp>
 
 using namespace privmx::endpoint::core;
 
 
-SubscriptionHelper::SubscriptionHelper(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& entryName) : 
+SubscriptionHelper::SubscriptionHelper(
+    std::shared_ptr<EventChannelManager> eventChannelManager, 
+    const std::string& moduleName, 
+    const std::string& entryName,
+    std::function<void()> onModuleSubscription,
+    std::function<void()> onModuleUnsubscription
+) : 
     _eventChannelManager(eventChannelManager), 
     _moduleName(moduleName), 
     _entryName(entryName),
+    _moduleCreateSubscription(false),
+    _moduleUpdateSubscription(false),
+    _moduleDeleteSubscription(false),
+    _moduleStatsSubscription(false),
+    _onModuleSubscription(onModuleSubscription),
+    _onModuleUnsubscription(onModuleUnsubscription),
     _channelSubscriptionMap(utils::ThreadSaveMap<std::string, std::string>()),
-    _subscriptionMap(utils::ThreadSaveMap<std::string, std::string>()) {}
+    _subscriptionMap(utils::ThreadSaveMap<std::string, std::string>())
+{}
 
 
 std::string SubscriptionHelper::getModuleEntryChannel(const std::string& moduleId) {
@@ -115,6 +129,63 @@ void SubscriptionHelper::subscribeForModuleEntryCustomChannel(const std::string&
 void SubscriptionHelper::unsubscribeFromModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName) {
     unsubscribeFor({getModuleEntryCustomChannel(moduleId, channelName)});
 }
+
+
+void SubscriptionHelper::processSubscriptionNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    if (notification.source != core::EventSource::INTERNAL) {
+        return;
+    }
+    if (type == "subscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
+        std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
+        if(channelName        == _moduleName+"/create") {
+            _moduleCreateSubscription = true;
+        } else if(channelName == _moduleName+"/update") {
+            _moduleUpdateSubscription = true;
+        } else if(channelName == _moduleName+"/delete") {
+            _moduleDeleteSubscription = true;
+        } else if(channelName == _moduleName+"/stats") {
+            _moduleStatsSubscription  = true;
+        }
+        if(_moduleCreateSubscription && _moduleUpdateSubscription && _moduleDeleteSubscription && _moduleStatsSubscription) {
+            _onModuleSubscription();
+        }
+        PRIVMX_DEBUG(
+            "SubscriptionHelper", 
+            "CacheStatus:" + _moduleName, 
+            std::to_string(_moduleCreateSubscription) + 
+            std::to_string(_moduleUpdateSubscription) + 
+            std::to_string(_moduleDeleteSubscription) + 
+            std::to_string(_moduleStatsSubscription)
+        )
+    } else if (type == "unsubscribe") {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
+        std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
+        if (channelName == _moduleName+"/create") {
+            _moduleCreateSubscription = false;
+            _onModuleUnsubscription();
+        } else if (channelName == _moduleName+"/update") {
+            _moduleUpdateSubscription = false;
+            _onModuleUnsubscription();
+        } else if (channelName == _moduleName+"/delete") {
+            _moduleDeleteSubscription = false;
+            _onModuleUnsubscription();
+        } else if (channelName == _moduleName+"/stats") {
+            _moduleStatsSubscription  = false;
+            _onModuleUnsubscription();
+        }
+        PRIVMX_DEBUG(
+            "SubscriptionHelper", 
+            "CacheStatus:" + _moduleName, 
+            std::to_string(_moduleCreateSubscription) + 
+            std::to_string(_moduleUpdateSubscription) + 
+            std::to_string(_moduleDeleteSubscription) + 
+            std::to_string(_moduleStatsSubscription)
+        )
+    }
+}
+
+// ------------------------------------ SubscriptionHelperExt ------------------------------------
 
 SubscriptionHelperExt::SubscriptionHelperExt(std::shared_ptr<EventChannelManager> eventChannelManager, const std::string& moduleName, const std::string& entryName) : 
     _subscriptionHelper(eventChannelManager, moduleName, entryName), _moduleName(moduleName), _entryName(entryName), _map(utils::ThreadSaveMap<std::string, std::string>()) {}
