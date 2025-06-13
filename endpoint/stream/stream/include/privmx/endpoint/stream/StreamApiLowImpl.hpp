@@ -91,7 +91,12 @@ public:
 
     void leaveStream(int64_t localStreamId);
 
+    void subscribeForStreamEvents();
+    void unsubscribeFromStreamEvents();
+
     void keyManagement(bool disable);
+
+    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
 
 private:
     struct StreamData {

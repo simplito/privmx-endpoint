@@ -538,3 +538,37 @@ void StreamApiLowImpl::keyManagement(bool disable) {
         room->streamKeyManager->keyManagement(disable);
     });
 }
+
+void StreamApiLowImpl::reconfigureStream(int64_t localStreamId, const std::string& optionsJSON) {
+    auto room = getStreamRoomData(localStreamId);
+    auto streamData = getStreamData(localStreamId, room);
+
+    std::shared_ptr<WebRTCInterface> webRtc = streamData->webRtc;
+    webRtc->updateKeys(room->streamKeyManager->getCurrentWebRtcKeys());
+    std::string sdp = webRtc->createOfferAndSetLocalDescription();
+    // Publish data on bridge
+    auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
+    janusJSEP.sdp(sdp);
+    janusJSEP.type("offer");
+    auto options = utils::Utils::parseJsonObject(optionsJSON);
+    options->set("restart", true);
+    options->set("jsep", janusJSEP);
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
+    model.sessionId(streamData->sessionId.value()); //TODO
+    model.options(options);
+    _serverApi->streamReconfigure(model);
+}
+
+void StreamApiLowImpl::subscribeForStreamEvents() {
+    if(_streamSubscriptionHelper.hasSubscriptionForModule()) {
+        throw AlreadySubscribedException();
+    }
+    _streamSubscriptionHelper.subscribeForModule();
+}
+
+void StreamApiLowImpl::unsubscribeFromStreamEvents() {
+    if(!_streamSubscriptionHelper.hasSubscriptionForModule()) {
+        throw NotSubscribedException();
+    }
+    _streamSubscriptionHelper.unsubscribeFromModule();
+}

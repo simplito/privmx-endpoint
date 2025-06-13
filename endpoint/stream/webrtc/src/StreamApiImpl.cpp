@@ -270,6 +270,14 @@ void StreamApiImpl::leaveStream(int64_t streamId) {
     _streamDataMap.erase(streamId);
 }
 
+void StreamApiImpl::subscribeForStreamEvents() {
+    _api->subscribeForStreamEvents();
+}
+
+void StreamApiImpl::unsubscribeFromStreamEvents() {
+    _api->unsubscribeFromStreamEvents();
+}
+
 void StreamApiImpl::keyManagement(bool disable) {
     _api->keyManagement(disable);
 }
@@ -279,4 +287,8 @@ void StreamApiImpl::dropBrokenFrames(bool enable) {
     _streamDataMap.forAll([&]([[maybe_unused]]const uint64_t &id, const std::shared_ptr<StreamData>& streamData) {
         streamData->webrtc->setCryptorOptions(_frameCryptorOptions);
     });
+}
+
+void StreamApiImpl::reconfigureStream(int64_t localStreamId, const std::string& optionsJSON) {
+    _api->reconfigureStream(localStreamId, optionsJSON);
 }

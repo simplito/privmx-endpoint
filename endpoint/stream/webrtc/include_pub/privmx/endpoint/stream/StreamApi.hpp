@@ -80,9 +80,13 @@ public:
     void unpublishStream(int64_t streamId);
 
     void leaveStream(int64_t streamId);
+    void subscribeForStreamEvents();
+    void unsubscribeFromStreamEvents();
 
     void keyManagement(bool disable);
     void dropBrokenFrames(bool enable);
+
+    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }
 

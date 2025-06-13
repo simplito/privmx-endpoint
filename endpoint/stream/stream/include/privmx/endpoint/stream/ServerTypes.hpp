@@ -181,6 +181,11 @@ ENDPOINT_SERVER_TYPE(StreamLeaveModel)
     INT64_FIELD(sessionId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamReconfigureModel)
+    OBJECT_PTR_FIELD(options)
+    INT64_FIELD(sessionId)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
     INT64_FIELD(version)
     STRING_FIELD(publicMeta)

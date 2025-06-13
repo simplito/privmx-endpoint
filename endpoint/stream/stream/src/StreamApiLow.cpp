@@ -198,10 +198,40 @@ void StreamApiLow::leaveStream(int64_t streamId) {
     }
 }
 
+void StreamApiLow::subscribeForStreamEvents() {
+    validateEndpoint();
+    try {
+        return _impl->subscribeForStreamEvents();
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::unsubscribeFromStreamEvents() {
+    validateEndpoint();
+    try {
+        return _impl->unsubscribeFromStreamEvents();
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void StreamApiLow::keyManagement(bool disable) {
     validateEndpoint();
     try {
         return _impl->keyManagement(disable);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::reconfigureStream(int64_t localStreamId, const std::string& optionsJSON) {
+    validateEndpoint();
+    try {
+        return _impl->reconfigureStream(localStreamId, optionsJSON);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
