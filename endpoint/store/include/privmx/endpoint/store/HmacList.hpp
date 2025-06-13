@@ -35,19 +35,19 @@ public:
         if (hash.size() != HMAC_SIZE) {
             // TODO: throw;
         }
-        if (chunkIndex < size) {
+        if (chunkIndex < _size) {
             auto offset = chunkIndex * HMAC_SIZE;
             std::memcpy(_hashes.data() + offset, hash.data(), HMAC_SIZE);
             _topHash.reset();
-        } else if (chunkIndex <= size) {
+        } else if (chunkIndex <= _size) {
             _size += 1;
             _hashes.append(hash);
             _topHash.reset();
         }
         // TODO: throw;
     }
-    const std::string& getHash(const int64_t& chunkIndex) {
-        if (chunkIndex > size) {
+    const std::string getHash(const int64_t& chunkIndex) {
+        if (chunkIndex > _size) {
             // TODO: throw;
         }
         return _hashes.substr(chunkIndex * HMAC_SIZE, HMAC_SIZE);
@@ -57,7 +57,7 @@ public:
     }
     const std::string& getTopHash() {
         if (!_topHash.has_value()) {
-            _topHash = privmx::crypto::hmacSha256(_topHashKey, _hashes);
+            _topHash = privmx::crypto::Crypto::hmacSha256(_topHashKey, _hashes);
         }
         return _topHash.value();
     }

@@ -22,7 +22,7 @@ public:
 
     virtual ~IHashList() = default;
     virtual void set(const int64_t& chunkIndex, const std::string& hash) = 0;
-    virtual const std::string& getHash(const int64_t& chunkIndex) = 0;
+    virtual const std::string getHash(const int64_t& chunkIndex) = 0;
     virtual const std::string& getAll() = 0;
     virtual const std::string& getTopHash() = 0;
     virtual bool verifyHash(const int64_t& chunkIndex, const std::string& hash) = 0;
