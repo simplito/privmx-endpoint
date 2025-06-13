@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 
@@ -184,7 +185,7 @@ private:
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     InboxProvider _inboxProvider;
-    bool _subscribeForInbox;
+    std::atomic_bool _inboxCache;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId, _messageDeleterId;
     size_t _serverRequestChunkSize;

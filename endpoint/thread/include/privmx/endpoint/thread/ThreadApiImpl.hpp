@@ -15,6 +15,7 @@ limitations under the License.
 #include <memory>
 #include <optional>
 #include <string>
+#include <atomic>
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
@@ -158,7 +159,7 @@ private:
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     ThreadProvider _threadProvider;
-    bool _subscribeForThread;
+    std::atomic_bool _threadCache;
     core::SubscriptionHelper _threadSubscriptionHelper;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
