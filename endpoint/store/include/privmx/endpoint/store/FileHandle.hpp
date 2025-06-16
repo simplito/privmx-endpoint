@@ -22,6 +22,7 @@ limitations under the License.
 #include "privmx/endpoint/store/interfaces/IFileReader.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
+#include "privmx/endpoint/store/File.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -34,6 +35,7 @@ public:
     virtual ~FileHandle() = default;
     virtual bool isReadHandle() const { return false; }
     virtual bool isWriteHandle() const { return false; }
+    virtual bool isRandomWriteHandle() const { return false; }
     int64_t getId();
     std::string getStoreId();
     std::string getFileId();
@@ -103,6 +105,19 @@ private:
 };
 
 
+class FileRandomWriteHandle : public FileHandle
+{
+public:
+    FileRandomWriteHandle(
+        int64_t id,
+        const std::string &fileId,
+        std::shared_ptr<FileInterface> file
+    ) : FileHandle(id, "", fileId, "", 0), file(file) {}
+    bool isRandomWriteHandle() const override { return true; }
+
+    std::shared_ptr<FileInterface> file;
+};
+
 
 class FileHandleManager
 {
@@ -131,8 +146,13 @@ public:
         uint64_t serverRequestChunkSize,
         std::shared_ptr<RequestApi> requestApi
     );
+    std::shared_ptr<FileRandomWriteHandle> createFileRandomWriteHandle(
+        const std::string &fileId,
+        std::shared_ptr<FileInterface> file
+    );
     std::shared_ptr<FileReadHandle> getFileReadHandle(int64_t id);
     std::shared_ptr<FileWriteHandle> getFileWriteHandle(int64_t id);
+    std::shared_ptr<FileRandomWriteHandle> tryGetFileRandomWriteHandle(int64_t id);
     std::shared_ptr<FileHandle> getFileHandle(int64_t id);
     void removeHandle(int64_t id);
 

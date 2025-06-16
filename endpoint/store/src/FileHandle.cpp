@@ -186,6 +186,16 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
     return result;
 }
 
+std::shared_ptr<FileRandomWriteHandle> FileHandleManager::createFileRandomWriteHandle(
+    const std::string &fileId,
+    std::shared_ptr<FileInterface> file
+) {
+    int64_t id = _handleManager->createHandle("FileRandomWrite");
+    std::shared_ptr<FileRandomWriteHandle> result = std::make_shared<FileRandomWriteHandle>(id, fileId, file);
+    _map.set(id, result);
+    return result;
+}
+
 std::shared_ptr<FileReadHandle> FileHandleManager::getFileReadHandle(int64_t id) {
     std::shared_ptr<FileHandle> handle = getFileHandle(id);
     if (!handle->isReadHandle()) {
@@ -200,6 +210,14 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::getFileWriteHandle(int64_t i
         throw InvalidFileWriteHandleException();
     }
     return std::dynamic_pointer_cast<FileWriteHandle>(handle);
+}
+
+std::shared_ptr<FileRandomWriteHandle> FileHandleManager::tryGetFileRandomWriteHandle(int64_t id) {
+    std::shared_ptr<FileHandle> handle = getFileHandle(id);
+    if (!handle->isRandomWriteHandle()) {
+        return std::shared_ptr<FileRandomWriteHandle>();
+    }
+    return std::dynamic_pointer_cast<FileRandomWriteHandle>(handle);
 }
 
 std::shared_ptr<FileHandle> FileHandleManager::getFileHandle(int64_t id) {

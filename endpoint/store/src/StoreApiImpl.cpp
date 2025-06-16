@@ -28,6 +28,8 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreVarSerializer.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 
+#include "privmx/endpoint/store/File.hpp"
+
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
@@ -426,6 +428,9 @@ void StoreApiImpl::deleteFile(const std::string& fileId) {
 
 int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
     assertStoreExist(storeId);
+    if (size == 0) {
+        return createRandomWriteFile(storeId, publicMeta, privateMeta);
+    }
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         storeId,
         std::string(),
@@ -439,6 +444,68 @@ int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer&
     );
     handle->createRequestData();
     return handle->getId();
+}
+
+int64_t StoreApiImpl::createRandomWriteFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
+    // creates an empty file
+    auto store = getRawStoreFromCacheOrBridge(storeId);
+    auto key = getStoreCurrentEncKey(store);
+    
+    // create request
+    auto createRequestModel = utils::TypedObjectFactory::createNewObject<server::CreateRequestModel>();
+    auto fileDefinitions = utils::TypedObjectFactory::createNewList<server::FileDefinition>();
+    auto fileDefinition = utils::TypedObjectFactory::createNewObject<server::FileDefinition>();
+    fileDefinition.size(0);
+    fileDefinition.checksumSize(0);
+    fileDefinition.randomWrite(true);
+    fileDefinitions.add(fileDefinition);
+    createRequestModel.files(fileDefinitions);
+    auto createRequestResult = _requestApi->createRequest(createRequestModel);
+
+    // commit file
+    server::CommitFileModel commitFileModel = utils::TypedObjectFactory::createNewObject<server::CommitFileModel>();
+    commitFileModel.requestId(createRequestResult.id());
+    commitFileModel.fileIndex(0);
+    commitFileModel.seq(0);
+    commitFileModel.checksum(Pson::BinaryString());
+    _requestApi->commitFile(commitFileModel);
+
+    // create file
+    auto fileKey = privmx::crypto::Crypto::randomBytes(32);
+    std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(fileKey);
+
+    auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
+    internalFileMeta.version(4);
+    internalFileMeta.size(0);
+    internalFileMeta.cipherType(1);
+    internalFileMeta.chunkSize(128 * 1024);
+    internalFileMeta.key(utils::Base64::from(fileKey));
+    internalFileMeta.hmac(utils::Base64::from(hash->getTopHash()));
+    internalFileMeta.randomWrite(true);
+
+    privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
+        store.contextId(),
+        core::EndpointUtils::generateId(),
+        storeId,
+        store.resourceIdOpt("")
+    );
+    store::FileMetaToEncryptV5 fileMeta {
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.asVar())),
+        .dio = fileDIO
+    };
+    auto encryptedMetaVar = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key).asVar();
+
+    auto storeFileCreateModel = utils::TypedObjectFactory::createNewObject<server::StoreFileCreateModel>();
+    storeFileCreateModel.fileIndex(0);
+    storeFileCreateModel.resourceId(core::EndpointUtils::generateId());
+    storeFileCreateModel.storeId(storeId);
+    storeFileCreateModel.meta(encryptedMetaVar);
+    storeFileCreateModel.keyId(key.id);
+    storeFileCreateModel.requestId(createRequestResult.id());
+    auto fileId = _serverApi->storeFileCreate(storeFileCreateModel).fileId();
+    return openFile(fileId);
 }
 
 int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
@@ -468,12 +535,32 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     core::EncKeyLocation location{.contextId=file_raw.store().contextId(), .resourceId=file_raw.store().resourceIdOpt(core::EndpointUtils::generateId())};
     keyProviderRequest.addOne(file_raw.store().keys(), file_raw.file().keyId(), location);
     auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(file_raw.file().keyId());
-    auto decryptionParams = getFileDecryptionParams(file_raw.file(), key);
+    auto internalMeta = decryptFileInternalMeta(file_raw.file(), core::DecryptedEncKey(key));
+    if (internalMeta.randomWriteOpt(false)) {
+        // random write
+        std::shared_ptr<ServerSliceProvider> ssp = std::make_shared<ServerSliceProvider>(_serverApi, fileId);
+        std::shared_ptr<SliceProvider> sp = std::make_shared<SliceProvider>(ssp);
+        std::shared_ptr<BlockProvider> bp = std::make_shared<BlockProvider>(sp);
+        std::shared_ptr<MetaEncryptor> me = std::make_shared<MetaEncryptor>(_userPrivKey, _connection, key);
+        std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(utils::Base64::toString(internalMeta.key()), internalMeta.chunkSize());
+        std::shared_ptr<File2> file2 = std::make_shared<File2>(bp, che, me);
+        std::shared_ptr<FileInterface> file = std::make_shared<FileImpl>(file2);
+        std::shared_ptr<FileRandomWriteHandle> handle = _fileHandleManager.createFileRandomWriteHandle(
+            fileId,
+            file
+        );
+        return handle->getId();
+    }
+    auto decryptionParams = getFileDecryptionParams(file_raw.file(), internalMeta);
     return createFileReadHandle(decryptionParams);
 }
 
 FileDecryptionParams StoreApiImpl::getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey) {
     auto internalMeta = decryptFileInternalMeta(file, core::DecryptedEncKey(encKey));
+    return getFileDecryptionParams(file, internalMeta);
+}
+
+FileDecryptionParams StoreApiImpl::getFileDecryptionParams(server::File file, dynamic::InternalStoreFileMeta internalMeta) {
     if ((uint64_t)internalMeta.chunkSize() > SIZE_MAX) {
         throw NumberToBigForCPUArchitectureException("chunkSize to big for this CPU architecture");
     }
@@ -510,11 +597,20 @@ int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFile
 }
 
 void StoreApiImpl::writeToFile(const int64_t handleId, const core::Buffer& dataChunk) {
+    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handleId);
+    if (rw_handle) {
+        rw_handle->file->write(dataChunk);
+        return;
+    }
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.getFileWriteHandle(handleId);
     handle->write(dataChunk.stdString());
 }
 
 core::Buffer StoreApiImpl::readFromFile(const int64_t handle, const int64_t length) {
+    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    if (rw_handle) {
+        return rw_handle->file->read(length);
+    }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
     try {
         return core::Buffer::from(handlePtr->read(length));
@@ -526,11 +622,22 @@ core::Buffer StoreApiImpl::readFromFile(const int64_t handle, const int64_t leng
 }
 
 void StoreApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
+    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    if (rw_handle) {
+        rw_handle->file->seekg(pos);
+        rw_handle->file->seekp(pos);
+        return;
+    }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
     handlePtr->seek(pos);
 }
 
 std::string StoreApiImpl::closeFile(const int64_t handle) {
+    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    if (rw_handle) {
+        rw_handle->file->close();
+        return rw_handle->getFileId();
+    }
     std::shared_ptr<FileHandle> handlePtr = _fileHandleManager.getFileHandle(handle);
     _fileHandleManager.removeHandle(handle);
     if (handlePtr->isWriteHandle()) {
