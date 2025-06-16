@@ -350,11 +350,19 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
     return result;
 }
 
-core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kvdbId, const kvdb::KvdbKeysPagingQuery& pagingQuery) {
+core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listEntriesKeys)
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListKeysModel>();
     model.kvdbId(kvdbId);
-    kvdb::Mapper::map(model, pagingQuery);
+    model.skip(pagingQuery.skip);
+    model.limit(pagingQuery.limit);
+    model.sortOrder(pagingQuery.sortOrder);
+    if(pagingQuery.sortBy.has_value()) {
+        model.sortBy(pagingQuery.sortBy.value());
+    }
+    if(pagingQuery.lastId.has_value()) {
+        model.lastKey(pagingQuery.lastId.value());
+    }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, getting entriesList)
     auto entriesList = _serverApi.kvdbListKeys(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
@@ -369,11 +377,22 @@ core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kv
     });
 }
 
-core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery) {
+core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listEntry)
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListEntriesModel>();
     model.kvdbId(kvdbId);
-    kvdb::Mapper::map(model, pagingQuery);
+    model.skip(pagingQuery.skip);
+    model.limit(pagingQuery.limit);
+    model.sortOrder(pagingQuery.sortOrder);
+    if(pagingQuery.sortBy.has_value()) {
+        model.sortBy(pagingQuery.sortBy.value());
+    }
+    if(pagingQuery.lastId.has_value()) {
+        model.lastKey(pagingQuery.lastId.value());
+    }
+    if(pagingQuery.queryAsJson.has_value()) {
+        model.query(privmx::utils::Utils::parseJson(pagingQuery.queryAsJson.value()));
+    }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntry, getting listEntry)
     auto entriesList = _serverApi.kvdbListEntries(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)

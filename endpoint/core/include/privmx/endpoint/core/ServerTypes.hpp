@@ -51,6 +51,7 @@ ENDPOINT_SERVER_TYPE(ListModel)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(lastId)
+    STRING_FIELD(sortBy)
     VAR_FIELD(query) // JSON
 TYPE_END
 
