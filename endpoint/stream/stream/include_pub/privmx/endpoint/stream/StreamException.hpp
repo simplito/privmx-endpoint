@@ -61,6 +61,13 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamCacheException, "Incor
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectTrackIdException, "Incorrect track id", 0x000C);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadySubscribedException, "Already subscribed", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotSubscribedException, "Cannot unsubscribe if not subscribed", 0x000E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomCreatedEventException, "Cannot extract StreamRoomCreatedEvent", 0x000F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomUpdatedEventException, "Cannot extract StreamRoomUpdatedEvent", 0x0010)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomDeletedEventException, "Cannot extract StreamRoomDeletedEvent", 0x0011)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamPublishedEventException, "Cannot extract StreamPublishedEvent", 0x0012)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamJoinedEventException, "Cannot extract StreamJoinedEvent", 0x0013)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUnpublishedEventException, "Cannot extract StreamUnpublishedEvent", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamLeftEventException, "Cannot extract StreamLeftEvent", 0x0015)
 
 
 } // stream

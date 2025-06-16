@@ -25,6 +25,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamTypes.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
+#include "privmx/endpoint/stream/Events.hpp"
 
 
 using namespace privmx::endpoint;
@@ -89,6 +90,56 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const s
         auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
         if(roomOpt.has_value()) {
             roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
+        }
+    }
+    if(!_streamSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+        return;
+    }
+    if (type == "streamRoomCreated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+        auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 
+        std::shared_ptr<StreamRoomCreatedEvent> event(new StreamRoomCreatedEvent());
+        event->channel = channel;
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+        auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 
+        std::shared_ptr<StreamRoomUpdatedEvent> event(new StreamRoomUpdatedEvent());
+        event->channel = channel;
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomDeleted") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
+        std::shared_ptr<StreamRoomDeletedEvent> event(new StreamRoomDeletedEvent());
+        event->channel = channel;
+        event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUnpublished" || type == "streamLeft" ) {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
+        std::vector<int64_t> streamIds;
+        for(auto i : raw.streamIds()) streamIds.push_back(i);
+        auto eventData = StreamEventData{.streamRoomId=raw.streamRoomId(), .streamIds=streamIds, .userId=raw.userId()};
+        if(type == "streamPublished") {
+            std::shared_ptr<StreamPublishedEvent> event(new StreamPublishedEvent());
+            event->channel = channel;
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
+        } else if(type == "streamJoined") {
+            std::shared_ptr<StreamJoinedEvent> event(new StreamJoinedEvent());
+            event->channel = channel;
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
+        } else if(type == "streamUnpublished") {
+            std::shared_ptr<StreamUnpublishedEvent> event(new StreamUnpublishedEvent());
+            event->channel = channel;
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
+        } else if(type == "streamLeft") {
+            std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
+            event->channel = channel;
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
         }
     } else if(type == "janus") {
         if( 

@@ -203,6 +203,20 @@ ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
     LIST_FIELD(users, core::server::UserIdentity)
 TYPE_END
 
+// Events
+
+ENDPOINT_SERVER_TYPE(StreamRoomDeletedEventData)
+    STRING_FIELD(streamRoomId)
+    STRING_FIELD(type)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamEventData)
+    STRING_FIELD(streamRoomId)
+    LIST_FIELD(streamIds, int64_t)
+    STRING_FIELD(userId)
+TYPE_END
+
+
 // JANUS events data
 
 ENDPOINT_SERVER_TYPE(JanusEventData)
