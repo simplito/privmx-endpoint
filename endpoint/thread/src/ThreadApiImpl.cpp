@@ -177,34 +177,28 @@ void ThreadApiImpl::updateThread(
     // extract current users info
     auto usersVec {core::EndpointUtils::listToVector<std::string>(currentThread.users())};
     auto managersVec {core::EndpointUtils::listToVector<std::string>(currentThread.managers())};
-    auto oldUsersAll {core::EndpointUtils::uniqueList(usersVec, managersVec)};
+    auto oldUsersIds {core::EndpointUtils::uniqueList(usersVec, managersVec)};
 
     auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-
+    auto newUsersIds {core::EndpointUtils::usersWithPubKeyToIds(new_users)};
+    auto deletedUsersIds {core::EndpointUtils::getDifference(oldUsersIds, newUsersIds)};
+    auto addedUsersIds {core::EndpointUtils::getDifference(newUsersIds, oldUsersIds)};
+        
     // adjust key
-    std::vector<std::string> deletedUsers {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
-    std::vector<std::string> addedUsers {core::EndpointUtils::getDifference(core::EndpointUtils::usersWithPubKeyToIds(new_users), oldUsersAll)};
     std::vector<core::UserWithPubKey> usersToAddMissingKey;
     for(auto new_user: new_users) {
-        if( std::find(addedUsers.begin(), addedUsers.end(), new_user.userId) != addedUsers.end()) {
+        if( std::find(addedUsersIds.begin(), addedUsersIds.end(), new_user.userId) != addedUsersIds.end()) {
             usersToAddMissingKey.push_back(new_user);
         }
     }
-    bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
+    bool needNewKey = deletedUsersIds.size() > 0 || forceGenerateNewKey;
 
-    // read all key to check if all key belongs to this thread
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=currentThread.contextId(), .resourceId=currentThreadResourceId};
-    keyProviderRequest.addAll(currentThread.keys(), location);
-    auto threadKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
+    auto location {getModuleEncKeyLocation(currentThread, currentThreadResourceId)};
     auto currentThreadEntry = currentThread.data().get(currentThread.data().size()-1);
-    core::DecryptedEncKey currentThreadKey;
-    for (auto key : threadKeys) {
-        if (currentThreadEntry.keyId() == key.first) {
-            currentThreadKey = key.second;
-            break;
-        }
-    }
+
+    auto threadKeys {getAndValidateModuleKeys(currentThread, currentThreadResourceId)};
+    auto currentThreadKey {findEncKeyByKeyId(threadKeys, currentThreadEntry.keyId())};
+
     auto threadInternalMeta = decryptThreadInternalMeta(currentThreadEntry, currentThreadKey);
     if(currentThreadKey.dataStructureVersion != 2) {
         //force update all keys if thread keys is in older version
@@ -405,7 +399,7 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessage);
     auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
-    auto msgKey = getModuleCurrentEncKey(thread);
+    auto msgKey = getAndValidateModuleCurrentEncKey(thread);
     auto resourceId = core::EndpointUtils::generateId();
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
     send_message_model.resourceId(resourceId);
@@ -473,7 +467,7 @@ void ThreadApiImpl::updateMessage(
     }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
-    auto msgKey = getModuleCurrentEncKey(thread);
+    auto msgKey = getAndValidateModuleCurrentEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
     send_message_model.messageId(messageId);
     send_message_model.keyId(msgKey.id);
