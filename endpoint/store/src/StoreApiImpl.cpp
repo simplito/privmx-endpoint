@@ -556,7 +556,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
         storeFileGetModel.fileId(handle->getFileId());
         store = _serverApi->storeFileGet(storeFileGetModel).store();
     }
-    auto key = getModuleCurrentEncKey(store);
+    auto key = getAndValidateModuleCurrentEncKey(store);
 
     auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
     internalFileMeta.version(4);
@@ -1421,7 +1421,7 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     if(statusCode != 0) {
         throw FileDataIntegrityException();
     }
-    auto key = getModuleCurrentEncKey(store);
+    auto key = getAndValidateModuleCurrentEncKey(store);
     Poco::Dynamic::Var encryptedMetaVar;
     auto fileInternalMeta = decryptFileInternalMeta(store, file);
     auto internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileInternalMeta));
