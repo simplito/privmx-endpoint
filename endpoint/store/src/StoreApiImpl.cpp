@@ -45,7 +45,8 @@ StoreApiImpl::StoreApiImpl(
     const std::shared_ptr<core::HandleManager>& handleManager,
     const core::Connection& connection,
     size_t serverRequestChunkSize
-) : _keyProvider(keyProvider),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection),
+    _keyProvider(keyProvider),
     _serverApi(serverApi),
     _host(host),
     _userPrivKey(userPrivKey),
@@ -555,7 +556,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
         storeFileGetModel.fileId(handle->getFileId());
         store = _serverApi->storeFileGet(storeFileGetModel).store();
     }
-    auto key = getStoreCurrentEncKey(store);
+    auto key = getAndValidateModuleCurrentEncKey(store);
 
     auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
     internalFileMeta.version(4);
@@ -1029,14 +1030,6 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
     return result;
 }
 
-core::DecryptedEncKey StoreApiImpl::getStoreCurrentEncKey(server::Store store) {
-    auto store_data_entry = store.data().get(store.data().size()-1);
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=store.contextId(), .resourceId=store.resourceIdOpt("")};
-    keyProviderRequest.addOne(store.keys(), store_data_entry.keyId(), location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(store_data_entry.keyId());
-}
-
 StoreInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     switch (getStoreEntryDataStructureVersion(storeEntry)) {
         case StoreDataSchema::Version::UNKNOWN:
@@ -1428,7 +1421,7 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     if(statusCode != 0) {
         throw FileDataIntegrityException();
     }
-    auto key = getStoreCurrentEncKey(store);
+    auto key = getAndValidateModuleCurrentEncKey(store);
     Poco::Dynamic::Var encryptedMetaVar;
     auto fileInternalMeta = decryptFileInternalMeta(store, file);
     auto internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileInternalMeta));

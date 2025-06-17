@@ -95,7 +95,7 @@ void KeyDecryptionAndVerificationRequest::markAsCompleted() {
     _completed = true;
 }
 
-KeyProvider::KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifierInterface>()> getUserVerifier) : _key(key), _getUserVerifier(getUserVerifier) {}
+KeyProvider::KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier) : _key(key), _getUserVerifier(getUserVerifier) {}
 
 EncKey KeyProvider::generateKey() {
     return {

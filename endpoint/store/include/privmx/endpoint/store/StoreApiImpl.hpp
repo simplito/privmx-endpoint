@@ -44,12 +44,13 @@ limitations under the License.
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/StoreProvider.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
+#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class StoreApiImpl
+class StoreApiImpl : protected core::ModuleBaseApi
 {
 public:
     StoreApiImpl(
@@ -137,7 +138,6 @@ private:
     Store decryptAndConvertStoreDataToStore(server::Store store);
     StoreInternalMetaV5 decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateStoreDataIntegrity(server::Store store);
-    core::DecryptedEncKey getStoreCurrentEncKey(server::Store store);
 
 
     // OLD CODE    
