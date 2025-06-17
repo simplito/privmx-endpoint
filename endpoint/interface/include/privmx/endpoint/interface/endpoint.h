@@ -14,11 +14,11 @@ int privmx_endpoint_freeEventQueue(EventQueue* ptr);
 int privmx_endpoint_execEventQueue(EventQueue* ptr, int method, const pson_value* args, pson_value** res);
 
 typedef struct Connection Connection;
-typedef int (*privmx_user_verifier)(const pson_value* args, pson_value** res);
+typedef int (*privmx_user_verifier)(void* ctx, const pson_value* args, pson_value** res);
 
 int privmx_endpoint_newConnection(Connection** outPtr);
 int privmx_endpoint_freeConnection(Connection* ptr);
-int privmx_endpoint_setUserVerifier(Connection* ptr, privmx_user_verifier verifier, pson_value** res);
+int privmx_endpoint_setUserVerifier(Connection* ptr, void* ctx, privmx_user_verifier verifier, pson_value** res);
 int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value* args, pson_value** res);
 
 typedef struct BackendRequester BackendRequester;
