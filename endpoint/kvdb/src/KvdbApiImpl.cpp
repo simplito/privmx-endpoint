@@ -584,11 +584,11 @@ core::container::DecryptedContainerDataV5 KvdbApiImpl::decryptKvdbV5(server::Kvd
         }
         return _kvdbDataEncryptorV5.decrypt(encryptedKvdbData, encKey.key);
     } catch (const core::Exception& e) {
-        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
+        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
     } catch (...) {
-        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
 }
 
@@ -645,9 +645,9 @@ Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, co
 KvdbDataSchema::Version KvdbApiImpl::getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry) {
     if (kvdbEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(kvdbEntry.data());
-        auto version = versioned.versionOpt(KvdbDataSchema::Version::UNKNOWN);
+        auto version = versioned.versionOpt(core::container::ContainerDataSchema::Version::UNKNOWN);
         switch (version) {
-            case KvdbDataSchema::Version::VERSION_5:
+            case core::container::ContainerDataSchema::Version::VERSION_5:
                 return KvdbDataSchema::Version::VERSION_5;
             default:
                 return KvdbDataSchema::Version::UNKNOWN;
