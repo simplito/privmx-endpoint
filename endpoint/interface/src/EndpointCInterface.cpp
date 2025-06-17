@@ -67,15 +67,15 @@ int privmx_endpoint_freeConnection(Connection* ptr) {
     return 1;
 }
 
-int privmx_endpoint_setUserVerifier(Connection* ptr, privmx_user_verifier verifier, pson_value** res) {
+int privmx_endpoint_setUserVerifier(Connection* ptr, void* ctx, privmx_user_verifier verifier, pson_value** res) {
     return CApiExecutor::execFunc(res, [&]{
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
         return _ptr->setUserVerifier(
-            [verifier](const Poco::Dynamic::Var& request) {
+            [ctx, verifier](const Poco::Dynamic::Var& request) {
                 pson_value* res = nullptr;
                 pson_value* args = (pson_value*)(new Poco::Dynamic::Var(request)); // alock memory
                 try {
-                    verifier(args, &res);
+                    verifier(ctx, args, &res);
                 } catch (...) {
                     //memory leeks protection
                     if(args != nullptr) { // free args memory
