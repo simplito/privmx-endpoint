@@ -9,39 +9,42 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_STORE_STOREDATAENCRYPTORV5_HPP_
-#define _PRIVMXLIB_ENDPOINT_STORE_STOREDATAENCRYPTORV5_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONTAINERDATAENCRYPTORV4_HPP
+#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONTAINERDATAENCRYPTORV4_HPP
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
+#include <privmx/endpoint/core/encryptors/container/Types.hpp>
+#include <privmx/endpoint/core/encryptors/container/DynamicTypes.hpp>
+#include <privmx/endpoint/core/encryptors/container/Constants.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include "privmx/endpoint/store/StoreTypes.hpp"
-#include "privmx/endpoint/store/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
-namespace store {
+namespace core {
+namespace container {
 
-class StoreDataEncryptorV5 {
+class ContainerDataEncryptorV4 {
 public:
-    server::EncryptedStoreDataV5 encrypt(const StoreDataToEncryptV5& storeData,
+    dynamic::EncryptedContainerDataV4 encrypt(const ContainerDataToEncryptV4& containerData,
                                         const crypto::PrivateKey& authorPrivateKey,
                                         const std::string& encryptionKey);
-    DecryptedStoreDataV5 decrypt(const server::EncryptedStoreDataV5& encryptedStoreData,
+    DecryptedContainerDataV4 decrypt(const dynamic::EncryptedContainerDataV4& encryptedContainerData,
                                 const std::string& encryptionKey);
-    DecryptedStoreDataV5 extractPublic(const server::EncryptedStoreDataV5& encryptedStoreData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedStoreDataV5& encryptedStoreData);
+
 private:
-    void assertDataFormat(const server::EncryptedStoreDataV5& encryptedStoreData);
+    void validateVersion(const dynamic::EncryptedContainerDataV4& encryptedContainerData);
 
     core::DataEncryptorV4 _dataEncryptor;
-    core::DIOEncryptorV1 _DIOEncryptor;
 };
 
-}  // namespace store
+
+}  // namespace container
+}  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_STORE_STOREDATAENCRYPTORV5_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONTAINERDATAENCRYPTORV4_HPP

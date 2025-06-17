@@ -62,7 +62,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectInvalidSign
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, KeyProviderRequestCompletedException, "KeyProvider request completed", 0x0018)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedVerifierResponseException, "Malformed verifier response", 0x0019)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleEncryptionKeyException, "Module's enc key with given keyId does not exist.", 0x0020)
-
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, ContainerPublicDataMismatchException, "Container public data mismatch", 0x0021)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidEncryptedContainerDataVersionException, "Invalid version of encrypted container data", 0x0022)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)

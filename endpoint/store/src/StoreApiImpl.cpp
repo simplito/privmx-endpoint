@@ -79,7 +79,6 @@ StoreApiImpl::StoreApiImpl(
         [&](){_storeCache=false;}
     )),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
-    _storeDataEncryptorV4(StoreDataEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -116,10 +115,10 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
         resourceId
     );
     auto storeSecret = _keyProvider->generateSecret();
-    StoreDataToEncryptV5 storeDataToEncrypt {
+    core::container::ContainerDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = StoreInternalMetaV5{.secret=storeSecret, .resourceId=resourceId, .randomId=storeDIO.randomId},
+        .internalMeta = core::container::ContainerInternalMetaV5{.secret=storeSecret, .resourceId=resourceId, .randomId=storeDIO.randomId},
         .dio = storeDIO
     };
     // auto new_store_data = utils::TypedObjectFactory::createNewObject<dynamic::StoreData>();
@@ -275,10 +274,10 @@ void StoreApiImpl::updateStore(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    StoreDataToEncryptV5 storeDataToEncrypt {
+    core::container::ContainerDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = StoreInternalMetaV5{.secret=storeInternalMeta.secret, .resourceId=currentStoreResourceId, .randomId=updateStoreDio.randomId},
+        .internalMeta = core::container::ContainerInternalMetaV5{.secret=storeInternalMeta.secret, .resourceId=currentStoreResourceId, .randomId=updateStoreDio.randomId},
         .dio = updateStoreDio
     };
     model.data(_storeDataEncryptorV5.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
@@ -760,22 +759,22 @@ dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntr
     }
 }
 
-DecryptedStoreDataV4 StoreApiImpl::decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+core::container::DecryptedContainerDataV4 StoreApiImpl::decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV4>(storeEntry.data());
+        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV4>(storeEntry.data());
         return _storeDataEncryptorV4.decrypt(encryptedDataEntryVar, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{}});
+        return core::container::DecryptedContainerDataV4({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = e.getCode()},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{}});
+        return core::container::DecryptedContainerDataV4({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{}});
     } catch (...) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{}});
+        return core::container::DecryptedContainerDataV4({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{}});
     }
 }
 
-DecryptedStoreDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+core::container::DecryptedContainerDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(storeEntry.data());
+        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(storeEntry.data());
         if(encKey.statusCode != 0) {
             auto tmp = _storeDataEncryptorV5.extractPublic(encryptedDataEntryVar);
             tmp.statusCode = encKey.statusCode;
@@ -783,11 +782,11 @@ DecryptedStoreDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEn
         }
         return _storeDataEncryptorV5.decrypt(encryptedDataEntryVar, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
+        return core::container::DecryptedContainerDataV5({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return core::container::DecryptedContainerDataV5({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return core::container::DecryptedContainerDataV5({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -843,7 +842,7 @@ Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::comp
     );
 }
 
-Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData) {
+Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const core::container::DecryptedContainerDataV4& storeData) {
     return convertServerStoreToLibStore(
         store, 
         storeData.publicMeta,
@@ -853,7 +852,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, cons
     );
 }
 
-Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData) {
+Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const core::container::DecryptedContainerDataV5& storeData) {
     return convertServerStoreToLibStore(
         store, 
         storeData.publicMeta,
@@ -866,11 +865,11 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
 StoreDataSchema::Version StoreApiImpl::getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry) {
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(storeEntry.data());
-        auto version = versioned.versionOpt(StoreDataSchema::Version::UNKNOWN);
+        auto version = versioned.versionOpt(core::container::ContainerDataSchema::Version::UNKNOWN);
         switch (version) {
-            case StoreDataSchema::Version::VERSION_4:
+            case core::container::ContainerDataSchema::Version::VERSION_4:
                 return StoreDataSchema::Version::VERSION_4;
-            case StoreDataSchema::Version::VERSION_5:
+            case core::container::ContainerDataSchema::Version::VERSION_5:
                 return StoreDataSchema::Version::VERSION_5;
             default:
                 return StoreDataSchema::Version::UNKNOWN;
@@ -1022,14 +1021,14 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
     return result;
 }
 
-StoreInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+core::container::ContainerInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     switch (getStoreEntryDataStructureVersion(storeEntry)) {
         case StoreDataSchema::Version::UNKNOWN:
             throw UnknowStoreFormatException();
         case StoreDataSchema::Version::VERSION_1:
-            return StoreInternalMetaV5();
+            return core::container::ContainerInternalMetaV5();
         case StoreDataSchema::Version::VERSION_4:
-            return StoreInternalMetaV5();
+            return core::container::ContainerInternalMetaV5();
         case StoreDataSchema::Version::VERSION_5:
             return decryptStoreV5(storeEntry, encKey).internalMeta;
     }
@@ -1090,11 +1089,11 @@ DecryptedFileMetaV4 StoreApiImpl::decryptFileMetaV4(server::File file, const cor
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
         return _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -1109,11 +1108,11 @@ DecryptedFileMetaV5 StoreApiImpl::decryptFileMetaV5(server::File file, const cor
             return _fileMetaEncryptorV5.decrypt(encryptedFileMeta, encKey.key);
         }
     } catch (const core::Exception& e) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -1491,7 +1490,7 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
             case StoreDataSchema::Version::VERSION_4:
                 return 0;
             case StoreDataSchema::Version::VERSION_5: {
-                auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
+                auto store_data = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(store_data_entry.data());
                 auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
                 if(
                     dio.contextId != store.contextId() ||

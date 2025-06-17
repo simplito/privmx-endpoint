@@ -40,12 +40,6 @@ ENDPOINT_CLIENT_TYPE(StoreFileMetaV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(StoreInternalMetaV5)
-    STRING_FIELD(secret)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(randomId)
-TYPE_END
-
 class BlobPropertyBag : public utils::TypedObject
 {
 public:

@@ -102,10 +102,10 @@ std::string KvdbApiImpl::createKvdbEx(
     );
     auto kvdbSecret = _keyProvider->generateSecret();
 
-    KvdbDataToEncryptV5 kvdbDataToEncrypt {
+    core::container::ContainerDataToEncryptV5 kvdbDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = KvdbInternalMetaV5{.secret=kvdbSecret, .resourceId=resourceId, .randomId=kvdbDIO.randomId},
+        .internalMeta = core::container::ContainerInternalMetaV5{.secret=kvdbSecret, .resourceId=resourceId, .randomId=kvdbDIO.randomId},
         .dio = kvdbDIO
     };
     auto create_kvdb_model = utils::TypedObjectFactory::createNewObject<server::KvdbCreateModel>();
@@ -241,10 +241,10 @@ void KvdbApiImpl::updateKvdb(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    KvdbDataToEncryptV5 kvdbDataToEncrypt {
+    core::container::ContainerDataToEncryptV5 kvdbDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = KvdbInternalMetaV5{.secret=kvdbInternalMeta.secret, .resourceId=currentKvdbResourceId, .randomId=updateKvdbDio.randomId},
+        .internalMeta = core::container::ContainerInternalMetaV5{.secret=kvdbInternalMeta.secret, .resourceId=currentKvdbResourceId, .randomId=updateKvdbDio.randomId},
         .dio = updateKvdbDio
     };
     model.data(_kvdbDataEncryptorV5.encrypt(kvdbDataToEncrypt, _userPrivKey, kvdbKey.key).asVar());
@@ -574,9 +574,9 @@ privmx::utils::List<std::string> KvdbApiImpl::mapUsers(const std::vector<core::U
     return result;
 }
 
-DecryptedKvdbDataV5 KvdbApiImpl::decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
+core::container::DecryptedContainerDataV5 KvdbApiImpl::decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedKvdbData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbDataV5>(kvdbEntry.data());
+        auto encryptedKvdbData = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(kvdbEntry.data());
         if(encKey.statusCode != 0) {
             auto tmp = _kvdbDataEncryptorV5.extractPublic(encryptedKvdbData);
             tmp.statusCode = encKey.statusCode;
@@ -584,11 +584,11 @@ DecryptedKvdbDataV5 KvdbApiImpl::decryptKvdbV5(server::KvdbDataEntry kvdbEntry, 
         }
         return _kvdbDataEncryptorV5.decrypt(encryptedKvdbData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedKvdbDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
+        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedKvdbDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
     } catch (...) {
-        return DecryptedKvdbDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = KvdbDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
 }
 
@@ -632,7 +632,7 @@ Kvdb KvdbApiImpl::convertServerKvdbToLibKvdb(
     };
 }
 
-Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const DecryptedKvdbDataV5& kvdbData) {
+Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const core::container::DecryptedContainerDataV5& kvdbData) {
     return convertServerKvdbToLibKvdb(
         kvdbInfo,
         kvdbData.publicMeta,
@@ -775,11 +775,11 @@ DecryptedKvdbEntryDataV5 KvdbApiImpl::decryptKvdbEntryDataV5(server::KvdbEntryIn
         }
         return _entryDataEncryptorV5.decrypt(encryptedEntryData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
+        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
+        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
     } catch (...) {
-        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
+        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
     }
 }
 
@@ -825,9 +825,9 @@ KvdbEntry KvdbApiImpl::convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEn
 KvdbEntryDataSchema::Version KvdbApiImpl::getMessagesDataStructureVersion(server::KvdbEntryInfo entry) {
     if (entry.kvdbEntryValue().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(entry.kvdbEntryValue());
-        auto version = versioned.versionOpt(KvdbEntryDataSchema::Version::UNKNOWN);
+        auto version = versioned.versionOpt(core::container::ContainerDataSchema::Version::UNKNOWN);
         switch (version) {
-            case KvdbEntryDataSchema::Version::VERSION_5:
+            case core::container::ContainerDataSchema::Version::VERSION_5:
                 return KvdbEntryDataSchema::Version::VERSION_5;
             default:
                 return KvdbEntryDataSchema::Version::UNKNOWN;
@@ -953,7 +953,7 @@ KvdbEntry KvdbApiImpl::decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo e
     }
 }
 
-KvdbInternalMetaV5 KvdbApiImpl::decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
+core::container::ContainerInternalMetaV5 KvdbApiImpl::decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
     switch (getKvdbDataEntryStructureVersion(kvdbEntry)) {
         case KvdbDataSchema::Version::UNKNOWN:
             throw UnknownKvdbFormatException();
@@ -996,7 +996,7 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
             case KvdbDataSchema::Version::UNKNOWN:
                 return UnknownKvdbFormatException().getCode();
             case KvdbDataSchema::Version::VERSION_5: {
-                auto kvdb_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedKvdbDataV5>(kvdb_data_entry.data());
+                auto kvdb_data = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(kvdb_data_entry.data());
                 auto dio = _kvdbDataEncryptorV5.getDIOAndAssertIntegrity(kvdb_data);
                 if(
                     dio.contextId != kvdb.contextId() ||

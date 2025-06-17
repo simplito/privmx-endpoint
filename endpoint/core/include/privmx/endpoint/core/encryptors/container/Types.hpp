@@ -9,52 +9,57 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_THREAD_THREADTYPES_HPP_
-#define _PRIVMXLIB_ENDPOINT_THREAD_THREADTYPES_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_TYPES_HPP_
+#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_TYPES_HPP_
 
 #include <string>
-
-#include "privmx/endpoint/thread/DynamicTypes.hpp"
+#include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
-namespace thread {
+namespace core {
+namespace container {
+// Version 4 (deprecated)
 
-struct MessageDataToEncryptV4 {
+struct ContainerDataToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer data;
     std::optional<core::Buffer> internalMeta;
 };
 
-struct DecryptedMessageDataV4 : public core::DecryptedVersionedData {
+struct DecryptedContainerDataV4 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer data;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
 };
 
-struct MessageDataToEncryptV5 {
+// Version 5 
+struct ContainerInternalMetaV5 {
+    std::string secret;
+    std::string resourceId;
+    std::string randomId;
+};
+
+struct ContainerDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer data;
-    std::optional<core::Buffer> internalMeta;
+    ContainerInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
 };
 
-struct DecryptedMessageDataV5 : public core::DecryptedVersionedData {
+struct DecryptedContainerDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::Buffer data;
-    std::optional<core::Buffer> internalMeta;
+    ContainerInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };
 
-} // thread
+} // container
+} // core
 } // endpoint
 } // privmx
 
-#endif // _PRIVMXLIB_ENDPOINT_THREAD_THREADTYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_TYPES_HPP_

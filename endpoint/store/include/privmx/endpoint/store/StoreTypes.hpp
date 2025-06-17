@@ -83,39 +83,6 @@ struct DecryptedFileMetaV5 : core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
-struct StoreDataToEncryptV4 {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
-};
-
-struct DecryptedStoreDataV4 : core::DecryptedVersionedData {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
-    std::string authorPubKey;
-};
-
-struct StoreInternalMetaV5 {
-    std::string secret;
-    std::string resourceId;
-    std::string randomId;
-};
-
-struct StoreDataToEncryptV5 {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    StoreInternalMetaV5 internalMeta;
-    core::DataIntegrityObject dio;
-};
-
-struct DecryptedStoreDataV5 : core::DecryptedVersionedData {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    StoreInternalMetaV5 internalMeta;
-    std::string authorPubKey;
-    core::DataIntegrityObject dio;
-};
 
 } // store
 } // endpoint

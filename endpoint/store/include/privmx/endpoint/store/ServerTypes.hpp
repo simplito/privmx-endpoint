@@ -185,23 +185,6 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedFileMetaV5, core::dynamic::VersionedData)
     STRING_FIELD(dio)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedStoreDataV4, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedStoreDataV5, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-    STRING_FIELD(dio)
-TYPE_END
-
 //-----------------------------------------------------
 
 
