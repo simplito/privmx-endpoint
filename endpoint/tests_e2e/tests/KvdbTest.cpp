@@ -991,9 +991,8 @@ TEST_F(KvdbTest, listEntries_incorrect_input_data) {
                 .skip=0, 
                 .limit=1, 
                 .sortOrder="BLACH",
+                .lastId=std::nullopt,
                 .sortBy=std::nullopt,
-                .lastKey=std::nullopt,
-                .prefix=std::nullopt,
                 .queryAsJson="{BLACH,}"
             }
         );

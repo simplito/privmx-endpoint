@@ -172,9 +172,7 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(KvdbListKeysModel)
     STRING_FIELD(kvdbId)
     STRING_FIELD(lastKey)
-    STRING_FIELD(prefix)
     STRING_FIELD(sortBy)
-
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(sortOrder)
@@ -189,7 +187,6 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(KvdbListEntriesModel)
     STRING_FIELD(kvdbId)
     STRING_FIELD(lastKey)
-    STRING_FIELD(prefix)
     STRING_FIELD(sortBy)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
