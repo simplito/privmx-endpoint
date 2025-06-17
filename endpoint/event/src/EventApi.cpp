@@ -26,6 +26,7 @@ EventApi EventApi::create(core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<EventApiImpl> impl(new EventApiImpl(
+            connection,
             connectionImpl->getUserPrivKey(),
             connectionImpl->getGateway(),
             connectionImpl->getEventMiddleware(),

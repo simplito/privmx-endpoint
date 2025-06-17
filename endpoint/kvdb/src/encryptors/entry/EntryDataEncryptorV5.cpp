@@ -48,8 +48,7 @@ server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(const KvdbEntryDa
     return result;
 }
 
-DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
-    const server::EncryptedKvdbEntryDataV5& encryptedEntryData, const std::string& encryptionKey) {
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(const server::EncryptedKvdbEntryDataV5& encryptedEntryData, const std::string& encryptionKey) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
