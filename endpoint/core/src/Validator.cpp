@@ -185,6 +185,13 @@ void Validator::validateEventType(const Event& value, const std::string& type, c
     }
 }
 
+void Validator::validateJSON(const std::string& value, const std::string& stack_trace) {
+    try {
+        privmx::utils::Utils::parseJson(value);
+    } catch (...) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid JSON"));
+    }
+}
 
 void StructValidator<Context>::validate(const Context& value, const std::string& stack_trace) {
     Validator::validateId(value.userId, stack_trace + ".userId");
@@ -206,6 +213,9 @@ void StructValidator<PagingQuery>::validate(const PagingQuery& value, const std:
     Validator::validateSortOrder(value.sortOrder, stack_trace + ".sortOrder");
     if (value.lastId.has_value()) {
         Validator::validateLastId(value.lastId.value(), stack_trace + ".lastId");
+    }
+    if (value.queryAsJson.has_value()) {
+        Validator::validateJSON(value.queryAsJson.value(), stack_trace + ".queryAsJson");
     }
 }
 

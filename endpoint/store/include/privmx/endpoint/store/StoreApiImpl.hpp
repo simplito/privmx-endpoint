@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 
@@ -44,12 +45,13 @@ limitations under the License.
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/StoreProvider.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
+#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class StoreApiImpl
+class StoreApiImpl : protected core::ModuleBaseApi
 {
 public:
     StoreApiImpl(
@@ -115,12 +117,19 @@ private:
     core::PagingList<Store> _storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
 
     std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey> &users);
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     dynamic::compat_v1::StoreData decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     DecryptedStoreDataV4 decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     DecryptedStoreDataV5 decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    Store convertServerStoreToLibStore(
+        server::Store store,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = StoreDataSchema::Version::UNKNOWN
+    );
     Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
     Store convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData);
     Store convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData);
@@ -130,7 +139,6 @@ private:
     Store decryptAndConvertStoreDataToStore(server::Store store);
     StoreInternalMetaV5 decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateStoreDataIntegrity(server::Store store);
-    core::DecryptedEncKey getStoreCurrentEncKey(server::Store store);
 
 
     // OLD CODE    
@@ -141,6 +149,15 @@ private:
     StoreFile decryptAndVerifyFileV1(const std::string &filesKey, server::File x);
     DecryptedFileMetaV4 decryptFileMetaV4(server::File file, const core::DecryptedEncKey& encKey);
     DecryptedFileMetaV5 decryptFileMetaV5(server::File file, const core::DecryptedEncKey& encKey);
+    File convertServerFileToLibFile(
+        server::File file,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const int64_t& size = 0,
+        const std::string& authorPubKey = std::string(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN
+    );
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
@@ -177,7 +194,7 @@ private:
     FileMetaEncryptor _fileMetaEncryptor;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     StoreProvider _storeProvider;
-    bool _subscribeForStore;
+    std::atomic_bool _storeCache;
     core::SubscriptionHelper _storeSubscriptionHelper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 

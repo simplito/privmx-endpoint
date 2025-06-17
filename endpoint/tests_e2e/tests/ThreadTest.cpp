@@ -9,6 +9,7 @@
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/ThreadVarSerializer.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 
 
@@ -184,6 +185,19 @@ TEST_F(ThreadTest, listThreads_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        threadApi->listThreads(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(ThreadTest, listThread_correct_input_data) {
@@ -913,6 +927,19 @@ TEST_F(ThreadTest, listMessages_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        threadApi->listMessages(
+            reader->getString("Thread_1.threadId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="BLACH",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(ThreadTest, listMessages_correct_input_data) {

@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 
@@ -121,8 +122,16 @@ private:
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
     InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    inbox::Inbox convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData);
     InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    inbox::Inbox convertServerInboxToLibInbox(
+        inbox::server::Inbox inbox,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const std::optional<privmx::endpoint::inbox::FilesConfig>& filesConfig = std::nullopt,
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = InboxDataSchema::Version::UNKNOWN
+    );
+    inbox::Inbox convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData);
     inbox::Inbox convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData);
     InboxDataSchema::Version getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry inboxEntry);
     std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
@@ -138,7 +147,7 @@ private:
     inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(inbox::server::Inbox inbox, thread::server::Message message);
     store::FileMetaToEncryptV4 prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
 
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     InboxDeletedEventData convertInboxDeletedEventData(server::InboxDeletedEventData data);
@@ -176,7 +185,7 @@ private:
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     InboxProvider _inboxProvider;
-    bool _subscribeForInbox;
+    std::atomic_bool _inboxCache;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId, _messageDeleterId;
     size_t _serverRequestChunkSize;

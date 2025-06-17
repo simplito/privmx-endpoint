@@ -31,6 +31,10 @@ elif [ "${first_arg}" == "InboxTest" ]; then
     ./privmxplatform_test_e2e_InboxTest $@
 elif [ "${first_arg}" == "InboxModuleEventsTest" ]; then
     ./privmxplatform_test_e2e_InboxModuleEventsTest $@
+elif [ "${first_arg}" == "KvdbTest" ]; then
+    ./privmxplatform_test_e2e_KvdbTest $@
+elif [ "${first_arg}" == "KvdbModuleEventsTest" ]; then
+    ./privmxplatform_test_e2e_KvdbModuleEventsTest $@
 elif [ "${first_arg}" == "EventsTest" ]; then
     ./privmxplatform_test_e2e_EventsTest $@
 elif [ "${first_arg}" == "CryptoTest" ]; then
@@ -47,6 +51,8 @@ elif [ "${first_arg}" == "All" ]; then
     ./privmxplatform_test_e2e_StoreModuleEventsTest $@
     ./privmxplatform_test_e2e_InboxTest $@
     ./privmxplatform_test_e2e_InboxModuleEventsTest $@
+    ./privmxplatform_test_e2e_KvdbTest $@
+    ./privmxplatform_test_e2e_KvdbModuleEventsTest $@
     ./privmxplatform_test_e2e_EventsTest $@
     ./privmxplatform_test_e2e_CryptoTest $@
     ./privmxplatform_test_e2e_UtilsTest $@

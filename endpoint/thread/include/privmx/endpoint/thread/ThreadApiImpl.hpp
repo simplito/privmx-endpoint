@@ -15,6 +15,7 @@ limitations under the License.
 #include <memory>
 #include <optional>
 #include <string>
+#include <atomic>
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
@@ -37,12 +38,13 @@ limitations under the License.
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/thread/ThreadProvider.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
+#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-class ThreadApiImpl
+class ThreadApiImpl : protected core::ModuleBaseApi
 {
 public:
     ThreadApiImpl(
@@ -96,13 +98,20 @@ private:
     Thread _getThreadEx(const std::string& threadId, const std::string& type);
     core::PagingList<Thread> _listThreadsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     dynamic::ThreadDataV1 decryptThreadV1(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     DecryptedThreadDataV4 decryptThreadV4(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     DecryptedThreadDataV5 decryptThreadV5(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    Thread convertServerThreadToLibThread(
+        server::ThreadInfo threadInfo,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = ThreadDataSchema::Version::UNKNOWN
+    );
     Thread convertThreadDataV1ToThread(server::ThreadInfo threadInfo, dynamic::ThreadDataV1 threadData);
     Thread convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV4& threadData);
     Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV5& threadData);
@@ -112,12 +121,20 @@ private:
     Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread);
     ThreadInternalMetaV5 decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
-    core::DecryptedEncKey getThreadCurrentEncKey(server::ThreadInfo thread);
 
     dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
     dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
     DecryptedMessageDataV4 decryptMessageDataV4(server::Message message, const core::DecryptedEncKey& encKey);
     DecryptedMessageDataV5 decryptMessageDataV5(server::Message message, const core::DecryptedEncKey& encKey);
+    Message convertServerMessageToLibMessage(
+        server::Message message,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const core::Buffer& data = core::Buffer(),
+        const std::string& authorPubKey = std::string(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = MessageDataSchema::Version::UNKNOWN
+    );
     Message convertMessageDataV2ToMessage(server::Message message, dynamic::MessageDataV2 messageData);
     Message convertMessageDataV3ToMessage(server::Message message, dynamic::MessageDataV3 messageData);
     Message convertDecryptedMessageDataV4ToMessage(server::Message message, DecryptedMessageDataV4 messageData);
@@ -142,7 +159,7 @@ private:
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     ThreadProvider _threadProvider;
-    bool _subscribeForThread;
+    std::atomic_bool _threadCache;
     core::SubscriptionHelper _threadSubscriptionHelper;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

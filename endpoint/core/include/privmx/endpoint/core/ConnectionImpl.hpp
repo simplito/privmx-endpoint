@@ -30,6 +30,7 @@ limitations under the License.
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
+#include "privmx/endpoint/core/UserVerifier.hpp"
 #include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
 #include "privmx/endpoint/core/ContextProvider.hpp"
 #include <mutex>
@@ -68,7 +69,7 @@ public:
     const rpc::ServerConfig& getServerConfig() const { return _serverConfig; }
 
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
-    const std::shared_ptr<UserVerifierInterface> getUserVerifier() {
+    const std::shared_ptr<UserVerifier> getUserVerifier() {
         std::shared_lock lock(_mutex);
         return _userVerifier;    
     }
@@ -89,6 +90,8 @@ public:
 
 
 private:
+    void assertServerVersion();
+    std::string generateDIORandomId();
     DataIntegrityObject createDIOExt(
         const std::string& contextId, 
         const std::string& resourceId, 
@@ -98,6 +101,7 @@ private:
         const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
     );
     int64_t generateConnectionId();
+    NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
 
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
@@ -109,7 +113,7 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
-    std::shared_ptr<UserVerifierInterface> _userVerifier;
+    std::shared_ptr<UserVerifier> _userVerifier;
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
 };
