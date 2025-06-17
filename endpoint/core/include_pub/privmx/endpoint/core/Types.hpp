@@ -51,7 +51,7 @@ struct PagingQuery {
     std::optional<std::string> lastId;
 
     /**
-     * field which elements are sorted in result
+     * field by elements are sorted in result
      */
     std::optional<std::string> sortBy;
 
