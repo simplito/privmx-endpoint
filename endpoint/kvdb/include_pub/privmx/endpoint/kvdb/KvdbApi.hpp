@@ -9,7 +9,7 @@
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
-#include "privmx/endpoint/KVDB/Types.hpp"
+#include "privmx/endpoint/kvdb/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
