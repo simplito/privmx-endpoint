@@ -22,8 +22,6 @@ namespace kvdb {
 
 class Mapper {
 public:
-    static void map(server::KvdbListEntriesModel obj, const KvdbEntryPagingQuery& listQuery);
-    static void map(server::KvdbListKeysModel obj, const KvdbKeysPagingQuery& listQuery);
 
     static KvdbDeletedEventData mapToKvdbDeletedEventData(const server::KvdbDeletedEventData& data);
     static KvdbDeletedEntryEventData mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData& data);
