@@ -72,10 +72,13 @@ StoreApiImpl::StoreApiImpl(
         },
         std::bind(&StoreApiImpl::validateStoreDataIntegrity, this, std::placeholders::_1)
     )),
-    _subscribeForStore(false),
-    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "store", "files")),
+    _storeCache(false),
+    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, 
+        "store", "files",
+        [&](){_storeProvider.invalidate();_storeCache=true;},
+        [&](){_storeCache=false;}
+    )),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
-    _storeDataEncryptorV4(StoreDataEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -112,10 +115,10 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
         resourceId
     );
     auto storeSecret = _keyProvider->generateSecret();
-    StoreDataToEncryptV5 storeDataToEncrypt {
+    core::container::ContainerDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = StoreInternalMetaV5{.secret=storeSecret, .resourceId=resourceId, .randomId=storeDIO.randomId},
+        .internalMeta = core::container::ContainerInternalMetaV5{.secret=storeSecret, .resourceId=resourceId, .randomId=storeDIO.randomId},
         .dio = storeDIO
     };
     // auto new_store_data = utils::TypedObjectFactory::createNewObject<dynamic::StoreData>();
@@ -271,10 +274,10 @@ void StoreApiImpl::updateStore(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    StoreDataToEncryptV5 storeDataToEncrypt {
+    core::container::ContainerDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = StoreInternalMetaV5{.secret=storeInternalMeta.secret, .resourceId=currentStoreResourceId, .randomId=updateStoreDio.randomId},
+        .internalMeta = core::container::ContainerInternalMetaV5{.secret=storeInternalMeta.secret, .resourceId=currentStoreResourceId, .randomId=updateStoreDio.randomId},
         .dio = updateStoreDio
     };
     model.data(_storeDataEncryptorV5.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
@@ -622,91 +625,79 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
 }
 
 void StoreApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::string channel = notification.channel;
-    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    if(!_storeSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+    if(notification.source == core::EventSource::INTERNAL) {
+        _storeSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
+        return;
+    }
+    if(!_storeSubscriptionHelper.hasSubscription(notification.subscriptions)) {
         return;
     }
     if (type == "storeCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(notification.data);
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValue(raw);
             auto data = decryptAndConvertStoreDataToStore(raw);
             std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
-            event->channel = channel;
+            event->channel = "store";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(notification.data);
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateByValue(raw);
             auto data = decryptAndConvertStoreDataToStore(raw);
             std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
-            event->channel = channel;
+            event->channel = "store";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreDeletedEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreDeletedEventData>(notification.data);
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.invalidateByContainerId(raw.storeId());
             auto data = Mapper::mapToStoreDeletedEventData(raw);
             std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
-            event->channel = channel;
+            event->channel = "store";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeStatsChanged") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(notification.data);
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             _storeProvider.updateStats(raw);
             auto data = Mapper::mapToStoreStatsChangedEventData(raw);
             std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
-            event->channel = channel;
+            event->channel = "store";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     
     } else if (type == "storeFileCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
         auto store {getRawStoreFromCacheOrBridge(raw.storeId())};
         auto file = decryptAndConvertFileDataToFileInfo(store, raw);
-
         // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
         std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
-        event->channel = channel;
+        event->channel = "store/" + raw.storeId() + "/files";
         event->data = file;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "storeFileUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
         auto store {getRawStoreFromCacheOrBridge(raw.storeId())};
         auto file = decryptAndConvertFileDataToFileInfo(store, raw);
         std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
-        event->channel = channel;
+        event->channel = "store/" + raw.storeId() + "/files";
         event->data = file;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "storeFileDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(notification.data);
         auto data = Mapper::mapToStoreFileDeletedEventData(raw);
         std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
-        event->channel = channel;
+        event->channel = "store/" + raw.storeId() + "/files";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "subscribe") {
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "store") {
-            PRIVMX_DEBUG("StoreApi", "Cache", "Enabled")
-            _subscribeForStore = true;
-        }
-    } else if (type == "unsubscribe") {
-        std::string channel = data->has("channel") ? data->get("channel") : "";
-        if(channel == "store") {
-            PRIVMX_DEBUG("StoreApi", "Cache", "Disabled")
-            _subscribeForStore = false;
-            _storeProvider.invalidate();
-        }
-    } 
+    }
 }
 
 void StoreApiImpl::subscribeForStoreEvents() {
@@ -725,18 +716,18 @@ void StoreApiImpl::unsubscribeFromStoreEvents() {
 
 void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
     assertStoreExist(storeId);
-    if(_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
+    if(_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
         throw AlreadySubscribedException(storeId);
     }
-    _storeSubscriptionHelper.subscribeForElement(storeId);
+    _storeSubscriptionHelper.subscribeForModuleEntry(storeId);
 }
 
 void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
     assertStoreExist(storeId);
-    if(!_storeSubscriptionHelper.hasSubscriptionForElement(storeId)) {
+    if(!_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
         throw NotSubscribedException(storeId);
     }
-    _storeSubscriptionHelper.unsubscribeFromElement(storeId);
+    _storeSubscriptionHelper.unsubscribeFromModuleEntry(storeId);
 }
 
 void StoreApiImpl::processConnectedEvent() {
@@ -768,22 +759,22 @@ dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntr
     }
 }
 
-DecryptedStoreDataV4 StoreApiImpl::decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+core::container::DecryptedContainerDataV4 StoreApiImpl::decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV4>(storeEntry.data());
+        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV4>(storeEntry.data());
         return _storeDataEncryptorV4.decrypt(encryptedDataEntryVar, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{}});
+        return core::container::DecryptedContainerDataV4({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = e.getCode()},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{}});
+        return core::container::DecryptedContainerDataV4({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{}});
     } catch (...) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{}});
+        return core::container::DecryptedContainerDataV4({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{}});
     }
 }
 
-DecryptedStoreDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+core::container::DecryptedContainerDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(storeEntry.data());
+        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(storeEntry.data());
         if(encKey.statusCode != 0) {
             auto tmp = _storeDataEncryptorV5.extractPublic(encryptedDataEntryVar);
             tmp.statusCode = encKey.statusCode;
@@ -791,11 +782,11 @@ DecryptedStoreDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEn
         }
         return _storeDataEncryptorV5.decrypt(encryptedDataEntryVar, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
+        return core::container::DecryptedContainerDataV5({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return core::container::DecryptedContainerDataV5({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return core::container::DecryptedContainerDataV5({{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -851,7 +842,7 @@ Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::comp
     );
 }
 
-Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData) {
+Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const core::container::DecryptedContainerDataV4& storeData) {
     return convertServerStoreToLibStore(
         store, 
         storeData.publicMeta,
@@ -861,7 +852,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, cons
     );
 }
 
-Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData) {
+Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const core::container::DecryptedContainerDataV5& storeData) {
     return convertServerStoreToLibStore(
         store, 
         storeData.publicMeta,
@@ -874,11 +865,11 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
 StoreDataSchema::Version StoreApiImpl::getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry) {
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(storeEntry.data());
-        auto version = versioned.versionOpt(StoreDataSchema::Version::UNKNOWN);
+        auto version = versioned.versionOpt(core::container::ContainerDataSchema::Version::UNKNOWN);
         switch (version) {
-            case StoreDataSchema::Version::VERSION_4:
+            case core::container::ContainerDataSchema::Version::VERSION_4:
                 return StoreDataSchema::Version::VERSION_4;
-            case StoreDataSchema::Version::VERSION_5:
+            case core::container::ContainerDataSchema::Version::VERSION_5:
                 return StoreDataSchema::Version::VERSION_5;
             default:
                 return StoreDataSchema::Version::UNKNOWN;
@@ -1030,14 +1021,14 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
     return result;
 }
 
-StoreInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
+core::container::ContainerInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
     switch (getStoreEntryDataStructureVersion(storeEntry)) {
         case StoreDataSchema::Version::UNKNOWN:
             throw UnknowStoreFormatException();
         case StoreDataSchema::Version::VERSION_1:
-            return StoreInternalMetaV5();
+            return core::container::ContainerInternalMetaV5();
         case StoreDataSchema::Version::VERSION_4:
-            return StoreInternalMetaV5();
+            return core::container::ContainerInternalMetaV5();
         case StoreDataSchema::Version::VERSION_5:
             return decryptStoreV5(storeEntry, encKey).internalMeta;
     }
@@ -1098,11 +1089,11 @@ DecryptedFileMetaV4 StoreApiImpl::decryptFileMetaV4(server::File file, const cor
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
         return _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -1117,11 +1108,11 @@ DecryptedFileMetaV5 StoreApiImpl::decryptFileMetaV5(server::File file, const cor
             return _fileMetaEncryptorV5.decrypt(encryptedFileMeta, encKey.key);
         }
     } catch (const core::Exception& e) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -1467,7 +1458,9 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
 server::Store StoreApiImpl::getRawStoreFromCacheOrBridge(const std::string& storeId) {
     // useing _storeProvider only with STORE_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!_subscribeForStore) _storeProvider.update(storeId);
+    if(!_storeCache) {
+        _storeProvider.update(storeId);
+    }
     auto storeContainerInfo = _storeProvider.get(storeId);
     if(storeContainerInfo.status != core::DataIntegrityStatus::ValidationSucceed) {
         throw StoreDataIntegrityException();
@@ -1497,7 +1490,7 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
             case StoreDataSchema::Version::VERSION_4:
                 return 0;
             case StoreDataSchema::Version::VERSION_5: {
-                auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
+                auto store_data = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(store_data_entry.data());
                 auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
                 if(
                     dio.contextId != store.contextId() ||
