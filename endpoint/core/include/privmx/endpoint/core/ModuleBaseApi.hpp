@@ -22,6 +22,8 @@ limitations under the License.
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -30,6 +32,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/core/Factory.hpp"
 
@@ -51,6 +54,30 @@ public:
     virtual ~ModuleBaseApi() = default;
 protected:
     template<typename ModuleStructAsTypedObj>
+    auto decryptModuleDataV4(
+        ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+    ) -> decltype(
+        moduleObj.keyId(), moduleObj.data(), 
+        core::DecryptedModuleDataV4()
+    );
+
+    template<typename ModuleStructAsTypedObj>
+    auto decryptModuleDataV5(
+        ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+    ) -> decltype(
+        moduleObj.keyId(), moduleObj.data(), 
+        core::DecryptedModuleDataV5()
+    );
+
+    template<typename ModuleStructAsTypedObj>
+    auto extractAndDecryptModuleInternalMeta(
+        ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+    ) -> decltype(
+        moduleObj.keyId(), moduleObj.data(), 
+        core::ModuleInternalMetaV5()
+    );
+
+    template<typename ModuleStructAsTypedObj>
     auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKey());
 
     template<typename ModuleStructAsTypedObj>
@@ -66,9 +93,74 @@ private:
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
+    std::shared_ptr<core::EventChannelManager> _eventChannelManager;
     core::Connection _connection;
+    core::ModuleDataEncryptorV4 _moduleDataEncryptorV4;
+    core::ModuleDataEncryptorV5 _moduleDataEncryptorV5;
 };
 
+template<typename ModuleStructAsTypedObj>
+auto ModuleBaseApi::decryptModuleDataV4(
+    ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+) -> decltype(
+    moduleObj.keyId(), moduleObj.data(), 
+    core::DecryptedModuleDataV4()
+) {
+    try {
+        auto encryptedData = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV4>(moduleObj.data());
+        return _moduleDataEncryptorV4.decrypt(encryptedData, encKey.key);
+    } catch (const core::Exception& e) {
+        return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{}};
+    } catch (const privmx::utils::PrivmxException& e) {
+        return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
+    } catch (...) {
+        return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
+    }
+}
+
+template<typename ModuleStructAsTypedObj>
+auto ModuleBaseApi::decryptModuleDataV5(
+    ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+) -> decltype(
+    moduleObj.keyId(), moduleObj.data(), 
+    core::DecryptedModuleDataV5()
+) {
+    try {
+        auto encryptedData = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(moduleObj.data());
+        if(encKey.statusCode != 0) {
+            auto tmp = _moduleDataEncryptorV5.extractPublic(encryptedData);
+            tmp.statusCode = encKey.statusCode;
+            return tmp;
+        }
+        return _moduleDataEncryptorV5.decrypt(encryptedData, encKey.key);
+    } catch (const core::Exception& e) {
+        return core::DecryptedModuleDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
+    } catch (const privmx::utils::PrivmxException& e) {
+        return core::DecryptedModuleDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+    } catch (...) {
+        return core::DecryptedModuleDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+    }
+}
+
+template<typename ModuleStructAsTypedObj>
+auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
+    ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+) -> decltype(
+    moduleObj.keyId(), moduleObj.data(), 
+    core::ModuleInternalMetaV5()
+) {
+    auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(moduleObj.data());
+    switch (versioned.versionOpt(core::ModuleDataSchema::Version::UNKNOWN)) {
+        case core::ModuleDataSchema::Version::UNKNOWN:
+            return core::ModuleInternalMetaV5();
+        case core::ModuleDataSchema::Version::VERSION_4:
+            return core::ModuleInternalMetaV5();
+        case core::ModuleDataSchema::Version::VERSION_5:
+            return decryptModuleDataV5(moduleObj, encKey).internalMeta;
+        default:
+            return core::ModuleInternalMetaV5();
+    }
+}
 
 template<typename ModuleStructAsTypedObj>
 auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKey()) {

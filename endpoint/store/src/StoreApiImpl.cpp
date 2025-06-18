@@ -220,7 +220,7 @@ void StoreApiImpl::updateStore(
             break;
         }
     }
-    auto storeInternalMeta = decryptStoreInternalMeta(currentStoreEntry, currentStoreKey);
+    auto storeInternalMeta = extractAndDecryptModuleInternalMeta(currentStoreEntry, currentStoreKey);
     if(currentStoreKey.dataStructureVersion != 2) {
         //force update all keys if thread keys is in older version
         usersToAddMissingKey = new_users;
@@ -759,37 +759,6 @@ dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntr
     }
 }
 
-core::DecryptedModuleDataV4 StoreApiImpl::decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV4>(storeEntry.data());
-        return _storeDataEncryptorV4.decrypt(encryptedDataEntryVar, encKey.key);
-    } catch (const core::Exception& e) {
-        return core::DecryptedModuleDataV4({{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = e.getCode()},{},{},{},{}});
-    } catch (const privmx::utils::PrivmxException& e) {
-        return core::DecryptedModuleDataV4({{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{}});
-    } catch (...) {
-        return core::DecryptedModuleDataV4({{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{}});
-    }
-}
-
-core::DecryptedModuleDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(storeEntry.data());
-        if(encKey.statusCode != 0) {
-            auto tmp = _storeDataEncryptorV5.extractPublic(encryptedDataEntryVar);
-            tmp.statusCode = encKey.statusCode;
-            return tmp;
-        }
-        return _storeDataEncryptorV5.decrypt(encryptedDataEntryVar, encKey.key);
-    } catch (const core::Exception& e) {
-        return core::DecryptedModuleDataV5({{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = e.getCode()},{},{},{},{},{}});
-    } catch (const privmx::utils::PrivmxException& e) {
-        return core::DecryptedModuleDataV5({{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
-    } catch (...) {
-        return core::DecryptedModuleDataV5({{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
-    }
-}
-
 Store StoreApiImpl::convertServerStoreToLibStore(
     server::Store store,
     const core::Buffer& publicMeta,
@@ -903,7 +872,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
             );
         }
         case StoreDataSchema::Version::VERSION_4: {
-            auto decryptedStoreData = decryptStoreV4(storeEntry, encKey);
+            auto decryptedStoreData = decryptModuleDataV4(storeEntry, encKey);
             return std::make_tuple(
                 convertDecryptedStoreDataV4ToStore(store, decryptedStoreData),
                 core::DataIntegrityObject{
@@ -920,7 +889,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
             );
         }
         case StoreDataSchema::Version::VERSION_5: {
-            auto decryptedStoreData = decryptStoreV5(storeEntry, encKey);
+            auto decryptedStoreData = decryptModuleDataV5(storeEntry, encKey);
             return std::make_tuple(convertDecryptedStoreDataV5ToStore(store, decryptedStoreData), decryptedStoreData.dio);
         }
     }
@@ -1019,20 +988,6 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
     }
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
-}
-
-core::ModuleInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
-    switch (getStoreEntryDataStructureVersion(storeEntry)) {
-        case StoreDataSchema::Version::UNKNOWN:
-            throw UnknowStoreFormatException();
-        case StoreDataSchema::Version::VERSION_1:
-            return core::ModuleInternalMetaV5();
-        case StoreDataSchema::Version::VERSION_4:
-            return core::ModuleInternalMetaV5();
-        case StoreDataSchema::Version::VERSION_5:
-            return decryptStoreV5(storeEntry, encKey).internalMeta;
-    }
-    throw UnknowStoreFormatException();
 }
 
 // OLD CODE
