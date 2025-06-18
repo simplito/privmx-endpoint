@@ -13,7 +13,6 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMVARSERIALIZER_HPP_
 
 #include <Poco/Dynamic/Var.h>
-
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <string>
 

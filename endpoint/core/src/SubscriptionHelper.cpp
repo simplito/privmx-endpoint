@@ -37,14 +37,14 @@ SubscriptionHelper::SubscriptionHelper(
 
 
 std::string SubscriptionHelper::getModuleEntryChannel(const std::string& moduleId) {
-    if(moduleId == "context") {
+    if(_moduleName == "context") {
         return _moduleName + "/" + _entryName + "|contextId=" + moduleId;
     }
     return _moduleName + "/" + _entryName + "|containerId=" + moduleId;
 }
 
 std::string SubscriptionHelper::getModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName) {
-    if(moduleId == "context") {
+    if(_moduleName == "context") {
         return _moduleName + "/custom/" + channelName + "|contextId=" + moduleId;
     }
     return _moduleName + "/custom/" + channelName + "|containerId=" + moduleId;

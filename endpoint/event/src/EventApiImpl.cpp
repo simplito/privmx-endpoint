@@ -70,10 +70,10 @@ void EventApiImpl::emitEventInternal(const std::string& contextId, InternalConte
     emitEventEx(contextId, users, INTERNAL_EVENT_CHANNEL_NAME, encryptedEvent, key);
 }
 
-bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType) {
+bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::vector<std::string>& subscriptions, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType) {
     //check if type == "custom" and channel == "context/<contextId>/internal"
-    
     if(type == "custom") {
+        std::string channel = _contextSubscriptionHelper.getChannel(subscriptions);
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
         if( !raw.idEmpty() && channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + raw.id() && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
             auto rawEventDataJSON = raw.eventData().extract<Poco::JSON::Object::Ptr>();

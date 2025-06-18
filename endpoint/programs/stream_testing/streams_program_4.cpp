@@ -294,7 +294,8 @@ void MyFrame::Connect(std::string privKey, std::string solutionId, std::string u
     auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
     std::string streamRoomId;
 
-    if(streamRoomList.readItems.size()==0) {
+    if(streamRoomList.readItems.size() == 0 || streamRoomList.readItems[0].statusCode != 0) {
+        if(streamRoomList.readItems.size() > 0) streamApi->deleteStreamRoom(streamRoomList.readItems[0].streamRoomId);
         auto pubKey = cryptoApi.derivePublicKey(privKey);
         std::vector<privmx::endpoint::core::UserWithPubKey> users = {
             privmx::endpoint::core::UserWithPubKey{.userId="patryk", .pubKey="51ciywf56WuDKxyEuquMsfoydEK2NavoFtFBvoKWEi7VuqHkur"},

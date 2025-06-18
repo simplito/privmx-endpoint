@@ -58,6 +58,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NetConnectionException, "Net
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, WebRTCException, "WebRTC error", 0x0009);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectStreamIdException, "Incorrect stream id", 0x000A);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamCacheException, "Incorrect Stream Cache state", 0x000B);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomEncryptionKeyValidationException, "Failed StreamRoom encryption key validation", 0x000C);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownStreamRoomFormatException, "Unknown StreamRoom format", 0x000D);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomDataIntegrityException, "Failed StreamRoom data integrity check", 0x000E);
 
 
 } // stream

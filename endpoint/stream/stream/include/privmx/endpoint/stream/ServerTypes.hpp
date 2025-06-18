@@ -32,6 +32,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomInfo)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(creator)
@@ -50,6 +51,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
     STRING_FIELD(contextId)
+    STRING_FIELD(resourceId)
     STRING_FIELD(keyId)
     VAR_FIELD(data)
     LIST_FIELD(users, std::string)
@@ -66,6 +68,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomUpdateModel)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(keyId)
     VAR_FIELD(data)
     LIST_FIELD(users, std::string)
@@ -179,15 +182,6 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamLeaveModel)
     INT64_FIELD(sessionId)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
-    INT64_FIELD(version)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)

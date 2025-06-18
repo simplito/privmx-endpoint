@@ -21,7 +21,7 @@ limitations under the License.
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/utils/CancellationToken.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/event/EventApiImpl.hpp>

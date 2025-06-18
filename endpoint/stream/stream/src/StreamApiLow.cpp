@@ -26,13 +26,13 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiLow StreamApiLow::create(core::Connection& connection, event::EventApi& eventApi) {
+StreamApiLow StreamApiLow::create(const core::Connection& connection, event::EventApi& eventApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<event::EventApiImpl> eventApiImpl = eventApi.getImpl();
         std::shared_ptr<StreamApiLowImpl> impl(new StreamApiLowImpl(
             eventApiImpl,
-            connectionImpl,
+            connection,
             connectionImpl->getGateway(),
             connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(),
