@@ -92,7 +92,7 @@ public:
      * @param kvdbId ID of KVDB to get
      * @return struct containing info about the KVDB
      */
-    KVDB getKvdb(const std::string& kvdbId);
+    Kvdb getKvdb(const std::string& kvdbId);
 
     /**
      * Gets a list of Kvdbs in given Context.
@@ -101,7 +101,7 @@ public:
      * @param pagingQuery with list query parameters
      * @return struct containing a list of Kvdbs
      */    
-    core::PagingList<KVDB> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery);
+    core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     /**
      * Gets a KVDB entry by given KVDB entry key and KVDB ID.
