@@ -123,10 +123,10 @@ std::string ThreadApiImpl::_createThreadEx(
     );
     auto threadSecret = _keyProvider->generateSecret();
 
-    core::container::ContainerDataToEncryptV5 threadDataToEncrypt {
+    core::ModuleDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::container::ContainerInternalMetaV5{.secret=threadSecret, .resourceId=resourceId, .randomId=threadDIO.randomId},
+        .internalMeta = core::ModuleInternalMetaV5{.secret=threadSecret, .resourceId=resourceId, .randomId=threadDIO.randomId},
         .dio = threadDIO
     };
     auto create_thread_model = utils::TypedObjectFactory::createNewObject<server::ThreadCreateModel>();
@@ -256,10 +256,10 @@ void ThreadApiImpl::updateThread(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    core::container::ContainerDataToEncryptV5 threadDataToEncrypt {
+    core::ModuleDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::container::ContainerInternalMetaV5{.secret=threadInternalMeta.secret, .resourceId=currentThreadResourceId, .randomId=updateThreadDio.randomId},
+        .internalMeta = core::ModuleInternalMetaV5{.secret=threadInternalMeta.secret, .resourceId=currentThreadResourceId, .randomId=updateThreadDio.randomId},
         .dio = updateThreadDio
     };
     model.data(_threadDataEncryptorV5.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
@@ -666,22 +666,22 @@ dynamic::ThreadDataV1 ThreadApiImpl::decryptThreadV1(server::Thread2DataEntry th
     }
 }
 
-core::container::DecryptedContainerDataV4 ThreadApiImpl::decryptThreadV4(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
+core::DecryptedModuleDataV4 ThreadApiImpl::decryptThreadV4(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV4>(threadEntry.data());
+        auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV4>(threadEntry.data());
         return _threadDataEncryptorV4.decrypt(encryptedThreadData, encKey.key);
     } catch (const core::Exception& e) {
-        return core::container::DecryptedContainerDataV4{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{}};
+        return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return core::container::DecryptedContainerDataV4{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
+        return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
     } catch (...) {
-        return core::container::DecryptedContainerDataV4{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
+        return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
     }
 }
 
-core::container::DecryptedContainerDataV5 ThreadApiImpl::decryptThreadV5(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
+core::DecryptedModuleDataV5 ThreadApiImpl::decryptThreadV5(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     try {
-        auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(threadEntry.data());
+        auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(threadEntry.data());
         if(encKey.statusCode != 0) {
             auto tmp = _threadDataEncryptorV5.extractPublic(encryptedThreadData);
             tmp.statusCode = encKey.statusCode;
@@ -689,11 +689,11 @@ core::container::DecryptedContainerDataV5 ThreadApiImpl::decryptThreadV5(server:
         }
         return _threadDataEncryptorV5.decrypt(encryptedThreadData, encKey.key);
     } catch (const core::Exception& e) {
-        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
+        return core::DecryptedModuleDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+        return core::DecryptedModuleDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
     } catch (...) {
-        return core::container::DecryptedContainerDataV5{{.dataStructureVersion = core::container::ContainerDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+        return core::DecryptedModuleDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
 }
 
@@ -748,7 +748,7 @@ Thread ThreadApiImpl::convertThreadDataV1ToThread(server::ThreadInfo threadInfo,
     );
 }
 
-Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const core::container::DecryptedContainerDataV4& threadData) {
+Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV4& threadData) {
     return convertServerThreadToLibThread(
         threadInfo, 
         threadData.publicMeta, 
@@ -758,7 +758,7 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(server::ThreadInfo th
     );
 }
 
-Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const core::container::DecryptedContainerDataV5& threadData) {  
+Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV5& threadData) {  
     return convertServerThreadToLibThread(
         threadInfo, 
         threadData.publicMeta, 
@@ -771,11 +771,11 @@ Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo th
 ThreadDataSchema::Version ThreadApiImpl::getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(threadEntry.data());
-        auto version = versioned.versionOpt(core::container::ContainerDataSchema::Version::UNKNOWN);
+        auto version = versioned.versionOpt(core::ModuleDataSchema::Version::UNKNOWN);
         switch (version) {
-            case core::container::ContainerDataSchema::Version::VERSION_4:
+            case core::ModuleDataSchema::Version::VERSION_4:
                 return ThreadDataSchema::Version::VERSION_4;
-            case core::container::ContainerDataSchema::Version::VERSION_5:
+            case core::ModuleDataSchema::Version::VERSION_5:
                 return ThreadDataSchema::Version::VERSION_5;
             default:
                 return ThreadDataSchema::Version::UNKNOWN;
@@ -1276,14 +1276,14 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message mes
     }
 }
 
-core::container::ContainerInternalMetaV5 ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
+core::ModuleInternalMetaV5 ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     switch (getThreadEntryDataStructureVersion(threadEntry)) {
         case ThreadDataSchema::Version::UNKNOWN:
             throw UnknowThreadFormatException();
         case ThreadDataSchema::Version::VERSION_1:
-            return core::container::ContainerInternalMetaV5();
+            return core::ModuleInternalMetaV5();
         case ThreadDataSchema::Version::VERSION_4:
-            return core::container::ContainerInternalMetaV5();
+            return core::ModuleInternalMetaV5();
         case ThreadDataSchema::Version::VERSION_5:
             return decryptThreadV5(threadEntry, encKey).internalMeta;
     }
@@ -1319,7 +1319,7 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
             case ThreadDataSchema::Version::VERSION_4:
                 return 0;
             case ThreadDataSchema::Version::VERSION_5: {
-                auto thread_data = utils::TypedObjectFactory::createObjectFromVar<core::container::dynamic::EncryptedContainerDataV5>(thread_data_entry.data());
+                auto thread_data = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(thread_data_entry.data());
                 auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
                 if(
                     dio.contextId != thread.contextId() ||

@@ -9,17 +9,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONSTANTS_HPP_
-#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONSTANTS_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_CONSTANTS_HPP_
+#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_CONSTANTS_HPP_
 
 #include <cstdint>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
-namespace container {
 
-namespace ContainerDataSchema {
+namespace ModuleDataSchema {
    enum Version : int64_t {
       UNKNOWN = 0,
       VERSION_4 = 4,
@@ -27,11 +26,10 @@ namespace ContainerDataSchema {
    };
 }
 
-}  // namespace container
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
 
 
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONSTANTS_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_CONSTANTS_HPP_
