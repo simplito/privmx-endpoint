@@ -24,6 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
+#include <privmx/endpoint/core/ModuleBaseApi.hpp>
 
 #include "privmx/endpoint/kvdb/ServerApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
@@ -38,7 +39,7 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbApiImpl
+class KvdbApiImpl : protected core::ModuleBaseApi
 {
 public:
     KvdbApiImpl(
@@ -102,7 +103,6 @@ private:
     void processDisconnectedEvent();
     utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 
-    core::DecryptedModuleDataV5 decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     Kvdb convertServerKvdbToLibKvdb(
         server::KvdbInfo kvdb,
         const core::Buffer& publicMeta = core::Buffer(),
@@ -115,9 +115,7 @@ private:
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     std::vector<Kvdb> decryptAndConvertKvdbsDataToKvdbs(utils::List<server::KvdbInfo> kvdbs);
     Kvdb decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
-    core::ModuleInternalMetaV5 decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
-    core::DecryptedEncKey getKvdbCurrentEncKey(server::KvdbInfo kvdb);
 
     DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
     KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo entry, DecryptedKvdbEntryDataV5 entryData);
