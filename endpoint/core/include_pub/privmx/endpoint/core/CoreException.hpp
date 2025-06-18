@@ -64,7 +64,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedVerifierResponseExcep
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleEncryptionKeyException, "Module's enc key with given keyId does not exist.", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, ModulePublicDataMismatchException, "Module public data mismatch", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidEncryptedModuleDataVersionException, "Invalid version of encrypted module data", 0x0022)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknowModuleFormatException, "Unknow module format", 0x0023)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleFormatException, "Unknown module format", 0x0023)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
