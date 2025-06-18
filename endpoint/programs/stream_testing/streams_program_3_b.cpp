@@ -96,22 +96,16 @@ int main(int argc, char** argv) {
 
     try {
         crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
-        core::Connection connection = core::Connection::connect("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");        
+        core::Connection connection = core::Connection::connect("KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
-        
-        core::Connection connection_patryk = core::Connection::connect("KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
-        event::EventApi eventApi_patryk = event::EventApi::create(connection_patryk);
-        stream::StreamApi streamApi_patryk = stream::StreamApi::create(connection_patryk, eventApi_patryk);
-        
         auto context = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
-        auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=100, .sortOrder="asc"});
+        auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
         std::string streamRoomId = "";
         std::vector<privmx::endpoint::core::UserWithPubKey> users = {
             privmx::endpoint::core::UserWithPubKey{.userId="patryk", .pubKey="51ciywf56WuDKxyEuquMsfoydEK2NavoFtFBvoKWEi7VuqHkur"},
             privmx::endpoint::core::UserWithPubKey{.userId="user1",  .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}
         };
-        std::cout << cryptoApi.derivePublicKey("KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8") << std::endl;
         if(streamList.readItems.size() == 0) {
             streamRoomId = streamApi.createStreamRoom(
                 context.contextId,
@@ -123,31 +117,30 @@ int main(int argc, char** argv) {
             );
         } else {
             streamRoomId = streamList.readItems[0].streamRoomId;
-        }
-        auto pubKey = cryptoApi.derivePublicKey("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN");        
+        } 
         streamApi.subscribeForStreamEvents();
         
-        auto streamId = streamApi.createStream(streamRoomId);
-        auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-        streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
-        auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
-        streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
-        streamApi.publishStream(streamId);
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream trackRemove~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
-        streamApi.trackRemove(streamId, stream::Track{.id=0, .type=stream::DeviceType::Video});
-        // std::this_thread::sleep_for(std::chrono::seconds(10));
-        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream trackAdd~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
-        // streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
-        
-        streamApi.reconfigureStream(streamId, "{}");
-        std::this_thread::sleep_for(std::chrono::seconds(20));
-
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream Reset done~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
-        streamApi.unpublishStream(streamId);
-        connection.disconnect();
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
+        std::cout << "streamRoomId: " << streamRoomId << std::endl;
+        RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
+        stream::StreamJoinSettings ssettings {
+            .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
+                r.OnFrame(w, h, frame, id);
+            }
+        };
+        // while (true) {
+            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream joinStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+            auto streamlist = streamApi.listStreams(streamRoomId);
+            std::vector<int64_t> streamsId;
+            for(int i = 0; i < streamlist.size(); i++) {
+                std::cout << "streamlist[" << i << "]:" <<  streamlist[i].streamId << std::endl;
+                streamsId.push_back(streamlist[i].streamId);
+            }
+            auto watchedStream = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+            std::this_thread::sleep_for(std::chrono::seconds(60));
+            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream leaveStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+            streamApi.leaveStream(watchedStream);
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        // }
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
