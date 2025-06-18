@@ -15,21 +15,35 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/TypesMacros.hpp"
+#include "privmx/endpoint/core/DynamicTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 namespace server {
 
+ENDPOINT_CLIENT_TYPE(ServerEvent)
+    STRING_FIELD(type)
+    VAR_FIELD(data)
+    INT64_FIELD(timestamp)
+    INT64_FIELD(version)
+    LIST_FIELD(subscriptions, std::string)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKeyEntryDataV2, dynamic::VersionedData)
+    STRING_FIELD(encryptedKey) // encrypted EncryptionKey
+    STRING_FIELD(dio) // signed and encoded in base64 DataIntegrityObject
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(KeyEntry)
     STRING_FIELD(keyId)
-    STRING_FIELD(data)
+    VAR_FIELD(data)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(KeyEntrySet)
     STRING_FIELD(user)
     STRING_FIELD(keyId)
-    STRING_FIELD(data)
+    VAR_FIELD(data)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ListModel)
@@ -37,6 +51,7 @@ ENDPOINT_SERVER_TYPE(ListModel)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(lastId)
+    STRING_FIELD(sortBy)
     VAR_FIELD(query) // JSON
 TYPE_END
 
@@ -54,6 +69,14 @@ ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
     STRING_FIELD(contextId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(ContextGetModel)
+    STRING_FIELD(id)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(ContextGetResult)
+    OBJECT_FIELD(context, ContextInfo)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(UserIdentity)
     STRING_FIELD(id)
     STRING_FIELD(pub)
@@ -63,8 +86,33 @@ ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatus, UserIdentity)
     STRING_FIELD(status)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(RpcEvent)
+    STRING_FIELD(type) 
+    VAR_FIELD(data)
+    INT64_FIELD(version)
+    INT64_FIELD(timestamp)
+    LIST_FIELD(subscriptions, std::string)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
     LIST_FIELD(users, server::UserIdentityWithStatus)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UnsubscribeFromChannelsModel)
+    LIST_FIELD(subscriptionsIds, std::string)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelsModel)
+    LIST_FIELD(channels, std::string)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(Subscription)
+    STRING_FIELD(subscriptionId) 
+    STRING_FIELD(channel) 
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelsResult)
+    LIST_FIELD(subscriptions, Subscription)
 TYPE_END
 
 } // server

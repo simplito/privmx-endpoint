@@ -13,7 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
-
+#include "privmx/endpoint/core/varinterface/VarUserVerifierInterface.hpp"
 using namespace privmx::endpoint::core;
 
 std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterface::*)(const Poco::Dynamic::Var&)>
@@ -22,22 +22,31 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
                                          {GetConnectionId, &ConnectionVarInterface::getConnectionId},
                                          {ListContexts, &ConnectionVarInterface::listContexts},
                                          {Disconnect, &ConnectionVarInterface::disconnect},
-                                         {GetContextUsers, &ConnectionVarInterface::getContextUsers}};
+                                         {GetContextUsers, &ConnectionVarInterface::getContextUsers}
+                                        };
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
-    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 3, 4);
     auto userPrivKey = _deserializer.deserialize<std::string>(argsArr->get(0), "userPrivKey");
     auto solutionId = _deserializer.deserialize<std::string>(argsArr->get(1), "solutionId");
     auto platformUrl = _deserializer.deserialize<std::string>(argsArr->get(2), "platformUrl");
-    _connection = Connection::connect(userPrivKey, solutionId, platformUrl);
+    auto verificationOptions = PKIVerificationOptions();
+    if(args.size() >= 4) {
+        verificationOptions = _deserializer.deserialize<PKIVerificationOptions>(argsArr->get(3), "verificationOptions");
+    }
+    _connection = Connection::connect(userPrivKey, solutionId, platformUrl, verificationOptions);
     return {};
 }
 
 Poco::Dynamic::Var ConnectionVarInterface::connectPublic(const Poco::Dynamic::Var& args) {
-    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 2, 3);
     auto solutionId = _deserializer.deserialize<std::string>(argsArr->get(0), "solutionId");
     auto platformUrl = _deserializer.deserialize<std::string>(argsArr->get(1), "platformUrl");
-    _connection = Connection::connectPublic(solutionId, platformUrl);
+    auto verificationOptions = PKIVerificationOptions();
+    if(args.size() >= 3) {
+        verificationOptions = _deserializer.deserialize<PKIVerificationOptions>(argsArr->get(2), "verificationOptions");
+    }
+    _connection = Connection::connectPublic(solutionId, platformUrl, verificationOptions);
     return {};
 }
 
@@ -65,6 +74,12 @@ Poco::Dynamic::Var ConnectionVarInterface::getContextUsers(const Poco::Dynamic::
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto result = _connection.getContextUsers(contextId);
     return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::setUserVerifier(const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback) {
+    std::shared_ptr<VarUserVerifierInterface> verifier = std::make_shared<VarUserVerifierInterface>(verifierCallback, _deserializer, _serializer);
+    _connection.setUserVerifier(verifier);
+    return {};
 }
 
 Poco::Dynamic::Var ConnectionVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {

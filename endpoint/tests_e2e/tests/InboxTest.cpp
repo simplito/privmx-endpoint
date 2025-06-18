@@ -14,6 +14,7 @@
 #include <privmx/endpoint/inbox/InboxApi.hpp>
 #include <privmx/endpoint/inbox/InboxVarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxException.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::utils;
@@ -192,6 +193,19 @@ TEST_F(InboxTest, listInboxes_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        inboxApi->listInboxes(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(InboxTest, listInboxes_correct_input_data) {
@@ -402,6 +416,7 @@ TEST_F(InboxTest, createInbox) {
             inboxId
         );
     });
+    EXPECT_EQ(inbox.statusCode, 0);
     EXPECT_EQ(inbox.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(inbox.publicMeta.stdString(), "public");
     EXPECT_EQ(inbox.privateMeta.stdString(), "private");
@@ -438,6 +453,7 @@ TEST_F(InboxTest, createInbox) {
             inboxId
         );
     });
+    EXPECT_EQ(inbox.statusCode, 0);
     EXPECT_EQ(inbox.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(inbox.publicMeta.stdString(), "public");
     EXPECT_EQ(inbox.privateMeta.stdString(), "private");
@@ -1810,6 +1826,7 @@ TEST_F(InboxTest, createInbox_policy) {
             inboxId
         );
     });
+    EXPECT_EQ(inbox.statusCode, 0);
     EXPECT_EQ(inbox.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(inbox.publicMeta.stdString(), "public");
     EXPECT_EQ(inbox.privateMeta.stdString(), "private");

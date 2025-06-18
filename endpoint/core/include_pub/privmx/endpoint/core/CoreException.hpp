@@ -51,6 +51,20 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidArgumentTypeException, 
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidBackendRequestModeException, "Invalid BackendRequest mode", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationFailureException, "User verification failure", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationMethodUnhandledException, "UserVerifierInterface.verify() thrown an exception. Implementation of the UserVerifierInterface should provide adequate error handling.", 0x000F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedEncryptionKeyException, "Malformed encryption key", 0x0010)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownEncryptionKeyVersionException, "Unknown encryption key", 0x0011)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyContainerValidationException, "Encryption key container validation error", 0x0012)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectDuplicatedException, "Duplicated data integrity object", 0x0013)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedDataIntegrityObjectException, "Malformed data integrity object", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidDataIntegrityObjectChecksumException, "Invalid data integrity object checksum", 0x0015)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectMismatchEncKeyException, "User key does not match with author public key in data integrity object", 0x0016)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectInvalidSignatureException, "Invalid data integrity object signature", 0x0017)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, KeyProviderRequestCompletedException, "KeyProvider request completed", 0x0018)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedVerifierResponseException, "Malformed verifier response", 0x0019)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleEncryptionKeyException, "Module's enc key with given keyId does not exist.", 0x0020)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, ModulePublicDataMismatchException, "Module public data mismatch", 0x0021)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidEncryptedModuleDataVersionException, "Invalid version of encrypted module data", 0x0022)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleFormatException, "Unknown module format", 0x0023)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
@@ -61,6 +75,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataBiggerThanDeclaredEx
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataSmallerThanDeclaredException, "Data smaller than declared", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataDifferentThanDeclaredException, "Data different than declared", 0x0007)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibBreakEventException, "Cannot extract LibBreakEvent", 0x0008)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, ServerVersionMismatchException, "The Bridge Server and the PrivMX Endpoint library versions mismatch", 0x0009)
 
 } // core
 } // endpoint

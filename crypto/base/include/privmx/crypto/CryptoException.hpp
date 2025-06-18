@@ -59,6 +59,7 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidWIFPayloadLengthException, CryptoException
 DECLARE_PRIVMX_EXCEPTION_CHILD(OpenSSLException, CryptoException, "OpenSSL Exception", 0x0026)
 DECLARE_PRIVMX_EXCEPTION_CHILD(PrivmxDriverCryptoException, CryptoException, "privmxDrvCrypto Exception", 0x0027)
 DECLARE_PRIVMX_EXCEPTION_CHILD(PrivmxDriverEccException, CryptoException, "privmxDrvEcc Exception", 0x0028)
+DECLARE_PRIVMX_EXCEPTION_CHILD(GivenPublicKeyDoesNotMatchWithSignatureException, CryptoException, "Given public key does not match with signature", 0x0029)
 
 } // crypto
 } // privmx

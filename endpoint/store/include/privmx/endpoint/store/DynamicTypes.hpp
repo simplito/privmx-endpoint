@@ -22,10 +22,6 @@ namespace store {
 namespace dynamic {
 //V4
 
-ENDPOINT_CLIENT_TYPE(VersionedData)
-    INT64_FIELD(version)
-TYPE_END
-
 ENDPOINT_CLIENT_TYPE(InternalStoreFileMeta)
     INT64_FIELD(version)
     INT64_FIELD(size)
@@ -43,7 +39,6 @@ ENDPOINT_CLIENT_TYPE(StoreFileMetaV4)
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
 TYPE_END
-
 
 class BlobPropertyBag : public utils::TypedObject
 {
@@ -118,6 +113,8 @@ namespace compat_v1 {
         OBJECT_FIELD(thumb, StoreThumbMeta)  // thumb?: {size: number; mimetype: string;}
     TYPE_END
 }
+
+
 
 } // dynamic
 } // store

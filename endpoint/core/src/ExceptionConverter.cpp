@@ -105,6 +105,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw internal::VarIsNotObjectException(e.what());
                 case 0x0004:
                     throw internal::VarIsNotArrayException(e.what());
+                case 0x0005:
+                    throw internal::InvalidVersionFormatException(e.what());
                 default:
                     throw internal::EndpointLibException(e.what());
             }
@@ -321,9 +323,5 @@ core::Exception ExceptionConverter::convert(const privmx::utils::PrivmxException
 }
 
 int64_t ExceptionConverter::getCodeOfUserVerificationFailureException() {
-    try {
-        throw privmx::endpoint::core::UserVerificationFailureException();
-    } catch (const privmx::endpoint::core::UserVerificationFailureException& e) {
-        return e.getCode();
-    }
+    return privmx::endpoint::core::UserVerificationFailureException().getCode();
 }

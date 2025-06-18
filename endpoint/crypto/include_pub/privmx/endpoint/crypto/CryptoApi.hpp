@@ -120,6 +120,14 @@ public:
     std::string convertPEMKeytoWIFKey(const std::string& pemKey);
 
     /**
+     * Converts given public key in PGP format to its base58DER format.
+     *
+     * @param pemKey public key to convert
+     * @return public key in base58DER format
+     */
+    std::string convertPGPAsn1KeyToBase58DERKey(const std::string& pgpKey);
+
+    /**
      * Generates ECC key and BIP-39 mnemonic from a password using BIP-39.
      * 
      * @param strength size of BIP-39 entropy, must be a multiple of 32

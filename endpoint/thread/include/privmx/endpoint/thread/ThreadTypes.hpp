@@ -15,39 +15,42 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/thread/DynamicTypes.hpp"
+#include "privmx/endpoint/core/CoreTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-struct MessageDataToEncrypt {
+struct MessageDataToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;
     std::optional<core::Buffer> internalMeta;
 };
 
-struct DecryptedMessageData {
+struct DecryptedMessageDataV4 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::Buffer data;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
 };
 
-struct ThreadDataToEncrypt {
+struct MessageDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
+    core::Buffer data;
     std::optional<core::Buffer> internalMeta;
+    core::DataIntegrityObject dio;
 };
 
-struct DecryptedThreadData {
+struct DecryptedMessageDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
+    core::Buffer data;
     std::optional<core::Buffer> internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
+    core::DataIntegrityObject dio;
 };
 
 } // thread

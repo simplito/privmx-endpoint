@@ -82,6 +82,7 @@ inline void Exception::rethrow() const {
 // 0x0007 - Inbox
 // 0x0008 - Stream
 // 0x0009 - Event
+// 0x000A - Kvdb
 // Form 0xE000 to 0xEFFF - Internal (PrivmxExtException)
 // Form 0xF000 to 0xFFFF - Server
 // 

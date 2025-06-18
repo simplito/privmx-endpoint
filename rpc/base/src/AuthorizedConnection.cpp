@@ -28,7 +28,7 @@ using namespace std;
 using Poco::Dynamic::Var;
 
 AuthorizedConnection::AuthorizedConnection(const ConnectionOptionsFull& options)
-        : _event_dispatcher(new EventDispatcher()), _options(options), _ticket_updater_cancellation_token(utils::CancellationToken::create()) {
+        : _options(options), _ticket_updater_cancellation_token(utils::CancellationToken::create()) {
     initChannel();
 }
 
@@ -111,7 +111,6 @@ void AuthorizedConnection::destroy() {
     
     _tickets_manager.clear();
     _disconnected_event_dispatcher.dispatch({});
-    _event_dispatcher->clear();
 }
 
 int AuthorizedConnection::addNotificationEventListener(const utils::Callback<NotificationEvent>& event_listener) {
@@ -180,9 +179,9 @@ void AuthorizedConnection::sendRequest(ClientEndpoint& endpoint, bool web_socket
     endpoint.connection.process(stream);
 }
 
-void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution) {
+void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey) {
     ClientEndpoint endpoint(_tickets_manager, _options);
-    endpoint.connection.ecdheHandshake(key, solution);
+    endpoint.connection.ecdheHandshake(key, solution, serverPubKey);
     endpoint.connection.ticketRequest(endpoint.TICKETS_MAX_COUNT);
     sendRequest(endpoint);
     EcdheConnectionInfo::Ptr info = new EcdheConnectionInfo();
@@ -192,9 +191,9 @@ void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key, const std
     activate();
 }
 
-void AuthorizedConnection::ecdhexConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution) {
+void AuthorizedConnection::ecdhexConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey) {
     ClientEndpoint endpoint(_tickets_manager, _options);
-    endpoint.connection.ecdhexHandshake(key, solution);
+    endpoint.connection.ecdhexHandshake(key, solution, serverPubKey);
     endpoint.connection.ticketRequest(endpoint.TICKETS_MAX_COUNT);
     sendRequest(endpoint);
     EcdhexConnectionInfo::Ptr info = new EcdhexConnectionInfo();
@@ -312,12 +311,11 @@ void AuthorizedConnection::authorizeWebsocket() {
         string decrypted = crypto::Crypto::aes256CbcHmac256Decrypt(data, key);
         Pson::Decoder decoder;
         auto decoded = decoder.decode(decrypted).extract<Poco::JSON::Object::Ptr>();
-        auto type = decoded->getValue<std::string>("type");
-        auto channel = decoded->optValue<std::string>("channel", std::string());
+        auto type = decoded->optValue<std::string>("type", std::string());
         if (type == "disconnected") {
             return;
         }
-        _notification_event_dispatcher.dispatch({.type = type, .channel = channel, .data = decoded->getObject("data")});
+        _notification_event_dispatcher.dispatch({.type = type, .data = decoded});
     }, [&]{
         _channels_connected = false;
         _session_checked = false;

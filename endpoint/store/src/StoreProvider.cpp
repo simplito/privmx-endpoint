@@ -14,22 +14,25 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-StoreProvider::StoreProvider(std::function<server::Store(std::string)> getStore) : core::ContainerProvider<std::string, server::Store>(getStore) {}
+StoreProvider::StoreProvider(std::function<server::Store(std::string)> getStore, std::function<uint32_t(server::Store)> validateStore)
+     : core::ContainerProvider<std::string, server::Store>(getStore, validateStore) {}
     
-void StoreProvider::updateByValue( const server::Store& container) {
+bool StoreProvider::isNewerOrSameAsInStorage( const server::Store& container) {
     auto cached = _storage.get(container.id());
     if(!cached.has_value()) {
-        _storage.set(container.id(), container);
-        return;
+        return true;
     }
-    auto cached_container = cached.value();
-    if(container.version() > cached_container.version() || container.lastModificationDate() > cached_container.lastModificationDate()) {
-        _storage.set(container.id(), container);
+    auto cached_container = cached.value().container;
+    if (container.version() > cached_container.version() ||
+        (container.lastModificationDate() >= cached_container.lastModificationDate() && container.version() == cached_container.version())
+    ) {
+            return true;
     }
+    return false;
 }
 
 void StoreProvider::updateStats(const server::StoreStatsChangedEventData& stats) {
-    auto store = this->get(stats.id());
+    auto store = this->get(stats.id()).container;
     store.files(stats.files());
     store.lastFileDate(stats.lastFileDate());
     updateByValue(store);

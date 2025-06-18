@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/CoreTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -25,6 +26,18 @@ namespace store {
 constexpr uint64_t IV_SIZE = 16;
 constexpr uint64_t HMAC_SIZE = 32;
 constexpr uint64_t CHUNK_PADDING = 16;
+
+struct FileDecryptionParams {
+    std::string fileId;
+    std::string resourceId;
+    uint64_t sizeOnServer;
+    uint64_t originalSize;
+    int64_t cipherType;
+    size_t chunkSize;
+    std::string key;
+    std::string hmac;
+    int64_t version;
+};
 
 struct FileMetaSigned
 {
@@ -40,35 +53,36 @@ struct StoreFile
     std::string verified;
 };
 
-struct FileMetaToEncrypt {
+struct FileMetaToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     int64_t fileSize;
     core::Buffer internalMeta;
 };
 
-struct DecryptedFileMeta {
+struct FileMetaToEncryptV5 {
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::Buffer internalMeta;
+    core::DataIntegrityObject dio;
+};
+
+struct DecryptedFileMetaV4 : core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     int64_t fileSize;
     core::Buffer internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
 };
 
-struct StoreDataToEncrypt {
+struct DecryptedFileMetaV5 : core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
-};
-
-struct DecryptedStoreData {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
+    core::Buffer internalMeta;
     std::string authorPubKey;
-    int64_t statusCode;
+    core::DataIntegrityObject dio;
 };
+
 
 } // store
 } // endpoint

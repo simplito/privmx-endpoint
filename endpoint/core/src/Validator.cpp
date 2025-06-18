@@ -185,6 +185,13 @@ void Validator::validateEventType(const Event& value, const std::string& type, c
     }
 }
 
+void Validator::validateJSON(const std::string& value, const std::string& stack_trace) {
+    try {
+        privmx::utils::Utils::parseJson(value);
+    } catch (...) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid JSON"));
+    }
+}
 
 void StructValidator<Context>::validate(const Context& value, const std::string& stack_trace) {
     Validator::validateId(value.userId, stack_trace + ".userId");
@@ -207,9 +214,18 @@ void StructValidator<PagingQuery>::validate(const PagingQuery& value, const std:
     if (value.lastId.has_value()) {
         Validator::validateLastId(value.lastId.value(), stack_trace + ".lastId");
     }
+    if (value.queryAsJson.has_value()) {
+        Validator::validateJSON(value.queryAsJson.value(), stack_trace + ".queryAsJson");
+    }
 }
 
 void StructValidator<LibPlatformDisconnectedEvent>::validate(const LibPlatformDisconnectedEvent& value, const std::string& stack_trace) {
     Validator::validateEventType(value, "libPlatformDisconnected", stack_trace + ".type");
+}
+
+void StructValidator<PKIVerificationOptions>::validate(const PKIVerificationOptions& value, const std::string& stack_trace) {
+    if(value.bridgeInstanceId.has_value() && !value.bridgePubKey.has_value()) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PKIVerificationOptions, bridgePubKey cannot be Null, when bridgeInstanceId is not Null"));
+    }
 }
 

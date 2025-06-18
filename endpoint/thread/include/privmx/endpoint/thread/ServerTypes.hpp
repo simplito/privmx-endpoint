@@ -23,6 +23,7 @@ namespace thread {
 namespace server {
 
 ENDPOINT_SERVER_TYPE(ThreadCreateModel)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
@@ -35,6 +36,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadUpdateModel)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
     VAR_FIELD(data)
@@ -52,6 +54,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadInfo)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(creator)
@@ -97,6 +100,7 @@ ENDPOINT_SERVER_TYPE(ThreadListResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessageSendModel)
+    STRING_FIELD(resourceId)
     STRING_FIELD(threadId)
     VAR_FIELD(data)
     STRING_FIELD(keyId)
@@ -110,13 +114,23 @@ ENDPOINT_SERVER_TYPE(ThreadMessageDeleteModel)
     STRING_FIELD(messageId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(MessageUpdate)
+    INT64_FIELD(createDate)
+    STRING_FIELD(author)
+TYPE_END
+
+
 ENDPOINT_SERVER_TYPE(Message)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
+    INT64_FIELD(version)
+    STRING_FIELD(contextId)
     STRING_FIELD(threadId)
     INT64_FIELD(createDate)
     STRING_FIELD(author)
     VAR_FIELD(data) // meta: unknown
     STRING_FIELD(keyId)
+    LIST_FIELD(updates, MessageUpdate)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessageGetModel)
@@ -159,8 +173,7 @@ ENDPOINT_SERVER_TYPE(ThreadStatsEventData)
     STRING_FIELD(type)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedMessageDataV4)
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV4, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -169,28 +182,14 @@ ENDPOINT_CLIENT_TYPE(EncryptedMessageDataV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedThreadDataV4)
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV5, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
+    STRING_FIELD(data)
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(ThreadEmitCustomEventModel)
-    STRING_FIELD(threadId);
-    STRING_FIELD(channel);
-    STRING_FIELD(keyId);
-    VAR_FIELD(data);
-    LIST_FIELD(users, std::string);
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(ThreadCustomEventData)
-    STRING_FIELD(id);
-    STRING_FIELD(keyId);
-    VAR_FIELD(eventData);
-    OBJECT_FIELD(author, core::server::UserIdentity);
+    STRING_FIELD(dio)
 TYPE_END
 
 } // server

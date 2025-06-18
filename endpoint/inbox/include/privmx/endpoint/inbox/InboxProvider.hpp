@@ -22,8 +22,10 @@ namespace inbox {
 
 class InboxProvider : public core::ContainerProvider<std::string, server::Inbox> {
 public:
-    InboxProvider(std::function<server::Inbox(std::string)> getThread);
-    void updateByValue(const server::Inbox& value) override;
+    InboxProvider(std::function<server::Inbox(std::string)> getInbox, std::function<uint32_t(server::Inbox)> validateInbox);
+protected:
+    bool isNewerOrSameAsInStorage(const server::Inbox& container) override;
+    inline std::string getID(const server::Inbox& container) override {return container.id();}
 };
 
 } // inbox

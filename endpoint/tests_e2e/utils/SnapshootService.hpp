@@ -65,12 +65,11 @@ void SnapshootService::up(const std::string& snapshoot, bool force) {
             _address = _instanceUrl;
             std::string checkServerCom = "curl -m 2 -X POST http://" + _instanceUrl + "/cloud/api 2>/dev/null >/dev/null";
             int i = 0;
-            for (; std::system(checkServerCom.c_str()) != 0 && i < 5000; ++i) {
-                if (i%100 == 0) {
-                    PRIVMX_DEBUG("TEST_E2E", "SnapshootService::up", "CheckServer, try nr: " + std::to_string(i) + " failed");
-                }
+            for (; std::system(checkServerCom.c_str()) != 0 && i < 50; ++i) {
+                PRIVMX_DEBUG("TEST_E2E", "SnapshootService::up", "CheckServer, try nr: " + std::to_string(i) + " failed");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
             };
-            if (i == 5000) {
+            if (i == 50) {
                 throw privmx::utils::PrivmxException("server not responding");
             }
         } else {

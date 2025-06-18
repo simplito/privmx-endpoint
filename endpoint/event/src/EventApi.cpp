@@ -41,12 +41,12 @@ EventApi EventApi::create(core::Connection& connection) {
 
 EventApi::EventApi(const std::shared_ptr<EventApiImpl>& impl) : _impl(impl) {}
 
-void EventApi::emitEvent(const std::string& contextId, const std::string& channelName, const core::Buffer& eventData, const std::vector<core::UserWithPubKey>& users) {
+void EventApi::emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     try {
-        return _impl->emitEvent(contextId, channelName, eventData, users);
+        return _impl->emitEvent(contextId, users, channelName, eventData);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

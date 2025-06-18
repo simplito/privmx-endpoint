@@ -60,6 +60,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(Store)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(creator)
@@ -78,6 +79,7 @@ ENDPOINT_SERVER_TYPE(Store)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreCreateModel)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
@@ -90,6 +92,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreUpdateModel)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     LIST_FIELD(users, std::string)
     LIST_FIELD(managers, std::string)
     VAR_FIELD(data)
@@ -110,6 +113,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(File)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     INT64_FIELD(version)
     STRING_FIELD(contextId)
     STRING_FIELD(storeId)
@@ -163,8 +167,7 @@ ENDPOINT_SERVER_TYPE(StoreFileListResult)
     INT64_FIELD(count)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedFileMetaV4)
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedFileMetaV4, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
@@ -173,13 +176,13 @@ ENDPOINT_CLIENT_TYPE(EncryptedFileMetaV4)
     STRING_FIELD(authorPubKey)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedStoreDataV4)
-    INT64_FIELD(version)
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedFileMetaV5, core::dynamic::VersionedData)
     STRING_FIELD(publicMeta)
     OBJECT_PTR_FIELD(publicMetaObject)
     STRING_FIELD(privateMeta)
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
+    STRING_FIELD(dio)
 TYPE_END
 
 //-----------------------------------------------------
@@ -220,6 +223,7 @@ TYPE_END
 
 
 ENDPOINT_SERVER_TYPE(StoreFileCreateModel)
+    STRING_FIELD(resourceId)
     STRING_FIELD(storeId)     
     STRING_FIELD(requestId)        // request.RequestId
     INT64_FIELD(fileIndex)
@@ -244,7 +248,7 @@ ENDPOINT_SERVER_TYPE(StoreFileReadResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreFileWriteModel)
-    STRING_FIELD(fileId)     
+    STRING_FIELD(fileId)
     STRING_FIELD(requestId)
     INT64_FIELD(fileIndex)
     VAR_FIELD(meta) // meta: unknown
@@ -316,21 +320,6 @@ ENDPOINT_SERVER_TYPE(StoreFileDeletedEventData)
     STRING_FIELD(id)
     STRING_FIELD(contextId)
     STRING_FIELD(storeId)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(StoreEmitCustomEventModel)
-    STRING_FIELD(storeId);
-    STRING_FIELD(channel);
-    STRING_FIELD(keyId);
-    VAR_FIELD(data);
-    LIST_FIELD(users, std::string);
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(StoreCustomEventData)
-    STRING_FIELD(id);
-    STRING_FIELD(keyId);
-    VAR_FIELD(eventData);
-    OBJECT_FIELD(author, core::server::UserIdentity);
 TYPE_END
 
 } // server

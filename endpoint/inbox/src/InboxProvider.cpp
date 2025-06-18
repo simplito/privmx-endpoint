@@ -14,16 +14,19 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
-InboxProvider::InboxProvider(std::function<server::Inbox(std::string)> getInbox) : core::ContainerProvider<std::string, server::Inbox>(getInbox) {}
+InboxProvider::InboxProvider(std::function<server::Inbox(std::string)> getInbox, std::function<uint32_t(server::Inbox)> validateInbox)
+     : core::ContainerProvider<std::string, server::Inbox>(getInbox, validateInbox) {}
     
-void InboxProvider::updateByValue(const server::Inbox& container) {
+bool InboxProvider::isNewerOrSameAsInStorage(const server::Inbox& container) {
     auto cached = _storage.get(container.id());
     if(!cached.has_value()) {
-        _storage.set(container.id(), container);
-        return;
+        return true;
     }
-    auto cached_container = cached.value();
-    if(container.version() > cached_container.version() || container.lastModificationDate() > cached_container.lastModificationDate()) {
-        _storage.set(container.id(), container);
+    auto cached_container = cached.value().container;
+    if (container.version() > cached_container.version() ||
+        (container.lastModificationDate() >= cached_container.lastModificationDate() && container.version() == cached_container.version())
+    ) {
+        return true;
     }
+    return false;
 }

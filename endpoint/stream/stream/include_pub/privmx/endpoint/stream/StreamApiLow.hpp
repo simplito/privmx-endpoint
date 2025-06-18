@@ -34,7 +34,7 @@ class StreamApiLowImpl;
 class StreamApiLow {
 public:
 
-    static StreamApiLow create(core::Connection& connection, event::EventApi& eventApi);
+    static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi);
     StreamApiLow() = default;
 
     std::vector<TurnCredentials> getTurnCredentials();

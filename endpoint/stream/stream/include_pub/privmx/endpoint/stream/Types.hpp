@@ -47,6 +47,7 @@ struct StreamRoom {
     core::Buffer privateMeta;
     core::ContainerPolicy policy;
     int64_t statusCode;
+    int64_t schemaVersion;
 };
 
 struct Stream {

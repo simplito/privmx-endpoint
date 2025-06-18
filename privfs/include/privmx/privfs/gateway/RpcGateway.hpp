@@ -25,7 +25,7 @@ limitations under the License.
 #include <privmx/rpc/Types.hpp>
 #include <privmx/privfs/gateway/Types.hpp>
 #include <privmx/rpc/AuthorizedConnection.hpp>
-#include <privmx/rpc/EventDispatcher.hpp>
+#include <privmx/utils/EventDispatcher.hpp>
 #include <privmx/crypto/BIP39.hpp>
 
 namespace privmx {
@@ -36,8 +36,8 @@ class RpcGateway
 public:
     using Ptr = Poco::SharedPtr<RpcGateway>;
 
-    static RpcGateway::Ptr createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution = {});
-    static RpcGateway::Ptr createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution = {});
+    static RpcGateway::Ptr createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution = {}, const std::optional<crypto::PublicKey>& serverPubKey = std::nullopt);
+    static RpcGateway::Ptr createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution = {}, const std::optional<crypto::PublicKey>& serverPubKey = std::nullopt);
     static RpcGateway::Ptr createGatewayFromKeyConnection(const crypto::PrivateKey& key, types::InitParameters init_parameters);
     static RpcGateway::Ptr createGatewayFromSrpConnection(const std::string& username, const std::string& password, types::InitParameters init_parameters);
     RpcGateway(rpc::AuthorizedConnection::Ptr rpc, std::optional<rpc::AdditionalLoginStepCallback> additional_login_step_on_relogin_callback);
