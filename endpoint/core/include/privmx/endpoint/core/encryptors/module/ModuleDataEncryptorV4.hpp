@@ -9,15 +9,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONTAINERDATAENCRYPTORV4_HPP
-#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONTAINERDATAENCRYPTORV4_HPP
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV4_HPP
+#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV4_HPP
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
-#include <privmx/endpoint/core/encryptors/container/Types.hpp>
-#include <privmx/endpoint/core/encryptors/container/DynamicTypes.hpp>
-#include <privmx/endpoint/core/encryptors/container/Constants.hpp>
+#include <privmx/endpoint/core/encryptors/module/Types.hpp>
+#include <privmx/endpoint/core/encryptors/module/DynamicTypes.hpp>
+#include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
@@ -25,26 +25,24 @@ limitations under the License.
 namespace privmx {
 namespace endpoint {
 namespace core {
-namespace container {
 
-class ContainerDataEncryptorV4 {
+class ModuleDataEncryptorV4 {
 public:
-    dynamic::EncryptedContainerDataV4 encrypt(const ContainerDataToEncryptV4& containerData,
+    dynamic::EncryptedModuleDataV4 encrypt(const ModuleDataToEncryptV4& moduleData,
                                         const crypto::PrivateKey& authorPrivateKey,
                                         const std::string& encryptionKey);
-    DecryptedContainerDataV4 decrypt(const dynamic::EncryptedContainerDataV4& encryptedContainerData,
+    DecryptedModuleDataV4 decrypt(const dynamic::EncryptedModuleDataV4& encryptedModuleData,
                                 const std::string& encryptionKey);
 
 private:
-    void validateVersion(const dynamic::EncryptedContainerDataV4& encryptedContainerData);
+    void validateVersion(const dynamic::EncryptedModuleDataV4& encryptedModuleData);
 
     core::DataEncryptorV4 _dataEncryptor;
 };
 
 
-}  // namespace container
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_CONTAINERDATAENCRYPTORV4_HPP
+#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV4_HPP

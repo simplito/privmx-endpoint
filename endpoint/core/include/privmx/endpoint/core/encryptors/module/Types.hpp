@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_TYPES_HPP_
-#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_TYPES_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_TYPES_HPP_
+#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_TYPES_HPP_
 
 #include <string>
 #include "privmx/endpoint/core/Buffer.hpp"
@@ -19,16 +19,16 @@ limitations under the License.
 namespace privmx {
 namespace endpoint {
 namespace core {
-namespace container {
+    
 // Version 4 (deprecated)
 
-struct ContainerDataToEncryptV4 {
+struct ModuleDataToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     std::optional<core::Buffer> internalMeta;
 };
 
-struct DecryptedContainerDataV4 : public core::DecryptedVersionedData {
+struct DecryptedModuleDataV4 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     std::optional<core::Buffer> internalMeta;
@@ -36,30 +36,29 @@ struct DecryptedContainerDataV4 : public core::DecryptedVersionedData {
 };
 
 // Version 5 
-struct ContainerInternalMetaV5 {
+struct ModuleInternalMetaV5 {
     std::string secret;
     std::string resourceId;
     std::string randomId;
 };
 
-struct ContainerDataToEncryptV5 {
+struct ModuleDataToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    ContainerInternalMetaV5 internalMeta;
+    ModuleInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
 };
 
-struct DecryptedContainerDataV5 : public core::DecryptedVersionedData {
+struct DecryptedModuleDataV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    ContainerInternalMetaV5 internalMeta;
+    ModuleInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
 };
 
-} // container
 } // core
 } // endpoint
 } // privmx
 
-#endif // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_CONTAINER_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_TYPES_HPP_
