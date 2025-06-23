@@ -64,6 +64,7 @@ public:
             window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 768, 432, 0);
             renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
             texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 768, 432);
+            windowEventsLoop();
         }
         uint32_t* pixels = new uint32_t[768 * 432];
         // std::cout << w << " - " << h << " frame Size" << std::endl;
@@ -71,23 +72,31 @@ public:
         SDL_UpdateTexture(texture, NULL, pixels, 768 * sizeof(uint32_t));
         SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
         delete pixels;
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            std::cerr << event.type << std::endl;
-            if (event.type == SDL_QUIT) exit(0);
-            if (event.type == SDL_WINDOWEVENT) {
-                if (event.window.event == SDL_WINDOWEVENT_CLOSE)
-                {
-                    exit(1);
-                }
-            }
-        }
     }
 private:
+    void windowEventsLoop() {
+        eventThreadLoop = std::make_shared<std::thread>([&](){
+            while(true) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                SDL_Event event;
+                while (SDL_PollEvent(&event)) {
+                    std::cerr << "SDL_Event.type = " << event.type << std::endl;
+                    if (event.type == SDL_QUIT) exit(0);
+                    if (event.type == SDL_WINDOWEVENT) {
+                        if (event.window.event == SDL_WINDOWEVENT_CLOSE)
+                        {
+                            exit(1);
+                        }
+                    }
+                }
+            }
+        });
+    }
     SDL_Window* window;
     SDL_Texture* texture;
     SDL_Renderer* renderer = NULL;
     std::string title;
+    std::shared_ptr<std::thread> eventThreadLoop;
 };
 
 int main(int argc, char** argv) {
