@@ -19,6 +19,10 @@ target_link_libraries(streamsProgram2 privmx privmxendpointcore privmxendpointcr
 find_package(SDL2 REQUIRED)
 add_executable(streamsProgram3 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_3.cpp)
 target_link_libraries(streamsProgram3 SDL2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+add_executable(streamsProgram3_b ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_3_b.cpp)
+target_link_libraries(streamsProgram3_b SDL2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+
+
 
 # privmxendpointstream + wxWidgets
 find_package(wxWidgets COMPONENTS core base xrc aui REQUIRED)

@@ -41,6 +41,7 @@ public:
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
     void streamLeave(server::StreamLeaveModel model);
+    void streamReconfigure(server::StreamReconfigureModel model);
 
 private:
     template<typename T>

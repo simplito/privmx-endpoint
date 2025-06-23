@@ -49,6 +49,8 @@ struct VideoStream {
 };
 
 
+
+
 } // stream
 } // endpoint
 } // privmx

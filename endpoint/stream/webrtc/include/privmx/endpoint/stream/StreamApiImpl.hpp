@@ -78,7 +78,8 @@ public:
     std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
     std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
 
-    void trackAdd(int64_t streamId, DeviceType type, int64_t id = 0, const std::string& params_JSON = "{}");
+    void trackAdd(int64_t streamId, const TrackParam& track);
+    void trackRemove(int64_t streamId, const Track& track);
     
     void publishStream(int64_t streamId);
 
@@ -89,21 +90,45 @@ public:
     void unpublishStream(int64_t streamId);
 
     void leaveStream(int64_t streamId);
+    
+    void subscribeForStreamEvents();
+    void unsubscribeFromStreamEvents();
 
     void keyManagement(bool disable);
     void dropBrokenFrames(bool enable);
+    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
 
 private:
-    
+    enum StreamStatus {
+        Offline = 0,
+        Online = 1
+    };
+    struct StreamData {
+        StreamData(
+            std::shared_ptr<WebRTC> _webrtc,
+            privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> _streamCapturers,
+            StreamStatus _status) : webrtc(_webrtc), streamCapturers(_streamCapturers), status(_status) {}
+        std::shared_ptr<WebRTC> webrtc;
+        privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> streamCapturers;
+        StreamStatus status;
+        std::mutex streamMutex;
+    };
+
+
     int64_t generateNumericId();
 
     void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
     void trackAddVideo(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
     void trackAddDesktop(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
+    void trackRemoveAudio(int64_t streamId, int64_t id = 0);
+    void trackRemoveVideo(int64_t streamId, int64_t id = 0);
+    void trackRemoveDesktop(int64_t streamId, int64_t id = 0);
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
-    privmx::utils::ThreadSaveMap<uint64_t, std::shared_ptr<WebRTC>> _streamDataMap;
+    privmx::utils::ThreadSaveMap<uint64_t, std::shared_ptr<StreamData>> _streamDataMap;
+    
+
 
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;

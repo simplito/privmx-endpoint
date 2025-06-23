@@ -320,9 +320,9 @@ void MyFrame::Connect(std::string privKey, std::string solutionId, std::string u
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
     auto streamId = streamApi->createStream(streamRoomId);
     auto listAudioRecordingDevices = streamApi->listAudioRecordingDevices();
-    streamApi->trackAdd(streamId, stream::DeviceType::Audio);
+    streamApi->trackAdd(streamId,  stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
     auto listVideoRecordingDevices = streamApi->listVideoRecordingDevices();
-    streamApi->trackAdd(streamId, stream::DeviceType::Video);
+    streamApi->trackAdd(streamId,  stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
     streamApi->publishStream(streamId);
 }
 

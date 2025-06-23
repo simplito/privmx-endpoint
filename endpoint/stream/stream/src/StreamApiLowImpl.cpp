@@ -26,6 +26,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamTypes.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
+#include "privmx/endpoint/stream/Events.hpp"
 
 
 using namespace privmx::endpoint;
@@ -94,7 +95,90 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
             roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
         }
     }
-    
+    if(!_streamSubscriptionHelper.hasSubscription(notification.subscriptions) && type != "janus") {
+        return;
+    }
+    if (type == "streamRoomCreated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+        auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 
+        std::shared_ptr<StreamRoomCreatedEvent> event(new StreamRoomCreatedEvent());
+        event->channel = "stream";
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+        auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 
+        std::shared_ptr<StreamRoomUpdatedEvent> event(new StreamRoomUpdatedEvent());
+        event->channel = "stream";
+        event->data = data;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomDeleted") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
+        std::shared_ptr<StreamRoomDeletedEvent> event(new StreamRoomDeletedEvent());
+        event->channel = "stream";
+        event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUnpublished" || type == "streamLeft" ) {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
+        std::vector<int64_t> streamIds;
+        for(auto i : raw.streamIds()) streamIds.push_back(i);
+        auto eventData = StreamEventData{.streamRoomId=raw.streamRoomId(), .streamIds=streamIds, .userId=raw.userId()};
+        if(type == "streamPublished") {
+            std::shared_ptr<StreamPublishedEvent> event(new StreamPublishedEvent());
+            event->channel = "stream";
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
+        } else if(type == "streamJoined") {
+            std::shared_ptr<StreamJoinedEvent> event(new StreamJoinedEvent());
+            event->channel = "stream";
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
+        } else if(type == "streamUnpublished") {
+            std::shared_ptr<StreamUnpublishedEvent> event(new StreamUnpublishedEvent());
+            event->channel = "stream";
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
+        } else if(type == "streamLeft") {
+            std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
+            event->channel = "stream";
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if(type == "janus") {
+        if( 
+            data->has("janus") && 
+            data->getValue<std::string>("janus") == "event" &&
+            data->has("jsep") && 
+            data->has("plugindata")
+        )  {
+            auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
+            auto localStreamId = _sessionIdToStreamId.get(janusPluginEvent.session_id());
+            // if stream is about me
+            if(localStreamId.has_value() && _streamIdToRoomId.has(localStreamId.value())) {
+                //if streamId exist that mens stream and room exist
+                auto room = _streamRoomMap.get(_streamIdToRoomId.get(localStreamId.value()).value()).value();
+                auto streamData = room->streamMap.get(localStreamId.value()).value();
+
+                if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
+                    auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata());
+                    if(janusVideoRoom.videoroomOpt("") == "updated") {
+                        auto janusVideoRoomUpdated = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoomUpdated>(janusPluginEvent.plugindata());
+                        // janusPluginEvent.session_id == _streamIdToRoomId[room].streamMap[streamId].sessionId
+                        // where janusPluginEvent.session_id maps one_to_one with StreamData.sessionId
+                        // task sessionId get StreamData.webRtc witch is stored in streamMap witch is stored in _streamIdToRoomId
+                        auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(janusPluginEvent.jsep().sdp(), janusPluginEvent.jsep().type());
+                        auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+                        sessionDescription.sdp(sdp);
+                        sessionDescription.type("answer");
+                        auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
+                        model.sessionId(janusPluginEvent.session_id());
+                        model.answer(sessionDescription);
+                        _serverApi->streamAcceptOffer(model);
+                    }
+                }
+            }
+        }
+    }
 }
 
 void StreamApiLowImpl::processConnectedEvent() {
@@ -164,7 +248,7 @@ void StreamApiLowImpl::publishStream(int64_t localStreamId) {
     auto result = _serverApi->streamPublish(model);
     streamData->sessionId = result.sessionId();
     // Set remote description
-    webRtc->setAnswerAndSetRemoteDescription(result.answer().sdp(), result.answer().type());
+    webRtc->setRemoteDescription(result.answer().sdp(), result.answer().type());
 }
 
 // Joining to Stream
@@ -186,6 +270,7 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     }
     streamJoinModel.streamRoomId(streamRoomId);
     auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
+    PRIVMX_DEBUG("STREAMS", "joinStream", "SessionId: " + std::to_string(streamJoinResult.sessionIdOpt(0)))
     // creating peerConnectio
 
     auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
@@ -201,6 +286,7 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
             }
         )
     );
+    _sessionIdToStreamId.set(streamJoinResult.sessionId(), localStreamId);
     std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
@@ -650,13 +736,7 @@ void StreamApiLowImpl::unpublishStream(int64_t localStreamId) {
         model.sessionId(streamData->sessionId.value());
         _serverApi->streamUnpublish(model);
     }
-    room->streamKeyManager->removeKeyUpdateCallback(streamData->updateId);
-    streamData->webRtc->close();
-    room->streamMap.erase(localStreamId);
-    if(room->streamMap.size() == 0) {
-        _streamIdToRoomId.erase(localStreamId);
-        _streamRoomMap.erase(room->id);
-    }
+    removeStream(room, streamData, localStreamId);
 }
 
 void StreamApiLowImpl::leaveStream(int64_t localStreamId) {
@@ -667,9 +747,16 @@ void StreamApiLowImpl::leaveStream(int64_t localStreamId) {
         model.sessionId(streamData->sessionId.value());
         _serverApi->streamLeave(model);
     }
+    removeStream(room, streamData, localStreamId);
+}
+
+void StreamApiLowImpl::removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, int64_t localStreamId) {
     room->streamKeyManager->removeKeyUpdateCallback(streamData->updateId);
     streamData->webRtc->close();
     room->streamMap.erase(localStreamId);
+    if(streamData->sessionId.has_value()) {
+        _sessionIdToStreamId.erase(streamData->sessionId.value());
+    }
     if(room->streamMap.size() == 0) {
         _streamIdToRoomId.erase(localStreamId);
         _streamRoomMap.erase(room->id);
@@ -704,6 +791,40 @@ void StreamApiLowImpl::keyManagement(bool disable) {
     _streamRoomMap.forAll([disable]([[maybe_unused]]const std::string& id, std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room) {
         room->streamKeyManager->keyManagement(disable);
     });
+}
+
+void StreamApiLowImpl::reconfigureStream(int64_t localStreamId, const std::string& optionsJSON) {
+    auto room = getStreamRoomData(localStreamId);
+    auto streamData = getStreamData(localStreamId, room);
+
+    std::shared_ptr<WebRTCInterface> webRtc = streamData->webRtc;
+    webRtc->updateKeys(room->streamKeyManager->getCurrentWebRtcKeys());
+    std::string sdp = webRtc->createOfferAndSetLocalDescription();
+    // Publish data on bridge
+    auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
+    janusJSEP.sdp(sdp);
+    janusJSEP.type("offer");
+    auto options = utils::Utils::parseJsonObject(optionsJSON);
+    options->set("restart", true);
+    options->set("jsep", janusJSEP);
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
+    model.sessionId(streamData->sessionId.value()); //TODO
+    model.options(options);
+    _serverApi->streamReconfigure(model);
+}
+
+void StreamApiLowImpl::subscribeForStreamEvents() {
+    if(_streamSubscriptionHelper.hasSubscriptionForModule()) {
+        throw AlreadySubscribedException();
+    }
+    _streamSubscriptionHelper.subscribeForModule();
+}
+
+void StreamApiLowImpl::unsubscribeFromStreamEvents() {
+    if(!_streamSubscriptionHelper.hasSubscriptionForModule()) {
+        throw NotSubscribedException();
+    }
+    _streamSubscriptionHelper.unsubscribeFromModule();
 }
 
 uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom) {
