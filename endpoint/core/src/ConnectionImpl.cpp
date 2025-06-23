@@ -14,18 +14,18 @@ limitations under the License.
 #include <cstdint>
 #include <privmx/rpc/Types.hpp>
 #include <privmx/utils/Debug.hpp>
-
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Constants.hpp"
+#include "privmx/endpoint/core/EndpointUtils.hpp"
 
 using namespace privmx::endpoint::core;
 
 ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
-    _userVerifier = std::make_shared<core::DefaultUserVerifierInterface>();
+    _userVerifier = std::make_shared<core::UserVerifier>(std::make_shared<core::DefaultUserVerifierInterface>());
 }
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
@@ -184,7 +184,7 @@ std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& context
 
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
     std::unique_lock lock(_mutex);
-    _userVerifier = verifier;
+    _userVerifier = std::make_shared<UserVerifier>(verifier);
 }
 
 void ConnectionImpl::disconnect() {
@@ -223,11 +223,6 @@ DataIntegrityObject ConnectionImpl::createPublicDIO(
     return createDIOExt(contextId, resourceId, containerId, containerResourceId, "<anonymous>", pubKey);
 }
 
-
-std::string ConnectionImpl::generateDIORandomId() {
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
-}
-
 DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::string& contextId, 
     const std::string& resourceId, 
@@ -243,7 +238,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
         .contextId = contextId,
         .resourceId = resourceId,
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
-        .randomId = generateDIORandomId(),
+        .randomId = EndpointUtils::generateDIORandomId(),
         .containerId = containerId,
         .containerResourceId = containerResourceId,
         .bridgeIdentity = _bridgeIdentity
@@ -251,11 +246,18 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
 }
 
 NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
+    std::vector<std::string> subscriptions;
+    auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
+    for(auto subscription : tmp.subscriptions()) {
+        subscriptions.push_back(subscription);
+    }
     return NotificationEvent{
         .source = EventSource::SERVER,
         .type = event.type,
-        .channel =  event.data->optValue<std::string>("channel", std::string()),
-        .data = event.data->getObject("data")
+        .data = tmp.data(),
+        .version = tmp.version(),
+        .timestamp = tmp.timestamp(),
+        .subscriptions = subscriptions
     };
 }
 

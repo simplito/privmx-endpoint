@@ -21,11 +21,7 @@ namespace endpoint {
 namespace kvdb {
 namespace dynamic {
 
-ENDPOINT_CLIENT_TYPE(KvdbInternalMetaV5)
-    STRING_FIELD(secret)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(randomId)
-TYPE_END
+
 
 } // dynamic
 } // kvdb

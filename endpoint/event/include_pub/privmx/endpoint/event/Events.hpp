@@ -25,7 +25,7 @@ struct ContextCustomEventData {
      */
     core::Buffer payload;
     /**
-     * Retrieval and decryption status code
+     * Payload decryption status
      */
     int64_t statusCode;
     /**

@@ -51,6 +51,11 @@ struct PagingQuery {
     std::optional<std::string> lastId;
 
     /**
+     * field by elements are sorted in result
+     */
+    std::optional<std::string> sortBy;
+
+    /**
      * extra query parameters in serialized JSON  
      */
     std::optional<std::string> queryAsJson;

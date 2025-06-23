@@ -15,6 +15,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/utils/Debug.hpp>
 
 #include "privmx/endpoint/event/EventApiImpl.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
@@ -59,17 +60,17 @@ void EventApiImpl::emitEvent(const std::string& contextId, const std::vector<cor
 
 void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
-    if(_contextSubscriptionHelper.hasSubscriptionForElementCustom(contextId, channelName)) {
+    if(_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
         throw AlreadySubscribedException();
     }
-    _contextSubscriptionHelper.subscribeForElementCustom(contextId, channelName);
+    _contextSubscriptionHelper.subscribeForModuleEntryCustomChannel(contextId, channelName);
 }
 void EventApiImpl::unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
-    if(!_contextSubscriptionHelper.hasSubscriptionForElementCustom(contextId, channelName)) {
+    if(!_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
         throw NotSubscribedException();
     }
-    _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, channelName);
+    _contextSubscriptionHelper.unsubscribeFromModuleEntryCustomChannel(contextId, channelName);
 }
 
 void EventApiImpl::emitEventInternal(const std::string& contextId, InternalContextEventDataV1 event, const std::vector<core::UserWithPubKey>& users) {
@@ -86,9 +87,10 @@ void EventApiImpl::emitEventInternal(const std::string& contextId, InternalConte
 
 bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType) {
     //check if type == "custom" and channel == "context/<contextId>/internal"
+    
     if(type == "custom") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(eventData);
-        if( !raw.idEmpty() && channel == "context/" + raw.id() + "/" INTERNAL_EVENT_CHANNEL_NAME) {
+        if( !raw.idEmpty() && channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + raw.id() && raw.eventData().type() == typeid(Poco::JSON::Object::Ptr)) {
             auto rawEventDataJSON = raw.eventData().extract<Poco::JSON::Object::Ptr>();
             if(rawEventDataJSON->has("type")) {
                 if(!internalContextEventType.has_value()) {
@@ -127,19 +129,20 @@ DecryptedInternalContextEventDataV1 EventApiImpl::extractInternalEventData(const
 }
 
 void EventApiImpl::subscribeForInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.subscribeForElementCustom(contextId, INTERNAL_EVENT_CHANNEL_NAME);
+    _contextSubscriptionHelper.subscribeForModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::unsubscribeFromInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.unsubscribeFromElementCustom(contextId, INTERNAL_EVENT_CHANNEL_NAME);
+    _contextSubscriptionHelper.unsubscribeFromModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::string channel = notification.channel;
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    if(type == "custom" && _contextSubscriptionHelper.hasSubscriptionForChannel(channel)) {
+    if(type == "custom" && _contextSubscriptionHelper.hasSubscription(notification.subscriptions)) {
+        std::string channel = _contextSubscriptionHelper.getChannel(notification.subscriptions);
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
-        if(channel == "context/" + rawEvent.id() + "/" INTERNAL_EVENT_CHANNEL_NAME) return;
+        // fix if not internal check
+        if(channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id()) return;
         auto resultEventData = ContextCustomEventData{
             .contextId = rawEvent.id(), 
             .userId = rawEvent.author().id(), 
