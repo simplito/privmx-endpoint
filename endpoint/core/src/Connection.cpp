@@ -68,7 +68,7 @@ int64_t Connection::getConnectionId() {
 
 PagingList<Context> Connection::listContexts(const PagingQuery& pagingQuery) {
     validateEndpoint();
-    Validator::validateClass<PagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
         return _impl->listContexts(pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
