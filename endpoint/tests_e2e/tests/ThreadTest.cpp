@@ -198,6 +198,20 @@ TEST_F(ThreadTest, listThreads_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        threadApi->listThreads(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(ThreadTest, listThread_correct_input_data) {
@@ -261,10 +275,13 @@ TEST_F(ThreadTest, listThread_correct_input_data) {
     EXPECT_NO_THROW({
         listThreads = threadApi->listThreads(
             reader->getString("Context_1.contextId"),
-            {
+            core::PagingQuery{
                 .skip=1, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
@@ -329,7 +346,6 @@ TEST_F(ThreadTest, listThread_correct_input_data) {
             EXPECT_EQ(thread.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    
 }
 
 TEST_F(ThreadTest, createThread) {
@@ -940,6 +956,20 @@ TEST_F(ThreadTest, listMessages_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        threadApi->listMessages(
+            reader->getString("Thread_1.threadId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(ThreadTest, listMessages_correct_input_data) {
@@ -988,7 +1018,7 @@ TEST_F(ThreadTest, listMessages_correct_input_data) {
         EXPECT_EQ(message.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Message_1.uploaded_privateMeta_inHex")));
         EXPECT_EQ(message.data.stdString(), privmx::utils::Hex::toString(reader->getString("Message_1.uploaded_data_inHex")));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on thread
+    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on thread
     EXPECT_NO_THROW({
         threadApi->updateThread(
             reader->getString("Thread_1.threadId"),
@@ -1014,10 +1044,13 @@ TEST_F(ThreadTest, listMessages_correct_input_data) {
     EXPECT_NO_THROW({
         listMessages = threadApi->listMessages(
             reader->getString("Thread_1.threadId"),
-            {
+            core::PagingQuery{
                 .skip=0, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
