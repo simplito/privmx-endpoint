@@ -113,6 +113,15 @@ public:
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
 
     /**
+     * Check whether the KVDB entry exists.
+     *
+     * @param kvdbId KVDB ID of the KVDB entry to check
+     * @param key key of the KVDB entry to check
+     * @returns 'true' if the KVDB has an entry with given key, 'false' otherwise
+     */   
+    bool hasEntry(const std::string& kvdbId, const std::string& key);
+
+    /**
      * Gets a list of KVDB entries keys from a KVDB.
      *
      * @param kvdbId ID of the KVDB to list KVDB entries from
@@ -139,7 +148,7 @@ public:
      * @param data content of the KVDB entry
      * @return ID of the new KVDB entry
      */    
-    void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
+    void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version = 0);
     
     /**
      * Deletes a KVDB entry by given KVDB entry ID.

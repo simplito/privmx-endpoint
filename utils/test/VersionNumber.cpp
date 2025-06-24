@@ -27,7 +27,9 @@ TEST(VersionNumber, Construction) {
         "1.0.*",
         "1.0.1",
         "1.0.1-rc1",
-        "1.9.2rc_1"
+        "1.9.2rc_1",
+        "1.010.2",
+        "2.31.2"
     };
     EXPECT_NO_THROW({
         auto tmp = VersionNumber(correctTestVersions[0]);
@@ -45,7 +47,8 @@ TEST(VersionNumber, Construction) {
         "1.-0",
         "1",
         "1.0-rc2",
-        "blach"
+        "blach",
+        "1.03.-2"
     };
     EXPECT_THROW({
         auto tmp = VersionNumber(incorrectTestVersions[0]);

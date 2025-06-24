@@ -115,13 +115,16 @@ Poco::Dynamic::Var KvdbApiVarInterface::listEntries(const Poco::Dynamic::Var& ar
 }
 
 Poco::Dynamic::Var KvdbApiVarInterface::setEntry(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 5, 6);
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
     auto key = _deserializer.deserialize<std::string>(argsArr->get(1), "key");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "privateMeta");
     auto data = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "data");
-    auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
+    int64_t version = 0;
+    if(argsArr->size() >= 6) {
+        version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
+    }
     _kvdbApi.setEntry(kvdbId, key, publicMeta, privateMeta, data, version);
     return {};
 }
@@ -167,6 +170,14 @@ Poco::Dynamic::Var KvdbApiVarInterface::unsubscribeFromEntryEvents(const Poco::D
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
     _kvdbApi.unsubscribeFromEntryEvents(kvdbId);
     return {};
+}
+
+Poco::Dynamic::Var KvdbApiVarInterface::hasEntry(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
+    auto key = _deserializer.deserialize<std::string>(argsArr->get(1), "key");
+    auto result = _kvdbApi.hasEntry(kvdbId, key);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var KvdbApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
