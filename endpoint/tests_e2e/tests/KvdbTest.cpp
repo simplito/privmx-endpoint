@@ -814,6 +814,24 @@ TEST_F(KvdbTest, getEntry) {
     EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("KvdbEntry_2.uploaded_data_inHex")));
 }
 
+TEST_F(KvdbTest, hasEntry) {
+    bool result;
+    EXPECT_NO_THROW({
+        result = kvdbApi->hasEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            reader->getString("Context_1.contextId")
+        );
+    });
+    EXPECT_EQ(result, false);
+    EXPECT_NO_THROW({
+        result = kvdbApi->hasEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            reader->getString("KvdbEntry_2.info_key")
+        );
+    });
+    EXPECT_EQ(result, true);
+}
+
 TEST_F(KvdbTest, listEntriesKeys_incorrect_input_data) {
     // incorrect kvdbId
     EXPECT_THROW({
