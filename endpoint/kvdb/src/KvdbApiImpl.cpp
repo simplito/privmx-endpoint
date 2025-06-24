@@ -370,15 +370,7 @@ core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kv
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listEntriesKeys)
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListKeysModel>();
     model.kvdbId(kvdbId);
-    model.skip(pagingQuery.skip);
-    model.limit(pagingQuery.limit);
-    model.sortOrder(pagingQuery.sortOrder);
-    if(pagingQuery.sortBy.has_value()) {
-        model.sortBy(pagingQuery.sortBy.value());
-    }
-    if(pagingQuery.lastId.has_value()) {
-        model.lastKey(pagingQuery.lastId.value());
-    }
+    core::ListQueryMapper::map(model, pagingQuery);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, getting entriesList)
     auto entriesList = _serverApi.kvdbListKeys(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
@@ -397,18 +389,7 @@ core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, 
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listEntry)
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListEntriesModel>();
     model.kvdbId(kvdbId);
-    model.skip(pagingQuery.skip);
-    model.limit(pagingQuery.limit);
-    model.sortOrder(pagingQuery.sortOrder);
-    if(pagingQuery.sortBy.has_value()) {
-        model.sortBy(pagingQuery.sortBy.value());
-    }
-    if(pagingQuery.lastId.has_value()) {
-        model.lastKey(pagingQuery.lastId.value());
-    }
-    if(pagingQuery.queryAsJson.has_value()) {
-        model.query(privmx::utils::Utils::parseJson(pagingQuery.queryAsJson.value()));
-    }
+    core::ListQueryMapper::map(model, pagingQuery);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntry, getting listEntry)
     auto entriesList = _serverApi.kvdbListEntries(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
