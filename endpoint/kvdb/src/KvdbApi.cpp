@@ -133,6 +133,17 @@ KvdbEntry KvdbApi::getEntry(const std::string& kvdbId, const std::string& key) {
     }
 }
 
+bool KvdbApi::hasEntry(const std::string& kvdbId, const std::string& key) {
+    validateEndpoint();
+    core::Validator::validateId(kvdbId, "field:kvdbId ");
+    try {
+        return _impl->hasEntry(kvdbId, key);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");

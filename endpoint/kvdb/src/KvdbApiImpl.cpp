@@ -26,9 +26,10 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 #include "privmx/endpoint/kvdb/Mapper.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 
 using namespace privmx::endpoint;
-using namespace kvdb;
+using namespace privmx::endpoint::kvdb;
 
 KvdbApiImpl::KvdbApiImpl(
     const privfs::RpcGateway::Ptr& gateway,
@@ -349,6 +350,22 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
     return result;
 }
 
+bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
+    try {
+        auto model = utils::TypedObjectFactory::createNewObject<server::KvdbEntryGetModel>();
+        model.kvdbId(kvdbId);
+        model.kvdbEntryKey(key);
+        PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, getting entry)
+        auto entry = _serverApi.kvdbEntryGet(model).kvdbEntry();
+    } catch (const privmx::utils::PrivmxException& e) {
+        if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
+            return false;
+        }
+        e.rethrow();
+    }
+    return true;
+}
+
 core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listEntriesKeys)
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbListKeysModel>();
@@ -666,7 +683,6 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDa
     return std::make_tuple(convertServerKvdbToLibKvdb(kvdb,{},{},e.getCode()), core::DataIntegrityObject());
 }
 
-
 std::vector<Kvdb> KvdbApiImpl::decryptAndConvertKvdbsDataToKvdbs(privmx::utils::List<server::KvdbInfo> kvdbs) {
     std::vector<Kvdb> result;
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
@@ -947,7 +963,8 @@ KvdbEntry KvdbApiImpl::decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo e
         return convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},ENDPOINT_CORE_EXCEPTION_CODE);
     }
 }
-server::KvdbInfo KvdbApiImpl::getRawKvdbFromCacheOrBridge(const std::string& kvdbId) {
+
+kvdb::server::KvdbInfo KvdbApiImpl::getRawKvdbFromCacheOrBridge(const std::string& kvdbId) {
     // useing kvdbProvider only with KVDB_TYPE_FILTER_FLAG 
     // making sure to have valid cache
     if(!_kvdbCache) {
