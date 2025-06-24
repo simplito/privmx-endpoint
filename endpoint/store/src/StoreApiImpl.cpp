@@ -79,7 +79,6 @@ StoreApiImpl::StoreApiImpl(
         [&](){_storeCache=false;}
     )),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
-    _storeDataEncryptorV4(StoreDataEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -116,10 +115,10 @@ std::string StoreApiImpl::_storeCreateEx(const std::string& contextId, const std
         resourceId
     );
     auto storeSecret = _keyProvider->generateSecret();
-    StoreDataToEncryptV5 storeDataToEncrypt {
+    core::ModuleDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = StoreInternalMetaV5{.secret=storeSecret, .resourceId=resourceId, .randomId=storeDIO.randomId},
+        .internalMeta = core::ModuleInternalMetaV5{.secret=storeSecret, .resourceId=resourceId, .randomId=storeDIO.randomId},
         .dio = storeDIO
     };
     // auto new_store_data = utils::TypedObjectFactory::createNewObject<dynamic::StoreData>();
@@ -221,7 +220,7 @@ void StoreApiImpl::updateStore(
             break;
         }
     }
-    auto storeInternalMeta = decryptStoreInternalMeta(currentStoreEntry, currentStoreKey);
+    auto storeInternalMeta = extractAndDecryptModuleInternalMeta(currentStoreEntry, currentStoreKey);
     if(currentStoreKey.dataStructureVersion != 2) {
         //force update all keys if thread keys is in older version
         usersToAddMissingKey = new_users;
@@ -275,10 +274,10 @@ void StoreApiImpl::updateStore(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    StoreDataToEncryptV5 storeDataToEncrypt {
+    core::ModuleDataToEncryptV5 storeDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = StoreInternalMetaV5{.secret=storeInternalMeta.secret, .resourceId=currentStoreResourceId, .randomId=updateStoreDio.randomId},
+        .internalMeta = core::ModuleInternalMetaV5{.secret=storeInternalMeta.secret, .resourceId=currentStoreResourceId, .randomId=updateStoreDio.randomId},
         .dio = updateStoreDio
     };
     model.data(_storeDataEncryptorV5.encrypt(storeDataToEncrypt, _userPrivKey, storeKey.key).asVar());
@@ -760,37 +759,6 @@ dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntr
     }
 }
 
-DecryptedStoreDataV4 StoreApiImpl::decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV4>(storeEntry.data());
-        return _storeDataEncryptorV4.decrypt(encryptedDataEntryVar, encKey.key);
-    } catch (const core::Exception& e) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{}});
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{}});
-    } catch (...) {
-        return DecryptedStoreDataV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{}});
-    }
-}
-
-DecryptedStoreDataV5 StoreApiImpl::decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedDataEntryVar = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(storeEntry.data());
-        if(encKey.statusCode != 0) {
-            auto tmp = _storeDataEncryptorV5.extractPublic(encryptedDataEntryVar);
-            tmp.statusCode = encKey.statusCode;
-            return tmp;
-        }
-        return _storeDataEncryptorV5.decrypt(encryptedDataEntryVar, encKey.key);
-    } catch (const core::Exception& e) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
-    } catch (...) {
-        return DecryptedStoreDataV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
-    }
-}
-
 Store StoreApiImpl::convertServerStoreToLibStore(
     server::Store store,
     const core::Buffer& publicMeta,
@@ -843,7 +811,7 @@ Store StoreApiImpl::convertStoreDataV1ToStore(server::Store store, dynamic::comp
     );
 }
 
-Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData) {
+Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, const core::DecryptedModuleDataV4& storeData) {
     return convertServerStoreToLibStore(
         store, 
         storeData.publicMeta,
@@ -853,7 +821,7 @@ Store StoreApiImpl::convertDecryptedStoreDataV4ToStore(server::Store store, cons
     );
 }
 
-Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData) {
+Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, const core::DecryptedModuleDataV5& storeData) {
     return convertServerStoreToLibStore(
         store, 
         storeData.publicMeta,
@@ -866,11 +834,11 @@ Store StoreApiImpl::convertDecryptedStoreDataV5ToStore(server::Store store, cons
 StoreDataSchema::Version StoreApiImpl::getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry) {
     if(storeEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(storeEntry.data());
-        auto version = versioned.versionOpt(StoreDataSchema::Version::UNKNOWN);
+        auto version = versioned.versionOpt(core::ModuleDataSchema::Version::UNKNOWN);
         switch (version) {
-            case StoreDataSchema::Version::VERSION_4:
+            case core::ModuleDataSchema::Version::VERSION_4:
                 return StoreDataSchema::Version::VERSION_4;
-            case StoreDataSchema::Version::VERSION_5:
+            case core::ModuleDataSchema::Version::VERSION_5:
                 return StoreDataSchema::Version::VERSION_5;
             default:
                 return StoreDataSchema::Version::UNKNOWN;
@@ -904,7 +872,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
             );
         }
         case StoreDataSchema::Version::VERSION_4: {
-            auto decryptedStoreData = decryptStoreV4(storeEntry, encKey);
+            auto decryptedStoreData = decryptModuleDataV4(storeEntry, encKey);
             return std::make_tuple(
                 convertDecryptedStoreDataV4ToStore(store, decryptedStoreData),
                 core::DataIntegrityObject{
@@ -921,7 +889,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreApiImpl::decryptAndConvertStor
             );
         }
         case StoreDataSchema::Version::VERSION_5: {
-            auto decryptedStoreData = decryptStoreV5(storeEntry, encKey);
+            auto decryptedStoreData = decryptModuleDataV5(storeEntry, encKey);
             return std::make_tuple(convertDecryptedStoreDataV5ToStore(store, decryptedStoreData), decryptedStoreData.dio);
         }
     }
@@ -980,11 +948,7 @@ std::vector<Store> StoreApiImpl::decryptAndConvertStoresDataToStores(utils::List
         }
     }
     std::vector<bool> verified;
-    try {
-        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); i++) {
         if(result[i].statusCode == 0) {
             result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
@@ -1013,27 +977,9 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
         .bridgeIdentity = storeDIO.bridgeIdentity
     });
     std::vector<bool> verified;
-    try {
-        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
-}
-
-StoreInternalMetaV5 StoreApiImpl::decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
-    switch (getStoreEntryDataStructureVersion(storeEntry)) {
-        case StoreDataSchema::Version::UNKNOWN:
-            throw UnknowStoreFormatException();
-        case StoreDataSchema::Version::VERSION_1:
-            return StoreInternalMetaV5();
-        case StoreDataSchema::Version::VERSION_4:
-            return StoreInternalMetaV5();
-        case StoreDataSchema::Version::VERSION_5:
-            return decryptStoreV5(storeEntry, encKey).internalMeta;
-    }
-    throw UnknowStoreFormatException();
 }
 
 // OLD CODE
@@ -1090,11 +1036,11 @@ DecryptedFileMetaV4 StoreApiImpl::decryptFileMetaV4(server::File file, const cor
         auto encryptedFileMeta = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(file.meta());
         return _fileMetaEncryptorV4.decrypt(encryptedFileMeta, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = e.getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedFileMetaV4({{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return DecryptedFileMetaV4({{.dataStructureVersion = FileDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -1109,11 +1055,11 @@ DecryptedFileMetaV5 StoreApiImpl::decryptFileMetaV5(server::File file, const cor
             return _fileMetaEncryptorV5.decrypt(encryptedFileMeta, encKey.key);
         }
     } catch (const core::Exception& e) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = e.getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = e.getCode()},{},{},{},{},{}});
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()},{},{},{},{},{}});
     } catch (...) {
-        return DecryptedFileMetaV5({{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
+        return DecryptedFileMetaV5({{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},{},{},{},{},{}});
     }
 }
 
@@ -1306,11 +1252,7 @@ std::vector<File> StoreApiImpl::decryptAndConvertFilesDataToFilesInfo(server::St
         }
     }
     std::vector<bool> verified;
-    try {
-        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); ++i) {
         if (result[i].statusCode == 0) {
             result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
@@ -1340,11 +1282,7 @@ File StoreApiImpl::decryptAndConvertFileDataToFileInfo(server::Store store, serv
             .bridgeIdentity = fileDIO.bridgeIdentity
         });
     std::vector<bool> verified;
-    try {
-        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
 }
@@ -1491,7 +1429,7 @@ uint32_t StoreApiImpl::validateStoreDataIntegrity(server::Store store) {
             case StoreDataSchema::Version::VERSION_4:
                 return 0;
             case StoreDataSchema::Version::VERSION_5: {
-                auto store_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedStoreDataV5>(store_data_entry.data());
+                auto store_data = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(store_data_entry.data());
                 auto dio = _storeDataEncryptorV5.getDIOAndAssertIntegrity(store_data);
                 if(
                     dio.contextId != store.contextId() ||

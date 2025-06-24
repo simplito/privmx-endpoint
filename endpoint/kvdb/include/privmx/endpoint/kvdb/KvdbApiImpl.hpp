@@ -23,10 +23,11 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
+#include <privmx/endpoint/core/ModuleBaseApi.hpp>
 
 #include "privmx/endpoint/kvdb/ServerApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
-#include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataEncryptorV5.hpp"
 #include "privmx/endpoint/kvdb/encryptors/entry/EntryDataEncryptorV5.hpp"
 #include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
@@ -38,7 +39,7 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbApiImpl
+class KvdbApiImpl : protected core::ModuleBaseApi
 {
 public:
     KvdbApiImpl(
@@ -75,6 +76,7 @@ public:
     core::PagingList<Kvdb> listKvdbsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
+    bool hasEntry(const std::string& kvdbId, const std::string& key);
     core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
     core::PagingList<KvdbEntry> listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
     void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
@@ -102,7 +104,6 @@ private:
     void processDisconnectedEvent();
     utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 
-    DecryptedKvdbDataV5 decryptKvdbV5(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     Kvdb convertServerKvdbToLibKvdb(
         server::KvdbInfo kvdb,
         const core::Buffer& publicMeta = core::Buffer(),
@@ -110,14 +111,12 @@ private:
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = KvdbDataSchema::Version::UNKNOWN
     );
-    Kvdb convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const DecryptedKvdbDataV5& kvdbData);
+    Kvdb convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const core::DecryptedModuleDataV5& kvdbData);
     KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     std::vector<Kvdb> decryptAndConvertKvdbsDataToKvdbs(utils::List<server::KvdbInfo> kvdbs);
     Kvdb decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
-    KvdbInternalMetaV5 decryptKvdbInternalMeta(server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
-    core::DecryptedEncKey getKvdbCurrentEncKey(server::KvdbInfo kvdb);
 
     DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
     KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo entry, DecryptedKvdbEntryDataV5 entryData);
@@ -148,7 +147,7 @@ private:
     KvdbProvider _kvdbProvider;
     std::atomic_bool _kvdbCache;
     core::SubscriptionHelper _kvdbSubscriptionHelper;
-    KvdbDataEncryptorV5 _kvdbDataEncryptorV5;
+    core::ModuleDataEncryptorV5 _kvdbDataEncryptorV5;
     EntryDataEncryptorV5 _entryDataEncryptorV5;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     inline static const std::string KVDB_TYPE_FILTER_FLAG = "kvdb";
