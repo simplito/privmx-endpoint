@@ -47,7 +47,7 @@ privmx::utils::List<server::UserKey> EventKeyProvider::prepareKeysList(
     const std::string& key
 ) {
     utils::List<server::UserKey> userKeys = utils::TypedObjectFactory::createNewList<server::UserKey>();
-    for (auto user : users) {
+    for (auto& user : users) {
         server::UserKey userKey = utils::TypedObjectFactory::createNewObject<server::UserKey>();
         userKey.id(user.userId);
         userKey.key(privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), key, _key));

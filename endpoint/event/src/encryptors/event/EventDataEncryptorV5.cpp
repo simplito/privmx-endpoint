@@ -34,7 +34,7 @@ server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
         result.type(eventData.type.value());
         fieldChecksums.insert(std::make_pair("type",result.type()));
     }
-    core::ExpandedDataIntegrityObject expandedDio = {eventData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {eventData.dio, .structureVersion=EventDataSchema::Version::VERSION_5, .fieldChecksums=fieldChecksums};
     result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
     return result; 
 }

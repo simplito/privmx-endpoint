@@ -178,7 +178,8 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
             resultEventData.statusCode = tmp.statusCode;
         }
         std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
-        event->channel = channel;
+        auto customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
+        event->channel = "context/" + rawEvent.id() + "/" + customChannelName;
         event->data = resultEventData;
         _eventMiddleware->emitApiEvent(event);
     }
@@ -215,10 +216,6 @@ bool EventApiImpl::verifyDecryptedEventDataV5(const DecryptedEventDataV5& data) 
         .bridgeIdentity = data.dio.bridgeIdentity
     });
     std::vector<bool> verified;
-    try {
-        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     return verified[0];
 }
