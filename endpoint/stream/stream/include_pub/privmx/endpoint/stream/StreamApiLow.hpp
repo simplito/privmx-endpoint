@@ -34,7 +34,7 @@ class StreamApiLowImpl;
 class StreamApiLow {
 public:
 
-    static StreamApiLow create(core::Connection& connection, event::EventApi& eventApi);
+    static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi);
     StreamApiLow() = default;
 
     std::vector<TurnCredentials> getTurnCredentials();
@@ -78,8 +78,11 @@ public:
 
     void leaveStream(int64_t localStreamId);
 
-    void keyManagement(bool disable);
+    void subscribeForStreamEvents();
+    void unsubscribeFromStreamEvents();
 
+    void keyManagement(bool disable);
+    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
     std::shared_ptr<StreamApiLowImpl> getImpl() const { return _impl; }
 
 private:

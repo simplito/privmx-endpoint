@@ -25,20 +25,23 @@ limitations under the License.
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/event/EventApiImpl.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
+#include <privmx/endpoint/core/ModuleBaseApi.hpp>
+
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
-#include "privmx/endpoint/stream/StreamRoomDataEncryptorV4.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
+#include "privmx/endpoint/stream/Constants.hpp"
 namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class StreamApiLowImpl {
+class StreamApiLowImpl : protected core::ModuleBaseApi {
 public:
     StreamApiLowImpl(
         const std::shared_ptr<event::EventApiImpl>& eventApi,
-        const std::shared_ptr<core::ConnectionImpl>& connection,
+        const core::Connection& connection,
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -91,7 +94,12 @@ public:
 
     void leaveStream(int64_t localStreamId);
 
+    void subscribeForStreamEvents();
+    void unsubscribeFromStreamEvents();
+
     void keyManagement(bool disable);
+
+    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
 
 private:
     struct StreamData {
@@ -110,19 +118,31 @@ private:
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
     
-    void processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    DecryptedStreamRoomData decryptStreamRoomV4(const server::StreamRoomInfo& streamRoom);
-    StreamRoom convertDecryptedStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoomInfo, const DecryptedStreamRoomData& streamRoomData);
-    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(const server::StreamRoomInfo& streamRoom);
+    StreamRoom convertServerStreamRoomToLibStreamRoom(
+        server::StreamRoomInfo streamRoomInfo,
+        const core::Buffer& publicMeta = core::Buffer(),
+        const core::Buffer& privateMeta = core::Buffer(),
+        const int64_t& statusCode = 0,
+        const int64_t& schemaVersion = StreamRoomDataSchema::Version::UNKNOWN
+    );
+    StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData);
+    StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
+    std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom, server::StreamRoomDataEntry streamRoomEntry, const core::DecryptedEncKey& encKey);
+    std::vector<StreamRoom> decryptAndConvertStreamRoomsDataToStreamRooms(utils::List<server::StreamRoomInfo> streamRooms);
+    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom);
+    uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     int64_t generateNumericId();
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId);
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(int64_t localStreamId);
     std::shared_ptr<StreamData> getStreamData(int64_t localStreamId, std::shared_ptr<StreamRoomData> room);
+
+    void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, int64_t localStreamId);
 
     std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::ConnectionImpl> _connection;
@@ -133,12 +153,13 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<ServerApi> _serverApi;
     core::SubscriptionHelper _streamSubscriptionHelper;
-    StreamRoomDataEncryptorV4 _streamRoomDataEncryptorV4;
+    core::ModuleDataEncryptorV5 _streamRoomDataEncryptorV5;
     core::DataEncryptorV4 _dataEncryptor;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     privmx::utils::ThreadSaveMap<int64_t, std::string> _streamIdToRoomId;
+    privmx::utils::ThreadSaveMap<int64_t, int64_t> _sessionIdToStreamId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

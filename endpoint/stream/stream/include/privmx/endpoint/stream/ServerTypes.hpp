@@ -32,6 +32,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomInfo)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(contextId)
     INT64_FIELD(createDate)
     STRING_FIELD(creator)
@@ -50,6 +51,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
     STRING_FIELD(contextId)
+    STRING_FIELD(resourceId)
     STRING_FIELD(keyId)
     VAR_FIELD(data)
     LIST_FIELD(users, std::string)
@@ -66,6 +68,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamRoomUpdateModel)
     STRING_FIELD(id)
+    STRING_FIELD(resourceId)
     STRING_FIELD(keyId)
     VAR_FIELD(data)
     LIST_FIELD(users, std::string)
@@ -181,13 +184,9 @@ ENDPOINT_SERVER_TYPE(StreamLeaveModel)
     INT64_FIELD(sessionId)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(EncryptedStreamRoomDataV4)
-    INT64_FIELD(version)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
+ENDPOINT_SERVER_TYPE(StreamReconfigureModel)
+    OBJECT_PTR_FIELD(options)
+    INT64_FIELD(sessionId)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
@@ -196,6 +195,61 @@ TYPE_END
 
 ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
     LIST_FIELD(users, core::server::UserIdentity)
+TYPE_END
+
+// Events
+
+ENDPOINT_SERVER_TYPE(StreamRoomDeletedEventData)
+    STRING_FIELD(streamRoomId)
+    STRING_FIELD(type)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamEventData)
+    STRING_FIELD(streamRoomId)
+    LIST_FIELD(streamIds, int64_t)
+    STRING_FIELD(userId)
+TYPE_END
+
+
+// JANUS events data
+
+ENDPOINT_SERVER_TYPE(JanusEventData)
+    STRING_FIELD(janus)
+    INT64_FIELD(sender)
+    INT64_FIELD(session_id)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusJSEP)
+    STRING_FIELD(sdp)
+    STRING_FIELD(type)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusVideoRoomStream)
+    BOOL_FIELD(active)
+    INT64_FIELD(mid)
+    INT64_FIELD(mindex)
+    BOOL_FIELD(ready)
+    BOOL_FIELD(send)
+    STRING_FIELD(type)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusVideoRoom)
+    STRING_FIELD(videoroom)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(JanusVideoRoomUpdated, JanusVideoRoom)
+    INT64_FIELD(room)
+    LIST_FIELD(streams, JanusVideoRoomStream)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(JanusPluginDataEvent)
+    VAR_FIELD(data)
+    STRING_FIELD(plugin)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(JanusPluginEvent, JanusEventData)
+    OBJECT_FIELD(jsep, JanusJSEP)
+    OBJECT_FIELD(plugindata, JanusPluginDataEvent)
 TYPE_END
 
 

@@ -192,24 +192,6 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV5, core::dynamic::VersionedDat
     STRING_FIELD(dio)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV4, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedThreadDataV5, core::dynamic::VersionedData)
-    INT64_FIELD(version)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-    STRING_FIELD(dio)
-TYPE_END
-
 } // server
 } // thread
 } // endpoint

@@ -51,6 +51,7 @@ ENDPOINT_SERVER_TYPE(ListModel)
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(lastId)
+    STRING_FIELD(sortBy)
     VAR_FIELD(query) // JSON
 TYPE_END
 
@@ -85,8 +86,33 @@ ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatus, UserIdentity)
     STRING_FIELD(status)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(RpcEvent)
+    STRING_FIELD(type) 
+    VAR_FIELD(data)
+    INT64_FIELD(version)
+    INT64_FIELD(timestamp)
+    LIST_FIELD(subscriptions, std::string)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
     LIST_FIELD(users, server::UserIdentityWithStatus)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(UnsubscribeFromChannelsModel)
+    LIST_FIELD(subscriptionsIds, std::string)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelsModel)
+    LIST_FIELD(channels, std::string)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(Subscription)
+    STRING_FIELD(subscriptionId) 
+    STRING_FIELD(channel) 
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(SubscribeToChannelsResult)
+    LIST_FIELD(subscriptions, Subscription)
 TYPE_END
 
 } // server

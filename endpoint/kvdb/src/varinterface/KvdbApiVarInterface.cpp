@@ -101,7 +101,7 @@ Poco::Dynamic::Var KvdbApiVarInterface::getEntry(const Poco::Dynamic::Var& args)
 Poco::Dynamic::Var KvdbApiVarInterface::listEntriesKeys(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
-    auto pagingQuery = _deserializer.deserialize<kvdb::KvdbKeysPagingQuery>(argsArr->get(1), "pagingQuery");
+    auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
     auto result = _kvdbApi.listEntriesKeys(kvdbId, pagingQuery);
     return _serializer.serialize(result);
 }
@@ -109,7 +109,7 @@ Poco::Dynamic::Var KvdbApiVarInterface::listEntriesKeys(const Poco::Dynamic::Var
 Poco::Dynamic::Var KvdbApiVarInterface::listEntries(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
-    auto pagingQuery = _deserializer.deserialize<kvdb::KvdbEntryPagingQuery>(argsArr->get(1), "pagingQuery");
+    auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
     auto result = _kvdbApi.listEntries(kvdbId, pagingQuery);
     return _serializer.serialize(result);
 }

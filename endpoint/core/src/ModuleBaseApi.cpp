@@ -37,7 +37,14 @@ ModuleBaseApi::ModuleBaseApi(
     _keyProvider(keyProvider),
     _host(host),
     _eventMiddleware(eventMiddleware),
+    _eventChannelManager(eventChannelManager),
     _connection(connection) {}
 
-
-
+DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(std::unordered_map<std::string, DecryptedEncKeyV2> keys, const std::string& keyId) {
+    for (auto key : keys) {
+        if (keyId == key.first) {
+            return key.second;
+        }
+    }
+    throw UnknownModuleEncryptionKeyException();
+}

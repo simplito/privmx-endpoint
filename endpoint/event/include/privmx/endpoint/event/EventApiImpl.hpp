@@ -24,7 +24,7 @@ public:
     void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
 
     void emitEventInternal(const std::string& contextId, InternalContextEvent event, const std::vector<core::UserWithPubKey>& users);
-    bool isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType);
+    bool isInternalContextEvent(const std::string& type, const std::vector<std::string>& subscriptions, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType);
     InternalContextEvent extractInternalEventData(const Poco::JSON::Object::Ptr& eventData);
     void subscribeForInternalEvents(const std::string& contextId);
     void unsubscribeFromInternalEvents(const std::string& contextId);

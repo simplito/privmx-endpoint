@@ -13,39 +13,6 @@ limitations under the License.
 
 using namespace privmx::endpoint::kvdb;
 
-void Mapper::map(server::KvdbListEntriesModel obj, const KvdbEntryPagingQuery& listQuery) {
-    obj.sortOrder(listQuery.sortOrder);
-    obj.limit(listQuery.limit);
-    obj.skip(listQuery.skip);
-    if(listQuery.queryAsJson.has_value()) {
-        obj.query(privmx::utils::Utils::parseJson(listQuery.queryAsJson.value()));
-    }
-    if(listQuery.lastKey.has_value()) {
-        obj.lastKey(listQuery.lastKey.value());
-    }
-    if(listQuery.prefix.has_value()) {
-        obj.prefix(listQuery.prefix.value());
-    }
-    if(listQuery.sortBy.has_value()) {
-        obj.sortBy(listQuery.sortBy.value());
-    }
-}
-
-void Mapper::map(server::KvdbListKeysModel obj, const KvdbKeysPagingQuery& listQuery) {
-    obj.sortOrder(listQuery.sortOrder);
-    obj.limit(listQuery.limit);
-    obj.skip(listQuery.skip);
-    if(listQuery.lastKey.has_value()) {
-        obj.lastKey(listQuery.lastKey.value());
-    }
-    if(listQuery.prefix.has_value()) {
-        obj.prefix(listQuery.prefix.value());
-    }
-    if(listQuery.sortBy.has_value()) {
-        obj.sortBy(listQuery.sortBy.value());
-    }
-}
-
 KvdbDeletedEventData Mapper::mapToKvdbDeletedEventData(const server::KvdbDeletedEventData& data) {
     return {.kvdbId = data.kvdbId()};
 }

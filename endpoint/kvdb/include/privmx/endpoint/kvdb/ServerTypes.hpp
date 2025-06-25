@@ -48,15 +48,6 @@ ENDPOINT_SERVER_TYPE(KvdbInfo)
     INT64_FIELD(lastEntryDate)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbDataV5, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-    STRING_FIELD(dio)
-TYPE_END
-
 ENDPOINT_SERVER_TYPE(KvdbCreateModel)
     STRING_FIELD(resourceId)
     STRING_FIELD(type)
@@ -172,9 +163,7 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(KvdbListKeysModel)
     STRING_FIELD(kvdbId)
     STRING_FIELD(lastKey)
-    STRING_FIELD(prefix)
     STRING_FIELD(sortBy)
-
     INT64_FIELD(skip)
     INT64_FIELD(limit)
     STRING_FIELD(sortOrder)
@@ -189,7 +178,6 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(KvdbListEntriesModel)
     STRING_FIELD(kvdbId)
     STRING_FIELD(lastKey)
-    STRING_FIELD(prefix)
     STRING_FIELD(sortBy)
     INT64_FIELD(skip)
     INT64_FIELD(limit)

@@ -12,7 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMTYPES_HPP_
 
+#include <privmx/endpoint/core/Buffer.hpp>
+#include <privmx/endpoint/core/CoreTypes.hpp>
 #include <string>
+#include <vector>
+#include <optional>
 
 
 namespace privmx {
@@ -44,19 +48,8 @@ struct VideoStream {
     std::string id;  // Assuming the 'id' might be optional in your context, using int64_t
 };
 
-struct StreamRoomDataToEncrypt {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
-};
 
-struct DecryptedStreamRoomData {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
-    std::string authorPubKey;
-    int64_t statusCode;
-};
+
 
 } // stream
 } // endpoint

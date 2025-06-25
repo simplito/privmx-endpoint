@@ -13,12 +13,10 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMVARSERIALIZER_HPP_
 
 #include <Poco/Dynamic/Var.h>
-
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <string>
 
-// #include "privmx/endpoint/stream/InboxApi.hpp"
-// #include "privmx/endpoint/inbox/Events.hpp"
+#include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 
 namespace privmx {
@@ -39,6 +37,33 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<stream::StreamRoom>
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoom>(const stream::StreamRoom& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomDeletedEventData>(const stream::StreamRoomDeletedEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamEventData>(const stream::StreamEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomCreatedEvent>(const stream::StreamRoomCreatedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomUpdatedEvent>(const stream::StreamRoomUpdatedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomDeletedEvent>(const stream::StreamRoomDeletedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamPublishedEvent>(const stream::StreamPublishedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamJoinedEvent>(const stream::StreamJoinedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEvent>(const stream::StreamUnpublishedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamLeftEvent>(const stream::StreamLeftEvent& val);
 
 }  // namespace core
 }  // namespace endpoint
