@@ -53,40 +53,6 @@ struct DecryptedMessageDataV5 : public core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
-struct ThreadDataToEncryptV4 {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
-};
-
-struct DecryptedThreadDataV4 : public core::DecryptedVersionedData {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    std::optional<core::Buffer> internalMeta;
-    std::string authorPubKey;
-};
-
-struct ThreadInternalMetaV5 {
-    std::string secret;
-    std::string resourceId;
-    std::string randomId;
-};
-
-struct ThreadDataToEncryptV5 {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    ThreadInternalMetaV5 internalMeta;
-    core::DataIntegrityObject dio;
-};
-
-struct DecryptedThreadDataV5 : public core::DecryptedVersionedData {
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    ThreadInternalMetaV5 internalMeta;
-    std::string authorPubKey;
-    core::DataIntegrityObject dio;
-};
-
 } // thread
 } // endpoint
 } // privmx

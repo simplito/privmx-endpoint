@@ -14,8 +14,8 @@ limitations under the License.
 
 #include <Poco/Dynamic/Var.h>
 
+#include <privmx/endpoint/core/VarDeserializer.hpp>
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
-#include "privmx/endpoint/kvdb/KvdbVarDeserializer.hpp"
 #include "privmx/endpoint/kvdb/KvdbVarSerializer.hpp"
 
 namespace privmx {
@@ -40,7 +40,8 @@ public:
         SubscribeForKvdbEvents = 12,
         UnsubscribeFromKvdbEvents = 13,
         SubscribeForEntryEvents = 14,
-        UnsubscribeFromEntryEvents = 15
+        UnsubscribeFromEntryEvents = 15,
+        HasEntry = 16,
     };
 
     KvdbApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -62,6 +63,7 @@ public:
     Poco::Dynamic::Var unsubscribeFromKvdbEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeForEntryEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var hasEntry(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

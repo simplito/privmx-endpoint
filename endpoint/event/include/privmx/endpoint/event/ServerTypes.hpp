@@ -14,8 +14,9 @@ limitations under the License.
 
 #include <string>
 
-#include "privmx/endpoint/core/TypesMacros.hpp"
-#include "privmx/endpoint/core/ServerTypes.hpp"
+#include <privmx/endpoint/core/TypesMacros.hpp>
+#include <privmx/endpoint/core/DynamicTypes.hpp>
+#include <privmx/endpoint/core/ServerTypes.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -47,8 +48,14 @@ ENDPOINT_CLIENT_TYPE(ContextCustomEventData)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(EncryptedInternalContextEvent) // ForInternalEvents
-    STRING_FIELD(type) // public data about event type
     STRING_FIELD(encryptedData)
+    STRING_FIELD(type) // public data about event type
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedContextEventDataV5, core::dynamic::VersionedData)
+    STRING_FIELD(encryptedData)
+    STRING_FIELD(type) // public data about event type, used only in internal events
+    STRING_FIELD(dio)
 TYPE_END
 
 } // server

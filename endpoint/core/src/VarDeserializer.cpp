@@ -75,6 +75,7 @@ PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& 
             .limit = deserialize<int64_t>(obj->get("limit"), name + ".limit"),
             .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
             .lastId = deserializeOptional<std::string>(obj->get("lastId"), name + ".lastId"),
+            .sortBy = deserializeOptional<std::string>(obj->get("sortBy"), name + ".sortBy"),
             .queryAsJson = deserializeOptional<std::string>(obj->get("queryAsJson"), name + ".queryAsJson")
     };
 }
@@ -128,7 +129,7 @@ PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(cons
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     PKIVerificationOptions result {};
-    result.bridgePubKey = deserializeOptional<std::string>(obj->get("bridgePubKey"), name + ".get");
-    result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".update");
+    result.bridgePubKey = deserializeOptional<std::string>(obj->get("bridgePubKey"), name + ".bridgePubKey");
+    result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".bridgeInstanceId");
     return result;
 }

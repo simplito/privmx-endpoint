@@ -8,6 +8,7 @@
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/event/Events.hpp>
 #include <privmx/endpoint/event/EventException.hpp>
+#include <privmx/endpoint/event/Constants.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/crypto/Crypto.hpp>
@@ -116,6 +117,8 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
             EXPECT_EQ(customContextEvent.data.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(customContextEvent.data.userId, reader->getString("Login.user_1_id"));
             EXPECT_EQ(customContextEvent.data.payload.stdString(), "test event");
+            EXPECT_EQ(customContextEvent.data.statusCode, 0);
+            EXPECT_EQ(customContextEvent.data.schemaVersion, event::CURRENT_EVENT_DATA_SCHEMA_VERSION);
         } else {
             FAIL();
         }
@@ -137,6 +140,8 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
             EXPECT_EQ(customContextEvent.data.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(customContextEvent.data.userId, reader->getString("Login.user_1_id"));
             EXPECT_EQ(customContextEvent.data.payload.stdString(), "test event");
+            EXPECT_EQ(customContextEvent.data.statusCode, 0);
+            EXPECT_EQ(customContextEvent.data.schemaVersion, event::CURRENT_EVENT_DATA_SCHEMA_VERSION);
         } else {
             FAIL();
         }

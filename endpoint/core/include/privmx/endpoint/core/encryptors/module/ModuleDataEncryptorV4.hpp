@@ -9,36 +9,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_THREAD_THREADDATAENCRYPTORV4_HPP
-#define _PRIVMXLIB_ENDPOINT_THREAD_THREADDATAENCRYPTORV4_HPP
+#ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV4_HPP
+#define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV4_HPP
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
+#include <privmx/endpoint/core/encryptors/module/Types.hpp>
+#include <privmx/endpoint/core/encryptors/module/DynamicTypes.hpp>
+#include <privmx/endpoint/core/encryptors/module/Constants.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include "privmx/endpoint/thread/ThreadTypes.hpp"
-#include "privmx/endpoint/thread/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
-namespace thread {
+namespace core {
 
-class ThreadDataEncryptorV4 {
+class ModuleDataEncryptorV4 {
 public:
-    server::EncryptedThreadDataV4 encrypt(const ThreadDataToEncryptV4& threadData,
+    dynamic::EncryptedModuleDataV4 encrypt(const ModuleDataToEncryptV4& moduleData,
                                         const crypto::PrivateKey& authorPrivateKey,
                                         const std::string& encryptionKey);
-    DecryptedThreadDataV4 decrypt(const server::EncryptedThreadDataV4& encryptedThreadData,
+    DecryptedModuleDataV4 decrypt(const dynamic::EncryptedModuleDataV4& encryptedModuleData,
                                 const std::string& encryptionKey);
 
 private:
-    void validateVersion(const server::EncryptedThreadDataV4& encryptedThreadData);
+    void validateVersion(const dynamic::EncryptedModuleDataV4& encryptedModuleData);
 
     core::DataEncryptorV4 _dataEncryptor;
 };
+
 
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_THREAD_THREADDATAENCRYPTORV4_HPP
+#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV4_HPP

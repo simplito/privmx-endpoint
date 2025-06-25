@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 
@@ -27,6 +28,8 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/FileDataProvider.hpp"
@@ -38,8 +41,6 @@ limitations under the License.
 #include "privmx/endpoint/store/FileKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
-#include "privmx/endpoint/store/encryptors/store/StoreDataEncryptorV4.hpp"
-#include "privmx/endpoint/store/encryptors/store/StoreDataEncryptorV5.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/StoreProvider.hpp"
@@ -120,8 +121,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     dynamic::compat_v1::StoreData decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
-    DecryptedStoreDataV4 decryptStoreV4(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
-    DecryptedStoreDataV5 decryptStoreV5(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     Store convertServerStoreToLibStore(
         server::Store store,
         const core::Buffer& publicMeta = core::Buffer(),
@@ -130,13 +129,12 @@ private:
         const int64_t& schemaVersion = StoreDataSchema::Version::UNKNOWN
     );
     Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
-    Store convertDecryptedStoreDataV4ToStore(server::Store store, const DecryptedStoreDataV4& storeData);
-    Store convertDecryptedStoreDataV5ToStore(server::Store store, const DecryptedStoreDataV5& storeData);
+    Store convertDecryptedStoreDataV4ToStore(server::Store store, const core::DecryptedModuleDataV4& storeData);
+    Store convertDecryptedStoreDataV5ToStore(server::Store store, const core::DecryptedModuleDataV5& storeData);
     StoreDataSchema::Version getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry);
     std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
     Store decryptAndConvertStoreDataToStore(server::Store store);
-    StoreInternalMetaV5 decryptStoreInternalMeta(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
     uint32_t validateStoreDataIntegrity(server::Store store);
 
 
@@ -193,15 +191,15 @@ private:
     FileMetaEncryptor _fileMetaEncryptor;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     StoreProvider _storeProvider;
-    bool _subscribeForStore;
+    std::atomic_bool _storeCache;
     core::SubscriptionHelper _storeSubscriptionHelper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 
 
     FileMetaEncryptorV4 _fileMetaEncryptorV4;
-    StoreDataEncryptorV4 _storeDataEncryptorV4;
+    core::ModuleDataEncryptorV4 _storeDataEncryptorV4;
     FileMetaEncryptorV5 _fileMetaEncryptorV5;
-    StoreDataEncryptorV5 _storeDataEncryptorV5;
+    core::ModuleDataEncryptorV5 _storeDataEncryptorV5;
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
     

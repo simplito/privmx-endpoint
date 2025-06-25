@@ -12,12 +12,12 @@ limitations under the License.
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/Validator.hpp>
 
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbVarSerializer.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
-#include "privmx/endpoint/kvdb/KvdbValidator.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
@@ -133,10 +133,21 @@ KvdbEntry KvdbApi::getEntry(const std::string& kvdbId, const std::string& key) {
     }
 }
 
-core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId, const kvdb::KvdbKeysPagingQuery& pagingQuery) {
+bool KvdbApi::hasEntry(const std::string& kvdbId, const std::string& key) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validateClass<kvdb::KvdbKeysPagingQuery>(pagingQuery, "field:pagingQuery ");
+    try {
+        return _impl->hasEntry(kvdbId, key);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
+    validateEndpoint();
+    core::Validator::validateId(kvdbId, "field:kvdbId ");
+    core::Validator::validateClass<core::PagingQuery>(pagingQuery, "field:pagingQuery ");
     try {
         return _impl->listEntriesKeys(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -144,10 +155,10 @@ core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, const kvdb::KvdbEntryPagingQuery& pagingQuery) {
+core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validateClass<kvdb::KvdbEntryPagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validateClass<core::PagingQuery>(pagingQuery, "field:pagingQuery ");
     try {
         return _impl->listEntries(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {

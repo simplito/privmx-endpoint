@@ -29,6 +29,7 @@ public:
     bool operator==(VersionNumber const& rhs) const;
     operator std::string() const {return _versionStr;}
 private:
+    
     std::string _versionStr;
     size_t _major;
     size_t _minor;
