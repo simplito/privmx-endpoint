@@ -48,3 +48,10 @@ DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(std::unordered_map<std::strin
     }
     throw UnknownModuleEncryptionKeyException();
 }
+
+core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(ContainerKeyCache::ModuleKeys moduleKeys) {
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    auto location = core::EncKeyLocation{.contextId=moduleKeys.contextId, .resourceId=moduleKeys.moduleResourceId};
+    keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(moduleKeys.currentKeyId);
+}

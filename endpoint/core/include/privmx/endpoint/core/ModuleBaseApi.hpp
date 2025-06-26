@@ -35,6 +35,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/core/Factory.hpp"
+#include "privmx/endpoint/core/ContainerKeyCache.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -78,7 +79,8 @@ protected:
     );
 
     template<typename ModuleStructAsTypedObj>
-    auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKey());
+    auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKeyV2());
+    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ContainerKeyCache::ModuleKeys moduleKeys);
 
     template<typename ModuleStructAsTypedObj>
     auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), core::EncKeyLocation());
@@ -163,12 +165,12 @@ auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
 }
 
 template<typename ModuleStructAsTypedObj>
-auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKey()) {
+auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKeyV2()) {
     auto data_entry = moduleObj.data().get(moduleObj.data().size()-1);
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location {getModuleEncKeyLocation(moduleObj, moduleObj.resourceIdOpt(""))};
     keyProviderRequest.addOne(moduleObj.keys(), data_entry.keyId(), location);
-    core::DecryptedEncKey ret = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(data_entry.keyId());
+    core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(data_entry.keyId());
     return ret;
 }
 
