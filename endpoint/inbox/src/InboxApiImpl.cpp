@@ -223,8 +223,8 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     auto privateKey = crypto::PrivateKey(eccKey);
     auto pubKey = privateKey.getPublicKey();
     InboxDataProcessorModelV5 inboxDataIn {
-        .storeId = currentInboxEntry.data().storeId(),
-        .threadId = currentInboxEntry.data().threadId(),
+        .storeId = currentInboxData.storeId(),
+        .threadId = currentInboxData.threadId(),
         .filesConfig = getFilesConfigOptOrDefault(fileConfig),
         .privateData = {
             .privateMeta = privateMeta,
