@@ -13,13 +13,14 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-UsersKeysResolver::UsersKeysResolver(const std::vector<core::UserWithPubKey>& users,
-            const std::vector<core::UserWithPubKey>& managers) : 
-    _gateway(gateway), _eventMiddleware(eventMiddleware) {}
+std::vector<UserWithPubKey> UsersKeysResolver::getUsersToAddKey() {
+    return _usersToAddMissingKey;
+}
 
-std::vector<core::UserWithPubKey> UsersKeysResolver::getUsersToAddKey() {
+std::vector<UserWithPubKey> UsersKeysResolver::getNewUsers() {
+    return _new_users;
 }
 
 bool UsersKeysResolver::doNeedNewKey() {
-
+    return _needNewKey;
 }

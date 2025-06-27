@@ -31,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxException.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/inbox/InboxDataHelper.hpp"
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
 
 
 using namespace privmx::endpoint::inbox;
@@ -53,8 +54,8 @@ InboxApiImpl::InboxApiImpl(
     const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const std::shared_ptr<core::HandleManager>& handleManager,
     size_t serverRequestChunkSize
-)
-    : _connection(connection),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection),
+    _connection(connection),
     _threadApi(threadApi),
     _storeApi(storeApi),
     _keyProvider(keyProvider),
@@ -176,62 +177,36 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
 ) {
     // get current inbox
     auto currentInbox = getRawInboxFromCacheOrBridge(inboxId);
-    auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data();
+    auto currentInboxEntry = getInboxCurrentDataEntry(currentInbox);
+    auto currentInboxData = currentInboxEntry.data();
     auto currentInboxResourceId = currentInbox.resourceIdOpt(core::EndpointUtils::generateId());
-
-    // extract current users info
-    auto usersVec {core::EndpointUtils::listToVector<std::string>(currentInbox.users())};
-    auto managersVec {core::EndpointUtils::listToVector<std::string>(currentInbox.managers())};
-    auto oldUsersAll {core::EndpointUtils::uniqueList(usersVec, managersVec)};
-
-    auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-
-    // adjust key
-    std::vector<std::string> deletedUsers {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
-    std::vector<std::string> addedUsers {core::EndpointUtils::getDifference(core::EndpointUtils::usersWithPubKeyToIds(new_users), oldUsersAll)};
-    std::vector<core::UserWithPubKey> usersToAddMissingKey;
-    for(auto new_user: new_users) {
-        if( std::find(addedUsers.begin(), addedUsers.end(), new_user.userId) != addedUsers.end()) {
-            usersToAddMissingKey.push_back(new_user);
-        }
-    }
-    bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-    
-    // read all key to check if all key belongs to this inbox
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=currentInbox.contextId(), .resourceId=currentInboxResourceId};
-    keyProviderRequest.addAll(currentInbox.keys(), location);
-    auto inboxKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
-    auto currentInboxEntry = currentInbox.data().get(currentInbox.data().size()-1);
-    core::DecryptedEncKey currentInboxKey;
-    for (auto key : inboxKeys) {
-        if (currentInboxEntry.keyId() == key.first) {
-            currentInboxKey = key.second;
-            break;
-        }
-    }
+    auto location {getModuleEncKeyLocation(currentInbox, currentInboxResourceId)};
+    auto inboxKeys {getAndValidateModuleKeys(currentInbox, currentInboxResourceId)};
+    auto currentInboxKey {findEncKeyByKeyId(inboxKeys, currentInboxEntry.keyId())};
     auto inboxInternalMeta = decryptInboxInternalMeta(currentInboxEntry, currentInboxKey);
-    if(currentInboxKey.dataStructureVersion != 2) {
-        //force update all keys if thread keys is in older version
-        usersToAddMissingKey = new_users;
-    }
+
+    auto usersKeysResolver {core::UsersKeysResolver::create(currentInbox, users, managers, forceGenerateNewKey, currentInboxKey)};
+
     if(!_keyProvider->verifyKeysSecret(inboxKeys, location, inboxInternalMeta.secret)) {
         throw InboxEncryptionKeyValidationException();
     }
     // setting inbox Key adding new users
     core::EncKey inboxKey = currentInboxKey;
     core::DataIntegrityObject updateInboxDio = _connection.getImpl()->createDIO(currentInbox.contextId(), currentInboxResourceId);
+    
     privmx::utils::List<core::server::KeyEntrySet> keysList = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
-    if(needNewKey) {
+    if(usersKeysResolver->doNeedNewKey()) {
         inboxKey = _keyProvider->generateKey();
         keysList = _keyProvider->prepareKeysList(
-            new_users, 
+            usersKeysResolver->getNewUsers(), 
             inboxKey, 
             updateInboxDio,
             location,
             inboxInternalMeta.secret
         );
     }
+    
+    auto usersToAddMissingKey {usersKeysResolver->getUsersToAddKey()};
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             inboxKeys,
@@ -248,8 +223,8 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     auto privateKey = crypto::PrivateKey(eccKey);
     auto pubKey = privateKey.getPublicKey();
     InboxDataProcessorModelV5 inboxDataIn {
-        .storeId = currentInboxData.storeId(),
-        .threadId = currentInboxData.threadId(),
+        .storeId = currentInboxEntry.data().storeId(),
+        .threadId = currentInboxEntry.data().threadId(),
         .filesConfig = getFilesConfigOptOrDefault(fileConfig),
         .privateData = {
             .privateMeta = privateMeta,
