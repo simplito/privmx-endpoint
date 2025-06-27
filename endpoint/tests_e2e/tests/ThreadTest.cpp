@@ -1871,3 +1871,53 @@ TEST_F(ThreadTest, updateThread_policy_update_by_added_user) {
         );
     });
 }
+
+TEST_F(ThreadTest, sendMessage_cacheManipulation) {
+    // load thread to cache
+    EXPECT_NO_THROW({
+        threadApi->getThread(reader->getString("Thread_1.threadId"));
+    });
+    // update thread
+    EXPECT_NO_THROW({
+        threadApi->updateThread(
+            reader->getString("Thread_1.threadId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });    
+    // correct data
+    std::string messageId;
+    EXPECT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            reader->getString("Thread_1.threadId"),
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta"),
+            core::Buffer::from("data")
+        );
+    });
+    thread::Message message;
+    EXPECT_NO_THROW({
+        message = threadApi->getMessage(
+            messageId
+        );
+    });
+    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(message.data.stdString(), "data");
+    EXPECT_EQ(message.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(message.publicMeta.stdString(), "publicMeta");
+}
