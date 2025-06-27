@@ -27,7 +27,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/Events.hpp"
-
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -401,38 +401,15 @@ void StreamApiLowImpl::updateStreamRoom(
     auto getModel = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     getModel.id(streamRoomId);
     auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom();
-    auto currentStreamRoomResourceId = currentStreamRoom.resourceIdOpt(core::EndpointUtils::generateId());
-
-    // extract current users info
-    auto usersVec {core::EndpointUtils::listToVector<std::string>(currentStreamRoom.users())};
-    auto managersVec {core::EndpointUtils::listToVector<std::string>(currentStreamRoom.managers())};
-    auto oldUsersIds {core::EndpointUtils::uniqueList(usersVec, managersVec)};
-
-    auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    auto newUsersIds {core::EndpointUtils::usersWithPubKeyToIds(new_users)};
-    auto deletedUsersIds {core::EndpointUtils::getDifference(oldUsersIds, newUsersIds)};
-    auto addedUsersIds {core::EndpointUtils::getDifference(newUsersIds, oldUsersIds)};
-        
-    // adjust key
-    std::vector<core::UserWithPubKey> usersToAddMissingKey;
-    for(auto new_user: new_users) {
-        if( std::find(addedUsersIds.begin(), addedUsersIds.end(), new_user.userId) != addedUsersIds.end()) {
-            usersToAddMissingKey.push_back(new_user);
-        }
-    }
-    bool needNewKey = deletedUsersIds.size() > 0 || forceGenerateNewKey;
-
-    auto location {getModuleEncKeyLocation(currentStreamRoom, currentStreamRoomResourceId)};
     auto currentStreamRoomEntry = currentStreamRoom.data().get(currentStreamRoom.data().size()-1);
-
+    auto currentStreamRoomResourceId = currentStreamRoom.resourceIdOpt(core::EndpointUtils::generateId());
+    auto location {getModuleEncKeyLocation(currentStreamRoom, currentStreamRoomResourceId)};
     auto streamRoomKeys {getAndValidateModuleKeys(currentStreamRoom, currentStreamRoomResourceId)};
     auto currentStreamRoomKey {findEncKeyByKeyId(streamRoomKeys, currentStreamRoomEntry.keyId())};
-
     auto streamRoomInternalMeta = extractAndDecryptModuleInternalMeta(currentStreamRoomEntry, currentStreamRoomKey);
-    if(currentStreamRoomKey.dataStructureVersion != 2) {
-        //force update all keys if streamRoom keys is in older version
-        usersToAddMissingKey = new_users;
-    }
+
+    auto usersKeysResolver {core::UsersKeysResolver::create(currentStreamRoom, users, managers, forceGenerateNewKey, currentStreamRoomKey)};
+
     if(!_keyProvider->verifyKeysSecret(streamRoomKeys, location, streamRoomInternalMeta.secret)) {
         throw StreamRoomEncryptionKeyValidationException();
     }
@@ -440,16 +417,18 @@ void StreamApiLowImpl::updateStreamRoom(
     core::EncKey streamRoomKey = currentStreamRoomKey;
     core::DataIntegrityObject updateStreamRoomDio = _connection->createDIO(currentStreamRoom.contextId(), currentStreamRoomResourceId);
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
-    if(needNewKey) {
+    if(usersKeysResolver->doNeedNewKey()) {
         streamRoomKey = _keyProvider->generateKey();
         keys = _keyProvider->prepareKeysList(
-            new_users, 
+            usersKeysResolver->getNewUsers(), 
             streamRoomKey, 
             updateStreamRoomDio,
             location,
             streamRoomInternalMeta.secret
         );
     }
+
+    auto usersToAddMissingKey {usersKeysResolver->getUsersToAddKey()};
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             streamRoomKeys,
