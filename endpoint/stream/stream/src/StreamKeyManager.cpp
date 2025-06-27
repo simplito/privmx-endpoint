@@ -252,7 +252,7 @@ dynamic::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
 
 void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
     data.streamRoomId(_streamRoomId);
-    event::InternalContextEvent event = {.type="StreamKeyManagementEvent", .data= privmx::endpoint::core::Buffer::from(utils::Utils::stringifyVar(data))};
+    event::InternalContextEventDataV1 event = {.type="StreamKeyManagementEvent", .data= privmx::endpoint::core::Buffer::from(utils::Utils::stringifyVar(data))};
     _eventApi->emitEventInternal(_contextId, event, users);
 }
 

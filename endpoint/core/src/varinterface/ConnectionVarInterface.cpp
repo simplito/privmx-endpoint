@@ -31,7 +31,7 @@ Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& arg
     auto solutionId = _deserializer.deserialize<std::string>(argsArr->get(1), "solutionId");
     auto platformUrl = _deserializer.deserialize<std::string>(argsArr->get(2), "platformUrl");
     auto verificationOptions = PKIVerificationOptions();
-    if(args.size() >= 4) {
+    if(argsArr->size() == 4) {
         verificationOptions = _deserializer.deserialize<PKIVerificationOptions>(argsArr->get(3), "verificationOptions");
     }
     _connection = Connection::connect(userPrivKey, solutionId, platformUrl, verificationOptions);

@@ -129,7 +129,7 @@ PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(cons
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     PKIVerificationOptions result {};
-    result.bridgePubKey = deserializeOptional<std::string>(obj->get("bridgePubKey"), name + ".get");
-    result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".update");
+    result.bridgePubKey = deserializeOptional<std::string>(obj->get("bridgePubKey"), name + ".bridgePubKey");
+    result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".bridgeInstanceId");
     return result;
 }

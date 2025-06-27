@@ -12,20 +12,40 @@ limitations under the License.
 #include "privmx/utils/VersionNumber.hpp"
 #include "privmx/utils/PrivmxExtExceptions.hpp"
 #include "privmx/utils/Utils.hpp"
-#include <regex>
 
 using namespace privmx;
 using namespace privmx::utils;
 
 VersionNumber::VersionNumber(): _versionStr("unknown"), _major(0), _minor(0) {}
 VersionNumber::VersionNumber(const std::string& versionStr): _versionStr(versionStr) {
-    std::regex versionRegex("^(\\d+\\.)(\\d+)(\\.)?(\\*|\\d+[0-9a-zA-Z\\-\\_]*)?$");
-    if(!std::regex_match(versionStr, versionRegex)) {
-        throw InvalidVersionFormatException(versionStr);
+
+    std::vector<std::string> tmp = privmx::utils::Utils::split(versionStr, ".");
+    if( tmp.size() != 3 && tmp.size() != 2) {
+        throw InvalidVersionFormatException(versionStr + ", expected format is x.y.z or x.y");
     }
-    // To Make processing easier in VersionDigit prepend a '.'
+    if(tmp[0].length() == 0 || tmp[1].length() == 0) {
+        throw InvalidVersionFormatException(versionStr + ", major or minor number are empty");
+    }
+    for(auto& c : tmp[0]) {
+        if(!std::isdigit(c)) {
+            throw InvalidVersionFormatException(versionStr + ", major is not natural number");
+        }
+    }
+    for(auto& c : tmp[1]) {
+        if(!std::isdigit(c)) {
+            throw InvalidVersionFormatException(versionStr + ", minor is not natural number");
+        }
+    }
+    if(tmp.size() == 3) {
+        if(tmp[1].length() == 0) {
+            throw InvalidVersionFormatException(versionStr + ", build version is empty");
+        }
+        if(!std::isdigit(tmp[2][0]) && tmp[2] != "*") {
+            throw InvalidVersionFormatException(versionStr + ", build is not natural number");
+        }
+    }
     try {
-        auto tmp = privmx::utils::Utils::split(versionStr, ".");
+        std::vector<std::string> tmp = privmx::utils::Utils::split(versionStr, ".");
         _major = std::stoul(tmp[0]);
         _minor = std::stoul(tmp[1]);
         if(tmp.size() == 3 && tmp[2] != "*") {

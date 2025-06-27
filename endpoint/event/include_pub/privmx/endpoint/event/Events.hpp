@@ -28,6 +28,10 @@ struct ContextCustomEventData {
      * Payload decryption status
      */
     int64_t statusCode;
+    /**
+     * Version of the event data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 /**

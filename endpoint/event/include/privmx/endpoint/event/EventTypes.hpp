@@ -21,12 +21,33 @@ namespace privmx {
 namespace endpoint {
 namespace event {
 
-struct InternalContextEvent {
+struct InternalContextEventDataV1 {
     std::string type;
     privmx::endpoint::core::Buffer data;
-    int64_t statusCode;
 };
 
+struct DecryptedInternalContextEventDataV1 :  public InternalContextEventDataV1, public core::DecryptedVersionedData {};
+struct DecryptedContextEventDataV1 :  public core::DecryptedVersionedData {
+    privmx::endpoint::core::Buffer data;
+};
+
+struct DecryptedEventEncKeyV1 : public core::DecryptedVersionedData {
+    std::string key;
+};
+
+enum EventType {
+    LIB_INTERNAL = 0,
+    LIB_API = 1
+};
+
+struct ContextEventDataV5 {
+    privmx::endpoint::core::Buffer data;
+    std::optional<std::string> type;
+    core::DataIntegrityObject dio;
+};
+
+struct ContextEventDataToEncryptV5 : public ContextEventDataV5 {};
+struct DecryptedEventDataV5 : public ContextEventDataV5, public core::DecryptedVersionedData {};
 
 }  // namespace event
 }  // namespace endpoint
