@@ -48,12 +48,13 @@ limitations under the License.
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/inbox/InboxProvider.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
+#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxApiImpl
+class InboxApiImpl : protected core::ModuleBaseApi
 {
 public:
     InboxApiImpl(
