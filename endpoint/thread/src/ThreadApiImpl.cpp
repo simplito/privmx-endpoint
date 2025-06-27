@@ -265,6 +265,7 @@ void ThreadApiImpl::deleteThread(const std::string& threadId) {
     auto model = utils::TypedObjectFactory::createNewObject<server::ThreadDeleteModel>();
     model.threadId(threadId);
     _serverApi.threadDelete(model);
+    _keyCache.clear(threadId);
 }
 
 Thread ThreadApiImpl::getThread(const std::string& threadId) {
@@ -455,6 +456,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
     } else if (type == "threadDeleted") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            _keyCache.clear(raw.threadId());
             auto data = Mapper::mapToThreadDeletedEventData(raw);
             std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
             event->channel = "thread";
@@ -700,10 +702,22 @@ std::vector<Thread> ThreadApiImpl::validateDecryptAndConvertThreadsDataToThreads
     std::vector<Thread> result(threads.size());
     // Validate data Integrity
     for (size_t i = 0; i < threads.size(); i++) {
-        result[i].statusCode = validateThreadDataIntegrity(threads.get(i));
+        auto thread = threads.get(i);
+        result[i].statusCode = validateThreadDataIntegrity(thread);
         if(result[i].statusCode != 0) {
-            result[i] = convertServerThreadToLibThread(threads.get(i), {}, {}, result[i].statusCode);
+            result[i] = convertServerThreadToLibThread(thread, {}, {}, result[i].statusCode);
         }
+        // Add to cache
+        _keyCache.set(
+            thread.id(), 
+            core::ContainerKeyCache::ModuleKeys{
+                .keys=thread.keys(),
+                .currentKeyId=thread.keyId(),
+                .moduleSchemaVersion=getThreadEntryDataStructureVersion(thread.data().get(thread.data().size()-1)),
+                .moduleResourceId=thread.resourceIdOpt(""),
+                .contextId=thread.contextId()
+            }
+        );
     }
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     // Create request to KeyProvider for keys
