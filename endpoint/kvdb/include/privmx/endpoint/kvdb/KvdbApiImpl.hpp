@@ -117,12 +117,7 @@ private:
     Kvdb validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
     void assertKvdbDataIntegrity(server::KvdbInfo kvdb);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
-    core::ContainerKeyCache::ModuleKeys getKvdbKeys(
-        const std::string& kvdbId, 
-        const std::optional<std::set<std::string>>& keyIds = std::nullopt, 
-        const std::optional<KvdbDataSchema::Version>& minimumKvdbSchemaVersion = std::nullopt
-    );
-    core::ContainerKeyCache::ModuleKeys getNewKvdbKeysAndUpdateCache(const std::string& kvdbId);
+    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId);
 
 
     DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
@@ -148,7 +143,7 @@ private:
         const core::Buffer& publicMeta, 
         const core::Buffer& privateMeta, 
         const core::Buffer& data, 
-        const core::ContainerKeyCache::ModuleKeys& kvdbKeys
+        const core::ModuleBaseApi::ModuleKeys& kvdbKeys
     );
     void setEntryRequest(
         const std::string& kvdbId, 
@@ -159,7 +154,6 @@ private:
         int64_t version
     );
 
-    
     void assertKvdbExist(const std::string& kvdbId);
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -168,7 +162,6 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
-    core::ContainerKeyCache _keyCache;
     core::SubscriptionHelper _kvdbSubscriptionHelper;
     core::ModuleDataEncryptorV5 _kvdbDataEncryptorV5;
     EntryDataEncryptorV5 _entryDataEncryptorV5;

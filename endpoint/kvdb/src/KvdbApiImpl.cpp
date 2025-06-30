@@ -49,7 +49,6 @@ KvdbApiImpl::KvdbApiImpl(
     _eventMiddleware(eventMiddleware),
     _connection(connection),
     _serverApi(ServerApi(gateway)),
-    _keyCache(core::ContainerKeyCache()),
     _kvdbSubscriptionHelper(core::SubscriptionHelper(
         eventChannelManager, 
         "kvdb", "entries",
@@ -246,7 +245,7 @@ void KvdbApiImpl::deleteKvdb(const std::string& kvdbId) {
     auto model = utils::TypedObjectFactory::createNewObject<server::KvdbDeleteModel>();
     model.kvdbId(kvdbId);
     _serverApi.kvdbDelete(model);
-    _keyCache.clear(kvdbId);
+    invalidateModuleKeysInCache(kvdbId);
 }
 
 Kvdb KvdbApiImpl::getKvdb(const std::string& kvdbId) {
@@ -263,10 +262,19 @@ Kvdb KvdbApiImpl::getKvdbEx(const std::string& kvdbId, const std::string& type) 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb,_getKvdbEx, getting kvdb)
     auto kvdb = _serverApi.kvdbGet(params).kvdb();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, _getKvdbEx, data send)
+    setNewModuleKeysInCache(
+        kvdb.id(), 
+        core::ModuleBaseApi::ModuleKeys{
+            .keys=kvdb.keys(),
+            .currentKeyId=kvdb.keyId(),
+            .moduleSchemaVersion=getKvdbDataEntryStructureVersion(kvdb.data().get(kvdb.data().size()-1)),
+            .moduleResourceId=kvdb.resourceIdOpt(""),
+            .contextId=kvdb.contextId()
+        }
+    );
     auto result = validateDecryptAndConvertKvdbDataToKvdb(kvdb);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, _getKvdbEx, data decrypted)
     return result;
-    
 }
 
 core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery) {
@@ -284,6 +292,18 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbsEx(const std::string& contextId, co
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, _listKvdbsEx, getting kvdbList)
     auto kvdbsList = _serverApi.kvdbList(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, _listKvdbsEx, data send)
+    for (auto kvdb : kvdbsList.kvdbs()) {
+        setNewModuleKeysInCache(
+            kvdb.id(), 
+            core::ModuleBaseApi::ModuleKeys{
+                .keys=kvdb.keys(),
+                .currentKeyId=kvdb.keyId(),
+                .moduleSchemaVersion=getKvdbDataEntryStructureVersion(kvdb.data().get(kvdb.data().size()-1)),
+                .moduleResourceId=kvdb.resourceIdOpt(""),
+                .contextId=kvdb.contextId()
+            }
+        );
+    }
     std::vector<Kvdb> kvdbs = validateDecryptAndConvertKvdbsDataToKvdbs(kvdbsList.kvdbs());
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, _listKvdbsEx, data decrypted)
     return core::PagingList<Kvdb>({
@@ -352,6 +372,17 @@ core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, 
     auto entriesList = _serverApi.kvdbListEntries(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
     auto kvdb = entriesList.kvdb();
+    assertKvdbDataIntegrity(kvdb);
+    setNewModuleKeysInCache(
+        kvdb.id(), 
+        core::ModuleBaseApi::ModuleKeys{
+            .keys=kvdb.keys(),
+            .currentKeyId=kvdb.keyId(),
+            .moduleSchemaVersion=getKvdbDataEntryStructureVersion(kvdb.data().get(kvdb.data().size()-1)),
+            .moduleResourceId=kvdb.resourceIdOpt(""),
+            .contextId=kvdb.contextId()
+        }
+    );
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
     auto entries = decryptAndConvertKvdbEntriesDataToKvdbEntries(kvdb, entriesList.kvdbEntries());
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, listEntriesKeys, data decrypted)
@@ -367,7 +398,7 @@ void KvdbApiImpl::setEntry(const std::string& kvdbId, const std::string& key, co
     } catch (const privmx::utils::PrivmxException& e) {
         if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::InvalidKeyIdException().getCode()) {
             //get new kvdb key to cache 
-            getNewKvdbKeysAndUpdateCache(kvdbId);
+            getNewModuleKeysAndUpdateCache(kvdbId);
             return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version);
         }
         e.rethrow();
@@ -376,7 +407,7 @@ void KvdbApiImpl::setEntry(const std::string& kvdbId, const std::string& key, co
     
 void KvdbApiImpl::setEntryRequest(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, sendEntry);
-    auto kvdbKeys = getKvdbKeys(kvdbId);
+    auto kvdbKeys = getModuleKeys(kvdbId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, sendEntry, getKvdb)
     auto msgKey = getAndValidateModuleCurrentEncKey(kvdbKeys);
     auto  send_entry_model = utils::TypedObjectFactory::createNewObject<server::KvdbEntrySetModel>();
@@ -423,6 +454,16 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
     if (type == "kvdbCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
         if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            setNewModuleKeysInCache(
+                raw.id(), 
+                core::ModuleBaseApi::ModuleKeys{
+                    .keys=raw.keys(),
+                    .currentKeyId=raw.keyId(),
+                    .moduleSchemaVersion=getKvdbDataEntryStructureVersion(raw.data().get(raw.data().size()-1)),
+                    .moduleResourceId=raw.resourceIdOpt(""),
+                    .contextId=raw.contextId()
+                }
+            );
             privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw); 
             std::shared_ptr<KvdbCreatedEvent> event(new KvdbCreatedEvent());
             event->channel = "kvdb";
@@ -432,6 +473,16 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
     } else if (type == "kvdbUpdated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
         if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            setNewModuleKeysInCache(
+                raw.id(), 
+                core::ModuleBaseApi::ModuleKeys{
+                    .keys=raw.keys(),
+                    .currentKeyId=raw.keyId(),
+                    .moduleSchemaVersion=getKvdbDataEntryStructureVersion(raw.data().get(raw.data().size()-1)),
+                    .moduleResourceId=raw.resourceIdOpt(""),
+                    .contextId=raw.contextId()
+                }
+            );
             privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw); 
             std::shared_ptr<KvdbUpdatedEvent> event(new KvdbUpdatedEvent());
             event->channel = "kvdb";
@@ -441,7 +492,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
     } else if (type == "kvdbDeleted") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEventData>(notification.data);
         if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            _keyCache.clear(raw.kvdbId());
+            invalidateModuleKeysInCache(raw.kvdbId());
             auto data = Mapper::mapToKvdbDeletedEventData(raw);
             std::shared_ptr<KvdbDeletedEvent> event(new KvdbDeletedEvent());
             event->channel = "kvdb";
@@ -614,17 +665,6 @@ std::vector<Kvdb> KvdbApiImpl::validateDecryptAndConvertKvdbsDataToKvdbs(privmx:
         if(result[i].statusCode != 0) {
             result[i] = convertServerKvdbToLibKvdb(kvdb, {}, {}, result[i].statusCode);
         }
-        // Add to cache
-        _keyCache.set(
-            kvdb.id(), 
-            core::ContainerKeyCache::ModuleKeys{
-                .keys=kvdb.keys(),
-                .currentKeyId=kvdb.keyId(),
-                .moduleSchemaVersion=getKvdbDataEntryStructureVersion(kvdb.data().get(kvdb.data().size()-1)),
-                .moduleResourceId=kvdb.resourceIdOpt(""),
-                .contextId=kvdb.contextId()
-            }
-        );
     }
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     // Create request to KeyProvider for keys
@@ -694,17 +734,6 @@ Kvdb KvdbApiImpl::validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb)
     if(statusCode != 0) {
         return convertServerKvdbToLibKvdb(kvdb, {}, {}, statusCode);
     }
-    // Add Keys to cache
-    _keyCache.set(
-        kvdb.id(), 
-        core::ContainerKeyCache::ModuleKeys{
-            .keys=kvdb.keys(),
-            .currentKeyId=kvdb.keyId(),
-            .moduleSchemaVersion=getKvdbDataEntryStructureVersion(kvdb.data().get(kvdb.data().size()-1)),
-            .moduleResourceId=kvdb.resourceIdOpt(""),
-            .contextId=kvdb.contextId()
-        }
-    );
     // Get current KvdbEntry and Key
     auto kvdb_data_entry = kvdb.data().get(kvdb.data().size()-1);
     // Create request to KeyProvider for keys
@@ -913,7 +942,7 @@ KvdbEntry KvdbApiImpl::validateDecryptAndConvertEntryDataToEntry(server::KvdbEnt
                 minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::VERSION_5;
                 break;
         }
-        auto keys = getKvdbKeys(entry.kvdbId(), std::set<std::string>{keyId}, minimumKvdbSchemaVersion);
+        auto keys = getModuleKeys(entry.kvdbId(), std::set<std::string>{keyId}, minimumKvdbSchemaVersion);
         // Create request to KeyProvider for keys
         core::KeyDecryptionAndVerificationRequest keyProviderRequest;
         core::EncKeyLocation location{.contextId=entry.contextId(), .resourceId=keys.moduleResourceId};
@@ -953,7 +982,7 @@ Poco::Dynamic::Var KvdbApiImpl::encryptEntryData(
     const core::Buffer& publicMeta, 
     const core::Buffer& privateMeta, 
     const core::Buffer& data, 
-    const core::ContainerKeyCache::ModuleKeys& kvdbKeys
+    const core::ModuleBaseApi::ModuleKeys& kvdbKeys
 ) {
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(kvdbKeys);
     switch (msgKey.dataStructureVersion) {
@@ -987,36 +1016,19 @@ void KvdbApiImpl::assertKvdbExist(const std::string& kvdbId) {
     _serverApi.kvdbGet(params);
 }
 
-core::ContainerKeyCache::ModuleKeys KvdbApiImpl::getNewKvdbKeysAndUpdateCache(const std::string& kvdbId) {
-    // get newest kvdb
-    PRIVMX_DEBUG("PlatformKvdb", "getNewKvdbKeysAndUpdateCache")
+core::ModuleBaseApi::ModuleKeys KvdbApiImpl::getModuleKeysFormServer(std::string moduleId) {
     auto params = privmx::utils::TypedObjectFactory::createNewObject<kvdb::server::KvdbGetModel>();
-    params.kvdbId(kvdbId);
+    params.kvdbId(moduleId);
     auto kvdb = _serverApi.kvdbGet(params).kvdb();
-    // validate kvdb Data before returning data
+    // validate thread Data before returning data
     assertKvdbDataIntegrity(kvdb);
-    auto keys = core::ContainerKeyCache::ModuleKeys{
+    return core::ModuleBaseApi::ModuleKeys{
         .keys=kvdb.keys(),
         .currentKeyId=kvdb.keyId(),
         .moduleSchemaVersion=getKvdbDataEntryStructureVersion(kvdb.data().get(kvdb.data().size()-1)),
         .moduleResourceId=kvdb.resourceIdOpt(""),
         .contextId = kvdb.contextId()
     };
-    _keyCache.set(kvdb.id(), keys);
-    return keys;
-}
-
-core::ContainerKeyCache::ModuleKeys KvdbApiImpl::getKvdbKeys(
-    const std::string& kvdbId, 
-    const std::optional<std::set<std::string>>& keyIds, 
-    const std::optional<KvdbDataSchema::Version>& minimumKvdbSchemaVersion
-) {
-    auto keys = _keyCache.getKeys(kvdbId, keyIds, minimumKvdbSchemaVersion);
-    // if cache don't have decryption keys 
-    if(!keys.has_value()) {
-        keys = getNewKvdbKeysAndUpdateCache(kvdbId);
-    }
-    return keys.value();
 }
 
 void KvdbApiImpl::assertKvdbDataIntegrity(server::KvdbInfo kvdb) {

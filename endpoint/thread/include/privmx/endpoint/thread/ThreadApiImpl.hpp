@@ -119,12 +119,9 @@ private:
     Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo thread);
     void assertThreadDataIntegrity(server::ThreadInfo thread);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
-    core::ContainerKeyCache::ModuleKeys getThreadKeys(
-        const std::string& threadId, 
-        const std::optional<std::set<std::string>>& keyIds = std::nullopt, 
-        const std::optional<ThreadDataSchema::Version>& minimumThreadSchemaVersion = std::nullopt
-    );
-    core::ContainerKeyCache::ModuleKeys getNewThreadKeysAndUpdateCache(const std::string& threadId);
+    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId);
+
+
 
     dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
     dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
@@ -155,7 +152,7 @@ private:
         const core::Buffer& publicMeta, 
         const core::Buffer& privateMeta, 
         const core::Buffer& data, 
-        const core::ContainerKeyCache::ModuleKeys& threadKeys
+        const core::ModuleBaseApi::ModuleKeys& threadKeys
     );
     std::string sendMessageRequest(
         const std::string& threadId, 
@@ -184,7 +181,6 @@ private:
     MessageDataV2Encryptor _messageDataV2Encryptor;
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
-    core::ContainerKeyCache _keyCache;
     core::SubscriptionHelper _threadSubscriptionHelper;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

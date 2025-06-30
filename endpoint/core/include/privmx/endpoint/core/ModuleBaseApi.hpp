@@ -52,8 +52,17 @@ public:
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
+    struct ModuleKeys {
+        privmx::utils::List<server::KeyEntry> keys;
+        std::string currentKeyId;
+        int64_t moduleSchemaVersion;
+        std::string moduleResourceId;
+        std::string contextId;
+    };
+
     virtual ~ModuleBaseApi() = default;
 protected:
+
     template<typename ModuleStructAsTypedObj>
     auto decryptModuleDataV4(
         ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
@@ -80,7 +89,8 @@ protected:
 
     template<typename ModuleStructAsTypedObj>
     auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKeyV2());
-    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ContainerKeyCache::ModuleKeys moduleKeys);
+    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
+    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(core::ContainerKeyCache::ModuleKeys moduleKeys);
 
     template<typename ModuleStructAsTypedObj>
     auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), core::EncKeyLocation());
@@ -89,8 +99,21 @@ protected:
     auto getAndValidateModuleKeys(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), std::unordered_map<std::string, DecryptedEncKeyV2>());
 
     DecryptedEncKeyV2 findEncKeyByKeyId(std::unordered_map<std::string, DecryptedEncKeyV2> keys, const std::string& keyId);
+    
+    ModuleKeys getModuleKeys(
+        const std::string& moduleId, 
+        const std::optional<std::set<std::string>>& keyIds = std::nullopt, 
+        const std::optional<int64_t>& minimumSchemaVersion = std::nullopt
+    );
+    virtual ModuleKeys getModuleKeysFormServer(std::string moduleId) = 0;
+    ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
+    void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys);
+    void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);
 
 private:
+    static core::ContainerKeyCache::ModuleKeys convertModuleKeysToContainerKeyCacheFormat(const ModuleKeys& moduleKeys);
+    static ModuleKeys convertContainerKeyCacheModuleKeysToModuleApiFormat(const core::ContainerKeyCache::ModuleKeys& moduleKeys);
+
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
@@ -99,6 +122,7 @@ private:
     core::Connection _connection;
     core::ModuleDataEncryptorV4 _moduleDataEncryptorV4;
     core::ModuleDataEncryptorV5 _moduleDataEncryptorV5;
+    core::ContainerKeyCache _keyCache;
 };
 
 template<typename ModuleStructAsTypedObj>

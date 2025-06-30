@@ -49,9 +49,67 @@ DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(std::unordered_map<std::strin
     throw UnknownModuleEncryptionKeyException();
 }
 
-core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(ContainerKeyCache::ModuleKeys moduleKeys) {
+core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleBaseApi::ModuleKeys moduleKeys) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = core::EncKeyLocation{.contextId=moduleKeys.contextId, .resourceId=moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(moduleKeys.currentKeyId);
+}
+
+core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(core::ContainerKeyCache::ModuleKeys moduleKeys) {
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    auto location = core::EncKeyLocation{.contextId=moduleKeys.contextId, .resourceId=moduleKeys.moduleResourceId};
+    keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(moduleKeys.currentKeyId);
+}
+
+ModuleBaseApi::ModuleKeys ModuleBaseApi::getModuleKeys(
+    const std::string& moduleId, 
+    const std::optional<std::set<std::string>>& keyIds, 
+    const std::optional<int64_t>& minimumSchemaVersion
+) {
+    auto keys = _keyCache.getKeys(moduleId, keyIds, minimumSchemaVersion);
+    // if cache don't have decryption keys 
+    if(!keys.has_value()) {
+        return getNewModuleKeysAndUpdateCache(moduleId);
+    }
+    return convertContainerKeyCacheModuleKeysToModuleApiFormat(keys.value());
+}
+
+void ModuleBaseApi::setNewModuleKeysInCache(const std::string& moduleId, const ModuleBaseApi::ModuleKeys& newKeys) {
+    auto keys = convertModuleKeysToContainerKeyCacheFormat(newKeys);
+    _keyCache.set(moduleId, keys);
+}
+
+void ModuleBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>& moduleId) {
+    _keyCache.clear(moduleId);
+}
+
+ModuleBaseApi::ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
+    // get newest module
+    PRIVMX_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
+    auto moduleKeys = getModuleKeysFormServer(moduleId);
+    auto keys = convertModuleKeysToContainerKeyCacheFormat(moduleKeys);
+    _keyCache.set(moduleId, keys);
+    return moduleKeys;
+}
+
+core::ContainerKeyCache::ModuleKeys ModuleBaseApi::convertModuleKeysToContainerKeyCacheFormat(const ModuleBaseApi::ModuleKeys& moduleKeys) {
+    return core::ContainerKeyCache::ModuleKeys{
+        .keys=moduleKeys.keys,
+        .currentKeyId=moduleKeys.currentKeyId,
+        .moduleSchemaVersion=moduleKeys.moduleSchemaVersion,
+        .moduleResourceId=moduleKeys.moduleResourceId,
+        .contextId = moduleKeys.contextId
+    };
+}
+
+ModuleBaseApi::ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(const core::ContainerKeyCache::ModuleKeys& moduleKeys) {
+    return ModuleBaseApi::ModuleKeys{
+        .keys=moduleKeys.keys,
+        .currentKeyId=moduleKeys.currentKeyId,
+        .moduleSchemaVersion=moduleKeys.moduleSchemaVersion,
+        .moduleResourceId=moduleKeys.moduleResourceId,
+        .contextId = moduleKeys.contextId
+    };
 }
