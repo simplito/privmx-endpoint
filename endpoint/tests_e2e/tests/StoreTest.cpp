@@ -2233,3 +2233,54 @@ TEST_F(StoreTest, update_access_to_old_files) {
     });
     EXPECT_EQ(file.statusCode, 0);
 }
+
+TEST_F(StoreTest, sendMessage_cacheManipulation) {
+    // load store to cache
+    EXPECT_NO_THROW({
+        storeApi->getStore(reader->getString("Store_1.storeId"));
+    });
+    // update store
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });    
+    // correct data
+    std::string fileId;
+    EXPECT_NO_THROW({
+        auto handle = storeApi->createFile(
+            reader->getString("Store_1.storeId"),
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta"),
+            0
+        );
+        fileId = storeApi->closeFile(handle);
+    });
+    store::File file;
+    EXPECT_NO_THROW({
+        file = storeApi->getFile(
+            fileId
+        );
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+    EXPECT_EQ(file.size, 0);
+}
