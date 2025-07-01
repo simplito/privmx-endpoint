@@ -76,6 +76,7 @@ public:
     core::PagingList<Kvdb> listKvdbsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
+    bool hasEntry(const std::string& kvdbId, const std::string& key);
     core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
     core::PagingList<KvdbEntry> listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
     void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);

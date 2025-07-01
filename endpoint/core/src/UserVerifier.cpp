@@ -17,7 +17,12 @@ using namespace privmx::endpoint::core;
 UserVerifier::UserVerifier(std::shared_ptr<UserVerifierInterface> userVerifier) : _userVerifier(userVerifier) {}
 
 std::vector<bool> UserVerifier::verify(const std::vector<VerificationRequest>& request) {
-    auto result = _userVerifier->verify(request);
+    std::vector<bool> result;
+    try {
+        result = _userVerifier->verify(request);
+    } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
     if(result.size() != request.size()) {
         throw MalformedVerifierResponseException("VerificationResult size is " + std::to_string(result.size()) + " which is different from VerificationRequest size" + std::to_string(request.size()));
     }

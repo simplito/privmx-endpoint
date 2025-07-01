@@ -53,6 +53,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, ContextDoesNotExistException
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, StoreDoesNotExistException, "Store does not exist", 0x6117)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, StoreFileDoesNotExistException, "Store file does not exist", 0x6118)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, InboxDoesNotExistException, "Inbox does not exist", 0x611E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, KvdbDoesNotExistException, "Kvdb does not exist", 0x613C)
+DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, KvdbEntryDoesNotExistException, "Kvdb entry does not exist", 0x613D)
 
 }
 

@@ -853,11 +853,7 @@ std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx:
         }
     }
     std::vector<bool> verified;
-    try {
-        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); i++) {
         if(result[i].statusCode == 0) {
             result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
@@ -886,11 +882,7 @@ Thread ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thr
         .bridgeIdentity = threadDIO.bridgeIdentity
     });
     std::vector<bool> verified;
-    try {
-        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
 }
@@ -1189,11 +1181,7 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
         }
     }
     std::vector<bool> verified;
-    try {
-        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); ++i) {
         if (result[i].statusCode == 0) {
             result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
@@ -1223,11 +1211,7 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::ThreadInfo 
             .bridgeIdentity = messageDIO.bridgeIdentity
         });
     std::vector<bool> verified;
-    try {
-        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
 }
