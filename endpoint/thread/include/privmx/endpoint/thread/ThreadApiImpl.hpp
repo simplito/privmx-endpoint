@@ -120,6 +120,7 @@ private:
     void assertThreadDataIntegrity(server::ThreadInfo thread);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId);
+    core::ModuleBaseApi::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
 
 
 
@@ -142,9 +143,9 @@ private:
     Message convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData);
     MessageDataSchema::Version getMessagesDataStructureVersion(server::Message message);
     std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey);
-    std::vector<Message> decryptAndConvertMessagesDataToMessages(server::ThreadInfo thread, utils::List<server::Message> messages);
-    Message decryptAndConvertMessageDataToMessage(server::ThreadInfo thread, server::Message message);
-    Message validateDecryptAndConvertMessageDataToMessage(server::Message message);
+    std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(utils::List<server::Message> messages, const core::ModuleBaseApi::ModuleKeys& threadKeys);
+    Message validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleBaseApi::ModuleKeys& threadKeys);
+    core::ModuleBaseApi::ModuleKeys getMessageDecryptionKeys(server::Message message, std::optional<server::ThreadInfo> thread = std::nullopt);
     uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);
     Poco::Dynamic::Var encryptMessageData(
         const std::string& threadId, 
@@ -158,7 +159,8 @@ private:
         const std::string& threadId, 
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta, 
-        const core::Buffer& data
+        const core::Buffer& data,
+        const core::ModuleBaseApi::ModuleKeys& keys
     );
     void updateMessageRequest(
         const std::string& messageId, 
@@ -166,7 +168,8 @@ private:
         const std::string& threadId, 
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta, 
-        const core::Buffer& data
+        const core::Buffer& data,
+        const core::ModuleBaseApi::ModuleKeys& keys
     );
 
     void assertThreadExist(const std::string& threadId);
