@@ -43,7 +43,6 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/store/StoreProvider.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
