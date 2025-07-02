@@ -238,6 +238,7 @@ void ThreadApiImpl::updateThread(
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateThread, data encrypted)
     _serverApi.threadUpdate(model);
+    invalidateModuleKeysInCache(threadId);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, updateThread, data send)
 }
 

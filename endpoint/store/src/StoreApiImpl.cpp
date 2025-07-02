@@ -249,6 +249,7 @@ void StoreApiImpl::updateStore(
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeUpdate, data encrypted)
     _serverApi->storeUpdate(model);
+    invalidateModuleKeysInCache(storeId);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeUpdate, data send)
 }
 

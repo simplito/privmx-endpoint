@@ -247,6 +247,7 @@ const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
     }
 
     _serverApi->inboxUpdate(inboxUpdateModel);
+    invalidateModuleKeysInCache(inboxId);
 
     auto store = (_storeApi.getImpl())->getStoreEx(currentInboxData.storeId(), INBOX_TYPE_FILTER_FLAG);
     (_storeApi.getImpl())->updateStore(

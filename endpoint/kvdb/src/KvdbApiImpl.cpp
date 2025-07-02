@@ -219,6 +219,7 @@ void KvdbApiImpl::updateKvdb(
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, updateKvdb, data encrypted)
     _serverApi.kvdbUpdate(model);
+    invalidateModuleKeysInCache(kvdbId);
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, updateKvdb, data send)
 }
 
