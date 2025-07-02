@@ -366,11 +366,12 @@ core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, 
 
 void KvdbApiImpl::setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
     try {
-        return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, getModuleKeys(kvdbId));
+        auto currentKeys{getModuleKeys(kvdbId)};
+        return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, currentKeys);
     } catch (const privmx::utils::PrivmxException& e) {
         if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::InvalidKeyIdException().getCode()) {
-            //get new kvdb key to cache 
-            return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, getNewModuleKeysAndUpdateCache(kvdbId));
+            auto newestKeys{getNewModuleKeysAndUpdateCache(kvdbId)};
+            return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, newestKeys);
         }
         e.rethrow();
     }

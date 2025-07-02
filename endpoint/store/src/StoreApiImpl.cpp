@@ -543,18 +543,15 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
                 storeKey
             );
         }
-        std::cout << storeKey.currentKeyId << std::endl;
         return storeFileFinalizeWriteRequest(handle, data, storeKey);
     } catch (const privmx::utils::PrivmxException& e) {
         if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::InvalidKeyException().getCode() && handle->getFileId().empty()) {
-            //get new kvdb key to cache 
             privmx::endpoint::core::ModuleBaseApi::ModuleKeys storeKey = getNewModuleKeysAndUpdateCache(handle->getStoreId());
-            std::cout << storeKey.currentKeyId << std::endl;
+
             return storeFileFinalizeWriteRequest(handle, data, storeKey);
         }
-        e.rethrow();
+        throw e;
     }
-    return "";
 }
 
 std::string StoreApiImpl::storeFileFinalizeWriteRequest(const std::shared_ptr<FileWriteHandle>& handle, const ChunksSentInfo& data, const core::ModuleBaseApi::ModuleKeys& storeKey) {

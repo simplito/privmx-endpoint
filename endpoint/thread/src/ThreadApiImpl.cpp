@@ -357,15 +357,15 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
 }
 std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data) {
     try {
-        return sendMessageRequest(threadId, publicMeta, privateMeta, data, getModuleKeys(threadId));
+        auto currentKeys{getModuleKeys(threadId)};
+        return sendMessageRequest(threadId, publicMeta, privateMeta, data, currentKeys);
     } catch (const privmx::utils::PrivmxException& e) {
         if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::InvalidThreadKeyException().getCode()) {
-            //get new thread key to cache
-            return sendMessageRequest(threadId, publicMeta, privateMeta, data, getNewModuleKeysAndUpdateCache(threadId));
+            auto newestKeys{getNewModuleKeysAndUpdateCache(threadId)};
+            return sendMessageRequest(threadId, publicMeta, privateMeta, data, newestKeys);
         }
-        e.rethrow();
+        throw e;
     }
-    return "";
 }
 
 std::string ThreadApiImpl::sendMessageRequest(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, const core::ModuleBaseApi::ModuleKeys& keys) {
@@ -400,10 +400,11 @@ void ThreadApiImpl::updateMessage(
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message();
     try {
-        return updateMessageRequest(messageId ,message.resourceIdOpt(core::EndpointUtils::generateId()), message.threadId(), publicMeta, privateMeta, data, getModuleKeys(message.threadId()));
+        auto currentKeys{getModuleKeys(message.threadId())};
+        return updateMessageRequest(messageId ,message.resourceIdOpt(core::EndpointUtils::generateId()), message.threadId(), publicMeta, privateMeta, data, currentKeys);
     } catch (const privmx::utils::PrivmxException& e) {
         if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::InvalidThreadKeyException().getCode()) {
-            //get new thread key to cache 
+            auto newestKeys{getNewModuleKeysAndUpdateCache(message.threadId())};
             return updateMessageRequest(
                 messageId,
                 message.resourceIdOpt(core::EndpointUtils::generateId()),
@@ -411,7 +412,7 @@ void ThreadApiImpl::updateMessage(
                 publicMeta,
                 privateMeta,
                 data,
-                getNewModuleKeysAndUpdateCache(message.threadId())
+                newestKeys
             );
         }
         e.rethrow();
