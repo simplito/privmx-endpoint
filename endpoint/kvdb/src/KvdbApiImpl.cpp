@@ -522,9 +522,11 @@ void KvdbApiImpl::unsubscribeFromEntryEvents(std::string kvdbId) {
 }
 
 void KvdbApiImpl::processConnectedEvent() {
+    invalidateModuleKeysInCache();
 }
 
 void KvdbApiImpl::processDisconnectedEvent() {
+    invalidateModuleKeysInCache();
 }
 
 privmx::utils::List<std::string> KvdbApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
@@ -688,7 +690,7 @@ std::vector<Kvdb> KvdbApiImpl::validateDecryptAndConvertKvdbsDataToKvdbs(privmx:
 }
 
 Kvdb KvdbApiImpl::validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb) {
-// Validate data Integrity
+    // Validate data Integrity
     auto statusCode = validateKvdbDataIntegrity(kvdb);
     if(statusCode != 0) {
         return convertServerKvdbToLibKvdb(kvdb, {}, {}, statusCode);
@@ -718,7 +720,7 @@ Kvdb KvdbApiImpl::validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb)
     std::vector<bool> verified;
     verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-    return result;    
+    return result;
 }
 
 
@@ -910,23 +912,18 @@ KvdbEntry KvdbApiImpl::validateDecryptAndConvertEntryDataToEntry(server::KvdbEnt
     }
 }
 
-core::ModuleBaseApi::ModuleKeys KvdbApiImpl::getEntryDecryptionKeys(server::KvdbEntryInfo entry, std::optional<server::KvdbInfo> kvdb) {
+core::ModuleBaseApi::ModuleKeys KvdbApiImpl::getEntryDecryptionKeys(server::KvdbEntryInfo entry) {
     auto keyId = entry.keyId();
-    if(kvdb.has_value()) {
-        return kvdbToModuleKeys(kvdb.value());
-    } else {
-        // get decryption Key form cache
-        kvdb::KvdbDataSchema::Version minimumKvdbSchemaVersion;
-        switch (getEntryDataStructureVersion(entry)) {
-            case kvdb::KvdbEntryDataSchema::Version::UNKNOWN:
-                minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::UNKNOWN;
-                break;
-            case kvdb::KvdbEntryDataSchema::Version::VERSION_5:
-                minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::VERSION_5;
-                break;
-        }
-        return getModuleKeys(entry.kvdbId(), std::set<std::string>{keyId}, minimumKvdbSchemaVersion);
+    kvdb::KvdbDataSchema::Version minimumKvdbSchemaVersion;
+    switch (getEntryDataStructureVersion(entry)) {
+        case kvdb::KvdbEntryDataSchema::Version::UNKNOWN:
+            minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::UNKNOWN;
+            break;
+        case kvdb::KvdbEntryDataSchema::Version::VERSION_5:
+            minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::VERSION_5;
+            break;
     }
+    return getModuleKeys(entry.kvdbId(), std::set<std::string>{keyId}, minimumKvdbSchemaVersion);
 }
 
 Poco::Dynamic::Var KvdbApiImpl::encryptEntryData(

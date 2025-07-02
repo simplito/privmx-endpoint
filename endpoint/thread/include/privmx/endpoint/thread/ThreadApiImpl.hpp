@@ -119,7 +119,7 @@ private:
     Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo thread);
     void assertThreadDataIntegrity(server::ThreadInfo thread);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
-    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId);
+    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId) override;
     core::ModuleBaseApi::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
 
 
@@ -145,7 +145,7 @@ private:
     std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey);
     std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(utils::List<server::Message> messages, const core::ModuleBaseApi::ModuleKeys& threadKeys);
     Message validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleBaseApi::ModuleKeys& threadKeys);
-    core::ModuleBaseApi::ModuleKeys getMessageDecryptionKeys(server::Message message, std::optional<server::ThreadInfo> thread = std::nullopt);
+    core::ModuleBaseApi::ModuleKeys getMessageDecryptionKeys(server::Message message);
     uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);
     Poco::Dynamic::Var encryptMessageData(
         const std::string& threadId, 

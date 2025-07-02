@@ -539,9 +539,13 @@ void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
     _threadSubscriptionHelper.unsubscribeFromModuleEntry(threadId);
 }
 
-void ThreadApiImpl::processConnectedEvent() {}
+void ThreadApiImpl::processConnectedEvent() {
+    invalidateModuleKeysInCache();
+}
 
-void ThreadApiImpl::processDisconnectedEvent() {}
+void ThreadApiImpl::processDisconnectedEvent() {
+    invalidateModuleKeysInCache();
+}
 
 privmx::utils::List<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
@@ -1166,28 +1170,23 @@ Message ThreadApiImpl::validateDecryptAndConvertMessageDataToMessage(server::Mes
     }
 }
 
-core::ModuleBaseApi::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message, std::optional<server::ThreadInfo> thread) {
+core::ModuleBaseApi::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message) {
     auto keyId = message.keyId();
-    if(thread.has_value()) {
-        return threadToModuleKeys(thread.value());
-    } else {
-        // get decryption Key form cache
-        thread::ThreadDataSchema::Version minimumThreadSchemaVersion;
-        switch (getMessagesDataStructureVersion(message)) {
-            case thread::MessageDataSchema::Version::UNKNOWN:
-                minimumThreadSchemaVersion = thread::ThreadDataSchema::UNKNOWN;
-                break;
-            case thread::MessageDataSchema::Version::VERSION_2:
-            case thread::MessageDataSchema::Version::VERSION_3:
-            case thread::MessageDataSchema::Version::VERSION_4:
-                minimumThreadSchemaVersion = thread::ThreadDataSchema::VERSION_1;
-                break;
-            case thread::MessageDataSchema::Version::VERSION_5:
-                minimumThreadSchemaVersion = thread::ThreadDataSchema::VERSION_5;
-                break;
-        }
-        return getModuleKeys(message.threadId(), std::set<std::string>{keyId}, minimumThreadSchemaVersion);
+    thread::ThreadDataSchema::Version minimumThreadSchemaVersion;
+    switch (getMessagesDataStructureVersion(message)) {
+        case thread::MessageDataSchema::Version::UNKNOWN:
+            minimumThreadSchemaVersion = thread::ThreadDataSchema::UNKNOWN;
+            break;
+        case thread::MessageDataSchema::Version::VERSION_2:
+        case thread::MessageDataSchema::Version::VERSION_3:
+        case thread::MessageDataSchema::Version::VERSION_4:
+            minimumThreadSchemaVersion = thread::ThreadDataSchema::VERSION_1;
+            break;
+        case thread::MessageDataSchema::Version::VERSION_5:
+            minimumThreadSchemaVersion = thread::ThreadDataSchema::VERSION_5;
+            break;
     }
+    return getModuleKeys(message.threadId(), std::set<std::string>{keyId}, minimumThreadSchemaVersion);
 }
 
 Poco::Dynamic::Var ThreadApiImpl::encryptMessageData(

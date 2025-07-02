@@ -140,7 +140,7 @@ private:
     Store validateDecryptAndConvertStoreDataToStore(server::Store store);
     void assertStoreDataIntegrity(server::Store store);
     uint32_t validateStoreDataIntegrity(server::Store store);
-    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId);
+    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId) override;
     core::ModuleBaseApi::ModuleKeys storeToModuleKeys(server::Store store);
 
     // OLD CODE    
@@ -168,7 +168,7 @@ private:
     File validateDecryptAndConvertFileDataToFileInfo(server::File file, const core::ModuleBaseApi::ModuleKeys& storeKeys);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
     dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(server::File file, const core::ModuleBaseApi::ModuleKeys& storeKeys);
-    core::ModuleBaseApi::ModuleKeys getFileDecryptionKeys(server::File file, std::optional<server::Store> store = std::nullopt);
+    core::ModuleBaseApi::ModuleKeys getFileDecryptionKeys(server::File file);
     uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     

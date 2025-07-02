@@ -281,6 +281,7 @@ void StoreApiImpl::deleteStore(const std::string& storeId) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StoreDeleteModel>();
     model.storeId(storeId);
     _serverApi->storeDelete(model);
+    invalidateModuleKeysInCache(storeId);
 }
 
 Store StoreApiImpl::getStore(const std::string& storeId) {
@@ -749,9 +750,11 @@ void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
 }
 
 void StoreApiImpl::processConnectedEvent() {
+    invalidateModuleKeysInCache();
 }
 
 void StoreApiImpl::processDisconnectedEvent() {
+    invalidateModuleKeysInCache();
 }
 
 dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {
@@ -1390,27 +1393,22 @@ dynamic::InternalStoreFileMeta StoreApiImpl::validateDecryptFileInternalMeta(ser
 }
 
 
-core::ModuleBaseApi::ModuleKeys StoreApiImpl::getFileDecryptionKeys(server::File file, std::optional<server::Store> store) {
+core::ModuleBaseApi::ModuleKeys StoreApiImpl::getFileDecryptionKeys(server::File file) {
     auto keyId = file.keyId();
-    if(store.has_value()) {
-        return storeToModuleKeys(store.value());
-    } else {
-        // get decryption Key form cache
-        store::StoreDataSchema::Version minimumStoreSchemaVersion;
-        switch (getFileDataStructureVersion(file)) {
-            case store::FileDataSchema::Version::UNKNOWN:
-                minimumStoreSchemaVersion = store::StoreDataSchema::UNKNOWN;
-                break;
-            case store::FileDataSchema::Version::VERSION_1:
-            case store::FileDataSchema::Version::VERSION_4:
-                minimumStoreSchemaVersion = store::StoreDataSchema::VERSION_1;
-                break;
-            case store::FileDataSchema::Version::VERSION_5:
-                minimumStoreSchemaVersion = store::StoreDataSchema::VERSION_5;
-                break;
-        }
-        return getModuleKeys(file.storeId(), std::set<std::string>{keyId}, minimumStoreSchemaVersion);
+    store::StoreDataSchema::Version minimumStoreSchemaVersion;
+    switch (getFileDataStructureVersion(file)) {
+        case store::FileDataSchema::Version::UNKNOWN:
+            minimumStoreSchemaVersion = store::StoreDataSchema::UNKNOWN;
+            break;
+        case store::FileDataSchema::Version::VERSION_1:
+        case store::FileDataSchema::Version::VERSION_4:
+            minimumStoreSchemaVersion = store::StoreDataSchema::VERSION_1;
+            break;
+        case store::FileDataSchema::Version::VERSION_5:
+            minimumStoreSchemaVersion = store::StoreDataSchema::VERSION_5;
+            break;
     }
+    return getModuleKeys(file.storeId(), std::set<std::string>{keyId}, minimumStoreSchemaVersion);
 }
 
 void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {

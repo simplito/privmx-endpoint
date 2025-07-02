@@ -117,7 +117,7 @@ private:
     Kvdb validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
     void assertKvdbDataIntegrity(server::KvdbInfo kvdb);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
-    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId);
+    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId) override;
     core::ModuleBaseApi::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
 
 
@@ -136,7 +136,7 @@ private:
     std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
     std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(utils::List<server::KvdbEntryInfo> entries, const core::ModuleBaseApi::ModuleKeys& kvdbKeys);
     KvdbEntry validateDecryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::ModuleBaseApi::ModuleKeys& kvdbKeys);
-    core::ModuleBaseApi::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry, std::optional<server::KvdbInfo> kvdb = std::nullopt);
+    core::ModuleBaseApi::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry);
     uint32_t validateEntryDataIntegrity(server::KvdbEntryInfo entry, const std::string& kvdbResourceId);
     Poco::Dynamic::Var encryptEntryData(
         const std::string& kvdbId, 
