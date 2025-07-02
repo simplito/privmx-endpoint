@@ -199,6 +199,20 @@ TEST_F(StoreTest, listStores_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(StoreTest, listStores_correct_input_data) {
@@ -258,14 +272,17 @@ TEST_F(StoreTest, listStores_correct_input_data) {
             EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc"}
+    // {.skip=1, .limit=3, .sortOrder="asc", .sortBy="createDate"}
     EXPECT_NO_THROW({
         listStores = storeApi->listStores(
             reader->getString("Context_1.contextId"),
             {
                 .skip=1, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
@@ -958,6 +975,20 @@ TEST_F(StoreTest, listFiles_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        storeApi->listFiles(
+            reader->getString("Store_1.storeId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(StoreTest, listFiles_correct_input_data) {
@@ -1005,7 +1036,7 @@ TEST_F(StoreTest, listFiles_correct_input_data) {
         );
         EXPECT_EQ(file.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_1.uploaded_publicMeta_inHex")));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on store
+    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on store
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -1030,7 +1061,10 @@ TEST_F(StoreTest, listFiles_correct_input_data) {
             {
                 .skip=0, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });

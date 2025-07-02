@@ -79,6 +79,7 @@ public:
     static void validateBase58(const std::string& value, const std::string& stack_trace = "");
     static void validateSortOrder(const std::string& value, const std::string& stack_trace = "");
     static void validateLastId(const std::string& value, const std::string& stack_trace = "");
+    static void validateEnumParamString(const std::string& value, const std::vector<std::string>& allowed_values, const std::string& param_string_name = "param string", const std::string& stack_trace = "");
 
     static void validateId(const std::string& value, const std::string& stack_trace = "");
     static void validatePrivKeyWIF(const std::string& value, const std::string& stack_trace = "");
@@ -86,6 +87,8 @@ public:
     static void validateSignature(const std::string& value, const std::string& stack_trace = "");
     static void validateEventType(const Event& value, const std::string& type, const std::string& stack_trace = "");
     static void validateJSON(const std::string& value, const std::string& stack_trace = "");
+    static void validatePagingQuery(const PagingQuery& value,const std::vector<std::string>& sort_by_field, const std::string& stack_trace = "");
+
     template<typename T>
     static void validateClass(const T& value, const std::string& stack_trace = "") {
         StructValidator<T>::validate(value, stack_trace + StructValidator<T>::getReadableType());
@@ -111,13 +114,6 @@ class StructValidator<UserWithPubKey> {
 public:
     static void validate(const UserWithPubKey& value, const std::string& stack_trace = "");
     static std::string getReadableType() { return "UserWithPubKey"; }
-};
-
-template<>
-class StructValidator<PagingQuery> {
-public:
-    static void validate(const PagingQuery& value, const std::string& stack_trace = "");
-    static std::string getReadableType() { return "PagingQuery"; }
 };
 
 template<>

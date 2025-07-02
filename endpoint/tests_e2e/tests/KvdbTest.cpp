@@ -199,6 +199,20 @@ TEST_F(KvdbTest, listKvdbs_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        kvdbApi->listKvdbs(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(KvdbTest, listKvdbs_correct_input_data) {
@@ -877,6 +891,20 @@ TEST_F(KvdbTest, listEntriesKeys_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect sortBy
+    EXPECT_THROW({
+        kvdbApi->listEntriesKeys(
+            reader->getString("Kvdb_1.kvdbId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
@@ -911,7 +939,7 @@ TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
         auto entry = listEntriesKeys.readItems[0];
         EXPECT_EQ(entry, reader->getString("KvdbEntry_1.info_key"));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on kvdb
+    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on kvdb
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             reader->getString("Kvdb_1.kvdbId"),
@@ -935,14 +963,22 @@ TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
         );
     });
     EXPECT_NO_THROW({
-        listEntriesKeys = kvdbApi->listEntriesKeys(
-            reader->getString("Kvdb_1.kvdbId"),
-            {
-                .skip=0, 
-                .limit=3, 
-                .sortOrder="asc"
-            }
-        );
+        try {
+            listEntriesKeys = kvdbApi->listEntriesKeys(
+                reader->getString("Kvdb_1.kvdbId"),
+                {
+                    .skip=0, 
+                    .limit=3, 
+                    .sortOrder="asc",
+                    .lastId=std::nullopt,
+                    .sortBy="createDate",
+                    .queryAsJson=std::nullopt
+                }
+            );
+        } catch (const core::Exception& e) {
+            std::cout << e.getFull() << std::endl;
+            e.rethrow();
+        }
     });
     EXPECT_EQ(listEntriesKeys.totalAvailable, 2);
     EXPECT_EQ(listEntriesKeys.readItems.size(), 2);
@@ -1092,7 +1128,10 @@ TEST_F(KvdbTest, listEntries_correct_input_data) {
             {
                 .skip=0, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });

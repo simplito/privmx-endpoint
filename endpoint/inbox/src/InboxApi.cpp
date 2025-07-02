@@ -109,7 +109,7 @@ Inbox InboxApi::getInbox(const std::string& inboxId) {
 core::PagingList<inbox::Inbox> InboxApi::listInboxes(const std::string& contextId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::StructValidator<core::PagingQuery>::validate(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate", "lastModificationDate"}, "field:query ");
     try {
         return _impl->listInboxes(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -194,7 +194,7 @@ void InboxApi::deleteEntry(const std::string& inboxEntryId) {
 core::PagingList<inbox::InboxEntry> InboxApi::listEntries(const std::string& inboxId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(inboxId, "field:inboxId ");
-    core::StructValidator<core::PagingQuery>::validate(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
     try {
         return _impl->listEntries(inboxId, query);
     } catch (const privmx::utils::PrivmxException& e) {
