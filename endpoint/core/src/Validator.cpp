@@ -156,9 +156,9 @@ void Validator::validateEnumParamString(const std::string& value, const std::vec
             error_message += " '" + a + "'";
         }
         if(value.empty()) {
-            error_message += ". Recived empty string";
+            error_message += ". Received empty string";
         } else {
-            error_message += ". Recived '" + value +"'";
+            error_message += ". Received '" + value +"'";
         }
         throw InvalidParamsException(stack_trace + " | " + error_message);
     }
