@@ -34,6 +34,7 @@ limitations under the License.
 #include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp>
 #include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp>
+#include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include "privmx/endpoint/inbox/InboxApi.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/InboxEntriesDataEncryptorSerializer.hpp"
@@ -46,14 +47,13 @@ limitations under the License.
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV5.hpp"
 #include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/inbox/InboxProvider.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxApiImpl
+class InboxApiImpl : protected core::ModuleBaseApi
 {
 public:
     InboxApiImpl(
@@ -117,7 +117,7 @@ public:
     void unsubscribeFromEntryEvents(const std::string& inboxId);
 
 private:
-    server::Inbox getRawInboxFromCacheOrBridge(const std::string& inboxId);
+    inbox::server::Inbox getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
@@ -135,17 +135,22 @@ private:
     inbox::Inbox convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData);
     InboxDataSchema::Version getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry inboxEntry);
     std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Inbox> decryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes);
-    inbox::Inbox decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);
+    std::vector<Inbox> validateDecryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes);
+    inbox::Inbox validateDecryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);
     InboxInternalMetaV5 decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::Inbox inbox);
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
-    uint32_t validateInboxDataIntegrity(server::Inbox inbox);
+    void assertInboxDataIntegrity(inbox::server::Inbox inbox);
+    uint32_t validateInboxDataIntegrity(inbox::server::Inbox inbox);
+    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId) override;
+    core::ModuleBaseApi::ModuleKeys inboxToModuleKeys(inbox::server::Inbox inbox);
 
-    InboxEntryResult decryptInboxEntry(inbox::server::Inbox inbox, thread::server::Message message);
-    inbox::InboxEntry convertInboxEntry(inbox::server::Inbox inbox, thread::server::Message message, const inbox::InboxEntryResult& inboxEntry);
-    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(inbox::server::Inbox inbox, thread::server::Message message);
+
+    InboxEntryResult decryptInboxEntry(thread::server::Message message, const core::ModuleBaseApi::ModuleKeys& inboxKeys);
+    inbox::InboxEntry convertInboxEntry(thread::server::Message message, const inbox::InboxEntryResult& inboxEntry);
+    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message message, const core::ModuleBaseApi::ModuleKeys& inboxKeys);
     store::FileMetaToEncryptV4 prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
+    core::ModuleBaseApi::ModuleKeys getEntryDecryptionKeys(thread::server::Message message);
 
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
@@ -184,8 +189,6 @@ private:
     InboxHandleManager _inboxHandleManager;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    InboxProvider _inboxProvider;
-    std::atomic_bool _inboxCache;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId, _messageDeleterId;
     size_t _serverRequestChunkSize;
