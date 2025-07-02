@@ -2017,3 +2017,70 @@ TEST_F(InboxTest, update_access_to_old_entries) {
     });
     EXPECT_EQ(entry.statusCode, 0);
 }
+
+TEST_F(InboxTest, sendEntry_cacheManipulation) {
+    // load inbox to cache
+    EXPECT_NO_THROW({
+        inboxApi->getInbox(reader->getString("Inbox_1.inboxId"));
+    });
+    // update inbox
+    EXPECT_NO_THROW({
+        inboxApi->updateInbox(
+            reader->getString("Inbox_1.inboxId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            1,
+            true,
+            true
+        );
+    }); 
+    // correct data
+
+    int64_t inboxHandle = 0;
+    EXPECT_NO_THROW({
+        inboxHandle = inboxApi->prepareEntry(
+            reader->getString("Inbox_2.inboxId"),
+            core::Buffer::from("test_sendEntry"),
+            {},
+            reader->getString("Login.user_1_privKey")
+        );
+    });
+    EXPECT_EQ(inboxHandle, 1);
+    if(inboxHandle == 1) {        
+        EXPECT_NO_THROW({
+            inboxApi->sendEntry(inboxHandle);
+        });
+        auto entries = inboxApi->listEntries(
+            reader->getString("Inbox_2.inboxId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="asc"
+            }
+        );
+        EXPECT_EQ(entries.totalAvailable, 1);
+        EXPECT_EQ(entries.readItems.size(), 1);
+        if(entries.readItems.size() >= 1) {
+            auto entry = entries.readItems[0];
+            EXPECT_EQ(entry.inboxId, reader->getString("Inbox_2.inboxId"));
+            EXPECT_EQ(entry.data.stdString(), "test_sendEntry");
+            EXPECT_EQ(entry.files.size(), 0);
+        }
+    } else {
+        std::cout << "prepareEntry Failed" << std::endl;
+        FAIL();
+    }
+}
