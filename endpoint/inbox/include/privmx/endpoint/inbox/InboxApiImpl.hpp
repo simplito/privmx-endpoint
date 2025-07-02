@@ -48,6 +48,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
+#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
 namespace endpoint {

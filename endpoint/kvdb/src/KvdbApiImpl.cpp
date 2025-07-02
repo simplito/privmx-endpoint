@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/Mapper.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 
 using namespace privmx::endpoint;
@@ -150,37 +151,15 @@ void KvdbApiImpl::updateKvdb(
     auto getModel = utils::TypedObjectFactory::createNewObject<server::KvdbGetModel>();
     getModel.kvdbId(kvdbId);
     auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb();
-    auto currentKvdbResourceId = currentKvdb.resourceIdOpt(core::EndpointUtils::generateId());
-
-    // extract current users info
-    auto usersVec {core::EndpointUtils::listToVector<std::string>(currentKvdb.users())};
-    auto managersVec {core::EndpointUtils::listToVector<std::string>(currentKvdb.managers())};
-    auto oldUsersAll {core::EndpointUtils::uniqueList(usersVec, managersVec)};
-
-    auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-
-    // adjust key
-    std::vector<std::string> deletedUsers {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
-    std::vector<std::string> addedUsers {core::EndpointUtils::getDifference(core::EndpointUtils::usersWithPubKeyToIds(new_users), oldUsersAll)};
-    std::vector<core::UserWithPubKey> usersToAddMissingKey;
-    for(auto new_user: new_users) {
-        if( std::find(addedUsers.begin(), addedUsers.end(), new_user.userId) != addedUsers.end()) {
-            usersToAddMissingKey.push_back(new_user);
-        }
-    }
-    bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-
-    auto location {getModuleEncKeyLocation(currentKvdb, currentKvdbResourceId)};
     auto currentKvdbEntry = currentKvdb.data().get(currentKvdb.data().size()-1);
-
+    auto currentKvdbResourceId = currentKvdb.resourceIdOpt(core::EndpointUtils::generateId());
+    auto location {getModuleEncKeyLocation(currentKvdb, currentKvdbResourceId)};
     auto kvdbKeys {getAndValidateModuleKeys(currentKvdb, currentKvdbResourceId)};
     auto currentKvdbKey {findEncKeyByKeyId(kvdbKeys, currentKvdbEntry.keyId())};
-
     auto kvdbInternalMeta = extractAndDecryptModuleInternalMeta(currentKvdbEntry, currentKvdbKey);
-    if(currentKvdbKey.dataStructureVersion != 2) {
-        //force update all keys if kvdb keys is in older version
-        usersToAddMissingKey = new_users;
-    }
+
+    auto usersKeysResolver {core::UsersKeysResolver::create(currentKvdb, users, managers, forceGenerateNewKey, currentKvdbKey)};
+
     if(!_keyProvider->verifyKeysSecret(kvdbKeys, location, kvdbInternalMeta.secret)) {
         throw KvdbEncryptionKeyValidationException();
     }
@@ -188,16 +167,18 @@ void KvdbApiImpl::updateKvdb(
     core::EncKey kvdbKey = currentKvdbKey;
     core::DataIntegrityObject updateKvdbDio = _connection.getImpl()->createDIO(currentKvdb.contextId(), currentKvdbResourceId);
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
-    if(needNewKey) {
+    if(usersKeysResolver->doNeedNewKey()) {
         kvdbKey = _keyProvider->generateKey();
         keys = _keyProvider->prepareKeysList(
-            new_users, 
+            usersKeysResolver->getNewUsers(), 
             kvdbKey, 
             updateKvdbDio,
             location,
             kvdbInternalMeta.secret
         );
     }
+
+    auto usersToAddMissingKey {usersKeysResolver->getUsersToAddKey()};
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             kvdbKeys,

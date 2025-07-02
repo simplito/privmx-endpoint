@@ -29,6 +29,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 
 using namespace privmx::endpoint;
@@ -168,59 +169,39 @@ void ThreadApiImpl::updateThread(
     auto getModel = utils::TypedObjectFactory::createNewObject<server::ThreadGetModel>();
     getModel.threadId(threadId);
     auto currentThread = _serverApi.threadGet(getModel).thread();
-    auto currentThreadResourceId = currentThread.resourceIdOpt(core::EndpointUtils::generateId());
-
-    // extract current users info
-    auto usersVec {core::EndpointUtils::listToVector<std::string>(currentThread.users())};
-    auto managersVec {core::EndpointUtils::listToVector<std::string>(currentThread.managers())};
-    auto oldUsersIds {core::EndpointUtils::uniqueList(usersVec, managersVec)};
-
-    auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    auto newUsersIds {core::EndpointUtils::usersWithPubKeyToIds(new_users)};
-    auto deletedUsersIds {core::EndpointUtils::getDifference(oldUsersIds, newUsersIds)};
-    auto addedUsersIds {core::EndpointUtils::getDifference(newUsersIds, oldUsersIds)};
-        
-    // adjust key
-    std::vector<core::UserWithPubKey> usersToAddMissingKey;
-    for(auto new_user: new_users) {
-        if( std::find(addedUsersIds.begin(), addedUsersIds.end(), new_user.userId) != addedUsersIds.end()) {
-            usersToAddMissingKey.push_back(new_user);
-        }
-    }
-    bool needNewKey = deletedUsersIds.size() > 0 || forceGenerateNewKey;
-
-    auto location {getModuleEncKeyLocation(currentThread, currentThreadResourceId)};
     auto currentThreadEntry = currentThread.data().get(currentThread.data().size()-1);
-
+    auto currentThreadResourceId = currentThread.resourceIdOpt(core::EndpointUtils::generateId());
+    auto location {getModuleEncKeyLocation(currentThread, currentThreadResourceId)};
     auto threadKeys {getAndValidateModuleKeys(currentThread, currentThreadResourceId)};
     auto currentThreadKey {findEncKeyByKeyId(threadKeys, currentThreadEntry.keyId())};
-
     auto threadInternalMeta = extractAndDecryptModuleInternalMeta(currentThreadEntry, currentThreadKey);
-    if(currentThreadKey.dataStructureVersion != 2) {
-        //force update all keys if thread keys is in older version
-        usersToAddMissingKey = new_users;
-    }
+
+    auto usersKeysResolver {core::UsersKeysResolver::create(currentThread, users, managers, forceGenerateNewKey, currentThreadKey)};
+
     if(!_keyProvider->verifyKeysSecret(threadKeys, location, threadInternalMeta.secret)) {
         throw ThreadEncryptionKeyValidationException();
     }
     // setting thread Key adding new users
     core::EncKey threadKey = currentThreadKey;
     core::DataIntegrityObject updateThreadDio = _connection.getImpl()->createDIO(currentThread.contextId(), currentThreadResourceId);
+    
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
-    if(needNewKey) {
+    if(usersKeysResolver->doNeedNewKey()) {
         threadKey = _keyProvider->generateKey();
         keys = _keyProvider->prepareKeysList(
-            new_users, 
+            usersKeysResolver->getNewUsers(), 
             threadKey, 
             updateThreadDio,
             location,
             threadInternalMeta.secret
         );
     }
+
+    auto usersToAddMissingKey {usersKeysResolver->getUsersToAddKey()};
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             threadKeys,
-            usersToAddMissingKey, 
+            usersToAddMissingKey,
             updateThreadDio, 
             location,
             threadInternalMeta.secret

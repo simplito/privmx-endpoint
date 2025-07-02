@@ -27,6 +27,7 @@ limitations under the License.
 #include "privmx/endpoint/store/Mapper.hpp"
 #include "privmx/endpoint/store/StoreVarSerializer.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 
 using namespace privmx::endpoint;
@@ -177,66 +178,40 @@ void StoreApiImpl::updateStore(
     auto getModel = utils::TypedObjectFactory::createNewObject<server::StoreGetModel>();
     getModel.storeId(storeId);
     auto currentStore {_serverApi->storeGet(getModel).store()};
-    auto currentStoreResourceId = currentStore.resourceIdOpt(core::EndpointUtils::generateId());
-
-    // extract current users info
-    auto usersVec {core::EndpointUtils::listToVector<std::string>(currentStore.users())};
-    auto managersVec {core::EndpointUtils::listToVector<std::string>(currentStore.managers())};
-    auto oldUsersAll {core::EndpointUtils::uniqueList(usersVec, managersVec)};
-
-    auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-
-    // adjust key
-    std::vector<std::string> deletedUsers {core::EndpointUtils::getDifference(oldUsersAll, usersWithPubKeyToIds(new_users))};
-    std::vector<std::string> addedUsers {core::EndpointUtils::getDifference(usersWithPubKeyToIds(new_users), oldUsersAll)};
-    std::vector<core::UserWithPubKey> usersToAddMissingKey;
-    for(auto new_user: new_users) {
-        if( std::find(addedUsers.begin(), addedUsers.end(), new_user.userId) != addedUsers.end()) {
-            usersToAddMissingKey.push_back(new_user);
-        }
-    }
-    bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-    
-    // read all key to check if all key belongs to this store
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=currentStore.contextId(), .resourceId=currentStoreResourceId};
-    keyProviderRequest.addAll(currentStore.keys(), location);
-    auto storeKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     auto currentStoreEntry = currentStore.data().get(currentStore.data().size()-1);
-    core::DecryptedEncKey currentStoreKey;
-    for (auto key : storeKeys) {
-        if (currentStoreEntry.keyId() == key.first) {
-            currentStoreKey = key.second;
-            break;
-        }
-    }
+    auto currentStoreResourceId = currentStore.resourceIdOpt(core::EndpointUtils::generateId());
+    auto location {getModuleEncKeyLocation(currentStore, currentStoreResourceId)};
+    auto storeKeys {getAndValidateModuleKeys(currentStore, currentStoreResourceId)};
+    auto currentStoreKey {findEncKeyByKeyId(storeKeys, currentStoreEntry.keyId())};
     auto storeInternalMeta = extractAndDecryptModuleInternalMeta(currentStoreEntry, currentStoreKey);
-    if(currentStoreKey.dataStructureVersion != 2) {
-        //force update all keys if store keys is in older version
-        usersToAddMissingKey = new_users;
-    }
+
+    auto usersKeysResolver {core::UsersKeysResolver::create(currentStore, users, managers, forceGenerateNewKey, currentStoreKey)};
+
     if(!_keyProvider->verifyKeysSecret(storeKeys, location, storeInternalMeta.secret)) {
         throw StoreEncryptionKeyValidationException();
     }
     // setting store Key adding new users
     core::EncKey storeKey = currentStoreKey;
     core::DataIntegrityObject updateStoreDio = _connection.getImpl()->createDIO(currentStore.contextId(), currentStoreResourceId);
+    
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
-    if(needNewKey) {
+    if(usersKeysResolver->doNeedNewKey()) {
         storeKey = _keyProvider->generateKey();
         keys = _keyProvider->prepareKeysList(
-            new_users, 
+            usersKeysResolver->getNewUsers(), 
             storeKey, 
             updateStoreDio,
             location,
             storeInternalMeta.secret
         );
     }
+
+    auto usersToAddMissingKey {usersKeysResolver->getUsersToAddKey()};
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             storeKeys,
             usersToAddMissingKey, 
-            updateStoreDio, 
+            updateStoreDio,
             location,
             storeInternalMeta.secret
         );
