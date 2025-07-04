@@ -535,6 +535,10 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     core::EncKeyLocation location{.contextId=file_raw.store().contextId(), .resourceId=file_raw.store().resourceIdOpt(core::EndpointUtils::generateId())};
     keyProviderRequest.addOne(file_raw.store().keys(), file_raw.file().keyId(), location);
     auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(file_raw.file().keyId());
+    // Fix later to proper one function
+    File decryptedFile;
+    core::DataIntegrityObject fileDIO;
+    std::tie(decryptedFile, fileDIO) = decryptAndConvertFileDataToFileInfo(file_raw.file(), core::DecryptedEncKey(key));
     auto internalMeta = decryptFileInternalMeta(file_raw.file(), core::DecryptedEncKey(key));
     if (internalMeta.randomWriteOpt(false)) {
         // random write
@@ -543,7 +547,26 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
         std::shared_ptr<BlockProvider> bp = std::make_shared<BlockProvider>(sp);
         std::shared_ptr<MetaEncryptor> me = std::make_shared<MetaEncryptor>(_userPrivKey, _connection, key);
         std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(utils::Base64::toString(internalMeta.key()), internalMeta.chunkSize());
-        std::shared_ptr<File2> file2 = std::make_shared<File2>(bp, che, me);
+        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(internalMeta.key(), internalMeta.hmac());
+        std::shared_ptr<File2> file2 = std::make_shared<File2>(
+            bp, che, hash, me, 
+            internalMeta.size(), 
+            file_raw.file().version(), 
+            internalMeta.chunkSize(),
+            privmx::endpoint::store::FileId{
+                .contextId = file_raw.file().contextId(), 
+                .storeId = file_raw.file().storeId(),
+                .storeResourceId = file_raw.store().resourceIdOpt(""),
+                .fileId = file_raw.file().id(),
+                .resourceId = file_raw.file().resourceIdOpt("")
+            },
+            privmx::endpoint::store::FileMeta{
+                .publicMeta=decryptedFile.publicMeta,
+                .privateMeta=decryptedFile.privateMeta,
+                .internalFileMeta=internalMeta
+            },
+            _serverApi
+        );
         std::shared_ptr<FileInterface> file = std::make_shared<FileImpl>(file2);
         std::shared_ptr<FileRandomWriteHandle> handle = _fileHandleManager.createFileRandomWriteHandle(
             fileId,
