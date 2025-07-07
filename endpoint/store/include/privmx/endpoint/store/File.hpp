@@ -81,7 +81,19 @@ public:
         auto key = getEncKey(fileId);
         return {key.id, FileMetaEncryptorV5().encrypt(metaToEncrypt, _userPrivKey, key.key).asVar()};
     }
-    // FileMeta decrypt(const FileId& fileId, const EncryptedMeta& encryptedMeta) {}
+
+    FileMeta decrypt(const FileId& fileId, const EncryptedMeta& encryptedMeta) {
+        auto key = getEncKey(fileId);
+        auto decryptedFileMeta = FileMetaEncryptorV5().decrypt(encryptedMeta.meta, key.key);
+        // TO DO validate decrypted data
+        return FileMeta{
+            decryptedFileMeta.publicMeta,
+            decryptedFileMeta.privateMeta,
+            utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(
+                utils::Utils::parseJson(decryptedFileMeta.internalMeta.stdString())
+            )
+        };
+    }
 
 private:
     privmx::endpoint::core::DataIntegrityObject createDIO(const FileId& fileId) {
@@ -130,7 +142,7 @@ class SliceProvider
 {
 public:
     SliceProvider(std::shared_ptr<ServerSliceProvider> serverSliceProvider) : _serverSliceProvider(std::move(serverSliceProvider)) {}
-    std::string get(int64_t start, int64_t end, int64_t version) {
+    std::string get(size_t start, size_t end, int64_t version) {
         return _serverSliceProvider->get(start, end, version);
     }
 
@@ -143,28 +155,28 @@ class BlockProvider
 public:
     BlockProvider(std::shared_ptr<SliceProvider> sliceProvider)
         : _sliceProvider(std::move(sliceProvider)) {}
-    std::string get(int64_t index, int64_t version, int64_t fileSize,  int64_t blockSize) { // warning: last chunk can be smaller than other!!
-        int64_t start = index * blockSize;
-        int64_t end = (index + 1) * blockSize;
-        if (start > fileSize) {
-            throw EndpointStoreException(); // TODO
+    std::string get(size_t blockIndex, int64_t version, size_t encryptedFileSize,  size_t encryptedBlockSize) { // warning: last chunk can be smaller than other!!
+        size_t start = blockIndex * encryptedBlockSize;
+        size_t end = (blockIndex + 1) * encryptedBlockSize;
+        if (start > encryptedFileSize) {
+            throw FileRandomWriteInternalException("seekg out of bounds");
         }
-        if (end > fileSize) {
-            end = fileSize;
+        if (end > encryptedFileSize) {
+            end = encryptedFileSize;
         }
         return _sliceProvider->get(start, end, version);
     }
 
 private:
     std::shared_ptr<SliceProvider> _sliceProvider;
-    int64_t _blockSize;
+    size_t _blockSize;
 };
 
 class ChunkEncryptor : public IChunkEncryptor
 {
 public:
-    ChunkEncryptor(std::string key, int64_t chunkSize) : _key(key), _chunkSize(chunkSize) {}
-    Chunk encrypt(const int64_t index, const std::string& data) override {
+    ChunkEncryptor(std::string key, size_t chunkSize) : _key(key), _chunkSize(chunkSize) {}
+    Chunk encrypt(const size_t index, const std::string& data) override {
         std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
         std::string iv = privmx::crypto::Crypto::randomBytes(IV_SIZE);
         std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
@@ -175,7 +187,7 @@ public:
             .hmac = hmac
         };
     }
-    std::string decrypt(const int64_t index, const Chunk& chunk) override {
+    std::string decrypt(const size_t index, const Chunk& chunk) override {
         std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
         std::string hmac = chunk.data.substr(0, HMAC_SIZE);
         if (chunk.hmac != hmac) {
@@ -189,29 +201,29 @@ public:
         std::string plain = crypto::Crypto::aes256CbcPkcs7Decrypt(chunk.data.substr(HMAC_SIZE + IV_SIZE), chunkKey, iv);
         return plain;
     }
-    int64_t getPlainChunkSize() override {
+    size_t getPlainChunkSize() override {
         return _chunkSize;
     }
-    int64_t getEncryptedChunkSize() override {
+    size_t getEncryptedChunkSize() override {
         Poco::Int64 CHUNK_PADDINGSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
         return _chunkSize + CHUNK_PADDINGSize + HMAC_SIZE + IV_SIZE;
     }
-    int64_t getEncryptedFileSize(const int64_t& fileSize) override {
-        int64_t numberOfChunks = (fileSize + getPlainChunkSize() - 1) / getPlainChunkSize();
+    size_t getEncryptedFileSize(const size_t& fileSize) override {
+        size_t numberOfChunks = (fileSize + getPlainChunkSize() - 1) / getPlainChunkSize();
         return numberOfChunks * getEncryptedChunkSize();
     }
-    int64_t getChunkIndex(const int64_t& pos) override {
+    size_t getChunkIndex(const size_t& pos) override {
         return pos / getPlainChunkSize();
     }
 
 private:
-    std::string chunkIndexToBE(const int64_t index) {
+    std::string chunkIndexToBE(const size_t index) {
         uint32_t index_be = Poco::ByteOrder::toBigEndian(index);
         return std::string((char *)&index_be, 4);
     }
 
     std::string _key;
-    int64_t _chunkSize;
+    size_t _chunkSize;
 };
 
 class File2
@@ -222,9 +234,10 @@ public:
         std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         std::shared_ptr<IHashList> hashList,
         std::shared_ptr<MetaEncryptor> metaEncryptor,
-        int64_t fileSize,
+        size_t fileSize,
+        size_t encryptedFileSize,
         int64_t version,
-        int64_t chunksize,
+        size_t chunksize,
         FileId fileId,
         FileMeta fileMeta,
         std::shared_ptr<ServerApi> server
@@ -234,13 +247,14 @@ public:
         _hashList(hashList),
         _fileMetaEncryptor(metaEncryptor),
         _fileSize(fileSize),
+        _encryptedFileSize(encryptedFileSize),
         _version(version),
         _chunksize(chunksize),
         _fileId(fileId),
         _fileMeta(fileMeta),
         _server(server)
     {}
-    void write(int64_t offset, const core::Buffer& data) { // data = buf + size
+    void write(size_t offset, const core::Buffer& data) { // data = buf + size
         auto toSend = data.stdString();
         if (_fileSize < offset) { 
             // if fileSize smaller than offset fill here empty space with 0
@@ -249,30 +263,37 @@ public:
             toSend = emptyChars + toSend;
         }
         // start writing to offset chunk
-        int64_t index = pos2index(offset);
-        int64_t dataSend = 0;
-        for(int i = 0; i <  pos2index(offset + toSend.size()); i++) {
-            if(i == 0) {
-                int64_t chunkOffset =offset % _chunksize;
+        size_t startIndex = posToindex(offset);
+        size_t stopIndex = posToindex(offset+toSend.size());
+        size_t dataSend = 0;
+        for(size_t i = startIndex; i <= stopIndex; i++) {
+            if(i == startIndex) {
+                size_t chunkOffset =offset % _chunksize;
                 std::string chunkData = toSend.substr(dataSend, _chunksize -(offset % _chunksize));
-                setChunk(index+i, chunkOffset, chunkData);
+                setChunk(i, chunkOffset, chunkData);
             } else {
-                int64_t chunkOffset = 0;
+                size_t chunkOffset = 0;
                 std::string chunkData = toSend.substr(dataSend, _chunksize);
-                setChunk(index+i, chunkOffset, chunkData);
+                setChunk(i, chunkOffset, chunkData);
             }
         }
     }
     void sync() {
         throw NotImplementedException();
     }
-    core::Buffer read(int64_t offset, int64_t size) {
-        throw NotImplementedException();
+    core::Buffer read(size_t offset, size_t size) {
+        size_t startIndex = posToindex(offset);
+        size_t stopIndex = posToindex(offset+size);
+        std::string data = std::string();
+        for(size_t i = startIndex; i <= stopIndex; i++) {
+            data.append(getDecryptedChunk(i));
+        }
+        return core::Buffer::from( data.substr(posInindex(offset), size) );
     }
-    int64_t getFileSize() {
+    size_t getFileSize() {
         return _fileSize;
     }
-    void truncate(int64_t length) {
+    void truncate(size_t length) {
         throw NotImplementedException(); // TODO
     }
     void close() {
@@ -280,30 +301,33 @@ public:
     }
 
 private:
-    void setChunk(int64_t index, int64_t chunkOffset, const std::string& data) {
-        if (chunkOffset + data.size() > _chunksize) {
+    void setChunk(size_t index, size_t chunkOffset, const std::string& data) {
+        // check if new data fit in _chunksize
+        if ((chunkOffset + data.size()) > _chunksize) {
             // "Given data with offset won't fit Chunk
             throw FileRandomWriteInternalException("Given data with offset won't fit Chunk");
             // throw
         }
-        std::string newChunk;
-        if (chunkOffset > 0 || data.size() < _chunksize) {
-            // TODO: check if exists or return ""
-            // get oldChunk (decrypted), _blockProvider->get return encrypted data
-            std::string prevChunk = getChunk(index, _version);
-
-            newChunk = prevChunk.substr(0, chunkOffset);
+        std::string newChunk = std::string();
+        // read old chunk
+        std::string prevEncryptedChunk = _blockProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+        std::string prevChunk = _chunkEncryptor->decrypt(index, {.data = prevEncryptedChunk, .hmac = _hashList->getHash(index)});
+        // fill new chunk data to chunkOffset
+        if(chunkOffset > 0) {
+            newChunk.append(prevChunk.substr(0, chunkOffset));
+            // fill empty space between chunkOffset and prevChunk with (char)0x00
             if (chunkOffset > prevChunk.size()) {
-                newChunk += std::string(chunkOffset - prevChunk.size(), (char)0x00);
+                newChunk.append(std::string(chunkOffset - prevChunk.size(), (char)0x00));
             }
-            newChunk += data;
-            if (chunkOffset + data.size() < prevChunk.size() ) {
-                newChunk += prevChunk.substr(chunkOffset + data.size());
-            }
+        }
+        // fill new chunk data from chunkOffset to data.size()
+        newChunk.append(data);
+        // fill new chunk data from chunkOffset + data.size() to end of chunk
+        if(prevChunk.size() > chunkOffset + data.size()) {
+            newChunk.append(prevChunk.substr(chunkOffset + data.size()));
         }
         // set newChunk;
         auto chunk = _chunkEncryptor->encrypt(index, newChunk);
-
         _hashList->set(index, chunk.hmac);
         auto topHash = _hashList->getTopHash();
 
@@ -341,26 +365,36 @@ private:
         _server->storeFileWrite(writeRequest);
 
         _version += 1;
-        _fileSize = std::max(_fileSize, int64_t(chunkOffset + data.size()));
+        // update _fileSize;
+        if(prevChunk.size() < chunkOffset + data.size()) {
+            // new data added
+            _fileSize += (chunkOffset + data.size()) - prevChunk.size();
+            _encryptedFileSize += chunk.data.size() - prevEncryptedChunk.size();
+        }
         
     }
 
-    std::string getChunk(int64_t index, int64_t version) {
-        std::string chunk = _blockProvider->get(index, version, _fileSize, _chunkEncryptor->getEncryptedChunkSize());
+    std::string getDecryptedChunk(size_t index) {
+        std::string chunk = _blockProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
         std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
         return plain;
     }
-    int64_t pos2index(int64_t position) {
-        throw NotImplementedException();
+    size_t posToindex(size_t position) {
+        return position / _chunkEncryptor->getPlainChunkSize();
+    }
+
+    size_t posInindex(size_t position) {
+        return position % _chunkEncryptor->getPlainChunkSize();
     }
 
     std::shared_ptr<BlockProvider> _blockProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
     std::shared_ptr<IHashList> _hashList;
     std::shared_ptr<MetaEncryptor> _fileMetaEncryptor;
-    int64_t _fileSize = 0;
+    size_t _fileSize = 0;
+    size_t _encryptedFileSize = 0;
     int64_t _version = 0;
-    int64_t _chunksize = 0; // TODO
+    size_t _chunksize = 0; // TODO
     FileId _fileId;
     FileMeta _fileMeta;
     std::shared_ptr<ServerApi> _server;
@@ -369,15 +403,15 @@ private:
 class FileInterface
 {
 public:
-    virtual int64_t size() = 0;
-    virtual void seekg(const int64_t pos) = 0;
-    virtual void seekp(const int64_t pos) = 0;
-    virtual core::Buffer read(const int64_t length) = 0;
+    virtual size_t size() = 0;
+    virtual void seekg(const size_t pos) = 0;
+    virtual void seekp(const size_t pos) = 0;
+    virtual core::Buffer read(const size_t length) = 0;
     virtual void write(const core::Buffer& chunk) = 0;
-    virtual void truncate(const int64_t length) = 0;
+    virtual void truncate(const size_t length) = 0;
     virtual void close() = 0;
-    // virtual void sync() = 0;
-    // virtual void flush() = 0;
+    virtual void sync() = 0;
+    virtual void flush() = 0;
 };
 
 
@@ -386,23 +420,23 @@ class FileImpl : public FileInterface
 public:
     FileImpl(std::shared_ptr<File2> file) : _file(file) {}
 
-    int64_t size() override {
+    size_t size() override {
         return _file->getFileSize();
     }
-    void seekg(const int64_t pos) override {
+    void seekg(const size_t pos) override {
         if (pos > _file->getFileSize()) {
-            throw EndpointStoreException(); // TODO
+            throw FileRandomWriteInternalException("seekg out of bounds");
         }
         _readPos = pos;
     }
-    void seekp(const int64_t pos) override {
+    void seekp(const size_t pos) override {
         if (pos > _file->getFileSize()) {
-            throw EndpointStoreException(); // TODO
+            throw FileRandomWriteInternalException("seekg out of bounds");
         }
         _writePos = pos;
     }
 
-    core::Buffer read(const int64_t length) override {
+    core::Buffer read(const size_t length) override {
         auto buf = _file->read(_readPos, length);
         _readPos += buf.size();
         return buf;
@@ -413,7 +447,7 @@ public:
         _writePos += chunk.size();
     }
 
-    void truncate(const int64_t length) override {
+    void truncate(const size_t length) override {
         _file->truncate(length);
     }
 
@@ -421,10 +455,18 @@ public:
         _file->close();
     }
 
+    void sync() override {
+        throw NotImplementedException();
+    }
+
+    void flush() override {
+        throw NotImplementedException();
+    }
+
 private:
     std::shared_ptr<File2> _file;
-    int64_t _readPos = 0;
-    int64_t _writePos = 0;
+    size_t _readPos = 0;
+    size_t _writePos = 0;
 };
 
 } // store

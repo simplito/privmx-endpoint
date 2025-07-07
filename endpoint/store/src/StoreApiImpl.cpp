@@ -334,16 +334,16 @@ core::PagingList<Store> StoreApiImpl::listStoresEx(const std::string& contextId,
 }
 
 core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeList)
+    PRIVMX_DEBUG_TIME_START(PlatformStore, _listStoresEx)
     auto storeListModel = utils::TypedObjectFactory::createNewObject<server::StoreListModel>();
     storeListModel.contextId(contextId);
     if (type.length() > 0) {
         storeListModel.type(type);
     }
     core::ListQueryMapper::map(storeListModel, query);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _listStoresEx)
     auto storesList = _serverApi->storeList(storeListModel);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList, data send)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _listStoresEx, data send)
     std::vector<Store> stores;
     for (size_t i = 0; i < storesList.stores().size(); i++) {
         auto store = storesList.stores().get(i);
@@ -551,6 +551,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
         std::shared_ptr<File2> file2 = std::make_shared<File2>(
             bp, che, hash, me, 
             internalMeta.size(), 
+            file_raw.file().size(),
             file_raw.file().version(), 
             internalMeta.chunkSize(),
             privmx::endpoint::store::FileId{

@@ -26,12 +26,12 @@ public:
     };
 
     virtual ~IChunkEncryptor() = default;
-    virtual Chunk encrypt(const int64_t index, const std::string& data) = 0;
-    virtual std::string decrypt(const int64_t index, const Chunk& chunk) = 0;
-    virtual int64_t getPlainChunkSize() = 0;
-    virtual int64_t getEncryptedChunkSize() = 0;
-    virtual int64_t getEncryptedFileSize(const int64_t& fileSize) = 0;
-    virtual int64_t getChunkIndex(const int64_t& pos) = 0;
+    virtual Chunk encrypt(const size_t index, const std::string& data) = 0;
+    virtual std::string decrypt(const size_t index, const Chunk& chunk) = 0;
+    virtual size_t getPlainChunkSize() = 0;
+    virtual size_t getEncryptedChunkSize() = 0;
+    virtual size_t getEncryptedFileSize(const size_t& fileSize) = 0;
+    virtual size_t getChunkIndex(const size_t& pos) = 0;
 
 };
 
