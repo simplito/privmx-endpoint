@@ -185,3 +185,29 @@ Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val) {
     obj->set("isActive", serialize(val.isActive));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$BridgeIdentity");
+    }
+    obj->set("url", serialize(val.url));
+    obj->set("pubKey", serialize(val.pubKey));
+    obj->set("instanceId", serialize(val.instanceId));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const VerificationRequest& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$VerificationRequest");
+    }
+    obj->set("contextId", serialize(val.contextId));
+    obj->set("senderId", serialize(val.senderId));
+    obj->set("senderPubKey", serialize(val.senderPubKey));
+    obj->set("date", serialize(val.date));
+    obj->set("bridgeIdentity", serialize(val.bridgeIdentity));
+    return obj;
+}

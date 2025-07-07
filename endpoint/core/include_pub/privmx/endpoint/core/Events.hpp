@@ -103,7 +103,7 @@ private:
 };
 
 /**
- * Event that can be emmited to break the waitEvent loop.
+ * Event that can be emitted to break the waitEvent loop.
  */
 struct LibBreakEvent : public Event {
 

@@ -28,6 +28,9 @@ public:
         if (listQuery.lastId.has_value()) {
             obj.lastId(listQuery.lastId.value());
         }
+        if (listQuery.sortBy.has_value()) {
+            obj.sortBy(listQuery.sortBy.value());
+        }
         if(listQuery.queryAsJson.has_value()) {
             obj.query(privmx::utils::Utils::parseJson(listQuery.queryAsJson.value()));
         }

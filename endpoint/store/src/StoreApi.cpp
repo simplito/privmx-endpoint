@@ -121,7 +121,7 @@ Store StoreApi::getStore(const std::string& storeId) {
 core::PagingList<Store> StoreApi::listStores(const std::string& contextId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<core::PagingQuery>(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate", "lastModificationDate", "lastFileDate"}, "field:query ");
     try {
         return _impl->listStores(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -230,7 +230,7 @@ File StoreApi::getFile(const std::string& fileId) {
 
 core::PagingList<File> StoreApi::listFiles(const std::string& storeId, const core::PagingQuery& listQuery) {
     core::Validator::validateId(storeId, "field:storeId ");
-    core::Validator::validateClass<core::PagingQuery>(listQuery, "field:listQuery ");
+    core::Validator::validatePagingQuery(listQuery, {"createDate", "updates"}, "field:listQuery ");
     try {
         return _impl->listFiles(storeId, listQuery);
     } catch (const privmx::utils::PrivmxException& e) {

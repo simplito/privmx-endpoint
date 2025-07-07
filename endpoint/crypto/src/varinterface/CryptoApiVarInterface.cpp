@@ -35,7 +35,8 @@ std::map<CryptoApiVarInterface::METHOD, Poco::Dynamic::Var (CryptoApiVarInterfac
                                         {FromEntropy, &CryptoApiVarInterface::fromEntropy},
                                         {EntropyToMnemonic, &CryptoApiVarInterface::entropyToMnemonic},
                                         {MnemonicToEntropy, &CryptoApiVarInterface::mnemonicToEntropy},
-                                        {MnemonicToSeed, &CryptoApiVarInterface::mnemonicToSeed}};
+                                        {MnemonicToSeed, &CryptoApiVarInterface::mnemonicToSeed},
+                                        {ConvertPGPAsn1KeyToBase58DERKey, &CryptoApiVarInterface::convertPGPAsn1KeyToBase58DERKey}};
 
 
 Poco::Dynamic::Var CryptoApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -178,6 +179,13 @@ Poco::Dynamic::Var CryptoApiVarInterface::mnemonicToSeed(const Poco::Dynamic::Va
     auto mnemonic = _deserializer.deserialize<std::string>(argsArr->get(0), "mnemonic");
     auto password = _deserializer.deserialize<std::string>(argsArr->get(1), "password");
     auto result = _cryptoApi.mnemonicToSeed(mnemonic, password);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var CryptoApiVarInterface::convertPGPAsn1KeyToBase58DERKey(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto keyPEM = _deserializer.deserialize<std::string>(argsArr->get(0), "pgpKey");
+    auto result = _cryptoApi.convertPGPAsn1KeyToBase58DERKey(keyPEM);
     return _serializer.serialize(result);
 }
 

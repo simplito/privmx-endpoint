@@ -53,6 +53,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, ContextDoesNotExistException
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, StoreDoesNotExistException, "Store does not exist", 0x6117)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, StoreFileDoesNotExistException, "Store file does not exist", 0x6118)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, InboxDoesNotExistException, "Inbox does not exist", 0x611E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, KvdbDoesNotExistException, "Kvdb does not exist", 0x613C)
+DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, KvdbEntryDoesNotExistException, "Kvdb entry does not exist", 0x613D)
 
 }
 
@@ -107,6 +109,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, VarIsNotObjectException, "Var i
 DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, VarIsNotArrayException, "Var is not array", 0x0004)
 DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, OperationCancelledException, "Operation canceled", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, NotImplementedException, "Not implemented", 0x0006)
+DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, InvalidVersionFormatException, "Invalid version format", 0x0007);
 
 } // internal
 

@@ -186,6 +186,33 @@ TEST_F(StoreTest, listStores_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(StoreTest, listStores_correct_input_data) {
@@ -245,14 +272,17 @@ TEST_F(StoreTest, listStores_correct_input_data) {
             EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc"}
+    // {.skip=1, .limit=3, .sortOrder="asc", .sortBy="createDate"}
     EXPECT_NO_THROW({
         listStores = storeApi->listStores(
             reader->getString("Context_1.contextId"),
             {
                 .skip=1, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
@@ -932,6 +962,33 @@ TEST_F(StoreTest, listFiles_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect queryAsJson
+    EXPECT_THROW({
+        storeApi->listFiles(
+            reader->getString("Store_1.storeId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        storeApi->listFiles(
+            reader->getString("Store_1.storeId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(StoreTest, listFiles_correct_input_data) {
@@ -979,7 +1036,7 @@ TEST_F(StoreTest, listFiles_correct_input_data) {
         );
         EXPECT_EQ(file.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_1.uploaded_publicMeta_inHex")));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on store
+    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on store
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -1004,7 +1061,10 @@ TEST_F(StoreTest, listFiles_correct_input_data) {
             {
                 .skip=0, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
@@ -1410,15 +1470,17 @@ TEST_F(StoreTest, createFile_writeToFile_closeFile) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 1024*1024*128);
-                int64_t readHandle;
-                EXPECT_NO_THROW({
-                    readHandle = storeApi->openFile(fileId);
-                });
+
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 1024*1024*128);
+            int64_t readHandle = 0;
+            EXPECT_NO_THROW({
+                readHandle = storeApi->openFile(fileId);
+            });
+            if(readHandle != 0) {
                 std::string total_data_read = "";
                 for(int i = 0; i < 1024*128; i++) {
                     total_data_read += storeApi->readFromFile(
@@ -1505,15 +1567,17 @@ TEST_F(StoreTest, updateFile_writeToFile_closeFile) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 1024*1024*128);
-                int64_t readHandle;
-                EXPECT_NO_THROW({
-                    readHandle = storeApi->openFile(fileId);
-                });
+            
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 1024*1024*128);
+            int64_t readHandle = 0;
+            EXPECT_NO_THROW({
+                readHandle = storeApi->openFile(fileId);
+            });
+            if(readHandle != 0) {
                 std::string total_data_read = "";
                 for(int i = 0; i < 1024*128; i++) {
                     total_data_read += storeApi->readFromFile(
@@ -1562,12 +1626,11 @@ TEST_F(StoreTest, createFile_with_size_0) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 0);
-            }
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 0);
         } else {
             std::cout << "closeFile Failed" << std::endl;
             FAIL();
@@ -1603,12 +1666,11 @@ TEST_F(StoreTest, updateFile_with_size_0) {
             EXPECT_NO_THROW({
                 file = storeApi->getFile(fileId);
             });
-            if(!file.info.fileId.empty()) {
-                EXPECT_EQ(file.info.fileId, fileId);
-                EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-                EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-                EXPECT_EQ(file.size, 0);
-            }
+            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(file.info.fileId, fileId);
+            EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(file.size, 0);
         } else {
             std::cout << "closeFile Failed" << std::endl;
             FAIL();
@@ -1641,12 +1703,11 @@ TEST_F(StoreTest, updateFileMeta) {
     EXPECT_NO_THROW({
         file = storeApi->getFile(reader->getString("File_1.info_fileId"));
     });
-    if(!file.info.fileId.empty()) {
-        EXPECT_EQ(file.info.fileId, reader->getString("File_1.info_fileId"));
-        EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
-        EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
-        EXPECT_EQ(file.size, reader->getInt64("File_1.size"));
-    }
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.info.fileId, reader->getString("File_1.info_fileId"));
+    EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+    EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(file.size, reader->getInt64("File_1.size"));
 }
 
 TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {

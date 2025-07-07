@@ -22,6 +22,7 @@ class KeyConverter
 {
 public:
     static std::string cryptoKeyConvertPEMToWIF(const std::string& keyPEM);
+    static std::string cryptoKeyConvertPGPToBase58DER(const std::string& keyPGP);
 };
 
 } // crypto

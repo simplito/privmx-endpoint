@@ -23,7 +23,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV1.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
-#include "privmx/endpoint/core/UserVerifierInterface.hpp"
+#include "privmx/endpoint/core/UserVerifier.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -45,7 +45,7 @@ private:
 
 class KeyProvider {
 public:
-    KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifierInterface>()> getUserVerifier);
+    KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
     EncKey generateKey();
     std::string generateSecret();
     std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(const KeyDecryptionAndVerificationRequest& request);
@@ -78,7 +78,7 @@ private:
     void verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location);
     void verifyUserData(std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys);
     privmx::crypto::PrivateKey _key;
-    std::function<std::shared_ptr<UserVerifierInterface>()> _getUserVerifier;
+    std::function<std::shared_ptr<UserVerifier>()> _getUserVerifier;
     EncKeyEncryptorV1 _encKeyEncryptorV1;
     EncKeyEncryptorV2 _encKeyEncryptorV2;
 };

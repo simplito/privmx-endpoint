@@ -139,12 +139,7 @@ void Validator::validateBase58(const string& value, const string& stack_trace) {
 }
 
 void Validator::validateSortOrder(const std::string& value, const std::string& stack_trace) {
-    if(value.empty()) {
-        throw InvalidParamsException(stack_trace + " | " + ("Invalid sortOrder, is empty"));
-    }
-    if(value != "asc" && value != "desc") {
-        throw InvalidParamsException(stack_trace + " | " + ("Invalid sortOrder, isn't 'asc' or 'desc', received '" + value + "'"));
-    }
+    return validateEnumParamString(value, {"asc","desc"}, "sortOrder", stack_trace);
 }
 
 void Validator::validateLastId(const std::string& value, const std::string& stack_trace) {
@@ -152,6 +147,21 @@ void Validator::validateLastId(const std::string& value, const std::string& stac
         throw InvalidParamsException(stack_trace + " | " + ("Invalid lastId, is empty"));
     }
     return validateId(value, stack_trace);
+}
+
+void Validator::validateEnumParamString(const std::string& value, const std::vector<std::string>& allowed_values, const std::string& param_string_name, const std::string& stack_trace) {
+    if(std::find(allowed_values.begin(), allowed_values.end(), value) == allowed_values.end()) {
+        std::string error_message = "Invalid " + param_string_name + ", allowed values are:";
+        for(const std::string& a : allowed_values) {
+            error_message += " '" + a + "'";
+        }
+        if(value.empty()) {
+            error_message += ". Received empty string";
+        } else {
+            error_message += ". Received '" + value +"'";
+        }
+        throw InvalidParamsException(stack_trace + " | " + error_message);
+    }
 }
 
 void Validator::validatePrivKeyWIF(const string& value, const string& stack_trace) {
@@ -185,6 +195,26 @@ void Validator::validateEventType(const Event& value, const std::string& type, c
     }
 }
 
+void Validator::validatePagingQuery(const PagingQuery& value,const std::vector<std::string>& sort_by_field, const std::string& stack_trace) {
+    Validator::validateSortOrder(value.sortOrder, stack_trace + "PagingQuery.sortOrder");
+    if (value.lastId.has_value()) {
+        Validator::validateLastId(value.lastId.value(), stack_trace + "PagingQuery.lastId");
+    }
+    if (value.sortBy.has_value()) {
+        Validator::validateEnumParamString(value.sortBy.value(), sort_by_field, "sortBy", stack_trace + "PagingQuery.sortBy");
+    }
+    if (value.queryAsJson.has_value()) {
+        Validator::validateJSON(value.queryAsJson.value(), stack_trace + "PagingQuery.queryAsJson");
+    }
+}
+
+void Validator::validateJSON(const std::string& value, const std::string& stack_trace) {
+    try {
+        privmx::utils::Utils::parseJson(value);
+    } catch (...) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid JSON"));
+    }
+}
 
 void StructValidator<Context>::validate(const Context& value, const std::string& stack_trace) {
     Validator::validateId(value.userId, stack_trace + ".userId");
@@ -200,13 +230,6 @@ void StructValidator<PagingList<Context>>::validate(const PagingList<Context>& v
 void StructValidator<UserWithPubKey>::validate(const UserWithPubKey& value, const std::string& stack_trace) {
     Validator::validateId(value.userId, stack_trace + ".userId");
     Validator::validatePubKeyBase58DER(value.pubKey, stack_trace + ".pubKey");
-}
-
-void StructValidator<PagingQuery>::validate(const PagingQuery& value, const std::string& stack_trace) {
-    Validator::validateSortOrder(value.sortOrder, stack_trace + ".sortOrder");
-    if (value.lastId.has_value()) {
-        Validator::validateLastId(value.lastId.value(), stack_trace + ".lastId");
-    }
 }
 
 void StructValidator<LibPlatformDisconnectedEvent>::validate(const LibPlatformDisconnectedEvent& value, const std::string& stack_trace) {

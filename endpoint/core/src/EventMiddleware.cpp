@@ -17,8 +17,8 @@ EventMiddleware::EventMiddleware(std::shared_ptr<EventQueueImpl> queue, const in
     : _queue(queue), _connectionId(connectionId) {}
 
 int EventMiddleware::addNotificationEventListener(
-    const std::function<void(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data)>&
-        callback) {
+    const std::function<void(const std::string& type, const NotificationEvent& notification)>& callback)
+{
     int id = _id.fetch_add(1);
     _notificationsListeners.set(id, callback);
     return id;
@@ -54,14 +54,16 @@ void EventMiddleware::removeDisconnectedEventListener(int id) noexcept {
     } catch (...) {}
 }
 
-void EventMiddleware::emitNotificationEvent(const std::string& type, const std::string& channel,
-                                            const Poco::JSON::Object::Ptr& data) {
+void EventMiddleware::emitNotificationEvent(const std::string& type, const NotificationEvent& notification) {
+    
     _notificationsListeners.forAll(
-        [&]([[maybe_unused]] const int& i, const std::function<void(const std::string& type, const std::string& channel,
-                                                                    const Poco::JSON::Object::Ptr& data)>& listener) {
+        [&](
+            [[maybe_unused]] const int& i, 
+            const std::function<void(const std::string& type, const NotificationEvent& notification)>& listener
+        ) {
             try {
                 if (listener) {
-                    listener(type, channel, data);
+                    listener(type, notification);
                 }
             } catch (...) {}
         });

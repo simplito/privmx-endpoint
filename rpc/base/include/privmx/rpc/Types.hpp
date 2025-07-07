@@ -20,6 +20,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/utils/TypedObject.hpp>
 #include <privmx/utils/TypesMacros.hpp>
+#include <privmx/utils/VersionNumber.hpp>
 #include <privmx/rpc/channel/WebSocketChannel.hpp>
 
 namespace privmx {
@@ -43,6 +44,7 @@ using AdditionalLoginStepCallback = std::function<void(Poco::Dynamic::Var, Secon
 
 struct ServerConfig {
     size_t requestChunkSize;
+    privmx::utils::VersionNumber serverVersion;
 };
 
 struct ConnectionInfo
@@ -468,7 +470,8 @@ struct EcdheOptions
 {
     std::optional<crypto::PrivateKey> key;
     std::optional<std::string> solution;
-    
+    std::optional<crypto::PublicKey> serverPubKey;
+
     Poco::Dynamic::Var serializeToVar(){
         Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
         auto object= package.extract<Poco::JSON::Object::Ptr>();
@@ -477,6 +480,9 @@ struct EcdheOptions
         }
         if (solution.has_value()) {
             object->set("solution", solution.value());
+        }
+        if (serverPubKey.has_value()) {
+            object->set("serverPubKey", serverPubKey.value().toBase58DER());
         }
         return package;
     }
@@ -491,11 +497,15 @@ struct EcdhexOptions
         if (solution.has_value()) {
             object->set("solution", solution.value());
         }
+        if (serverPubKey.has_value()) {
+            object->set("serverPubKey", serverPubKey.value().toBase58DER());
+        }
         return package;
     }
 
     crypto::PrivateKey key;
     std::optional<std::string> solution;
+    std::optional<crypto::PublicKey> serverPubKey;
 };
 
 struct SrpOptions

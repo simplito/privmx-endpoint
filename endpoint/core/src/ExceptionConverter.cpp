@@ -25,19 +25,19 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0xFFFF:
             // Server Request
             switch (code_second_two_bytes) {
-                case 0xFFFF8043: // -32700 PARSE_ERROR
+                case 0x8043: // -32700 PARSE_ERROR
                     throw server::ParseErrorException(e.getData());
-                case 0xFFFF80A8: // -32600 INVALID_REQUEST
+                case 0x80A8: // -32600 INVALID_REQUEST
                     throw server::InvalidRequestAException(e.getData());
-                case 0xFFFF80A7: // -32601 METHOD_NOT_FOUND
+                case 0x80A7: // -32601 METHOD_NOT_FOUND
                     throw server::MethodNotFoundException(e.getData());
-                case 0xFFFF80A6: // -32602 INVALID_PARAMS
+                case 0x80A6: // -32602 INVALID_PARAMS
                     throw server::InvalidParamsException(e.getData());
-                case 0xFFFF80A5: // -32603 INTERNAL_ERROR
+                case 0x80A5: // -32603 INTERNAL_ERROR
                     throw server::InternalErrorException(e.getData());
-                case 0xFFFF80A4: // -32604 NOT_YET_INSTALLED
+                case 0x80A4: // -32604 NOT_YET_INSTALLED
                     throw server::InvalidRequestBException(e.getData());
-                case 0xFFFF80A3: // -32605 ONLY_POST_METHOD_ALLOWED
+                case 0x80A3: // -32605 ONLY_POST_METHOD_ALLOWED
                     throw server::InvalidRequestCException(e.getData());
                 default:
                     throw server::EndpointServerRequestException(e.getData());
@@ -58,6 +58,10 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw server::StoreFileDoesNotExistException(e.getData());
                 case 0x611E: // INBOX_DOES_NOT_EXIST
                     throw server::InboxDoesNotExistException(e.getData());
+                case 0x613C: // KVDB_DOES_NOT_EXIST
+                    throw server::KvdbDoesNotExistException(e.getData());
+                case 0x613D: // KVDB_ENTRY_DOES_NOT_EXIST
+                    throw server::KvdbEntryDoesNotExistException(e.getData());
             }
             if(code_second_two_bytes >= 0x0001 && code_second_two_bytes <= 0x00A0) {
                 throw server::EndpointServerException(e.getData(), e.what(), e.getCode());
@@ -105,6 +109,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw internal::VarIsNotObjectException(e.what());
                 case 0x0004:
                     throw internal::VarIsNotArrayException(e.what());
+                case 0x0005:
+                    throw internal::InvalidVersionFormatException(e.what());
                 default:
                     throw internal::EndpointLibException(e.what());
             }

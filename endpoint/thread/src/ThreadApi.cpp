@@ -116,7 +116,7 @@ Thread ThreadApi::getThread(const std::string& threadId) {
 core::PagingList<Thread> ThreadApi::listThreads(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<core::PagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "lastModificationDate", "lastMsgDate"}, "field:pagingQuery ");
     try {
         return _impl->listThreads(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -139,7 +139,7 @@ Message ThreadApi::getMessage(const std::string& messageId) {
 core::PagingList<Message> ThreadApi::listMessages(const std::string& threadId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(threadId, "field:threadId ");
-    core::StructValidator<core::PagingQuery>::validate(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "updates"}, "field:pagingQuery ");
     try {
         return _impl->listMessages(threadId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {

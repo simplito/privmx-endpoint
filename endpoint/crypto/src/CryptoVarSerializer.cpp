@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/crypto/CryptoVarSerializer.hpp"
 
-
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 

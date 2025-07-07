@@ -78,7 +78,7 @@ public:
     static std::string jsonArrayJoin(const Poco::JSON::Array::Ptr& arr);
     static std::string trim(const std::string& data);
     static std::vector<std::string> split(std::string data, const std::string& delimiter);
-
+    static bool validateTimestamps(const int64_t& t1, const int64_t& t2, const int64_t& threshold);
     static std::vector<std::string> parseIniFileLine(const std::string& str, char character);
     static void ltrim(std::string& s);
     static void rtrim(std::string& s);

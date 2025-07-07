@@ -14,18 +14,14 @@ limitations under the License.
 
 #include <optional>
 #include <string>
+#include <Poco/Dynamic/Var.h>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace core {
-
-struct BridgeIdentity {
-    std::string url;
-    std::optional<std::string> pubKey;
-    std::optional<std::string> instanceId;
-};
 
 struct EncKey {
     std::string id;
@@ -41,6 +37,7 @@ struct DataIntegrityObject {
     std::string randomId;
     std::optional<std::string> containerId;
     std::optional<std::string> containerResourceId;
+    std::optional<BridgeIdentity> bridgeIdentity;
 };
 
 struct DecryptedVersionedData {
@@ -74,6 +71,19 @@ struct DecryptedEncKeyV2 : public DecryptedEncKey {
     ExpandedDataIntegrityObject dio;
     std::string keySecret;
     std::string secretHash;
+};
+
+enum EventSource {
+    INTERNAL = 0,
+    SERVER = 1
+};
+struct NotificationEvent {
+    EventSource source;
+    std::string type;
+    Poco::Dynamic::Var data;
+    int64_t version;
+    int64_t timestamp;
+    std::vector<std::string> subscriptions;
 };
 
 }  // namespace core

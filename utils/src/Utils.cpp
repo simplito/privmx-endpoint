@@ -263,3 +263,7 @@ std::vector<std::string> Utils::split(std::string data, const std::string& delim
 
     return tokens;
 }
+
+bool Utils::validateTimestamps(const int64_t& t1, const int64_t& t2, const int64_t& threshold) {
+    return abs(t1 - t2) < threshold;
+}

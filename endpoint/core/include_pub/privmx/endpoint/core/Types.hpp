@@ -51,6 +51,11 @@ struct PagingQuery {
     std::optional<std::string> lastId;
 
     /**
+     * field name to sort elements by
+     */
+    std::optional<std::string> sortBy;
+
+    /**
      * extra query parameters in serialized JSON  
      */
     std::optional<std::string> queryAsJson;
@@ -87,11 +92,11 @@ struct UserWithPubKey {
 };
 
 /**
- * Contains Infomation about user
+ * Contains Information about user
  */
 struct UserInfo {
     /**
-     * User publicKey and usetId
+     * User publicKey and userId
      */
     UserWithPubKey user;
 
@@ -173,7 +178,7 @@ struct ContainerPolicy : public ContainerPolicyWithoutItem {
 };
 
 /**
- * Options used to verify if Bridge on given url is the one you expect.
+ * PrivMX Bridge server instance verification options using a PKI server.
  */
 struct PKIVerificationOptions {
     /** 
@@ -184,6 +189,24 @@ struct PKIVerificationOptions {
      * Bridge instance Id given by PKI.
      */
     std::optional<std::string> bridgeInstanceId;
+};
+
+/**
+ * Bridge server identification details.
+ */
+struct BridgeIdentity {
+    /**
+     * Bridge URL.
+     */
+    std::string url;
+    /** 
+     * Bridge public Key.
+     */
+    std::optional<std::string> pubKey;
+    /** 
+     * Bridge instance Id given by PKI.
+     */
+    std::optional<std::string> instanceId;
 };
 
 }  // namespace core

@@ -14,17 +14,18 @@ limitations under the License.
 #include <cstdint>
 #include <privmx/rpc/Types.hpp>
 #include <privmx/utils/Debug.hpp>
-
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Constants.hpp"
+#include "privmx/endpoint/core/EndpointUtils.hpp"
 
 using namespace privmx::endpoint::core;
 
 ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
-    _userVerifier = std::make_shared<core::DefaultUserVerifierInterface>();
+    _userVerifier = std::make_shared<core::UserVerifier>(std::make_shared<core::DefaultUserVerifierInterface>());
 }
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
@@ -41,7 +42,11 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         .instanceId=verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::fromWIF(userPrivKey);
-    _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
+    if(verificationOptions.bridgePubKey.has_value()) {
+        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId, crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value()));
+    } else {
+        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
+    }
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
     _userPrivKey = key;
@@ -68,7 +73,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
-        _eventMiddleware->emitNotificationEvent(event.type, event.channel, event.data);
+        _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
     });
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
@@ -76,6 +81,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -120,7 +126,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
-        _eventMiddleware->emitNotificationEvent(event.type, event.channel, event.data);
+        _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
     });
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
@@ -128,6 +134,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
 
@@ -177,7 +184,7 @@ std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& context
 
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
     std::unique_lock lock(_mutex);
-    _userVerifier = verifier;
+    _userVerifier = std::make_shared<UserVerifier>(verifier);
 }
 
 void ConnectionImpl::disconnect() {
@@ -216,11 +223,6 @@ DataIntegrityObject ConnectionImpl::createPublicDIO(
     return createDIOExt(contextId, resourceId, containerId, containerResourceId, "<anonymous>", pubKey);
 }
 
-
-std::string ConnectionImpl::generateDIORandomId() {
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
-}
-
 DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::string& contextId, 
     const std::string& resourceId, 
@@ -229,14 +231,43 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::optional<std::string>& creatorUserId,
     const std::optional<crypto::PublicKey>& creatorPublicKey
 ) {
+    
     return core::DataIntegrityObject{
         .creatorUserId = creatorUserId.has_value() ? creatorUserId.value() : getMyUserId(contextId),
         .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
         .contextId = contextId,
         .resourceId = resourceId,
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
-        .randomId = generateDIORandomId(),
+        .randomId = EndpointUtils::generateDIORandomId(),
         .containerId = containerId,
-        .containerResourceId = containerResourceId
+        .containerResourceId = containerResourceId,
+        .bridgeIdentity = _bridgeIdentity
     };
+}
+
+NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
+    std::vector<std::string> subscriptions;
+    auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
+    for(auto subscription : tmp.subscriptions()) {
+        subscriptions.push_back(subscription);
+    }
+    return NotificationEvent{
+        .source = EventSource::SERVER,
+        .type = event.type,
+        .data = tmp.data(),
+        .version = tmp.version(),
+        .timestamp = tmp.timestamp(),
+        .subscriptions = subscriptions
+    };
+}
+
+void ConnectionImpl::assertServerVersion() {
+    if(_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {
+        disconnect();
+        throw ServerVersionMismatchException(
+            "Bridge Server current version: " + (std::string)_serverConfig.serverVersion + "\n" +
+            "PrivMX Ednpoint library current version: " + ENDPOINT_VERSION + "\n"
+            "Bridge Server minimal expected version: " + MINIMUM_REQUIRED_BRIDGE_VERSION
+        );
+    }
 }

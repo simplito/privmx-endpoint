@@ -10,9 +10,10 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/TimestampValidator.hpp"
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
 
 bool TimestampValidator::validate(int64_t clinetTimestamp, int64_t serverTimestamp) {
-    return abs(serverTimestamp - clinetTimestamp) < TIMESTAMP_ALLOWED_DELTA;
+    return privmx::utils::Utils::validateTimestamps(serverTimestamp, clinetTimestamp, TIMESTAMP_ALLOWED_DELTA);
 }

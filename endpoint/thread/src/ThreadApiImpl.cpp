@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
 
 using namespace privmx::endpoint;
 using namespace thread;
@@ -40,7 +41,8 @@ ThreadApiImpl::ThreadApiImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const core::Connection& connection
-) : _gateway(gateway),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection), 
+    _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
@@ -61,11 +63,16 @@ ThreadApiImpl::ThreadApiImpl(
         },
         std::bind(&ThreadApiImpl::validateThreadDataIntegrity, this, std::placeholders::_1)
     )),
-    _subscribeForThread(false),
-    _threadSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "thread", "messages")),
+    _threadCache(false),
+    _threadSubscriptionHelper(core::SubscriptionHelper(
+        eventChannelManager, 
+        "thread", "messages", 
+        [&](){_threadProvider.invalidate();_threadCache=true;},
+        [&](){_threadCache=false;}
+    )),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
-    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&ThreadApiImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&ThreadApiImpl::processDisconnectedEvent, this));
 }
@@ -117,10 +124,10 @@ std::string ThreadApiImpl::_createThreadEx(
     );
     auto threadSecret = _keyProvider->generateSecret();
 
-    ThreadDataToEncryptV5 threadDataToEncrypt {
+    core::ModuleDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = ThreadInternalMetaV5{.secret=threadSecret, .resourceId=resourceId, .randomId=threadDIO.randomId},
+        .internalMeta = core::ModuleInternalMetaV5{.secret=threadSecret, .resourceId=resourceId, .randomId=threadDIO.randomId},
         .dio = threadDIO
     };
     auto create_thread_model = utils::TypedObjectFactory::createNewObject<server::ThreadCreateModel>();
@@ -171,65 +178,39 @@ void ThreadApiImpl::updateThread(
     auto getModel = utils::TypedObjectFactory::createNewObject<server::ThreadGetModel>();
     getModel.threadId(threadId);
     auto currentThread = _serverApi.threadGet(getModel).thread();
-    auto currentThreadResourceId = currentThread.resourceIdOpt(core::EndpointUtils::generateId());
-
-    // extract current users info
-    auto usersVec {core::EndpointUtils::listToVector<std::string>(currentThread.users())};
-    auto managersVec {core::EndpointUtils::listToVector<std::string>(currentThread.managers())};
-    auto oldUsersAll {core::EndpointUtils::uniqueList(usersVec, managersVec)};
-
-    auto new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-
-    // adjust key
-    std::vector<std::string> deletedUsers {core::EndpointUtils::getDifference(oldUsersAll, core::EndpointUtils::usersWithPubKeyToIds(new_users))};
-    std::vector<std::string> addedUsers {core::EndpointUtils::getDifference(core::EndpointUtils::usersWithPubKeyToIds(new_users), oldUsersAll)};
-    std::vector<core::UserWithPubKey> usersToAddMissingKey;
-    for(auto new_user: new_users) {
-        if( std::find(addedUsers.begin(), addedUsers.end(), new_user.userId) != addedUsers.end()) {
-            usersToAddMissingKey.push_back(new_user);
-        }
-    }
-    bool needNewKey = deletedUsers.size() > 0 || forceGenerateNewKey;
-
-    // read all key to check if all key belongs to this thread
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=currentThread.contextId(), .resourceId=currentThreadResourceId};
-    keyProviderRequest.addAll(currentThread.keys(), location);
-    auto threadKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     auto currentThreadEntry = currentThread.data().get(currentThread.data().size()-1);
-    core::DecryptedEncKey currentThreadKey;
-    for (auto key : threadKeys) {
-        if (currentThreadEntry.keyId() == key.first) {
-            currentThreadKey = key.second;
-            break;
-        }
-    }
-    auto threadInternalMeta = decryptThreadInternalMeta(currentThreadEntry, currentThreadKey);
-    if(currentThreadKey.dataStructureVersion != 2) {
-        //force update all keys if thread keys is in older version
-        usersToAddMissingKey = new_users;
-    }
+    auto currentThreadResourceId = currentThread.resourceIdOpt(core::EndpointUtils::generateId());
+    auto location {getModuleEncKeyLocation(currentThread, currentThreadResourceId)};
+    auto threadKeys {getAndValidateModuleKeys(currentThread, currentThreadResourceId)};
+    auto currentThreadKey {findEncKeyByKeyId(threadKeys, currentThreadEntry.keyId())};
+    auto threadInternalMeta = extractAndDecryptModuleInternalMeta(currentThreadEntry, currentThreadKey);
+
+    auto usersKeysResolver {core::UsersKeysResolver::create(currentThread, users, managers, forceGenerateNewKey, currentThreadKey)};
+
     if(!_keyProvider->verifyKeysSecret(threadKeys, location, threadInternalMeta.secret)) {
         throw ThreadEncryptionKeyValidationException();
     }
     // setting thread Key adding new users
     core::EncKey threadKey = currentThreadKey;
     core::DataIntegrityObject updateThreadDio = _connection.getImpl()->createDIO(currentThread.contextId(), currentThreadResourceId);
+    
     privmx::utils::List<core::server::KeyEntrySet> keys = utils::TypedObjectFactory::createNewList<core::server::KeyEntrySet>();
-    if(needNewKey) {
+    if(usersKeysResolver->doNeedNewKey()) {
         threadKey = _keyProvider->generateKey();
         keys = _keyProvider->prepareKeysList(
-            new_users, 
+            usersKeysResolver->getNewUsers(), 
             threadKey, 
             updateThreadDio,
             location,
             threadInternalMeta.secret
         );
     }
+
+    auto usersToAddMissingKey {usersKeysResolver->getUsersToAddKey()};
     if(usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
             threadKeys,
-            usersToAddMissingKey, 
+            usersToAddMissingKey,
             updateThreadDio, 
             location,
             threadInternalMeta.secret
@@ -256,10 +237,10 @@ void ThreadApiImpl::updateThread(
     if (policies.has_value()) {
         model.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    ThreadDataToEncryptV5 threadDataToEncrypt {
+    core::ModuleDataToEncryptV5 threadDataToEncrypt {
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = ThreadInternalMetaV5{.secret=threadInternalMeta.secret, .resourceId=currentThreadResourceId, .randomId=updateThreadDio.randomId},
+        .internalMeta = core::ModuleInternalMetaV5{.secret=threadInternalMeta.secret, .resourceId=currentThreadResourceId, .randomId=updateThreadDio.randomId},
         .dio = updateThreadDio
     };
     model.data(_threadDataEncryptorV5.encrypt(threadDataToEncrypt, _userPrivKey, threadKey.key).asVar());
@@ -299,7 +280,7 @@ Thread ThreadApiImpl::_getThreadEx(const std::string& threadId, const std::strin
         if(type == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationFailed});
         }
-        return Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
+        return convertServerThreadToLibThread(thread, {}, {}, statusCode);
     } else {
         if(type == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -334,7 +315,7 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
         auto thread = threadsList.threads().get(i);
         if(type == THREAD_TYPE_FILTER_FLAG) _threadProvider.updateByValue(thread);
         auto statusCode = validateThreadDataIntegrity(thread);
-        threads.push_back(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}});
+        threads.push_back(convertServerThreadToLibThread(thread, {}, {}, statusCode));
         if(statusCode == 0) {
             if(type == THREAD_TYPE_FILTER_FLAG) {
                 _threadProvider.updateByValueAndStatus(ThreadProvider::ContainerInfo{.container=thread, .status=core::DataIntegrityStatus::ValidationSucceed});
@@ -404,15 +385,17 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessage);
     auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
-    auto msgKey = getThreadCurrentEncKey(thread);
+    auto msgKey = getAndValidateModuleCurrentEncKey(thread);
     auto resourceId = core::EndpointUtils::generateId();
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
     send_message_model.resourceId(resourceId);
     send_message_model.threadId(thread.id());
     send_message_model.keyId(msgKey.id);
     switch (getThreadEntryDataStructureVersion(thread.data().get(thread.data().size()-1))) {
-        case 1:
-        case 4: {
+        case ThreadDataSchema::Version::UNKNOWN: 
+            throw UnknowThreadFormatException();
+        case ThreadDataSchema::Version::VERSION_1:
+        case ThreadDataSchema::Version::VERSION_4: {
             MessageDataToEncryptV4 messageData {
                 .publicMeta = publicMeta,
                 .privateMeta = privateMeta,
@@ -423,7 +406,7 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
             send_message_model.data(encryptedMessageData.asVar());
             break;
         }
-        case 5: {
+        case ThreadDataSchema::Version::VERSION_5: {
             auto messageDIO = _connection.getImpl()->createDIO(
                 thread.contextId(),
                 resourceId,
@@ -470,13 +453,15 @@ void ThreadApiImpl::updateMessage(
     }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
-    auto msgKey = getThreadCurrentEncKey(thread);
+    auto msgKey = getAndValidateModuleCurrentEncKey(thread);
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
     send_message_model.messageId(messageId);
     send_message_model.keyId(msgKey.id);
     switch (getThreadEntryDataStructureVersion(thread.data().get(thread.data().size()-1))) {
-        case 1:
-        case 4: {
+        case ThreadDataSchema::Version::UNKNOWN: 
+            throw UnknowThreadFormatException();
+        case ThreadDataSchema::Version::VERSION_1:
+        case ThreadDataSchema::Version::VERSION_4: {
             MessageDataToEncryptV4 messageData {
                 .publicMeta = publicMeta,
                 .privateMeta = privateMeta,
@@ -487,7 +472,7 @@ void ThreadApiImpl::updateMessage(
             send_message_model.data(encryptedMessageData.asVar());
             break;
         }
-        case 5: {
+        case ThreadDataSchema::Version::VERSION_5: {
             auto messageDIO = _connection.getImpl()->createDIO(
                 message.contextId(),
                 message.resourceIdOpt(""),
@@ -511,12 +496,16 @@ void ThreadApiImpl::updateMessage(
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, updateMessage, data send)
 }
 
-void ThreadApiImpl::processNotificationEvent(const std::string& type, const std::string& channel, const Poco::JSON::Object::Ptr& data) {
-    if(!_threadSubscriptionHelper.hasSubscriptionForChannel(channel) && channel != INTERNAL_EVENT_CHANNEL_NAME) {
+void ThreadApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    if(notification.source == core::EventSource::INTERNAL) {
+        _threadSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
+        return;
+    }
+    if(!_threadSubscriptionHelper.hasSubscription(notification.subscriptions)) {
         return;
     }
     if (type == "threadCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValue(raw);
             auto statusCode = validateThreadDataIntegrity(raw);
@@ -524,15 +513,15 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
             if(statusCode == 0) {
                 data = decryptAndConvertThreadDataToThread(raw); 
             } else {
-                data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
+                data = convertServerThreadToLibThread(raw, {}, {}, statusCode);
             }
             std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateByValue(raw);
             auto statusCode = validateThreadDataIntegrity(raw);
@@ -540,67 +529,54 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const std:
             if(statusCode == 0) {
                 data = decryptAndConvertThreadDataToThread(raw); 
             } else {
-                data = Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = statusCode, {}};
+                data = convertServerThreadToLibThread(raw, {}, {}, statusCode);
             }
             std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.invalidateByContainerId(raw.threadId());
             auto data = Mapper::mapToThreadDeletedEventData(raw);
             std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadStats") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             _threadProvider.updateStats(raw);
             auto data = Mapper::mapToThreadStatsEventData(raw);
             std::shared_ptr<ThreadStatsChangedEvent> event(new ThreadStatsChangedEvent());
-            event->channel = channel;
+            event->channel = "thread";
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadNewMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(notification.data);
         auto data = decryptAndConvertMessageDataToMessage(raw);
         std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
-        event->channel = channel;
+        event->channel = "thread/" + raw.threadId() + "/messages";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadUpdatedMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(notification.data);
         auto data = decryptAndConvertMessageDataToMessage(raw);
         std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
-        event->channel = channel;
+        event->channel = "thread/" + raw.threadId() + "/messages";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "threadDeletedMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(notification.data);
         auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
         std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
-        event->channel = channel;
+        event->channel = "thread/" + raw.threadId() + "/messages";
         event->data = data;
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "subscribe") {
-        std::string channelName = data->has("channel") ? data->getValue<std::string>("channel") : "";
-        if(channelName == "thread") {
-            PRIVMX_DEBUG("ThreadApi", "Cache", "Enabled")
-            _subscribeForThread = true;
-        }
-    } else if (type == "unsubscribe") {
-        std::string channelName = data->has("channel") ?  data->getValue<std::string>("channel") : "";
-        if(channelName == "thread") {
-            PRIVMX_DEBUG("ThreadApi", "Cache", "Disabled")
-            _subscribeForThread = false;
-            _threadProvider.invalidate();
-        }
     }
 }
 
@@ -620,18 +596,18 @@ void ThreadApiImpl::unsubscribeFromThreadEvents() {
 
 void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
     assertThreadExist(threadId);
-    if(_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
+    if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
         throw AlreadySubscribedException(threadId);
     }
-    _threadSubscriptionHelper.subscribeForElement(threadId);
+    _threadSubscriptionHelper.subscribeForModuleEntry(threadId);
 }
 
 void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
     assertThreadExist(threadId);
-    if(!_threadSubscriptionHelper.hasSubscriptionForElement(threadId)) {
+    if(!_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
         throw NotSubscribedException(threadId);
     }
-    _threadSubscriptionHelper.unsubscribeFromElement(threadId);
+    _threadSubscriptionHelper.unsubscribeFromModuleEntry(threadId);
 }
 
 void ThreadApiImpl::processConnectedEvent() {
@@ -671,142 +647,102 @@ dynamic::ThreadDataV1 ThreadApiImpl::decryptThreadV1(server::Thread2DataEntry th
     }
 }
 
-DecryptedThreadDataV4 ThreadApiImpl::decryptThreadV4(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV4>(threadEntry.data());
-        return _threadDataEncryptorV4.decrypt(encryptedThreadData, encKey.key);
-    } catch (const core::Exception& e) {
-        return DecryptedThreadDataV4{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{}};
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedThreadDataV4{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{}};
-    } catch (...) {
-        return DecryptedThreadDataV4{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{}};
-    }
-}
-
-DecryptedThreadDataV5 ThreadApiImpl::decryptThreadV5(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
-    try {
-        auto encryptedThreadData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(threadEntry.data());
-        if(encKey.statusCode != 0) {
-            auto tmp = _threadDataEncryptorV5.extractPublic(encryptedThreadData);
-            tmp.statusCode = encKey.statusCode;
-            return tmp;
+Thread ThreadApiImpl::convertServerThreadToLibThread(
+    server::ThreadInfo threadInfo,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const int64_t& statusCode,
+    const int64_t& schemaVersion
+) {
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    if(!threadInfo.usersEmpty()) {
+        for (auto x : threadInfo.users()) {
+            users.push_back(x);
         }
-        return _threadDataEncryptorV5.decrypt(encryptedThreadData, encKey.key);
-    } catch (const core::Exception& e) {
-        return DecryptedThreadDataV5{{.dataStructureVersion = 5, .statusCode = e.getCode()}, {},{},{},{},{}};
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedThreadDataV5{{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
-    } catch (...) {
-        return DecryptedThreadDataV5{{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
+    if(!threadInfo.managersEmpty()) {
+        for (auto x : threadInfo.managers()) {
+            managers.push_back(x);
+        }
+    }
+    return Thread{
+        .contextId = threadInfo.contextIdOpt(""),
+        .threadId = threadInfo.idOpt(""),
+        .createDate = threadInfo.createDateOpt(0),
+        .creator = threadInfo.creatorOpt(""),
+        .lastModificationDate = threadInfo.lastModificationDateOpt(0),
+        .lastModifier = threadInfo.lastModifierOpt(""),
+        .users = users,
+        .managers = managers,
+        .version = threadInfo.versionOpt(0),
+        .lastMsgDate = threadInfo.lastMsgDateOpt(0),
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(threadInfo.policyOpt(Poco::JSON::Object::Ptr(new Poco::JSON::Object))), 
+        .messagesCount = threadInfo.messagesOpt(0),
+        .statusCode = statusCode,
+        .schemaVersion = schemaVersion
+    };
 }
 
 Thread ThreadApiImpl::convertThreadDataV1ToThread(server::ThreadInfo threadInfo, dynamic::ThreadDataV1 threadData) {
-    std::vector<std::string> users;
-    std::vector<std::string> managers;
-    for (auto x : threadInfo.users()) {
-        users.push_back(x);
-    }
-    for (auto x : threadInfo.managers()) {
-        managers.push_back(x);
-    }
     Poco::JSON::Object::Ptr privateMeta = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
     privateMeta->set("title", threadData.title());
-    int64_t statusCode = threadData.statusCodeOpt(0);
-    return {
-        .contextId = threadInfo.contextId(),
-        .threadId = threadInfo.id(),
-        .createDate = threadInfo.createDate(),
-        .creator = threadInfo.creator(),
-        .lastModificationDate = threadInfo.lastModificationDate(),
-        .lastModifier = threadInfo.lastModifier(),
-        .users = users,
-        .managers = managers,
-        .version = threadInfo.version(),
-        .lastMsgDate = threadInfo.lastMsgDate(),
-        .publicMeta = core::Buffer::from(""),
-        .privateMeta = core::Buffer::from(utils::Utils::stringify(privateMeta)),
-        .policy = {},
-        .messagesCount = threadInfo.messages(),
-        .statusCode = statusCode,
-        .schemaVersion = 1
-    };
+    return convertServerThreadToLibThread(
+        threadInfo, 
+        core::Buffer::from(""), 
+        core::Buffer::from(utils::Utils::stringify(privateMeta)), 
+        threadData.statusCodeOpt(0), 
+        ThreadDataSchema::Version::VERSION_1
+    );
 }
 
-Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV4& threadData) {
-    std::vector<std::string> users;
-    std::vector<std::string> managers;
-    for (auto x : threadInfo.users()) {
-        users.push_back(x);
-    }
-    for (auto x : threadInfo.managers()) {
-        managers.push_back(x);
-    }
-
-    return {
-        .contextId = threadInfo.contextId(),
-        .threadId = threadInfo.id(),
-        .createDate = threadInfo.createDate(),
-        .creator = threadInfo.creator(),
-        .lastModificationDate = threadInfo.lastModificationDate(),
-        .lastModifier = threadInfo.lastModifier(),
-        .users = users,
-        .managers = managers,
-        .version = threadInfo.version(),
-        .lastMsgDate = threadInfo.lastMsgDate(),
-        .publicMeta = threadData.publicMeta,
-        .privateMeta = threadData.privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
-        .messagesCount = threadInfo.messages(),
-        .statusCode = threadData.statusCode,
-        .schemaVersion = 4
-    };
+Thread ThreadApiImpl::convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV4& threadData) {
+    return convertServerThreadToLibThread(
+        threadInfo, 
+        threadData.publicMeta, 
+        threadData.privateMeta, 
+        threadData.statusCode, 
+        ThreadDataSchema::Version::VERSION_4
+    );
 }
 
-Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const DecryptedThreadDataV5& threadData) {
-    std::vector<std::string> users;
-    std::vector<std::string> managers;
-    for (auto x : threadInfo.users()) {
-        users.push_back(x);
-    }
-    for (auto x : threadInfo.managers()) {
-        managers.push_back(x);
-    }
-
-    return {
-        .contextId = threadInfo.contextId(),
-        .threadId = threadInfo.id(),
-        .createDate = threadInfo.createDate(),
-        .creator = threadInfo.creator(),
-        .lastModificationDate = threadInfo.lastModificationDate(),
-        .lastModifier = threadInfo.lastModifier(),
-        .users = users,
-        .managers = managers,
-        .version = threadInfo.version(),
-        .lastMsgDate = threadInfo.lastMsgDate(),
-        .publicMeta = threadData.publicMeta,
-        .privateMeta = threadData.privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(threadInfo.policy()), 
-        .messagesCount = threadInfo.messages(),
-        .statusCode = threadData.statusCode,
-        .schemaVersion = 5
-    };
+Thread ThreadApiImpl::convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV5& threadData) {  
+    return convertServerThreadToLibThread(
+        threadInfo, 
+        threadData.publicMeta, 
+        threadData.privateMeta, 
+        threadData.statusCode, 
+        ThreadDataSchema::Version::VERSION_5
+    );
 }
 
-uint32_t ThreadApiImpl::getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry) {
+ThreadDataSchema::Version ThreadApiImpl::getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry) {
     if (threadEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(threadEntry.data());
-        return versioned.versionOpt(0);
+        auto version = versioned.versionOpt(core::ModuleDataSchema::Version::UNKNOWN);
+        switch (version) {
+            case core::ModuleDataSchema::Version::VERSION_4:
+                return ThreadDataSchema::Version::VERSION_4;
+            case core::ModuleDataSchema::Version::VERSION_5:
+                return ThreadDataSchema::Version::VERSION_5;
+            default:
+                return ThreadDataSchema::Version::UNKNOWN;
+        }
     } else if (threadEntry.data().isString()) {
-        return 1;
+        return ThreadDataSchema::Version::VERSION_1;
     }
-    return 0;
+    return ThreadDataSchema::Version::UNKNOWN;
 }
 
 std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
     switch (getThreadEntryDataStructureVersion(threadEntry)) {
-        case 1: {
+        case ThreadDataSchema::Version::UNKNOWN: {
+            auto e = UnknowThreadFormatException();
+            return std::make_tuple(convertServerThreadToLibThread(thread, {}, {}, e.getCode()), core::DataIntegrityObject());
+        }
+        case ThreadDataSchema::Version::VERSION_1: {
             return std::make_tuple(
                 convertThreadDataV1ToThread(thread, decryptThreadV1(threadEntry, encKey)),
                 core::DataIntegrityObject{
@@ -817,12 +753,13 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                     .timestamp = thread.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = std::nullopt,
-                    .containerResourceId = std::nullopt
+                    .containerResourceId = std::nullopt,
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
-        case 4: {
-            auto decryptedThreadData = decryptThreadV4(threadEntry, encKey);
+        case ThreadDataSchema::Version::VERSION_4: {
+            auto decryptedThreadData = decryptModuleDataV4(threadEntry, encKey);
             return std::make_tuple(
                 convertDecryptedThreadDataV4ToThread(thread, decryptedThreadData), 
                 core::DataIntegrityObject{
@@ -833,17 +770,18 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertTh
                     .timestamp = thread.lastModificationDate(),
                     .randomId = std::string(),
                     .containerId = std::nullopt,
-                    .containerResourceId = std::nullopt
+                    .containerResourceId = std::nullopt,
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
-        case 5: {
-            auto decryptedThreadData = decryptThreadV5(threadEntry, encKey);
+        case ThreadDataSchema::Version::VERSION_5: {
+            auto decryptedThreadData = decryptModuleDataV5(threadEntry, encKey);
             return std::make_tuple(convertDecryptedThreadDataV5ToThread(thread, decryptedThreadData), decryptedThreadData.dio);
         }            
     }
     auto e = UnknowThreadFormatException();
-    return std::make_tuple(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}}, core::DataIntegrityObject());
+    return std::make_tuple(convertServerThreadToLibThread(thread, {}, {}, e.getCode()), core::DataIntegrityObject());
 }
 
 
@@ -879,27 +817,24 @@ std::vector<Thread> ThreadApiImpl::decryptAndConvertThreadsDataToThreads(privmx:
                 result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result.push_back(Thread{ {},{},{},{},{},{},{},{},{},{},{},{},{},{}, .statusCode = e.getCode(), {}});
+            result.push_back(convertServerThreadToLibThread(thread, {}, {}, e.getCode()));
             threadsDIO.push_back(core::DataIntegrityObject{});
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
     for (size_t i = 0; i < result.size(); i++) {
         if(result[i].statusCode == 0) {
-            verifierInput.push_back({
+            verifierInput.push_back(core::VerificationRequest{
                 .contextId = result[i].contextId,
                 .senderId = result[i].lastModifier,
                 .senderPubKey = threadsDIO[i].creatorPubKey,
-                .date = result[i].lastModificationDate
+                .date = result[i].lastModificationDate,
+                .bridgeIdentity = threadsDIO[i].bridgeIdentity
             });
         }
     }
     std::vector<bool> verified;
-    try {
-        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); i++) {
         if(result[i].statusCode == 0) {
             result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
@@ -920,18 +855,15 @@ Thread ThreadApiImpl::decryptAndConvertThreadDataToThread(server::ThreadInfo thr
     std::tie(result, threadDIO) = decryptAndConvertThreadDataToThread(thread, thread_data_entry, key);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
-    verifierInput.push_back({
+    verifierInput.push_back(core::VerificationRequest{
         .contextId = result.contextId,
         .senderId = result.lastModifier,
         .senderPubKey = threadDIO.creatorPubKey,
-        .date = result.lastModificationDate
+        .date = result.lastModificationDate,
+        .bridgeIdentity = threadDIO.bridgeIdentity
     });
     std::vector<bool> verified;
-    try {
-        verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
 }
@@ -986,11 +918,11 @@ DecryptedMessageDataV4 ThreadApiImpl::decryptMessageDataV4(server::Message messa
         auto encryptedMessageData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV4>(message.data());
         return _messageDataEncryptorV4.decrypt(encryptedMessageData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedMessageDataV4{{.dataStructureVersion = 4, .statusCode = e.getCode()}, {},{},{},{},{}};
+        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedMessageDataV4{{.dataStructureVersion = 4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
+        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchema::Version::VERSION_4, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{}};
     } catch (...) {
-        return DecryptedMessageDataV4{{.dataStructureVersion = 4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
+        return DecryptedMessageDataV4{{.dataStructureVersion = MessageDataSchema::Version::VERSION_4, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{}};
     }
 }
 
@@ -1004,12 +936,37 @@ DecryptedMessageDataV5 ThreadApiImpl::decryptMessageDataV5(server::Message messa
         }
         return _messageDataEncryptorV5.decrypt(encryptedMessageData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedMessageDataV5{{.dataStructureVersion = 5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
+        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedMessageDataV5{{.dataStructureVersion = 5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
+        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
     } catch (...) {
-        return DecryptedMessageDataV5{{.dataStructureVersion = 5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
+        return DecryptedMessageDataV5{{.dataStructureVersion = MessageDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
     }
+}
+
+Message ThreadApiImpl::convertServerMessageToLibMessage(
+    server::Message message,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const core::Buffer& data,
+    const std::string& authorPubKey,
+    const int64_t& statusCode,
+    const int64_t& schemaVersion
+) {
+    return Message{
+        .info = {
+            .threadId = message.threadIdOpt(std::string()),
+            .messageId = message.idOpt(std::string()),
+            .createDate = message.createDateOpt(0),
+            .author = message.authorOpt(std::string()),
+        },
+        .publicMeta = publicMeta, 
+        .privateMeta = privateMeta,
+        .data = data,
+        .authorPubKey = authorPubKey,
+        .statusCode = statusCode,
+        .schemaVersion = schemaVersion
+    };
 }
 
 Message ThreadApiImpl::convertMessageDataV2ToMessage(server::Message message, dynamic::MessageDataV2 messageData) {
@@ -1017,98 +974,86 @@ Message ThreadApiImpl::convertMessageDataV2ToMessage(server::Message message, dy
     Poco::JSON::Object::Ptr privateMeta = messageData.copy();
     privateMeta->remove("text");
     privateMeta->remove("statusCode");
-    Message ret {
-        .info = {
-            .threadId = message.threadId(),
-            .messageId = message.id(),
-            .createDate = message.createDate(),
-            .author = message.author(),
-        },
-        .publicMeta = core::Buffer(), 
-        .privateMeta = core::Buffer::from(privmx::utils::Utils::stringify(privateMeta)),
-        .data = core::Buffer::from(data),
-        .authorPubKey = messageData.author().pubKey(),
-        .statusCode = messageData.statusCodeOpt(0),
-        .schemaVersion = 2
-    };
-    return ret;
+    return convertServerMessageToLibMessage(
+        message,
+        core::Buffer(), 
+        core::Buffer::from(privmx::utils::Utils::stringify(privateMeta)),
+        core::Buffer::from(data),
+        messageData.author().pubKey(),
+        messageData.statusCodeOpt(0),
+        MessageDataSchema::Version::VERSION_2
+    );
 }
 
 Message ThreadApiImpl::convertMessageDataV3ToMessage(server::Message message, dynamic::MessageDataV3 messageData) {
-    Message ret {
-        .info = {
-            .threadId = message.threadId(),
-            .messageId = message.id(),
-            .createDate = message.createDate(),
-            .author = message.author(),
-        },
-        .publicMeta = core::Buffer::from(messageData.publicMetaOpt(Pson::BinaryString())), 
-        .privateMeta = core::Buffer::from(messageData.privateMetaOpt(Pson::BinaryString())),
-        .data = core::Buffer::from(messageData.dataOpt(Pson::BinaryString())),
-        .authorPubKey = std::string(),
-        .statusCode = messageData.statusCodeOpt(0),
-        .schemaVersion = 3
-    };
-    return ret;
+    return convertServerMessageToLibMessage(
+        message,
+        core::Buffer::from(messageData.publicMetaOpt(Pson::BinaryString())), 
+        core::Buffer::from(messageData.privateMetaOpt(Pson::BinaryString())),
+        core::Buffer::from(messageData.dataOpt(Pson::BinaryString())),
+        std::string(),
+        messageData.statusCodeOpt(0),
+        MessageDataSchema::Version::VERSION_3
+    );
 }
 
 Message ThreadApiImpl::convertDecryptedMessageDataV4ToMessage(server::Message message, DecryptedMessageDataV4 messageData) {
-    Message ret {
-        .info = {
-            .threadId = message.threadId(),
-            .messageId = message.id(),
-            .createDate = message.createDate(),
-            .author = message.author(),
-        },
-        .publicMeta = messageData.publicMeta, 
-        .privateMeta = messageData.privateMeta,
-        .data = messageData.data,
-        .authorPubKey = messageData.authorPubKey,
-        .statusCode = messageData.statusCode,
-        .schemaVersion = 4
-    };
-    return ret;
+    return convertServerMessageToLibMessage(
+        message,
+        messageData.publicMeta, 
+        messageData.privateMeta,
+        messageData.data,
+        messageData.authorPubKey,
+        messageData.statusCode,
+        MessageDataSchema::Version::VERSION_4
+    );
 }
 
 Message ThreadApiImpl::convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData) {
-    Message ret {
-        .info = {
-            .threadId = message.threadId(),
-            .messageId = message.id(),
-            .createDate = message.createDate(),
-            .author = message.author(),
-        },
-        .publicMeta = messageData.publicMeta, 
-        .privateMeta = messageData.privateMeta,
-        .data = messageData.data,
-        .authorPubKey = messageData.authorPubKey,
-        .statusCode = messageData.statusCode,
-        .schemaVersion = 5
-    };
-    return ret;
+    return convertServerMessageToLibMessage(
+        message,
+        messageData.publicMeta, 
+        messageData.privateMeta,
+        messageData.data,
+        messageData.authorPubKey,
+        messageData.statusCode,
+        MessageDataSchema::Version::VERSION_5
+    );
 }
 
 
-uint32_t ThreadApiImpl::getMessagesDataStructureVersion(server::Message message) {
+MessageDataSchema::Version ThreadApiImpl::getMessagesDataStructureVersion(server::Message message) {
     // If data is not string, then data is object and has version field
     // Solution with data as object is newer than data as base64 string
     if (message.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(message.data());
-        return versioned.versionOpt(0);
+        auto version = versioned.versionOpt(MessageDataSchema::Version::UNKNOWN);
+        switch (version) {
+            case MessageDataSchema::Version::VERSION_4:
+                return MessageDataSchema::Version::VERSION_4;
+            case MessageDataSchema::Version::VERSION_5:
+                return MessageDataSchema::Version::VERSION_5;
+            default:
+                return MessageDataSchema::Version::UNKNOWN;
+        }
     } else if (message.data().isString()) {
         // Temporary Solution need better way to dif V3 from V2
         if(core::DataEncryptorUtil::hasSign(utils::Base64::toString(message.data()))) {
-            return 3;
+            return MessageDataSchema::Version::VERSION_3;
         } else {
-            return 2;
+            return MessageDataSchema::Version::VERSION_2;
         }
     }
-    return 0;
+    return MessageDataSchema::Version::UNKNOWN;
 }
 
 std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey) {
     switch (getMessagesDataStructureVersion(message)) {
-        case 2: {
+        case MessageDataSchema::Version::UNKNOWN: {
+            auto e = UnknowMessageFormatException();
+            return std::make_tuple(convertServerMessageToLibMessage(message,{},{},{},{},e.getCode()), core::DataIntegrityObject());
+        }
+        case MessageDataSchema::Version::VERSION_2: {
             return std::make_tuple(
                 convertMessageDataV2ToMessage(message,  decryptMessageDataV2(message, encKey)), 
                 core::DataIntegrityObject{
@@ -1119,11 +1064,12 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
                     .randomId = std::string(),
                     .containerId = message.threadId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
-        case 3: {
+        case MessageDataSchema::Version::VERSION_3: {
             return std::make_tuple(
                 convertMessageDataV3ToMessage(message,  decryptMessageDataV3(message, encKey)), 
                 core::DataIntegrityObject{
@@ -1134,11 +1080,12 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
                     .randomId = std::string(),
                     .containerId = message.threadId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
-        case 4: {
+        case MessageDataSchema::Version::VERSION_4: {
             auto decryptedMessage = decryptMessageDataV4(message, encKey);
             return std::make_tuple(
                 convertDecryptedMessageDataV4ToMessage(message, decryptedMessage), 
@@ -1150,11 +1097,12 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
                     .timestamp = message.updates().size() == 0 ? message.createDate() : message.updates().get(message.updates().size()-1).createDate(),
                     .randomId = std::string(),
                     .containerId = message.threadId(),
-                    .containerResourceId = std::string()
+                    .containerResourceId = std::string(),
+                    .bridgeIdentity = std::nullopt
                 }
             );
         }
-        case 5: {
+        case MessageDataSchema::Version::VERSION_5: {
             auto decryptedMessage = decryptMessageDataV5(message, encKey);
             return std::make_tuple(
                 convertDecryptedMessageDataV5ToMessage(message, decryptedMessage), 
@@ -1163,7 +1111,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
         }
     } 
     auto e = UnknowMessageFormatException();
-    return std::make_tuple(Message{{},{},{},{},{},.statusCode = e.getCode(), {}}, core::DataIntegrityObject());
+    return std::make_tuple(convertServerMessageToLibMessage(message,{},{},{},{},e.getCode()), core::DataIntegrityObject());
 }
 
 std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(server::ThreadInfo thread, utils::List<server::Message> messages) {
@@ -1177,6 +1125,7 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
     keyProviderRequest.addMany(thread.keys(), keyIds, location);
     auto keyMap = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
     std::vector<Message> result;
+    std::vector<core::DataIntegrityObject> messagesDIO;
     std::map<std::string, bool> duplication_check;
     for (auto message : messages) {
         try {
@@ -1185,6 +1134,7 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
                 auto tmp = decryptAndConvertMessageDataToMessage(message, keyMap.at(message.keyId()));
                 result.push_back(std::get<0>(tmp));
                 auto messageDIO = std::get<1>(tmp);
+                messagesDIO.push_back(messageDIO);
                 //find duplication
                 std::string fullRandomId =  messageDIO.randomId + "-" + std::to_string(messageDIO.timestamp);
                 if(duplication_check.find(fullRandomId) == duplication_check.end()) {
@@ -1193,29 +1143,26 @@ std::vector<Message> ThreadApiImpl::decryptAndConvertMessagesDataToMessages(serv
                     result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(Message{{},{},{},{},{},.statusCode = statusCode, {}});
+                result.push_back(convertServerMessageToLibMessage(message,{},{},{},{},statusCode));
             }
         } catch (const core::Exception& e) {
-            result.push_back(Message{{},{},{},{},{},.statusCode = e.getCode(), {}});
+                result.push_back(convertServerMessageToLibMessage(message,{},{},{},{},e.getCode()));
         }
     }
     std::vector<core::VerificationRequest> verifierInput {};
-    for (auto message: result) {
-        if(message.statusCode == 0) {
-            verifierInput.push_back({
+    for (size_t i = 0; i < result.size(); i++) {
+        if(result[i].statusCode == 0) {
+            verifierInput.push_back(core::VerificationRequest{
                 .contextId = thread.contextId(),
-                .senderId = message.info.author,
-                .senderPubKey = message.authorPubKey,
-                .date = message.info.createDate
+                .senderId = result[i].info.author,
+                .senderPubKey = result[i].authorPubKey,
+                .date = result[i].info.createDate,
+                .bridgeIdentity = messagesDIO[i].bridgeIdentity
             });
         }
     }
     std::vector<bool> verified;
-    try {
-        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); ++i) {
         if (result[i].statusCode == 0) {
             result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
@@ -1237,18 +1184,15 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::ThreadInfo 
     std::tie(result, messageDIO) = decryptAndConvertMessageDataToMessage(message, encKey);
     if(result.statusCode != 0) return result;
     std::vector<core::VerificationRequest> verifierInput {};
-        verifierInput.push_back({
+        verifierInput.push_back(core::VerificationRequest{
             .contextId = thread.contextId(),
             .senderId = result.info.author,
             .senderPubKey = result.authorPubKey,
-            .date = result.info.createDate
+            .date = result.info.createDate,
+            .bridgeIdentity = messageDIO.bridgeIdentity
         });
     std::vector<bool> verified;
-    try {
-        verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    } catch (...) {
-        throw core::UserVerificationMethodUnhandledException();
-    }
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
 }
@@ -1258,38 +1202,20 @@ Message ThreadApiImpl::decryptAndConvertMessageDataToMessage(server::Message mes
         auto thread = getRawThreadFromCacheOrBridge(message.threadId());
         return decryptAndConvertMessageDataToMessage(thread, message);
     } catch (const core::Exception& e) {
-        return Message{{},{},{},{},{},.statusCode = e.getCode(), {}};
+        return convertServerMessageToLibMessage(message,{},{},{},{},e.getCode());
     } catch (const privmx::utils::PrivmxException& e) {
-        return Message{{},{},{},{},{},.statusCode = e.getCode(), {}};
+        return convertServerMessageToLibMessage(message,{},{},{},{},core::ExceptionConverter::convert(e).getCode());
     } catch (...) {
-        return Message{{},{},{},{},{},.statusCode = ENDPOINT_CORE_EXCEPTION_CODE, {}};
+        return convertServerMessageToLibMessage(message,{},{},{},{},ENDPOINT_CORE_EXCEPTION_CODE);
     }
-}
-
-ThreadInternalMetaV5 ThreadApiImpl::decryptThreadInternalMeta(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey) {
-    switch (getThreadEntryDataStructureVersion(threadEntry)) {
-        case 1:
-            return ThreadInternalMetaV5();
-        case 4:
-            return ThreadInternalMetaV5();
-        case 5:
-            return decryptThreadV5(threadEntry, encKey).internalMeta;
-    }
-    throw UnknowThreadFormatException();
-}
-
-core::DecryptedEncKey ThreadApiImpl::getThreadCurrentEncKey(server::ThreadInfo thread) {
-    auto thread_data_entry = thread.data().get(thread.data().size()-1);
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=thread.contextId(), .resourceId=thread.resourceIdOpt("")};
-    keyProviderRequest.addOne(thread.keys(), thread_data_entry.keyId(), location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(thread_data_entry.keyId());
 }
 
 server::ThreadInfo ThreadApiImpl::getRawThreadFromCacheOrBridge(const std::string& threadId) {
     // useing threadProvider only with THREAD_TYPE_FILTER_FLAG 
     // making sure to have valid cache
-    if(!_subscribeForThread) _threadProvider.update(threadId);
+    if(!_threadCache) {
+        _threadProvider.invalidate();
+    }
     auto threadContainerInfo = _threadProvider.get(threadId);
     if(threadContainerInfo.status != core::DataIntegrityStatus::ValidationSucceed) {
         throw ThreadDataIntegrityException();
@@ -1306,12 +1232,14 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
     auto thread_data_entry = thread.data().get(thread.data().size()-1);
     try {
         switch (getThreadEntryDataStructureVersion(thread_data_entry)) {
-            case 1:
+            case ThreadDataSchema::Version::UNKNOWN:
+                return UnknowThreadFormatException().getCode();
+            case ThreadDataSchema::Version::VERSION_1:
                 return 0;
-            case 4:
+            case ThreadDataSchema::Version::VERSION_4:
                 return 0;
-            case 5: {
-                auto thread_data = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedThreadDataV5>(thread_data_entry.data());
+            case ThreadDataSchema::Version::VERSION_5: {
+                auto thread_data = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(thread_data_entry.data());
                 auto dio = _threadDataEncryptorV5.getDIOAndAssertIntegrity(thread_data);
                 if(
                     dio.contextId != thread.contextId() ||
@@ -1338,13 +1266,15 @@ uint32_t ThreadApiImpl::validateThreadDataIntegrity(server::ThreadInfo thread) {
 uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId) {
     try {
         switch (getMessagesDataStructureVersion(message)) {
-            case 2:
+            case MessageDataSchema::Version::UNKNOWN:
+                return UnknowMessageFormatException().getCode();
+            case MessageDataSchema::Version::VERSION_2:
                 return 0;
-            case 3:
+            case MessageDataSchema::Version::VERSION_3:
                 return 0;
-            case 4:
+            case MessageDataSchema::Version::VERSION_4:
                 return 0;
-            case 5: {
+            case MessageDataSchema::Version::VERSION_5: {
                 auto encData = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedMessageDataV5>(message.data());
                 auto dio = _messageDataEncryptorV5.getDIOAndAssertIntegrity(encData);
                 if(
