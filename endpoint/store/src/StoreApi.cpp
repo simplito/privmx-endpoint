@@ -176,10 +176,10 @@ int64_t StoreApi::openFile(const std::string& fileId) {
     }
 }
 
-void StoreApi::writeToFile(const int64_t handle, const core::Buffer& dataChunk) {
+void StoreApi::writeToFile(const int64_t handle, const core::Buffer& dataChunk, bool truncate) {
     validateEndpoint();
     try {
-        return _impl->writeToFile(handle, dataChunk);
+        return _impl->writeToFile(handle, dataChunk, truncate);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

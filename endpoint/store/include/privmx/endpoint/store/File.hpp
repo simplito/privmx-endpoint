@@ -268,7 +268,7 @@ public:
         size_t dataSend = 0;
         for(size_t i = startIndex; i <= stopIndex; i++) {
             if(i == startIndex) {
-                size_t chunkOffset =offset % _chunksize;
+                size_t chunkOffset = offset % _chunksize;
                 std::string chunkData = toSend.substr(dataSend, _chunksize -(offset % _chunksize));
                 setChunk(i, chunkOffset, chunkData);
             } else {
@@ -293,8 +293,71 @@ public:
     size_t getFileSize() {
         return _fileSize;
     }
-    void truncate(size_t length) {
-        throw NotImplementedException(); // TODO
+    void truncate(size_t pos) {
+        // update 
+        size_t index = posToindex(pos);
+        size_t chunkOffset = pos % _chunksize;
+        std::string newChunk = std::string();
+        // read old chunk
+        std::string prevEncryptedChunk = _blockProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+        std::string prevChunk = "";
+        std::cout << "prevEncryptedChunk.size()" << prevEncryptedChunk.size() << std::endl;
+        if(prevEncryptedChunk.size() != 0) {
+            prevChunk = _chunkEncryptor->decrypt(index, {.data = prevEncryptedChunk, .hmac = _hashList->getHash(index)});
+        }
+        // fill new chunk data to chunkOffset
+        if(chunkOffset > 0) {
+            newChunk.append(prevChunk.substr(0, chunkOffset));
+            // fill empty space between chunkOffset and prevChunk with (char)0x00
+            if (chunkOffset > prevChunk.size()) {
+                newChunk.append(std::string(chunkOffset - prevChunk.size(), (char)0x00));
+            }
+        }
+        // set newChunk;
+        auto chunk = _chunkEncryptor->encrypt(index, newChunk);
+        _hashList->set(index, chunk.hmac);
+        auto topHash = _hashList->getTopHash();
+
+        // update meta
+        _fileMeta.internalFileMeta.hmac(topHash);
+        // _fileMeta.internalFileMeta.size(newSize);
+
+        auto newMeta = _fileMetaEncryptor->encrypt(_fileId, _fileMeta);
+
+        // update file by operation
+        auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
+        operation1.type("file");
+        operation1.pos(_chunksize * index);
+        operation1.data(chunk.data);
+        operation1.truncate(false);
+
+        auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
+        operation2.type("checksum");
+        operation2.pos(_hashList->getHashSize() * index);
+        operation2.data(chunk.hmac);
+        operation2.truncate(false);
+
+        auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
+        operations.add(operation1);
+        operations.add(operation2);
+
+        auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
+        writeRequest.fileId(_fileId.fileId);
+        writeRequest.operations(operations);
+        writeRequest.meta(newMeta.meta);
+        writeRequest.keyId(newMeta.keyId);
+        writeRequest.version(_version);
+        writeRequest.force(false);
+
+        _server->storeFileWrite(writeRequest);
+
+        _version += 1;
+        // update _fileSize;
+        if(prevChunk.size() > newChunk.size()) {
+            // new data added
+            _fileSize += newChunk.size() - prevChunk.size();
+            _encryptedFileSize += chunk.data.size() - prevEncryptedChunk.size();
+        }
     }
     void close() {
         // throw NotImplementedException();
@@ -346,13 +409,13 @@ private:
         operation1.type("file");
         operation1.pos(_chunksize * index);
         operation1.data(chunk.data);
-        operation1.truncate(false);
+        operation1.truncate(true);
 
         auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
         operation2.type("checksum");
         operation2.pos(_hashList->getHashSize() * index);
         operation2.data(chunk.hmac);
-        operation2.truncate(false);
+        operation2.truncate(true);
 
         auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
         operations.add(operation1);
@@ -375,7 +438,6 @@ private:
             _fileSize += (chunkOffset + data.size()) - prevChunk.size();
             _encryptedFileSize += chunk.data.size() - prevEncryptedChunk.size();
         }
-        
     }
 
     std::string getDecryptedChunk(size_t index) {

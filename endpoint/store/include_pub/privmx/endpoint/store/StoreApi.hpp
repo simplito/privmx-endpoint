@@ -133,7 +133,7 @@ public:
      * @param handle handle to write file data
      * @param dataChunk file data chunk
      */
-    void writeToFile(const int64_t fileHandle, const core::Buffer& dataChunk);
+    void writeToFile(const int64_t fileHandle, const core::Buffer& dataChunk, bool truncate = false);
 
     /**
      * Deletes a file by given ID.

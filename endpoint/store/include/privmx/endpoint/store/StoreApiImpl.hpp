@@ -97,7 +97,7 @@ public:
     int64_t updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size);
     void updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
     int64_t openFile(const std::string& fileId);
-    void writeToFile(const int64_t handle, const core::Buffer& dataChunk);
+    void writeToFile(const int64_t handle, const core::Buffer& dataChunk, bool truncate = false);
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
     std::string closeFile(const int64_t handle);

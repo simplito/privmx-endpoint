@@ -124,10 +124,11 @@ Poco::Dynamic::Var StoreApiVarInterface::updateFile(const Poco::Dynamic::Var& ar
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::writeToFile(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
     auto dataChunk = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "dataChunk");
-    _storeApi.writeToFile(fileHandle, dataChunk);
+    auto truncate = _deserializer.deserialize<bool>(argsArr->get(2), "truncate");
+    _storeApi.writeToFile(fileHandle, dataChunk, truncate);
     return {};
 }
 
