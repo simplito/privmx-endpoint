@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
+#include "../utils/FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -1901,6 +1902,113 @@ TEST_F(ThreadTest, updateThread_policy_update_by_added_user) {
             true,
             true,
             policy
+        );
+    });
+}
+
+TEST_F(ThreadTest, userValidator_false) {
+    auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
+    connection->setUserVerifier(verifier);
+    // getThread
+    EXPECT_NO_THROW({
+        auto thread = threadApi->getThread(
+            reader->getString("Thread_1.threadId")
+        );
+        EXPECT_FALSE(thread.statusCode == 0);
+    });
+    // listThreads
+    EXPECT_NO_THROW({
+        auto threads = threadApi->listThreads(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(threads.readItems[0].statusCode == 0);
+    });
+    // createThread
+    EXPECT_NO_THROW({
+        threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private")
+        );
+    });
+    EXPECT_THROW({
+        threadApi->updateThread(
+            reader->getString("Thread_1.threadId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    }, core::Exception);
+    // deleteThread
+    EXPECT_NO_THROW({
+        threadApi->deleteThread(
+            reader->getString("Thread_2.threadId")
+        );
+    });
+    // getMessage
+    EXPECT_NO_THROW({
+        auto message = threadApi->getMessage(
+            reader->getString("Message_1.info_messageId")
+        );
+        EXPECT_FALSE(message.statusCode == 0);
+    });
+    // listMessages
+    EXPECT_NO_THROW({
+        auto messages = threadApi->listMessages(
+            reader->getString("Thread_1.threadId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(messages.readItems[0].statusCode == 0);
+    });
+    // sendMessage
+    EXPECT_THROW({
+        threadApi->sendMessage(
+            reader->getString("Thread_1.threadId"),
+            core::Buffer::from("pubMeta"),
+            core::Buffer::from("privMeta"),
+            core::Buffer::from("data")
+        );
+    }, core::Exception);
+    // updateMessage
+    EXPECT_THROW({
+        threadApi->updateMessage(
+            reader->getString("Message_1.info_messageId"),
+            core::Buffer::from("pubMeta"),
+            core::Buffer::from("privMeta"),
+            core::Buffer::from("data")
+        );
+    }, core::Exception);
+    // deleteMessage
+    EXPECT_NO_THROW({
+        threadApi->deleteMessage(
+            reader->getString("Message_2.info_messageId")
         );
     });
 }

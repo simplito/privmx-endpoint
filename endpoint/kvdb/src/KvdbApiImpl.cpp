@@ -389,6 +389,9 @@ void KvdbApiImpl::setEntry(const std::string& kvdbId, const std::string& key, co
     auto kvdb = getRawKvdbFromCacheOrBridge(kvdbId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, sendEntry, getKvdb)
     auto msgKey = getAndValidateModuleCurrentEncKey(kvdb);
+    if(msgKey.statusCode != 0) {
+        throw KvdbEncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(msgKey.statusCode));
+    }
     auto  send_entry_model = utils::TypedObjectFactory::createNewObject<server::KvdbEntrySetModel>();
     send_entry_model.kvdbId(kvdb.id());
     send_entry_model.kvdbEntryKey(key);

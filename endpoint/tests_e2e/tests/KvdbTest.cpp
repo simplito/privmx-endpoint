@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
+#include "../utils/FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -85,7 +86,6 @@ protected:
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
 };
-
 
 TEST_F(KvdbTest, getKvdb) {
     kvdb::Kvdb kvdb;
@@ -1436,4 +1436,106 @@ TEST_F(KvdbTest, deleteEntries) {
             reader->getString("KvdbEntry_2.info_key")
         );
     }, core::Exception);
+}
+
+
+TEST_F(KvdbTest, userValidator_false) {
+    auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
+    connection->setUserVerifier(verifier);
+    // getKvdb
+    EXPECT_NO_THROW({
+        auto Kvdb = kvdbApi->getKvdb(
+            reader->getString("Kvdb_1.KvdbId")
+        );
+        EXPECT_FALSE(Kvdb.statusCode == 0);
+    });
+    // listKvdbs
+    EXPECT_NO_THROW({
+        auto Kvdbs = kvdbApi->listKvdbs(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(Kvdbs.readItems[0].statusCode == 0);
+    });
+    // createKvdb
+    EXPECT_NO_THROW({
+        kvdbApi->createKvdb(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private")
+        );
+    });
+    EXPECT_THROW({
+        kvdbApi->updateKvdb(
+            reader->getString("Kvdb_1.KvdbId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    }, core::Exception);
+    // deleteKvdb
+    EXPECT_NO_THROW({
+        kvdbApi->deleteKvdb(
+            reader->getString("Kvdb_2.KvdbId")
+        );
+    });
+    // getEntry
+    EXPECT_NO_THROW({
+        auto entry = kvdbApi->getEntry(
+            reader->getString("KvdbEntry_1.info_kvdbId"),
+            reader->getString("KvdbEntry_1.info_key")
+        );
+        EXPECT_FALSE(entry.statusCode == 0);
+    });
+    // listMessages
+    EXPECT_NO_THROW({
+        auto entries = kvdbApi->listEntries(
+            reader->getString("Kvdb_1.KvdbId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(entries.readItems[0].statusCode == 0);
+    });
+    // setEntry
+    EXPECT_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_1.KvdbId"),
+            "key",
+            core::Buffer::from("pubMeta"),
+            core::Buffer::from("privMeta"),
+            core::Buffer::from("data")
+        );
+    }, core::Exception);
+    // deleteEntry
+    EXPECT_NO_THROW({
+        kvdbApi->deleteEntry(
+            reader->getString("KvdbEntry_2.info_kvdbId"),
+            reader->getString("KvdbEntry_2.info_key")
+        );
+    });
 }
