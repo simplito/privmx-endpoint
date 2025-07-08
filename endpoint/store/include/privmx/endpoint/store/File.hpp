@@ -297,7 +297,7 @@ public:
         throw NotImplementedException(); // TODO
     }
     void close() {
-        throw NotImplementedException();
+        // throw NotImplementedException();
     }
 
 private:
@@ -311,7 +311,11 @@ private:
         std::string newChunk = std::string();
         // read old chunk
         std::string prevEncryptedChunk = _blockProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
-        std::string prevChunk = _chunkEncryptor->decrypt(index, {.data = prevEncryptedChunk, .hmac = _hashList->getHash(index)});
+        std::string prevChunk = "";
+        std::cout << "prevEncryptedChunk.size()" << prevEncryptedChunk.size() << std::endl;
+        if(prevEncryptedChunk.size() != 0) {
+            prevChunk = _chunkEncryptor->decrypt(index, {.data = prevEncryptedChunk, .hmac = _hashList->getHash(index)});
+        }
         // fill new chunk data to chunkOffset
         if(chunkOffset > 0) {
             newChunk.append(prevChunk.substr(0, chunkOffset));
@@ -408,7 +412,7 @@ public:
     virtual void seekp(const size_t pos) = 0;
     virtual core::Buffer read(const size_t length) = 0;
     virtual void write(const core::Buffer& chunk) = 0;
-    virtual void truncate(const size_t length) = 0;
+    virtual void truncate() = 0;
     virtual void close() = 0;
     virtual void sync() = 0;
     virtual void flush() = 0;
@@ -447,8 +451,8 @@ public:
         _writePos += chunk.size();
     }
 
-    void truncate(const size_t length) override {
-        _file->truncate(length);
+    void truncate() override {
+        _file->truncate(_writePos);
     }
 
     void close() override {
