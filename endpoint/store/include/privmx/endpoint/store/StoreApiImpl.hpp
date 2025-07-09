@@ -33,7 +33,7 @@ limitations under the License.
 
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/FileDataProvider.hpp"
-#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV1.hpp"
 #include "privmx/endpoint/store/RequestApi.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
@@ -190,7 +190,7 @@ private:
     
     FileHandleManager _fileHandleManager;
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
-    FileMetaEncryptor _fileMetaEncryptor;
+    FileMetaEncryptorV1 _fileMetaEncryptorV1;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     StoreProvider _storeProvider;
     std::atomic_bool _storeCache;

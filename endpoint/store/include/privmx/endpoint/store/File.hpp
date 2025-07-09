@@ -419,6 +419,7 @@ private:
     size_t _chunksize = 0; // TODO
     FileInfo _fileInfo;
     FileMeta _fileMeta;
+    core::EncKey _fileEncKey;
     std::shared_ptr<ServerApi> _server;
 };
 

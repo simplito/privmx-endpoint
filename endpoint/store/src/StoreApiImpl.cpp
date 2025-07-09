@@ -64,7 +64,7 @@ StoreApiImpl::StoreApiImpl(
 
     _fileHandleManager(FileHandleManager(handleManager, "Store")),
     _dataEncryptorCompatV1(core::DataEncryptor<dynamic::compat_v1::StoreData>()),
-    _fileMetaEncryptor(FileMetaEncryptor()),
+    _fileMetaEncryptorV1(FileMetaEncryptorV1()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
     _storeProvider(StoreProvider(
         [&](const std::string& id) {
@@ -1133,7 +1133,7 @@ std::string StoreApiImpl::verifyFileV1Signature(FileMetaSigned meta, server::Fil
 // OLD CODE
 StoreFile StoreApiImpl::decryptAndVerifyFileV1(const std::string &filesKey, server::File x) {
     StoreFile odp;
-    auto fileMetaSigned = _fileMetaEncryptor.decrypt(x.meta(), filesKey);
+    auto fileMetaSigned = _fileMetaEncryptorV1.decrypt(x.meta(), filesKey);
     odp.raw = x;
     odp.meta = fileMetaSigned.meta;
     odp.verified = verifyFileV1Signature(fileMetaSigned, x, _host);
