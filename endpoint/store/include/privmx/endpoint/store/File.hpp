@@ -24,7 +24,7 @@ limitations under the License.
 #include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IHashList.hpp"
 
-#include "privmx/endpoint/store/HmacList.hpp"
+#include "privmx/endpoint/store/interfaces/IHashList.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/core/Connection.hpp"
@@ -37,26 +37,8 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-struct FileId
-{
-    std::string contextId;
-    std::string storeId;
-    std::string storeResourceId;
-    std::string fileId;
-    std::string resourceId;
-};
-
-struct FileMeta
-{
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    dynamic::InternalStoreFileMeta internalFileMeta;
-};
-
-class MetaEncryptor
-{
+class MetaEncryptor {
 public:
-
     struct EncryptedMeta
     {
         std::string keyId;
@@ -71,7 +53,7 @@ public:
         _connection(connection),
         _encKey(encKey) {}
 
-    EncryptedMeta encrypt(const FileId& fileId, const FileMeta& fileMeta) {
+    EncryptedMeta encrypt(const FileInfo& fileId, const FileMeta& fileMeta) {
         store::FileMetaToEncryptV5 metaToEncrypt {
             .publicMeta = fileMeta.publicMeta,
             .privateMeta = fileMeta.privateMeta,
@@ -82,7 +64,7 @@ public:
         return {key.id, FileMetaEncryptorV5().encrypt(metaToEncrypt, _userPrivKey, key.key).asVar()};
     }
 
-    FileMeta decrypt(const FileId& fileId, const EncryptedMeta& encryptedMeta) {
+    FileMeta decrypt(const FileInfo& fileId, const EncryptedMeta& encryptedMeta) {
         auto key = getEncKey(fileId);
         auto decryptedFileMeta = FileMetaEncryptorV5().decrypt(encryptedMeta.meta, key.key);
         // TO DO validate decrypted data
@@ -96,7 +78,7 @@ public:
     }
 
 private:
-    privmx::endpoint::core::DataIntegrityObject createDIO(const FileId& fileId) {
+    privmx::endpoint::core::DataIntegrityObject createDIO(const FileInfo& fileId) {
         privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
             fileId.contextId,
             fileId.resourceId,
@@ -106,7 +88,7 @@ private:
         return fileDIO;
     }
 
-    core::DecryptedEncKey getEncKey(const FileId& fileId) {
+    core::DecryptedEncKey getEncKey(const FileInfo& fileId) {
         return _encKey;
     }
 
@@ -115,11 +97,12 @@ private:
     core::DecryptedEncKey _encKey;
 };
 
-class ServerSliceProvider
+class ServerFileSliceProvider
 {
 public:
-    ServerSliceProvider(std::shared_ptr<ServerApi> server, const std::string& fileId) : _server(std::move(server)), _fileId(fileId) {}
+    ServerFileSliceProvider(std::shared_ptr<ServerApi> server, const std::string& fileId) : _server(std::move(server)), _fileId(fileId) {}
     std::string get(int64_t start, int64_t end, int64_t version) {
+        // Place implement serwerChunk 
         auto range = utils::TypedObjectFactory::createNewObject<server::BufferReadRangeSlice>();
         range.from(start);
         range.to(end);
@@ -132,28 +115,26 @@ public:
         auto fileData = _server->storeFileRead(fileDataModel);
         return fileData.data();
     }
-
-private:
     std::shared_ptr<ServerApi> _server;
     std::string _fileId;
 };
 
-class SliceProvider
+class FileSliceProvider
 {
 public:
-    SliceProvider(std::shared_ptr<ServerSliceProvider> serverSliceProvider) : _serverSliceProvider(std::move(serverSliceProvider)) {}
+    FileSliceProvider(std::shared_ptr<ServerFileSliceProvider> serverFileSliceProvider) : _serverFileSliceProvider(serverFileSliceProvider) {}
     std::string get(size_t start, size_t end, int64_t version) {
-        return _serverSliceProvider->get(start, end, version);
+        // place to implement Cache logic
+        return _serverFileSliceProvider->get(start, end, version);
     }
-
 private:
-    std::shared_ptr<ServerSliceProvider> _serverSliceProvider;
+    std::shared_ptr<ServerFileSliceProvider> _serverFileSliceProvider;
 };
 
-class BlockProvider
+class FileChunkProvider
 {
 public:
-    BlockProvider(std::shared_ptr<SliceProvider> sliceProvider)
+    FileChunkProvider(std::shared_ptr<FileSliceProvider> sliceProvider)
         : _sliceProvider(std::move(sliceProvider)) {}
     std::string get(size_t blockIndex, int64_t version, size_t encryptedFileSize,  size_t encryptedBlockSize) { // warning: last chunk can be smaller than other!!
         size_t start = blockIndex * encryptedBlockSize;
@@ -168,7 +149,7 @@ public:
     }
 
 private:
-    std::shared_ptr<SliceProvider> _sliceProvider;
+    std::shared_ptr<FileSliceProvider> _sliceProvider;
     size_t _blockSize;
 };
 
@@ -230,7 +211,7 @@ class File2
 {
 public:
     File2 (
-        std::shared_ptr<BlockProvider> blockProvider,
+        std::shared_ptr<FileChunkProvider> fileChunkProvider,
         std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         std::shared_ptr<IHashList> hashList,
         std::shared_ptr<MetaEncryptor> metaEncryptor,
@@ -238,11 +219,11 @@ public:
         size_t encryptedFileSize,
         int64_t version,
         size_t chunksize,
-        FileId fileId,
+        FileInfo fileInfo,
         FileMeta fileMeta,
         std::shared_ptr<ServerApi> server
     ) : 
-        _blockProvider(std::move(blockProvider)),
+        _fileChunkProvider(fileChunkProvider),
         _chunkEncryptor(chunkEncryptor),
         _hashList(hashList),
         _fileMetaEncryptor(metaEncryptor),
@@ -250,7 +231,7 @@ public:
         _encryptedFileSize(encryptedFileSize),
         _version(version),
         _chunksize(chunksize),
-        _fileId(fileId),
+        _fileInfo(fileInfo),
         _fileMeta(fileMeta),
         _server(server)
     {}
@@ -299,7 +280,7 @@ public:
         size_t chunkOffset = pos % _chunksize;
         std::string newChunk = std::string();
         // read old chunk
-        std::string prevEncryptedChunk = _blockProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+        std::string prevEncryptedChunk = _fileChunkProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
         std::string prevChunk = "";
         std::cout << "prevEncryptedChunk.size()" << prevEncryptedChunk.size() << std::endl;
         if(prevEncryptedChunk.size() != 0) {
@@ -322,7 +303,7 @@ public:
         _fileMeta.internalFileMeta.hmac(topHash);
         // _fileMeta.internalFileMeta.size(newSize);
 
-        auto newMeta = _fileMetaEncryptor->encrypt(_fileId, _fileMeta);
+        auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta);
 
         // update file by operation
         auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
@@ -335,19 +316,19 @@ public:
         operation2.type("checksum");
         operation2.pos(_hashList->getHashSize() * index);
         operation2.data(chunk.hmac);
-        operation2.truncate(false);
+        operation2.truncate(true);
 
         auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
         operations.add(operation1);
         operations.add(operation2);
 
         auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
-        writeRequest.fileId(_fileId.fileId);
+        writeRequest.fileId(_fileInfo.fileId);
         writeRequest.operations(operations);
         writeRequest.meta(newMeta.meta);
         writeRequest.keyId(newMeta.keyId);
         writeRequest.version(_version);
-        writeRequest.force(false);
+        writeRequest.force(true);
 
         _server->storeFileWrite(writeRequest);
 
@@ -373,7 +354,7 @@ private:
         }
         std::string newChunk = std::string();
         // read old chunk
-        std::string prevEncryptedChunk = _blockProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+        std::string prevEncryptedChunk = _fileChunkProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
         std::string prevChunk = "";
         std::cout << "prevEncryptedChunk.size()" << prevEncryptedChunk.size() << std::endl;
         if(prevEncryptedChunk.size() != 0) {
@@ -402,27 +383,27 @@ private:
         _fileMeta.internalFileMeta.hmac(topHash);
         // _fileMeta.internalFileMeta.size(newSize);
 
-        auto newMeta = _fileMetaEncryptor->encrypt(_fileId, _fileMeta);
+        auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta);
 
         // update file by operation
         auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
         operation1.type("file");
         operation1.pos(_chunksize * index);
         operation1.data(chunk.data);
-        operation1.truncate(true);
+        operation1.truncate(false);
 
         auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
         operation2.type("checksum");
         operation2.pos(_hashList->getHashSize() * index);
         operation2.data(chunk.hmac);
-        operation2.truncate(true);
+        operation2.truncate(false);
 
         auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
         operations.add(operation1);
         operations.add(operation2);
 
         auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
-        writeRequest.fileId(_fileId.fileId);
+        writeRequest.fileId(_fileInfo.fileId);
         writeRequest.operations(operations);
         writeRequest.meta(newMeta.meta);
         writeRequest.keyId(newMeta.keyId);
@@ -441,7 +422,7 @@ private:
     }
 
     std::string getDecryptedChunk(size_t index) {
-        std::string chunk = _blockProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+        std::string chunk = _fileChunkProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
         std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
         return plain;
     }
@@ -453,7 +434,7 @@ private:
         return position % _chunkEncryptor->getPlainChunkSize();
     }
 
-    std::shared_ptr<BlockProvider> _blockProvider;
+    std::shared_ptr<FileChunkProvider> _fileChunkProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
     std::shared_ptr<IHashList> _hashList;
     std::shared_ptr<MetaEncryptor> _fileMetaEncryptor;
@@ -461,7 +442,7 @@ private:
     size_t _encryptedFileSize = 0;
     int64_t _version = 0;
     size_t _chunksize = 0; // TODO
-    FileId _fileId;
+    FileInfo _fileInfo;
     FileMeta _fileMeta;
     std::shared_ptr<ServerApi> _server;
 };

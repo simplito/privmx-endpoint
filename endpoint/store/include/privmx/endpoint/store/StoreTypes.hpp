@@ -83,6 +83,21 @@ struct DecryptedFileMetaV5 : core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
+struct FileInfo {
+    std::string contextId;
+    std::string storeId;
+    std::string storeResourceId;
+    std::string fileId;
+    std::string resourceId;
+};
+
+struct FileMeta
+{
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    dynamic::InternalStoreFileMeta internalFileMeta;
+};
+
 
 } // store
 } // endpoint
