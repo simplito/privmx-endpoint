@@ -60,13 +60,11 @@ public:
             .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.asVar())),
             .dio = createDIO(fileId)
         };
-        auto key = getEncKey(fileId);
-        return {key.id, FileMetaEncryptorV5().encrypt(metaToEncrypt, _userPrivKey, key.key).asVar()};
+        return {_encKey.id, FileMetaEncryptorV5().encrypt(metaToEncrypt, _userPrivKey, _encKey.key).asVar()};
     }
 
     FileMeta decrypt(const FileInfo& fileId, const EncryptedMeta& encryptedMeta) {
-        auto key = getEncKey(fileId);
-        auto decryptedFileMeta = FileMetaEncryptorV5().decrypt(encryptedMeta.meta, key.key);
+        auto decryptedFileMeta = FileMetaEncryptorV5().decrypt(encryptedMeta.meta, _encKey.key);
         // TO DO validate decrypted data
         return FileMeta{
             decryptedFileMeta.publicMeta,
@@ -86,10 +84,6 @@ private:
             fileId.storeResourceId
         );
         return fileDIO;
-    }
-
-    core::DecryptedEncKey getEncKey(const FileInfo& fileId) {
-        return _encKey;
     }
 
     privmx::crypto::PrivateKey _userPrivKey;
@@ -306,31 +300,7 @@ public:
         auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta);
 
         // update file by operation
-        auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-        operation1.type("file");
-        operation1.pos(_chunksize * index);
-        operation1.data(chunk.data);
-        operation1.truncate(false);
-
-        auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-        operation2.type("checksum");
-        operation2.pos(_hashList->getHashSize() * index);
-        operation2.data(chunk.hmac);
-        operation2.truncate(true);
-
-        auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
-        operations.add(operation1);
-        operations.add(operation2);
-
-        auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
-        writeRequest.fileId(_fileInfo.fileId);
-        writeRequest.operations(operations);
-        writeRequest.meta(newMeta.meta);
-        writeRequest.keyId(newMeta.keyId);
-        writeRequest.version(_version);
-        writeRequest.force(true);
-
-        _server->storeFileWrite(writeRequest);
+        updateOnServer(chunk, index, newMeta.meta, newMeta.keyId, true);
 
         _version += 1;
         // update _fileSize;
@@ -386,31 +356,7 @@ private:
         auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta);
 
         // update file by operation
-        auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-        operation1.type("file");
-        operation1.pos(_chunksize * index);
-        operation1.data(chunk.data);
-        operation1.truncate(false);
-
-        auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-        operation2.type("checksum");
-        operation2.pos(_hashList->getHashSize() * index);
-        operation2.data(chunk.hmac);
-        operation2.truncate(false);
-
-        auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
-        operations.add(operation1);
-        operations.add(operation2);
-
-        auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
-        writeRequest.fileId(_fileInfo.fileId);
-        writeRequest.operations(operations);
-        writeRequest.meta(newMeta.meta);
-        writeRequest.keyId(newMeta.keyId);
-        writeRequest.version(_version);
-        writeRequest.force(false);
-
-        _server->storeFileWrite(writeRequest);
+        updateOnServer(chunk, index, newMeta.meta, newMeta.keyId, false);
 
         _version += 1;
         // update _fileSize;
@@ -419,6 +365,35 @@ private:
             _fileSize += (chunkOffset + data.size()) - prevChunk.size();
             _encryptedFileSize += chunk.data.size() - prevEncryptedChunk.size();
         }
+    }
+
+    void updateOnServer(const store::IChunkEncryptor::Chunk& updatedChunk, size_t chunkIndex, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
+        // update file by operation
+        auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
+        operation1.type("file");
+        operation1.pos(_chunksize * chunkIndex);
+        operation1.data(updatedChunk.data);
+        operation1.truncate(truncate);
+
+        auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
+        operation2.type("checksum");
+        operation2.pos(_hashList->getHashSize() * chunkIndex);
+        operation2.data(updatedChunk.hmac);
+        operation2.truncate(truncate);
+
+        auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
+        operations.add(operation1);
+        operations.add(operation2);
+
+        auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
+        writeRequest.fileId(_fileInfo.fileId);
+        writeRequest.operations(operations);
+        writeRequest.meta(updatedMeta);
+        writeRequest.keyId(encKeyId);
+        writeRequest.version(_version);
+        writeRequest.force(false);
+
+        _server->storeFileWrite(writeRequest);
     }
 
     std::string getDecryptedChunk(size_t index) {

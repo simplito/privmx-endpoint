@@ -16,6 +16,7 @@ limitations under the License.
 #include <optional>
 
 #include <privmx/crypto/Crypto.hpp>
+#include "privmx/endpoint/store/StoreTypes.hpp"
 #include "privmx/endpoint/store/interfaces/IHashList.hpp"
 
 namespace privmx {
@@ -35,7 +36,6 @@ public:
     inline size_t getHashSize() { return HMAC_SIZE; };
 
 private:
-    constexpr static size_t HMAC_SIZE = 32;
     std::string _topHashKey;
     std::optional<std::string> _topHash;
     int64_t _size = 0;
