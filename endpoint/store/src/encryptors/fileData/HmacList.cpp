@@ -17,7 +17,7 @@ using namespace privmx::endpoint::store;
 
 HmacList::HmacList(const std::string& topHashKey, const std::string& data) : _topHashKey(topHashKey), _hashes(data) {
     if (_hashes.size() % HMAC_SIZE != 0) {
-        // throw InvalidHashSizeException();
+        throw InvalidHashSizeException();
     }
     _size = _hashes.size() / HMAC_SIZE;
 }

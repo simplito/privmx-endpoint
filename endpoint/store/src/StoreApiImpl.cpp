@@ -520,20 +520,21 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     core::DataIntegrityObject fileDIO;
     std::tie(decryptedFile, fileDIO) = decryptAndConvertFileDataToFileInfo(file_raw.file(), core::DecryptedEncKey(key));
     auto internalMeta = decryptFileInternalMeta(file_raw.file(), core::DecryptedEncKey(key));
+    auto decryptionParams = getFileDecryptionParams(file_raw.file(), internalMeta);
     if (internalMeta.randomWriteOpt(false)) {
         // random write
         std::shared_ptr<ServerFileSliceProvider> ssp = std::make_shared<ServerFileSliceProvider>(_serverApi, fileId);
         std::shared_ptr<FileSliceProvider> sp = std::make_shared<FileSliceProvider>(ssp);
         std::shared_ptr<FileChunkProvider> bp = std::make_shared<FileChunkProvider>(sp);
         std::shared_ptr<MetaEncryptor> me = std::make_shared<MetaEncryptor>(_userPrivKey, _connection, key);
-        std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(utils::Base64::toString(internalMeta.key()), internalMeta.chunkSize());
-        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(internalMeta.key(), internalMeta.hmac());
+        std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
+        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(decryptionParams.key, decryptionParams.hmac);
         std::shared_ptr<File2> file2 = std::make_shared<File2>(
             bp, che, hash, me, 
-            internalMeta.size(), 
-            file_raw.file().size(),
-            file_raw.file().version(), 
-            internalMeta.chunkSize(),
+            decryptionParams.originalSize,
+            decryptionParams.sizeOnServer,
+            decryptionParams.version,
+            decryptionParams.chunkSize,
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file().contextId(), 
                 .storeId = file_raw.file().storeId(),
@@ -555,7 +556,6 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
         );
         return handle->getId();
     }
-    auto decryptionParams = getFileDecryptionParams(file_raw.file(), internalMeta);
     return createFileReadHandle(decryptionParams);
 }
 
