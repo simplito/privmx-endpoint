@@ -116,7 +116,7 @@ private:
     std::string storeFileFinalizeWriteRequest(
         const std::shared_ptr<FileWriteHandle>& handle, 
         const ChunksSentInfo& data,
-        const core::ModuleBaseApi::ModuleKeys& storeKey
+        const core::ModuleKeys& storeKey
     );
 
     std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey> &users);
@@ -140,8 +140,8 @@ private:
     Store validateDecryptAndConvertStoreDataToStore(server::Store store);
     void assertStoreDataIntegrity(server::Store store);
     uint32_t validateStoreDataIntegrity(server::Store store);
-    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId) override;
-    core::ModuleBaseApi::ModuleKeys storeToModuleKeys(server::Store store);
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) override;
+    core::ModuleKeys storeToModuleKeys(server::Store store);
 
     // OLD CODE    
     StoreFile decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey);
@@ -164,11 +164,11 @@ private:
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
     FileDataSchema::Version getFileDataStructureVersion(server::File file);
-    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(utils::List<server::File> files, const core::ModuleBaseApi::ModuleKeys& storeKeys);
-    File validateDecryptAndConvertFileDataToFileInfo(server::File file, const core::ModuleBaseApi::ModuleKeys& storeKeys);
+    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(utils::List<server::File> files, const core::ModuleKeys& storeKeys);
+    File validateDecryptAndConvertFileDataToFileInfo(server::File file, const core::ModuleKeys& storeKeys);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
-    dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(server::File file, const core::ModuleBaseApi::ModuleKeys& storeKeys);
-    core::ModuleBaseApi::ModuleKeys getFileDecryptionKeys(server::File file);
+    dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(server::File file, const core::ModuleKeys& storeKeys);
+    core::ModuleKeys getFileDecryptionKeys(server::File file);
     uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     

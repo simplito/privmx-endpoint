@@ -86,6 +86,14 @@ struct NotificationEvent {
     std::vector<std::string> subscriptions;
 };
 
+struct ModuleKeys {
+        privmx::utils::List<server::KeyEntry> keys;
+        std::string currentKeyId;
+        int64_t moduleSchemaVersion;
+        std::string moduleResourceId;
+        std::string contextId;
+    };
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

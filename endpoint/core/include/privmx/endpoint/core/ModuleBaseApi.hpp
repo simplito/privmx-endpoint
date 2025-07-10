@@ -52,13 +52,7 @@ public:
         const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
-    struct ModuleKeys {
-        privmx::utils::List<server::KeyEntry> keys;
-        std::string currentKeyId;
-        int64_t moduleSchemaVersion;
-        std::string moduleResourceId;
-        std::string contextId;
-    };
+    
 
     virtual ~ModuleBaseApi() = default;
 protected:
@@ -90,7 +84,6 @@ protected:
     template<typename ModuleStructAsTypedObj>
     auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKeyV2());
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
-    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(core::ContainerKeyCache::ModuleKeys moduleKeys);
 
     template<typename ModuleStructAsTypedObj>
     auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), core::EncKeyLocation());
@@ -105,14 +98,14 @@ protected:
         const std::optional<std::set<std::string>>& keyIds = std::nullopt, 
         const std::optional<int64_t>& minimumSchemaVersion = std::nullopt
     );
-    virtual ModuleKeys getModuleKeysFormServer(std::string moduleId) = 0;
+    virtual std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) = 0;
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
-    void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys);
+    void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);
 
 private:
-    static core::ContainerKeyCache::ModuleKeys convertModuleKeysToContainerKeyCacheFormat(const ModuleKeys& moduleKeys);
-    static ModuleKeys convertContainerKeyCacheModuleKeysToModuleApiFormat(const core::ContainerKeyCache::ModuleKeys& moduleKeys);
+    static core::ContainerKeyCache::CachedModuleKeys convertModuleKeysToContainerKeyCacheFormat(const ModuleKeys& moduleKeys, int64_t moduleVersion);
+    static ModuleKeys convertContainerKeyCacheModuleKeysToModuleApiFormat(const core::ContainerKeyCache::CachedModuleKeys& moduleKeys);
 
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;

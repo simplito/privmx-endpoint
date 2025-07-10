@@ -268,7 +268,7 @@ Thread ThreadApiImpl::_getThreadEx(const std::string& threadId, const std::strin
     auto thread = _serverApi.threadGet(params).thread();
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, data send)
      // Add to cache
-    setNewModuleKeysInCache(thread.id(), threadToModuleKeys(thread));
+    setNewModuleKeysInCache(thread.id(), threadToModuleKeys(thread), thread.version());
     // decrypt
     auto result = validateDecryptAndConvertThreadDataToThread(thread);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _getThreadEx, data decrypted)
@@ -295,7 +295,7 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
     auto threadsList = _serverApi.threadList(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, _listThreadsEx, data send)
     for (auto thread : threadsList.threads()) {
-        setNewModuleKeysInCache(thread.id(), threadToModuleKeys(thread));
+        setNewModuleKeysInCache(thread.id(), threadToModuleKeys(thread), thread.version());
     }
     std::vector<Thread> threads = validateDecryptAndConvertThreadsDataToThreads(threadsList.threads());
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _listThreadsEx, data decrypted)
@@ -328,7 +328,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(const std::string& threadI
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting thread)
     auto thread = messagesList.thread();
     assertThreadDataIntegrity(thread);
-    setNewModuleKeysInCache(thread.id(), threadToModuleKeys(thread));
+    setNewModuleKeysInCache(thread.id(), threadToModuleKeys(thread), thread.version());
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     auto messages = validateDecryptAndConvertMessagesDataToMessages(messagesList.messages(), threadToModuleKeys(thread));
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, listMessages, data decrypted)
@@ -350,7 +350,7 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     }
 }
 
-std::string ThreadApiImpl::sendMessageRequest(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, const core::ModuleBaseApi::ModuleKeys& keys) {
+std::string ThreadApiImpl::sendMessageRequest(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, const core::ModuleKeys& keys) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessageRequest);
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
     auto resourceId = core::EndpointUtils::generateId();
@@ -408,7 +408,7 @@ void ThreadApiImpl::updateMessageRequest(
     const core::Buffer& publicMeta, 
     const core::Buffer& privateMeta, 
     const core::Buffer& data,
-    const core::ModuleBaseApi::ModuleKeys& keys
+    const core::ModuleKeys& keys
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, updateMessageRequest);
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
@@ -432,7 +432,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
     if (type == "threadCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw));
+            setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertThreadDataToThread(raw);
             std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
             event->channel = "thread";
@@ -442,7 +442,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
     } else if (type == "threadUpdated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw));
+            setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertThreadDataToThread(raw);
             std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
             event->channel = "thread";
@@ -1050,7 +1050,7 @@ std::tuple<Message, core::DataIntegrityObject> ThreadApiImpl::decryptAndConvertM
     return std::make_tuple(convertServerMessageToLibMessage(message,{},{},{},{},e.getCode()), core::DataIntegrityObject());
 }
 
-std::vector<Message> ThreadApiImpl::validateDecryptAndConvertMessagesDataToMessages(utils::List<server::Message> messages, const core::ModuleBaseApi::ModuleKeys& threadKeys) {
+std::vector<Message> ThreadApiImpl::validateDecryptAndConvertMessagesDataToMessages(utils::List<server::Message> messages, const core::ModuleKeys& threadKeys) {
     std::set<std::string> keyIds;
     for (auto message : messages) {
         keyIds.insert(message.keyId());
@@ -1111,7 +1111,7 @@ std::vector<Message> ThreadApiImpl::validateDecryptAndConvertMessagesDataToMessa
     return result;
 }
 
-Message ThreadApiImpl::validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleBaseApi::ModuleKeys& threadKeys) {
+Message ThreadApiImpl::validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleKeys& threadKeys) {
     try {
         auto keyId = message.keyId();
         // Validate data Integrity
@@ -1153,7 +1153,7 @@ Message ThreadApiImpl::validateDecryptAndConvertMessageDataToMessage(server::Mes
     }
 }
 
-core::ModuleBaseApi::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message) {
+core::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message) {
     auto keyId = message.keyId();
     thread::ThreadDataSchema::Version minimumThreadSchemaVersion;
     switch (getMessagesDataStructureVersion(message)) {
@@ -1178,7 +1178,7 @@ Poco::Dynamic::Var ThreadApiImpl::encryptMessageData(
     const core::Buffer& publicMeta, 
     const core::Buffer& privateMeta, 
     const core::Buffer& data, 
-    const core::ModuleBaseApi::ModuleKeys& threadKeys
+    const core::ModuleKeys& threadKeys
 ) {
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(threadKeys);
     switch (msgKey.dataStructureVersion) {
@@ -1222,17 +1222,17 @@ void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
     _serverApi.threadGet(params).thread();
 }
 
-core::ModuleBaseApi::ModuleKeys ThreadApiImpl::getModuleKeysFormServer(std::string moduleId) {
+std::pair<core::ModuleKeys, int64_t> ThreadApiImpl::getModuleKeysAndVersionFormServer(std::string moduleId) {
     auto params = privmx::utils::TypedObjectFactory::createNewObject<thread::server::ThreadGetModel>();
     params.threadId(moduleId);
     auto thread = _serverApi.threadGet(params).thread();
     // validate thread Data before returning data
     assertThreadDataIntegrity(thread);
-    return threadToModuleKeys(thread);
+    return std::make_pair(threadToModuleKeys(thread), thread.version());
 }
 
-core::ModuleBaseApi::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
-    return core::ModuleBaseApi::ModuleKeys{
+core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
+    return core::ModuleKeys{
         .keys=thread.keys(),
         .currentKeyId=thread.keyId(),
         .moduleSchemaVersion=getThreadEntryDataStructureVersion(thread.data().get(thread.data().size()-1)),

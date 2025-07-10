@@ -300,7 +300,7 @@ Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& t
     PRIVMX_DEBUG_TIME_START(PlatformInbox, _getInboxEx)
     auto inbox = getServerInbox(inboxId, type);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, _getInboxEx, data send)
-    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox));
+    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox), inbox.version());
     auto result = validateDecryptAndConvertInboxDataToInbox(inbox);
     PRIVMX_DEBUG_TIME_STOP(PlatformInbox, _getInboxEx, data decrypted)
     return result;
@@ -315,7 +315,7 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
     core::ListQueryMapper::map(model, query);
     auto inboxesListResult = _serverApi->inboxList(model);
     for (auto inbox : inboxesListResult.inboxes()) {
-        setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox));
+        setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox), inbox.version());
     }
     std::vector<Inbox> inboxes = validateDecryptAndConvertInboxesDataToInboxes(inboxesListResult.inboxes());
     return core::PagingList<inbox::Inbox>({
@@ -465,7 +465,7 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(const std::string&
     }
     PRIVMX_DEBUG_TIME_START(InboxApi, listEntries)
     auto inboxRaw {getServerInbox(inboxId)};
-    setNewModuleKeysInCache(inboxRaw.id(), inboxToModuleKeys(inboxRaw));
+    setNewModuleKeysInCache(inboxRaw.id(), inboxToModuleKeys(inboxRaw), inboxRaw.version());
     auto inboxData {getInboxCurrentDataEntry(inboxRaw).data()};
     auto threadId = inboxData.threadId();
     auto model = Factory::createObject<thread::server::ThreadMessagesGetModel>();
@@ -899,7 +899,7 @@ inbox::server::InboxMessageServer InboxApiImpl::unpackInboxOrigMessage(const std
     return message;
 }
 
-InboxEntryResult InboxApiImpl::decryptInboxEntry(thread::server::Message message, const core::ModuleBaseApi::ModuleKeys& inboxKeys) {
+InboxEntryResult InboxApiImpl::decryptInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys) {
     InboxEntryResult result;
     result.statusCode = 0;
     try {
@@ -981,7 +981,7 @@ inbox::InboxEntry InboxApiImpl::convertInboxEntry(thread::server::Message messag
     return result;
 }
 
-inbox::InboxEntry InboxApiImpl::decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message message, const core::ModuleBaseApi::ModuleKeys& inboxKeys) {
+inbox::InboxEntry InboxApiImpl::decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys) {
     auto inboxEntry = decryptInboxEntry(message, inboxKeys);
     return convertInboxEntry(message, inboxEntry);
 }
@@ -1009,7 +1009,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
     }
     if (type == "inboxCreated") {
         auto raw = Factory::createObject<server::Inbox>(notification.data);
-         setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw));
+        setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
         auto data = validateDecryptAndConvertInboxDataToInbox(raw);
         std::shared_ptr<InboxCreatedEvent> event(new InboxCreatedEvent());
         event->channel = "inbox";
@@ -1017,7 +1017,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "inboxUpdated") {
         auto raw = Factory::createObject<server::Inbox>(notification.data);
-         setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw));
+        setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
         auto data = validateDecryptAndConvertInboxDataToInbox(raw);
         std::shared_ptr<InboxUpdatedEvent> event(new InboxUpdatedEvent());
         event->channel = "inbox";
@@ -1072,7 +1072,7 @@ void InboxApiImpl::unsubscribeFromInboxEvents() {
 
 void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
     auto inbox = getServerInbox(inboxId);
-    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox));
+    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox), inbox.version());
     auto inboxData = getInboxCurrentDataEntry(inbox).data();
     if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(inboxData.threadId())) {
         throw AlreadySubscribedException(inboxId);
@@ -1082,7 +1082,7 @@ void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
 
 void InboxApiImpl::unsubscribeFromEntryEvents(const std::string& inboxId) {
     auto inbox = getServerInbox(inboxId);
-    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox));
+    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox), inbox.version());
     auto inboxData = getInboxCurrentDataEntry(inbox).data();
     if(!_threadSubscriptionHelper.hasSubscriptionForModuleEntry(inboxData.threadId())) {
         throw NotSubscribedException(inboxId);
@@ -1131,7 +1131,7 @@ thread::server::Message InboxApiImpl::getServerMessage(const std::string& messag
     return _serverApi->threadMessageGet(model).message();
 }
 
-core::ModuleBaseApi::ModuleKeys InboxApiImpl::getEntryDecryptionKeys(thread::server::Message message) {
+core::ModuleKeys InboxApiImpl::getEntryDecryptionKeys(thread::server::Message message) {
     auto inboxId = readInboxIdFromMessageKeyId(message.keyId());
     auto inboxMessageServer = unpackInboxOrigMessage(message.data());
     auto msgData = inboxMessageServer.message();
@@ -1141,15 +1141,15 @@ core::ModuleBaseApi::ModuleKeys InboxApiImpl::getEntryDecryptionKeys(thread::ser
     return getModuleKeys(inboxId, std::set<std::string>{keyId}, inbox::InboxDataSchema::VERSION_4);
 }
 
-core::ModuleBaseApi::ModuleKeys InboxApiImpl::getModuleKeysFormServer(std::string moduleId) {
+std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFormServer(std::string moduleId) {
     auto inbox = getServerInbox(moduleId);
     // validate inbox Data before returning data
     assertInboxDataIntegrity(inbox);
-    return inboxToModuleKeys(inbox);
+    return std::make_pair(inboxToModuleKeys(inbox), inbox.version());
 }
 
-core::ModuleBaseApi::ModuleKeys InboxApiImpl::inboxToModuleKeys(inbox::server::Inbox inbox) {
-    return core::ModuleBaseApi::ModuleKeys{
+core::ModuleKeys InboxApiImpl::inboxToModuleKeys(inbox::server::Inbox inbox) {
+    return core::ModuleKeys{
         .keys=inbox.keys(),
         .currentKeyId=inbox.keyId(),
         .moduleSchemaVersion=getInboxDataEntryStructureVersion(inbox.data().get(inbox.data().size()-1)),

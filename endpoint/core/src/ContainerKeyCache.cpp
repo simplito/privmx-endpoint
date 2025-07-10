@@ -13,14 +13,14 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-ContainerKeyCache::ContainerKeyCache() : _storage(std::map<std::string, ContainerKeyCache::ModuleKeys>()) {}
+ContainerKeyCache::ContainerKeyCache() : _storage(std::map<std::string, ContainerKeyCache::CachedModuleKeys>()) {}
 
-std::optional<ContainerKeyCache::ModuleKeys> ContainerKeyCache::getKeys(
+std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getKeys(
     const std::string& moduleId, 
     const std::optional<std::set<std::string>>& requiredKeyIds,
     const std::optional<int64_t> minimumRequiredModuleSchemaVersion
 ) {
-    auto moduleKeys = getModuleKeys(moduleId);
+    auto moduleKeys = getCachedModuleKeys(moduleId);
     if(!moduleKeys.has_value()) {
         return std::nullopt;
     }
@@ -42,8 +42,13 @@ std::optional<ContainerKeyCache::ModuleKeys> ContainerKeyCache::getKeys(
     return moduleKeys;
 }
 
-void ContainerKeyCache::set(const std::string& moduleId, const ModuleKeys& newKeys) {
+void ContainerKeyCache::set(const std::string& moduleId, const CachedModuleKeys& newKeys, bool force) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
+    auto moduleKeys = getCachedModuleKeys(moduleId);
+    if(moduleKeys.has_value() && moduleKeys->moduleVersion > newKeys.moduleVersion) {
+        // nothin to change version is older then version in cache
+        return;
+    }
     _storage.insert_or_assign(
         moduleId,
         newKeys
@@ -59,7 +64,7 @@ void ContainerKeyCache::clear(const std::optional<std::string>& moduleId) {
     _storage.erase(moduleId.value());
 }
 
-std::optional<ContainerKeyCache::ModuleKeys> ContainerKeyCache::getModuleKeys(const std::string& moduleId) {
+std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getCachedModuleKeys(const std::string& moduleId) {
     std::shared_lock<std::shared_mutex> lock(_mutex);
     auto moduleKeys = _storage.find(moduleId);
     if (moduleKeys == _storage.end()) {

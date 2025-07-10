@@ -143,15 +143,15 @@ private:
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
     void assertInboxDataIntegrity(inbox::server::Inbox inbox);
     uint32_t validateInboxDataIntegrity(inbox::server::Inbox inbox);
-    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId) override;
-    core::ModuleBaseApi::ModuleKeys inboxToModuleKeys(inbox::server::Inbox inbox);
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) override;
+    core::ModuleKeys inboxToModuleKeys(inbox::server::Inbox inbox);
 
 
-    InboxEntryResult decryptInboxEntry(thread::server::Message message, const core::ModuleBaseApi::ModuleKeys& inboxKeys);
+    InboxEntryResult decryptInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
     inbox::InboxEntry convertInboxEntry(thread::server::Message message, const inbox::InboxEntryResult& inboxEntry);
-    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message message, const core::ModuleBaseApi::ModuleKeys& inboxKeys);
+    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
     store::FileMetaToEncryptV4 prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
-    core::ModuleBaseApi::ModuleKeys getEntryDecryptionKeys(thread::server::Message message);
+    core::ModuleKeys getEntryDecryptionKeys(thread::server::Message message);
 
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();

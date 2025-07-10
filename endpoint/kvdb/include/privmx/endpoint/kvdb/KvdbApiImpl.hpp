@@ -117,8 +117,8 @@ private:
     Kvdb validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
     void assertKvdbDataIntegrity(server::KvdbInfo kvdb);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
-    virtual core::ModuleBaseApi::ModuleKeys getModuleKeysFormServer(std::string moduleId) override;
-    core::ModuleBaseApi::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) override;
+    core::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
 
 
     DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
@@ -134,9 +134,9 @@ private:
     );
     KvdbEntryDataSchema::Version getEntryDataStructureVersion(server::KvdbEntryInfo entry);
     std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
-    std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(utils::List<server::KvdbEntryInfo> entries, const core::ModuleBaseApi::ModuleKeys& kvdbKeys);
-    KvdbEntry validateDecryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::ModuleBaseApi::ModuleKeys& kvdbKeys);
-    core::ModuleBaseApi::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry);
+    std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(utils::List<server::KvdbEntryInfo> entries, const core::ModuleKeys& kvdbKeys);
+    KvdbEntry validateDecryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::ModuleKeys& kvdbKeys);
+    core::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry);
     uint32_t validateEntryDataIntegrity(server::KvdbEntryInfo entry, const std::string& kvdbResourceId);
     Poco::Dynamic::Var encryptEntryData(
         const std::string& kvdbId, 
@@ -144,7 +144,7 @@ private:
         const core::Buffer& publicMeta, 
         const core::Buffer& privateMeta, 
         const core::Buffer& data, 
-        const core::ModuleBaseApi::ModuleKeys& kvdbKeys
+        const core::ModuleKeys& kvdbKeys
     );
     void setEntryRequest(
         const std::string& kvdbId, 
@@ -153,7 +153,7 @@ private:
         const core::Buffer& privateMeta, 
         const core::Buffer& data, 
         int64_t version,
-        const core::ModuleBaseApi::ModuleKeys& keys
+        const core::ModuleKeys& keys
     );
 
     void assertKvdbExist(const std::string& kvdbId);

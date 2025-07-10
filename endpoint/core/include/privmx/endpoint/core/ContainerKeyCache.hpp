@@ -31,25 +31,26 @@ namespace core {
 class ContainerKeyCache {
 public:
     ContainerKeyCache();
-    struct ModuleKeys {
+    struct CachedModuleKeys {
         privmx::utils::List<server::KeyEntry> keys;
         std::string currentKeyId;
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;
         std::string contextId;
+        std::string moduleVersion;
     };
-    std::optional<ModuleKeys> getKeys(
+    std::optional<CachedModuleKeys> getKeys(
         const std::string& moduleId, 
         const std::optional<std::set<std::string>>& requiredKeyIds = std::nullopt,
         const std::optional<int64_t> minimumRequiredModuleSchemaVersion = std::nullopt
     );
 
-    void set(const std::string& moduleId, const ModuleKeys& newKeys);
+    void set(const std::string& moduleId, const CachedModuleKeys& newKeys, bool force = false);
     void clear(const std::optional<std::string>& moduleId = std::nullopt);
 protected:
     
-    std::optional<ModuleKeys> getModuleKeys(const std::string& moduleId);
-    std::map<std::string, ModuleKeys> _storage;
+    std::optional<CachedModuleKeys> getCachedModuleKeys(const std::string& moduleId);
+    std::map<std::string, CachedModuleKeys> _storage;
     std::shared_mutex _mutex;
 
 };
