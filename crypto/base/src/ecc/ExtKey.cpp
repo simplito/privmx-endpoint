@@ -148,6 +148,9 @@ ExtKey ExtKey::deriveHardenedOldPrivmxVersion(Poco::UInt32 index) const {
 }
 
 string ExtKey::toBase58(bool is_private) const {
+    if (is_private && !_is_private) {
+        throw DeriveFromPublicKeyNotImplementedException();
+    }
     string result(13, '\0');
     char* result_data = result.data();
     UInt32 version = is_private ? Networks::BITCOIN.BIP39.PRIVATE : Networks::BITCOIN.BIP39.PUBLIC;

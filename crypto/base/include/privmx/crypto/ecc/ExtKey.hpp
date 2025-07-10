@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/ECC.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/CryptoException.hpp>
 
 namespace privmx {
 namespace crypto {
@@ -78,6 +79,7 @@ inline std::string ExtKey::getPublicPartAsBase58() const {
 }
 
 inline PrivateKey ExtKey::getPrivateKey() const {
+    if (!_is_private) {throw DeriveFromPublicKeyNotImplementedException();}
     return PrivateKey(_ec);
 }
 
@@ -86,6 +88,7 @@ inline PublicKey ExtKey::getPublicKey() const {
 }
 
 inline std::string ExtKey::getPrivateEncKey() const {
+    if (!_is_private) {throw DeriveFromPublicKeyNotImplementedException();}
     return getPrivateKey().getPrivateEncKey();
 }
 
