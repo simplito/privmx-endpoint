@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkBufferedStream.hpp"
 #include "privmx/endpoint/store/ChunkStreamer.hpp"
 #include "privmx/endpoint/store/interfaces/IFileReader.hpp"
+#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/File.hpp"
@@ -111,11 +112,11 @@ public:
     FileRandomWriteHandle(
         int64_t id,
         const std::string &fileId,
-        std::shared_ptr<FileInterface> file
+        std::shared_ptr<IFileHandler> file
     ) : FileHandle(id, "", fileId, "", 0), file(file) {}
     bool isRandomWriteHandle() const override { return true; }
 
-    std::shared_ptr<FileInterface> file;
+    std::shared_ptr<IFileHandler> file;
 };
 
 
@@ -148,7 +149,7 @@ public:
     );
     std::shared_ptr<FileRandomWriteHandle> createFileRandomWriteHandle(
         const std::string &fileId,
-        std::shared_ptr<FileInterface> file
+        std::shared_ptr<IFileHandler> file
     );
     std::shared_ptr<FileReadHandle> getFileReadHandle(int64_t id);
     std::shared_ptr<FileWriteHandle> getFileWriteHandle(int64_t id);

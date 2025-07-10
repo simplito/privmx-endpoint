@@ -28,6 +28,7 @@ namespace endpoint {
 namespace store {
 
 class FileMetaEncryptor {
+public:
     struct DecryptedFileMeta {
     public:
         DecryptedFileMeta() : version(FileDataSchema::Version::UNKNOWN), v1(std::nullopt), v4(std::nullopt), v5(std::nullopt) {};
@@ -43,12 +44,12 @@ class FileMetaEncryptor {
 
     FileMetaEncryptor(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
-    Poco::Dynamic::Var encrypt(const FileInfo& fileId, const FileMeta& fileMeta, core::EncKey encKey, core::EncryptionKeyDataSchema::Version keyVersion);
-    DecryptedFileMeta decrypt(const FileInfo& fileId, Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey);
-    DecryptedFileMeta extractPublic(const FileInfo& fileId, Poco::Dynamic::Var encryptedFileMeta);
+    Poco::Dynamic::Var encrypt(const FileInfo& fileInfo, const FileMeta& fileMeta, core::EncKey encKey, int64_t keyVersion = core::CURRENT_ENCRYPTION_KEY_DATA_SCHEMA_VERSION);
+    DecryptedFileMeta decrypt(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey);
+    DecryptedFileMeta extractPublic(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta);
     FileDataSchema::Version getFileDataStructureVersion(Poco::Dynamic::Var encryptedFileMeta);
 private:
-    privmx::endpoint::core::DataIntegrityObject createDIO(const FileInfo& fileId);
+    privmx::endpoint::core::DataIntegrityObject createDIO(const FileInfo& fileInfo);
     privmx::crypto::PrivateKey _userPrivKey;
     core::Connection _connection;
     FileMetaEncryptorV1 _fileMetaEncryptorV1;
@@ -61,4 +62,4 @@ private:
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_CORE_FILEMETAENCRYPTOR_HPP_
+#endif  //_PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTOR_HPP_

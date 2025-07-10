@@ -23,7 +23,7 @@ using namespace privmx::endpoint::store;
 FileMetaEncryptor::FileMetaEncryptor(const privmx::crypto::PrivateKey& userPrivKey,const core::Connection& connection) 
     : _userPrivKey(userPrivKey), _connection(connection) {}
 
-Poco::Dynamic::Var FileMetaEncryptor::encrypt(const FileInfo& fileId, const FileMeta& fileMeta, core::EncKey encKey, core::EncryptionKeyDataSchema::Version keyVersion) {
+Poco::Dynamic::Var FileMetaEncryptor::encrypt(const FileInfo& fileInfo, const FileMeta& fileMeta, core::EncKey encKey, int64_t keyVersion) {
     switch (keyVersion) {
         case core::EncryptionKeyDataSchema::Version::VERSION_1:
             return FileMetaEncryptorV4().encrypt(
@@ -41,7 +41,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(const FileInfo& fileId, const File
                     .publicMeta = fileMeta.publicMeta,
                     .privateMeta = fileMeta.privateMeta,
                     .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.asVar())),
-                    .dio = createDIO(fileId)
+                    .dio = createDIO(fileInfo)
                 },
                 _userPrivKey,
                 encKey.key
@@ -51,10 +51,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(const FileInfo& fileId, const File
     }
 }
 
-
-    
-
-FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(const FileInfo& fileId, Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey) {
+FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey) {
     switch (getFileDataStructureVersion(encryptedFileMeta)) {
         case FileDataSchema::Version::UNKNOWN: 
             return FileMetaEncryptor::DecryptedFileMeta();
@@ -75,7 +72,7 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(const FileInfo& 
     return FileMetaEncryptor::DecryptedFileMeta();
 }
 
-FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(const FileInfo& fileId, Poco::Dynamic::Var encryptedFileMeta) {
+FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta) {
     switch (getFileDataStructureVersion(encryptedFileMeta)) {
         case FileDataSchema::Version::UNKNOWN: 
             return FileMetaEncryptor::DecryptedFileMeta();
@@ -114,12 +111,12 @@ FileDataSchema::Version FileMetaEncryptor::getFileDataStructureVersion(Poco::Dyn
     return FileDataSchema::Version::UNKNOWN;
 }
 
-privmx::endpoint::core::DataIntegrityObject FileMetaEncryptor::createDIO(const FileInfo& fileId) {
+privmx::endpoint::core::DataIntegrityObject FileMetaEncryptor::createDIO(const FileInfo& fileInfo) {
     privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
-        fileId.contextId,
-        fileId.resourceId,
-        fileId.storeId,
-        fileId.storeResourceId
+        fileInfo.contextId,
+        fileInfo.resourceId,
+        fileInfo.storeId,
+        fileInfo.storeResourceId
     );
     return fileDIO;
 }

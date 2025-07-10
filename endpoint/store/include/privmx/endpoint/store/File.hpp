@@ -30,66 +30,14 @@ limitations under the License.
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
-#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
-#include "privmx/endpoint/core/ConnectionImpl.hpp"
+
+
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace store {
-
-class MetaEncryptor {
-public:
-    struct EncryptedMeta
-    {
-        std::string keyId;
-        Poco::Dynamic::Var meta;
-    };
-
-    MetaEncryptor(
-        const privmx::crypto::PrivateKey& userPrivKey,
-        const core::Connection& connection,
-        const core::DecryptedEncKey& encKey
-    ) : _userPrivKey(userPrivKey),
-        _connection(connection),
-        _encKey(encKey) {}
-
-    EncryptedMeta encrypt(const FileInfo& fileId, const FileMeta& fileMeta) {
-        store::FileMetaToEncryptV5 metaToEncrypt {
-            .publicMeta = fileMeta.publicMeta,
-            .privateMeta = fileMeta.privateMeta,
-            .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.asVar())),
-            .dio = createDIO(fileId)
-        };
-        return {_encKey.id, FileMetaEncryptorV5().encrypt(metaToEncrypt, _userPrivKey, _encKey.key).asVar()};
-    }
-
-    FileMeta decrypt(const FileInfo& fileId, const EncryptedMeta& encryptedMeta) {
-        auto decryptedFileMeta = FileMetaEncryptorV5().decrypt(encryptedMeta.meta, _encKey.key);
-        // TO DO validate decrypted data
-        return FileMeta{
-            decryptedFileMeta.publicMeta,
-            decryptedFileMeta.privateMeta,
-            utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(
-                utils::Utils::parseJson(decryptedFileMeta.internalMeta.stdString())
-            )
-        };
-    }
-
-private:
-    privmx::endpoint::core::DataIntegrityObject createDIO(const FileInfo& fileId) {
-        privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
-            fileId.contextId,
-            fileId.resourceId,
-            fileId.storeId,
-            fileId.storeResourceId
-        );
-        return fileDIO;
-    }
-
-    privmx::crypto::PrivateKey _userPrivKey;
-    core::Connection _connection;
-    core::DecryptedEncKey _encKey;
-};
 
 class ServerFileSliceProvider
 {
@@ -201,20 +149,21 @@ private:
     size_t _chunkSize;
 };
 
-class File2
+class FileHandler
 {
 public:
-    File2 (
+    FileHandler (
         std::shared_ptr<FileChunkProvider> fileChunkProvider,
         std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         std::shared_ptr<IHashList> hashList,
-        std::shared_ptr<MetaEncryptor> metaEncryptor,
+        std::shared_ptr<FileMetaEncryptor> metaEncryptor,
         size_t fileSize,
         size_t encryptedFileSize,
         int64_t version,
         size_t chunksize,
         FileInfo fileInfo,
         FileMeta fileMeta,
+        core::DecryptedEncKey fileEncKey,
         std::shared_ptr<ServerApi> server
     ) : 
         _fileChunkProvider(fileChunkProvider),
@@ -227,8 +176,10 @@ public:
         _chunksize(chunksize),
         _fileInfo(fileInfo),
         _fileMeta(fileMeta),
+        _fileEncKey(fileEncKey),
         _server(server)
     {}
+
     void write(size_t offset, const core::Buffer& data) { // data = buf + size
         auto toSend = data.stdString();
         if (_fileSize < offset) { 
@@ -297,10 +248,10 @@ public:
         _fileMeta.internalFileMeta.hmac(topHash);
         // _fileMeta.internalFileMeta.size(newSize);
 
-        auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta);
+        auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
 
         // update file by operation
-        updateOnServer(chunk, index, newMeta.meta, newMeta.keyId, true);
+        updateOnServer(chunk, index, newMeta, _fileEncKey.id, true);
 
         _version += 1;
         // update _fileSize;
@@ -352,11 +303,11 @@ private:
         // update meta
         _fileMeta.internalFileMeta.hmac(topHash);
         // _fileMeta.internalFileMeta.size(newSize);
-
-        auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta);
+        
+        auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
 
         // update file by operation
-        updateOnServer(chunk, index, newMeta.meta, newMeta.keyId, false);
+        updateOnServer(chunk, index, newMeta, _fileEncKey.id, false);
 
         _version += 1;
         // update _fileSize;
@@ -412,36 +363,21 @@ private:
     std::shared_ptr<FileChunkProvider> _fileChunkProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
     std::shared_ptr<IHashList> _hashList;
-    std::shared_ptr<MetaEncryptor> _fileMetaEncryptor;
+    std::shared_ptr<store::FileMetaEncryptor> _fileMetaEncryptor;
     size_t _fileSize = 0;
     size_t _encryptedFileSize = 0;
     int64_t _version = 0;
     size_t _chunksize = 0; // TODO
     FileInfo _fileInfo;
     FileMeta _fileMeta;
-    core::EncKey _fileEncKey;
+    core::DecryptedEncKey _fileEncKey;
     std::shared_ptr<ServerApi> _server;
 };
 
-class FileInterface
+class FileHandlerImpl : public IFileHandler
 {
 public:
-    virtual size_t size() = 0;
-    virtual void seekg(const size_t pos) = 0;
-    virtual void seekp(const size_t pos) = 0;
-    virtual core::Buffer read(const size_t length) = 0;
-    virtual void write(const core::Buffer& chunk) = 0;
-    virtual void truncate() = 0;
-    virtual void close() = 0;
-    virtual void sync() = 0;
-    virtual void flush() = 0;
-};
-
-
-class FileImpl : public FileInterface
-{
-public:
-    FileImpl(std::shared_ptr<File2> file) : _file(file) {}
+    FileHandlerImpl(std::shared_ptr<FileHandler> file) : _file(file) {}
 
     size_t size() override {
         return _file->getFileSize();
@@ -487,7 +423,7 @@ public:
     }
 
 private:
-    std::shared_ptr<File2> _file;
+    std::shared_ptr<FileHandler> _file;
     size_t _readPos = 0;
     size_t _writePos = 0;
 };

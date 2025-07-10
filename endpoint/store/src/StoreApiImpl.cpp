@@ -31,6 +31,8 @@ limitations under the License.
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 
 #include "privmx/endpoint/store/File.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -526,10 +528,10 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
         std::shared_ptr<ServerFileSliceProvider> ssp = std::make_shared<ServerFileSliceProvider>(_serverApi, fileId);
         std::shared_ptr<FileSliceProvider> sp = std::make_shared<FileSliceProvider>(ssp);
         std::shared_ptr<FileChunkProvider> bp = std::make_shared<FileChunkProvider>(sp);
-        std::shared_ptr<MetaEncryptor> me = std::make_shared<MetaEncryptor>(_userPrivKey, _connection, key);
+        std::shared_ptr<FileMetaEncryptor> me = std::make_shared<FileMetaEncryptor>(_userPrivKey, _connection);
         std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
         std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(decryptionParams.key, decryptionParams.hmac);
-        std::shared_ptr<File2> file2 = std::make_shared<File2>(
+        std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
             bp, che, hash, me, 
             decryptionParams.originalSize,
             decryptionParams.sizeOnServer,
@@ -547,9 +549,10 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
                 .privateMeta=decryptedFile.privateMeta,
                 .internalFileMeta=internalMeta
             },
+            key,
             _serverApi
         );
-        std::shared_ptr<FileInterface> file = std::make_shared<FileImpl>(file2);
+        std::shared_ptr<IFileHandler> file = std::make_shared<FileHandlerImpl>(fileHandler);
         std::shared_ptr<FileRandomWriteHandle> handle = _fileHandleManager.createFileRandomWriteHandle(
             fileId,
             file

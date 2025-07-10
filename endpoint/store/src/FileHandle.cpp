@@ -15,6 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkedFileReader.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint::store;
@@ -188,7 +189,7 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
 
 std::shared_ptr<FileRandomWriteHandle> FileHandleManager::createFileRandomWriteHandle(
     const std::string &fileId,
-    std::shared_ptr<FileInterface> file
+    std::shared_ptr<IFileHandler> file
 ) {
     int64_t id = _handleManager->createHandle("FileRandomWrite");
     std::shared_ptr<FileRandomWriteHandle> result = std::make_shared<FileRandomWriteHandle>(id, fileId, file);
