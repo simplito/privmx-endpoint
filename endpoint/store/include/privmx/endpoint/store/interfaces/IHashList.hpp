@@ -16,6 +16,9 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
+#include <cstdint>
+#include <string>
+
 class IHashList
 {
 public:

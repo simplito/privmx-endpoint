@@ -12,10 +12,9 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_HMACLIST_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_HMACLIST_HPP_
 
-#include <cstring>
+#include <cstdint>
+#include <string>
 #include <optional>
-
-#include <privmx/crypto/Crypto.hpp>
 #include "privmx/endpoint/store/StoreTypes.hpp"
 #include "privmx/endpoint/store/interfaces/IHashList.hpp"
 

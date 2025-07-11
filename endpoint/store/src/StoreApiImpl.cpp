@@ -25,13 +25,15 @@ limitations under the License.
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
 #include "privmx/endpoint/store/Mapper.hpp"
-#include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
 #include "privmx/endpoint/store/StoreVarSerializer.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 
 #include "privmx/endpoint/store/File.hpp"
+#include "privmx/endpoint/store/FileHandler.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
+#include "privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 
 using namespace privmx::endpoint;
@@ -536,7 +538,6 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
             decryptionParams.originalSize,
             decryptionParams.sizeOnServer,
             decryptionParams.version,
-            decryptionParams.chunkSize,
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file().contextId(), 
                 .storeId = file_raw.file().storeId(),

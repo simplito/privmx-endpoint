@@ -13,12 +13,11 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTOR_HPP_
 
 #include <optional>
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include "privmx/endpoint/store/Constants.hpp"
-#include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV1.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"

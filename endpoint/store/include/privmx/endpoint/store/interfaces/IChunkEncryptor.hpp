@@ -16,6 +16,8 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
+#include <string>
+
 class IChunkEncryptor
 {
 public:

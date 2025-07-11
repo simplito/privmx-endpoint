@@ -13,7 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEHANDLER_INTERFACE_HPP_
 
 #include <cstdint>
-#include <stdlib.h>
+#include <string>
 #include <privmx/endpoint/core/Buffer.hpp>
 
 namespace privmx {
