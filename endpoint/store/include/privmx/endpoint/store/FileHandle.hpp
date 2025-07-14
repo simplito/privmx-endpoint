@@ -23,7 +23,6 @@ limitations under the License.
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
-#include "privmx/endpoint/store/File.hpp"
 
 namespace privmx {
 namespace endpoint {

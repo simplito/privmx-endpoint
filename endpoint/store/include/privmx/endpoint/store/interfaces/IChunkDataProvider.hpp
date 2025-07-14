@@ -21,6 +21,8 @@ class IChunkDataProvider
 public:
     virtual ~IChunkDataProvider() = default;
     virtual std::string getChunk(uint32_t chunkNumber) = 0;
+    virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion) = 0;
+    virtual void update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) = 0;
     virtual std::string getChecksums() = 0;
 };
 

@@ -38,6 +38,8 @@ public:
         int64_t fileVersion
     );
     virtual std::string getChunk(uint32_t chunkNumber) override;
+    virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion) override;
+    virtual void update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) override;
     virtual std::string getChecksums() override;
 private:
     static int64_t getServerReadDataSize(int64_t encryptedChunkSize, int64_t severChunkSize);

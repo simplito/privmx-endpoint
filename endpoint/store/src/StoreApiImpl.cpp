@@ -29,12 +29,14 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 
-#include "privmx/endpoint/store/File.hpp"
 #include "privmx/endpoint/store/FileHandler.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
 #include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
 #include "privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
+#include "privmx/endpoint/store/ChunkDataProvider.hpp"
+#include "privmx/endpoint/store/ChunkReader.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -361,12 +363,12 @@ core::PagingList<Store> StoreApiImpl::_storeListEx(const std::string& contextId,
 }
 
 File StoreApiImpl::getFile(const std::string& fileId) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeFileGet)
+    PRIVMX_DEBUG_TIME_START(PlatformStore, getFile)
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getFile)
     auto serverFileResult = _serverApi->storeFileGet(storeFileGetModel);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileGet, data send)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getFile, data send)
     if(serverFileResult.store().type() == STORE_TYPE_FILTER_FLAG) _storeProvider.updateByValue(serverFileResult.store());
     if(validateStoreDataIntegrity(serverFileResult.store()) != 0) throw StoreDataIntegrityException();
     auto statusCode = validateFileDataIntegrity(serverFileResult.file(), serverFileResult.store().resourceIdOpt(""));
@@ -377,7 +379,7 @@ File StoreApiImpl::getFile(const std::string& fileId) {
         return result;
     }
     auto ret {decryptAndConvertFileDataToFileInfo(serverFileResult.store(), serverFileResult.file())};
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileGet, data decrypted)
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data decrypted)
     return ret;
 }
 
@@ -483,7 +485,7 @@ int64_t StoreApiImpl::createRandomWriteFile(const std::string& storeId, const co
 
     auto storeFileCreateModel = utils::TypedObjectFactory::createNewObject<server::StoreFileCreateModel>();
     storeFileCreateModel.fileIndex(0);
-    storeFileCreateModel.resourceId(core::EndpointUtils::generateId());
+    storeFileCreateModel.resourceId(fileDIO.resourceId);
     storeFileCreateModel.storeId(storeId);
     storeFileCreateModel.meta(encryptedMetaVar);
     storeFileCreateModel.keyId(key.id);
@@ -526,15 +528,19 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto internalMeta = decryptFileInternalMeta(file_raw.file(), core::DecryptedEncKey(key));
     auto decryptionParams = getFileDecryptionParams(file_raw.file(), internalMeta);
     if (internalMeta.randomWriteOpt(false)) {
-        // random write
-        std::shared_ptr<ServerFileSliceProvider> ssp = std::make_shared<ServerFileSliceProvider>(_serverApi, fileId);
-        std::shared_ptr<FileSliceProvider> sp = std::make_shared<FileSliceProvider>(ssp);
-        std::shared_ptr<FileChunkProvider> bp = std::make_shared<FileChunkProvider>(sp);
+        std::shared_ptr<IChunkDataProvider> cdp = std::make_shared<ChunkDataProvider>(
+            _serverApi, 
+            ChunkReader::getEncryptedChunkSize(decryptionParams.chunkSize),
+            _serverRequestChunkSize, 
+            decryptionParams.fileId, 
+            decryptionParams.sizeOnServer, 
+            decryptionParams.version
+        );
         std::shared_ptr<FileMetaEncryptor> me = std::make_shared<FileMetaEncryptor>(_userPrivKey, _connection);
         std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
         std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(decryptionParams.key, decryptionParams.hmac);
         std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
-            bp, che, hash, me, 
+            cdp, che, hash, me, 
             decryptionParams.originalSize,
             decryptionParams.sizeOnServer,
             decryptionParams.version,

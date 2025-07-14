@@ -16,7 +16,7 @@ using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
 
 FileHandler::FileHandler (
-    std::shared_ptr<FileChunkProvider> fileChunkProvider,
+    std::shared_ptr<IChunkDataProvider> chunkDataProvider,
     std::shared_ptr<IChunkEncryptor> chunkEncryptor,
     std::shared_ptr<IHashList> hashList,
     std::shared_ptr<FileMetaEncryptor> metaEncryptor,
@@ -28,7 +28,7 @@ FileHandler::FileHandler (
     core::DecryptedEncKey fileEncKey,
     std::shared_ptr<ServerApi> server
 ) : 
-    _fileChunkProvider(fileChunkProvider),
+    _chunkDataProvider(chunkDataProvider),
     _chunkEncryptor(chunkEncryptor),
     _hashList(hashList),
     _fileMetaEncryptor(metaEncryptor),
@@ -73,6 +73,7 @@ void FileHandler::write(size_t offset, const core::Buffer& data) { // data = buf
 
 core::Buffer FileHandler::read(size_t offset, size_t size) {
     if(size > _plainfileSize) size = _plainfileSize;
+    if(size == 0) return core::Buffer();
     size_t startIndex = posToindex(offset);
     size_t stopIndex = posToindex(offset+size-1);
     std::string data = std::string();
@@ -88,7 +89,7 @@ void FileHandler::truncate(size_t pos) {
     size_t chunkOffset = pos % _plainChunkSize;
     std::string newChunk = std::string();
     // read old chunk
-    std::string prevEncryptedChunk = _fileChunkProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+    std::string prevEncryptedChunk = _chunkDataProvider->getChunk(index, _version);
     std::string prevChunk = "";
     if(prevEncryptedChunk.size() != 0) {
         prevChunk = _chunkEncryptor->decrypt(index, {.data = prevEncryptedChunk, .hmac = _hashList->getHash(index)});
@@ -105,20 +106,22 @@ void FileHandler::truncate(size_t pos) {
     auto chunk = _chunkEncryptor->encrypt(index, newChunk);
     _hashList->set(index, chunk.hmac);
     auto topHash = _hashList->getTopHash();
-
+    // newSize
+    auto newPlainfileSize = pos;
+    auto newEncryptedFileSize = index *_encryptedChunkSize + chunk.data.size();
     // update meta
-    _fileMeta.internalFileMeta.hmac(topHash);
-    // _fileMeta.internalFileMeta.size(newSize);
-
+    _fileMeta.internalFileMeta.hmac(utils::Base64::from(topHash));
+    _fileMeta.internalFileMeta.size(newPlainfileSize);
+    
     auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
 
     // update file by operation
     updateOnServer(chunk, index, newMeta, _fileEncKey.id, true);
-
+    // update Info
     _version += 1;
-    // new data added
-    _plainfileSize = pos;
-    _encryptedFileSize = index *_encryptedChunkSize + chunk.data.size();
+    _plainfileSize = newPlainfileSize;
+    _encryptedFileSize = newEncryptedFileSize;
+    _chunkDataProvider->update(_version, index, newMeta, _encryptedFileSize, true);
     PRIVMX_DEBUG("FileHandler", "truncate", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
 }
 
@@ -135,7 +138,7 @@ void FileHandler::setChunk(size_t index, size_t chunkOffset, const std::string& 
     }
     std::string newChunk = std::string();
     // read old chunk
-    std::string prevEncryptedChunk = _fileChunkProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+    std::string prevEncryptedChunk = _chunkDataProvider->getChunk(index, _version);
     std::string prevChunk = "";
     if(prevEncryptedChunk.size() != 0) {
         prevChunk = _chunkEncryptor->decrypt(index, {.data = prevEncryptedChunk, .hmac = _hashList->getHash(index)});
@@ -158,23 +161,26 @@ void FileHandler::setChunk(size_t index, size_t chunkOffset, const std::string& 
     auto chunk = _chunkEncryptor->encrypt(index, newChunk);
     _hashList->set(index, chunk.hmac);
     auto topHash = _hashList->getTopHash();
-
+    // newSize
+    auto newPlainfileSize = _plainfileSize;
+    auto newEncryptedFileSize = _encryptedFileSize;
+    if(prevChunk.size() < chunkOffset + data.size()) {
+        newPlainfileSize += newChunk.size() - prevChunk.size();
+        newEncryptedFileSize += chunk.data.size() - prevEncryptedChunk.size();
+    }
     // update meta
-    _fileMeta.internalFileMeta.hmac(topHash);
-    // _fileMeta.internalFileMeta.size(newSize);
+    _fileMeta.internalFileMeta.hmac(utils::Base64::from(topHash));
+    _fileMeta.internalFileMeta.size(newPlainfileSize);
     
     auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
 
     // update file by operation
     updateOnServer(chunk, index, newMeta, _fileEncKey.id, false);
-
+    // update Info
     _version += 1;
-    // update _plainfileSize;
-    if(prevChunk.size() < chunkOffset + data.size()) {
-        // new data added
-        _plainfileSize += (chunkOffset + data.size()) - prevChunk.size();
-        _encryptedFileSize += chunk.data.size() - prevEncryptedChunk.size();
-    }
+    _plainfileSize = newPlainfileSize;
+    _encryptedFileSize = newEncryptedFileSize;
+    _chunkDataProvider->update(_version, index, newMeta, _encryptedFileSize, false);
 }
 
 void FileHandler::updateOnServer(const store::IChunkEncryptor::Chunk& updatedChunk, size_t chunkIndex, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
@@ -202,12 +208,11 @@ void FileHandler::updateOnServer(const store::IChunkEncryptor::Chunk& updatedChu
     writeRequest.keyId(encKeyId);
     writeRequest.version(_version);
     writeRequest.force(false);
-
     _server->storeFileWrite(writeRequest);
 }
 
 std::string FileHandler::getDecryptedChunk(size_t index) {
-    std::string chunk = _fileChunkProvider->get(index, _version, _encryptedFileSize, _chunkEncryptor->getEncryptedChunkSize());
+    std::string chunk = _chunkDataProvider->getChunk(index, _version);
     std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
     return plain;
 }

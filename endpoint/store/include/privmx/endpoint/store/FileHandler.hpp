@@ -25,9 +25,8 @@ limitations under the License.
 #include "privmx/endpoint/store/interfaces/IHashList.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
 
-//Remove later
-#include "privmx/endpoint/store/File.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -37,7 +36,7 @@ class FileHandler
 {
 public:
     FileHandler (
-        std::shared_ptr<FileChunkProvider> fileChunkProvider,
+        std::shared_ptr<IChunkDataProvider> chunkDataProvider,
         std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         std::shared_ptr<IHashList> hashList,
         std::shared_ptr<FileMetaEncryptor> metaEncryptor,
@@ -66,7 +65,7 @@ private:
     size_t posToindex(size_t position);
     size_t posInindex(size_t position);
 
-    std::shared_ptr<FileChunkProvider> _fileChunkProvider;
+    std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
     std::shared_ptr<IHashList> _hashList;
     std::shared_ptr<store::FileMetaEncryptor> _fileMetaEncryptor;
