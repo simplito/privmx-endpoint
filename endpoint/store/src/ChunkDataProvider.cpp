@@ -72,15 +72,22 @@ void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, con
         }
         _serverFileSize = encryptedFileSize;
     }
+}
 
-    if(_fileVersion < newfileVersion && _lastServerChunkNumber.has_value() && _lastServerChunkNumber.value() == serverChunkNumber) {
-        _fileVersion = newfileVersion;
-
-        _lastServerChunkNumber = std::nullopt;
-        _lastServerChunk = "";
-    } else {
-        _lastServerChunkNumber = std::nullopt;
-        _lastServerChunk = "";
+void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) {
+    uint64_t from = _encryptedChunkSize * chunkNumber;
+    uint64_t serverChunkNumber = from / _serverChunkSize;
+    uint64_t serverChunkPos = from % _serverChunkSize;
+    if(_fileVersion < newfileVersion) {
+        if(_lastServerChunkNumber.has_value() && _lastServerChunkNumber.value() == serverChunkNumber) {
+            std::string oldServerChunkDataBefore = _lastServerChunk.substr(0, serverChunkPos);
+            std::string oldServerChunkDataAfter = "";
+            if(!truncate && _lastServerChunk.size() > serverChunkPos + newChunkEncryptedData.size()) {
+                oldServerChunkDataAfter = _lastServerChunk.substr(serverChunkPos + newChunkEncryptedData.size());
+            }
+            _lastServerChunk = oldServerChunkDataBefore + newChunkEncryptedData + oldServerChunkDataAfter;
+        }
+        _serverFileSize = encryptedFileSize;
     }
 }
 
