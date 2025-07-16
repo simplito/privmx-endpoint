@@ -93,7 +93,8 @@ core::ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToCont
         .currentKeyId=moduleKeys.currentKeyId,
         .moduleSchemaVersion=moduleKeys.moduleSchemaVersion,
         .moduleResourceId=moduleKeys.moduleResourceId,
-        .contextId = moduleKeys.contextId
+        .contextId = moduleKeys.contextId,
+        .moduleVersion = moduleVersion
     };
 }
 

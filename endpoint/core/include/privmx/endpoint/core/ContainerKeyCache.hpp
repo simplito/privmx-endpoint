@@ -37,7 +37,7 @@ public:
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;
         std::string contextId;
-        std::string moduleVersion;
+        int64_t moduleVersion;
     };
     std::optional<CachedModuleKeys> getKeys(
         const std::string& moduleId, 

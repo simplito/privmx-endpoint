@@ -20,7 +20,11 @@ std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getKeys(
     const std::optional<std::set<std::string>>& requiredKeyIds,
     const std::optional<int64_t> minimumRequiredModuleSchemaVersion
 ) {
-    auto moduleKeys = getCachedModuleKeys(moduleId);
+    std::optional<ContainerKeyCache::CachedModuleKeys> moduleKeys;
+    {
+        std::shared_lock<std::shared_mutex> lock(_mutex);
+        moduleKeys = getCachedModuleKeys(moduleId);
+    }
     if(!moduleKeys.has_value()) {
         return std::nullopt;
     }
@@ -45,7 +49,7 @@ std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getKeys(
 void ContainerKeyCache::set(const std::string& moduleId, const CachedModuleKeys& newKeys, bool force) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
     auto moduleKeys = getCachedModuleKeys(moduleId);
-    if(moduleKeys.has_value() && moduleKeys->moduleVersion > newKeys.moduleVersion) {
+    if(moduleKeys.has_value() && moduleKeys->moduleVersion > newKeys.moduleVersion && !force) {
         // nothin to change version is older then version in cache
         return;
     }
@@ -65,7 +69,6 @@ void ContainerKeyCache::clear(const std::optional<std::string>& moduleId) {
 }
 
 std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getCachedModuleKeys(const std::string& moduleId) {
-    std::shared_lock<std::shared_mutex> lock(_mutex);
     auto moduleKeys = _storage.find(moduleId);
     if (moduleKeys == _storage.end()) {
         return std::nullopt;

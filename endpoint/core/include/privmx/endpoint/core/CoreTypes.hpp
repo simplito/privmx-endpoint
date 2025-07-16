@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
