@@ -25,14 +25,15 @@ namespace store {
 class HmacList : public IHashList
 {
 public:
-    HmacList(const std::string& topHashKey, const std::string& data = std::string());
-    void set(const int64_t& chunkIndex, const std::string& hash);
-    const std::string getHash(const int64_t& chunkIndex);
-    const std::string& getAll();
-    const std::string& getTopHash();
-    bool verifyHash(const int64_t& chunkIndex, const std::string& hash);
-    bool verifyTopHash(const std::string& topHash);
-    inline size_t getHashSize() { return HMAC_SIZE; };
+    HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes = std::string());
+    virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) override;
+    virtual void set(const int64_t& chunkIndex, const std::string& hash, bool truncate = false) override;
+    virtual const std::string getHash(const int64_t& chunkIndex) override;
+    virtual const std::string& getAll() override;
+    virtual const std::string& getTopHash() override;
+    virtual bool verifyHash(const int64_t& chunkIndex, const std::string& hash) override;
+    virtual bool verifyTopHash(const std::string& topHash) override;
+    virtual inline size_t getHashSize() override { return HMAC_SIZE; };
 
 private:
     std::string _topHashKey;

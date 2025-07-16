@@ -46,7 +46,7 @@ public:
 
     ChunkStreamer() = default;
     ChunkStreamer(const std::shared_ptr<store::RequestApi>& requestApi, size_t chunkSize, uint64_t fileSize, size_t serverRequestChunkSize);
-    void createRequest();
+    void createRequest(bool enableRandomWrite = false);
     void setRequestData(const std::string& requestId, const std::string& key, const uint64_t& fileIndex);
     void sendChunk(const std::string& data);
     ChunksSentInfo finalize(const std::string& data);    

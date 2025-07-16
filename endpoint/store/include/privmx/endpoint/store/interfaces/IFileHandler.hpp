@@ -15,7 +15,8 @@ limitations under the License.
 #include <cstdint>
 #include <string>
 #include <privmx/endpoint/core/Buffer.hpp>
-
+#include "privmx/endpoint/store/interfaces/IHashList.hpp"
+#include "privmx/endpoint/store/StoreTypes.hpp"
 namespace privmx {
 namespace endpoint {
 namespace store {
@@ -30,7 +31,7 @@ public:
     virtual void write(const core::Buffer& chunk) = 0;
     virtual void truncate() = 0;
     virtual void close() = 0;
-    virtual void sync() = 0;
+    virtual void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms) = 0;
     virtual void flush() = 0;
 };
 

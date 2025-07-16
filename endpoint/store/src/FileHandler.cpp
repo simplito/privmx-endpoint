@@ -104,7 +104,7 @@ void FileHandler::truncate(size_t pos) {
     }
     // set newChunk;
     auto chunk = _chunkEncryptor->encrypt(index, newChunk);
-    _hashList->set(index, chunk.hmac);
+    _hashList->set(index, chunk.hmac, true);
     auto topHash = _hashList->getTopHash();
     // newSize
     auto newPlainfileSize = pos;
@@ -121,7 +121,7 @@ void FileHandler::truncate(size_t pos) {
     _version += 1;
     _plainfileSize = newPlainfileSize;
     _encryptedFileSize = newEncryptedFileSize;
-    _chunkDataProvider->update(_version, index, newMeta, _encryptedFileSize, true);
+    _chunkDataProvider->update(_version, index, chunk.data, _encryptedFileSize, true);
     PRIVMX_DEBUG("FileHandler", "truncate", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
 }
 
@@ -180,7 +180,7 @@ void FileHandler::setChunk(size_t index, size_t chunkOffset, const std::string& 
     _version += 1;
     _plainfileSize = newPlainfileSize;
     _encryptedFileSize = newEncryptedFileSize;
-    _chunkDataProvider->update(_version, index, newMeta, _encryptedFileSize, false);
+    _chunkDataProvider->update(_version, index, chunk.data, _encryptedFileSize, false);
 }
 
 void FileHandler::updateOnServer(const store::IChunkEncryptor::Chunk& updatedChunk, size_t chunkIndex, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
@@ -222,6 +222,15 @@ size_t FileHandler::posToindex(size_t position) {
 
 size_t FileHandler::posInindex(size_t position) {
     return position % _chunkEncryptor->getPlainChunkSize();
+}
+
+void FileHandler::sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms) {
+    _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getChecksums());
+    _fileMeta = fileMeta;
+    _version = newParms.version;
+    _plainfileSize = newParms.originalSize;
+    _encryptedFileSize = newParms.sizeOnServer;
+    _chunkDataProvider->sync(_version, _encryptedFileSize);
 }
 
 FileHandlerImpl::FileHandlerImpl(std::shared_ptr<FileHandler> file) : _file(file) {}

@@ -31,7 +31,7 @@ namespace store {
 class FileHandle
 {
 public:
-    FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, const std::string& resourceId, uint64_t fileSize);
+    FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, const std::string& resourceId, uint64_t fileSize, bool randomWriteSupport);
     virtual ~FileHandle() = default;
     virtual bool isReadHandle() const { return false; }
     virtual bool isWriteHandle() const { return false; }
@@ -41,12 +41,14 @@ public:
     std::string getFileId();
     std::string getResourceId();
     uint64_t getSize();
+    bool getRandomWriteSupport();
 protected:
     const int64_t _id;
     std::string _storeId;
     std::string _fileId;
     std::string _resourceId;
     uint64_t _size;
+    bool _randomWriteSupport;
 };
 
 class FileReadHandle : public FileHandle
@@ -64,6 +66,15 @@ public:
         const std::string& fileKey,
         const std::string& fileHmac,
         std::shared_ptr<ServerApi> server
+    );
+    void sync(
+        uint64_t fileSize,
+        uint64_t serverFileSize,
+        size_t chunkSize,
+        size_t serverChunkSize,
+        int64_t fileVersion,
+        const std::string& fileKey,
+        const std::string& fileHmac
     );
     bool isReadHandle() const override { return true; }
     std::string read(uint64_t length);
@@ -86,7 +97,8 @@ public:
         const core::Buffer& privateMeta,
         uint64_t chunkSize,
         uint64_t serverRequestChunkSize,
-        std::shared_ptr<privmx::endpoint::store::RequestApi> requestApi
+        std::shared_ptr<privmx::endpoint::store::RequestApi> requestApi,
+        bool randomWriteSupport
     );
     void write(const std::string& data);
     privmx::endpoint::store::ChunksSentInfo finalize();
@@ -110,9 +122,11 @@ class FileRandomWriteHandle : public FileHandle
 public:
     FileRandomWriteHandle(
         int64_t id,
+        const std::string &storeId,
         const std::string &fileId,
+        const std::string &resourceId,
         std::shared_ptr<IFileHandler> file
-    ) : FileHandle(id, "", fileId, "", 0), file(file) {}
+    ) : FileHandle(id, storeId, fileId, resourceId, 0, true), file(file) {}
     bool isRandomWriteHandle() const override { return true; }
 
     std::shared_ptr<IFileHandler> file;
@@ -144,10 +158,13 @@ public:
         const core::Buffer& privateMeta,
         uint64_t chunkSize,
         uint64_t serverRequestChunkSize,
-        std::shared_ptr<RequestApi> requestApi
+        std::shared_ptr<RequestApi> requestApi,
+        bool randomWriteSupport
     );
     std::shared_ptr<FileRandomWriteHandle> createFileRandomWriteHandle(
+        const std::string &storeId,
         const std::string &fileId,
+        const std::string &resourceId,
         std::shared_ptr<IFileHandler> file
     );
     std::shared_ptr<FileReadHandle> getFileReadHandle(int64_t id);

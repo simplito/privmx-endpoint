@@ -15,20 +15,42 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-HmacList::HmacList(const std::string& topHashKey, const std::string& data) : _topHashKey(topHashKey), _hashes(data) {
+HmacList::HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) : _topHashKey(topHashKey), _hashes(hashes) {
+    _topHash = privmx::crypto::Crypto::hmacSha256(_topHashKey, _hashes);
+    if(_topHash != topHash) {
+        throw InvalidFileTopHashException();
+    }
     if (_hashes.size() % HMAC_SIZE != 0) {
         throw InvalidHashSizeException();
     }
     _size = _hashes.size() / HMAC_SIZE;
 }
 
-void HmacList::set(const int64_t& chunkIndex, const std::string& hash) {
+void HmacList::sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) {
+    auto tmp = privmx::crypto::Crypto::hmacSha256(topHashKey, hashes);
+    if(tmp != topHash) {
+        throw InvalidFileTopHashException();
+    }
+    if (hashes.size() % HMAC_SIZE != 0) {
+        throw InvalidHashSizeException();
+    }
+    _topHashKey = topHashKey;
+    _hashes = hashes;
+    _topHash = tmp;
+    _size = _hashes.size() / HMAC_SIZE;
+}
+
+void HmacList::set(const int64_t& chunkIndex, const std::string& hash, bool truncate ) {
     if (hash.size() != HMAC_SIZE) {
         throw InvalidHashSizeException();
     }
     if (chunkIndex < _size) {
         auto offset = chunkIndex * HMAC_SIZE;
         std::memcpy(_hashes.data() + offset, hash.data(), HMAC_SIZE);
+        if(truncate) {
+            _size = chunkIndex+1;
+            _hashes.erase(offset+HMAC_SIZE);
+        }
         _topHash.reset();
     } else if (chunkIndex == _size) {
         _size += 1;

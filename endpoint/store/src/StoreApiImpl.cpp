@@ -412,11 +412,8 @@ void StoreApiImpl::deleteFile(const std::string& fileId) {
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileDelete, data send)
 }
 
-int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
+int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size, bool randomWriteSupport) {
     assertStoreExist(storeId);
-    if (size == 0) {
-        return createRandomWriteFile(storeId, publicMeta, privateMeta);
-    }
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         storeId,
         std::string(),
@@ -426,78 +423,18 @@ int64_t StoreApiImpl::createFile(const std::string& storeId, const core::Buffer&
         privateMeta,
         _CHUNK_SIZE,
         _serverRequestChunkSize,
-        _requestApi
+        _requestApi,
+        randomWriteSupport
     );
     handle->createRequestData();
     return handle->getId();
-}
-
-int64_t StoreApiImpl::createRandomWriteFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
-    // creates an empty file
-    auto store = getRawStoreFromCacheOrBridge(storeId);
-    auto key = getAndValidateModuleCurrentEncKey(store);
-    
-    // create request
-    auto createRequestModel = utils::TypedObjectFactory::createNewObject<server::CreateRequestModel>();
-    auto fileDefinitions = utils::TypedObjectFactory::createNewList<server::FileDefinition>();
-    auto fileDefinition = utils::TypedObjectFactory::createNewObject<server::FileDefinition>();
-    fileDefinition.size(0);
-    fileDefinition.checksumSize(0);
-    fileDefinition.randomWrite(true);
-    fileDefinitions.add(fileDefinition);
-    createRequestModel.files(fileDefinitions);
-    auto createRequestResult = _requestApi->createRequest(createRequestModel);
-
-    // commit file
-    server::CommitFileModel commitFileModel = utils::TypedObjectFactory::createNewObject<server::CommitFileModel>();
-    commitFileModel.requestId(createRequestResult.id());
-    commitFileModel.fileIndex(0);
-    commitFileModel.seq(0);
-    commitFileModel.checksum(Pson::BinaryString());
-    _requestApi->commitFile(commitFileModel);
-
-    // create file
-    auto fileKey = privmx::crypto::Crypto::randomBytes(32);
-    std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(fileKey);
-
-    auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
-    internalFileMeta.version(4);
-    internalFileMeta.size(0);
-    internalFileMeta.cipherType(1);
-    internalFileMeta.chunkSize(128 * 1024);
-    internalFileMeta.key(utils::Base64::from(fileKey));
-    internalFileMeta.hmac(utils::Base64::from(hash->getTopHash()));
-    internalFileMeta.randomWrite(true);
-
-    privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
-        store.contextId(),
-        core::EndpointUtils::generateId(),
-        storeId,
-        store.resourceIdOpt("")
-    );
-    store::FileMetaToEncryptV5 fileMeta {
-        .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.asVar())),
-        .dio = fileDIO
-    };
-    auto encryptedMetaVar = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key).asVar();
-
-    auto storeFileCreateModel = utils::TypedObjectFactory::createNewObject<server::StoreFileCreateModel>();
-    storeFileCreateModel.fileIndex(0);
-    storeFileCreateModel.resourceId(fileDIO.resourceId);
-    storeFileCreateModel.storeId(storeId);
-    storeFileCreateModel.meta(encryptedMetaVar);
-    storeFileCreateModel.keyId(key.id);
-    storeFileCreateModel.requestId(createRequestResult.id());
-    auto fileId = _serverApi->storeFileCreate(storeFileCreateModel).fileId();
-    return openFile(fileId);
 }
 
 int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
     auto result = _serverApi->storeFileGet(storeFileGetModel);
+    auto internalMeta = decryptFileInternalMeta(result.store(), result.file());
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         result.store().id(),
         fileId,
@@ -507,7 +444,8 @@ int64_t StoreApiImpl::updateFile(const std::string& fileId, const core::Buffer& 
         privateMeta,
         _CHUNK_SIZE,
         _serverRequestChunkSize,
-        _requestApi
+        _requestApi,
+        internalMeta.randomWriteOpt(false)
     );
     handle->createRequestData();
     return handle->getId();
@@ -538,7 +476,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
         );
         std::shared_ptr<FileMetaEncryptor> me = std::make_shared<FileMetaEncryptor>(_userPrivKey, _connection);
         std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
-        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(decryptionParams.key, decryptionParams.hmac);
+        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(decryptionParams.key, decryptionParams.hmac, cdp->getChecksums());
         std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
             cdp, che, hash, me, 
             decryptionParams.originalSize,
@@ -561,7 +499,9 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
         );
         std::shared_ptr<IFileHandler> file = std::make_shared<FileHandlerImpl>(fileHandler);
         std::shared_ptr<FileRandomWriteHandle> handle = _fileHandleManager.createFileRandomWriteHandle(
+            file_raw.store().id(),
             fileId,
+            file_raw.file().resourceIdOpt(""),
             file
         );
         return handle->getId();
@@ -627,13 +567,7 @@ core::Buffer StoreApiImpl::readFromFile(const int64_t handle, const int64_t leng
         return rw_handle->file->read(length);
     }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
-    try {
-        return core::Buffer::from(handlePtr->read(length));
-    } catch(const store::FileVersionMismatchException& e) {
-        closeFile(handle);
-        throw FileVersionMismatchHandleClosedException();
-    }
-
+    return core::Buffer::from(handlePtr->read(length));
 }
 
 void StoreApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
@@ -645,6 +579,51 @@ void StoreApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
     }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
     handlePtr->seek(pos);
+}
+
+void StoreApiImpl::syncFile(const int64_t handle) {
+    std::shared_ptr<FileHandle> fileHandle = _fileHandleManager.getFileHandle(handle);
+    auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
+    storeFileGetModel.fileId(fileHandle->getFileId());
+    auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=file_raw.store().contextId(), .resourceId=file_raw.store().resourceIdOpt(core::EndpointUtils::generateId())};
+    keyProviderRequest.addOne(file_raw.store().keys(), file_raw.file().keyId(), location);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(file_raw.file().keyId());
+    // Fix later to proper one function
+    File decryptedFile;
+    core::DataIntegrityObject fileDIO;
+    std::tie(decryptedFile, fileDIO) = decryptAndConvertFileDataToFileInfo(file_raw.file(), core::DecryptedEncKey(key));
+    auto internalMeta = decryptFileInternalMeta(file_raw.file(), core::DecryptedEncKey(key));
+    auto decryptionParams = getFileDecryptionParams(file_raw.file(), internalMeta);
+
+    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    if (rw_handle) {
+        rw_handle->file->sync(
+            privmx::endpoint::store::FileMeta{
+                .publicMeta=decryptedFile.publicMeta,
+                .privateMeta=decryptedFile.privateMeta,
+                .internalFileMeta=internalMeta
+            },
+            decryptionParams
+        );
+        return;
+    }
+    std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
+    try {
+        handlePtr->sync(
+            decryptionParams.originalSize,
+            decryptionParams.sizeOnServer,
+            decryptionParams.chunkSize,
+            _serverRequestChunkSize,
+            decryptionParams.version,
+            decryptionParams.key,
+            decryptionParams.hmac
+        );
+    } catch (const store::FileCorruptedException& e) {
+        _fileHandleManager.removeHandle(handle);
+        throw FileSyncFailedHandleCloseException("in file read handle");
+    }
 }
 
 std::string StoreApiImpl::closeFile(const int64_t handle) {
@@ -687,6 +666,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     internalFileMeta.chunkSize(data.chunkSize);
     internalFileMeta.key(utils::Base64::from(data.key));
     internalFileMeta.hmac(utils::Base64::from(data.hmac));
+    internalFileMeta.randomWrite(handle->getRandomWriteSupport());
     auto fileId = core::EndpointUtils::generateId();
     Poco::Dynamic::Var encryptedMetaVar;
     switch (getStoreEntryDataStructureVersion(store.data().get(store.data().size()-1))) {

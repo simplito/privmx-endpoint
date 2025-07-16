@@ -74,8 +74,10 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StoreEncryptionKeyValidationE
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StoreDataIntegrityException, "Failed Store data integrity check", 0x0027)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileDataIntegrityException, "Failed file data integrity check", 0x0028)
 // ------------------------------ Random/Write ------------------------------
-DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidHashSizeException, "InvalidHashSize", 0x0029)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidHashSizeException, "Invalid hash size", 0x0029)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, HashIndexOutOfBoundsException, "Hash index out of bounds", 0x0029)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileTopHashException, "Invalid file top hash", 0x002A)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileSyncFailedHandleCloseException, "File sync failed, handle closed", 0x002B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileRandomWriteInternalException, "File random write internal Exception ", 0x00FF)
 
 

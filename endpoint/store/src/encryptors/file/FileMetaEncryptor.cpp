@@ -30,6 +30,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(const FileInfo& fileInfo, const Fi
                 store::FileMetaToEncryptV4{
                     .publicMeta = fileMeta.publicMeta,
                     .privateMeta = fileMeta.privateMeta,
+                    .fileSize = fileMeta.internalFileMeta.size(),
                     .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.asVar()))
                 },
                 _userPrivKey,
@@ -51,7 +52,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(const FileInfo& fileInfo, const Fi
     }
 }
 
-FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey) {
+FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey) {
     switch (getFileDataStructureVersion(encryptedFileMeta)) {
         case FileDataSchema::Version::UNKNOWN: 
             return FileMetaEncryptor::DecryptedFileMeta();
@@ -72,7 +73,7 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(const FileInfo& 
     return FileMetaEncryptor::DecryptedFileMeta();
 }
 
-FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta) {
+FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(Poco::Dynamic::Var encryptedFileMeta) {
     switch (getFileDataStructureVersion(encryptedFileMeta)) {
         case FileDataSchema::Version::UNKNOWN: 
             return FileMetaEncryptor::DecryptedFileMeta();

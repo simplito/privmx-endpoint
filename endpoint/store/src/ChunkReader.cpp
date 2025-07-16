@@ -37,6 +37,29 @@ ChunkReader::ChunkReader(
     }
 }
 
+void ChunkReader::sync(
+    int64_t newfileVersion, 
+    uint64_t encryptedFileSize, 
+    const std::string& hmac, 
+    std::optional<size_t> chunkSize, 
+    std::optional<size_t> encryptedChunkSize, 
+    const std::optional<std::string>& key,
+    std::optional<size_t> serverChunkSize
+) {
+    auto checksums = _chunkDataProvider->getChecksums();
+    if (hmac != crypto::Crypto::hmacSha256(key.has_value() ? key.value() : _key, checksums)) {
+        throw FileInvalidChecksumException();
+    }
+    _chunkDataProvider->sync(newfileVersion, encryptedFileSize, encryptedChunkSize, serverChunkSize);
+    _checksums = checksums;
+    if(chunkSize.has_value()) {
+        _chunkSize = chunkSize.value();
+    }
+    if(key.has_value()) {
+        _key = key.value();
+    }
+}
+
 std::string ChunkReader::getChunk(uint32_t chunkNumber) {
     if(!_lastChunkNumber.has_value() || _lastChunkNumber.value() != chunkNumber) {
         _lastChunkDecrypted = decryptChunk(_chunkDataProvider->getChunk(chunkNumber), chunkNumber);

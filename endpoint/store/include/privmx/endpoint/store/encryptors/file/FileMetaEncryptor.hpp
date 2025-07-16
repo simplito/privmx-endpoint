@@ -44,8 +44,8 @@ public:
     FileMetaEncryptor(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(const FileInfo& fileInfo, const FileMeta& fileMeta, core::EncKey encKey, int64_t keyVersion = core::CURRENT_ENCRYPTION_KEY_DATA_SCHEMA_VERSION);
-    DecryptedFileMeta decrypt(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey);
-    DecryptedFileMeta extractPublic(const FileInfo& fileInfo, Poco::Dynamic::Var encryptedFileMeta);
+    DecryptedFileMeta decrypt(Poco::Dynamic::Var encryptedFileMeta, core::EncKey encKey);
+    DecryptedFileMeta extractPublic(Poco::Dynamic::Var encryptedFileMeta);
     FileDataSchema::Version getFileDataStructureVersion(Poco::Dynamic::Var encryptedFileMeta);
 private:
     privmx::endpoint::core::DataIntegrityObject createDIO(const FileInfo& fileInfo);

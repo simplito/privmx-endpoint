@@ -93,13 +93,14 @@ public:
     File getFile(const std::string& fileId);
     core::PagingList<store::File> listFiles(const std::string& storeId, const core::PagingQuery& query);
     void deleteFile(const std::string& fileId);
-    int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size);
+    int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size, bool randomWriteSupport = false);
     int64_t updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size);
     void updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
     int64_t openFile(const std::string& fileId);
     void writeToFile(const int64_t handle, const core::Buffer& dataChunk, bool truncate = false);
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
+    void syncFile(const int64_t handle);
     std::string closeFile(const int64_t handle);
 
     void subscribeForStoreEvents();
@@ -187,7 +188,6 @@ private:
     core::Connection _connection;
     size_t _serverRequestChunkSize;
     
-    
     FileHandleManager _fileHandleManager;
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
     FileMetaEncryptorV1 _fileMetaEncryptorV1;
@@ -205,7 +205,6 @@ private:
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
     
-
     inline static const std::string STORE_TYPE_FILTER_FLAG = "store";
 };
 

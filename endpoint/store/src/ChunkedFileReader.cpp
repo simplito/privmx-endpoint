@@ -28,6 +28,24 @@ ChunkedFileReader::ChunkedFileReader(
     _totalChunks = (originalFileSize + _chunkSize -1) / _chunkSize;
 }
 
+void ChunkedFileReader::sync(
+    int64_t newfileVersion, 
+    uint64_t originalFileSize,
+    uint64_t encryptedFileSize, 
+    const std::string& hmac, 
+    std::optional<size_t> chunkSize, 
+    std::optional<size_t> encryptedChunkSize, 
+    const std::optional<std::string>& key,
+    std::optional<size_t> serverChunkSize
+) {
+    _chunkReader->sync(newfileVersion, encryptedFileSize, hmac, chunkSize, encryptedChunkSize, key, serverChunkSize);
+    if(encryptedFileSize != _chunkReader->getEncryptedFileSize(originalFileSize)) {
+        throw FileCorruptedException();
+    }
+    _chunkSize = _chunkReader->getChunkSize();
+    _totalChunks = (originalFileSize + _chunkSize -1) / _chunkSize;
+}
+
 std::string ChunkedFileReader::read(uint64_t pos, size_t length) {
     uint64_t chunkIndex =  pos / _chunkSize;
     uint64_t numberOfChunks = ((pos + length + _chunkSize - 1 ) / _chunkSize) - chunkIndex;
