@@ -949,7 +949,7 @@ void KvdbApiImpl::assertKvdbExist(const std::string& kvdbId) {
     _serverApi.kvdbGet(params);
 }
 
-std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFormServer(std::string moduleId) {
+std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     auto params = privmx::utils::TypedObjectFactory::createNewObject<kvdb::server::KvdbGetModel>();
     params.kvdbId(moduleId);
     auto kvdb = _serverApi.kvdbGet(params).kvdb();

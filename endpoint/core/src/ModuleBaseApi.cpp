@@ -81,7 +81,7 @@ void ModuleBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>
 ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
     // get newest module
     PRIVMX_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
-    auto moduleKeys = getModuleKeysAndVersionFormServer(moduleId);
+    auto moduleKeys = getModuleKeysAndVersionFromServer(moduleId);
     auto keys = convertModuleKeysToContainerKeyCacheFormat(moduleKeys.first, moduleKeys.second);
     _keyCache.set(moduleId, keys);
     return moduleKeys.first;

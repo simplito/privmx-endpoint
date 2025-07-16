@@ -98,7 +98,7 @@ protected:
         const std::optional<std::set<std::string>>& keyIds = std::nullopt, 
         const std::optional<int64_t>& minimumSchemaVersion = std::nullopt
     );
-    virtual std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) = 0;
+    virtual std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) = 0;
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);

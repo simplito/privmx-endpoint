@@ -1141,7 +1141,7 @@ core::ModuleKeys InboxApiImpl::getEntryDecryptionKeys(thread::server::Message me
     return getModuleKeys(inboxId, std::set<std::string>{keyId}, inbox::InboxDataSchema::VERSION_4);
 }
 
-std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFormServer(std::string moduleId) {
+std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     auto inbox = getServerInbox(moduleId);
     // validate inbox Data before returning data
     assertInboxDataIntegrity(inbox);

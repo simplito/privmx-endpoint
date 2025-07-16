@@ -140,7 +140,7 @@ private:
     Store validateDecryptAndConvertStoreDataToStore(server::Store store);
     void assertStoreDataIntegrity(server::Store store);
     uint32_t validateStoreDataIntegrity(server::Store store);
-    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) override;
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys storeToModuleKeys(server::Store store);
 
     // OLD CODE    

@@ -1222,7 +1222,7 @@ void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
     _serverApi.threadGet(params).thread();
 }
 
-std::pair<core::ModuleKeys, int64_t> ThreadApiImpl::getModuleKeysAndVersionFormServer(std::string moduleId) {
+std::pair<core::ModuleKeys, int64_t> ThreadApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     auto params = privmx::utils::TypedObjectFactory::createNewObject<thread::server::ThreadGetModel>();
     params.threadId(moduleId);
     auto thread = _serverApi.threadGet(params).thread();

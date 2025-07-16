@@ -1462,7 +1462,7 @@ void StoreApiImpl::assertFileExist(const std::string& fileId) {
     auto file = _serverApi->storeFileGet(storeFileGetModel).file();
 }
 
-std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFormServer(std::string moduleId) {
+std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     auto params = privmx::utils::TypedObjectFactory::createNewObject<store::server::StoreGetModel>();
     params.storeId(moduleId);
     auto store = _serverApi->storeGet(params).store();

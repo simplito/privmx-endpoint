@@ -119,7 +119,7 @@ private:
     Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo thread);
     void assertThreadDataIntegrity(server::ThreadInfo thread);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
-    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) override;
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
 
 

@@ -117,7 +117,7 @@ private:
     Kvdb validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
     void assertKvdbDataIntegrity(server::KvdbInfo kvdb);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
-    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) override;
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
 
 

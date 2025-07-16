@@ -143,7 +143,7 @@ private:
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
     void assertInboxDataIntegrity(inbox::server::Inbox inbox);
     uint32_t validateInboxDataIntegrity(inbox::server::Inbox inbox);
-    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFormServer(std::string moduleId) override;
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys inboxToModuleKeys(inbox::server::Inbox inbox);
 
 
