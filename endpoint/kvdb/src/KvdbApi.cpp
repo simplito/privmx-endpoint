@@ -113,7 +113,7 @@ Kvdb KvdbApi::getKvdb(const std::string& kvdbId) {
 core::PagingList<Kvdb> KvdbApi::listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<core::PagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate"}, "field:pagingQuery ");
     try {
         return _impl->listKvdbs(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -147,7 +147,7 @@ bool KvdbApi::hasEntry(const std::string& kvdbId, const std::string& key) {
 core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validateClass<core::PagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery ");
     try {
         return _impl->listEntriesKeys(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -158,7 +158,7 @@ core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId
 core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validateClass<core::PagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery ");
     try {
         return _impl->listEntries(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {

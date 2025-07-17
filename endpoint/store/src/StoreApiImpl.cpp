@@ -537,9 +537,10 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
 
 std::string StoreApiImpl::storeFileFinalizeWriteRequest(const std::shared_ptr<FileWriteHandle>& handle, const ChunksSentInfo& data, const core::ModuleKeys& storeKey) {
     auto serverId = _host;
-    
     auto key = getAndValidateModuleCurrentEncKey(storeKey);
-
+    if(key.statusCode != 0) {
+        throw StoreEncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(key.statusCode));
+    }
     auto internalFileMeta = utils::TypedObjectFactory::createNewObject<dynamic::InternalStoreFileMeta>();
     internalFileMeta.version(4);
     internalFileMeta.size(handle->getSize());
@@ -1408,6 +1409,9 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
         throw FileDataIntegrityException();
     }
     auto key = getAndValidateModuleCurrentEncKey(store);
+    if(key.statusCode != 0) {
+        throw StoreEncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(key.statusCode));
+    }
     Poco::Dynamic::Var encryptedMetaVar;
     auto fileInternalMeta = validateDecryptFileInternalMeta(file, storeToModuleKeys(store));
     auto internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileInternalMeta));
