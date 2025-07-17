@@ -1438,7 +1438,59 @@ TEST_F(KvdbTest, deleteEntries) {
     }, core::Exception);
 }
 
+TEST_F(KvdbTest, sendMessage_cacheManipulation) {
+    // load kvdb to cache
+    EXPECT_NO_THROW({
+        kvdbApi->getKvdb(reader->getString("Kvdb_1.kvdbId"));
+    });
+    // update kvdb
+    EXPECT_NO_THROW({
+        kvdbApi->updateKvdb(
+            reader->getString("Kvdb_1.kvdbId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
 
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });    
+    // correct data
+    EXPECT_NO_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            "test",
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta"),
+            core::Buffer::from("data"),
+            0
+        );
+    });
+    kvdb::KvdbEntry entry;
+    EXPECT_NO_THROW({
+        entry = kvdbApi->getEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            "test"
+        );
+    });
+    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(entry.data.stdString(), "data");
+    EXPECT_EQ(entry.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(entry.publicMeta.stdString(), "publicMeta");
+}
+    
 TEST_F(KvdbTest, userValidator_false) {
     auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
     connection->setUserVerifier(verifier);
