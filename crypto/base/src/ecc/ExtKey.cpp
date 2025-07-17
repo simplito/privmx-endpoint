@@ -90,7 +90,7 @@ ExtKey::ExtKey(const string& key, const string& chain_code, bool private_key, UI
 
 ExtKey ExtKey::derive(UInt32 index, bool old_privmx_version) const {
     if (!_is_private) {
-        throw DeriveFromPublicKeyNotImplementedException();
+        throw ExtKeyDoesNotHoldPrivateKeyException();
     }
     string private_key = _ec.getPrivateKey();
     UInt32 index_be = ByteOrder::toBigEndian(index);
@@ -149,7 +149,7 @@ ExtKey ExtKey::deriveHardenedOldPrivmxVersion(Poco::UInt32 index) const {
 
 string ExtKey::toBase58(bool is_private) const {
     if (is_private && !_is_private) {
-        throw DeriveFromPublicKeyNotImplementedException();
+        throw ExtKeyDoesNotHoldPrivateKeyException();
     }
     string result(13, '\0');
     char* result_data = result.data();

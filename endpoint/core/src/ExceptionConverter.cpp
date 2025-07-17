@@ -184,8 +184,6 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw crypto::InvalidVersionException(e.what());
                 case 0x0020:
                     throw crypto::InvalidParentFingerprintException(e.what());
-                case 0x0021:
-                    throw crypto::DeriveFromPublicKeyNotImplementedException(e.what());
                 case 0x0022:
                     throw crypto::InvalidResultSizeException(e.what());
                 case 0x0023:

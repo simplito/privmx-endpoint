@@ -80,7 +80,7 @@ inline std::string ExtKey::getPublicPartAsBase58() const {
 
 inline PrivateKey ExtKey::getPrivateKey() const {
     if (!_is_private) {
-        throw DeriveFromPublicKeyNotImplementedException();
+        throw ExtKeyDoesNotHoldPrivateKeyException();
     }
     return PrivateKey(_ec);
 }
@@ -91,7 +91,7 @@ inline PublicKey ExtKey::getPublicKey() const {
 
 inline std::string ExtKey::getPrivateEncKey() const {
     if (!_is_private) {
-        throw DeriveFromPublicKeyNotImplementedException();
+        throw ExtKeyDoesNotHoldPrivateKeyException();
     }
     return getPrivateKey().getPrivateEncKey();
 }
