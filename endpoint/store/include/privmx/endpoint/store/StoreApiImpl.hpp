@@ -110,7 +110,6 @@ public:
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
 private:
-    int64_t createRandomWriteFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
                 const std::optional<core::ContainerPolicy>& policies);
@@ -168,9 +167,12 @@ private:
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::Store store, server::File file);
     uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
+    FileEncryptionParams getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey);
+    FileEncryptionParams getFileEncryptionParams(server::File file, server::Store store);
     FileDecryptionParams getFileDecryptionParams(server::File file, dynamic::InternalStoreFileMeta internalMeta);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
+    int64_t createFileRandomWriteHandle(const FileDecryptionParams& storeFileDecryptionParams, const FileMeta& fileMeta);
     void assertStoreExist(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
     

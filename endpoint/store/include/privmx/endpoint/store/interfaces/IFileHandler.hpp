@@ -31,7 +31,7 @@ public:
     virtual void write(const core::Buffer& chunk) = 0;
     virtual void truncate() = 0;
     virtual void close() = 0;
-    virtual void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms) = 0;
+    virtual void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) = 0;
     virtual void flush() = 0;
 };
 

@@ -455,33 +455,24 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileId);
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=file_raw.store().contextId(), .resourceId=file_raw.store().resourceIdOpt(core::EndpointUtils::generateId())};
-    keyProviderRequest.addOne(file_raw.store().keys(), file_raw.file().keyId(), location);
-    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(file_raw.file().keyId());
-    // Fix later to proper one function
-    File decryptedFile;
-    core::DataIntegrityObject fileDIO;
-    std::tie(decryptedFile, fileDIO) = decryptAndConvertFileDataToFileInfo(file_raw.file(), core::DecryptedEncKey(key));
-    auto internalMeta = decryptFileInternalMeta(file_raw.file(), core::DecryptedEncKey(key));
-    auto decryptionParams = getFileDecryptionParams(file_raw.file(), internalMeta);
-    if (internalMeta.randomWriteOpt(false)) {
+    auto encryptionParams = getFileEncryptionParams(file_raw.file(), file_raw.store());
+    if (encryptionParams.fileMeta.internalFileMeta.randomWriteOpt(false)) {
         std::shared_ptr<IChunkDataProvider> cdp = std::make_shared<ChunkDataProvider>(
             _serverApi, 
-            ChunkReader::getEncryptedChunkSize(decryptionParams.chunkSize),
+            ChunkReader::getEncryptedChunkSize(encryptionParams.fileDecryptionParams.chunkSize),
             _serverRequestChunkSize, 
-            decryptionParams.fileId, 
-            decryptionParams.sizeOnServer, 
-            decryptionParams.version
+            encryptionParams.fileDecryptionParams.fileId, 
+            encryptionParams.fileDecryptionParams.sizeOnServer, 
+            encryptionParams.fileDecryptionParams.version
         );
         std::shared_ptr<FileMetaEncryptor> me = std::make_shared<FileMetaEncryptor>(_userPrivKey, _connection);
-        std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
-        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(decryptionParams.key, decryptionParams.hmac, cdp->getChecksums());
+        std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.chunkSize);
+        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.hmac, cdp->getChecksums());
         std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
             cdp, che, hash, me, 
-            decryptionParams.originalSize,
-            decryptionParams.sizeOnServer,
-            decryptionParams.version,
+            encryptionParams.fileDecryptionParams.originalSize,
+            encryptionParams.fileDecryptionParams.sizeOnServer,
+            encryptionParams.fileDecryptionParams.version,
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file().contextId(), 
                 .storeId = file_raw.file().storeId(),
@@ -489,12 +480,8 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
                 .fileId = file_raw.file().id(),
                 .resourceId = file_raw.file().resourceIdOpt("")
             },
-            privmx::endpoint::store::FileMeta{
-                .publicMeta=decryptedFile.publicMeta,
-                .privateMeta=decryptedFile.privateMeta,
-                .internalFileMeta=internalMeta
-            },
-            key,
+            encryptionParams.fileMeta,
+            encryptionParams.encKey,
             _serverApi
         );
         std::shared_ptr<IFileHandler> file = std::make_shared<FileHandlerImpl>(fileHandler);
@@ -506,7 +493,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
         );
         return handle->getId();
     }
-    return createFileReadHandle(decryptionParams);
+    return createFileReadHandle(encryptionParams.fileDecryptionParams);
 }
 
 FileDecryptionParams StoreApiImpl::getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey) {
@@ -586,39 +573,27 @@ void StoreApiImpl::syncFile(const int64_t handle) {
     auto storeFileGetModel = utils::TypedObjectFactory::createNewObject<server::StoreFileGetModel>();
     storeFileGetModel.fileId(fileHandle->getFileId());
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=file_raw.store().contextId(), .resourceId=file_raw.store().resourceIdOpt(core::EndpointUtils::generateId())};
-    keyProviderRequest.addOne(file_raw.store().keys(), file_raw.file().keyId(), location);
-    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(file_raw.file().keyId());
-    // Fix later to proper one function
-    File decryptedFile;
-    core::DataIntegrityObject fileDIO;
-    std::tie(decryptedFile, fileDIO) = decryptAndConvertFileDataToFileInfo(file_raw.file(), core::DecryptedEncKey(key));
-    auto internalMeta = decryptFileInternalMeta(file_raw.file(), core::DecryptedEncKey(key));
-    auto decryptionParams = getFileDecryptionParams(file_raw.file(), internalMeta);
+    auto encryptionParams = getFileEncryptionParams(file_raw.file(), file_raw.store());
 
     std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
     if (rw_handle) {
         rw_handle->file->sync(
-            privmx::endpoint::store::FileMeta{
-                .publicMeta=decryptedFile.publicMeta,
-                .privateMeta=decryptedFile.privateMeta,
-                .internalFileMeta=internalMeta
-            },
-            decryptionParams
+            encryptionParams.fileMeta,
+            encryptionParams.fileDecryptionParams,
+            encryptionParams.encKey
         );
         return;
     }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
     try {
         handlePtr->sync(
-            decryptionParams.originalSize,
-            decryptionParams.sizeOnServer,
-            decryptionParams.chunkSize,
+            encryptionParams.fileDecryptionParams.originalSize,
+            encryptionParams.fileDecryptionParams.sizeOnServer,
+            encryptionParams.fileDecryptionParams.chunkSize,
             _serverRequestChunkSize,
-            decryptionParams.version,
-            decryptionParams.key,
-            decryptionParams.hmac
+            encryptionParams.fileDecryptionParams.version,
+            encryptionParams.fileDecryptionParams.key,
+            encryptionParams.fileDecryptionParams.hmac
         );
     } catch (const store::FileCorruptedException& e) {
         _fileHandleManager.removeHandle(handle);
@@ -1079,6 +1054,30 @@ Store StoreApiImpl::decryptAndConvertStoreDataToStore(server::Store store) {
     verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
+}
+
+FileEncryptionParams StoreApiImpl::getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey) {
+    // Fix later to proper one function
+    File decryptedFile;
+    core::DataIntegrityObject fileDIO;
+    std::tie(decryptedFile, fileDIO) = decryptAndConvertFileDataToFileInfo(file, core::DecryptedEncKey(encKey));
+    auto internalMeta = decryptFileInternalMeta(file, core::DecryptedEncKey(encKey));
+    return FileEncryptionParams{
+        FileMeta{
+            .publicMeta=decryptedFile.publicMeta,
+            .privateMeta=decryptedFile.privateMeta,
+            .internalFileMeta=internalMeta
+        },
+        getFileDecryptionParams(file, internalMeta),
+        encKey
+    };
+}
+FileEncryptionParams  StoreApiImpl::getFileEncryptionParams(server::File file, server::Store store) {
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=store.contextId(), .resourceId=store.resourceIdOpt(core::EndpointUtils::generateId())};
+    keyProviderRequest.addOne(store.keys(), file.keyId(), location);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(file.keyId());
+    return getFileEncryptionParams(file, key);
 }
 
 // OLD CODE

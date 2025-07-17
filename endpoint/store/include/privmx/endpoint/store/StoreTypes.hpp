@@ -98,6 +98,12 @@ struct FileMeta
     dynamic::InternalStoreFileMeta internalFileMeta;
 };
 
+struct FileEncryptionParams {
+    FileMeta fileMeta;
+    FileDecryptionParams fileDecryptionParams;
+    core::DecryptedEncKey encKey;
+};
+
 
 } // store
 } // endpoint

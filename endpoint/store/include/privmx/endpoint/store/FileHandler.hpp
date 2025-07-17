@@ -53,7 +53,7 @@ public:
     core::Buffer read(size_t offset, size_t size);
     size_t getFileSize();
     void truncate(size_t pos);
-    void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms);
+    void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey);
     void close();
     void flush();
 
@@ -92,8 +92,8 @@ public:
     void truncate() override;
 
     inline void close() override {}
-    inline void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms) override {
-        return _file->sync(fileMeta, newParms);
+    inline void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) override {
+        return _file->sync(fileMeta, newParms, fileEncKey);
     }
     inline void flush() override {throw NotImplementedException();}
 
