@@ -198,6 +198,10 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw crypto::PrivmxDriverCryptoException(e.what());
                 case 0x0028:
                     throw crypto::PrivmxDriverEccException(e.what());
+                case 0x0029:
+                    throw crypto::GivenPublicKeyDoesNotMatchWithSignatureException(e.what());
+                case 0x002A:
+                    throw crypto::ExtKeyDoesNotHoldPrivateKeyException(e.what());
                 default:
                     throw crypto::EndpointCryptoException(e.what());
             }
