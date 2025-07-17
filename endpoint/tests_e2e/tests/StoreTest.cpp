@@ -2336,6 +2336,7 @@ TEST_F(StoreTest, random_write_oneChunk) {
     EXPECT_EQ(file.publicMeta.stdString(), "RW_publicMeta");
     EXPECT_EQ(file.privateMeta.stdString(), "RW_privateMeta");
     EXPECT_EQ(file.size, 3);
+    EXPECT_EQ(file.randomWrite, true);
     EXPECT_EQ(writtenData, "ttt");
 }
 
@@ -2404,6 +2405,7 @@ TEST_F(StoreTest, random_write_multipleChunks) {
     EXPECT_EQ(file.publicMeta.stdString(), "RW_publicMeta");
     EXPECT_EQ(file.privateMeta.stdString(), "RW_privateMeta");
     EXPECT_EQ(file.size, blockSize*3);
+    EXPECT_EQ(file.randomWrite, true);
     EXPECT_EQ(writtenData, Ix64k+Tx64k+Ix64k);
 }
 
