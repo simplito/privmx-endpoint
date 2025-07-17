@@ -154,7 +154,8 @@ private:
         const int64_t& size = 0,
         const std::string& authorPubKey = std::string(),
         const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN
+        const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN,
+        const bool& randomWrite = false
     );
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);

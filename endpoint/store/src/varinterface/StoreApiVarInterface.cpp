@@ -38,7 +38,8 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
                                        {SubscribeForStoreEvents, &StoreApiVarInterface::subscribeForStoreEvents},
                                        {UnsubscribeFromStoreEvents, &StoreApiVarInterface::unsubscribeFromStoreEvents},
                                        {SubscribeForFileEvents, &StoreApiVarInterface::subscribeForFileEvents},
-                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents}};
+                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents},
+                                       {SyncFile, &StoreApiVarInterface::syncFile}};
 
 
 Poco::Dynamic::Var StoreApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -209,6 +210,13 @@ Poco::Dynamic::Var StoreApiVarInterface::updateFileMeta(const Poco::Dynamic::Var
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "privateMeta");
     _storeApi.updateFileMeta(fileId, publicMeta, privateMeta);
+    return {};
+}
+
+Poco::Dynamic::Var StoreApiVarInterface::syncFile(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
+    _storeApi.syncFile(fileHandle);
     return {};
 }
 

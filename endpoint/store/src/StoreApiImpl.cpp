@@ -307,7 +307,7 @@ Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& t
         }
     }
     auto result = decryptAndConvertStoreDataToStore(store);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _getStoreEx, data decrypted)
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _storeGetEx, data decrypted)
     return result;
 }
 
@@ -1168,7 +1168,8 @@ File StoreApiImpl::convertServerFileToLibFile(
     const int64_t& size,
     const std::string& authorPubKey,
     const int64_t& statusCode,
-    const int64_t& schemaVersion
+    const int64_t& schemaVersion,
+    const bool& randomWrite
 ) {
     return File{
         .info = {
@@ -1182,7 +1183,8 @@ File StoreApiImpl::convertServerFileToLibFile(
         .size = size,
         .authorPubKey = authorPubKey,
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .randomWrite = randomWrite
     };
 }
 
@@ -1194,11 +1196,26 @@ File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::comp
         storeFileMeta.sizeOpt(0),
         storeFileMeta.authorEmpty() ? "" : storeFileMeta.author().pubKeyOpt(""),
         storeFileMeta.statusCodeOpt(0),
-        FileDataSchema::Version::VERSION_1
+        FileDataSchema::Version::VERSION_1,
+        false
     );
 }
 
 File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData) {
+    bool randomWrite = false;
+    auto statusCode = fileData.statusCode;
+    if(statusCode == 0) {
+        try {
+            auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileData.internalMeta.stdString()));
+            randomWrite = internalMeta.randomWriteOpt(false);
+        }  catch (const privmx::endpoint::core::Exception& e) {
+            statusCode = e.getCode();
+        } catch (const privmx::utils::PrivmxException& e) {
+            statusCode = core::ExceptionConverter::convert(e).getCode();
+        } catch (...) {
+            statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
+    }
     return convertServerFileToLibFile(
         file,
         fileData.publicMeta,
@@ -1206,17 +1223,20 @@ File StoreApiImpl::convertDecryptedFileMetaV4ToFile(server::File file, const Dec
         fileData.fileSize,
         fileData.authorPubKey,
         fileData.statusCode,
-        FileDataSchema::Version::VERSION_4
+        FileDataSchema::Version::VERSION_4,
+        randomWrite
     );
 }
 
 File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData) {
     int64_t size = 0;
+    bool randomWrite = false;
     auto statusCode = fileData.statusCode;
     if(statusCode == 0) {
         try {
             auto internalMeta = utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(utils::Utils::parseJson(fileData.internalMeta.stdString()));
             size = internalMeta.size();
+            randomWrite = internalMeta.randomWriteOpt(false);
         }  catch (const privmx::endpoint::core::Exception& e) {
             statusCode = e.getCode();
         } catch (const privmx::utils::PrivmxException& e) {
@@ -1232,7 +1252,8 @@ File StoreApiImpl::convertDecryptedFileMetaV5ToFile(server::File file, const Dec
         size,
         fileData.authorPubKey,
         statusCode,
-        FileDataSchema::Version::VERSION_5
+        FileDataSchema::Version::VERSION_5,
+        randomWrite
     );
 }
 
