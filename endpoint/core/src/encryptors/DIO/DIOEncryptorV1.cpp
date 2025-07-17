@@ -46,16 +46,17 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     if(dio.bridgeIdentity->pubKey.has_value()) {
         bridgeIdentity.pubKey(dio.bridgeIdentity->pubKey.value());
     } else {
-        bridgeIdentity.pubKeyEmpty();
+        bridgeIdentity.pubKeyClear();
     }
     if(dio.bridgeIdentity->instanceId.has_value()) {
         bridgeIdentity.instanceId(dio.bridgeIdentity->instanceId.value());
     } else {
-        bridgeIdentity.instanceIdEmpty();
+        bridgeIdentity.instanceIdClear();
     }
     dioJSON.bridgeIdentity(bridgeIdentity);
     return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), authorKey));
 }
+
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
     auto dioAndSignature = _dataEncryptor.extractDataWithSignature(_dataEncryptor.decode(signedDio));
     dynamic::DataIntegrityObject dioJSON = privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::DataIntegrityObject>(

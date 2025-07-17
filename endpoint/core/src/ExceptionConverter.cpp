@@ -56,6 +56,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw server::StoreDoesNotExistException(e.getData());
                 case 0x6118: // STORE_FILE_DOES_NOT_EXIST
                     throw server::StoreFileDoesNotExistException(e.getData());
+                case 0x6128: // STORE_FILE_VERSION_MISMATCH
+                    throw server::StoreFileVersionMismatchException(e.getData());
                 case 0x611E: // INBOX_DOES_NOT_EXIST
                     throw server::InboxDoesNotExistException(e.getData());
                 case 0x613C: // KVDB_DOES_NOT_EXIST

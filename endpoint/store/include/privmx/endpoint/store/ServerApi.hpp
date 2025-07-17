@@ -38,6 +38,7 @@ public:
     server::StoreFileCreateResult storeFileCreate(const server::StoreFileCreateModel& model);
     server::StoreFileReadResult storeFileRead(const server::StoreFileReadModel& model);
     void storeFileWrite(const server::StoreFileWriteModel& model);
+    void storeFileWrite(const server::StoreFileWriteModelByOperations& model);
     void storeFileUpdate(const server::StoreFileUpdateModel& model);
     void storeFileDelete(const server::StoreFileDeleteModel& model);
 private:

@@ -34,6 +34,15 @@ public:
         const std::string& key,
         const std::string& hmac
     );
+    virtual void sync(
+        int64_t newfileVersion, 
+        uint64_t encryptedFileSize, 
+        const std::string& hmac, 
+        std::optional<size_t> chunkSize = std::nullopt, 
+        std::optional<size_t> encryptedChunkSize = std::nullopt, 
+        const std::optional<std::string>& key = std::nullopt,
+        std::optional<size_t> serverChunkSize = std::nullopt
+    ) override;
     virtual std::string getChunk(uint32_t chunkNumber) override;
     virtual size_t getChunkSize() override;
     virtual uint64_t getEncryptedFileSize(uint64_t fileSize) override;
@@ -44,7 +53,6 @@ private:
 
     std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
     size_t _chunkSize;
-    uint64_t _originalFileSize;
     uint64_t _encryptedFileSize;
     std::string _key;
     std::string _checksums;

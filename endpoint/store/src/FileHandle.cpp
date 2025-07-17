@@ -15,13 +15,14 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkedFileReader.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
 
-FileHandle::FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, const std::string& resourceId, uint64_t fileSize): 
-    _id(id), _storeId(storeId), _fileId(fileId), _resourceId(resourceId), _size(fileSize) {}
+FileHandle::FileHandle(int64_t id, const std::string& storeId, const std::string& fileId, const std::string& resourceId, uint64_t fileSize, bool randomWriteSupport): 
+    _id(id), _storeId(storeId), _fileId(fileId), _resourceId(resourceId), _size(fileSize), _randomWriteSupport(randomWriteSupport) {}
 
 std::string FileHandle::getStoreId() {
     return _storeId;
@@ -43,6 +44,10 @@ int64_t FileHandle::getId() {
     return _id;
 }
 
+bool FileHandle::getRandomWriteSupport() {
+    return _randomWriteSupport;
+}
+
 FileReadHandle::FileReadHandle(
     int64_t id, 
     const std::string& fileId,
@@ -56,28 +61,31 @@ FileReadHandle::FileReadHandle(
     const std::string& fileHmac,
     std::shared_ptr<ServerApi> server
 ) 
-    : FileHandle(id, std::string(), fileId, resourceId, fileSize) 
+    : FileHandle(id, std::string(), fileId, resourceId, fileSize, false) 
 {
     std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(server, ChunkReader::getEncryptedChunkSize(chunkSize), serverChunkSize, fileId, serverFileSize, fileVersion);
     std::shared_ptr<ChunkReader> chunkReader = std::make_shared<ChunkReader>(chunkDataProvider, chunkSize, fileKey, fileHmac);
     _reader = std::make_shared<ChunkedFileReader>(chunkReader, fileSize, serverFileSize);
+    _size = fileSize;
+}
+
+void FileReadHandle::sync(
+    uint64_t fileSize,
+    uint64_t serverFileSize,
+    size_t chunkSize,
+    size_t serverChunkSize,
+    int64_t fileVersion,
+    const std::string& fileKey,
+    const std::string& fileHmac
+) {
+    _reader->sync(fileVersion, fileSize, serverFileSize, fileHmac, chunkSize, ChunkReader::getEncryptedChunkSize(chunkSize), fileKey, serverChunkSize);
 }
 
 std::string FileReadHandle::read(uint64_t length) {
     if (length > SIZE_MAX) {
         throw NumberToBigForCPUArchitectureException("length to big for this CPU Architecture");
     }
-    std::string result;
-    try {
-        result = _reader->read(_pos, length);
-    } catch(const utils::PrivmxException& e) {
-        if(e.getCode() == 0x00006128) {
-            // STORE_FILE_VERSION_MISMATCH
-            throw FileVersionMismatchException();
-        } else {
-            e.rethrow();
-        }
-    }
+    std::string result = _reader->read(_pos, length);
     _pos += length;
     return result;
 }
@@ -99,9 +107,10 @@ FileWriteHandle::FileWriteHandle(
     const core::Buffer& privateMeta,
     uint64_t chunkSize,
     uint64_t serverRequestChunkSize,
-    std::shared_ptr<RequestApi> requestApi
+    std::shared_ptr<RequestApi> requestApi,
+    bool randomWriteSupport
 )
-    : FileHandle(id, storeId, fileId, resourceId, size),
+    : FileHandle(id, storeId, fileId, resourceId, size, randomWriteSupport),
     _publicMeta(publicMeta),
     _privateMeta(privateMeta),
     _stream(ChunkBufferedStream(chunkSize, size)),
@@ -141,7 +150,7 @@ privmx::endpoint::store::FileSizeResult FileWriteHandle::getEncryptedFileSize() 
 }
 
 void FileWriteHandle::createRequestData() {
-    _streamer.createRequest();
+    _streamer.createRequest(getRandomWriteSupport());
 }
 
 void FileWriteHandle::setRequestData(const std::string& requestId, const std::string& key, const Poco::Int64& fileIndex) {
@@ -178,10 +187,23 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
     const core::Buffer& privateMeta,
     uint64_t chunkSize,
     uint64_t serverRequestChunkSize,
-    std::shared_ptr<RequestApi> requestApi
+    std::shared_ptr<RequestApi> requestApi,
+    bool randomWriteSupport
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileWrite");
-    std::shared_ptr<FileWriteHandle> result = std::make_shared<FileWriteHandle>(id, storeId, fileId, resourceId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
+    std::shared_ptr<FileWriteHandle> result = std::make_shared<FileWriteHandle>(id, storeId, fileId, resourceId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi, randomWriteSupport);
+    _map.set(id, result);
+    return result;
+}
+
+std::shared_ptr<FileRandomWriteHandle> FileHandleManager::createFileRandomWriteHandle(
+    const std::string &storeId,
+    const std::string &fileId,
+    const std::string &resourceId,
+    std::shared_ptr<IFileHandler> file
+) {
+    int64_t id = _handleManager->createHandle("FileRandomWrite");
+    std::shared_ptr<FileRandomWriteHandle> result = std::make_shared<FileRandomWriteHandle>(id, storeId, fileId, resourceId, file);
     _map.set(id, result);
     return result;
 }
@@ -200,6 +222,14 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::getFileWriteHandle(int64_t i
         throw InvalidFileWriteHandleException();
     }
     return std::dynamic_pointer_cast<FileWriteHandle>(handle);
+}
+
+std::shared_ptr<FileRandomWriteHandle> FileHandleManager::tryGetFileRandomWriteHandle(int64_t id) {
+    std::shared_ptr<FileHandle> handle = getFileHandle(id);
+    if (!handle->isRandomWriteHandle()) {
+        return std::shared_ptr<FileRandomWriteHandle>();
+    }
+    return std::dynamic_pointer_cast<FileRandomWriteHandle>(handle);
 }
 
 std::shared_ptr<FileHandle> FileHandleManager::getFileHandle(int64_t id) {

@@ -25,7 +25,7 @@ using namespace privmx::endpoint::store;
 ChunkStreamer::ChunkStreamer(const std::shared_ptr<store::RequestApi>& requestApi, size_t chunkSize, uint64_t fileSize, size_t serverRequestChunkSize)
             : _requestApi(requestApi), _chunkSize(chunkSize), _fileSize(fileSize), _chunkBufferedStream(serverRequestChunkSize) {}
 
-void ChunkStreamer::createRequest() {
+void ChunkStreamer::createRequest(bool randomWriteSupport) {
     _key = privmx::crypto::Crypto::randomBytes(32);
     auto size = getFileSize();
     auto createRequestModel = utils::TypedObjectFactory::createNewObject<server::CreateRequestModel>();
@@ -33,6 +33,7 @@ void ChunkStreamer::createRequest() {
     auto fileDefinition = utils::TypedObjectFactory::createNewObject<server::FileDefinition>();
     fileDefinition.size(size.size);
     fileDefinition.checksumSize(size.checksumSize);
+    fileDefinition.randomWrite(randomWriteSupport);
     fileDefinitions.add(fileDefinition);
     createRequestModel.files(fileDefinitions);
     _fileIndex = 0;
