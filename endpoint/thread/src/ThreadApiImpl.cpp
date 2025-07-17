@@ -386,6 +386,9 @@ std::string ThreadApiImpl::sendMessage(const std::string& threadId, const core::
     auto thread = getRawThreadFromCacheOrBridge(threadId);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessage, getThread)
     auto msgKey = getAndValidateModuleCurrentEncKey(thread);
+    if(msgKey.statusCode != 0) {
+        throw ThreadEncryptionKeyValidationException("Current encryption key statusCode: "+ std::to_string(msgKey.statusCode));
+    }
     auto resourceId = core::EndpointUtils::generateId();
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageSendModel>();
     send_message_model.resourceId(resourceId);
@@ -454,6 +457,9 @@ void ThreadApiImpl::updateMessage(
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting thread)
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, data preparing)
     auto msgKey = getAndValidateModuleCurrentEncKey(thread);
+    if(msgKey.statusCode != 0) {
+        throw ThreadEncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(msgKey.statusCode));
+    }
     auto  send_message_model = utils::TypedObjectFactory::createNewObject<server::ThreadMessageUpdateModel>();
     send_message_model.messageId(messageId);
     send_message_model.keyId(msgKey.id);
