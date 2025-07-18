@@ -49,18 +49,31 @@ public:
         std::shared_ptr<ServerApi> server
     );
 
-    void write(size_t offset, const core::Buffer& data);
+    void write(size_t offset, const core::Buffer& data, bool truncate = false);
     core::Buffer read(size_t offset, size_t size);
     size_t getFileSize();
-    void truncate(size_t pos);
     void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey);
     void close();
     void flush();
 
 private:
-    void setChunk(size_t index, size_t chunkOffset, const std::string& data);
-    void updateOnServer(const store::IChunkEncryptor::Chunk& updatedChunk, size_t chunkIndex, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate);
+    struct UpdateChunkData {
+        store::IChunkEncryptor::Chunk chunk;
+        size_t chunkIndex;
+        int64_t plainfileSizeChange;
+        int64_t encryptedFileSizeChange;
+    };
+    struct UpdateChanges {
+        std::string data;
+        size_t dataPos;
+        std::string checksum;
+        size_t checksumPos;
+    };
+
+    UpdateChunkData createUpdateChunk(size_t index, size_t chunkOffset, const std::string& data, bool truncate = false);
+    void updateOnServer(const std::vector<UpdateChanges>& updatedChunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate);
     std::string getDecryptedChunk(size_t index);
+    std::vector<UpdateChanges> createListOfUpdateChangesFromUpdateChunkData(const std::vector<UpdateChunkData>& updatedChunks);
     size_t posToindex(size_t position);
     size_t posInindex(size_t position);
 
@@ -77,6 +90,8 @@ private:
     std::shared_ptr<ServerApi> _server;
     size_t _plainChunkSize;
     size_t _encryptedChunkSize;
+    static constexpr size_t SERVER_OPERATIONS_LIMIT = 4;
+    static constexpr size_t SERVER_OPERATION_SIZE_LIMIT = 512*1024; // 512KiB
 };
 
 class FileHandlerImpl : public IFileHandler
@@ -88,8 +103,7 @@ public:
     void seekg(const size_t pos) override;
     void seekp(const size_t pos) override;
     core::Buffer read(const size_t length) override;
-    void write(const core::Buffer& chunk) override;
-    void truncate() override;
+    void write(const core::Buffer& chunk, bool truncate = false) override;
 
     inline void close() override {}
     inline void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) override {

@@ -43,7 +43,7 @@ FileHandler::FileHandler (
     _encryptedChunkSize(chunkEncryptor->getEncryptedChunkSize())
 {}
 
-void FileHandler::write(size_t offset, const core::Buffer& data) { // data = buf + size
+void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) { // data = buf + size
     auto toSend = data.stdString();
     if (_plainfileSize < offset) { 
         // if fileSize smaller than offset fill here empty space with 0
@@ -55,18 +55,61 @@ void FileHandler::write(size_t offset, const core::Buffer& data) { // data = buf
     size_t startIndex = posToindex(offset);
     size_t stopIndex = posToindex(offset+toSend.size()-1);
     size_t dataSend = 0;
+    std::vector<FileHandler::UpdateChunkData> chunksToUpdate;
+    auto newPlainfileSize = _plainfileSize;
+    auto newEncryptedFileSize = _encryptedFileSize;
+    // prepare chunk to update
     for(size_t i = startIndex; i <= stopIndex; i++) {
         if(i == startIndex) {
             size_t chunkOffset = offset % _chunkEncryptor->getPlainChunkSize();
             std::string chunkData = toSend.substr(dataSend, _plainChunkSize -(offset % _plainChunkSize));
-            setChunk(i, chunkOffset, chunkData);
+            chunksToUpdate.push_back(createUpdateChunk(i, chunkOffset, chunkData, i == stopIndex ? truncate: false));
             dataSend += chunkData.size();
         } else {
             size_t chunkOffset = 0;
             std::string chunkData = toSend.substr(dataSend, _plainChunkSize);
-            setChunk(i, chunkOffset, chunkData);
+            chunksToUpdate.push_back(createUpdateChunk(i, chunkOffset, chunkData, i == stopIndex ? truncate: false));
             dataSend += chunkData.size();
         }
+    }
+    // prepare meta ChunksToUpdate and rollback HashList
+    auto oldHashList = _hashList->getAll();
+    for(size_t i = 0; i < chunksToUpdate.size(); i++) {
+        //update _hashList, newPlainfileSize, newEncryptedFileSize
+        auto& updateInfo = chunksToUpdate.at(i);
+        _hashList->set(updateInfo.chunkIndex, updateInfo.chunk.hmac, i == chunksToUpdate.size()-1 ? truncate : false);
+        newPlainfileSize += updateInfo.plainfileSizeChange;
+        newEncryptedFileSize += updateInfo.encryptedFileSizeChange;
+    }
+    // squash chunksToUpdate 
+    auto squashedChunksToUpdate = createListOfUpdateChangesFromUpdateChunkData(chunksToUpdate);
+    // update meta
+    store::FileMeta newFileMeta = {
+        _fileMeta.publicMeta,
+        _fileMeta.privateMeta,
+        privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(privmx::utils::Utils::jsonObjectDeepCopy(_fileMeta.internalFileMeta))
+    };
+    newFileMeta.internalFileMeta.hmac(utils::Base64::from(_hashList->getTopHash()));
+    newFileMeta.internalFileMeta.size(newPlainfileSize);
+    auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, newFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
+    try {
+        updateOnServer(squashedChunksToUpdate, newMeta, _fileEncKey.id, truncate);
+    } catch (const core::Exception& e) {
+        //roll back all changes
+        _hashList->setAll(oldHashList);
+        e.rethrow();
+    } catch (const privmx::utils::PrivmxException& e) {
+        //roll back all changes
+        _hashList->setAll(oldHashList);
+        e.rethrow();
+    }
+    // update Info
+    _version += 1;
+    _fileMeta = newFileMeta;
+    _plainfileSize = newPlainfileSize;
+    _encryptedFileSize = newEncryptedFileSize;
+    for(auto& updateInfo : chunksToUpdate) {
+        _chunkDataProvider->update(_version, updateInfo.chunkIndex, updateInfo.chunk.data, _encryptedFileSize, truncate);
     }
     PRIVMX_DEBUG("FileHandler", "write", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
 }
@@ -83,53 +126,11 @@ core::Buffer FileHandler::read(size_t offset, size_t size) {
     return core::Buffer::from( data.substr(posInindex(offset), size) );
 }
 
-void FileHandler::truncate(size_t pos) {
-    // update 
-    size_t index = posToindex(pos);
-    size_t chunkOffset = pos % _plainChunkSize;
-    std::string newChunk = std::string();
-    // read old chunk
-    std::string prevEncryptedChunk = _chunkDataProvider->getChunk(index, _version);
-    std::string prevChunk = "";
-    if(prevEncryptedChunk.size() != 0) {
-        prevChunk = _chunkEncryptor->decrypt(index, {.data = prevEncryptedChunk, .hmac = _hashList->getHash(index)});
-    }
-    // fill new chunk data to chunkOffset
-    if(chunkOffset > 0) {
-        newChunk.append(prevChunk.substr(0, chunkOffset));
-        // fill empty space between chunkOffset and prevChunk with (char)0x00
-        if (chunkOffset > prevChunk.size()) {
-            newChunk.append(std::string(chunkOffset - prevChunk.size(), (char)0x00));
-        }
-    }
-    // set newChunk;
-    auto chunk = _chunkEncryptor->encrypt(index, newChunk);
-    _hashList->set(index, chunk.hmac, true);
-    auto topHash = _hashList->getTopHash();
-    // newSize
-    auto newPlainfileSize = pos;
-    auto newEncryptedFileSize = index *_encryptedChunkSize + chunk.data.size();
-    // update meta
-    _fileMeta.internalFileMeta.hmac(utils::Base64::from(topHash));
-    _fileMeta.internalFileMeta.size(newPlainfileSize);
-    
-    auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
-
-    // update file by operation
-    updateOnServer(chunk, index, newMeta, _fileEncKey.id, true);
-    // update Info
-    _version += 1;
-    _plainfileSize = newPlainfileSize;
-    _encryptedFileSize = newEncryptedFileSize;
-    _chunkDataProvider->update(_version, index, chunk.data, _encryptedFileSize, true);
-    PRIVMX_DEBUG("FileHandler", "truncate", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
-}
-
 size_t FileHandler::getFileSize() {
     return _plainfileSize;
 }
 
-void FileHandler::setChunk(size_t index, size_t chunkOffset, const std::string& data) {
+FileHandler::UpdateChunkData FileHandler::createUpdateChunk(size_t index, size_t chunkOffset, const std::string& data, bool truncate){
     // check if new data fit in _plainChunkSize
     if ((chunkOffset + data.size()) > _plainChunkSize) {
         // "Given data with offset won't fit Chunk
@@ -154,61 +155,51 @@ void FileHandler::setChunk(size_t index, size_t chunkOffset, const std::string& 
     // fill new chunk data from chunkOffset to data.size()
     newChunk.append(data);
     // fill new chunk data from chunkOffset + data.size() to end of chunk
-    if(prevChunk.size() > chunkOffset + data.size()) {
+    if(prevChunk.size() > chunkOffset + data.size() && !truncate) {
         newChunk.append(prevChunk.substr(chunkOffset + data.size()));
     }
     // set newChunk;
     auto chunk = _chunkEncryptor->encrypt(index, newChunk);
-    _hashList->set(index, chunk.hmac);
-    auto topHash = _hashList->getTopHash();
-    // newSize
-    auto newPlainfileSize = _plainfileSize;
-    auto newEncryptedFileSize = _encryptedFileSize;
-    if(prevChunk.size() < chunkOffset + data.size()) {
-        newPlainfileSize += newChunk.size() - prevChunk.size();
-        newEncryptedFileSize += chunk.data.size() - prevEncryptedChunk.size();
-    }
-    // update meta
-    _fileMeta.internalFileMeta.hmac(utils::Base64::from(topHash));
-    _fileMeta.internalFileMeta.size(newPlainfileSize);
-    
-    auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, _fileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
 
-    // update file by operation
-    updateOnServer(chunk, index, newMeta, _fileEncKey.id, false);
-    // update Info
-    _version += 1;
-    _plainfileSize = newPlainfileSize;
-    _encryptedFileSize = newEncryptedFileSize;
-    _chunkDataProvider->update(_version, index, chunk.data, _encryptedFileSize, false);
+    return FileHandler::UpdateChunkData{
+        chunk,
+        index,
+        truncate ? (int64_t)(index * _plainChunkSize + newChunk.size()) - (int64_t)_plainfileSize : (int64_t)newChunk.size() - (int64_t)prevChunk.size(),
+        truncate ? (int64_t)(index * _encryptedChunkSize + chunk.data.size()) - (int64_t)_encryptedFileSize : (int64_t)chunk.data.size() - (int64_t)prevEncryptedChunk.size()
+    };
 }
 
-void FileHandler::updateOnServer(const store::IChunkEncryptor::Chunk& updatedChunk, size_t chunkIndex, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
-    // update file by operation
-    auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-    operation1.type("file");
-    operation1.pos(_encryptedChunkSize * chunkIndex);
-    operation1.data(updatedChunk.data);
-    operation1.truncate(truncate);
+void FileHandler::updateOnServer(const std::vector<FileHandler::UpdateChanges>& updatedChunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
+    for(size_t i = 0; i < updatedChunks.size();) { 
+        // update file by operation
+        auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
+        for(size_t j = 0; j < (SERVER_OPERATIONS_LIMIT>>1) && i < updatedChunks.size(); ++j,++i) {
+            auto& updatedChunk = updatedChunks.at(i);
+            auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
+            operation1.type("file");
+            operation1.pos(updatedChunk.dataPos);
+            operation1.data(updatedChunk.data);
+            operation1.truncate(i == updatedChunks.size()-1 ? truncate : true);
 
-    auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-    operation2.type("checksum");
-    operation2.pos(_hashList->getHashSize() * chunkIndex);
-    operation2.data(updatedChunk.hmac);
-    operation2.truncate(truncate);
+            auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
+            operation2.type("checksum");
+            operation2.pos(updatedChunk.checksumPos);
+            operation2.data(updatedChunk.checksum);
+            operation2.truncate(i == updatedChunks.size()-1 ? truncate : true);
 
-    auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
-    operations.add(operation1);
-    operations.add(operation2);
+            operations.add(operation1);
+            operations.add(operation2);
+        }
 
-    auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
-    writeRequest.fileId(_fileInfo.fileId);
-    writeRequest.operations(operations);
-    writeRequest.meta(updatedMeta);
-    writeRequest.keyId(encKeyId);
-    writeRequest.version(_version);
-    writeRequest.force(false);
-    _server->storeFileWrite(writeRequest);
+        auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
+        writeRequest.fileId(_fileInfo.fileId);
+        writeRequest.operations(operations);
+        writeRequest.meta(updatedMeta);
+        writeRequest.keyId(encKeyId);
+        writeRequest.version(_version);
+        writeRequest.force(false);
+        _server->storeFileWrite(writeRequest);
+    }
 }
 
 std::string FileHandler::getDecryptedChunk(size_t index) {
@@ -232,6 +223,37 @@ void FileHandler::sync(const FileMeta& fileMeta, const store::FileDecryptionPara
     _encryptedFileSize = newParms.sizeOnServer;
     _fileEncKey = fileEncKey;
     _chunkDataProvider->sync(_version, _encryptedFileSize);
+}
+
+std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFromUpdateChunkData(const std::vector<FileHandler::UpdateChunkData>& updatedChunks) {
+    if(updatedChunks.size() == 0) {
+        return std::vector<FileHandler::UpdateChanges>();
+    }
+    auto updatedChunk = updatedChunks.begin();
+    std::vector<FileHandler::UpdateChanges> result = {FileHandler::UpdateChanges{
+        updatedChunk->chunk.data,
+        updatedChunk->chunkIndex*_encryptedChunkSize,
+        updatedChunk->chunk.hmac,
+        updatedChunk->chunkIndex*_hashList->getHashSize()
+    }};
+    auto& squashedChanges = result.back();
+    for(updatedChunk++; updatedChunk != updatedChunks.end(); updatedChunk++) {
+        if (squashedChanges.dataPos + squashedChanges.data.size() == updatedChunk->chunkIndex*_encryptedChunkSize && 
+            squashedChanges.data.size() + updatedChunk->chunk.data.size() < SERVER_OPERATION_SIZE_LIMIT
+        ) {
+            squashedChanges.data += updatedChunk->chunk.data;
+            squashedChanges.checksum += updatedChunk->chunk.hmac;
+        } else {
+            result.push_back(FileHandler::UpdateChanges{
+                updatedChunk->chunk.data,
+                updatedChunk->chunkIndex*_encryptedChunkSize,
+                updatedChunk->chunk.hmac,
+                updatedChunk->chunkIndex*_hashList->getHashSize()
+            });
+            squashedChanges = result.back();
+        }
+    }
+    return result;
 }
 
 FileHandlerImpl::FileHandlerImpl(std::shared_ptr<FileHandler> file) : _file(file) {}
@@ -260,11 +282,7 @@ core::Buffer FileHandlerImpl::read(const size_t length) {
     return buf;
 }
 
-void FileHandlerImpl::write(const core::Buffer& chunk) {
-    _file->write(_writePos, chunk);
+void FileHandlerImpl::write(const core::Buffer& chunk, bool truncate) {
+    _file->write(_writePos, chunk, truncate);
     _writePos += chunk.size();
-}
-
-void FileHandlerImpl::truncate() {
-    _file->truncate(_writePos);
 }

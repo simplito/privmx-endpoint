@@ -40,6 +40,16 @@ void HmacList::sync(const std::string& topHashKey, const std::string& topHash, c
     _size = _hashes.size() / HMAC_SIZE;
 }
 
+void HmacList::setAll(const std::string& hashes) {
+    if (hashes.size() % HMAC_SIZE != 0) {
+        throw InvalidHashSizeException();
+    }
+    _hashes = hashes;
+    _topHash.reset();
+    _size = _hashes.size() / HMAC_SIZE;
+}
+
+
 void HmacList::set(const int64_t& chunkIndex, const std::string& hash, bool truncate ) {
     if (hash.size() != HMAC_SIZE) {
         throw InvalidHashSizeException();

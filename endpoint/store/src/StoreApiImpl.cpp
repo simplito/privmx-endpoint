@@ -540,8 +540,7 @@ int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFile
 void StoreApiImpl::writeToFile(const int64_t handleId, const core::Buffer& dataChunk, bool truncate) {
     std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handleId);
     if (rw_handle) {
-        if (truncate) rw_handle->file->truncate();
-        rw_handle->file->write(dataChunk);
+        rw_handle->file->write(dataChunk, truncate);
         return;
     }
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.getFileWriteHandle(handleId);

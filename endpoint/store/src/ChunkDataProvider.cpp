@@ -68,7 +68,9 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
         _lastServerChunk = requestServerChunk(serverChunkNumber);
         _lastServerChunkNumber = serverChunkNumber;
     }
-
+    if(serverChunkPos > _lastServerChunk.size()) {
+        return std::string();
+    }
     return _lastServerChunk.substr(serverChunkPos, _encryptedChunkSize);
 }
 
@@ -85,18 +87,16 @@ void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, con
     uint64_t from = _encryptedChunkSize * chunkNumber;
     uint64_t serverChunkNumber = from / _serverChunkSize;
     uint64_t serverChunkPos = from % _serverChunkSize;
-    if(_fileVersion < newfileVersion) {
-        if(_lastServerChunkNumber.has_value() && _lastServerChunkNumber.value() == serverChunkNumber) {
-            std::string oldServerChunkDataBefore = _lastServerChunk.substr(0, serverChunkPos);
-            std::string oldServerChunkDataAfter = "";
-            if(!truncate && _lastServerChunk.size() > serverChunkPos + newChunkEncryptedData.size()) {
-                oldServerChunkDataAfter = _lastServerChunk.substr(serverChunkPos + newChunkEncryptedData.size());
-            }
-            _lastServerChunk = oldServerChunkDataBefore + newChunkEncryptedData + oldServerChunkDataAfter;
+    if(_lastServerChunkNumber.has_value() && _lastServerChunkNumber.value() == serverChunkNumber) {
+        std::string oldServerChunkDataBefore = _lastServerChunk.substr(0, serverChunkPos);
+        std::string oldServerChunkDataAfter = "";
+        if(!truncate && _lastServerChunk.size() > serverChunkPos + newChunkEncryptedData.size()) {
+            oldServerChunkDataAfter = _lastServerChunk.substr(serverChunkPos + newChunkEncryptedData.size());
         }
-        _serverFileSize = encryptedFileSize;
-        _fileVersion = newfileVersion;
+        _lastServerChunk = oldServerChunkDataBefore + newChunkEncryptedData + oldServerChunkDataAfter;
     }
+    _serverFileSize = encryptedFileSize;
+    _fileVersion = newfileVersion;
 }
 
 std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {

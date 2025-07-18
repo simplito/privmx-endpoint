@@ -25,6 +25,7 @@ public:
 
     virtual ~IHashList() = default;
     virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) = 0;
+    virtual void setAll(const std::string& hashes) = 0;
     virtual void set(const int64_t& chunkIndex, const std::string& hash, bool truncate = false) = 0;
     virtual const std::string getHash(const int64_t& chunkIndex) = 0;
     virtual const std::string& getAll() = 0;

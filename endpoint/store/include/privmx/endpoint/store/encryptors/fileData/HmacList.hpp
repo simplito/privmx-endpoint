@@ -27,6 +27,7 @@ class HmacList : public IHashList
 public:
     HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes = std::string());
     virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) override;
+    virtual void setAll(const std::string& hashes) override;
     virtual void set(const int64_t& chunkIndex, const std::string& hash, bool truncate = false) override;
     virtual const std::string getHash(const int64_t& chunkIndex) override;
     virtual const std::string& getAll() override;
