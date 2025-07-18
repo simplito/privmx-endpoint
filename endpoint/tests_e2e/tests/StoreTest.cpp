@@ -86,6 +86,7 @@ protected:
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
 };
+
 TEST_F(StoreTest, getStore) {
     store::Store store;
     // incorrect storeId
@@ -2542,4 +2543,22 @@ TEST_F(StoreTest, random_write_multipleSync_multipleChunks) {
         EXPECT_EQ(testWrite, Ix64k+Tx64k+Ix64k);
     });
     connection_user2->disconnect();
+}
+
+TEST_F(StoreTest, random_write_bufferSize) {
+    int64_t rwFileHandle = 0;
+    std::string fileId = "";
+    EXPECT_NO_THROW({
+        auto t = storeApi->createFile(reader->getString("Store_2.storeId"), core::Buffer::from("RW_publicMeta"), core::Buffer::from("RW_privateMeta"), 0, true);
+        fileId = storeApi->closeFile(t);
+        rwFileHandle = storeApi->openFile(fileId);
+    });
+    EXPECT_EQ(rwFileHandle, 2);
+    if(rwFileHandle != 2) {
+        return;
+    }
+    EXPECT_THROW({
+        storeApi->seekInFile(rwFileHandle,0);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(std::string(512*1025+1, 'H')));
+    }, core::InvalidParamsException);
 }
