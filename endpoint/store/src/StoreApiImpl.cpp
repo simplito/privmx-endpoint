@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreVarSerializer.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/core/Validator.hpp"
 
 #include "privmx/endpoint/store/FileHandler.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
@@ -540,6 +541,7 @@ int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFile
 void StoreApiImpl::writeToFile(const int64_t handleId, const core::Buffer& dataChunk, bool truncate) {
     std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handleId);
     if (rw_handle) {
+        core::Validator::validateBufferSize(dataChunk, 0, 512*1024, "field:dataChunk");
         rw_handle->file->write(dataChunk, truncate);
         return;
     }
