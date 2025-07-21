@@ -54,6 +54,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadCreated_enabled) {
     EXPECT_NO_THROW({
         threadApi->subscribeForThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->subscribeForThreadEvents();
+    }, thread::AlreadySubscribedException);
 
     std::string threadId;
     EXPECT_NO_THROW({
@@ -114,6 +117,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadCreated_disabled) {
         threadApi->subscribeForThreadEvents();
         threadApi->unsubscribeFromThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->unsubscribeFromThreadEvents();
+    }, thread::NotSubscribedException);
 
     std::string threadId;
     EXPECT_NO_THROW({
@@ -157,6 +163,10 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdated_enabled) {
     EXPECT_NO_THROW({
         threadApi->subscribeForThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->subscribeForThreadEvents();
+    }, thread::AlreadySubscribedException);
+    
 
     EXPECT_NO_THROW({
         threadApi->updateThread(
@@ -219,6 +229,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdated_disabled) {
         threadApi->subscribeForThreadEvents();
         threadApi->unsubscribeFromThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->unsubscribeFromThreadEvents();
+    }, thread::NotSubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->updateThread(
@@ -264,6 +277,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeleted_enabled) {
     EXPECT_NO_THROW({
         threadApi->subscribeForThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->subscribeForThreadEvents();
+    }, thread::AlreadySubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteThread(
@@ -303,6 +319,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeleted_disabled) {
         threadApi->subscribeForThreadEvents();
         threadApi->unsubscribeFromThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->unsubscribeFromThreadEvents();
+    }, thread::NotSubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteThread(
@@ -335,6 +354,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadStats_enabled) {
     EXPECT_NO_THROW({
         threadApi->subscribeForThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->subscribeForThreadEvents();
+    }, thread::AlreadySubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
@@ -375,6 +397,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadStats_disabled) {
         threadApi->subscribeForThreadEvents();
         threadApi->unsubscribeFromThreadEvents();
     });
+    EXPECT_THROW({
+        threadApi->unsubscribeFromThreadEvents();
+    }, thread::NotSubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
@@ -407,6 +432,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadNewMessage_enabled) {
     EXPECT_NO_THROW({
         threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
     });
+    EXPECT_THROW({
+        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
+    }, thread::AlreadySubscribedException);
     std::string messageId;
     EXPECT_NO_THROW({
         messageId = threadApi->sendMessage(
@@ -452,6 +480,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadNewMessage_disabled) {
         threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
         threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
     });
+    EXPECT_THROW({
+        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
+    }, thread::NotSubscribedException);
     std::string messageId;
     EXPECT_NO_THROW({
         messageId = threadApi->sendMessage(
@@ -487,6 +518,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdatedMessage_enabled) {
     EXPECT_NO_THROW({
         threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
     });
+    EXPECT_THROW({
+        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
+    }, thread::AlreadySubscribedException);
     EXPECT_NO_THROW({
         threadApi->updateMessage(
             reader->getString("Message_1.info_messageId"),
@@ -532,6 +566,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdatedMessage_disabled) {
         threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
         threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
     });
+    EXPECT_THROW({
+        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
+    }, thread::NotSubscribedException);
     EXPECT_NO_THROW({
         threadApi->updateMessage(
             reader->getString("Message_1.info_messageId"),
@@ -566,6 +603,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeletedMessage_enabled) {
     EXPECT_NO_THROW({
         threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
     });
+    EXPECT_THROW({
+        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
+    }, thread::AlreadySubscribedException);
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
             reader->getString("Message_1.info_messageId")
@@ -606,6 +646,9 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeletedMessage_disabled) {
         threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
         threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
     });
+    EXPECT_THROW({
+        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
+    }, thread::NotSubscribedException);
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
             reader->getString("Message_1.info_messageId")
