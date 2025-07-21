@@ -146,6 +146,7 @@ ENDPOINT_SERVER_TYPE(ThreadMessageGetResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessagesGetResult)
+    OBJECT_FIELD(thread, ThreadInfo)
     LIST_FIELD(messages, server::Message)
     INT64_FIELD(count)
 TYPE_END
