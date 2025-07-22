@@ -18,6 +18,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 #include <Poco/SharedPtr.h>
+#include <iostream>
 
 #include <privmx/utils/PrivmxExtExceptions.hpp>
 #include <privmx/utils/Types.hpp>
@@ -88,6 +89,7 @@ inline void CancellationToken::sleep(const std::chrono::duration<Rep, Period>& d
     }
     auto status = _cv.wait_for(lock, duration);
     if (status == std::cv_status::no_timeout) {
+        std::cerr << "no timeout on cv" << std::endl;
         throwOperationCanceled();
     }
 }

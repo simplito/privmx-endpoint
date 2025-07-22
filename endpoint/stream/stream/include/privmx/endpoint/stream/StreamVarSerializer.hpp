@@ -18,6 +18,7 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -65,6 +66,14 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEvent>(cons
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamLeftEvent>(const stream::StreamLeftEvent& val);
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stream::SdpWithTypeModel& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::Key>(const stream::Key& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::KeyType>(const stream::KeyType& val);
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

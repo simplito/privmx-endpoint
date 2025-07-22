@@ -248,7 +248,7 @@ void StreamApiLowImpl::publishStream(int64_t localStreamId) {
     auto result = _serverApi->streamPublish(model);
     streamData->sessionId = result.sessionId();
     // Set remote description
-    webRtc->setRemoteDescription(result.answer().sdp(), result.answer().type());
+    webRtc->setAnswerAndSetRemoteDescription(result.answer().sdp(), result.answer().type());
 }
 
 // Joining to Stream
