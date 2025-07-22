@@ -16,9 +16,9 @@ limitations under the License.
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <map>
 #include <condition_variable>
 #include <Poco/Dynamic/Var.h>
-#include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/utils/CancellationToken.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
@@ -71,6 +71,7 @@ private:
     void respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userPubKey);
     void sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
     void updateWebRtcKeyStore();
+    void removeOldKeyFormKeysStrage();
 
     std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -83,13 +84,15 @@ private:
     privmx::utils::CancellationToken::Ptr _cancellationToken;
     std::thread _keyCollector;
     std::optional<std::thread> _keyUpdater;
-    privmx::utils::ThreadSaveMap<int64_t, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)>> _webRtcKeyUpdateCallbacks; 
-
-    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;
+    std::shared_mutex _webRtcKeyUpdateCallbacksMutex;
+    std::map<int64_t, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)>> _webRtcKeyUpdateCallbacks; 
+    std::shared_mutex _keysStrageMutex;
+    std::map<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;
     std::vector<privmx::endpoint::core::UserWithPubKey> _connectedUsers;
     std::string _currentKeyId;
     std::shared_ptr<StreamEncKey> _keyForUpdate;
-    privmx::utils::ThreadSaveMap<std::string, bool> _userUpdateKeyConfirmationStatus;
+    std::shared_mutex _userUpdateKeyConfirmationStatusMutex;
+    std::map<std::string, bool> _userUpdateKeyConfirmationStatus;
     std::mutex _updateKeyMutex;
     std::condition_variable _updateKeyCV;
     std::atomic_bool _keyUpdateInProgress = false;

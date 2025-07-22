@@ -14,7 +14,7 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*60
+#define MAX_STD_KEY_TTL 1000*15
 
 using namespace privmx::endpoint::stream; 
 
@@ -34,7 +34,7 @@ StreamKeyManager::StreamKeyManager(
         .creation_time=std::chrono::system_clock::now(), 
         .TTL=std::chrono::milliseconds(MAX_STD_KEY_TTL)
     });
-    _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
+    _keysStrage.insert_or_assign(_keyForUpdate->key.id, _keyForUpdate);
     _currentKeyId = _keyForUpdate->key.id;
     updateWebRtcKeyStore();
     // ->setKey(currentKey.id, currentKey.key);
@@ -47,22 +47,13 @@ StreamKeyManager::StreamKeyManager(
             } catch (const privmx::utils::OperationCancelledException& e) {
                 break;
             }
-            std::vector<std::string> keysToDelete;
-            auto key = _keysStrage.get(_currentKeyId).value();
+            std::shared_ptr<StreamKeyManager::StreamEncKey> key;
+            {
+                std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
+                key = _keysStrage.at(_currentKeyId);
+            }
             if(key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+1000) < std::chrono::system_clock::now() && !_keyUpdateInProgress) {
                 updateKey();
-            }
-
-            _keysStrage.forAll([&](std::string key, std::shared_ptr<StreamEncKey> value) {
-                if(value->creation_time + value->TTL < std::chrono::system_clock::now()) {
-                    keysToDelete.push_back(key);
-                }
-            });
-            for(auto keyToDelete: keysToDelete) {
-                _keysStrage.erase(keyToDelete);
-            }
-            if(keysToDelete.size() > 0) {
-                updateWebRtcKeyStore();
             }
         }
     }); 
@@ -83,12 +74,16 @@ std::vector<privmx::endpoint::stream::Key> StreamKeyManager::getCurrentWebRtcKey
 
 int64_t StreamKeyManager::addKeyUpdateCallback(std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> keyUpdateCallback) {
     int64_t id = ++_nextKeyUpdateCallbackId;
-    _webRtcKeyUpdateCallbacks.set(id, keyUpdateCallback);
+    {
+        std::unique_lock<std::shared_mutex> lock(_webRtcKeyUpdateCallbacksMutex);
+        _webRtcKeyUpdateCallbacks.insert_or_assign(id, keyUpdateCallback);
+    }
     keyUpdateCallback(_currentWebRtcKeys);
     return id;
 }
 
 void StreamKeyManager::removeKeyUpdateCallback(int64_t keyUpdateCallbackId) {
+    std::unique_lock<std::shared_mutex> lock(_webRtcKeyUpdateCallbacksMutex);
     _webRtcKeyUpdateCallbacks.erase(keyUpdateCallbackId);
 }
 
@@ -134,16 +129,19 @@ void StreamKeyManager::setRequestKeyResult(dynamic::RequestKeyRespondEvent resul
     //validate data
     auto newKey = result.encKey();
     // add new key
-    _keysStrage.set(
-        newKey.keyId(),
-        std::make_shared<StreamEncKey>(
-            StreamEncKey{
-                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=privmx::utils::Base64::toString(newKey.key())},
-                .creation_time=std::chrono::system_clock::now(), 
-                .TTL=std::chrono::milliseconds(newKey.TTL())
-            }
-        )
-    );
+    {
+        std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
+        _keysStrage.insert_or_assign(
+            newKey.keyId(),
+            std::make_shared<StreamEncKey>(
+                StreamEncKey{
+                    .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=privmx::utils::Base64::toString(newKey.key())},
+                    .creation_time=std::chrono::system_clock::now(), 
+                    .TTL=std::chrono::milliseconds(newKey.TTL())
+                }
+            )
+        );
+    }
     updateWebRtcKeyStore();
 }
 
@@ -161,9 +159,12 @@ void StreamKeyManager::updateKey() {
     // create date
     _keyUpdateInProgress = true;
     auto newKey = prepareCurrenKeyToUpdate();
-    _userUpdateKeyConfirmationStatus.clear();
-    for(auto user : _connectedUsers) {
-        _userUpdateKeyConfirmationStatus.set(user.pubKey, false);
+    {
+        std::unique_lock<std::shared_mutex> lock(_userUpdateKeyConfirmationStatusMutex);
+        _userUpdateKeyConfirmationStatus.clear();
+        for(auto user : _connectedUsers) {
+            _userUpdateKeyConfirmationStatus.insert_or_assign(user.pubKey, false);
+        }
     }
     // prepare data to send
     dynamic::UpdateKeyEvent respond = privmx::utils::TypedObjectFactory::createNewObject<dynamic::UpdateKeyEvent>();
@@ -178,7 +179,10 @@ void StreamKeyManager::updateKey() {
         std::unique_lock<std::mutex> lock(_updateKeyMutex);
         _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
         if(!_cancellationToken->isCancelled()) {
-            _keysStrage.set(_keyForUpdate->key.id, _keyForUpdate);
+            {
+                std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
+                _keysStrage.insert_or_assign(_keyForUpdate->key.id, _keyForUpdate);
+            }
             _currentKeyId = _keyForUpdate->key.id;
             updateWebRtcKeyStore();
             _keyUpdateInProgress = false;
@@ -191,16 +195,19 @@ void StreamKeyManager::respondToUpdateRequest(dynamic::UpdateKeyEvent request, c
     //extract key
     auto newKey = request.encKey();
     // add new key
-    _keysStrage.set(
-        newKey.keyId(),
-        std::make_shared<StreamEncKey>(
-            StreamEncKey{
-                .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=privmx::utils::Base64::toString(newKey.key())},
-                .creation_time=std::chrono::system_clock::now(), 
-                .TTL=std::chrono::milliseconds(newKey.TTL())
-            }
-        )
-    );
+    {
+        std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
+        _keysStrage.insert_or_assign(
+            newKey.keyId(),
+            std::make_shared<StreamEncKey>(
+                StreamEncKey{
+                    .key=privmx::endpoint::core::EncKey{.id=newKey.keyId(), .key=privmx::utils::Base64::toString(newKey.key())},
+                    .creation_time=std::chrono::system_clock::now(), 
+                    .TTL=std::chrono::milliseconds(newKey.TTL())
+                }
+            )
+        );
+    }
     updateWebRtcKeyStore();
     // prepare ack data
     dynamic::UpdateKeyACKEvent ack = privmx::utils::TypedObjectFactory::createNewObject<dynamic::UpdateKeyACKEvent>();
@@ -212,6 +219,7 @@ void StreamKeyManager::respondToUpdateRequest(dynamic::UpdateKeyEvent request, c
 
 void StreamKeyManager::respondUpdateKeyConfirmation(dynamic::UpdateKeyACKEvent ack, const std::string& userPubKey) {
     if(_keyForUpdate->key.id == ack.keyId()) {
+        std::unique_lock<std::shared_mutex> lock(_userUpdateKeyConfirmationStatusMutex);
         _userUpdateKeyConfirmationStatus.erase(userPubKey);
         if (_userUpdateKeyConfirmationStatus.size() == 0) {
             _updateKeyCV.notify_all();
@@ -228,9 +236,11 @@ dynamic::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
             .TTL=std::chrono::milliseconds(MAX_STD_KEY_TTL)
         });
     }
-
-    auto currentKeyOpt = _keysStrage.get(_currentKeyId);
-    auto currentKey = currentKeyOpt.value();
+    std::shared_ptr<StreamKeyManager::StreamEncKey> currentKey;
+    {
+        std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
+        currentKey = _keysStrage.at(_currentKeyId);
+    }
     dynamic::NewStreamEncKey result = privmx::utils::TypedObjectFactory::createNewObject<dynamic::NewStreamEncKey>();
     result.oldKeyId(currentKey->key.id);
     
@@ -257,19 +267,45 @@ void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventDa
 }
 
 void StreamKeyManager::updateWebRtcKeyStore() {
+    removeOldKeyFormKeysStrage();
     std::vector<privmx::endpoint::stream::Key> webRtcKeys;
-    _keysStrage.forAll([&]([[maybe_unused]]std::string key, std::shared_ptr<StreamEncKey> value) {
-        privmx::endpoint::stream::Key webRtcKey {
-            .keyId = value->key.id,
-            .key =  core::Buffer::from(value->key.key),
-            .type = value->key.id == _currentKeyId ? privmx::endpoint::stream::KeyType::LOCAL : privmx::endpoint::stream::KeyType::REMOTE
+    {
+        std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateWebRtcKeyStore key_list_size : " + std::to_string(_keysStrage.size()));
+        for(auto& key: _keysStrage) {
+            privmx::endpoint::stream::Key webRtcKey {
+                .keyId = key.second->key.id,
+                .key =  core::Buffer::from(key.second->key.key),
+                .type = key.second->key.id == _currentKeyId ? privmx::endpoint::stream::KeyType::LOCAL : privmx::endpoint::stream::KeyType::REMOTE
+            };
+            webRtcKeys.push_back(webRtcKey);
         };
-        webRtcKeys.push_back(webRtcKey);
-    });
+    }
     _currentWebRtcKeys = webRtcKeys;
     if(!disableKeyUpdateForEncryptors) {
-        _webRtcKeyUpdateCallbacks.forAll([&]([[maybe_unused]]int64_t key, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> value) {
-            value(_currentWebRtcKeys);
-        });
+        std::shared_lock<std::shared_mutex> lock(_webRtcKeyUpdateCallbacksMutex);
+        for(auto& webRtcKeyUpdateCallback: _webRtcKeyUpdateCallbacks) {
+            webRtcKeyUpdateCallback.second(_currentWebRtcKeys);
+        };
+    }
+}
+
+void StreamKeyManager::removeOldKeyFormKeysStrage() {
+    std::vector<std::string> keysToDelete;
+    {
+        std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
+        for(auto& key: _keysStrage) {
+            if(key.second->creation_time + key.second->TTL < std::chrono::system_clock::now()) {
+                keysToDelete.push_back(key.first);
+            }
+        };
+    }
+    if(keysToDelete.size() > 0) {
+        {
+            std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
+            for(auto& keyToDelete: keysToDelete) {
+                _keysStrage.erase(keyToDelete);
+            }
+        }
     }
 }
