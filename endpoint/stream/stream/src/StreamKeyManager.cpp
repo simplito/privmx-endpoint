@@ -174,21 +174,18 @@ void StreamKeyManager::updateKey() {
     if(!disableKeyUpdateForEncryptors) {
         sendStreamKeyManagementEvent(respond, _connectedUsers);
     }
-    //thread for timeout and update
-    _keyUpdater = std::thread([&]() {
-        std::unique_lock<std::mutex> lock(_updateKeyMutex);
-        _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
-        if(!_cancellationToken->isCancelled()) {
-            {
-                std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
-                _keysStrage.insert_or_assign(_keyForUpdate->key.id, _keyForUpdate);
-            }
-            _currentKeyId = _keyForUpdate->key.id;
-            updateWebRtcKeyStore();
-            _keyUpdateInProgress = false;
+    //update timeout
+    std::unique_lock<std::mutex> lock(_updateKeyMutex);
+    _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
+    if(!_cancellationToken->isCancelled()) {
+        {
+            std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
+            _keysStrage.insert_or_assign(_keyForUpdate->key.id, _keyForUpdate);
         }
-    });
-    _keyUpdater.value().detach();
+        _currentKeyId = _keyForUpdate->key.id;
+        updateWebRtcKeyStore();
+        _keyUpdateInProgress = false;
+    }
 }
 
 void StreamKeyManager::respondToUpdateRequest(dynamic::UpdateKeyEvent request, const std::string& userId, const std::string& userPubKey) {
