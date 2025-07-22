@@ -49,7 +49,6 @@ public:
     ~StreamKeyManager();
     
     void requestKey(const std::vector<core::UserWithPubKey>& users);
-    void updateKey();
     void respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey);
     void removeUser(core::UserWithPubKey);
     int64_t addKeyUpdateCallback(std::function<void(const std::vector<privmx::endpoint::stream::Key>&)> keyUpdateCallback);
@@ -72,6 +71,7 @@ private:
     void sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users);
     void updateWebRtcKeyStore();
     void removeOldKeyFormKeysStrage();
+    void updateKey();
 
     std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::KeyProvider> _keyProvider;
