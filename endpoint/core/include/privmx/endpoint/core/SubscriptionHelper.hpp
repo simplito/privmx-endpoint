@@ -27,29 +27,30 @@ public:
     SubscriptionHelper(
         std::shared_ptr<EventChannelManager> eventChannelManager, 
         const std::string& moduleName, 
-        const std::string& entryName = "item",
-        std::function<void()> onModuleSubscription = [](){},
-        std::function<void()> onModuleUnsubscription = [](){}
+        const std::string& entryName = "item"
     );
-    bool hasSubscriptionForModule();
-    bool hasSubscriptionForModuleEntry(const std::string& moduleId);
-    bool hasSubscriptionForModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName);
+    bool hasSubscriptionForModule(const std::vector<std::string>& eventTypes = std::vector<std::string>());
+    bool hasSubscriptionForModuleEntry(const std::string& moduleId, const std::vector<std::string>& eventTypes = std::vector<std::string>());
+    bool hasSubscriptionForSingleModuleCustomChannel(const std::string& moduleId, const std::string& channelName);
     bool hasSubscriptionForChannel(const std::string& fullChannel);
     bool hasSubscription(const std::vector<std::string>& subscriptionIds);
     std::string getChannel(const std::vector<std::string>& subscriptionIds);
 
-    void subscribeForModule();
-    void unsubscribeFromModule();
-    void subscribeForModuleEntry(const std::string& moduleId);
-    void unsubscribeFromModuleEntry(const std::string& moduleId);
-    void subscribeForModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName);
-    void unsubscribeFromModuleEntryCustomChannel(const std::string& moduleId, const std::string&  channelName);
+    void subscribeForModule(const std::vector<std::string>& eventTypes = std::vector<std::string>());
+    void unsubscribeFromModule(const std::vector<std::string>& eventTypes = std::vector<std::string>());
+    void subscribeForModuleEntry(const std::string& moduleId, const std::vector<std::string>& eventTypes = std::vector<std::string>());
+    void unsubscribeFromModuleEntry(const std::string& moduleId, const std::vector<std::string>& eventTypes = std::vector<std::string>());
+    void subscribeForSingleModuleCustomChannel(const std::string& moduleId, const std::string&  channelName);
+    void unsubscribeFromSingleModuleCustomChannel(const std::string& moduleId, const std::string&  channelName);
 
     void processSubscriptionNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     
+    std::string getModuleChannel(const std::optional<std::string>& eventType = std::nullopt);
+    std::string getModuleCustomChannel(const std::string& channelName);
+    std::string getModuleEntryChannel(const std::string& moduleId, const std::optional<std::string>& eventType = std::nullopt);
+    std::string getSingleModuleCustomChannel(const std::string& moduleId, const std::string& channelName);
 private:
-    std::string getModuleEntryChannel(const std::string& moduleId);
-    std::string getModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName);
+    
     void subscribeFor(const std::vector<std::string>& channels);
     void unsubscribeFor(const std::vector<std::string>& channels);
 
@@ -57,12 +58,6 @@ private:
     std::string _moduleName;
     std::string _entryName;
 
-    bool _moduleCreateSubscription;
-    bool _moduleUpdateSubscription;
-    bool _moduleDeleteSubscription;
-    bool _moduleStatsSubscription;
-    std::function<void()> _onModuleSubscription;
-    std::function<void()> _onModuleUnsubscription;
     // fast search
     utils::ThreadSaveMap<std::string, std::string> _channelSubscriptionMap; // channel -> subscriptionId 
     utils::ThreadSaveMap<std::string, std::string> _subscriptionMap;        // subscriptionId -> channel
@@ -76,7 +71,6 @@ public:
         const std::string& entryName = "item"
     );
     bool hasSubscriptionForModuleEntry(const std::string& moduleId);
-    bool hasSubscriptionForModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName);
     bool hasSubscriptionForChannel(const std::string& fullChannel);
     bool hasSubscription(const std::vector<std::string>& subscriptionIds);
     std::string getChannel(const std::vector<std::string>& subscriptionIds);
@@ -84,11 +78,7 @@ public:
 
     void subscribeForModuleEntry(const std::string& moduleId, const std::string& parentModuleEntryId);
     void unsubscribeFromModuleEntry(const std::string& moduleId);
-    void subscribeForModuleEntryCustomChannel(const std::string& moduleId, const std::string& parentModuleEntryId, const std::string& channelName);
-    void unsubscribeFromModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName);
 private:
-    std::string getModuleEntryChannel(const std::string& moduleId);
-    std::string getModuleEntryCustomChannel(const std::string& moduleId, const std::string& channelName);
 
     SubscriptionHelper _subscriptionHelper;
     std::string _moduleName;

@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <set>
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/store/Types.hpp"
@@ -196,24 +197,24 @@ public:
     /**
      * Subscribes for the Store module main events.
      */
-    void subscribeForStoreEvents();
+    void subscribeForStoreEvents(const std::set<std::string>& eventTypes = {"create", "update", "stats", "delete"});
 
     /**
      * Unsubscribes from the Store module main events.
      */
-    void unsubscribeFromStoreEvents();
+    void unsubscribeFromStoreEvents(const std::set<std::string>& eventTypes = {"create", "update", "stats", "delete"});
     
     /**
      * Subscribes for events in given Store.
      * @param store ID of the Store to subscribe
      */
-    void subscribeForFileEvents(const std::string& storeId);
+    void subscribeForFileEvents(const std::string& storeId, const std::set<std::string>& eventTypes = {"create", "update", "delete"});
 
     /**
      * Unsubscribes from events in given Store.
      * @param store ID of the Store to unsubscribe
      */    
-    void unsubscribeFromFileEvents(const std::string& storeId);
+    void unsubscribeFromFileEvents(const std::string& storeId, const std::set<std::string>& eventTypes = {"create", "update", "delete"});
 
     std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }
 private:

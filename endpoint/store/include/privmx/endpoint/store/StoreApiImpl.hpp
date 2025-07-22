@@ -101,10 +101,10 @@ public:
     void seekInFile(const int64_t handle, const int64_t pos);
     std::string closeFile(const int64_t handle);
 
-    void subscribeForStoreEvents();
-    void unsubscribeFromStoreEvents();
-    void subscribeForFileEvents(const std::string& storeId);
-    void unsubscribeFromFileEvents(const std::string& storeId);
+    void subscribeForStoreEvents(const std::set<std::string>& eventTypes);
+    void unsubscribeFromStoreEvents(const std::set<std::string>& eventTypes);
+    void subscribeForFileEvents(const std::string& storeId, const std::set<std::string>& eventTypes);
+    void unsubscribeFromFileEvents(const std::string& storeId, const std::set<std::string>& eventTypes);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
 private:

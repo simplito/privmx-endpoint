@@ -60,17 +60,17 @@ void EventApiImpl::emitEvent(const std::string& contextId, const std::vector<cor
 
 void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
-    if(_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
+    if(_contextSubscriptionHelper.hasSubscriptionForSingleModuleCustomChannel(contextId, channelName)) {
         throw AlreadySubscribedException();
     }
-    _contextSubscriptionHelper.subscribeForModuleEntryCustomChannel(contextId, channelName);
+    _contextSubscriptionHelper.subscribeForSingleModuleCustomChannel(contextId, channelName);
 }
 void EventApiImpl::unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
-    if(!_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
+    if(!_contextSubscriptionHelper.hasSubscriptionForSingleModuleCustomChannel(contextId, channelName)) {
         throw NotSubscribedException();
     }
-    _contextSubscriptionHelper.unsubscribeFromModuleEntryCustomChannel(contextId, channelName);
+    _contextSubscriptionHelper.unsubscribeFromSingleModuleCustomChannel(contextId, channelName);
 }
 
 void EventApiImpl::emitEventInternal(const std::string& contextId, InternalContextEventDataV1 event, const std::vector<core::UserWithPubKey>& users) {
@@ -129,11 +129,11 @@ DecryptedInternalContextEventDataV1 EventApiImpl::extractInternalEventData(const
 }
 
 void EventApiImpl::subscribeForInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.subscribeForModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
+    _contextSubscriptionHelper.subscribeForSingleModuleCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::unsubscribeFromInternalEvents(const std::string& contextId) {
-    _contextSubscriptionHelper.unsubscribeFromModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
+    _contextSubscriptionHelper.unsubscribeFromSingleModuleCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {

@@ -52,9 +52,7 @@ KvdbApiImpl::KvdbApiImpl(
     _serverApi(ServerApi(gateway)),
     _kvdbSubscriptionHelper(core::SubscriptionHelper(
         eventChannelManager, 
-        "kvdb", "entries",
-        [&](){},
-        [&](){}
+        "kvdb", "entries"
     ))
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));

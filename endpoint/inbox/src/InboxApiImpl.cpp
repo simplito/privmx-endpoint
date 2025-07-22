@@ -71,9 +71,7 @@ InboxApiImpl::InboxApiImpl(
     _serverRequestChunkSize(serverRequestChunkSize),
     _inboxSubscriptionHelper(core::SubscriptionHelper(
         eventChannelManager, 
-        "inbox", "items", 
-        [&](){},
-        [&](){}
+        "inbox", "items"
     )),
     _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread", "messages")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "inbox", "entries"}) 

@@ -57,9 +57,7 @@ ThreadApiImpl::ThreadApiImpl(
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
     _threadSubscriptionHelper(core::SubscriptionHelper(
         eventChannelManager, 
-        "thread", "messages", 
-        [&](){},
-        [&](){}
+        "thread", "messages"
     )),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {

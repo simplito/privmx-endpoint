@@ -65,9 +65,7 @@ StoreApiImpl::StoreApiImpl(
     _fileMetaEncryptor(FileMetaEncryptor()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
     _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, 
-        "store", "files",
-        [&](){},
-        [&](){}
+        "store", "files"
     )),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
@@ -674,7 +672,6 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
-    
     } else if (type == "storeFileCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
         auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
@@ -684,11 +681,12 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
         event->data = file;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "storeFileUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileUpdatedEventData>(notification.data);
         auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
+        auto data = Mapper::mapTostoreFileUpdatedEventData(raw, file);
         std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
         event->channel = "store/" + raw.storeId() + "/files";
-        event->data = file;
+        event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "storeFileDeleted") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(notification.data);
@@ -700,34 +698,42 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
     }
 }
 
-void StoreApiImpl::subscribeForStoreEvents() {
-    if(_storeSubscriptionHelper.hasSubscriptionForModule()) {
+void StoreApiImpl::subscribeForStoreEvents(const std::set<std::string>& eventTypes) {
+    if(eventTypes.size() == 0) return;
+    std::vector<std::string> types = std::vector<std::string>(eventTypes.begin(), eventTypes.end());
+    if(_storeSubscriptionHelper.hasSubscriptionForModule(types)) {
         throw AlreadySubscribedException();
     }
-    _storeSubscriptionHelper.subscribeForModule();
+    _storeSubscriptionHelper.subscribeForModule(types);
 }
 
-void StoreApiImpl::unsubscribeFromStoreEvents() {
-    if(!_storeSubscriptionHelper.hasSubscriptionForModule()) {
+void StoreApiImpl::unsubscribeFromStoreEvents(const std::set<std::string>& eventTypes) {
+    if(eventTypes.size() == 0) return;
+    std::vector<std::string> types = std::vector<std::string>(eventTypes.begin(), eventTypes.end());
+    if(!_storeSubscriptionHelper.hasSubscriptionForModule(types)) {
         throw NotSubscribedException();
     }
-    _storeSubscriptionHelper.unsubscribeFromModule();
+    _storeSubscriptionHelper.unsubscribeFromModule(types);
 }
 
-void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
+void StoreApiImpl::subscribeForFileEvents(const std::string& storeId, const std::set<std::string>& eventTypes) {
+    if(eventTypes.size() == 0) return;
+    std::vector<std::string> types = std::vector<std::string>(eventTypes.begin(), eventTypes.end());
     assertStoreExist(storeId);
-    if(_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
+    if(_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId, types)) {
         throw AlreadySubscribedException(storeId);
     }
-    _storeSubscriptionHelper.subscribeForModuleEntry(storeId);
+    _storeSubscriptionHelper.subscribeForModuleEntry(storeId, types);
 }
 
-void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
+void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId, const std::set<std::string>& eventTypes) {
+    if(eventTypes.size() == 0) return;
+    std::vector<std::string> types = std::vector<std::string>(eventTypes.begin(), eventTypes.end());
     assertStoreExist(storeId);
-    if(!_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
+    if(!_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId, types)) {
         throw NotSubscribedException(storeId);
     }
-    _storeSubscriptionHelper.unsubscribeFromModuleEntry(storeId);
+    _storeSubscriptionHelper.unsubscribeFromModuleEntry(storeId, types);
 }
 
 void StoreApiImpl::processConnectedEvent() {
