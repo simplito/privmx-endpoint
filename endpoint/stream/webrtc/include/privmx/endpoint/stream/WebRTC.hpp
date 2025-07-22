@@ -48,7 +48,7 @@ public:
     std::string createOfferAndSetLocalDescription() override;
     std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) override;
     std::string negotiationNeeded();
-    void setRemoteDescription(const std::string& sdp, const std::string& type) override;
+    void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) override;
     void close() override;
     void updateKeys(const std::vector<Key>& keys) override;
     void AddAudioTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, int64_t id = 0);

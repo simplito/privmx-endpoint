@@ -55,6 +55,11 @@ struct Stream {
     std::string userId;
 };
 
+struct SdpWithTypeModel {
+    std::string sdp;
+    std::string type;
+};
+
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx

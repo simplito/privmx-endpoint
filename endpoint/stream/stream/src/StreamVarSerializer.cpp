@@ -192,3 +192,31 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamLeftEvent>(const strea
     return obj;
 }
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stream::SdpWithTypeModel& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$SdpWithTypeModel");
+    }
+    obj->set("sdp", serialize(val.sdp));
+    obj->set("type", serialize(val.type));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::Key>(const stream::Key& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$Key");
+    }
+    obj->set("keyId", serialize(val.keyId));
+    obj->set("key", serialize(val.key));
+    obj->set("type", serialize(val.type));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::KeyType>(const stream::KeyType& val) {
+
+    return Poco::Dynamic::Var(static_cast<int>(val));
+}

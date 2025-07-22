@@ -96,12 +96,13 @@ Poco::Dynamic::Var StreamApiLowVarInterface::deleteStreamRoom(const Poco::Dynami
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::createStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
     auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "localStreamId");
-    auto webRtcInt = _deserializer.deserialize<int64_t>(argsArr->get(2), "webRtc");
-    std::shared_ptr<WebRTCInterface>* webRtcPtr = (std::shared_ptr<WebRTCInterface>*)webRtcInt;
-    auto result = _streamApi.createStream(streamRoomId, localStreamId, (*webRtcPtr));
+    // auto webRtcInt = _deserializer.deserialize<int64_t>(argsArr->get(2), "webRtc");
+    // std::shared_ptr<WebRTCInterface>* webRtcPtr = (std::shared_ptr<WebRTCInterface>*)webRtcInt;
+    // auto result = _streamApi.createStream(streamRoomId, localStreamId, (*webRtcPtr));
+    auto result = _streamApi.createStream(streamRoomId, localStreamId, getWebRtcInterface());
     return _serializer.serialize(result);
 }
 
@@ -113,14 +114,15 @@ Poco::Dynamic::Var StreamApiLowVarInterface::publishStream(const Poco::Dynamic::
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::joinStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 5);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
     auto streamsId = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsId");
     auto settings = _deserializer.deserialize<Settings>(argsArr->get(2), "settings");
     auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(3), "localStreamId");
-    auto webRtcInt = _deserializer.deserialize<int64_t>(argsArr->get(4), "webRtc");
-    std::shared_ptr<WebRTCInterface>* webRtcPtr = (std::shared_ptr<WebRTCInterface>*)webRtcInt;
-    auto result = _streamApi.joinStream(streamRoomId, streamsId, settings, localStreamId, (*webRtcPtr));
+    // auto webRtcInt = _deserializer.deserialize<int64_t>(argsArr->get(4), "webRtc");
+    // std::shared_ptr<WebRTCInterface>* webRtcPtr = (std::shared_ptr<WebRTCInterface>*)webRtcInt;
+    // auto result = _streamApi.joinStream(streamRoomId, streamsId, settings, localStreamId, (*webRtcPtr));
+    auto result = _streamApi.joinStream(streamRoomId, streamsId, settings, localStreamId, getWebRtcInterface());
     return _serializer.serialize(result);
 }
 
@@ -158,4 +160,18 @@ Poco::Dynamic::Var StreamApiLowVarInterface::exec(METHOD method, const Poco::Dyn
         throw core::InvalidMethodException();
     }
     return (*this.*(it->second))(args);
+}
+
+
+std::shared_ptr<WebRTCInterface> StreamApiLowVarInterface:: getWebRtcInterface() {
+    return _webRtcInterface;
+}
+
+void StreamApiLowVarInterface::setWebRtcInterface(std::shared_ptr<WebRTCInterface> webRtcInterface) {
+    std::unique_lock lock(_mutex);
+    _webRtcInterface = webRtcInterface;
+}
+
+int64_t StreamApiLowVarInterface::getWebRtcInterfaceRawPtr() {
+    return (int64_t)(_webRtcInterface.get());
 }
