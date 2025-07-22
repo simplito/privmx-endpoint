@@ -1,6 +1,7 @@
 
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
+#include "../utils/FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
@@ -2561,4 +2562,269 @@ TEST_F(StoreTest, random_write_bufferSize) {
         storeApi->seekInFile(rwFileHandle,0);
         storeApi->writeToFile(rwFileHandle, core::Buffer::from(std::string(512*1025+1, 'H')));
     }, core::InvalidParamsException);
+}
+TEST_F(StoreTest, sendMessage_cacheManipulation) {
+    // load store to cache
+    EXPECT_NO_THROW({
+        storeApi->getStore(reader->getString("Store_1.storeId"));
+    });
+    // update store
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });    
+    // correct data
+    std::string fileId;
+    EXPECT_NO_THROW({
+        auto handle = storeApi->createFile(
+            reader->getString("Store_1.storeId"),
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta"),
+            0
+        );
+        fileId = storeApi->closeFile(handle);
+    });
+    store::File file;
+    EXPECT_NO_THROW({
+        file = storeApi->getFile(
+            fileId
+        );
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+    EXPECT_EQ(file.size, 0);
+}
+
+TEST_F(StoreTest, updateFile_cacheManipulation) {
+    // load store to cache
+    EXPECT_NO_THROW({
+        storeApi->getStore(reader->getString("Store_1.storeId"));
+    });
+    // update store
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });    
+    // correct data
+    std::string fileId;
+    EXPECT_NO_THROW({
+        auto handle = storeApi->updateFile(
+            reader->getString("File_1.info_fileId"),
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta"),
+            0
+        );
+        fileId = storeApi->closeFile(handle);
+    });
+    store::File file;
+    EXPECT_NO_THROW({
+        file = storeApi->getFile(
+            fileId
+        );
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+    EXPECT_EQ(file.size, 0);
+}
+
+TEST_F(StoreTest, updateFileMeta_cacheManipulation) {
+    // load store to cache
+    EXPECT_NO_THROW({
+        storeApi->getStore(reader->getString("Store_1.storeId"));
+    });
+    // update store
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });    
+    // correct data
+    EXPECT_NO_THROW({
+        storeApi->updateFileMeta(
+            reader->getString("File_1.info_fileId"),
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta")
+        );
+    });
+    store::File file;
+    EXPECT_NO_THROW({
+        file = storeApi->getFile(
+            reader->getString("File_1.info_fileId")
+        );
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
+    EXPECT_EQ(file.size, reader->getInt("File_1.size"));
+}
+
+TEST_F(StoreTest, userValidator_false) {
+    auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
+    connection->setUserVerifier(verifier);
+    // getStore
+    EXPECT_NO_THROW({
+        auto store = storeApi->getStore(
+            reader->getString("Store_1.storeId")
+        );
+        EXPECT_FALSE(store.statusCode == 0);
+    });
+    // listStore
+    EXPECT_NO_THROW({
+        auto stores = storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(stores.readItems[0].statusCode == 0);
+    });
+    // createStore
+    EXPECT_THROW({
+        storeApi->createStore(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_2_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_2_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private")
+        );
+    }, core::Exception);
+    // updateStore
+    EXPECT_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_2_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_2_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    }, core::Exception);
+    // deleteStore
+    EXPECT_NO_THROW({
+        storeApi->deleteStore(
+            reader->getString("Store_2.storeId")
+        );
+    });
+    // getFile 
+    EXPECT_NO_THROW({
+        auto file = storeApi->getFile(
+            reader->getString("File_1.info_fileId")
+        );
+        EXPECT_FALSE(file.statusCode == 0);
+    });
+    // listFiles
+    EXPECT_NO_THROW({
+        auto files = storeApi->listFiles(
+            reader->getString("Store_1.storeId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(files.readItems[0].statusCode == 0);
+    });
+    // createFile 
+    EXPECT_THROW({
+        auto handle = storeApi->createFile(
+            reader->getString("Store_1.storeId"),
+            privmx::endpoint::core::Buffer::from("publicMeta"),
+            privmx::endpoint::core::Buffer::from("privateMeta"),
+            0
+        );
+        storeApi->closeFile(handle);
+    }, core::Exception);
+    // updateFile 
+    EXPECT_THROW({
+        auto handle = storeApi->updateFile(
+            reader->getString("File_1.info_fileId"),
+            privmx::endpoint::core::Buffer::from("publicMeta"),
+            privmx::endpoint::core::Buffer::from("privateMeta"),
+            0
+        );
+        storeApi->closeFile(handle);
+    }, core::Exception);
+    // openFile 
+    EXPECT_THROW({
+        storeApi->openFile(
+            reader->getString("File_1.info_fileId")
+        );
+    }, core::Exception);
+    // deleteStore
+    EXPECT_NO_THROW({
+        storeApi->deleteFile(
+            reader->getString("File_2.info_fileId")
+        );
+    });
 }

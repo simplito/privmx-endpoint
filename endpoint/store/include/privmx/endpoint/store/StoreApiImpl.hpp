@@ -43,7 +43,6 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/store/StoreProvider.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
@@ -113,9 +112,13 @@ private:
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
                 const std::optional<core::ContainerPolicy>& policies);
-    server::Store getRawStoreFromCacheOrBridge(const std::string& storeId);
     Store _storeGetEx(const std::string& storeId, const std::string& type);
     core::PagingList<Store> _storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
+    std::string storeFileFinalizeWriteRequest(
+        const std::shared_ptr<FileWriteHandle>& handle, 
+        const ChunksSentInfo& data,
+        const core::ModuleKeys& storeKey
+    );
 
     std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey> &users);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
@@ -134,10 +137,12 @@ private:
     Store convertDecryptedStoreDataV5ToStore(server::Store store, const core::DecryptedModuleDataV5& storeData);
     StoreDataSchema::Version getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry);
     std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
-    Store decryptAndConvertStoreDataToStore(server::Store store);
+    std::vector<Store> validateDecryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
+    Store validateDecryptAndConvertStoreDataToStore(server::Store store);
+    void assertStoreDataIntegrity(server::Store store);
     uint32_t validateStoreDataIntegrity(server::Store store);
-
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
+    core::ModuleKeys storeToModuleKeys(server::Store store);
 
     // OLD CODE    
     StoreFile decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey);
@@ -161,11 +166,11 @@ private:
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
     FileDataSchema::Version getFileDataStructureVersion(server::File file);
-    std::vector<File> decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files);
-    File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
-    File decryptAndConvertFileDataToFileInfo(server::File file);
+    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(utils::List<server::File> files, const core::ModuleKeys& storeKeys);
+    File validateDecryptAndConvertFileDataToFileInfo(server::File file, const core::ModuleKeys& storeKeys);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
-    dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::Store store, server::File file);
+    dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(server::File file, const core::ModuleKeys& storeKeys);
+    core::ModuleKeys getFileDecryptionKeys(server::File file);
     uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     FileEncryptionParams getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey);
@@ -195,8 +200,6 @@ private:
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
     FileMetaEncryptorV1 _fileMetaEncryptorV1;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    StoreProvider _storeProvider;
-    std::atomic_bool _storeCache;
     core::SubscriptionHelper _storeSubscriptionHelper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 

@@ -46,10 +46,16 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             switch (code_second_two_bytes) {
                 case 0x0030: // ACCESS_DENIED
                     throw server::AccessDeniedException(e.getData());
+                case 0x0070: // INVALID_KEY
+                    throw server::InvalidKeyException(e.getData());
                 case 0x6001: // THREAD_DOES_NOT_EXIST
                     throw server::ThreadDoesNotExistException(e.getData());
+                case 0x6002: // INVALID_THREAD_KEY
+                    throw server::InvalidThreadKeyException(e.getData());
                 case 0x600D: // THREAD_MESSAGE_DOES_NOT_EXIST
                     throw server::ThreadMessageDoesNotExistException(e.getData());
+                case 0x6015: // INVALID_KEY_ID
+                    throw server::InvalidKeyIdException(e.getData());
                 case 0x6116: // CONTEXT_DOES_NOT_EXIST
                     throw server::ContextDoesNotExistException(e.getData());
                 case 0x6117: // STORE_DOES_NOT_EXIST
