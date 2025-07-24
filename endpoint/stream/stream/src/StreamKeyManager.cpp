@@ -13,8 +13,9 @@ limitations under the License.
 #include <iostream>
 #include <privmx/utils/Debug.hpp>
 
+#define UPDATE_INTERVAL 1000*1
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*15
+#define MAX_STD_KEY_TTL 1000*60+MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL
 
 using namespace privmx::endpoint::stream; 
 
@@ -40,10 +41,10 @@ StreamKeyManager::StreamKeyManager(
     // ->setKey(currentKey.id, currentKey.key);
     _cancellationToken = privmx::utils::CancellationToken::create();
     // create thread to remove old keys
-    _keyCollector = std::thread([&]() {
-        while (!_cancellationToken->isCancelled()) {
+    _keyCollector = std::thread([&](privmx::utils::CancellationToken::Ptr token) {
+        while (!token->isCancelled()) {
             try {
-                _cancellationToken->sleep( std::chrono::milliseconds(1000));
+                token->sleep( std::chrono::milliseconds(UPDATE_INTERVAL));
             } catch (const privmx::utils::OperationCancelledException& e) {
                 break;
             }
@@ -52,11 +53,11 @@ StreamKeyManager::StreamKeyManager(
                 std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
                 key = _keysStrage.at(_currentKeyId);
             }
-            if(key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+1000) < std::chrono::system_clock::now() && !_keyUpdateInProgress) {
+            if(key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL) < std::chrono::system_clock::now() && !_keyUpdateInProgress) {
                 updateKey();
             }
         }
-    }); 
+    }, _cancellationToken); 
     _eventApi->subscribeForInternalEvents(_contextId);
 }
 
