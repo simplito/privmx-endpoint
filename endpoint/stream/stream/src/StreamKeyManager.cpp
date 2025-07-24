@@ -12,10 +12,11 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include <iostream>
 #include <privmx/utils/Debug.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 
 #define UPDATE_INTERVAL 1000*1
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*60+MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL
+#define MAX_STD_KEY_TTL 1000*3+MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL
 
 using namespace privmx::endpoint::stream; 
 
@@ -42,31 +43,37 @@ StreamKeyManager::StreamKeyManager(
     _cancellationToken = privmx::utils::CancellationToken::create();
     // create thread to remove old keys
     _keyCollector = std::thread([&](privmx::utils::CancellationToken::Ptr token) {
-        while (!token->isCancelled()) {
-            try {
-                token->sleep( std::chrono::milliseconds(UPDATE_INTERVAL));
-            } catch (const privmx::utils::OperationCancelledException& e) {
-                break;
+        try {
+            while (!token->isCancelled()) {
+                _cancellationToken->sleep( std::chrono::milliseconds(UPDATE_INTERVAL));
+                std::shared_ptr<StreamKeyManager::StreamEncKey> key;
+                {
+                    std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
+                    if (_keysStrage.find(_currentKeyId) != _keysStrage.end()) {
+                        key = _keysStrage.at(_currentKeyId);                
+                    }
+                }
+                if(!key || (key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL) < std::chrono::system_clock::now())) {
+                    updateKey();
+                }
             }
-            std::shared_ptr<StreamKeyManager::StreamEncKey> key;
-            {
-                std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
-                key = _keysStrage.at(_currentKeyId);
-            }
-            if(key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL) < std::chrono::system_clock::now() && !_keyUpdateInProgress) {
-                updateKey();
-            }
+            std::cerr << "std::thread while-loop break" << std::endl;
+        } catch (const core::Exception& e) {
+            std::cerr << "Error on std::thread" << e.getFull() << std::endl;
+        } catch (const std::exception& ex) {
+            std::cerr << "Unknown exception" << ex.what() << std::endl;
         }
     }, _cancellationToken); 
     _eventApi->subscribeForInternalEvents(_contextId);
 }
 
 StreamKeyManager::~StreamKeyManager() {
+    std::cerr << "StreamKeyManager.destroy()" << std::endl;
     _cancellationToken->cancel();
     _updateKeyCV.notify_all();
     _eventApi->unsubscribeFromInternalEvents(_contextId);
     if(_keyCollector.joinable()) _keyCollector.join();
-    if(_keyUpdater.has_value()) if(_keyUpdater.value().joinable()) _keyUpdater.value().join();
+    // if(_keyUpdater.has_value()) if(_keyUpdater.value().joinable()) _keyUpdater.value().join();
     PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Successfully Deconstructed : " + _streamRoomId);
 }
 std::vector<privmx::endpoint::stream::Key> StreamKeyManager::getCurrentWebRtcKeys() {
