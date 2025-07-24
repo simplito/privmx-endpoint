@@ -34,6 +34,26 @@ struct ServerFileInfo {
 };
 
 /**
+ * Holds information about the file change.
+ * 
+ */
+struct FileChange {
+    /**
+     * position of file change
+     */
+    int64_t pos;
+    /**
+     * length of file change
+     */
+    int64_t length;
+    /**
+     * remove all data 
+     */
+    bool truncate;
+};
+
+
+/**
  * Holds information about the file.
  * 
  */

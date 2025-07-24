@@ -322,6 +322,17 @@ ENDPOINT_SERVER_TYPE(StoreFileDeletedEventData)
     STRING_FIELD(storeId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StoreFileChange)
+    STRING_FIELD(type)
+    INT64_FIELD(pos)
+    INT64_FIELD(length)
+    BOOL_FIELD(truncate)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(StoreFileUpdatedEventData, File)
+    LIST_FIELD(changes, StoreFileChange)
+TYPE_END
+
 } // server
 } // store
 } // endpoint

@@ -544,7 +544,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_enabled) {
         EXPECT_EQ(event->type, "storeFileUpdated");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileUpdatedEvent(event)) {
-            store::File storeFile = store::Events::extractStoreFileUpdatedEvent(event).data;
+            store::File storeFile = store::Events::extractStoreFileUpdatedEvent(event).data.file;
             EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeFile.size, 0);
             EXPECT_EQ(storeFile.publicMeta.stdString(), "publicMeta");

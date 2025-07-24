@@ -674,7 +674,6 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             event->data = data;
             _eventMiddleware->emitApiEvent(event);
         }
-    
     } else if (type == "storeFileCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
         auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
@@ -684,11 +683,12 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
         event->data = file;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "storeFileUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileUpdatedEventData>(notification.data);
         auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
+        auto data = Mapper::mapTostoreFileUpdatedEventData(raw, file);
         std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
         event->channel = "store/" + raw.storeId() + "/files";
-        event->data = file;
+        event->data = data;
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "storeFileDeleted") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(notification.data);

@@ -43,6 +43,10 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEventData>(
     const store::StoreFileDeletedEventData& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEventData>(
+    const store::StoreFileUpdatedEventData& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreCreatedEvent>(const store::StoreCreatedEvent& val);
 
 template<>
@@ -65,6 +69,9 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEvent>(const 
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::File>(const store::File& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<store::FileChange>(const store::FileChange& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<PagingList<store::File>>(const PagingList<store::File>& val);

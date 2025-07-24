@@ -44,6 +44,18 @@ Poco::Dynamic::Var VarSerializer::serialize<store::Store>(const store::Store& va
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<store::FileChange>(const store::FileChange& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "store$FileChange");
+    }
+    obj->set("pos", serialize(val.pos));
+    obj->set("length", serialize(val.length));
+    obj->set("truncate", serialize(val.truncate));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<store::Store>>(const core::PagingList<store::Store>& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
@@ -88,6 +100,18 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEventData>(
     obj->set("contextId", serialize(val.contextId));
     obj->set("storeId", serialize(val.storeId));
     obj->set("fileId", serialize(val.fileId));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEventData>(
+    const store::StoreFileUpdatedEventData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "store$StoreFileUpdatedEventData");
+    }
+    obj->set("file", serialize(val.file));
+    obj->set("changes", serialize(val.changes));
     return obj;
 }
 
