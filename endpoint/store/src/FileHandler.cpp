@@ -264,14 +264,14 @@ size_t FileHandlerImpl::size() {
 
 void FileHandlerImpl::seekg(const size_t pos) {
     if (pos > _file->getFileSize()) {
-        throw FileRandomWriteInternalException("seekg out of bounds");
+        throw PosOutOfBoundsException("seekg out of bounds");
     }
     _readPos = pos;
 }
 
 void FileHandlerImpl::seekp(const size_t pos) {
     if (pos > _file->getFileSize()) {
-        throw FileRandomWriteInternalException("seekg out of bounds");
+        throw PosOutOfBoundsException("seekg out of bounds");
     }
     _writePos = pos;
 }

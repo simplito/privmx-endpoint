@@ -78,7 +78,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidHashSizeException, "In
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, HashIndexOutOfBoundsException, "Hash index out of bounds", 0x0029)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileTopHashException, "Invalid file top hash", 0x002A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileSyncFailedHandleCloseException, "File sync failed, handle closed", 0x002B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileRandomWriteInternalException, "File random write internal Exception ", 0x00FF)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileRandomWriteInternalException, "File random write internal Exception ", 0x002C)
 
 
 } // store
