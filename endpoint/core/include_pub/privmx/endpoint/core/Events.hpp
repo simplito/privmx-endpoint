@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace privmx {
 namespace endpoint {
@@ -55,6 +56,11 @@ struct Event {
      * ID of the connection (unique)
      */
     int64_t connectionId = -1;
+
+    /**
+     * List of subscriptions Id for witch it is
+     */
+    std::vector<std::string> subscriptions;
 };
 
 /**

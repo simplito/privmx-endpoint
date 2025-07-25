@@ -243,6 +243,10 @@ public:
      */
     void unsubscribeFromEntryEvents(const std::string& inboxId);
 
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+
 private:
     void validateEndpoint();
     InboxApi(const std::shared_ptr<InboxApiImpl>& impl);

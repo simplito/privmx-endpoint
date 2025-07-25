@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
+#include "privmx/endpoint/store/VarSerializer.hpp"
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>

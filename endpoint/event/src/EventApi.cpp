@@ -80,3 +80,33 @@ void EventApi::validateEndpoint() {
     if(!_impl) throw NotInitializedException();
 }
 
+std::vector<std::string> EventApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    validateEndpoint();
+    try {
+        return _impl->subscribeFor(subscriptionQueries);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void EventApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    validateEndpoint();
+    try {
+        return _impl->unsubscribeFrom(subscriptionIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string EventApi::buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQuery(channelName, selectorType, selectorId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+

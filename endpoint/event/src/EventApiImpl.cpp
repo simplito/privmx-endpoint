@@ -32,7 +32,9 @@ EventApiImpl::EventApiImpl(const core::Connection& connection, const privmx::cry
     _eventMiddleware(eventMiddleware),
     _contextSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "context", "contexts")),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}), 
-    _eventKeyProvider(EventKeyProvider(userPrivKey))
+    _eventKeyProvider(EventKeyProvider(userPrivKey)),
+    _subscriber(SubscriberImpl(gateway)),
+    _useNewSubscriptionApi(true)
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&EventApiImpl::processConnectedEvent, this));
@@ -60,6 +62,7 @@ void EventApiImpl::emitEvent(const std::string& contextId, const std::vector<cor
 
 void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
+    _useNewSubscriptionApi.store(false);
     if(_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
         throw AlreadySubscribedException();
     }
@@ -67,6 +70,7 @@ void EventApiImpl::subscribeForCustomEvents(const std::string& contextId, const 
 }
 void EventApiImpl::unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName) {
     validateChannelName(channelName);
+    _useNewSubscriptionApi.store(false);
     if(!_contextSubscriptionHelper.hasSubscriptionForModuleEntryCustomChannel(contextId, channelName)) {
         throw NotSubscribedException();
     }
@@ -129,16 +133,18 @@ DecryptedInternalContextEventDataV1 EventApiImpl::extractInternalEventData(const
 }
 
 void EventApiImpl::subscribeForInternalEvents(const std::string& contextId) {
+    _useNewSubscriptionApi.store(false);
     _contextSubscriptionHelper.subscribeForModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::unsubscribeFromInternalEvents(const std::string& contextId) {
+    _useNewSubscriptionApi.store(false);
     _contextSubscriptionHelper.unsubscribeFromModuleEntryCustomChannel(contextId, INTERNAL_EVENT_CHANNEL_NAME);
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    if(type == "custom" && _contextSubscriptionHelper.hasSubscription(notification.subscriptions)) {
+    if(type == "custom" && (_contextSubscriptionHelper.hasSubscription(notification.subscriptions) || _useNewSubscriptionApi.load())) {
         std::string channel = _contextSubscriptionHelper.getChannel(notification.subscriptions);
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
         // fix if not internal check
@@ -181,6 +187,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
         auto customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
         event->channel = "context/" + rawEvent.id() + "/" + customChannelName;
         event->data = resultEventData;
+        event->subscriptions = notification.subscriptions;
         _eventMiddleware->emitApiEvent(event);
     }
 }
@@ -218,4 +225,18 @@ bool EventApiImpl::verifyDecryptedEventDataV5(const DecryptedEventDataV5& data) 
     std::vector<bool> verified;
     verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
     return verified[0];
+}
+
+std::vector<std::string> EventApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    _useNewSubscriptionApi.store(true);
+    return _subscriber.subscribeFor(subscriptionQueries);
+}
+
+void EventApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    _useNewSubscriptionApi.store(true);
+    return _subscriber.unsubscribeFrom(subscriptionIds);
+}
+
+std::string EventApiImpl::buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId) {
+    return SubscriberImpl::buildQuery(channelName, selectorType, selectorId);
 }

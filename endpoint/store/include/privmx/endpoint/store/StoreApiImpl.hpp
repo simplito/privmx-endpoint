@@ -44,6 +44,7 @@ limitations under the License.
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
+#include "privmx/endpoint/store/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
@@ -107,6 +108,10 @@ public:
     void unsubscribeFromFileEvents(const std::string& storeId);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
+
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
@@ -196,6 +201,8 @@ private:
     FileMetaEncryptor _fileMetaEncryptor;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     core::SubscriptionHelper _storeSubscriptionHelper;
+    SubscriberImpl _subscriber;
+    std::atomic_bool _useNewSubscriptionApi;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 
 

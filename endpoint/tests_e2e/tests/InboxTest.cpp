@@ -8,11 +8,11 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
-#include <privmx/endpoint/store/StoreVarSerializer.hpp>
+#include <privmx/endpoint/store/VarSerializer.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/endpoint/thread/ThreadVarSerializer.hpp>
+#include <privmx/endpoint/thread/VarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
-#include <privmx/endpoint/inbox/InboxVarSerializer.hpp>
+#include <privmx/endpoint/inbox/VarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxException.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 

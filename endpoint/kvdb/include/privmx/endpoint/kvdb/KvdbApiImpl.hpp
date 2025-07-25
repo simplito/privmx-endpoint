@@ -33,6 +33,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/kvdb/Constants.hpp"
+#include "privmx/endpoint/kvdb/SubscriberImpl.hpp"
 
 
 namespace privmx {
@@ -87,6 +88,10 @@ public:
     void unsubscribeFromKvdbEvents();
     void subscribeForEntryEvents(std::string kvdbId);
     void unsubscribeFromEntryEvents(std::string kvdbId);
+
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string createKvdbEx(
         const std::string& contextId, 
@@ -165,6 +170,8 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
     core::SubscriptionHelper _kvdbSubscriptionHelper;
+    SubscriberImpl _subscriber;
+    std::atomic_bool _useNewSubscriptionApi;
     core::ModuleDataEncryptorV5 _kvdbDataEncryptorV5;
     EntryDataEncryptorV5 _entryDataEncryptorV5;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

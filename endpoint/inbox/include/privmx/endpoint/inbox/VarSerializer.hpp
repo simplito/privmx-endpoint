@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXVARSERIALIZER_HPP_
-#define _PRIVMXLIB_ENDPOINT_INBOX_INBOXVARSERIALIZER_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_INBOX_VARSERIALIZER_HPP_
+#define _PRIVMXLIB_ENDPOINT_INBOX_VARSERIALIZER_HPP_
 
 #include <Poco/Dynamic/Var.h>
 
@@ -69,4 +69,4 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEvent>(const
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STORE_STOREVARSERIALIZER_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_INBOX_VARSERIALIZER_HPP_

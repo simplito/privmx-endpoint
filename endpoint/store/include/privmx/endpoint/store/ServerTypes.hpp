@@ -320,6 +320,7 @@ ENDPOINT_SERVER_TYPE(StoreFileDeletedEventData)
     STRING_FIELD(id)
     STRING_FIELD(contextId)
     STRING_FIELD(storeId)
+    STRING_FIELD(containerType)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StoreFileChange)
@@ -329,7 +330,11 @@ ENDPOINT_SERVER_TYPE(StoreFileChange)
     BOOL_FIELD(truncate)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE_INHERIT(StoreFileUpdatedEventData, File)
+ENDPOINT_SERVER_TYPE_INHERIT(StoreFileEventData, File)
+    STRING_FIELD(containerType)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(StoreFileUpdatedEventData, StoreFileEventData)
     LIST_FIELD(changes, StoreFileChange)
 TYPE_END
 

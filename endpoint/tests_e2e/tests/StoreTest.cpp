@@ -9,7 +9,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
-#include <privmx/endpoint/store/StoreVarSerializer.hpp>
+#include <privmx/endpoint/store/VarSerializer.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 

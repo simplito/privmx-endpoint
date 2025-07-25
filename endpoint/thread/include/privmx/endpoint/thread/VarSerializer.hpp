@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_ENDPOINT_THREAD_THREADVARSERIALIZER_HPP_
-#define _PRIVMXLIB_ENDPOINT_THREAD_THREADVARSERIALIZER_HPP_
+#ifndef _PRIVMXLIB_ENDPOINT_THREAD_VARSERIALIZER_HPP_
+#define _PRIVMXLIB_ENDPOINT_THREAD_VARSERIALIZER_HPP_
 
 #include <Poco/Dynamic/Var.h>
 
@@ -76,4 +76,4 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageDeletedEvent>(c
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_THREAD_THREADVARSERIALIZER_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_THREAD_VARSERIALIZER_HPP_

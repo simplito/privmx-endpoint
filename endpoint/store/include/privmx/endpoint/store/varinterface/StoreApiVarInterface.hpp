@@ -15,8 +15,8 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 
 #include "privmx/endpoint/store/StoreApi.hpp"
-#include "privmx/endpoint/store/StoreVarDeserializer.hpp"
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
+#include "privmx/endpoint/store/VarDeserializer.hpp"
+#include "privmx/endpoint/store/VarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -46,6 +46,9 @@ public:
         UnsubscribeFromStoreEvents = 18,
         SubscribeForFileEvents = 19,
         UnsubscribeFromFileEvents = 20,
+        SubscribeFor = 21,
+        UnsubscribeFrom = 22,
+        BuildSubscriptionQuery = 23,
     };
 
     StoreApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -72,6 +75,10 @@ public:
     Poco::Dynamic::Var unsubscribeFromStoreEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeForFileEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromFileEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
+
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

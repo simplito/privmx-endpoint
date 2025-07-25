@@ -9,7 +9,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
-#include <privmx/endpoint/kvdb/KvdbVarSerializer.hpp>
+#include <privmx/endpoint/kvdb/VarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 

@@ -2,7 +2,7 @@
 #define _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_HPP_
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/event/Types.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 
 namespace privmx {
@@ -52,6 +52,10 @@ public:
      * @param channelName name of the Channel
      */
     void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
+
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
 
     std::shared_ptr<EventApiImpl> getImpl() const { return _impl; }
 private:

@@ -48,6 +48,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
+#include "privmx/endpoint/inbox/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
@@ -117,6 +118,9 @@ public:
     void subscribeForEntryEvents(const std::string& inboxId);
     void unsubscribeFromEntryEvents(const std::string& inboxId);
 
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     inbox::server::Inbox getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
@@ -197,6 +201,8 @@ private:
     store::FileMetaEncryptorV5 _fileMetaEncryptorV5;
     core::SubscriptionHelper _inboxSubscriptionHelper;
     core::SubscriptionHelperExt _threadSubscriptionHelper;
+    SubscriberImpl _subscriber;
+    std::atomic_bool _useNewSubscriptionApi;
     
     InboxDataProcessorV4 _inboxDataProcessorV4;
     InboxDataProcessorV5 _inboxDataProcessorV5;

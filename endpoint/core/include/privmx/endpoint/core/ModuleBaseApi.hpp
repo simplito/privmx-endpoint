@@ -33,7 +33,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
-
+#include <privmx/endpoint/core/ServerTypes.hpp>
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 

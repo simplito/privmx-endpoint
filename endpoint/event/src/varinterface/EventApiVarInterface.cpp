@@ -20,7 +20,10 @@ std::map<EventApiVarInterface::METHOD, Poco::Dynamic::Var (EventApiVarInterface:
     EventApiVarInterface::methodMap = {{Create, &EventApiVarInterface::create},
                                        {EmitEvent, &EventApiVarInterface::emitEvent},
                                        {SubscribeForCustomEvents, &EventApiVarInterface::subscribeForCustomEvents},
-                                       {UnsubscribeFromCustomEvents, &EventApiVarInterface::unsubscribeFromCustomEvents}};
+                                       {UnsubscribeFromCustomEvents, &EventApiVarInterface::unsubscribeFromCustomEvents},
+                                       {SubscribeFor, &EventApiVarInterface::subscribeFor},
+                                       {UnsubscribeFrom, &EventApiVarInterface::unsubscribeFrom},
+                                       {BuildSubscriptionQuery, &EventApiVarInterface::buildSubscriptionQuery}};
 
 Poco::Dynamic::Var EventApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -53,6 +56,29 @@ Poco::Dynamic::Var EventApiVarInterface::unsubscribeFromCustomEvents(const Poco:
     auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
     _eventApi.unsubscribeFromCustomEvents(contextId, channelName);
     return {};
+}
+
+Poco::Dynamic::Var EventApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto result = _eventApi.subscribeFor(subscriptionQueries);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var EventApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    _eventApi.unsubscribeFrom(subscriptionIds);
+    return {};
+}
+
+Poco::Dynamic::Var EventApiVarInterface::buildSubscriptionQuery(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(0), "channelName");
+    auto selectorType = _deserializer.deserialize<event::EventSelectorType>(argsArr->get(1), "selectorType");
+    auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
+    auto result = _eventApi.buildSubscriptionQuery(channelName, selectorType, selectorId);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var EventApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {

@@ -189,6 +189,10 @@ public:
      */    
     void unsubscribeFromEntryEvents(std::string kvdbId);
 
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+
     std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
 private:
     void validateEndpoint();

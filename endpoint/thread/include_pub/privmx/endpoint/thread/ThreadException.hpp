@@ -56,6 +56,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, MessagePublicDataMismatchExc
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadDataIntegrityException, "Failed thread data integrity check", 0x0014)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, MessageDataIntegrityException, "Failed message data integrity check", 0x0015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadEncryptionKeyValidationException, "Failed Thread encryption key validation", 0x0016)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NotImplementedException, "Not Implemented", 0x0017)
+DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0018)
 
 } // thread
 } // endpoint

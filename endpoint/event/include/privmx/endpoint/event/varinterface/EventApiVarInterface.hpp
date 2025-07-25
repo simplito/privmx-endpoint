@@ -15,8 +15,10 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 
 #include "privmx/endpoint/event/EventApi.hpp"
-#include "privmx/endpoint/event/EventVarSerializer.hpp"
+#include "privmx/endpoint/event/VarSerializer.hpp"
+#include "privmx/endpoint/event/VarDeserializer.hpp"
 #include <privmx/endpoint/core/VarDeserializer.hpp>
+#include <privmx/endpoint/event/VarDeserializer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -29,6 +31,9 @@ public:
         EmitEvent = 1,
         SubscribeForCustomEvents = 2,
         UnsubscribeFromCustomEvents = 3,
+        SubscribeFor = 4,
+        UnsubscribeFrom = 5,
+        BuildSubscriptionQuery = 6,
     };
 
     EventApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -38,6 +43,9 @@ public:
     Poco::Dynamic::Var emitEvent(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeForCustomEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromCustomEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

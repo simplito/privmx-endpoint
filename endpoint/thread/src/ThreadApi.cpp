@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
-#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/thread/ThreadValidator.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
@@ -217,6 +216,36 @@ void ThreadApi::unsubscribeFromMessageEvents(const std::string& threadId) {
     core::Validator::validateId(threadId, "field:threadId ");
     try {
         return _impl->unsubscribeFromMessageEvents(threadId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::vector<std::string> ThreadApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    validateEndpoint();
+    try {
+        return _impl->subscribeFor(subscriptionQueries);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void ThreadApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    validateEndpoint();
+    try {
+        return _impl->unsubscribeFrom(subscriptionIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string ThreadApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

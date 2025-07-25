@@ -38,7 +38,10 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
                                        {SubscribeForStoreEvents, &StoreApiVarInterface::subscribeForStoreEvents},
                                        {UnsubscribeFromStoreEvents, &StoreApiVarInterface::unsubscribeFromStoreEvents},
                                        {SubscribeForFileEvents, &StoreApiVarInterface::subscribeForFileEvents},
-                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents}};
+                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents},
+                                       {SubscribeFor, &StoreApiVarInterface::subscribeFor},
+                                       {UnsubscribeFrom, &StoreApiVarInterface::unsubscribeFrom},
+                                       {BuildSubscriptionQuery, &StoreApiVarInterface::buildSubscriptionQuery}};
 
 
 Poco::Dynamic::Var StoreApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -209,6 +212,29 @@ Poco::Dynamic::Var StoreApiVarInterface::updateFileMeta(const Poco::Dynamic::Var
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "privateMeta");
     _storeApi.updateFileMeta(fileId, publicMeta, privateMeta);
     return {};
+}
+
+Poco::Dynamic::Var StoreApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto result = _storeApi.subscribeFor(subscriptionQueries);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var StoreApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    _storeApi.unsubscribeFrom(subscriptionIds);
+    return {};
+}
+
+Poco::Dynamic::Var StoreApiVarInterface::buildSubscriptionQuery(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto eventType = _deserializer.deserialize<store::EventType>(argsArr->get(0), "eventType");
+    auto selectorType = _deserializer.deserialize<store::EventSelectorType>(argsArr->get(1), "selectorType");
+    auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
+    auto result = _storeApi.buildSubscriptionQuery(eventType, selectorType, selectorId);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {

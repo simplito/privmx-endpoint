@@ -37,6 +37,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
+#include "privmx/endpoint/thread/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 
@@ -84,6 +85,10 @@ public:
     void unsubscribeFromThreadEvents();
     void subscribeForMessageEvents(std::string threadId);
     void unsubscribeFromMessageEvents(std::string threadId);
+
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string _createThreadEx(
         const std::string& contextId, 
@@ -185,6 +190,8 @@ private:
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     core::SubscriptionHelper _threadSubscriptionHelper;
+    SubscriberImpl _subscriber;
+    std::atomic_bool _useNewSubscriptionApi;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _messageDeleterId;

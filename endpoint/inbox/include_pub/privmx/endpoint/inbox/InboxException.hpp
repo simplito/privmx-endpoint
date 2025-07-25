@@ -61,6 +61,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InvalidFileWriteHandleExcepti
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, UnknownInboxFormatException, "Unknown Inbox format", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxDataIntegrityException, "Failed inbox data integrity check", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxEncryptionKeyValidationException, "Failed inbox encryption key validation", 0x0022)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, NotImplementedException, "Not Implemented", 0x0023)
+DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0024)
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointInboxException, InboxModuleDoesNotSupportQueriesYetException, "Inbox module does not support queries yet.", 0x0099)
 

@@ -17,9 +17,9 @@ limitations under the License.
 
 #include "privmx/utils/PrivmxException.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
-#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
-#include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
+#include "privmx/endpoint/thread/VarSerializer.hpp"
+#include "privmx/endpoint/store/VarSerializer.hpp"
+#include "privmx/endpoint/inbox/VarSerializer.hpp"
 
 using namespace std;
 using namespace privmx::endpoint::privmxcli;
