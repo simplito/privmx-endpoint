@@ -33,7 +33,8 @@ std::map<KvdbApiVarInterface::METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*
                                         {SubscribeForKvdbEvents, &KvdbApiVarInterface::subscribeForKvdbEvents},
                                         {UnsubscribeFromKvdbEvents, &KvdbApiVarInterface::unsubscribeFromKvdbEvents},
                                         {SubscribeForEntryEvents, &KvdbApiVarInterface::subscribeForEntryEvents},
-                                        {UnsubscribeFromEntryEvents, &KvdbApiVarInterface::unsubscribeFromEntryEvents}};
+                                        {UnsubscribeFromEntryEvents, &KvdbApiVarInterface::unsubscribeFromEntryEvents},
+                                        {HasEntry, &KvdbApiVarInterface::hasEntry}};
 
 Poco::Dynamic::Var KvdbApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
