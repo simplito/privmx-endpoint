@@ -41,6 +41,7 @@ StreamKeyManager::StreamKeyManager(
     updateWebRtcKeyStore();
     // ->setKey(currentKey.id, currentKey.key);
     _cancellationToken = privmx::utils::CancellationToken::create();
+    std::cerr << "Created _cancellationToken at StreamKeyManager constructor: " << _cancellationToken.get() << std::endl; // Debug by Patryk
     // create thread to remove old keys
     _keyCollector = std::thread([&](privmx::utils::CancellationToken::Ptr token) {
         try {
@@ -69,6 +70,7 @@ StreamKeyManager::StreamKeyManager(
 
 StreamKeyManager::~StreamKeyManager() {
     std::cerr << "StreamKeyManager.destroy()" << std::endl;
+    std::cerr << "Created _cancellationToken at StreamKeyManager deconstructor: " << _cancellationToken.get() << std::endl; // Debug by Patryk
     _cancellationToken->cancel();
     _updateKeyCV.notify_all();
     _eventApi->unsubscribeFromInternalEvents(_contextId);
