@@ -95,7 +95,6 @@ private:
     std::map<std::string, bool> _userUpdateKeyConfirmationStatus;
     std::mutex _updateKeyMutex;
     std::condition_variable _updateKeyCV;
-    std::atomic_bool _keyUpdateInProgress = false;
     std::vector<privmx::endpoint::stream::Key> _currentWebRtcKeys;
     std::atomic_int64_t _nextKeyUpdateCallbackId = 0;
     bool disableKeyUpdateForEncryptors = false;
