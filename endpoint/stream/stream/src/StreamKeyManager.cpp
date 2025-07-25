@@ -152,6 +152,7 @@ void StreamKeyManager::setRequestKeyResult(dynamic::RequestKeyRespondEvent resul
             )
         );
     }
+    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "setRequestKeyResult updateWebRtcKeyStore");
     updateWebRtcKeyStore();
 }
 
@@ -167,7 +168,6 @@ void StreamKeyManager::removeUser(core::UserWithPubKey user) {
 
 void StreamKeyManager::updateKey() {
     // create date
-    _keyUpdateInProgress = true;
     auto newKey = prepareCurrenKeyToUpdate();
     {
         std::unique_lock<std::shared_mutex> lock(_userUpdateKeyConfirmationStatusMutex);
@@ -191,10 +191,11 @@ void StreamKeyManager::updateKey() {
         {
             std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
             _keysStrage.insert_or_assign(_keyForUpdate->key.id, _keyForUpdate);
+            _currentKeyId = _keyForUpdate->key.id;
         }
-        _currentKeyId = _keyForUpdate->key.id;
+
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey updateWebRtcKeyStore");
         updateWebRtcKeyStore();
-        _keyUpdateInProgress = false;
     }
 }
 
@@ -215,6 +216,7 @@ void StreamKeyManager::respondToUpdateRequest(dynamic::UpdateKeyEvent request, c
             )
         );
     }
+    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
     updateWebRtcKeyStore();
     // prepare ack data
     dynamic::UpdateKeyACKEvent ack = privmx::utils::TypedObjectFactory::createNewObject<dynamic::UpdateKeyACKEvent>();
