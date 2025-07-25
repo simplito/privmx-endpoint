@@ -34,16 +34,10 @@ CancellationToken::Ptr CancellationToken::create(CancellationToken::Ptr token) {
 }
 
 CancellationToken::CancellationToken() : _cancelled(false) {
-    std::cerr << "CancellationToken constructor: " << this << std::endl; // Debug by Patryk
 }
 
 CancellationToken::CancellationToken(CancellationToken::Ptr token) : _cancelled(token->isCancelled()) {
     _parent = Task(token, [&]{ cancel(); });
-    std::cerr << "CancellationToken constructor: " << this << std::endl; // Debug by Patryk
-}
-
-CancellationToken::~CancellationToken() {
-    std::cerr << "CancellationToken deconstructor: " << this << std::endl; // Debug by Patryk
 }
 
 void CancellationToken::cancel() {
@@ -59,7 +53,6 @@ void CancellationToken::cancel() {
 }
 
 int CancellationToken::registerTask(const function<void(void)>& func) {
-    std::cerr << "CancellationToken registerTask: " << this << std::endl; // Debug by Patryk
     UniqueLock lock(_mutex);
     validate();
     int id = ++_id;
@@ -68,7 +61,6 @@ int CancellationToken::registerTask(const function<void(void)>& func) {
 }
 
 void CancellationToken::unregisterTask(int id) {
-    std::cerr << "CancellationToken unregisterTask: " << this << std::endl; // Debug by Patryk
     UniqueLock lock(_mutex);
     auto it = _tasks.find(id);
     if (it != _tasks.end()) {

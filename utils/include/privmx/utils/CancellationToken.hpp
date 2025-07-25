@@ -47,7 +47,7 @@ public:
     static CancellationToken::Ptr create(CancellationToken::Ptr token);
     CancellationToken();
     CancellationToken(CancellationToken::Ptr token);
-    ~CancellationToken();
+    ~CancellationToken() = default;
     void cancel();
     bool isCancelled();
     void validate();
@@ -69,12 +69,10 @@ private:
 };
 
 inline bool CancellationToken::isCancelled() {
-    std::cerr << "CancellationToken isCancelled: " << this << std::endl; // Debug by Patryk
     return _cancelled.load();
 }
 
 inline void CancellationToken::validate() {
-    std::cerr << "CancellationToken validate: " << this << std::endl; // Debug by Patryk
     if (isCancelled()) {
         throwOperationCanceled();
     }
@@ -86,13 +84,12 @@ inline void CancellationToken::throwOperationCanceled() {
 
 template<typename Rep, typename Period>
 inline void CancellationToken::sleep(const std::chrono::duration<Rep, Period>& duration) {
-    std::cerr << "CancellationToken sleep: " << this << std::endl; // Debug by Patryk
     UniqueLock lock(_mutex);
     if (_cancelled) {
         throwOperationCanceled();
     }
-    auto status = _cv.wait_for(lock, duration);
-    if (status == std::cv_status::no_timeout) {
+    auto status = _cv.wait_for(lock, duration, [&]{return _cancelled.load();});
+    if (status) {
         throwOperationCanceled();
     }
 }

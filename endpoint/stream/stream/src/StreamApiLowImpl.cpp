@@ -98,6 +98,7 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
     if(!_streamSubscriptionHelper.hasSubscription(notification.subscriptions) && type != "janus") {
         return;
     }
+    std::cerr << "Event-Debug - type: " << type << std::endl << utils::Utils::stringifyVar(data, true) << std::endl << "------------------------ END" << std::endl;
     if (type == "streamRoomCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
         auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 

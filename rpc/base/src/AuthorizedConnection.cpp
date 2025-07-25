@@ -315,6 +315,8 @@ void AuthorizedConnection::authorizeWebsocket() {
         if (type == "disconnected") {
             return;
         }
+            std::cerr << "Event-Debug[AuthConn] - type: " << type << std::endl << utils::Utils::stringifyVar(decoded, true) << std::endl << "------------------------ END" << std::endl;
+
         _notification_event_dispatcher.dispatch({.type = type, .data = decoded});
     }, [&]{
         _channels_connected = false;
