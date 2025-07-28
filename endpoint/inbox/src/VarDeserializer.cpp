@@ -45,7 +45,7 @@ inbox::EventType VarDeserializer::deserialize<inbox::EventType>(const Poco::Dyna
         case inbox::EventType::ENTRY_DELETE:
             return inbox::EventType::ENTRY_DELETE;
     }
-    throw InvalidParamsException("Unknown inbox::EventType value");
+    throw InvalidParamsException(name + " | " + ("Unknown inbox::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }
 
 template<>
@@ -59,5 +59,5 @@ inbox::EventSelectorType VarDeserializer::deserialize<inbox::EventSelectorType>(
         case inbox::EventSelectorType::ENTRY_ID:
             return inbox::EventSelectorType::ENTRY_ID;
     }
-    throw InvalidParamsException("Unknown inbox::EventSelectorType value");
+    throw InvalidParamsException(name + " | " + ("Unknown inbox::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }

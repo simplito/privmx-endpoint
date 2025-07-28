@@ -21,7 +21,6 @@ using namespace privmx::endpoint::core;
 
 template<>
 thread::EventType VarDeserializer::deserialize<thread::EventType>(const Poco::Dynamic::Var& val, const std::string& name) {
-
     switch (val.convert<int64_t>()) {
         case thread::EventType::THREAD_CREATE:
             return thread::EventType::THREAD_CREATE;
@@ -38,7 +37,7 @@ thread::EventType VarDeserializer::deserialize<thread::EventType>(const Poco::Dy
         case thread::EventType::MESSAGE_DELETE:
             return thread::EventType::MESSAGE_DELETE;
     }
-    throw InvalidParamsException("Unknown thread::EventType value");
+    throw InvalidParamsException(name + " | " + ("Unknown thread::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }
 
 template<>
@@ -52,5 +51,5 @@ thread::EventSelectorType VarDeserializer::deserialize<thread::EventSelectorType
         case thread::EventSelectorType::MESSAGE_ID:
             return thread::EventSelectorType::MESSAGE_ID;
     }
-    throw InvalidParamsException("Unknown thread::EventSelectorType value");
+    throw InvalidParamsException(name + " | " + ("Unknown thread::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }

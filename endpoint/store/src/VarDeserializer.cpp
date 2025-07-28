@@ -38,7 +38,7 @@ store::EventType VarDeserializer::deserialize<store::EventType>(const Poco::Dyna
         case store::EventType::FILE_DELETE:
             return store::EventType::FILE_DELETE;
     }
-    throw InvalidParamsException("Unknown store::EventType value");
+    throw InvalidParamsException(name + " | " + ("Unknown store::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }
 
 template<>
@@ -52,5 +52,5 @@ store::EventSelectorType VarDeserializer::deserialize<store::EventSelectorType>(
         case store::EventSelectorType::FILE_ID:
             return store::EventSelectorType::FILE_ID;
     }
-    throw InvalidParamsException("Unknown store::EventSelectorType value");
+    throw InvalidParamsException(name + " | " + ("Unknown store::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }

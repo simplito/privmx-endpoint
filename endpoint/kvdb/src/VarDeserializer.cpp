@@ -38,7 +38,7 @@ kvdb::EventType VarDeserializer::deserialize<kvdb::EventType>(const Poco::Dynami
         case kvdb::EventType::ENTRY_DELETE:
             return kvdb::EventType::ENTRY_DELETE;
     }
-    throw InvalidParamsException("Unknown kvdb::EventType value");
+    throw InvalidParamsException(name + " | " + ("Unknown kvdb::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }
 
 template<>
@@ -52,5 +52,5 @@ kvdb::EventSelectorType VarDeserializer::deserialize<kvdb::EventSelectorType>(co
         case kvdb::EventSelectorType::ENTRY_ID:
             return kvdb::EventSelectorType::ENTRY_ID;
     }
-    throw InvalidParamsException("Unknown kvdb::EventSelectorType value");
+    throw InvalidParamsException(name + " | " + ("Unknown kvdb::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }

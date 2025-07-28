@@ -32,7 +32,7 @@ private:
     static std::string getChannel(EventType eventType);
     static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
     static constexpr std::string_view _moduleName = "store";
-    static constexpr std::string_view _itemName = "file";
+    static constexpr std::string_view _itemName = "files";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
     static const std::map<EventType, std::string> _eventTypeNames;
     static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;

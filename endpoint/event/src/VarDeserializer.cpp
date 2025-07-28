@@ -26,6 +26,6 @@ event::EventSelectorType VarDeserializer::deserialize<event::EventSelectorType>(
         case event::EventSelectorType::CONTEXT_ID:
             return event::EventSelectorType::CONTEXT_ID;
     }
-    throw InvalidParamsException("Unknown event::EventSelectorType value");
+    throw InvalidParamsException(name + " | " + ("Unknown event::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }
 
