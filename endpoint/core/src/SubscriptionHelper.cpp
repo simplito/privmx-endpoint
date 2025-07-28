@@ -64,6 +64,7 @@ void SubscriptionHelper::unsubscribeFor(const std::vector<std::string>& channels
         auto subscriptionId = _channelSubscriptionMap.get(channel);
         if(subscriptionId.has_value()) {
             _subscriptionMap.erase(subscriptionId.value());
+            _channelSubscriptionMap.erase(channel);
         }
     }
 }

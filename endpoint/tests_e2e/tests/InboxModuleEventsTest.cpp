@@ -69,7 +69,6 @@ protected:
     Poco::Util::IniFileConfiguration::Ptr reader;
 };
 
-
 TEST_F(InboxEventTest, waitEvent_getEvent_inboxCreated_enabled) {
     std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
     EXPECT_NO_THROW({
@@ -80,6 +79,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxCreated_enabled) {
         threadApi->subscribeForThreadEvents();
         storeApi->subscribeForStoreEvents();
     });
+    EXPECT_THROW({
+        inboxApi->subscribeForInboxEvents();
+    }, inbox::AlreadySubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
@@ -157,6 +159,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxCreated_disabled) {
         storeApi->subscribeForStoreEvents();
         inboxApi->unsubscribeFromInboxEvents();
     });
+    EXPECT_THROW({
+        inboxApi->unsubscribeFromInboxEvents();
+    }, inbox::NotSubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
@@ -202,6 +207,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxUpdated_enabled) {
         threadApi->subscribeForThreadEvents();
         storeApi->subscribeForStoreEvents();
     });
+    EXPECT_THROW({
+        inboxApi->subscribeForInboxEvents();
+    }, inbox::AlreadySubscribedException);
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),
@@ -281,6 +289,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxUpdated_disabled) {
         storeApi->subscribeForStoreEvents();
         inboxApi->unsubscribeFromInboxEvents();
     });
+    EXPECT_THROW({
+        inboxApi->unsubscribeFromInboxEvents();
+    }, inbox::NotSubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
@@ -329,6 +340,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxDeleted_enabled) {
         threadApi->subscribeForThreadEvents();
         storeApi->subscribeForStoreEvents();
     });
+    EXPECT_THROW({
+        inboxApi->subscribeForInboxEvents();
+    }, inbox::AlreadySubscribedException);
     EXPECT_NO_THROW({
         inboxApi->deleteInbox(
             reader->getString("Inbox_1.inboxId")
@@ -384,6 +398,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxDeleted_disabled) {
         storeApi->subscribeForStoreEvents();
         inboxApi->unsubscribeFromInboxEvents();
     });
+    EXPECT_THROW({
+        inboxApi->unsubscribeFromInboxEvents();
+    }, inbox::NotSubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxApi->deleteInbox(
@@ -416,6 +433,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryCreated_enabled) {
     EXPECT_NO_THROW({
         inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
     });
+    EXPECT_THROW({
+        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
+    }, inbox::AlreadySubscribedException);
     int64_t fileHandle = 0;
     std::string file_total_data_send = "";
     EXPECT_NO_THROW({
@@ -483,22 +503,15 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryCreated_enabled) {
 TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryCreated_disabled) {
     std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
     EXPECT_NO_THROW({
-        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
-        if(eventHolder.has_value()) {
-            event = eventHolder.value().get();
-        } else {
-            event = nullptr;
-        }
+        eventQueue.waitEvent(); // pop libConnected form queue
     });
-    if(event != nullptr) {
-        EXPECT_EQ(event->connectionId, connection->getConnectionId());
-        EXPECT_EQ(event->type, "libConnected");
-    } else {
-        FAIL();
-    }
+    EXPECT_NO_THROW({
+        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
+        inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
+    });
     EXPECT_THROW({
         inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
-    }, core::Exception);
+    }, inbox::NotSubscribedException);
     int64_t fileHandle = 0;
     std::string file_total_data_send = "";
     EXPECT_NO_THROW({
@@ -558,6 +571,9 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryDeleted_enabled) {
     EXPECT_NO_THROW({
         inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
     });
+    EXPECT_THROW({
+        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
+    }, inbox::AlreadySubscribedException);
     EXPECT_NO_THROW({
         inboxApi->deleteEntry(
             reader->getString("Entry_1.entryId")
@@ -591,22 +607,15 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryDeleted_enabled) {
 TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryDeleted_disabled) {
     std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
     EXPECT_NO_THROW({
-        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
-        if(eventHolder.has_value()) {
-            event = eventHolder.value().get();
-        } else {
-            event = nullptr;
-        }
+        eventQueue.waitEvent(); // pop libConnected form queue
     });
-    if(event != nullptr) {
-        EXPECT_EQ(event->connectionId, connection->getConnectionId());
-        EXPECT_EQ(event->type, "libConnected");
-    } else {
-        FAIL();
-    }
+    EXPECT_NO_THROW({
+        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
+        inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
+    });
     EXPECT_THROW({
         inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
-    }, core::Exception);
+    }, inbox::NotSubscribedException);
     EXPECT_NO_THROW({
         inboxApi->deleteEntry(
             reader->getString("Entry_1.entryId")

@@ -34,6 +34,7 @@ std::map<KvdbApiVarInterface::METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*
                                         {UnsubscribeFromKvdbEvents, &KvdbApiVarInterface::unsubscribeFromKvdbEvents},
                                         {SubscribeForEntryEvents, &KvdbApiVarInterface::subscribeForEntryEvents},
                                         {UnsubscribeFromEntryEvents, &KvdbApiVarInterface::unsubscribeFromEntryEvents},
+                                        {HasEntry, &KvdbApiVarInterface::hasEntry},
                                         {SubscribeFor, &KvdbApiVarInterface::subscribeFor},
                                         {UnsubscribeFrom, &KvdbApiVarInterface::unsubscribeFrom},
                                         {BuildSubscriptionQuery, &KvdbApiVarInterface::buildSubscriptionQuery}};

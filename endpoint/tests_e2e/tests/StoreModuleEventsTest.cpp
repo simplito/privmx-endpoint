@@ -55,6 +55,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_enabled) {
     EXPECT_NO_THROW({
         storeApi->subscribeForStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->subscribeForStoreEvents();
+    }, store::AlreadySubscribedException);
     std::string storeId;
     EXPECT_NO_THROW({
         storeId = storeApi->createStore(
@@ -114,6 +117,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_disabled) {
         storeApi->subscribeForStoreEvents();
         storeApi->unsubscribeFromStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->unsubscribeFromStoreEvents();
+    }, store::NotSubscribedException);
     std::string storeId;
     EXPECT_NO_THROW({
         storeId = storeApi->createStore(
@@ -156,6 +162,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_enabled) {
     EXPECT_NO_THROW({
         storeApi->subscribeForStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->subscribeForStoreEvents();
+    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -213,10 +222,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
-     EXPECT_NO_THROW({
+    EXPECT_NO_THROW({
         storeApi->subscribeForStoreEvents();
         storeApi->unsubscribeFromStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->unsubscribeFromStoreEvents();
+    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -261,6 +273,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_enabled) {
     EXPECT_NO_THROW({
         storeApi->subscribeForStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->subscribeForStoreEvents();
+    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteStore(
             reader->getString("Store_1.storeId")
@@ -295,10 +310,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
-     EXPECT_NO_THROW({
+    EXPECT_NO_THROW({
         storeApi->subscribeForStoreEvents();
         storeApi->unsubscribeFromStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->unsubscribeFromStoreEvents();
+    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteStore(
             reader->getString("Store_1.storeId")
@@ -330,6 +348,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_enabled) {
     EXPECT_NO_THROW({
         storeApi->subscribeForStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->subscribeForStoreEvents();
+    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
@@ -370,6 +391,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_disabled) {
         storeApi->subscribeForStoreEvents();
         storeApi->unsubscribeFromStoreEvents();
     });
+    EXPECT_THROW({
+        storeApi->unsubscribeFromStoreEvents();
+    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
@@ -401,6 +425,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_enabled) {
     EXPECT_NO_THROW({
         storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
     });
+    EXPECT_THROW({
+        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+    }, store::AlreadySubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->createFile(
@@ -454,11 +481,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_disabled) {
     std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
-    });
+    });    
     EXPECT_NO_THROW({
         storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
         storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
     });
+    EXPECT_THROW({
+        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
+    }, store::NotSubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->createFile(
@@ -507,6 +537,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_enabled) {
     EXPECT_NO_THROW({
         storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
     });
+    EXPECT_THROW({
+        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+    }, store::AlreadySubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->updateFile(
@@ -562,9 +595,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
+    EXPECT_NO_THROW({
+        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
+    });
     EXPECT_THROW({
         storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
-    }, core::Exception);
+    }, store::NotSubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->updateFile(
@@ -614,6 +651,9 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_enabled) {
     EXPECT_NO_THROW({
         storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));;
     });
+    EXPECT_THROW({
+        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
@@ -650,9 +690,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
+    EXPECT_NO_THROW({
+        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
+    });
     EXPECT_THROW({
         storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
-    }, core::Exception);
+    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
