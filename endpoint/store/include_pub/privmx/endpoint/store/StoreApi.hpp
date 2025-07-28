@@ -196,27 +196,49 @@ public:
     /**
      * Subscribes for the Store module main events.
      */
+    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
     void subscribeForStoreEvents();
 
     /**
      * Unsubscribes from the Store module main events.
      */
+    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
     void unsubscribeFromStoreEvents();
     
     /**
      * Subscribes for events in given Store.
      * @param store ID of the Store to subscribe
      */
+    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
     void subscribeForFileEvents(const std::string& storeId);
 
     /**
      * Unsubscribes from events in given Store.
      * @param store ID of the Store to unsubscribe
-     */    
+     */
+    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
     void unsubscribeFromFileEvents(const std::string& storeId);
 
+    /**
+     * Subscribe for the Store events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
+     */
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+
+    /**
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
+     */
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+
+    /**
+     * Generate subscription Query for the Store events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }

@@ -170,27 +170,49 @@ public:
     /**
      * Subscribes for the KVDB module main events.
      */
+    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
     void subscribeForKvdbEvents();
     
     /**
      * Unsubscribes from the KVDB module main events.
      */
+    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
     void unsubscribeFromKvdbEvents();
 
     /**
      * Subscribes for events in given KVDB.
      * @param ID of the KVDB to subscribe
-     */    
+     */  
+    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]  
     void subscribeForEntryEvents(std::string kvdbId);
 
     /**
      * Unsubscribes from events in given KVDB.
      * @param {string} kvdbId ID of the KVDB to unsubscribe
-     */    
+     */
+    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
     void unsubscribeFromEntryEvents(std::string kvdbId);
 
+    /**
+     * Subscribe for the KVDB events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
+     */
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+
+    /**
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
+     */
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+
+    /**
+     * Generate subscription Query for the KVDB events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }

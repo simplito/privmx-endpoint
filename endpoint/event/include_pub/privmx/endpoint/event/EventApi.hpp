@@ -43,6 +43,7 @@ public:
      * @param contextId ID of the Context
      * @param channelName name of the Channel
      */
+    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
     void subscribeForCustomEvents(const std::string& contextId, const std::string& channelName);
     
     /**
@@ -51,10 +52,29 @@ public:
      * @param contextId ID of the Context
      * @param channelName name of the Channel
      */
+    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
     void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
 
+    /**
+     * Subscribe for the custom events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
+     */
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+
+    /**
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
+     */
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+
+    /**
+     * Generate subscription Query for the custom events.
+     * @param channelName name of the Channel
+     * @param selectorType selector of scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
     std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
 
     std::shared_ptr<EventApiImpl> getImpl() const { return _impl; }

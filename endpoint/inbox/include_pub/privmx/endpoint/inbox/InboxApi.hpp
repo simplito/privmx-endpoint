@@ -224,27 +224,51 @@ public:
     /**
      * Subscribes for the Inbox module main events.
      */
+
+    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
     void subscribeForInboxEvents();
 
     /**
      * Unsubscribes from the Inbox module main events.
      */
+    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
     void unsubscribeFromInboxEvents();
 
     /**
      * Subscribes for events in given Inbox.
      * @param inbox ID of the Inbox to subscribe
      */
+
+    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
     void subscribeForEntryEvents(const std::string& inboxId);
 
     /**
      * Unsubscribes from events in given Inbox.
      * @param inbox ID of the Inbox to unsubscribe
      */
+    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
     void unsubscribeFromEntryEvents(const std::string& inboxId);
 
+    /**
+     * Subscribe for the Inbox events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
+     */
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+
+    /**
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
+     */
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+
+    /**
+     * Generate subscription Query for the Inbox events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
 private:
