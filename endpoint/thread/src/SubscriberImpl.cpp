@@ -80,21 +80,27 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
     ); 
 }
 
-std::string SubscriberImpl::transform(const std::string& subscriptionQuery) {
-    return subscriptionQuery;
+privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std::string>& subscriptionQueries) {
+    auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    for(auto& s: subscriptionQueries) {
+        result.add(s);
+    }
+    return result;
 }
 
-void SubscriberImpl::assertQuery(const std::string& subscriptionQuery) {
-    auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
-    if(tmp.size() != 2) {
-        throw InvalidSubscriptionQueryException();
-    }
-    auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
-    if(selectorData.size() != 2) {
-        throw InvalidSubscriptionQueryException();
-    }
-    auto channelData = privmx::utils::Utils::split(tmp[0], "/");
-    if(channelData.size() < 2 || channelData.size() > 3 || channelData[0] != std::string(_moduleName)) {
-        throw InvalidSubscriptionQueryException();
+void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
+    for(auto& subscriptionQuery : subscriptionQueries) {
+        auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
+        if(tmp.size() != 2) {
+            throw InvalidSubscriptionQueryException();
+        }
+        auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
+        if(selectorData.size() != 2) {
+            throw InvalidSubscriptionQueryException();
+        }
+        auto channelData = privmx::utils::Utils::split(tmp[0], "/");
+        if(channelData.size() < 2 || channelData.size() > 3 || channelData[0] != std::string(_moduleName)) {
+            throw InvalidSubscriptionQueryException();
+        }
     }
 }

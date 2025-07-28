@@ -137,6 +137,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbCreatedEvent>(const kvdb::
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -150,6 +151,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbUpdatedEvent>(const kvdb::
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -163,6 +165,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEvent>(const kvdb::
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -176,6 +179,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsChangedEvent>(const k
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -189,6 +193,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbNewEntryEvent>(const kvdb:
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -202,6 +207,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryUpdatedEvent>(const k
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -216,6 +222,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }

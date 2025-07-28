@@ -84,6 +84,7 @@ Poco::Dynamic::Var VarSerializer::serialize<LibPlatformDisconnectedEvent>(const 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     return obj;
 }
 
@@ -96,6 +97,7 @@ Poco::Dynamic::Var VarSerializer::serialize<LibConnectedEvent>(const LibConnecte
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     return obj;
 }
 
@@ -108,6 +110,7 @@ Poco::Dynamic::Var VarSerializer::serialize<LibDisconnectedEvent>(const LibDisco
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     return obj;
 }
 
@@ -120,6 +123,7 @@ Poco::Dynamic::Var VarSerializer::serialize<LibBreakEvent>(const LibBreakEvent& 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     return obj;
 }
 

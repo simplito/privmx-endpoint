@@ -29,10 +29,6 @@ std::map<ThreadApiVarInterface::METHOD, Poco::Dynamic::Var (ThreadApiVarInterfac
                                         {SendMessage, &ThreadApiVarInterface::sendMessage},
                                         {DeleteMessage, &ThreadApiVarInterface::deleteMessage},
                                         {UpdateMessage, &ThreadApiVarInterface::updateMessage},
-                                        {SubscribeForThreadEvents, &ThreadApiVarInterface::subscribeForThreadEvents},
-                                        {UnsubscribeFromThreadEvents, &ThreadApiVarInterface::unsubscribeFromThreadEvents},
-                                        {SubscribeForMessageEvents, &ThreadApiVarInterface::subscribeForMessageEvents},
-                                        {UnsubscribeFromMessageEvents, &ThreadApiVarInterface::unsubscribeFromMessageEvents},
                                         {SubscribeFor, &ThreadApiVarInterface::subscribeFor},
                                         {UnsubscribeFrom, &ThreadApiVarInterface::unsubscribeFrom},
                                         {BuildSubscriptionQuery, &ThreadApiVarInterface::buildSubscriptionQuery}};
@@ -131,32 +127,6 @@ Poco::Dynamic::Var ThreadApiVarInterface::deleteMessage(const Poco::Dynamic::Var
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto messageId = _deserializer.deserialize<std::string>(argsArr->get(0), "messageId");
     _threadApi.deleteMessage(messageId);
-    return {};
-}
-
-Poco::Dynamic::Var ThreadApiVarInterface::subscribeForThreadEvents(const Poco::Dynamic::Var& args) {
-    core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _threadApi.subscribeForThreadEvents();
-    return {};
-}
-
-Poco::Dynamic::Var ThreadApiVarInterface::unsubscribeFromThreadEvents(const Poco::Dynamic::Var& args) {
-    core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _threadApi.unsubscribeFromThreadEvents();
-    return {};
-}
-
-Poco::Dynamic::Var ThreadApiVarInterface::subscribeForMessageEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
-    _threadApi.subscribeForMessageEvents(threadId);
-    return {};
-}
-
-Poco::Dynamic::Var ThreadApiVarInterface::unsubscribeFromMessageEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
-    _threadApi.unsubscribeFromMessageEvents(threadId);
     return {};
 }
 

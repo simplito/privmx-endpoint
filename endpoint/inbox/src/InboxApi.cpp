@@ -39,7 +39,6 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
         connectionImpl->getHost(),
         connectionImpl->getUserPrivKey(),
         connectionImpl->getEventMiddleware(),
-        connectionImpl->getEventChannelManager(),
         connectionImpl->getHandleManager(),
         connectionImpl->getServerConfig().requestChunkSize
     ));
@@ -260,48 +259,6 @@ std::string InboxApi::closeFile(const int64_t handle) {
     validateEndpoint();
     try {
         return _impl->closeFile(handle);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::subscribeForInboxEvents() {
-    validateEndpoint();
-    try {
-        return _impl->subscribeForInboxEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::unsubscribeFromInboxEvents() {
-    validateEndpoint();
-    try {
-        return _impl->unsubscribeFromInboxEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::subscribeForEntryEvents(const std::string& inboxId) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->subscribeForEntryEvents(inboxId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::unsubscribeFromEntryEvents(const std::string& inboxId) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->unsubscribeFromEntryEvents(inboxId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

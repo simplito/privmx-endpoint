@@ -19,8 +19,6 @@ using namespace privmx::endpoint::event;
 std::map<EventApiVarInterface::METHOD, Poco::Dynamic::Var (EventApiVarInterface::*)(const Poco::Dynamic::Var&)>
     EventApiVarInterface::methodMap = {{Create, &EventApiVarInterface::create},
                                        {EmitEvent, &EventApiVarInterface::emitEvent},
-                                       {SubscribeForCustomEvents, &EventApiVarInterface::subscribeForCustomEvents},
-                                       {UnsubscribeFromCustomEvents, &EventApiVarInterface::unsubscribeFromCustomEvents},
                                        {SubscribeFor, &EventApiVarInterface::subscribeFor},
                                        {UnsubscribeFrom, &EventApiVarInterface::unsubscribeFrom},
                                        {BuildSubscriptionQuery, &EventApiVarInterface::buildSubscriptionQuery}};
@@ -38,23 +36,6 @@ Poco::Dynamic::Var EventApiVarInterface::emitEvent(const Poco::Dynamic::Var& arg
     auto channelName = _deserializer.deserialize<std::string>(argsArr->get(2), "channelName");
     auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "eventData");
     _eventApi.emitEvent(contextId, users, channelName, eventData);
-    return {};
-}
-
-
-Poco::Dynamic::Var EventApiVarInterface::subscribeForCustomEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    _eventApi.subscribeForCustomEvents(contextId, channelName);
-    return {};
-}
-
-Poco::Dynamic::Var EventApiVarInterface::unsubscribeFromCustomEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
-    _eventApi.unsubscribeFromCustomEvents(contextId, channelName);
     return {};
 }
 

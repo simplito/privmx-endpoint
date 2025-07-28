@@ -26,9 +26,9 @@ std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const st
     return "|" + _selectorTypeNames.at(selectorType) + "=" + selectorId;
 }
 
-std::string SubscriberImpl::buildQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId) {
+std::string SubscriberImpl::buildQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId, bool enableAllChannelNames) {
     std::set<std::string>::iterator it = _forbiddenChannelsNames.find(channelName);
-    if(it != _forbiddenChannelsNames.end()) {
+    if(it == _forbiddenChannelsNames.end() || enableAllChannelNames) {
         return getChannel(channelName) + getSelector(selectorType, selectorId);
     }
     std::string forbiddenChannelsNamesString;
@@ -41,33 +41,35 @@ std::string SubscriberImpl::buildQuery(const std::string& channelName, EventSele
     ); 
 }
 
-std::string SubscriberImpl::transform(const std::string& subscriptionQuery) {
-    auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
-    auto selectorData = tmp[1];
-    auto channelData = privmx::utils::Utils::split(tmp[0], "/");
-    std::string result = "context";
-    for(auto it = channelData.begin()+1; it != channelData.end(); it+=1) {
-        result += "/" + (*it);
+privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std::string>& subscriptionQueries) {
+    auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    for(auto& subscriptionQuery: subscriptionQueries) {
+        auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
+        auto selectorData = tmp[1];
+        auto channelData = privmx::utils::Utils::split(tmp[0], "/");
+        std::string query = "context";
+        for(auto it = channelData.begin()+1; it != channelData.end(); it+=1) {
+            query += "/" + (*it);
+        }
+        result.add(query+"|"+selectorData);
     }
-    return result+"|"+selectorData;
+    return result;
 }
 
-void SubscriberImpl::assertQuery(const std::string& subscriptionQuery) {
-    auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
-    if(tmp.size() != 2) {
-        throw InvalidSubscriptionQueryException();
-    }
-    
-    auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
-    if(selectorData.size() != 2) {
-        throw InvalidSubscriptionQueryException();
-    }
-    auto channelData = privmx::utils::Utils::split(tmp[0], "/");
-    if(channelData.size() != 3 || channelData[0] != std::string(_moduleName) || channelData[1] != "custom") {
-        throw InvalidSubscriptionQueryException();
-    }
-    std::set<std::string>::iterator it = _forbiddenChannelsNames.find(channelData[2]);
-    if(it == _forbiddenChannelsNames.end()) {
-        throw ForbiddenChannelNameException("Forbidden channelName.");
+void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
+    for(auto& subscriptionQuery: subscriptionQueries) {
+        auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
+        if(tmp.size() != 2) {
+            throw InvalidSubscriptionQueryException();
+        }
+        
+        auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
+        if(selectorData.size() != 2) {
+            throw InvalidSubscriptionQueryException();
+        }
+        auto channelData = privmx::utils::Utils::split(tmp[0], "/");
+        if(channelData.size() != 3 || channelData[0] != std::string(_moduleName) || channelData[1] != "custom") {
+            throw InvalidSubscriptionQueryException();
+        }
     }
 }

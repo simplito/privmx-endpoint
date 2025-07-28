@@ -62,7 +62,6 @@ public:
         const std::shared_ptr<RequestApi>& requestApi,
         const std::shared_ptr<FileDataProvider>& fileDataProvider,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const std::shared_ptr<core::HandleManager>& handleManager,
         const core::Connection& connection,
         size_t serverRequestChunkSize
@@ -101,11 +100,6 @@ public:
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
     std::string closeFile(const int64_t handle);
-
-    void subscribeForStoreEvents();
-    void unsubscribeFromStoreEvents();
-    void subscribeForFileEvents(const std::string& storeId);
-    void unsubscribeFromFileEvents(const std::string& storeId);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
 
@@ -190,7 +184,6 @@ private:
     std::shared_ptr<RequestApi> _requestApi;
     std::shared_ptr<FileDataProvider> _fileDataProvider;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::EventChannelManager> _eventChannelManager;
     std::shared_ptr<core::HandleManager> _handleManager;
     core::Connection _connection;
     size_t _serverRequestChunkSize;
@@ -200,9 +193,7 @@ private:
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
     FileMetaEncryptor _fileMetaEncryptor;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    core::SubscriptionHelper _storeSubscriptionHelper;
     SubscriberImpl _subscriber;
-    std::atomic_bool _useNewSubscriptionApi;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 
 

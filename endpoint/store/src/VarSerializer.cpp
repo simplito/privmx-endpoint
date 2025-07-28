@@ -124,6 +124,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreCreatedEvent>(const stor
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -137,6 +138,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreUpdatedEvent>(const stor
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -150,6 +152,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreDeletedEvent>(const stor
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -163,6 +166,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreStatsChangedEvent>(const
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -176,6 +180,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileCreatedEvent>(const 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -189,6 +194,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEvent>(const 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -202,6 +208,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEvent>(const 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }

@@ -99,10 +99,6 @@ enum func_enum {
     thread_getMessage,
     thread_listMessages,
     thread_deleteMessage,
-    thread_subscribeForThreadEvents,
-    thread_unsubscribeFromThreadEvents,
-    thread_subscribeForMessageEvents,
-    thread_unsubscribeFromMessageEvents,
     //  store
     store_createStore,
     store_updateStore,
@@ -120,10 +116,6 @@ enum func_enum {
     store_writeToFile,
     store_seekInFile,
     store_closeFile,
-    store_subscribeForStoreEvents,
-    store_unsubscribeFromStoreEvents,
-    store_subscribeForFileEvents,
-    store_unsubscribeFromFileEvents,
     //  inbox
     inbox_createInbox,
     inbox_updateInbox,
@@ -142,10 +134,6 @@ enum func_enum {
     inbox_readFromFile,
     inbox_seekInFile,
     inbox_closeFile,
-    inbox_subscribeForInboxEvents,
-    inbox_unsubscribeFromInboxEvents,
-    inbox_subscribeForEntryEvents,
-    inbox_unsubscribeFromEntryEvents
 };
 
 } // privmxcli

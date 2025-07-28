@@ -54,7 +54,6 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
     ~ThreadApiImpl();
@@ -80,11 +79,6 @@ public:
     void deleteMessage(const std::string& messageId);
     void updateMessage(const std::string& messageId, const core::Buffer& publicMeta,
                             const core::Buffer& privateMeta, const core::Buffer& data);
-
-    void subscribeForThreadEvents();
-    void unsubscribeFromThreadEvents();
-    void subscribeForMessageEvents(std::string threadId);
-    void unsubscribeFromMessageEvents(std::string threadId);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -189,9 +183,7 @@ private:
     MessageDataV2Encryptor _messageDataV2Encryptor;
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
-    core::SubscriptionHelper _threadSubscriptionHelper;
     SubscriberImpl _subscriber;
-    std::atomic_bool _useNewSubscriptionApi;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _messageDeleterId;

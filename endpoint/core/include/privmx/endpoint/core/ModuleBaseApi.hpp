@@ -49,7 +49,6 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
     
@@ -111,7 +110,6 @@ private:
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::EventChannelManager> _eventChannelManager;
     core::Connection _connection;
     core::ModuleDataEncryptorV4 _moduleDataEncryptorV4;
     core::ModuleDataEncryptorV5 _moduleDataEncryptorV5;

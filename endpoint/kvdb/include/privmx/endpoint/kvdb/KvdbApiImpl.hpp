@@ -49,7 +49,6 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
     ~KvdbApiImpl();
@@ -83,11 +82,6 @@ public:
     void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
     void deleteEntry(const std::string& kvdbId, const std::string& key);
     std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
-
-    void subscribeForKvdbEvents();
-    void unsubscribeFromKvdbEvents();
-    void subscribeForEntryEvents(std::string kvdbId);
-    void unsubscribeFromEntryEvents(std::string kvdbId);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -169,9 +163,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
-    core::SubscriptionHelper _kvdbSubscriptionHelper;
     SubscriberImpl _subscriber;
-    std::atomic_bool _useNewSubscriptionApi;
     core::ModuleDataEncryptorV5 _kvdbDataEncryptorV5;
     EntryDataEncryptorV5 _entryDataEncryptorV5;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

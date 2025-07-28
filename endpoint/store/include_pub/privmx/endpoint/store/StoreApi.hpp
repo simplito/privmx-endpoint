@@ -194,32 +194,6 @@ public:
     std::string closeFile(const int64_t fileHandle);
 
     /**
-     * Subscribes for the Store module main events.
-     */
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
-    void subscribeForStoreEvents();
-
-    /**
-     * Unsubscribes from the Store module main events.
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromStoreEvents();
-    
-    /**
-     * Subscribes for events in given Store.
-     * @param store ID of the Store to subscribe
-     */
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
-    void subscribeForFileEvents(const std::string& storeId);
-
-    /**
-     * Unsubscribes from events in given Store.
-     * @param store ID of the Store to unsubscribe
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromFileEvents(const std::string& storeId);
-
-    /**
      * Subscribe for the Store events on the given subscription query.
      * 
      * @param subscriptionQueries list of queries

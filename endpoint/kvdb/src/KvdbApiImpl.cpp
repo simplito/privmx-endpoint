@@ -39,9 +39,8 @@ KvdbApiImpl::KvdbApiImpl(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const core::Connection& connection
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
     _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
@@ -49,14 +48,7 @@ KvdbApiImpl::KvdbApiImpl(
     _eventMiddleware(eventMiddleware),
     _connection(connection),
     _serverApi(ServerApi(gateway)),
-    _kvdbSubscriptionHelper(core::SubscriptionHelper(
-        eventChannelManager, 
-        "kvdb", "entries",
-        [&](){},
-        [&](){}
-    )),
-    _subscriber(gateway),
-    _useNewSubscriptionApi(true)
+    _subscriber(gateway)
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
@@ -408,11 +400,8 @@ std::map<std::string, bool> KvdbApiImpl::deleteEntries(const std::string& kvdbId
 }
 
 void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(notification.source == core::EventSource::INTERNAL) {
-        _kvdbSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
-        return;
-    }
-    if(!(_kvdbSubscriptionHelper.hasSubscription(notification.subscriptions) || _useNewSubscriptionApi.load())) {
+    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
         return;
     }
     if (type == "kvdbCreated") {
@@ -489,40 +478,6 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             _eventMiddleware->emitApiEvent(event);
         }
     }
-}
-
-void KvdbApiImpl::subscribeForKvdbEvents() {
-    _useNewSubscriptionApi.store(false);
-    if(_kvdbSubscriptionHelper.hasSubscriptionForModule()) {
-        throw AlreadySubscribedException();
-    }
-    _kvdbSubscriptionHelper.subscribeForModule();
-}
-
-void KvdbApiImpl::unsubscribeFromKvdbEvents() {
-    _useNewSubscriptionApi.store(false);
-    if(!_kvdbSubscriptionHelper.hasSubscriptionForModule()) {
-        throw NotSubscribedException();
-    }
-    _kvdbSubscriptionHelper.unsubscribeFromModule();
-}
-
-void KvdbApiImpl::subscribeForEntryEvents(std::string kvdbId) {
-    assertKvdbExist(kvdbId);
-    _useNewSubscriptionApi.store(false);
-    if(_kvdbSubscriptionHelper.hasSubscriptionForModuleEntry(kvdbId)) {
-        throw AlreadySubscribedException(kvdbId);
-    }
-    _kvdbSubscriptionHelper.subscribeForModuleEntry(kvdbId);
-}
-
-void KvdbApiImpl::unsubscribeFromEntryEvents(std::string kvdbId) {
-    assertKvdbExist(kvdbId);
-    _useNewSubscriptionApi.store(false);
-    if(!_kvdbSubscriptionHelper.hasSubscriptionForModuleEntry(kvdbId)) {
-        throw NotSubscribedException(kvdbId);
-    }
-    _kvdbSubscriptionHelper.unsubscribeFromModuleEntry(kvdbId);
 }
 
 void KvdbApiImpl::processConnectedEvent() {
@@ -1057,13 +1012,14 @@ uint32_t KvdbApiImpl::validateEntryDataIntegrity(server::KvdbEntryInfo entry, co
 }
 
 std::vector<std::string> KvdbApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    _useNewSubscriptionApi.store(true);
-    return _subscriber.subscribeFor(subscriptionQueries);
+    auto result = _subscriber.subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
 }
 
 void KvdbApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    _useNewSubscriptionApi.store(true);
-    return _subscriber.unsubscribeFrom(subscriptionIds);
+    _subscriber.unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
 std::string KvdbApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {

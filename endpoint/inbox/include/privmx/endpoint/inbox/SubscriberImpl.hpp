@@ -28,12 +28,12 @@ public:
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
     std::optional<std::string> convertKnownThreadIdToInboxId(const std::string& threadId);
 private:
-    virtual std::string transform(const std::string& subscriptionQuery);
-    virtual void assertQuery(const std::string& subscriptionQuery);
-    ServerApi _serverApi;
-
+    virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
+    virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);
     static std::string getChannel(EventType eventType);
     static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
+
+    ServerApi _serverApi;
     static constexpr std::string_view _moduleName = "inbox";
     static constexpr std::string_view _itemName = "entries";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
@@ -41,7 +41,6 @@ private:
     static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;
     static const std::map<EventSelectorType, std::string> _readableSelectorTyp;
     static const std::map<EventType, std::string> _readableEventType;
-
     std::map<std::string, std::string> _threadIdToInboxId;
 };
 

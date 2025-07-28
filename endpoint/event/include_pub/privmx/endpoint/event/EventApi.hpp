@@ -36,24 +36,6 @@ public:
      * @param eventData event's data
      */
     void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
-    
-    /**
-     * Subscribe for the custom events on the given channel.
-     * 
-     * @param contextId ID of the Context
-     * @param channelName name of the Channel
-     */
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
-    void subscribeForCustomEvents(const std::string& contextId, const std::string& channelName);
-    
-    /**
-     * Unsubscribe from the custom events on the given channel.
-     * 
-     * @param contextId ID of the Context
-     * @param channelName name of the Channel
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
 
     /**
      * Subscribe for the custom events on the given subscription query.

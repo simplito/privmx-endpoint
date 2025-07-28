@@ -37,10 +37,10 @@ public:
         SetEntry = 9,
         DeleteEntry = 10,
         DeleteEntries = 11,
-        SubscribeForKvdbEvents = 12,
-        UnsubscribeFromKvdbEvents = 13,
-        SubscribeForEntryEvents = 14,
-        UnsubscribeFromEntryEvents = 15,
+        Deleted_Function_0 = 12,
+        Deleted_Function_1 = 13,
+        Deleted_Function_2 = 14,
+        Deleted_Function_3 = 15,
         HasEntry = 16,
         SubscribeFor = 17,
         UnsubscribeFrom = 18,
@@ -62,10 +62,6 @@ public:
     Poco::Dynamic::Var setEntry(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteEntry(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteEntries(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForKvdbEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromKvdbEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForEntryEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var hasEntry(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);

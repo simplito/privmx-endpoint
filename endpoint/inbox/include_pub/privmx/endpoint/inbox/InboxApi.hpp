@@ -222,34 +222,6 @@ public:
     std::string closeFile(const int64_t fileHandle);
 
     /**
-     * Subscribes for the Inbox module main events.
-     */
-
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
-    void subscribeForInboxEvents();
-
-    /**
-     * Unsubscribes from the Inbox module main events.
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromInboxEvents();
-
-    /**
-     * Subscribes for events in given Inbox.
-     * @param inbox ID of the Inbox to subscribe
-     */
-
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
-    void subscribeForEntryEvents(const std::string& inboxId);
-
-    /**
-     * Unsubscribes from events in given Inbox.
-     * @param inbox ID of the Inbox to unsubscribe
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromEntryEvents(const std::string& inboxId);
-
-    /**
      * Subscribe for the Inbox events on the given subscription query.
      * 
      * @param subscriptionQueries list of queries

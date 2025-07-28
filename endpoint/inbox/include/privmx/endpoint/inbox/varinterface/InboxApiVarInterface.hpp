@@ -43,10 +43,10 @@ public:
         ReadFromFile = 15,
         SeekInFile = 16,
         CloseFile = 17,
-        SubscribeForInboxEvents = 18,
-        UnsubscribeFromInboxEvents = 19,
-        SubscribeForEntryEvents = 20,
-        UnsubscribeFromEntryEvents = 21,
+        Deleted_Function_0 = 18,
+        Deleted_Function_1 = 19,
+        Deleted_Function_2 = 20,
+        Deleted_Function_3 = 21,
         SubscribeFor = 22,
         UnsubscribeFrom = 23,
         BuildSubscriptionQuery = 24,
@@ -73,10 +73,6 @@ public:
     Poco::Dynamic::Var readFromFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var seekInFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var closeFile(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForInboxEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromInboxEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForEntryEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);

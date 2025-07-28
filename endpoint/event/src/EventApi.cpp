@@ -29,8 +29,7 @@ EventApi EventApi::create(core::Connection& connection) {
             connection,
             connectionImpl->getUserPrivKey(),
             connectionImpl->getGateway(),
-            connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager()
+            connectionImpl->getEventMiddleware()
         ));
         return EventApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -48,28 +47,6 @@ void EventApi::emitEvent(const std::string& contextId, const std::vector<core::U
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     try {
         return _impl->emitEvent(contextId, users, channelName, eventData);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void EventApi::subscribeForCustomEvents(const std::string& contextId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(contextId, "field:contextId ");
-    try {
-        return _impl->subscribeForCustomEvents(contextId, channelName);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void EventApi::unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName) {
-    validateEndpoint();
-    core::Validator::validateId(contextId, "field:contextId ");
-    try {
-        return _impl->unsubscribeFromCustomEvents(contextId, channelName);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

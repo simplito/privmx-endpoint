@@ -26,8 +26,8 @@ public:
     SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
-    virtual std::string transform(const std::string& subscriptionQuery);
-    virtual void assertQuery(const std::string& subscriptionQuery);
+    virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
+    virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);
 
     static std::string getChannel(EventType eventType);
     static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);

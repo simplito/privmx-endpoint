@@ -31,7 +31,6 @@ ThreadApi ThreadApi::create(core::Connection& connection) {
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
             connection
         ));
         return ThreadApi(impl);
@@ -174,48 +173,6 @@ void ThreadApi::updateMessage(const std::string& messageId, const core::Buffer& 
     core::Validator::validateId(messageId, "field:messageId ");
     try {
         return _impl->updateMessage(messageId, publicMeta, privateMeta, data);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ThreadApi::subscribeForThreadEvents() {
-    validateEndpoint();
-    try {
-        return _impl->subscribeForThreadEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ThreadApi::unsubscribeFromThreadEvents() {
-    validateEndpoint();
-    try {
-        return _impl->unsubscribeFromThreadEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ThreadApi::subscribeForMessageEvents(const std::string& threadId) {
-    validateEndpoint();
-    core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return _impl->subscribeForMessageEvents(threadId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ThreadApi::unsubscribeFromMessageEvents(const std::string& threadId) {
-    validateEndpoint();
-    core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return _impl->unsubscribeFromMessageEvents(threadId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

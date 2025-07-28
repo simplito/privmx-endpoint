@@ -68,7 +68,6 @@ public:
         const std::string& host,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const std::shared_ptr<core::HandleManager>& handleManager,
         size_t serverRequestChunkSize
     );
@@ -112,11 +111,6 @@ public:
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
     std::string closeFile(const int64_t handle);
-
-    void subscribeForInboxEvents();
-    void unsubscribeFromInboxEvents();
-    void subscribeForEntryEvents(const std::string& inboxId);
-    void unsubscribeFromEntryEvents(const std::string& inboxId);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -199,10 +193,7 @@ private:
     size_t _serverRequestChunkSize;
     store::FileMetaEncryptorV4 _fileMetaEncryptorV4;
     store::FileMetaEncryptorV5 _fileMetaEncryptorV5;
-    core::SubscriptionHelper _inboxSubscriptionHelper;
-    core::SubscriptionHelperExt _threadSubscriptionHelper;
     SubscriberImpl _subscriber;
-    std::atomic_bool _useNewSubscriptionApi;
     
     InboxDataProcessorV4 _inboxDataProcessorV4;
     InboxDataProcessorV5 _inboxDataProcessorV5;

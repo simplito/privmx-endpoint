@@ -30,7 +30,6 @@ KvdbApi KvdbApi::create(core::Connection& connection) {
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
             connection
         ));
         return KvdbApi(impl);
@@ -193,45 +192,6 @@ std::map<std::string, bool> KvdbApi::deleteEntries(const std::string& kvdbId, co
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
         return _impl->deleteEntries(kvdbId, keys);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void KvdbApi::subscribeForKvdbEvents() {
-    validateEndpoint();
-    try {
-        return _impl->subscribeForKvdbEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-void KvdbApi::unsubscribeFromKvdbEvents() {
-    validateEndpoint();
-    try {
-        return _impl->unsubscribeFromKvdbEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-void KvdbApi::subscribeForEntryEvents(std::string kvdbId) {
-    validateEndpoint();
-    core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return _impl->subscribeForEntryEvents(kvdbId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-void KvdbApi::unsubscribeFromEntryEvents(std::string kvdbId) {
-    validateEndpoint();
-    core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return _impl->unsubscribeFromEntryEvents(kvdbId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

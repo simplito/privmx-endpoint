@@ -40,9 +40,8 @@ ThreadApiImpl::ThreadApiImpl(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const core::Connection& connection
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection), 
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), 
     _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
@@ -54,14 +53,7 @@ ThreadApiImpl::ThreadApiImpl(
     _messageDataV2Encryptor(MessageDataV2Encryptor()),
     _messageDataV3Encryptor(MessageDataV3Encryptor()),
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
-    _threadSubscriptionHelper(core::SubscriptionHelper(
-        eventChannelManager, 
-        "thread", "messages", 
-        [&](){},
-        [&](){}
-    )),
     _subscriber(gateway),
-    _useNewSubscriptionApi(true),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -429,11 +421,8 @@ void ThreadApiImpl::updateMessageRequest(
 }
 
 void ThreadApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(notification.source == core::EventSource::INTERNAL) {
-        _threadSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
-        return;
-    }
-    if(!(_threadSubscriptionHelper.hasSubscription(notification.subscriptions) || _useNewSubscriptionApi.load())) {
+    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
         return;
     }
     if (type == "threadCreated") {
@@ -510,40 +499,6 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             _eventMiddleware->emitApiEvent(event);
         }
     }
-}
-
-void ThreadApiImpl::subscribeForThreadEvents() {
-    _useNewSubscriptionApi.store(false);
-    if(_threadSubscriptionHelper.hasSubscriptionForModule()) {
-        throw AlreadySubscribedException();
-    }
-    _threadSubscriptionHelper.subscribeForModule();
-}
-
-void ThreadApiImpl::unsubscribeFromThreadEvents() {
-    _useNewSubscriptionApi.store(false);
-    if(!_threadSubscriptionHelper.hasSubscriptionForModule()) {
-        throw NotSubscribedException();
-    }
-    _threadSubscriptionHelper.unsubscribeFromModule();
-}
-
-void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
-    assertThreadExist(threadId);
-    _useNewSubscriptionApi.store(false);
-    if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
-        throw AlreadySubscribedException(threadId);
-    }
-    _threadSubscriptionHelper.subscribeForModuleEntry(threadId);
-}
-
-void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
-    assertThreadExist(threadId);
-    _useNewSubscriptionApi.store(false);
-    if(!_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
-        throw NotSubscribedException(threadId);
-    }
-    _threadSubscriptionHelper.unsubscribeFromModuleEntry(threadId);
 }
 
 void ThreadApiImpl::processConnectedEvent() {
@@ -1342,13 +1297,14 @@ uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message, co
 }
 
 std::vector<std::string> ThreadApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    _useNewSubscriptionApi.store(true);
-    return _subscriber.subscribeFor(subscriptionQueries);
+    auto result = _subscriber.subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
 }
 
 void ThreadApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    _useNewSubscriptionApi.store(true);
-    return _subscriber.unsubscribeFrom(subscriptionIds);
+    _subscriber.unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
 std::string ThreadApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {

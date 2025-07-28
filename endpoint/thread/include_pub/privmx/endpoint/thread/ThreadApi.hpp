@@ -141,32 +141,6 @@ public:
                             const core::Buffer& privateMeta, const core::Buffer& data);
 
     /**
-     * Subscribes for the Thread module main events.
-     */
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
-    void subscribeForThreadEvents();
-
-    /**
-     * Unsubscribes from the Thread module main events.
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromThreadEvents();
-
-    /**
-     * Subscribes for events in given Thread.
-     * @param thread ID of the Thread to subscribe
-     */ 
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]   
-    void subscribeForMessageEvents(const std::string& threadId);
-
-    /**
-     * Unsubscribes from events in given Thread.
-     * @param thread ID of the Thread to unsubscribe
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromMessageEvents(const std::string& threadId);
-
-    /**
      * Subscribe for the Thread events on the given subscription query.
      * 
      * @param subscriptionQueries list of queries

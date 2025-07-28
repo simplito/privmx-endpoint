@@ -36,10 +36,6 @@ std::map<InboxApiVarInterface::METHOD, Poco::Dynamic::Var (InboxApiVarInterface:
                                        {ReadFromFile, &InboxApiVarInterface::readFromFile},
                                        {SeekInFile, &InboxApiVarInterface::seekInFile},
                                        {CloseFile, &InboxApiVarInterface::closeFile},
-                                       {SubscribeForInboxEvents, &InboxApiVarInterface::subscribeForInboxEvents},
-                                       {UnsubscribeFromInboxEvents, &InboxApiVarInterface::unsubscribeFromInboxEvents},
-                                       {SubscribeForEntryEvents, &InboxApiVarInterface::subscribeForEntryEvents},
-                                       {UnsubscribeFromEntryEvents, &InboxApiVarInterface::unsubscribeFromEntryEvents},
                                        {SubscribeFor, &InboxApiVarInterface::subscribeFor},
                                        {UnsubscribeFrom, &InboxApiVarInterface::unsubscribeFrom},
                                        {BuildSubscriptionQuery, &InboxApiVarInterface::buildSubscriptionQuery}};
@@ -194,32 +190,6 @@ Poco::Dynamic::Var InboxApiVarInterface::closeFile(const Poco::Dynamic::Var& arg
     auto handle = _deserializer.deserialize<int64_t>(argsArr->get(0), "handle");
     auto result = _inboxApi.closeFile(handle);
     return _serializer.serialize(result);
-}
-
-Poco::Dynamic::Var InboxApiVarInterface::subscribeForInboxEvents(const Poco::Dynamic::Var& args) {
-    core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _inboxApi.subscribeForInboxEvents();
-    return {};
-}
-
-Poco::Dynamic::Var InboxApiVarInterface::unsubscribeFromInboxEvents(const Poco::Dynamic::Var& args) {
-    core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _inboxApi.unsubscribeFromInboxEvents();
-    return {};
-}
-
-Poco::Dynamic::Var InboxApiVarInterface::subscribeForEntryEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
-    _inboxApi.subscribeForEntryEvents(inboxId);
-    return {};
-}
-
-Poco::Dynamic::Var InboxApiVarInterface::unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
-    _inboxApi.unsubscribeFromEntryEvents(inboxId);
-    return {};
 }
 
 Poco::Dynamic::Var InboxApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {

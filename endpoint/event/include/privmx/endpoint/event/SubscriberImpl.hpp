@@ -24,10 +24,10 @@ class SubscriberImpl : public privmx::endpoint::core::Subscriber
 public:
     
     SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
-    static std::string buildQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
+    static std::string buildQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId, bool enableAllChannelNames = false);
 private:
-    virtual std::string transform(const std::string& subscriptionQuery);
-    virtual void assertQuery(const std::string& subscriptionQuery);
+    virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
+    virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);
 
     static std::string getChannel(const std::string& channelName);
     static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);

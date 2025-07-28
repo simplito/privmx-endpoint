@@ -26,6 +26,7 @@ Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEvent>(const eve
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }

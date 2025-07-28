@@ -168,32 +168,6 @@ public:
     std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
 
     /**
-     * Subscribes for the KVDB module main events.
-     */
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]
-    void subscribeForKvdbEvents();
-    
-    /**
-     * Unsubscribes from the KVDB module main events.
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromKvdbEvents();
-
-    /**
-     * Subscribes for events in given KVDB.
-     * @param ID of the KVDB to subscribe
-     */  
-    [[deprecated("Use subscribeFor(const std::vector<std::string>& subscriptionQueries).")]]  
-    void subscribeForEntryEvents(std::string kvdbId);
-
-    /**
-     * Unsubscribes from events in given KVDB.
-     * @param {string} kvdbId ID of the KVDB to unsubscribe
-     */
-    [[deprecated("Use unsubscribeFrom(const std::vector<std::string>& subscriptionIds).")]]
-    void unsubscribeFromEntryEvents(std::string kvdbId);
-
-    /**
      * Subscribe for the KVDB events on the given subscription query.
      * 
      * @param subscriptionQueries list of queries

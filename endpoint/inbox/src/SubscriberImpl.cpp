@@ -70,41 +70,53 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
     ); 
 }
 
-std::string SubscriberImpl::transform(const std::string& subscriptionQuery) {
-    auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
-    auto selector = tmp[1];
-    auto channelData = privmx::utils::Utils::split(tmp[0], "/");
-    if(channelData.size() >= 2 && channelData[1] == std::string(_itemName)) {
-        std::string result = "thread/messages";
-        for(auto it = channelData.begin()+2; it != channelData.end(); it+=1) {
-            result += "/" + (*it);
+privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std::string>& subscriptionQueries) {
+    std::map<std::string, std::string> inboxIdToThreadId;
+    auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    for(auto& subscriptionQuery: subscriptionQueries) {
+        auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
+        auto selector = tmp[1];
+        auto channelData = privmx::utils::Utils::split(tmp[0], "/");
+        if(channelData.size() >= 2 && channelData[1] == std::string(_itemName)) {
+            std::string query = "thread/messages";
+            for(auto it = channelData.begin()+2; it != channelData.end(); it+=1) {
+                query += "/" + (*it);
+            }
+            //getInbox to get threadId
+            auto selectorData =privmx::utils::Utils::split(selector, "=");
+            auto inboxId = selectorData[1];
+            if(inboxIdToThreadId[inboxId] == "") {
+                auto model = Factory::createObject<server::InboxGetModel>();
+                model.id(inboxId);
+                auto inboxRaw = _serverApi.inboxGet(model).inbox();
+                auto threadId = inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
+                inboxIdToThreadId[inboxId] = threadId;
+                _threadIdToInboxId[threadId] = inboxId;
+            }
+            std::string threadId = inboxIdToThreadId[inboxId];
+            inboxIdToThreadId.insert_or_assign(inboxId, threadId);
+            result.add( query+"|"+selectorData[0]+"="+threadId);
+        } else {
+            result.add(subscriptionQuery);
         }
-        //getInbox to get threadId
-        auto selectorData =privmx::utils::Utils::split(selector, "=");
-        auto inboxId = selectorData[1];
-        auto model = Factory::createObject<server::InboxGetModel>();
-        model.id(inboxId);
-        auto inboxRaw = _serverApi.inboxGet(model).inbox();
-        auto threadId = inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
-        _threadIdToInboxId.insert_or_assign(threadId, inboxId);
-        return result+"|"+selectorData[0]+"="+inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
-    } else {
-        return subscriptionQuery;
     }
+    return result;        
 }
 
-void SubscriberImpl::assertQuery(const std::string& subscriptionQuery) {
-    auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
-    if(tmp.size() != 2) {
-        throw InvalidSubscriptionQueryException();
-    }
-    auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
-    if(selectorData.size() != 2) {
-        throw InvalidSubscriptionQueryException();
-    }
-    auto channelData = privmx::utils::Utils::split(tmp[0], "/");
-    if(channelData.size() < 2 || channelData.size() > 3 || channelData[0] != std::string(_moduleName)) {
-        throw InvalidSubscriptionQueryException();
+void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
+    for(auto& subscriptionQuery: subscriptionQueries) {
+        auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
+        if(tmp.size() != 2) {
+            throw InvalidSubscriptionQueryException();
+        }
+        auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
+        if(selectorData.size() != 2) {
+            throw InvalidSubscriptionQueryException();
+        }
+        auto channelData = privmx::utils::Utils::split(tmp[0], "/");
+        if(channelData.size() < 2 || channelData.size() > 3 || channelData[0] != std::string(_moduleName)) {
+            throw InvalidSubscriptionQueryException();
+        }
     }
 }
 

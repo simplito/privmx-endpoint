@@ -32,11 +32,8 @@ StoreApi StoreApi::create(core::Connection& connection) {
             connectionImpl->getHost(),
             connectionImpl->getUserPrivKey(),
             requestApi,
-            // std::shared_ptr<FilesUtils>(new FilesUtils(requestApi)),
             std::shared_ptr<FileDataProvider>(new FileDataProvider(serverApi)),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
-            // connectionImpl->getDataResolver(),
             connectionImpl->getHandleManager(),
             connection,
             connectionImpl->getServerConfig().requestChunkSize
@@ -231,48 +228,6 @@ core::PagingList<File> StoreApi::listFiles(const std::string& storeId, const cor
     core::Validator::validatePagingQuery(listQuery, {"createDate", "updates"}, "field:listQuery ");
     try {
         return _impl->listFiles(storeId, listQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::subscribeForStoreEvents() {
-    validateEndpoint();
-    try {
-        return _impl->subscribeForStoreEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::unsubscribeFromStoreEvents() {
-    validateEndpoint();
-    try {
-        return _impl->unsubscribeFromStoreEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::subscribeForFileEvents(const std::string& storeId) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->subscribeForFileEvents(storeId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::unsubscribeFromFileEvents(const std::string& storeId) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->unsubscribeFromFileEvents(storeId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

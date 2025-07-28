@@ -41,11 +41,10 @@ StoreApiImpl::StoreApiImpl(
     const std::shared_ptr<RequestApi>& requestApi,
     const std::shared_ptr<store::FileDataProvider>& fileDataProvider,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const std::shared_ptr<core::HandleManager>& handleManager,
     const core::Connection& connection,
     size_t serverRequestChunkSize
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
     _keyProvider(keyProvider),
     _serverApi(serverApi),
     _host(host),
@@ -53,7 +52,6 @@ StoreApiImpl::StoreApiImpl(
     _requestApi(requestApi),
     _fileDataProvider(fileDataProvider),
     _eventMiddleware(eventMiddleware),
-    _eventChannelManager(eventChannelManager),
     _handleManager(handleManager),
     _connection(connection),
     _serverRequestChunkSize(serverRequestChunkSize),
@@ -62,13 +60,7 @@ StoreApiImpl::StoreApiImpl(
     _dataEncryptorCompatV1(core::DataEncryptor<dynamic::compat_v1::StoreData>()),
     _fileMetaEncryptor(FileMetaEncryptor()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
-    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, 
-        "store", "files",
-        [&](){},
-        [&](){}
-    )),
     _subscriber(connection.getImpl()->getGateway()),
-    _useNewSubscriptionApi(true),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
@@ -606,11 +598,8 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(const std::shared_ptr<Fi
 
 
 void StoreApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(notification.source == core::EventSource::INTERNAL) {
-        _storeSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
-        return;
-    }
-    if(!(_storeSubscriptionHelper.hasSubscription(notification.subscriptions) || _useNewSubscriptionApi.load())) {
+    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
         return;
     }
     if (type == "storeCreated") {
@@ -691,40 +680,6 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             _eventMiddleware->emitApiEvent(event);
         }
     }
-}
-
-void StoreApiImpl::subscribeForStoreEvents() {
-    _useNewSubscriptionApi.store(false);
-    if(_storeSubscriptionHelper.hasSubscriptionForModule()) {
-        throw AlreadySubscribedException();
-    }
-    _storeSubscriptionHelper.subscribeForModule();
-}
-
-void StoreApiImpl::unsubscribeFromStoreEvents() {
-    _useNewSubscriptionApi.store(false);
-    if(!_storeSubscriptionHelper.hasSubscriptionForModule()) {
-        throw NotSubscribedException();
-    }
-    _storeSubscriptionHelper.unsubscribeFromModule();
-}
-
-void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
-    assertStoreExist(storeId);
-    _useNewSubscriptionApi.store(false);
-    if(_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
-        throw AlreadySubscribedException(storeId);
-    }
-    _storeSubscriptionHelper.subscribeForModuleEntry(storeId);
-}
-
-void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
-    assertStoreExist(storeId);
-    _useNewSubscriptionApi.store(false);
-    if(!_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
-        throw NotSubscribedException(storeId);
-    }
-    _storeSubscriptionHelper.unsubscribeFromModuleEntry(storeId);
 }
 
 void StoreApiImpl::processConnectedEvent() {
@@ -1558,13 +1513,14 @@ uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file, const std::s
 }
 
 std::vector<std::string> StoreApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    _useNewSubscriptionApi.store(true);
-    return _subscriber.subscribeFor(subscriptionQueries);
+    auto result = _subscriber.subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
 }
 
 void StoreApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    _useNewSubscriptionApi.store(true);
-    return _subscriber.unsubscribeFrom(subscriptionIds);
+    _subscriber.unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
 std::string StoreApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {

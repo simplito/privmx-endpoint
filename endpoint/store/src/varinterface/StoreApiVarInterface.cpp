@@ -35,10 +35,6 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
                                        {ReadFromFile, &StoreApiVarInterface::readFromFile},
                                        {SeekInFile, &StoreApiVarInterface::seekInFile},
                                        {CloseFile, &StoreApiVarInterface::closeFile},
-                                       {SubscribeForStoreEvents, &StoreApiVarInterface::subscribeForStoreEvents},
-                                       {UnsubscribeFromStoreEvents, &StoreApiVarInterface::unsubscribeFromStoreEvents},
-                                       {SubscribeForFileEvents, &StoreApiVarInterface::subscribeForFileEvents},
-                                       {UnsubscribeFromFileEvents, &StoreApiVarInterface::unsubscribeFromFileEvents},
                                        {SubscribeFor, &StoreApiVarInterface::subscribeFor},
                                        {UnsubscribeFrom, &StoreApiVarInterface::unsubscribeFrom},
                                        {BuildSubscriptionQuery, &StoreApiVarInterface::buildSubscriptionQuery}};
@@ -177,32 +173,6 @@ Poco::Dynamic::Var StoreApiVarInterface::closeFile(const Poco::Dynamic::Var& arg
     auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
     auto result = _storeApi.closeFile(fileHandle);
     return _serializer.serialize(result);
-}
-
-Poco::Dynamic::Var StoreApiVarInterface::subscribeForStoreEvents(const Poco::Dynamic::Var& args) {
-    core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _storeApi.subscribeForStoreEvents();
-    return {};
-}
-
-Poco::Dynamic::Var StoreApiVarInterface::unsubscribeFromStoreEvents(const Poco::Dynamic::Var& args) {
-    core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _storeApi.unsubscribeFromStoreEvents();
-    return {};
-}
-
-Poco::Dynamic::Var StoreApiVarInterface::subscribeForFileEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
-    _storeApi.subscribeForFileEvents(storeId);
-    return {};
-}
-
-Poco::Dynamic::Var StoreApiVarInterface::unsubscribeFromFileEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
-    _storeApi.unsubscribeFromFileEvents(storeId);
-    return {};
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::updateFileMeta(const Poco::Dynamic::Var& args) {
