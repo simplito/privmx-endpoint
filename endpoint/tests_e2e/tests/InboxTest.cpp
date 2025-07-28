@@ -582,10 +582,6 @@ TEST_F(InboxTest, updateInbox_incorrect_data) {
 }
 
 TEST_F(InboxTest, updateInbox_correct_data) {
-    //enable cache
-    EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-    });
     inbox::Inbox inbox;
     // new users
     EXPECT_NO_THROW({
