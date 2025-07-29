@@ -32,12 +32,20 @@ public:
     ChunkDataProvider(
         std::shared_ptr<ServerApi> server,
         size_t encryptedChunkSize,
-        size_t severChunkSize,
+        size_t serverChunkSize,
         const std::string& fileId,
         uint64_t serverFileSize,
         int64_t fileVersion
     );
+    virtual void sync(
+        int64_t newfileVersion, 
+        int64_t encryptedFileSize, 
+        std::optional<size_t> encryptedChunkSize = std::nullopt, 
+        std::optional<size_t> serverChunkSize = std::nullopt
+    ) override;
     virtual std::string getChunk(uint32_t chunkNumber) override;
+    virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion) override;
+    virtual void update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) override;
     virtual std::string getChecksums() override;
 private:
     static int64_t getServerReadDataSize(int64_t encryptedChunkSize, int64_t severChunkSize);

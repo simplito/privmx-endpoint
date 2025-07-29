@@ -46,9 +46,10 @@ public:
         Deleted_Function_1 = 18,
         Deleted_Function_2 = 19,
         Deleted_Function_3 = 20,
-        SubscribeFor = 21,
-        UnsubscribeFrom = 22,
-        BuildSubscriptionQuery = 23,
+        SyncFile = 21,
+        SubscribeFor = 22,
+        UnsubscribeFrom = 23,
+        BuildSubscriptionQuery = 24,
     };
 
     StoreApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -71,6 +72,7 @@ public:
     Poco::Dynamic::Var readFromFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var seekInFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var closeFile(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var syncFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);

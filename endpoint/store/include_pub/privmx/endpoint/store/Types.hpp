@@ -93,6 +93,11 @@ struct File {
      * Version of the file data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
+
+    /**
+     * have random write feature enabled 
+     */
+    bool randomWrite;
 };
 
 

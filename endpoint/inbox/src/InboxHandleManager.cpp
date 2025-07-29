@@ -111,7 +111,7 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandl
         uint64_t serverRequestChunkSize,
         std::shared_ptr<store::RequestApi> requestApi
 ) {
-    return _fileHandleManager.createFileWriteHandle(storeId, fileId, std::string(), size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
+    return _fileHandleManager.createFileWriteHandle(storeId, fileId, std::string(), size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi, false);
 }
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {

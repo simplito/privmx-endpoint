@@ -208,6 +208,13 @@ void Validator::validatePagingQuery(const PagingQuery& value,const std::vector<s
     }
 }
 
+void Validator::validateBufferSize(const core::Buffer& value,size_t min_len, size_t max_len,const std::string& stack_trace) {
+    if(value.size() < min_len || value.size() > max_len) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid BufferSize, expected size " + to_string(min_len) + "-" + to_string(max_len)  + ", received size " + to_string(value.size())));
+
+    }
+}
+
 void Validator::validateJSON(const std::string& value, const std::string& stack_trace) {
     try {
         privmx::utils::Utils::parseJson(value);

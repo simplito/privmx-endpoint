@@ -35,6 +35,7 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
                                        {ReadFromFile, &StoreApiVarInterface::readFromFile},
                                        {SeekInFile, &StoreApiVarInterface::seekInFile},
                                        {CloseFile, &StoreApiVarInterface::closeFile},
+                                       {SyncFile, &StoreApiVarInterface::syncFile},
                                        {SubscribeFor, &StoreApiVarInterface::subscribeFor},
                                        {UnsubscribeFrom, &StoreApiVarInterface::unsubscribeFrom},
                                        {BuildSubscriptionQuery, &StoreApiVarInterface::buildSubscriptionQuery}};
@@ -123,10 +124,11 @@ Poco::Dynamic::Var StoreApiVarInterface::updateFile(const Poco::Dynamic::Var& ar
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::writeToFile(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
     auto dataChunk = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "dataChunk");
-    _storeApi.writeToFile(fileHandle, dataChunk);
+    auto truncate = _deserializer.deserialize<bool>(argsArr->get(2), "truncate");
+    _storeApi.writeToFile(fileHandle, dataChunk, truncate);
     return {};
 }
 
@@ -181,6 +183,13 @@ Poco::Dynamic::Var StoreApiVarInterface::updateFileMeta(const Poco::Dynamic::Var
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "privateMeta");
     _storeApi.updateFileMeta(fileId, publicMeta, privateMeta);
+    return {};
+}
+
+Poco::Dynamic::Var StoreApiVarInterface::syncFile(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
+    _storeApi.syncFile(fileHandle);
     return {};
 }
 

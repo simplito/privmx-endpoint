@@ -240,6 +240,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::File>(const store::File& val)
     obj->set("authorPubKey", serialize(val.authorPubKey));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
+    obj->set("randomWrite", serialize(val.randomWrite));
     return obj;
 }
 

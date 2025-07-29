@@ -101,10 +101,11 @@ public:
      * @param publicMeta public file metadata
      * @param privateMeta private file metadata
      * @param size size of the file
+     * @param randomWriteSupport enable random write support for file
      * @return handle to write data
      */
     int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                            const int64_t size);
+                            const int64_t size, bool randomWriteSupport = false);
 
     /**
      * Update an existing file in a Store.
@@ -133,7 +134,7 @@ public:
      * @param handle handle to write file data
      * @param dataChunk file data chunk
      */
-    void writeToFile(const int64_t fileHandle, const core::Buffer& dataChunk);
+    void writeToFile(const int64_t fileHandle, const core::Buffer& dataChunk, bool truncate = false);
 
     /**
      * Deletes a file by given ID.
@@ -214,6 +215,12 @@ public:
      * @param selectorId ID of the selector
      */
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+
+    /**
+     * Synchronize file handle data with newset data on serwer
+     * @param handle handle to read/write file data
+     */ 
+    void syncFile(const int64_t handle);
 
     std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }
 private:

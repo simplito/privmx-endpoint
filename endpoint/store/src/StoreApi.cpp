@@ -136,12 +136,12 @@ void StoreApi::deleteFile(const std::string& fileId) {
     }
 }
 
-int64_t StoreApi::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
+int64_t StoreApi::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size, bool randomWriteSupport) {
     validateEndpoint();
     core::Validator::validateId(storeId, "field:storeId ");
     core::Validator::validateNumberNonNegative(size, "field:size ");
     try {
-        return _impl->createFile(storeId, publicMeta, privateMeta, size);
+        return _impl->createFile(storeId, publicMeta, privateMeta, size, randomWriteSupport);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -171,10 +171,10 @@ int64_t StoreApi::openFile(const std::string& fileId) {
     }
 }
 
-void StoreApi::writeToFile(const int64_t handle, const core::Buffer& dataChunk) {
+void StoreApi::writeToFile(const int64_t handle, const core::Buffer& dataChunk, bool truncate) {
     validateEndpoint();
     try {
-        return _impl->writeToFile(handle, dataChunk);
+        return _impl->writeToFile(handle, dataChunk, truncate);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -239,6 +239,16 @@ void StoreApi::updateFileMeta(const std::string& fileId, const core::Buffer& pub
     core::Validator::validateId(fileId, "field:fileId ");
     try {
         return _impl->updateFileMeta(fileId, publicMeta, privateMeta);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StoreApi::syncFile(const int64_t handle) {
+    validateEndpoint();
+    try {
+        return _impl->syncFile(handle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

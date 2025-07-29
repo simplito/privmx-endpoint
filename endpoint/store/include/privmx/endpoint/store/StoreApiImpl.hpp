@@ -31,7 +31,7 @@ limitations under the License.
 
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/FileDataProvider.hpp"
-#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV1.hpp"
 #include "privmx/endpoint/store/RequestApi.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
@@ -90,13 +90,14 @@ public:
     File getFile(const std::string& fileId);
     core::PagingList<store::File> listFiles(const std::string& storeId, const core::PagingQuery& query);
     void deleteFile(const std::string& fileId);
-    int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size);
+    int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size, bool randomWriteSupport = false);
     int64_t updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size);
     void updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
     int64_t openFile(const std::string& fileId);
-    void writeToFile(const int64_t handle, const core::Buffer& dataChunk);
+    void writeToFile(const int64_t handle, const core::Buffer& dataChunk, bool truncate = false);
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
+    void syncFile(const int64_t handle);
     std::string closeFile(const int64_t handle);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
@@ -155,7 +156,8 @@ private:
         const int64_t& size = 0,
         const std::string& authorPubKey = std::string(),
         const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN
+        const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN,
+        const bool& randomWrite = false
     );
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
@@ -168,8 +170,12 @@ private:
     core::ModuleKeys getFileDecryptionKeys(server::File file);
     uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
+    FileEncryptionParams getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey);
+    FileEncryptionParams getFileEncryptionParams(server::File file, server::Store store);
+    FileDecryptionParams getFileDecryptionParams(server::File file, dynamic::InternalStoreFileMeta internalMeta);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
+    int64_t createFileRandomWriteHandle(const FileDecryptionParams& storeFileDecryptionParams, const FileMeta& fileMeta);
     void assertStoreExist(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
     
@@ -186,10 +192,9 @@ private:
     core::Connection _connection;
     size_t _serverRequestChunkSize;
     
-    
     FileHandleManager _fileHandleManager;
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
-    FileMetaEncryptor _fileMetaEncryptor;
+    FileMetaEncryptorV1 _fileMetaEncryptorV1;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     SubscriberImpl _subscriber;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
@@ -202,7 +207,6 @@ private:
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
     
-
     inline static const std::string STORE_TYPE_FILTER_FLAG = "store";
 };
 
