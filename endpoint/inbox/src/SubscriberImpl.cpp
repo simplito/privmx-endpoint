@@ -82,20 +82,24 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
             for(auto it = channelData.begin()+2; it != channelData.end(); it+=1) {
                 query += "/" + (*it);
             }
-            //getInbox to get threadId
             auto selectorData =privmx::utils::Utils::split(selector, "=");
-            auto inboxId = selectorData[1];
-            if(inboxIdToThreadId[inboxId] == "") {
-                auto model = Factory::createObject<server::InboxGetModel>();
-                model.id(inboxId);
-                auto inboxRaw = _serverApi.inboxGet(model).inbox();
-                auto threadId = inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
-                inboxIdToThreadId[inboxId] = threadId;
-                _threadIdToInboxId[threadId] = inboxId;
+            if(selectorData[0] == _selectorTypeNames.at(EventSelectorType::INBOX_ID)) {
+                //getInbox to get threadId
+                auto inboxId = selectorData[1];
+                if(inboxIdToThreadId[inboxId] == "") {
+                    auto model = Factory::createObject<server::InboxGetModel>();
+                    model.id(inboxId);
+                    auto inboxRaw = _serverApi.inboxGet(model).inbox();
+                    auto threadId = inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
+                    inboxIdToThreadId[inboxId] = threadId;
+                    _threadIdToInboxId[threadId] = inboxId;
+                }
+                std::string threadId = inboxIdToThreadId[inboxId];
+                inboxIdToThreadId.insert_or_assign(inboxId, threadId);
+                result.add( query+"|"+selectorData[0]+"="+threadId);
+            } else {
+                result.add( query+"|"+selector);
             }
-            std::string threadId = inboxIdToThreadId[inboxId];
-            inboxIdToThreadId.insert_or_assign(inboxId, threadId);
-            result.add( query+"|"+selectorData[0]+"="+threadId);
         } else {
             result.add(subscriptionQuery);
         }
