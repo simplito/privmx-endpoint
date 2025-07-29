@@ -21,8 +21,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/ContainerKeyCache.hpp>

@@ -26,8 +26,6 @@ limitations under the License.
 #include <privmx/endpoint/core/encryptors/DataEncryptor.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 

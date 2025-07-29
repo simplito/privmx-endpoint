@@ -26,6 +26,8 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+#define INTERNAL_EVENT_CHANNEL_NAME "internal"
+
 class Subscriber 
 {
 public:

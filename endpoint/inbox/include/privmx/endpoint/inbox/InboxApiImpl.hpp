@@ -24,14 +24,12 @@ limitations under the License.
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/thread/ServerTypes.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>
 #include <privmx/endpoint/store/DynamicTypes.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp>
 #include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp>
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
