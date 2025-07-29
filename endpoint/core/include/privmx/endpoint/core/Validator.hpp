@@ -19,6 +19,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/Buffer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -88,6 +89,7 @@ public:
     static void validateEventType(const Event& value, const std::string& type, const std::string& stack_trace = "");
     static void validateJSON(const std::string& value, const std::string& stack_trace = "");
     static void validatePagingQuery(const PagingQuery& value,const std::vector<std::string>& sort_by_field, const std::string& stack_trace = "");
+    static void validateBufferSize(const core::Buffer& value,size_t min_len, size_t max_len,const std::string& stack_trace = "");
 
     template<typename T>
     static void validateClass(const T& value, const std::string& stack_trace = "") {

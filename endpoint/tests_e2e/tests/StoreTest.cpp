@@ -1923,13 +1923,13 @@ TEST_F(StoreTest, openFile_readFromFile_updateFile_closeFile_FileVersionMismatch
             handle,
             reader->getInt64("File_1.size")
         );
-    }, store::FileVersionMismatchHandleClosedException);
+    }, store::FileVersionMismatchException);
 
-    EXPECT_THROW({
+    EXPECT_NO_THROW({
         storeApi->closeFile(
             handle
         );
-    }, store::InvalidFileHandleException);
+    });
 }
 
 TEST_F(StoreTest, createStore_policy) {
@@ -2269,6 +2269,300 @@ TEST_F(StoreTest, update_access_to_old_files) {
     EXPECT_EQ(file.statusCode, 0);
 }
 
+TEST_F(StoreTest, random_write_oneChunk) {
+    int64_t rwFileHandle = 0;
+    std::string fileId = "";
+    store::File file;
+    EXPECT_NO_THROW({
+        auto t = storeApi->createFile(reader->getString("Store_2.storeId"), core::Buffer::from("RW_publicMeta"), core::Buffer::from("RW_privateMeta"), 0, true);
+        fileId = storeApi->closeFile(t);
+        rwFileHandle = storeApi->openFile(fileId);
+    });
+    EXPECT_EQ(rwFileHandle, 2);
+    if(rwFileHandle != 2) {
+        return;
+    }
+    EXPECT_NO_THROW({
+        try {
+        file = storeApi->getFile(fileId);
+        } catch (const core::Exception& e) {
+            std::cout << e.getFull() << std::endl;
+            e.rethrow();
+        }
+
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.publicMeta.stdString(), "RW_publicMeta");
+    EXPECT_EQ(file.privateMeta.stdString(), "RW_privateMeta");
+    EXPECT_EQ(file.size, 0);
+
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle,0);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from("testing_rw"));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite1 = storeApi->readFromFile(rwFileHandle, 20).stdString();
+        EXPECT_EQ(testWrite1, "testing_rw");
+    });
+
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle,2);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from("testing_rw"));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, 20).stdString();
+        EXPECT_EQ(testWrite, "tetesting_rw");
+    });
+
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle,3);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(""), true);
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, 20).stdString();
+        EXPECT_EQ(testWrite, "tet");
+    });
+
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle,1);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from("t"));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, 20).stdString();
+        EXPECT_EQ(testWrite, "ttt");
+        storeApi->closeFile(rwFileHandle);
+    });
+    std::string writtenData = "";
+    EXPECT_NO_THROW({
+        file = storeApi->getFile(fileId);
+        rwFileHandle = storeApi->openFile(fileId);
+        writtenData = storeApi->readFromFile(rwFileHandle, file.size).stdString();
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.publicMeta.stdString(), "RW_publicMeta");
+    EXPECT_EQ(file.privateMeta.stdString(), "RW_privateMeta");
+    EXPECT_EQ(file.size, 3);
+    EXPECT_EQ(file.randomWrite, true);
+    EXPECT_EQ(writtenData, "ttt");
+}
+
+TEST_F(StoreTest, random_write_multipleChunks) {
+    int64_t rwFileHandle = 0;
+    std::string fileId = "";
+    EXPECT_NO_THROW({
+        auto t = storeApi->createFile(reader->getString("Store_2.storeId"), core::Buffer::from("RW_publicMeta"), core::Buffer::from("RW_privateMeta"), 0, true);
+        fileId = storeApi->closeFile(t);
+        rwFileHandle = storeApi->openFile(fileId);
+    });
+    EXPECT_EQ(rwFileHandle, 2);
+    if(rwFileHandle != 2) {
+        return;
+    }
+    size_t blockSize = 1024*64;
+    std::string Hx64k = std::string(blockSize, 'H');
+    std::string Ix64k = std::string(blockSize, 'I');
+    std::string Tx64k = std::string(blockSize, 'T');
+
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle,0);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Hx64k+Hx64k+Hx64k+Hx64k));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*4+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Hx64k+Hx64k+Hx64k);
+    });
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle, blockSize*1);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Ix64k+Ix64k));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*4+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Ix64k+Ix64k+Hx64k);
+    });
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle, blockSize*3);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Tx64k+Tx64k+Tx64k));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*6+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Ix64k+Ix64k+Tx64k+Tx64k+Tx64k);
+    });
+    EXPECT_NO_THROW({
+        // truncate
+        storeApi->seekInFile(rwFileHandle, blockSize*1);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Tx64k+Ix64k), true);
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*6+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Tx64k+Ix64k);
+    });
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle, 0);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Ix64k));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*6+1).stdString();
+        EXPECT_EQ(testWrite, Ix64k+Tx64k+Ix64k);
+        storeApi->closeFile(rwFileHandle);
+    });
+    std::string writtenData = "";
+    store::File file;
+    EXPECT_NO_THROW({
+        file = storeApi->getFile(fileId);
+        rwFileHandle = storeApi->openFile(fileId);
+        writtenData = storeApi->readFromFile(rwFileHandle, file.size).stdString();
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.publicMeta.stdString(), "RW_publicMeta");
+    EXPECT_EQ(file.privateMeta.stdString(), "RW_privateMeta");
+    EXPECT_EQ(file.size, blockSize*3);
+    EXPECT_EQ(file.randomWrite, true);
+    EXPECT_EQ(writtenData, Ix64k+Tx64k+Ix64k);
+}
+
+
+TEST_F(StoreTest, random_write_sync_oneChunk) {
+    auto connection_user2 = std::make_shared<core::Connection>(
+        core::Connection::connect(
+            reader->getString("Login.user_2_privKey"), 
+            reader->getString("Login.solutionId"), 
+            getPlatformUrl(reader->getString("Login.instanceUrl"))
+        )
+    );
+    auto storeApi_user2 = std::make_shared<store::StoreApi>(
+        store::StoreApi::create(
+            *connection_user2
+        )
+    );
+    int64_t rwFileHandle = 0;
+    int64_t rwFileHandle_2 = 0;
+    std::string fileId = "";
+    store::File file;
+    EXPECT_NO_THROW({
+        auto t = storeApi->createFile(reader->getString("Store_2.storeId"), core::Buffer::from("RW_publicMeta"), core::Buffer::from("RW_privateMeta"), 0, true);
+        fileId = storeApi->closeFile(t);
+        rwFileHandle = storeApi->openFile(fileId);
+        rwFileHandle_2 = storeApi_user2->openFile(fileId);
+    });
+    EXPECT_EQ(rwFileHandle, 2);
+    EXPECT_EQ(rwFileHandle_2, 1);
+    if(rwFileHandle != 2 || rwFileHandle_2 != 1) {
+        return;
+    }
+    EXPECT_NO_THROW({
+        try {
+        file = storeApi->getFile(fileId);
+        } catch (const core::Exception& e) {
+            std::cout << e.getFull() << std::endl;
+            e.rethrow();
+        }
+
+    });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.publicMeta.stdString(), "RW_publicMeta");
+    EXPECT_EQ(file.privateMeta.stdString(), "RW_privateMeta");
+    EXPECT_EQ(file.size, 0);
+
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle,0);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from("testing_rw"));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite1 = storeApi->readFromFile(rwFileHandle, 20).stdString();
+        EXPECT_EQ(testWrite1, "testing_rw");
+    });
+
+    EXPECT_NO_THROW({
+        storeApi_user2->syncFile(rwFileHandle_2);
+        storeApi_user2->seekInFile(rwFileHandle_2,0);
+        auto testWrite = storeApi_user2->readFromFile(rwFileHandle_2, 20).stdString();
+        EXPECT_EQ(testWrite, "testing_rw");
+    });
+
+    connection_user2->disconnect();
+}
+
+TEST_F(StoreTest, random_write_multipleSync_multipleChunks) {
+    auto connection_user2 = std::make_shared<core::Connection>(
+        core::Connection::connect(
+            reader->getString("Login.user_2_privKey"), 
+            reader->getString("Login.solutionId"), 
+            getPlatformUrl(reader->getString("Login.instanceUrl"))
+        )
+    );
+    auto storeApi_user2 = std::make_shared<store::StoreApi>(
+        store::StoreApi::create(
+            *connection_user2
+        )
+    );
+
+    int64_t rwFileHandle = 0;
+    int64_t rwFileHandle_2 = 0;
+    EXPECT_NO_THROW({
+        auto t = storeApi->createFile(reader->getString("Store_2.storeId"), core::Buffer::from("RW_publicMeta"), core::Buffer::from("RW_privateMeta"), 0, true);
+        auto fileId = storeApi->closeFile(t);
+        rwFileHandle = storeApi->openFile(fileId);
+        rwFileHandle_2 = storeApi_user2->openFile(fileId);
+    });
+    EXPECT_EQ(rwFileHandle, 2);
+    EXPECT_EQ(rwFileHandle_2, 1);
+    if(rwFileHandle != 2 || rwFileHandle_2 != 1) {
+        return;
+    }
+    size_t blockSize = 1024*64;
+    std::string Hx64k = std::string(blockSize, 'H');
+    std::string Ix64k = std::string(blockSize, 'I');
+    std::string Tx64k = std::string(blockSize, 'T');
+
+    EXPECT_NO_THROW({
+        storeApi->seekInFile(rwFileHandle,0);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Hx64k+Hx64k+Hx64k+Hx64k));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*4+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Hx64k+Hx64k+Hx64k);
+    });
+    EXPECT_NO_THROW({
+        storeApi_user2->syncFile(rwFileHandle_2);
+        storeApi_user2->seekInFile(rwFileHandle_2, blockSize*1);
+        storeApi_user2->writeToFile(rwFileHandle_2, core::Buffer::from(Ix64k+Ix64k));
+        storeApi_user2->seekInFile(rwFileHandle_2,0);
+        auto testWrite = storeApi_user2->readFromFile(rwFileHandle_2, blockSize*4+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Ix64k+Ix64k+Hx64k);
+    });
+    EXPECT_NO_THROW({
+        storeApi->syncFile(rwFileHandle);
+        storeApi->seekInFile(rwFileHandle, blockSize*3);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Tx64k+Tx64k+Tx64k));
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*6+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Ix64k+Ix64k+Tx64k+Tx64k+Tx64k);
+    });
+    EXPECT_NO_THROW({
+        // truncate
+        storeApi->seekInFile(rwFileHandle, blockSize*1);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(Tx64k+Ix64k), true);
+        storeApi->seekInFile(rwFileHandle,0);
+        auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*6+1).stdString();
+        EXPECT_EQ(testWrite, Hx64k+Tx64k+Ix64k);
+    });
+    EXPECT_NO_THROW({
+        storeApi_user2->syncFile(rwFileHandle_2);
+        storeApi_user2->seekInFile(rwFileHandle_2, 0);
+        storeApi_user2->writeToFile(rwFileHandle_2, core::Buffer::from(Ix64k));
+        storeApi_user2->seekInFile(rwFileHandle_2,0);
+        auto testWrite = storeApi_user2->readFromFile(rwFileHandle_2, blockSize*6+1).stdString();
+        EXPECT_EQ(testWrite, Ix64k+Tx64k+Ix64k);
+    });
+    connection_user2->disconnect();
+}
+
+TEST_F(StoreTest, random_write_bufferSize) {
+    int64_t rwFileHandle = 0;
+    std::string fileId = "";
+    EXPECT_NO_THROW({
+        auto t = storeApi->createFile(reader->getString("Store_2.storeId"), core::Buffer::from("RW_publicMeta"), core::Buffer::from("RW_privateMeta"), 0, true);
+        fileId = storeApi->closeFile(t);
+        rwFileHandle = storeApi->openFile(fileId);
+    });
+    EXPECT_EQ(rwFileHandle, 2);
+    if(rwFileHandle != 2) {
+        return;
+    }
+    EXPECT_THROW({
+        storeApi->seekInFile(rwFileHandle,0);
+        storeApi->writeToFile(rwFileHandle, core::Buffer::from(std::string(512*1025+1, 'H')));
+    }, core::InvalidParamsException);
+}
 TEST_F(StoreTest, sendMessage_cacheManipulation) {
     // load store to cache
     EXPECT_NO_THROW({

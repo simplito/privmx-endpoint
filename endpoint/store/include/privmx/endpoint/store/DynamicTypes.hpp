@@ -29,6 +29,7 @@ ENDPOINT_CLIENT_TYPE(InternalStoreFileMeta)
     INT64_FIELD(chunkSize)
     STRING_FIELD(key)
     STRING_FIELD(hmac)
+    BOOL_FIELD(randomWrite)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(StoreFileMetaV4)
