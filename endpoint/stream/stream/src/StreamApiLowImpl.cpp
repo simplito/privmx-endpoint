@@ -88,9 +88,14 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
     }
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    std::cerr << "before check" << std::endl;
-    isInternalJanusEvent(type, data);
-    std::cerr << "after check" << std::endl;
+    std::cerr << "before check: " << privmx::utils::Utils::stringifyVar(data) << std::endl;
+    try {
+        isInternalJanusEvent(type, data);
+        std::cerr << "after check" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Error in isInternalJanusEvent(): " << e.what() << std::endl;
+    }
+
 
     if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
         std::cerr << __LINE__ << std::endl;
@@ -109,11 +114,9 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         std::cerr << __LINE__ << std::endl;
         return;
     }
-    std::cerr << "Event-Debug - type: " << type << std::endl << utils::Utils::stringifyVar(data, true) << std::endl << "------------------------ END" << std::endl;
     if (isInternalJanusEvent(type, data)) {
-        std::cerr << __LINE__ << std::endl;
-
-        processJanusEvent(data);
+        auto janusEventData = data->getObject("data");
+        processJanusEvent(janusEventData);
         return;
     }
     
@@ -201,12 +204,10 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
     // }
 }
 
-bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data) {
-    auto isJanus = type == "janus";
-    auto isDataJanus = data->has("janus");
-    auto isEvent = data->getValue<std::string>("janus") == "event";
-    std::cerr << "isJanus: " << isJanus << " / isDataJanus: " << isDataJanus << " / isEvent: " << isEvent << std::endl;
-    return type == "janus" && data->has("janus") && data->getValue<std::string>("janus") == "event";
+bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr event) {
+    return type == "janus" 
+    && event->has("data") 
+    && event->getObject("data")->has("janus");
 }
 
 void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
