@@ -83,8 +83,17 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 }
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    std::cerr << "new event: " << type << std::endl;
+    if (type == "janus") {
+        std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
+    }
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
+    std::cerr << "before check" << std::endl;
+    isInternalJanusEvent(type, data);
+    std::cerr << "after check" << std::endl;
+
     if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
+        std::cerr << __LINE__ << std::endl;
         auto raw = utils::TypedObjectFactory::createObjectFromVar<event::server::ContextCustomEventData>(data);
         auto decryptedData = _eventApi->extractInternalEventData(data);
         auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<dynamic::StreamKeyManagementEvent>(
@@ -95,10 +104,19 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
             roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
         }
     }
-    if(!_streamSubscriptionHelper.hasSubscription(notification.subscriptions) && type != "janus") {
+
+    if(!_streamSubscriptionHelper.hasSubscription(notification.subscriptions) && !isInternalJanusEvent(type, data)) {
+        std::cerr << __LINE__ << std::endl;
         return;
     }
     std::cerr << "Event-Debug - type: " << type << std::endl << utils::Utils::stringifyVar(data, true) << std::endl << "------------------------ END" << std::endl;
+    if (isInternalJanusEvent(type, data)) {
+        std::cerr << __LINE__ << std::endl;
+
+        processJanusEvent(data);
+        return;
+    }
+    
     if (type == "streamRoomCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
         auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 
@@ -145,42 +163,98 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
             event->data = eventData;
             _eventMiddleware->emitApiEvent(event);
         }
-    } else if(type == "janus") {
-        if( 
-            data->has("janus") && 
-            data->getValue<std::string>("janus") == "event" &&
-            data->has("jsep") && 
-            data->has("plugindata")
-        )  {
-            auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
-            auto localStreamId = _sessionIdToStreamId.get(janusPluginEvent.session_id());
-            // if stream is about me
-            if(localStreamId.has_value() && _streamIdToRoomId.has(localStreamId.value())) {
-                //if streamId exist that mens stream and room exist
-                auto room = _streamRoomMap.get(_streamIdToRoomId.get(localStreamId.value()).value()).value();
-                auto streamData = room->streamMap.get(localStreamId.value()).value();
+    } 
+    // else if(type == "janus") {
+    //     if( 
+    //         data->has("janus") && 
+    //         data->getValue<std::string>("janus") == "event" &&
+    //         data->has("jsep") && 
+    //         data->has("plugindata")
+    //     )  {
+    //         auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
+    //         auto localStreamId = _sessionIdToStreamId.get(janusPluginEvent.session_id());
+    //         // if stream is about me
+    //         if(localStreamId.has_value() && _streamIdToRoomId.has(localStreamId.value())) {
+    //             //if streamId exist that mens stream and room exist
+    //             auto room = _streamRoomMap.get(_streamIdToRoomId.get(localStreamId.value()).value()).value();
+    //             auto streamData = room->streamMap.get(localStreamId.value()).value();
 
-                if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
-                    auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata());
-                    if(janusVideoRoom.videoroomOpt("") == "updated") {
-                        auto janusVideoRoomUpdated = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoomUpdated>(janusPluginEvent.plugindata());
-                        // janusPluginEvent.session_id == _streamIdToRoomId[room].streamMap[streamId].sessionId
-                        // where janusPluginEvent.session_id maps one_to_one with StreamData.sessionId
-                        // task sessionId get StreamData.webRtc witch is stored in streamMap witch is stored in _streamIdToRoomId
-                        auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(janusPluginEvent.jsep().sdp(), janusPluginEvent.jsep().type());
-                        auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
-                        sessionDescription.sdp(sdp);
-                        sessionDescription.type("answer");
-                        auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
-                        model.sessionId(janusPluginEvent.session_id());
-                        model.answer(sessionDescription);
-                        _serverApi->streamAcceptOffer(model);
-                    }
+    //             if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
+    //                 auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata());
+    //                 if(janusVideoRoom.videoroomOpt("") == "updated") {
+    //                     auto janusVideoRoomUpdated = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoomUpdated>(janusPluginEvent.plugindata());
+    //                     // janusPluginEvent.session_id == _streamIdToRoomId[room].streamMap[streamId].sessionId
+    //                     // where janusPluginEvent.session_id maps one_to_one with StreamData.sessionId
+    //                     // task sessionId get StreamData.webRtc witch is stored in streamMap witch is stored in _streamIdToRoomId
+    //                     auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(janusPluginEvent.jsep().sdp(), janusPluginEvent.jsep().type());
+    //                     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+    //                     sessionDescription.sdp(sdp);
+    //                     sessionDescription.type("answer");
+    //                     auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
+    //                     model.sessionId(janusPluginEvent.session_id());
+    //                     model.answer(sessionDescription);
+    //                     _serverApi->streamAcceptOffer(model);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+}
+
+bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data) {
+    auto isJanus = type == "janus";
+    auto isDataJanus = data->has("janus");
+    auto isEvent = data->getValue<std::string>("janus") == "event";
+    std::cerr << "isJanus: " << isJanus << " / isDataJanus: " << isDataJanus << " / isEvent: " << isEvent << std::endl;
+    return type == "janus" && data->has("janus") && data->getValue<std::string>("janus") == "event";
+}
+
+void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
+    std::cerr << "=========> PROCESSING JANUS EVENT <==================" << std::endl;
+    auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
+    auto localStreamId = _sessionIdToStreamId.get(janusPluginEvent.session_id());
+    // if stream is about me
+    if(localStreamId.has_value() && _streamIdToRoomId.has(localStreamId.value())) {
+        std::cerr << __LINE__ << std::endl;
+        //if streamId exist that mens stream and room exist
+        auto room = _streamRoomMap.get(_streamIdToRoomId.get(localStreamId.value()).value()).value();
+        auto streamData = room->streamMap.get(localStreamId.value()).value();
+    
+        if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
+            std::cerr << __LINE__ << std::endl;
+            auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata());
+
+            if(janusVideoRoom.videoroomOpt("") == "updated") {
+                std::cerr << __LINE__ << std::endl;
+                auto janusVideoRoomUpdated = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoomUpdated>(janusVideoRoom);
+                auto jsep = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
+                if (!janusPluginEvent.jsepEmpty()) {
+                    jsep = janusPluginEvent.jsep();
                 }
+                std::cerr << __LINE__ << std::endl;
+
+                onVideoRoomUpdate(janusPluginEvent.session_id(), janusVideoRoomUpdated, streamData, jsep);
             }
         }
     }
 }
+
+void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, const server::JanusVideoRoomUpdated updateEvent, const std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep) {
+    if (jsep.has_value()) {
+                        std::cerr << __LINE__ << std::endl;
+        auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(jsep.value().sdp(), jsep.value().type());
+        auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+        sessionDescription.sdp(sdp);
+        sessionDescription.type("answer");
+        auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
+        model.sessionId(session_id);
+        model.answer(sessionDescription);
+        _serverApi->streamAcceptOffer(model);
+    }
+    std::cerr << "onVideoRoomUpdate (but without jsep)" << std::endl;
+    // TODO: update list of available streams and emit user event about update
+} 
+
 
 void StreamApiLowImpl::processConnectedEvent() {
 

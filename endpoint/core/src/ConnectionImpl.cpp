@@ -73,7 +73,12 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
-        _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
+        if (event.type == "janus") {
+            // emit as raw
+            _eventMiddleware->emitNotificationEvent(event.type, convertJanusEventToCoreNotificationEvent(event));
+        } else {
+            _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
+        }
     });
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
@@ -258,6 +263,17 @@ NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationE
         .version = tmp.version(),
         .timestamp = tmp.timestamp(),
         .subscriptions = subscriptions
+    };
+}
+
+NotificationEvent ConnectionImpl::convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
+    return NotificationEvent{
+        .source = EventSource::SERVER,
+        .type = event.type,
+        .data = event.data,
+        .version = 0,
+        .timestamp = 0,
+        .subscriptions = {}
     };
 }
 

@@ -87,6 +87,7 @@ public:
 
 private:
     void validateEndpoint();
+
     StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl);
     std::shared_ptr<StreamApiLowImpl> _impl;
 };

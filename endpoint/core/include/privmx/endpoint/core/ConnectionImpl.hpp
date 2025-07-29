@@ -102,6 +102,7 @@ private:
     );
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
+    NotificationEvent convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
 
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;

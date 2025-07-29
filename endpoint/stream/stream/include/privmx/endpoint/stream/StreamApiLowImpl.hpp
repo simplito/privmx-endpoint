@@ -121,6 +121,11 @@ private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
+
+    bool isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data);
+    void processJanusEvent(const Poco::JSON::Object::Ptr data);
+    void onVideoRoomUpdate(const int64_t session_id, const server::JanusVideoRoomUpdated updateEvent, const std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep = std::nullopt);
+
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     StreamRoom convertServerStreamRoomToLibStreamRoom(
         server::StreamRoomInfo streamRoomInfo,

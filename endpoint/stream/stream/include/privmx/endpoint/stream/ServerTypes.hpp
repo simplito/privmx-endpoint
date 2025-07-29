@@ -239,7 +239,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE_INHERIT(JanusVideoRoomUpdated, JanusVideoRoom)
     INT64_FIELD(room)
-    LIST_FIELD(streams, JanusVideoRoomStream)
+    LIST_FIELD(streams, JanusVideoRoomStream)    
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(JanusPluginDataEvent)
