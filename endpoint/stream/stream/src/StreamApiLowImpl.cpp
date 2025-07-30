@@ -223,7 +223,7 @@ void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
     
         if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
             std::cerr << __LINE__ << std::endl;
-            auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata());
+            auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata().data());
 
             if(janusVideoRoom.videoroomOpt("") == "updated") {
                 std::cerr << __LINE__ << std::endl;
@@ -251,8 +251,10 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, const server:
         model.sessionId(session_id);
         model.answer(sessionDescription);
         _serverApi->streamAcceptOffer(model);
+        std::cerr << "===========> AFTER streamAcceptOffer!!!" << std::endl;
+    } else {
+        std::cerr << "onVideoRoomUpdate (but without jsep)" << std::endl;
     }
-    std::cerr << "onVideoRoomUpdate (but without jsep)" << std::endl;
     // TODO: update list of available streams and emit user event about update
 } 
 
