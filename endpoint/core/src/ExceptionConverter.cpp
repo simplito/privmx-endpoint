@@ -192,8 +192,6 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw crypto::InvalidVersionException(e.what());
                 case 0x0020:
                     throw crypto::InvalidParentFingerprintException(e.what());
-                case 0x0021:
-                    throw crypto::DeriveFromPublicKeyNotImplementedException(e.what());
                 case 0x0022:
                     throw crypto::InvalidResultSizeException(e.what());
                 case 0x0023:
@@ -208,6 +206,10 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw crypto::PrivmxDriverCryptoException(e.what());
                 case 0x0028:
                     throw crypto::PrivmxDriverEccException(e.what());
+                case 0x0029:
+                    throw crypto::GivenPublicKeyDoesNotMatchWithSignatureException(e.what());
+                case 0x002A:
+                    throw crypto::ExtKeyDoesNotHoldPrivateKeyException(e.what());
                 default:
                     throw crypto::EndpointCryptoException(e.what());
             }

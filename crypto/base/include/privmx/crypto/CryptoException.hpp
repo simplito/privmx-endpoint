@@ -51,7 +51,6 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidBNException, CryptoException, "Invalid B N
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidM2Exception, CryptoException, "Invalid M2", 0x0001E)
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidVersionException, CryptoException, "Invalid version", 0x001F)
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidParentFingerprintException, CryptoException, "Invalid parent fingerprint", 0x0020)
-DECLARE_PRIVMX_EXCEPTION_CHILD(DeriveFromPublicKeyNotImplementedException, CryptoException, "Derive from public key not implemented", 0x0021)
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidResultSizeException, CryptoException, "Invalid result size", 0x0022)
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidNetworkException, CryptoException, "Invalid network", 0x0023)
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidCompressionFlagException, CryptoException, "Invalid compression flag", 0x0024)
@@ -60,6 +59,7 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(OpenSSLException, CryptoException, "OpenSSL Excep
 DECLARE_PRIVMX_EXCEPTION_CHILD(PrivmxDriverCryptoException, CryptoException, "privmxDrvCrypto Exception", 0x0027)
 DECLARE_PRIVMX_EXCEPTION_CHILD(PrivmxDriverEccException, CryptoException, "privmxDrvEcc Exception", 0x0028)
 DECLARE_PRIVMX_EXCEPTION_CHILD(GivenPublicKeyDoesNotMatchWithSignatureException, CryptoException, "Given public key does not match with signature", 0x0029)
+DECLARE_PRIVMX_EXCEPTION_CHILD(ExtKeyDoesNotHoldPrivateKeyException, CryptoException, "Ext key does not hold private key", 0x002A)
 
 } // crypto
 } // privmx

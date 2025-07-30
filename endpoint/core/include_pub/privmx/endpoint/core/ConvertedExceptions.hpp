@@ -152,7 +152,6 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidBNException, "Invalid
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidM2Exception, "Invalid M2", 0x001E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidVersionException, "Invalid version", 0x001F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidParentFingerprintException, "Invalid parent fingerprint", 0x0020)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, DeriveFromPublicKeyNotImplementedException, "Derive from public key not implemented", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidResultSizeException, "Invalid result size", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidNetworkException, "Invalid network", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidCompressionFlagException, "Invalid network", 0x0024)
@@ -160,6 +159,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidWIFPayloadLengthExcep
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, OpenSSLException, "OpenSSL Exception", 0x0026)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, PrivmxDriverCryptoException, "privmxDrvCrypto Exception", 0x0027)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, PrivmxDriverEccException, "privmxDrvEcc Exception", 0x0028)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, GivenPublicKeyDoesNotMatchWithSignatureException, "DGiven public key does not match with signature", 0x0029)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, ExtKeyDoesNotHoldPrivateKeyException, "Ext key does not hold private key", 0x002A)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointPrivFsException, "Unknown PrivFs exception", "PrivFs", 0xE0A3)
 DECLARE_ENDPOINT_EXCEPTION(EndpointPrivFsException, InvalidHostException, "Invalid host", 0x0001)
