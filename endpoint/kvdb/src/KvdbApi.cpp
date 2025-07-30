@@ -16,7 +16,6 @@ limitations under the License.
 
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
-#include "privmx/endpoint/kvdb/KvdbVarSerializer.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 
 using namespace privmx::endpoint;
@@ -31,7 +30,6 @@ KvdbApi KvdbApi::create(core::Connection& connection) {
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
             connection
         ));
         return KvdbApi(impl);
@@ -200,39 +198,30 @@ std::map<std::string, bool> KvdbApi::deleteEntries(const std::string& kvdbId, co
     }
 }
 
-void KvdbApi::subscribeForKvdbEvents() {
+std::vector<std::string> KvdbApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     validateEndpoint();
     try {
-        return _impl->subscribeForKvdbEvents();
+        return _impl->subscribeFor(subscriptionQueries);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-void KvdbApi::unsubscribeFromKvdbEvents() {
+
+void KvdbApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     validateEndpoint();
     try {
-        return _impl->unsubscribeFromKvdbEvents();
+        return _impl->unsubscribeFrom(subscriptionIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-void KvdbApi::subscribeForEntryEvents(std::string kvdbId) {
+
+std::string KvdbApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     validateEndpoint();
-    core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
-        return _impl->subscribeForEntryEvents(kvdbId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-void KvdbApi::unsubscribeFromEntryEvents(std::string kvdbId) {
-    validateEndpoint();
-    core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return _impl->unsubscribeFromEntryEvents(kvdbId);
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

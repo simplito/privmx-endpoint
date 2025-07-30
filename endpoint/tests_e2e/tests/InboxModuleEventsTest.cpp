@@ -75,13 +75,14 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-        threadApi->subscribeForThreadEvents();
-        storeApi->subscribeForStoreEvents();
+        inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::INBOX_CREATE, 
+                inbox::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        inboxApi->subscribeForInboxEvents();
-    }, inbox::AlreadySubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
@@ -154,14 +155,15 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxCreated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-        threadApi->subscribeForThreadEvents();
-        storeApi->subscribeForStoreEvents();
-        inboxApi->unsubscribeFromInboxEvents();
+        auto tmp = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::INBOX_CREATE, 
+                inbox::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        inboxApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        inboxApi->unsubscribeFromInboxEvents();
-    }, inbox::NotSubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
@@ -203,13 +205,14 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxUpdated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-        threadApi->subscribeForThreadEvents();
-        storeApi->subscribeForStoreEvents();
+        inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::INBOX_UPDATE, 
+                inbox::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        inboxApi->subscribeForInboxEvents();
-    }, inbox::AlreadySubscribedException);
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),
@@ -284,14 +287,15 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxUpdated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-        threadApi->subscribeForThreadEvents();
-        storeApi->subscribeForStoreEvents();
-        inboxApi->unsubscribeFromInboxEvents();
+        auto tmp = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::INBOX_UPDATE, 
+                inbox::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        inboxApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        inboxApi->unsubscribeFromInboxEvents();
-    }, inbox::NotSubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
@@ -336,13 +340,14 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-        threadApi->subscribeForThreadEvents();
-        storeApi->subscribeForStoreEvents();
+        inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::INBOX_DELETE, 
+                inbox::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        inboxApi->subscribeForInboxEvents();
-    }, inbox::AlreadySubscribedException);
     EXPECT_NO_THROW({
         inboxApi->deleteInbox(
             reader->getString("Inbox_1.inboxId")
@@ -393,14 +398,15 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxDeleted_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-        threadApi->subscribeForThreadEvents();
-        storeApi->subscribeForStoreEvents();
-        inboxApi->unsubscribeFromInboxEvents();
+        auto tmp = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::INBOX_DELETE, 
+                inbox::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        inboxApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        inboxApi->unsubscribeFromInboxEvents();
-    }, inbox::NotSubscribedException);
     std::string inboxId;
     EXPECT_NO_THROW({
         inboxApi->deleteInbox(
@@ -431,11 +437,14 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
+        inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::ENTRY_CREATE, 
+                inbox::EventSelectorType::INBOX_ID,
+                reader->getString("Inbox_1.inboxId")
+            )
+        });
     });
-    EXPECT_THROW({
-        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
-    }, inbox::AlreadySubscribedException);
     int64_t fileHandle = 0;
     std::string file_total_data_send = "";
     EXPECT_NO_THROW({
@@ -506,12 +515,15 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryCreated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
-        inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
+        auto tmp = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::ENTRY_CREATE, 
+                inbox::EventSelectorType::INBOX_ID,
+                reader->getString("Inbox_1.inboxId")
+            )
+        });
+        inboxApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
-    }, inbox::NotSubscribedException);
     int64_t fileHandle = 0;
     std::string file_total_data_send = "";
     EXPECT_NO_THROW({
@@ -569,11 +581,14 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
+        inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::ENTRY_DELETE, 
+                inbox::EventSelectorType::INBOX_ID,
+                reader->getString("Inbox_1.inboxId")
+            )
+        });
     });
-    EXPECT_THROW({
-        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
-    }, inbox::AlreadySubscribedException);
     EXPECT_NO_THROW({
         inboxApi->deleteEntry(
             reader->getString("Entry_1.entryId")
@@ -610,12 +625,15 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryDeleted_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        inboxApi->subscribeForEntryEvents(reader->getString("Inbox_1.inboxId"));
-        inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
+        auto tmp = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::ENTRY_DELETE, 
+                inbox::EventSelectorType::INBOX_ID,
+                reader->getString("Inbox_1.inboxId")
+            )
+        });
+        inboxApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        inboxApi->unsubscribeFromEntryEvents(reader->getString("Inbox_1.inboxId"));
-    }, inbox::NotSubscribedException);
     EXPECT_NO_THROW({
         inboxApi->deleteEntry(
             reader->getString("Entry_1.entryId")

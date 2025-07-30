@@ -9,7 +9,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
-#include <privmx/endpoint/store/StoreVarSerializer.hpp>
+#include <privmx/endpoint/store/VarSerializer.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
@@ -587,10 +587,6 @@ TEST_F(StoreTest, updateStore_incorrect_data) {
 }
 
 TEST_F(StoreTest, updateStore_correct_data) {
-    //enable cache
-    EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-    });
     store::Store store;
     // new users
     EXPECT_NO_THROW({

@@ -104,10 +104,6 @@ inline const std::unordered_map<std::string, func_enum> functions_endpoint = {
     {"thread.getMessage", thread_getMessage},
     {"thread.listMessages", thread_listMessages},
     {"thread.deleteMessage", thread_deleteMessage},
-    {"thread.subscribeForThreadEvents", thread_subscribeForThreadEvents},
-    {"thread.unsubscribeFromThreadEvents", thread_unsubscribeFromThreadEvents},
-    {"thread.subscribeForMessageEvents", thread_subscribeForMessageEvents},
-    {"thread.unsubscribeFromMessageEvents", thread_unsubscribeFromMessageEvents},
     {"store.createStore", store_createStore},
     {"store.updateStore", store_updateStore},
     {"store.getStore", store_getStore},
@@ -124,10 +120,6 @@ inline const std::unordered_map<std::string, func_enum> functions_endpoint = {
     {"store.writeToFile", store_writeToFile},
     {"store.seekInFile", store_seekInFile},
     {"store.closeFile", store_closeFile},
-    {"store.subscribeForStoreEvents", store_subscribeForStoreEvents},
-    {"store.unsubscribeFromStoreEvents", store_unsubscribeFromStoreEvents},
-    {"store.subscribeForFileEvents", store_subscribeForFileEvents},
-    {"store.unsubscribeFromFileEvents", store_unsubscribeFromFileEvents},
     {"inbox.createInbox", inbox_createInbox},
     {"inbox.updateInbox", inbox_updateInbox},
     {"inbox.getInbox", inbox_getInbox},
@@ -145,10 +137,6 @@ inline const std::unordered_map<std::string, func_enum> functions_endpoint = {
     {"inbox.readFromFile", inbox_readFromFile},
     {"inbox.seekInFile", inbox_seekInFile},
     {"inbox.closeFile", inbox_closeFile},
-    {"inbox.subscribeForInboxEvents", inbox_subscribeForInboxEvents},
-    {"inbox.unsubscribeFromInboxEvents",  inbox_unsubscribeFromInboxEvents},
-    {"inbox.subscribeForEntryEvents", inbox_subscribeForEntryEvents},
-    {"inbox.unsubscribeFromEntryEvents", inbox_unsubscribeFromEntryEvents},
 };
 
 } // privmxcli

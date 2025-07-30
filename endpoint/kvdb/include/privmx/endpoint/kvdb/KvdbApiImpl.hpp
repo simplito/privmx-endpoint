@@ -21,8 +21,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/ContainerKeyCache.hpp>
@@ -33,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/kvdb/Constants.hpp"
+#include "privmx/endpoint/kvdb/SubscriberImpl.hpp"
 
 
 namespace privmx {
@@ -48,7 +47,6 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
     ~KvdbApiImpl();
@@ -83,10 +81,9 @@ public:
     void deleteEntry(const std::string& kvdbId, const std::string& key);
     std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
 
-    void subscribeForKvdbEvents();
-    void unsubscribeFromKvdbEvents();
-    void subscribeForEntryEvents(std::string kvdbId);
-    void unsubscribeFromEntryEvents(std::string kvdbId);
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string createKvdbEx(
         const std::string& contextId, 
@@ -164,7 +161,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
-    core::SubscriptionHelper _kvdbSubscriptionHelper;
+    SubscriberImpl _subscriber;
     core::ModuleDataEncryptorV5 _kvdbDataEncryptorV5;
     EntryDataEncryptorV5 _entryDataEncryptorV5;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

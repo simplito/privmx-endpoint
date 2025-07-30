@@ -16,9 +16,7 @@ limitations under the License.
 
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
 #include "privmx/endpoint/store/StoreValidator.hpp"
-#include "privmx/endpoint/core/EventVarSerializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -34,11 +32,8 @@ StoreApi StoreApi::create(core::Connection& connection) {
             connectionImpl->getHost(),
             connectionImpl->getUserPrivKey(),
             requestApi,
-            // std::shared_ptr<FilesUtils>(new FilesUtils(requestApi)),
             std::shared_ptr<FileDataProvider>(new FileDataProvider(serverApi)),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
-            // connectionImpl->getDataResolver(),
             connectionImpl->getHandleManager(),
             connection,
             connectionImpl->getServerConfig().requestChunkSize
@@ -239,48 +234,6 @@ core::PagingList<File> StoreApi::listFiles(const std::string& storeId, const cor
     }
 }
 
-void StoreApi::subscribeForStoreEvents() {
-    validateEndpoint();
-    try {
-        return _impl->subscribeForStoreEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::unsubscribeFromStoreEvents() {
-    validateEndpoint();
-    try {
-        return _impl->unsubscribeFromStoreEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::subscribeForFileEvents(const std::string& storeId) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->subscribeForFileEvents(storeId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::unsubscribeFromFileEvents(const std::string& storeId) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->unsubscribeFromFileEvents(storeId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 void StoreApi::updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
     validateEndpoint();
     core::Validator::validateId(fileId, "field:fileId ");
@@ -296,6 +249,36 @@ void StoreApi::syncFile(const int64_t handle) {
     validateEndpoint();
     try {
         return _impl->syncFile(handle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::vector<std::string> StoreApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    validateEndpoint();
+    try {
+        return _impl->subscribeFor(subscriptionQueries);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StoreApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    validateEndpoint();
+    try {
+        return _impl->unsubscribeFrom(subscriptionIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string StoreApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

@@ -26,8 +26,6 @@ limitations under the License.
 #include <privmx/endpoint/core/encryptors/DataEncryptor.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 
@@ -44,6 +42,7 @@ limitations under the License.
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
+#include "privmx/endpoint/store/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
@@ -61,7 +60,6 @@ public:
         const std::shared_ptr<RequestApi>& requestApi,
         const std::shared_ptr<FileDataProvider>& fileDataProvider,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const std::shared_ptr<core::HandleManager>& handleManager,
         const core::Connection& connection,
         size_t serverRequestChunkSize
@@ -101,13 +99,12 @@ public:
     void seekInFile(const int64_t handle, const int64_t pos);
     void syncFile(const int64_t handle);
     std::string closeFile(const int64_t handle);
-
-    void subscribeForStoreEvents();
-    void unsubscribeFromStoreEvents();
-    void subscribeForFileEvents(const std::string& storeId);
-    void unsubscribeFromFileEvents(const std::string& storeId);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
+
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
@@ -191,7 +188,6 @@ private:
     std::shared_ptr<RequestApi> _requestApi;
     std::shared_ptr<FileDataProvider> _fileDataProvider;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::EventChannelManager> _eventChannelManager;
     std::shared_ptr<core::HandleManager> _handleManager;
     core::Connection _connection;
     size_t _serverRequestChunkSize;
@@ -200,7 +196,7 @@ private:
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
     FileMetaEncryptorV1 _fileMetaEncryptorV1;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    core::SubscriptionHelper _storeSubscriptionHelper;
+    SubscriberImpl _subscriber;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 
 

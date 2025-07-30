@@ -22,8 +22,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 
@@ -37,6 +35,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
+#include "privmx/endpoint/thread/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 
@@ -53,7 +52,6 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
     ~ThreadApiImpl();
@@ -80,10 +78,9 @@ public:
     void updateMessage(const std::string& messageId, const core::Buffer& publicMeta,
                             const core::Buffer& privateMeta, const core::Buffer& data);
 
-    void subscribeForThreadEvents();
-    void unsubscribeFromThreadEvents();
-    void subscribeForMessageEvents(std::string threadId);
-    void unsubscribeFromMessageEvents(std::string threadId);
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string _createThreadEx(
         const std::string& contextId, 
@@ -184,7 +181,7 @@ private:
     MessageDataV2Encryptor _messageDataV2Encryptor;
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
-    core::SubscriptionHelper _threadSubscriptionHelper;
+    SubscriberImpl _subscriber;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _messageDeleterId;

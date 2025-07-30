@@ -53,11 +53,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_CREATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        storeApi->subscribeForStoreEvents();
-    }, store::AlreadySubscribedException);
     std::string storeId;
     EXPECT_NO_THROW({
         storeId = storeApi->createStore(
@@ -114,12 +117,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_CREATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromStoreEvents();
-    }, store::NotSubscribedException);
     std::string storeId;
     EXPECT_NO_THROW({
         storeId = storeApi->createStore(
@@ -160,11 +166,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_UPDATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        storeApi->subscribeForStoreEvents();
-    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -223,12 +232,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_UPDATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromStoreEvents();
-    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -271,11 +283,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_DELETE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        storeApi->subscribeForStoreEvents();
-    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteStore(
             reader->getString("Store_1.storeId")
@@ -311,12 +326,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_DELETE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromStoreEvents();
-    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteStore(
             reader->getString("Store_1.storeId")
@@ -346,11 +364,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_STATS, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        storeApi->subscribeForStoreEvents();
-    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
@@ -388,12 +409,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_STATS, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromStoreEvents();
-    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
@@ -423,11 +447,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_CREATE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
     });
-    EXPECT_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
-    }, store::AlreadySubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->createFile(
@@ -483,12 +510,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });    
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_CREATE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
-    }, store::NotSubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->createFile(
@@ -535,11 +565,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_UPDATE, 
+                store::EventSelectorType::FILE_ID,
+                reader->getString("File_1.info_fileId")
+            )
+        });
     });
-    EXPECT_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
-    }, store::AlreadySubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->updateFile(
@@ -577,7 +610,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_enabled) {
         EXPECT_EQ(event->type, "storeFileUpdated");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileUpdatedEvent(event)) {
-            store::File storeFile = store::Events::extractStoreFileUpdatedEvent(event).data;
+            store::File storeFile = store::Events::extractStoreFileUpdatedEvent(event).data.file;
             EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeFile.size, 0);
             EXPECT_EQ(storeFile.publicMeta.stdString(), "publicMeta");
@@ -596,12 +629,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_UPDATE, 
+                store::EventSelectorType::FILE_ID,
+                reader->getString("File_1.info_fileId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
-    }, store::NotSubscribedException);
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->updateFile(
@@ -649,11 +685,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));;
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_DELETE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
     });
-    EXPECT_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
-    }, store::AlreadySubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
@@ -691,12 +730,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_DELETE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
-    }, store::NotSubscribedException);
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")

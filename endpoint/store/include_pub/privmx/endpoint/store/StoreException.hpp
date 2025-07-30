@@ -80,6 +80,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileTopHashException, 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileSyncFailedHandleCloseException, "File sync failed, handle closed", 0x002B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileRandomWriteInternalException, "File random write internal Exception ", 0x002C)
 
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x002D)
+
 
 } // store
 } // endpoint

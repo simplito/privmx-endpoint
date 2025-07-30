@@ -195,26 +195,26 @@ public:
     std::string closeFile(const int64_t fileHandle);
 
     /**
-     * Subscribes for the Store module main events.
+     * Subscribe for the Store events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
      */
-    void subscribeForStoreEvents();
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
 
     /**
-     * Unsubscribes from the Store module main events.
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
      */
-    void unsubscribeFromStoreEvents();
-    
-    /**
-     * Subscribes for events in given Store.
-     * @param store ID of the Store to subscribe
-     */
-    void subscribeForFileEvents(const std::string& storeId);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
 
     /**
-     * Unsubscribes from events in given Store.
-     * @param store ID of the Store to unsubscribe
-     */    
-    void unsubscribeFromFileEvents(const std::string& storeId);
+     * Generate subscription Query for the Store events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     /**
      * Synchronize file handle data with newset data on serwer

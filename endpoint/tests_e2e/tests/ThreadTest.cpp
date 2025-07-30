@@ -9,7 +9,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/endpoint/thread/ThreadVarSerializer.hpp>
+#include <privmx/endpoint/thread/VarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 
@@ -583,10 +583,6 @@ TEST_F(ThreadTest, updateThread_incorrect_data) {
 }
 
 TEST_F(ThreadTest, updateThread_correct_data) {
-    //enable cache
-    EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
-    });
     thread::Thread thread;
     // new users
     EXPECT_NO_THROW({

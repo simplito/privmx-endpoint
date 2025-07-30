@@ -34,6 +34,26 @@ struct ServerFileInfo {
 };
 
 /**
+ * Holds information about the file change.
+ * 
+ */
+struct FileChange {
+    /**
+     * position of file change
+     */
+    int64_t pos;
+    /**
+     * length of file change
+     */
+    int64_t length;
+    /**
+     * remove all data 
+     */
+    bool truncate;
+};
+
+
+/**
  * Holds information about the file.
  * 
  */
@@ -167,6 +187,22 @@ struct Store {
     int64_t schemaVersion;
 };
 
+enum EventType: int64_t {
+    STORE_CREATE = 0,
+    STORE_UPDATE = 1,
+    STORE_DELETE = 2,
+    STORE_STATS = 3,
+    FILE_CREATE = 4,
+    FILE_UPDATE = 5,
+    FILE_DELETE = 6,
+
+};
+
+enum EventSelectorType: int64_t {
+    CONTEXT_ID = 0,
+    STORE_ID = 1,
+    FILE_ID = 2,
+};
 
 }  // namespace store
 }  // namespace endpoint

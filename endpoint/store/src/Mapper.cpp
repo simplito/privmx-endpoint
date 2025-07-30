@@ -27,3 +27,19 @@ StoreStatsChangedEventData Mapper::mapToStoreStatsChangedEventData(const server:
             .lastFileDate = data.lastFileDate(),
             .filesCount = data.files()};
 }
+
+StoreFileUpdatedEventData Mapper::mapTostoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file ) {
+    auto result = StoreFileUpdatedEventData{.file = file, .changes = {}};
+    if (!data.changesEmpty()) {
+        for(auto change: data.changes()) {
+            if(change.type() == "file") {
+                result.changes.push_back(FileChange{
+                    .pos = change.pos(),
+                    .length = change.length(),
+                    .truncate = change.truncate()
+                });
+            }
+        }
+    }
+    return result;
+}

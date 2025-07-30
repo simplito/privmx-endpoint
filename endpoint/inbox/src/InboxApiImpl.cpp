@@ -51,10 +51,9 @@ InboxApiImpl::InboxApiImpl(
     const std::string &host,
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const std::shared_ptr<core::HandleManager>& handleManager,
     size_t serverRequestChunkSize
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
     _connection(connection),
     _threadApi(threadApi),
     _storeApi(storeApi),
@@ -69,14 +68,8 @@ InboxApiImpl::InboxApiImpl(
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
     _serverRequestChunkSize(serverRequestChunkSize),
-    _inboxSubscriptionHelper(core::SubscriptionHelper(
-        eventChannelManager, 
-        "inbox", "items", 
-        [&](){},
-        [&](){}
-    )),
-    _threadSubscriptionHelper(core::SubscriptionHelperExt(eventChannelManager, "thread", "messages")),
-    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "inbox", "entries"}) 
+    _subscriber(connection.getImpl()->getGateway()),
+    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "inbox", "entries"})
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&InboxApiImpl::processConnectedEvent, this));
@@ -1000,94 +993,72 @@ inbox::FilesConfig InboxApiImpl::getFilesConfigOptOrDefault(const std::optional<
 }
 
 void InboxApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(notification.source == core::EventSource::INTERNAL) {
-        _inboxSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
-        return;
-    }
-    if(!(_inboxSubscriptionHelper.hasSubscription(notification.subscriptions) || _threadSubscriptionHelper.hasSubscription(notification.subscriptions))) {
+    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
         return;
     }
     if (type == "inboxCreated") {
         auto raw = Factory::createObject<server::Inbox>(notification.data);
-        setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
-        auto data = validateDecryptAndConvertInboxDataToInbox(raw);
-        std::shared_ptr<InboxCreatedEvent> event(new InboxCreatedEvent());
-        event->channel = "inbox";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
+        if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
+            setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
+            auto data = validateDecryptAndConvertInboxDataToInbox(raw);
+            std::shared_ptr<InboxCreatedEvent> event(new InboxCreatedEvent());
+            event->channel = "inbox";
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
     } else if (type == "inboxUpdated") {
         auto raw = Factory::createObject<server::Inbox>(notification.data);
-        setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
-        auto data = validateDecryptAndConvertInboxDataToInbox(raw);
-        std::shared_ptr<InboxUpdatedEvent> event(new InboxUpdatedEvent());
-        event->channel = "inbox";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
+        if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
+            setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
+            auto data = validateDecryptAndConvertInboxDataToInbox(raw);
+            std::shared_ptr<InboxUpdatedEvent> event(new InboxUpdatedEvent());
+            event->channel = "inbox";
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        }
     } else if (type == "inboxDeleted") {
         auto raw = Factory::createObject<server::InboxDeletedEventData>(notification.data);
-        invalidateModuleKeysInCache(raw.inboxId());
-        auto data = convertInboxDeletedEventData(raw);
-        std::shared_ptr<InboxDeletedEvent> event(new InboxDeletedEvent());
-        event->channel = "inbox";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
+        if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
+            invalidateModuleKeysInCache(raw.inboxId());
+            auto data = convertInboxDeletedEventData(raw);
+            std::shared_ptr<InboxDeletedEvent> event(new InboxDeletedEvent());
+            event->channel = "inbox";
+            event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
     } else if (type == "threadNewMessage") {
-        auto raw = Factory::createObject<privmx::endpoint::thread::server::Message>(notification.data); 
-        if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(raw.threadId())) {
-            auto inboxId = _threadSubscriptionHelper.getParentModuleEntryId(raw.threadId());
+        auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadMessageEventData>(notification.data); 
+        if(raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
+            auto inboxId = readInboxIdFromMessageKeyId(raw.keyId());
             auto message = decryptAndConvertInboxEntryDataToInboxEntry(raw, getEntryDecryptionKeys(raw));
             std::shared_ptr<InboxEntryCreatedEvent> event(new InboxEntryCreatedEvent());
             event->channel = "inbox/" + inboxId + "/entries";
             event->data = message;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadDeletedMessage") {
         auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadDeletedMessageEventData>(notification.data); 
-        if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(raw.threadId())) {
-            auto inboxId = _threadSubscriptionHelper.getParentModuleEntryId(raw.threadId());
+        if(raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
             std::shared_ptr<InboxEntryDeletedEvent> event(new InboxEntryDeletedEvent());
+            std::string inboxId;
+            auto tmp = _subscriber.convertKnownThreadIdToInboxId(raw.threadId());
+            if(tmp.has_value()) {
+                inboxId = tmp.value();
+            } else {
+                inboxId = "";
+            }
             event->channel = "inbox/" + inboxId + "/entries";
             event->data = {
                 .inboxId = inboxId,
                 .entryId = raw.messageId()
             };
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     }
-}
-
-void InboxApiImpl::subscribeForInboxEvents() {
-    if(_inboxSubscriptionHelper.hasSubscriptionForModule()) {
-        throw AlreadySubscribedException();
-    }
-    _inboxSubscriptionHelper.subscribeForModule();
-}
-
-void InboxApiImpl::unsubscribeFromInboxEvents() {
-    if(!_inboxSubscriptionHelper.hasSubscriptionForModule()) {
-        throw NotSubscribedException();
-    }
-    _inboxSubscriptionHelper.unsubscribeFromModule();
-}
-
-void InboxApiImpl::subscribeForEntryEvents(const std::string &inboxId) {
-    auto inbox = getServerInbox(inboxId);
-    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox), inbox.version());
-    auto inboxData = getInboxCurrentDataEntry(inbox).data();
-    if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(inboxData.threadId())) {
-        throw AlreadySubscribedException(inboxId);
-    }
-    _threadSubscriptionHelper.subscribeForModuleEntry(inboxData.threadId(), inboxId);
-}
-
-void InboxApiImpl::unsubscribeFromEntryEvents(const std::string& inboxId) {
-    auto inbox = getServerInbox(inboxId);
-    setNewModuleKeysInCache(inbox.id(), inboxToModuleKeys(inbox), inbox.version());
-    auto inboxData = getInboxCurrentDataEntry(inbox).data();
-    if(!_threadSubscriptionHelper.hasSubscriptionForModuleEntry(inboxData.threadId())) {
-        throw NotSubscribedException(inboxId);
-    }
-    _threadSubscriptionHelper.unsubscribeFromModuleEntry(inboxData.threadId());
 }
 
 void InboxApiImpl::processConnectedEvent() {
@@ -1193,4 +1164,19 @@ uint32_t InboxApiImpl::validateInboxDataIntegrity(server::Inbox inbox) {
         return ENDPOINT_CORE_EXCEPTION_CODE;
     } 
     return UnknownInboxFormatException().getCode();
+}
+
+std::vector<std::string> InboxApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    auto result = _subscriber.subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
+}
+
+void InboxApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    _subscriber.unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
+}
+
+std::string InboxApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }

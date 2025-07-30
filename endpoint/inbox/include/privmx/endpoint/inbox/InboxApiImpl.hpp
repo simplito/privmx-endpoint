@@ -24,14 +24,12 @@ limitations under the License.
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/thread/ServerTypes.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>
 #include <privmx/endpoint/store/DynamicTypes.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp>
 #include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp>
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
@@ -48,6 +46,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
+#include "privmx/endpoint/inbox/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
@@ -67,7 +66,6 @@ public:
         const std::string& host,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const std::shared_ptr<core::HandleManager>& handleManager,
         size_t serverRequestChunkSize
     );
@@ -112,11 +110,9 @@ public:
     void seekInFile(const int64_t handle, const int64_t pos);
     std::string closeFile(const int64_t handle);
 
-    void subscribeForInboxEvents();
-    void unsubscribeFromInboxEvents();
-    void subscribeForEntryEvents(const std::string& inboxId);
-    void unsubscribeFromEntryEvents(const std::string& inboxId);
-
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     inbox::server::Inbox getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
@@ -195,8 +191,7 @@ private:
     size_t _serverRequestChunkSize;
     store::FileMetaEncryptorV4 _fileMetaEncryptorV4;
     store::FileMetaEncryptorV5 _fileMetaEncryptorV5;
-    core::SubscriptionHelper _inboxSubscriptionHelper;
-    core::SubscriptionHelperExt _threadSubscriptionHelper;
+    SubscriberImpl _subscriber;
     
     InboxDataProcessorV4 _inboxDataProcessorV4;
     InboxDataProcessorV5 _inboxDataProcessorV5;

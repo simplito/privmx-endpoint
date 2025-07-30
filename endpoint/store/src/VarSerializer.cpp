@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
+#include "privmx/endpoint/store/VarSerializer.hpp"
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
@@ -40,6 +40,18 @@ Poco::Dynamic::Var VarSerializer::serialize<store::Store>(const store::Store& va
     obj->set("policy", serialize(val.policy));
     obj->set("filesCount", serialize(val.filesCount));
     obj->set("statusCode", serialize(val.statusCode));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<store::FileChange>(const store::FileChange& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "store$FileChange");
+    }
+    obj->set("pos", serialize(val.pos));
+    obj->set("length", serialize(val.length));
+    obj->set("truncate", serialize(val.truncate));
     return obj;
 }
 
@@ -92,6 +104,18 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEventData>(
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEventData>(
+    const store::StoreFileUpdatedEventData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "store$StoreFileUpdatedEventData");
+    }
+    obj->set("file", serialize(val.file));
+    obj->set("changes", serialize(val.changes));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreCreatedEvent>(const store::StoreCreatedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
@@ -100,6 +124,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreCreatedEvent>(const stor
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -113,6 +138,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreUpdatedEvent>(const stor
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -126,6 +152,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreDeletedEvent>(const stor
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -139,6 +166,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreStatsChangedEvent>(const
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -152,6 +180,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileCreatedEvent>(const 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -165,6 +194,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEvent>(const 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -178,6 +208,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEvent>(const 
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }

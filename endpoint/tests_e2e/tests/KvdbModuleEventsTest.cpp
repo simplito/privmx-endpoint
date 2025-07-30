@@ -52,11 +52,14 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_CREATE, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-    }, kvdb::AlreadySubscribedException);
 
     std::string kvdbId;
     EXPECT_NO_THROW({
@@ -114,12 +117,15 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbCreated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-        kvdbApi->unsubscribeFromKvdbEvents();
+        auto tmp = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_CREATE, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        kvdbApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        kvdbApi->unsubscribeFromKvdbEvents();
-    }, kvdb::NotSubscribedException);
 
     std::string kvdbId;
     EXPECT_NO_THROW({
@@ -161,11 +167,14 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbUpdated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_UPDATE, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-    }, kvdb::AlreadySubscribedException);
 
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
@@ -225,12 +234,15 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbUpdated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-        kvdbApi->unsubscribeFromKvdbEvents();
+        auto tmp = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_UPDATE, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        kvdbApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        kvdbApi->unsubscribeFromKvdbEvents();
-    }, kvdb::NotSubscribedException);
 
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
@@ -274,11 +286,14 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_DELETE, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-    }, kvdb::AlreadySubscribedException);
 
     EXPECT_NO_THROW({
         kvdbApi->deleteKvdb(
@@ -315,12 +330,15 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbDeleted_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-        kvdbApi->unsubscribeFromKvdbEvents();
+        auto tmp = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_DELETE, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        kvdbApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        kvdbApi->unsubscribeFromKvdbEvents();
-    }, kvdb::NotSubscribedException);
 
     EXPECT_NO_THROW({
         kvdbApi->deleteKvdb(
@@ -351,11 +369,14 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbStats_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_STATS, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-    }, kvdb::AlreadySubscribedException);
 
     EXPECT_NO_THROW({
         kvdbApi->deleteEntry(
@@ -394,12 +415,15 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbStats_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-        kvdbApi->unsubscribeFromKvdbEvents();
+        auto tmp = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::KVDB_STATS, 
+                kvdb::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        kvdbApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        kvdbApi->unsubscribeFromKvdbEvents();
-    }, kvdb::NotSubscribedException);
 
     EXPECT_NO_THROW({
         kvdbApi->deleteEntry(
@@ -431,11 +455,14 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbNewKvdbEntry_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::ENTRY_CREATE, 
+                kvdb::EventSelectorType::KVDB_ID,
+                reader->getString("Kvdb_1.kvdbId")
+            )
+        });
     });
-    EXPECT_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-    }, kvdb::AlreadySubscribedException);
     std::string key = "key";
     EXPECT_NO_THROW({
         kvdbApi->setEntry(
@@ -480,12 +507,15 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbNewKvdbEntry_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-        kvdbApi->unsubscribeFromEntryEvents(reader->getString("Kvdb_1.kvdbId"));
+        auto tmp = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::ENTRY_CREATE, 
+                kvdb::EventSelectorType::KVDB_ID,
+                reader->getString("Kvdb_1.kvdbId")
+            )
+        });
+        kvdbApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        kvdbApi->unsubscribeFromEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-    }, kvdb::NotSubscribedException);
     std::string key = "key";
     EXPECT_NO_THROW({
         kvdbApi->setEntry(
@@ -521,11 +551,14 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbUpdatedKvdbEntry_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::ENTRY_UPDATE, 
+                kvdb::EventSelectorType::KVDB_ID,
+                reader->getString("Kvdb_1.kvdbId")
+            )
+        });
     });
-    EXPECT_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-    }, kvdb::AlreadySubscribedException);
     EXPECT_NO_THROW({
         kvdbApi->setEntry(
             reader->getString("Kvdb_1.kvdbId"),
@@ -570,12 +603,15 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbUpdatedKvdbEntry_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-        kvdbApi->unsubscribeFromEntryEvents(reader->getString("Kvdb_1.kvdbId"));
+        auto tmp = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::ENTRY_UPDATE, 
+                kvdb::EventSelectorType::KVDB_ID,
+                reader->getString("Kvdb_1.kvdbId")
+            )
+        });
+        kvdbApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        kvdbApi->unsubscribeFromEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-    }, kvdb::NotSubscribedException);
     EXPECT_NO_THROW({
         kvdbApi->setEntry(
             reader->getString("Kvdb_1.kvdbId"),
@@ -610,11 +646,14 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbDeletedKvdbEntry_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::ENTRY_DELETE, 
+                kvdb::EventSelectorType::KVDB_ID,
+                reader->getString("Kvdb_1.kvdbId")
+            )
+        });
     });
-    EXPECT_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-    }, kvdb::AlreadySubscribedException);
     EXPECT_NO_THROW({
         kvdbApi->deleteEntry(
             reader->getString("Kvdb_1.kvdbId"),
@@ -652,12 +691,15 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbDeletedKvdbEntry_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        kvdbApi->subscribeForEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-        kvdbApi->unsubscribeFromEntryEvents(reader->getString("Kvdb_1.kvdbId"));
+        auto tmp = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(
+                kvdb::EventType::ENTRY_DELETE, 
+                kvdb::EventSelectorType::KVDB_ID,
+                reader->getString("Kvdb_1.kvdbId")
+            )
+        });
+        kvdbApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        kvdbApi->unsubscribeFromEntryEvents(reader->getString("Kvdb_1.kvdbId"));
-    }, kvdb::NotSubscribedException);
     EXPECT_NO_THROW({
         kvdbApi->deleteEntry(
             reader->getString("Kvdb_1.kvdbId"),

@@ -9,7 +9,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
-#include <privmx/endpoint/kvdb/KvdbVarSerializer.hpp>
+#include <privmx/endpoint/kvdb/VarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 
@@ -522,10 +522,6 @@ TEST_F(KvdbTest, updateKvdb_incorrect_data) {
 }
 
 TEST_F(KvdbTest, updateKvdb_correct_data) {
-    //enable cache
-    EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-    });
     kvdb::Kvdb kvdb;
     // new users
     EXPECT_NO_THROW({

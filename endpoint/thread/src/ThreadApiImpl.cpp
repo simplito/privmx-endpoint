@@ -26,7 +26,6 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 #include "privmx/endpoint/thread/Mapper.hpp"
-#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
@@ -41,9 +40,8 @@ ThreadApiImpl::ThreadApiImpl(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const core::Connection& connection
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection), 
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), 
     _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
@@ -55,12 +53,7 @@ ThreadApiImpl::ThreadApiImpl(
     _messageDataV2Encryptor(MessageDataV2Encryptor()),
     _messageDataV3Encryptor(MessageDataV3Encryptor()),
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
-    _threadSubscriptionHelper(core::SubscriptionHelper(
-        eventChannelManager, 
-        "thread", "messages", 
-        [&](){},
-        [&](){}
-    )),
+    _subscriber(gateway),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -428,11 +421,8 @@ void ThreadApiImpl::updateMessageRequest(
 }
 
 void ThreadApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(notification.source == core::EventSource::INTERNAL) {
-        _threadSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
-        return;
-    }
-    if(!_threadSubscriptionHelper.hasSubscription(notification.subscriptions)) {
+    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
         return;
     }
     if (type == "threadCreated") {
@@ -443,6 +433,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
             event->channel = "thread";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadUpdated") {
@@ -453,6 +444,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
             event->channel = "thread";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadDeleted") {
@@ -463,6 +455,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
             event->channel = "thread";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadStats") {
@@ -472,60 +465,40 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             std::shared_ptr<ThreadStatsChangedEvent> event(new ThreadStatsChangedEvent());
             event->channel = "thread";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadNewMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(notification.data);
-        auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
-        std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
-        event->channel = "thread/" + raw.threadId() + "/messages";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
+        if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
+            std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
+            event->channel = "thread/" + raw.threadId() + "/messages";
+            event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
     } else if (type == "threadUpdatedMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Message>(notification.data);
-        auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
-        std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
-        event->channel = "thread/" + raw.threadId() + "/messages";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
+        if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
+            std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
+            event->channel = "thread/" + raw.threadId() + "/messages";
+            event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
     } else if (type == "threadDeletedMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(notification.data);
-        auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
-        std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
-        event->channel = "thread/" + raw.threadId() + "/messages";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
+        if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+            auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
+            std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
+            event->channel = "thread/" + raw.threadId() + "/messages";
+            event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
     }
-}
-
-void ThreadApiImpl::subscribeForThreadEvents() {
-    if(_threadSubscriptionHelper.hasSubscriptionForModule()) {
-        throw AlreadySubscribedException();
-    }
-    _threadSubscriptionHelper.subscribeForModule();
-}
-
-void ThreadApiImpl::unsubscribeFromThreadEvents() {
-    if(!_threadSubscriptionHelper.hasSubscriptionForModule()) {
-        throw NotSubscribedException();
-    }
-    _threadSubscriptionHelper.unsubscribeFromModule();
-}
-
-void ThreadApiImpl::subscribeForMessageEvents(std::string threadId) {
-    assertThreadExist(threadId);
-    if(_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
-        throw AlreadySubscribedException(threadId);
-    }
-    _threadSubscriptionHelper.subscribeForModuleEntry(threadId);
-}
-
-void ThreadApiImpl::unsubscribeFromMessageEvents(std::string threadId) {
-    assertThreadExist(threadId);
-    if(!_threadSubscriptionHelper.hasSubscriptionForModuleEntry(threadId)) {
-        throw NotSubscribedException(threadId);
-    }
-    _threadSubscriptionHelper.unsubscribeFromModuleEntry(threadId);
 }
 
 void ThreadApiImpl::processConnectedEvent() {
@@ -1322,5 +1295,21 @@ uint32_t ThreadApiImpl::validateMessageDataIntegrity(server::Message message, co
     } 
     return UnknowMessageFormatException().getCode();
 }
+
+std::vector<std::string> ThreadApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    auto result = _subscriber.subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
+}
+
+void ThreadApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    _subscriber.unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
+}
+
+std::string ThreadApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
+}
+
 
 

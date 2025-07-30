@@ -52,12 +52,14 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
+        threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_CREATE, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        threadApi->subscribeForThreadEvents();
-    }, thread::AlreadySubscribedException);
-
     std::string threadId;
     EXPECT_NO_THROW({
         threadId = threadApi->createThread(
@@ -114,12 +116,15 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadCreated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
-        threadApi->unsubscribeFromThreadEvents();
+        auto tmp = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_CREATE, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        threadApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        threadApi->unsubscribeFromThreadEvents();
-    }, thread::NotSubscribedException);
 
     std::string threadId;
     EXPECT_NO_THROW({
@@ -161,11 +166,14 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
+        threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_UPDATE, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        threadApi->subscribeForThreadEvents();
-    }, thread::AlreadySubscribedException);
     
 
     EXPECT_NO_THROW({
@@ -226,12 +234,15 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
-        threadApi->unsubscribeFromThreadEvents();
+        auto tmp = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_UPDATE, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        threadApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        threadApi->unsubscribeFromThreadEvents();
-    }, thread::NotSubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->updateThread(
@@ -275,11 +286,14 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
+        threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_DELETE, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        threadApi->subscribeForThreadEvents();
-    }, thread::AlreadySubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteThread(
@@ -316,12 +330,15 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeleted_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
-        threadApi->unsubscribeFromThreadEvents();
+        auto tmp = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_DELETE, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        threadApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        threadApi->unsubscribeFromThreadEvents();
-    }, thread::NotSubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteThread(
@@ -352,11 +369,14 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadStats_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
+        threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_STATS, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
-    EXPECT_THROW({
-        threadApi->subscribeForThreadEvents();
-    }, thread::AlreadySubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
@@ -394,12 +414,15 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadStats_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForThreadEvents();
-        threadApi->unsubscribeFromThreadEvents();
+        auto tmp = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::THREAD_STATS, 
+                thread::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        threadApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        threadApi->unsubscribeFromThreadEvents();
-    }, thread::NotSubscribedException);
 
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
@@ -430,11 +453,14 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadNewMessage_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
+        threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::MESSAGE_CREATE, 
+                thread::EventSelectorType::THREAD_ID,
+                reader->getString("Thread_1.threadId")
+            )
+        });
     });
-    EXPECT_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
-    }, thread::AlreadySubscribedException);
     std::string messageId;
     EXPECT_NO_THROW({
         messageId = threadApi->sendMessage(
@@ -477,12 +503,15 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadNewMessage_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
-        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
+        auto tmp = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::MESSAGE_CREATE, 
+                thread::EventSelectorType::THREAD_ID,
+                reader->getString("Thread_1.threadId")
+            )
+        });
+        threadApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
-    }, thread::NotSubscribedException);
     std::string messageId;
     EXPECT_NO_THROW({
         messageId = threadApi->sendMessage(
@@ -516,11 +545,14 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdatedMessage_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
+        threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::MESSAGE_UPDATE, 
+                thread::EventSelectorType::THREAD_ID,
+                reader->getString("Thread_1.threadId")
+            )
+        });
     });
-    EXPECT_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
-    }, thread::AlreadySubscribedException);
     EXPECT_NO_THROW({
         threadApi->updateMessage(
             reader->getString("Message_1.info_messageId"),
@@ -563,12 +595,15 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdatedMessage_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
-        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
+        auto tmp = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::MESSAGE_UPDATE, 
+                thread::EventSelectorType::THREAD_ID,
+                reader->getString("Thread_1.threadId")
+            )
+        });
+        threadApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
-    }, thread::NotSubscribedException);
     EXPECT_NO_THROW({
         threadApi->updateMessage(
             reader->getString("Message_1.info_messageId"),
@@ -601,11 +636,14 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeletedMessage_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
+        threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::MESSAGE_DELETE, 
+                thread::EventSelectorType::THREAD_ID,
+                reader->getString("Thread_1.threadId")
+            )
+        });
     });
-    EXPECT_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
-    }, thread::AlreadySubscribedException);
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
             reader->getString("Message_1.info_messageId")
@@ -643,12 +681,15 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeletedMessage_disabled) {
     });
     
     EXPECT_NO_THROW({
-        threadApi->subscribeForMessageEvents(reader->getString("Thread_1.threadId"));
-        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
+        auto tmp = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(
+                thread::EventType::MESSAGE_DELETE, 
+                thread::EventSelectorType::THREAD_ID,
+                reader->getString("Thread_1.threadId")
+            )
+        });
+        threadApi->unsubscribeFrom(tmp);
     });
-    EXPECT_THROW({
-        threadApi->unsubscribeFromMessageEvents(reader->getString("Thread_1.threadId"));
-    }, thread::NotSubscribedException);
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
             reader->getString("Message_1.info_messageId")

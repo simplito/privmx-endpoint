@@ -27,13 +27,11 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
-
+#include <privmx/endpoint/core/ServerTypes.hpp>
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 
@@ -49,7 +47,6 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
     
@@ -111,7 +108,6 @@ private:
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::EventChannelManager> _eventChannelManager;
     core::Connection _connection;
     core::ModuleDataEncryptorV4 _moduleDataEncryptorV4;
     core::ModuleDataEncryptorV5 _moduleDataEncryptorV5;

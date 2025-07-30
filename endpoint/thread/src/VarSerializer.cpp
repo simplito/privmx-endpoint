@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
+#include "privmx/endpoint/thread/VarSerializer.hpp"
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
@@ -96,6 +96,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadCreatedEvent>(const th
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -109,6 +110,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadUpdatedEvent>(const th
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -122,6 +124,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadDeletedEvent>(const th
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -135,6 +138,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadNewMessageEvent>(const
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -148,6 +152,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageUpdatedEvent>(c
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -162,6 +167,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageDeletedEvent>(
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -175,6 +181,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsChangedEvent>(con
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }

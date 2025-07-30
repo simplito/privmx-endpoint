@@ -18,7 +18,6 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/InboxApi.hpp"
 #include "privmx/endpoint/inbox/InboxApiImpl.hpp"
-#include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
 
@@ -40,7 +39,6 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
         connectionImpl->getHost(),
         connectionImpl->getUserPrivKey(),
         connectionImpl->getEventMiddleware(),
-        connectionImpl->getEventChannelManager(),
         connectionImpl->getHandleManager(),
         connectionImpl->getServerConfig().requestChunkSize
     ));
@@ -267,42 +265,30 @@ std::string InboxApi::closeFile(const int64_t handle) {
     }
 }
 
-void InboxApi::subscribeForInboxEvents() {
+std::vector<std::string> InboxApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     validateEndpoint();
     try {
-        return _impl->subscribeForInboxEvents();
+        return _impl->subscribeFor(subscriptionQueries);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void InboxApi::unsubscribeFromInboxEvents() {
+void InboxApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     validateEndpoint();
     try {
-        return _impl->unsubscribeFromInboxEvents();
+        return _impl->unsubscribeFrom(subscriptionIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void InboxApi::subscribeForEntryEvents(const std::string& inboxId) {
+std::string InboxApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
     try {
-        return _impl->subscribeForEntryEvents(inboxId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::unsubscribeFromEntryEvents(const std::string& inboxId) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->unsubscribeFromEntryEvents(inboxId);
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

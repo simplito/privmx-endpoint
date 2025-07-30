@@ -16,7 +16,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
-#include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 
@@ -25,7 +24,6 @@ limitations under the License.
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
 #include "privmx/endpoint/store/Mapper.hpp"
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
@@ -53,11 +51,10 @@ StoreApiImpl::StoreApiImpl(
     const std::shared_ptr<RequestApi>& requestApi,
     const std::shared_ptr<store::FileDataProvider>& fileDataProvider,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
     const std::shared_ptr<core::HandleManager>& handleManager,
     const core::Connection& connection,
     size_t serverRequestChunkSize
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
     _keyProvider(keyProvider),
     _serverApi(serverApi),
     _host(host),
@@ -65,7 +62,6 @@ StoreApiImpl::StoreApiImpl(
     _requestApi(requestApi),
     _fileDataProvider(fileDataProvider),
     _eventMiddleware(eventMiddleware),
-    _eventChannelManager(eventChannelManager),
     _handleManager(handleManager),
     _connection(connection),
     _serverRequestChunkSize(serverRequestChunkSize),
@@ -74,11 +70,7 @@ StoreApiImpl::StoreApiImpl(
     _dataEncryptorCompatV1(core::DataEncryptor<dynamic::compat_v1::StoreData>()),
     _fileMetaEncryptorV1(FileMetaEncryptorV1()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
-    _storeSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, 
-        "store", "files",
-        [&](){},
-        [&](){}
-    )),
+    _subscriber(connection.getImpl()->getGateway()),
     _fileMetaEncryptorV4(FileMetaEncryptorV4()),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
 {
@@ -706,53 +698,32 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(const std::shared_ptr<Fi
 
 
 void StoreApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    if(notification.source == core::EventSource::INTERNAL) {
-        _storeSubscriptionHelper.processSubscriptionNotificationEvent(type,notification);
-        return;
-    }
-    if(!_storeSubscriptionHelper.hasSubscription(notification.subscriptions)) {
+    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
         return;
     }
     if (type == "storeCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(notification.data);
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             // Add Keys to cache
-            setNewModuleKeysInCache(
-                raw.id(), 
-                core::ModuleKeys{
-                    .keys=raw.keys(),
-                    .currentKeyId=raw.keyId(),
-                    .moduleSchemaVersion=getStoreEntryDataStructureVersion(raw.data().get(raw.data().size()-1)),
-                    .moduleResourceId=raw.resourceIdOpt(""),
-                    .contextId=raw.contextId()
-                },
-                raw.version()
-            );
+            setNewModuleKeysInCache(raw.id(), storeToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertStoreDataToStore(raw);
             std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
             event->channel = "store";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeUpdated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::Store>(notification.data);
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             // Add Keys to cache
-            setNewModuleKeysInCache(
-                raw.id(), 
-                core::ModuleKeys{
-                    .keys=raw.keys(),
-                    .currentKeyId=raw.keyId(),
-                    .moduleSchemaVersion=getStoreEntryDataStructureVersion(raw.data().get(raw.data().size()-1)),
-                    .moduleResourceId=raw.resourceIdOpt(""),
-                    .contextId=raw.contextId()
-                },
-                raw.version()
-            );
+            setNewModuleKeysInCache(raw.id(), storeToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertStoreDataToStore(raw);
             std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
             event->channel = "store";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeDeleted") {
@@ -763,6 +734,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
             event->channel = "store";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeStatsChanged") {
@@ -772,62 +744,42 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
             event->channel = "store";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
-    
     } else if (type == "storeFileCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
-        auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
-        // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
-        std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
-        event->channel = "store/" + raw.storeId() + "/files";
-        event->data = file;
-        _eventMiddleware->emitApiEvent(event);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileEventData>(notification.data);
+        if(raw.containerTypeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
+            // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
+            std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
+            event->channel = "store/" + raw.storeId() + "/files";
+            event->data = file;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
     } else if (type == "storeFileUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::File>(notification.data);
-        auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
-        std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
-        event->channel = "store/" + raw.storeId() + "/files";
-        event->data = file;
-        _eventMiddleware->emitApiEvent(event);
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileUpdatedEventData>(notification.data);
+        if(raw.containerTypeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
+            auto data = Mapper::mapTostoreFileUpdatedEventData(raw, file);
+            std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
+            event->channel = "store/" + raw.storeId() + "/files";
+            event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
     } else if (type == "storeFileDeleted") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(notification.data);
-        auto data = Mapper::mapToStoreFileDeletedEventData(raw);
-        std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
-        event->channel = "store/" + raw.storeId() + "/files";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
+        if(raw.containerTypeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
+            auto data = Mapper::mapToStoreFileDeletedEventData(raw);
+            std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
+            event->channel = "store/" + raw.storeId() + "/files";
+            event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
     }
-}
-
-void StoreApiImpl::subscribeForStoreEvents() {
-    if(_storeSubscriptionHelper.hasSubscriptionForModule()) {
-        throw AlreadySubscribedException();
-    }
-    _storeSubscriptionHelper.subscribeForModule();
-}
-
-void StoreApiImpl::unsubscribeFromStoreEvents() {
-    if(!_storeSubscriptionHelper.hasSubscriptionForModule()) {
-        throw NotSubscribedException();
-    }
-    _storeSubscriptionHelper.unsubscribeFromModule();
-}
-
-void StoreApiImpl::subscribeForFileEvents(const std::string& storeId) {
-    assertStoreExist(storeId);
-    if(_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
-        throw AlreadySubscribedException(storeId);
-    }
-    _storeSubscriptionHelper.subscribeForModuleEntry(storeId);
-}
-
-void StoreApiImpl::unsubscribeFromFileEvents(const std::string& storeId) {
-    assertStoreExist(storeId);
-    if(!_storeSubscriptionHelper.hasSubscriptionForModuleEntry(storeId)) {
-        throw NotSubscribedException(storeId);
-    }
-    _storeSubscriptionHelper.unsubscribeFromModuleEntry(storeId);
 }
 
 void StoreApiImpl::processConnectedEvent() {
@@ -1703,4 +1655,19 @@ uint32_t StoreApiImpl::validateFileDataIntegrity(server::File file, const std::s
         return ENDPOINT_CORE_EXCEPTION_CODE;
     } 
     return UnknowFileFormatException().getCode();
+}
+
+std::vector<std::string> StoreApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    auto result = _subscriber.subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
+}
+
+void StoreApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    _subscriber.unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
+}
+
+std::string StoreApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }

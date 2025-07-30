@@ -24,7 +24,6 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/core/EventChannelManager.hpp"
 #include "privmx/endpoint/core/EventMiddleware.hpp"
 #include "privmx/endpoint/core/HandleManager.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
@@ -63,7 +62,6 @@ public:
     const std::string& getHost() const { return _host; }
     const std::shared_ptr<KeyProvider>& getKeyProvider() const { return _keyProvider; }
     const std::shared_ptr<EventMiddleware>& getEventMiddleware() const { return _eventMiddleware; }
-    const std::shared_ptr<EventChannelManager>& getEventChannelManager() const { return _eventChannelManager; }
     const std::shared_ptr<HandleManager>& getHandleManager() const { return _handleManager; }
 
     const rpc::ServerConfig& getServerConfig() const { return _serverConfig; }
@@ -111,7 +109,6 @@ private:
     rpc::ServerConfig _serverConfig;
     std::shared_ptr<KeyProvider> _keyProvider;
     std::shared_ptr<EventMiddleware> _eventMiddleware;
-    std::shared_ptr<EventChannelManager> _eventChannelManager;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifier> _userVerifier;
     std::shared_ptr<ContextProvider> _contextProvider;

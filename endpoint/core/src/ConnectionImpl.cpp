@@ -53,7 +53,6 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
-    _eventChannelManager = std::make_shared<EventChannelManager>(_gateway, _eventMiddleware);
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
@@ -105,7 +104,6 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
-    _eventChannelManager = std::make_shared<EventChannelManager>(_gateway, _eventMiddleware);
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
         std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());

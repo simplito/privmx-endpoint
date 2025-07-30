@@ -9,9 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
-#include <privmx/endpoint/thread/ThreadVarSerializer.hpp>
-#include <privmx/endpoint/store/StoreVarSerializer.hpp>
+#include "privmx/endpoint/inbox/VarSerializer.hpp"
+#include <privmx/endpoint/thread/VarSerializer.hpp>
+#include <privmx/endpoint/store/VarSerializer.hpp>
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
@@ -116,6 +116,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxCreatedEvent>(const inbo
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -129,6 +130,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxUpdatedEvent>(const inbo
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -153,6 +155,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxDeletedEvent>(const inbo
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -166,6 +169,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryCreatedEvent>(const
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
@@ -191,6 +195,7 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEvent>(const
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
     obj->set("data", serialize(val.data));
     return obj;
 }
