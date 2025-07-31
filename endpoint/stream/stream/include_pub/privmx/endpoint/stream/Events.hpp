@@ -334,7 +334,7 @@ public:
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'StreamUnpublishedEvent', else otherwise
      */
-    static bool isStreamDeletedMessageEvent(const core::EventHolder& eventHolder);
+    static bool isStreamUnpublishedEvent(const core::EventHolder& eventHolder);
 
     /**
      * Gets Event held in the 'EventHolder' as an 'StreamUnpublishedEvent' 
