@@ -67,6 +67,6 @@ size_t ChunkEncryptor::getChunkIndex(const size_t& pos) {
 }
 
 std::string ChunkEncryptor::chunkIndexToBE(const size_t index) {
-    uint32_t index_be = Poco::ByteOrder::toBigEndian(index);
+    uint32_t index_be = Poco::ByteOrder::toBigEndian(static_cast<uint32_t>(index));
     return std::string((char *)&index_be, 4);
 }
