@@ -190,7 +190,9 @@ void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
         auto streamData = getStreamData(localStreamId.value(), room);
     
         if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
+            std::cerr << __LINE__ << std::endl;
             auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata().data());
+
             if(janusVideoRoom.videoroomOpt("") == "updated") {
                 auto janusVideoRoomUpdated = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoomUpdated>(janusVideoRoom);
                 std::optional<server::JanusJSEP> jsep = std::nullopt;
