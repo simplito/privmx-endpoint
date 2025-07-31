@@ -45,15 +45,19 @@ StreamKeyManager::StreamKeyManager(
     _keyCollector = std::thread([&](privmx::utils::CancellationToken::Ptr token) {
         try {
             while (!token->isCancelled()) {
+
+                PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "key update Loop")  
                 _cancellationToken->sleep( std::chrono::milliseconds(UPDATE_INTERVAL));
+                
                 std::shared_ptr<StreamKeyManager::StreamEncKey> key;
                 {
                     std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
                     if (_keysStrage.find(_currentKeyId) != _keysStrage.end()) {
-                        key = _keysStrage.at(_currentKeyId);                
+                        key = _keysStrage.at(_currentKeyId); 
                     }
                 }
                 if(!key || (key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL) < std::chrono::system_clock::now())) {
+                    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updating current Key")
                     updateKey();
                 }
             }
@@ -96,13 +100,19 @@ void StreamKeyManager::removeKeyUpdateCallback(int64_t keyUpdateCallbackId) {
 }
 
 void StreamKeyManager::respondToEvent(dynamic::StreamKeyManagementEvent event, const std::string& userId, const std::string& userPubKey) {
+
+    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToEvent data: " + privmx::utils::Utils::stringifyVar(event));  
     if(event.subtype() == "RequestKeyEvent") {
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
         respondToRequestKey(userId, userPubKey);
     } else if(event.subtype() == "RequestKeyRespondEvent") {
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
         setRequestKeyResult(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::RequestKeyRespondEvent>(event));
     } else if(event.subtype() == "UpdateKeyEvent") {
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
         respondToUpdateRequest(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyEvent>(event), userId, userPubKey);
     } else if(event.subtype() == "UpdateKeyACKEvent") {
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
         respondUpdateKeyConfirmation(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyACKEvent>(event), userPubKey);
     }
 }
@@ -184,14 +194,18 @@ void StreamKeyManager::updateKey() {
     }
     //update timeout
     std::unique_lock<std::mutex> lock(_updateKeyMutex);
-    _updateKeyCV.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
+
+    if(_connectedUsers.size() > 0) {
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey _updateKeyCV.wait_for");
+        _updateKeyCV.wait_for(lock, std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey _updateKeyCV.wait_for done");
+    }
     if(!_cancellationToken->isCancelled()) {
         {
             std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
             _keysStrage.insert_or_assign(_keyForUpdate->key.id, _keyForUpdate);
             _currentKeyId = _keyForUpdate->key.id;
         }
-
         PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey updateWebRtcKeyStore");
         updateWebRtcKeyStore();
     }
@@ -270,7 +284,10 @@ dynamic::NewStreamEncKey StreamKeyManager::prepareCurrenKeyToUpdate() {
 void StreamKeyManager::sendStreamKeyManagementEvent(dynamic::StreamCustomEventData data, const std::vector<privmx::endpoint::core::UserWithPubKey>& users) {
     data.streamRoomId(_streamRoomId);
     event::InternalContextEventDataV1 event = {.type="StreamKeyManagementEvent", .data= privmx::endpoint::core::Buffer::from(utils::Utils::stringifyVar(data))};
+
+    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "sendStreamKeyManagementEvent data: " + privmx::utils::Utils::stringifyVar(data));
     _eventApi->emitEventInternal(_contextId, event, users);
+
 }
 
 void StreamKeyManager::updateWebRtcKeyStore() {
