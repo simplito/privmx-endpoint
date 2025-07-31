@@ -83,22 +83,22 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 }
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::cerr << "new event: " << type << std::endl;
+    // // std::cerr << "new event: " << type << std::endl;
     if (type == "janus") {
-        std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
+        // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
     }
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    std::cerr << "before check: " << privmx::utils::Utils::stringifyVar(data) << std::endl;
+    // std::cerr << "before check: " << privmx::utils::Utils::stringifyVar(data) << std::endl;
     try {
         isInternalJanusEvent(type, data);
-        std::cerr << "after check" << std::endl;
+        // std::cerr << "after check" << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Error in isInternalJanusEvent(): " << e.what() << std::endl;
+        // std::cerr << "Error in isInternalJanusEvent(): " << e.what() << std::endl;
     }
 
 
     if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
-        std::cerr << __LINE__ << std::endl;
+        // std::cerr << __LINE__ << std::endl;
         auto raw = utils::TypedObjectFactory::createObjectFromVar<event::server::ContextCustomEventData>(data);
         auto decryptedData = _eventApi->extractInternalEventData(data);
         auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<dynamic::StreamKeyManagementEvent>(
@@ -113,7 +113,7 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
 
     // PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "event_type: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true))
     if(!_streamSubscriptionHelper.hasSubscription(notification.subscriptions) && !isInternalJanusEvent(type, data)) {
-        std::cerr << __LINE__ << std::endl;
+        // std::cerr << __LINE__ << std::endl;
         return;
     }
     if (isInternalJanusEvent(type, data)) {
@@ -178,7 +178,7 @@ bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco:
 }
 
 void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
-    std::cerr << "=========> PROCESSING JANUS EVENT <==================" << std::endl;
+    // std::cerr << "=========> PROCESSING JANUS EVENT <==================" << std::endl;
     auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
     PRIVMX_DEBUG("StreamApiLowImpl", "processJanusEvent", "janusPluginEvent :\n" + privmx::utils::Utils::stringifyVar(janusPluginEvent, true));
     
@@ -190,7 +190,7 @@ void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
         auto streamData = getStreamData(localStreamId.value(), room);
     
         if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
-            std::cerr << __LINE__ << std::endl;
+            // std::cerr << __LINE__ << std::endl;
             auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata().data());
 
             if(janusVideoRoom.videoroomOpt("") == "updated") {
@@ -199,7 +199,7 @@ void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
                 if (!janusPluginEvent.jsepEmpty()) {
                     jsep = janusPluginEvent.jsep();
                 }
-                std::cerr << __LINE__ << std::endl;
+                // std::cerr << __LINE__ << std::endl;
                 onVideoRoomUpdate(janusPluginEvent.session_id(), janusVideoRoomUpdated, streamData, jsep);
             }
         }
@@ -210,7 +210,7 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::Janus
     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "session_id :" + std::to_string(session_id));
     if (jsep.has_value() && !jsep.value().sdpEmpty() && !jsep.value().typeEmpty()) {
         auto t = std::thread([&](const int64_t session_id_copy, server::JanusVideoRoomUpdated updateEvent_copy, std::shared_ptr<StreamData> streamData_copy, server::JanusJSEP jsep_copy) {
-            std::cerr << __LINE__ << std::endl;
+            // std::cerr << __LINE__ << std::endl;
             auto sdp = streamData_copy->webRtc->createAnswerAndSetDescriptions(jsep_copy.sdp(), jsep_copy.type());
             auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
             janusJSEP.sdp(sdp);
@@ -240,7 +240,7 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::Janus
         t.detach();
     } else {
         PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
-        std::cerr << "onVideoRoomUpdate (but without jsep)" << std::endl;
+        // std::cerr << "onVideoRoomUpdate (but without jsep)" << std::endl;
     }
     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
     // TODO: update list of available streams and emit user event about update
