@@ -376,6 +376,7 @@ void AuthorizedConnection::performTicketTest(bool websocket) {
 }
 
 void AuthorizedConnection::clearWebSocket() {
+    PRIVMX_DEBUG("AuthorizedConnection", "clearWebSocket");
     auto id = _wschannel_id.exchange(-1);
     if (id != -1) {
         if(_tickets_manager.ticketsCount() != 0) {
@@ -400,15 +401,15 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
                     endpoint.connection.ticketHandshake();
                     endpoint.connection.ticketRequest(ClientEndpoint::TICKETS_MAX_COUNT);
                     sendRequest(endpoint);
-                    PRIVMX_DEBUG("activateUpdateTicketLoop", "succes")
+                    PRIVMX_DEBUG("AuthorizedConnection", "activateUpdateTicketLoop", "succes")
                 } else {
                     token->sleep(std::chrono::seconds(10));
                 }
             } catch (const privmx::utils::OperationCancelledException &e) {
-                PRIVMX_DEBUG("activateUpdateTicketLoop", "cancel")
+                PRIVMX_DEBUG("AuthorizedConnection", "activateUpdateTicketLoop", "cancel")
                 return;
             } catch (...) {
-                PRIVMX_DEBUG("activateUpdateTicketLoop", "fail")
+                PRIVMX_DEBUG("AuthorizedConnection", "activateUpdateTicketLoop", "fail")
                 token->sleep(std::chrono::seconds(1));
             }
         }

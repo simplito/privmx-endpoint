@@ -13,10 +13,10 @@
 #include <thread>
 #include <mutex>
 #include <map>
+
 #include <privmx/utils/Debug.hpp>
 #include <privmx/utils/CancellationToken.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-
 
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -33,6 +33,9 @@
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
 #include <privmx/utils/PrivmxException.hpp>
+#include <Poco/URI.h>
+#include <privmx/rpc/channel/ChannelEnv.hpp>
+#include <privmx/utils/Utils.hpp>
 
 
 using namespace std;
@@ -134,7 +137,7 @@ class MyFrame : public wxFrame
 {
 public:
     MyFrame();
-    void Connect(std::string privKey, std::string solutionId, std::string url);
+    void Connect(std::string login, std::string password, std::string url);
     void PublishToStreamRoom(std::string streamRoomId);
     void JoinToStreamRoom(std::string streamRoomId);
     std::vector<privmx::endpoint::stream::StreamRoom> ListStreamRooms(std::string streamRoomId);
@@ -156,14 +159,13 @@ private:
     wxButton* joinButton;
     wxButton* publishButton;
     wxTextCtrl* hostURLInput;
-    wxTextCtrl* privKeyInput;
-    wxTextCtrl* solutionIdInput;
+    wxTextCtrl* loginInput;
+    wxTextCtrl* passwordInput;
     wxTextCtrl* streamRoomIdInput;
     wxPanel* checkbox_board;
     wxBoxSizer* checkBoxSizer;
     wxCheckBox* brickKeyManager;
     wxCheckBox* hideBrokenFrames;
-
 
 
     std::vector<unsigned char> picData_vector = std::vector<unsigned char>(4 * MAX_VIDEO_W * MAX_VIDEO_W);
@@ -173,6 +175,9 @@ private:
     std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApi> streamApi;
     std::thread _event_chandler;
+    std::optional<int64_t> joinedStream;
+    std::optional<int64_t> publishedStream;
+
 };
 
 
@@ -198,9 +203,20 @@ void MyFrame::OnResize(wxSizeEvent& event) {
 
 void MyFrame::OnExit(wxCloseEvent& event) {
     cancellationToken.cancel();
-    if(streamApi) streamApi.reset();
+    if(streamApi) {
+        if(joinedStream.has_value()) {
+            PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Leaving Stream")
+            streamApi->leaveStream(joinedStream.value());
+        }
+        if(publishedStream.has_value()) {
+            PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Unpublishing Stream")
+            streamApi->unpublishStream(publishedStream.value());
+        }
+        streamApi.reset();
+    }
     if(eventApi) eventApi.reset();
     if(connection) {
+        PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Disconnecting")
         connection->disconnect();
         connection.reset();
     }
@@ -210,24 +226,23 @@ void MyFrame::OnExit(wxCloseEvent& event) {
     Destroy();
 }
 
-
 MyFrame::MyFrame()
-    : wxFrame(nullptr, wxID_ANY, "Video Board", wxDefaultPosition, wxDefaultSize)
+    : wxFrame(nullptr, wxID_ANY, "Video Board", wxDefaultPosition, wxDefaultSize), cancellationToken(privmx::utils::CancellationToken())
 {
     controlSizer = new wxGridSizer(2);
     m_board = new wxPanel(this, wxID_ANY);
     connectButton = new wxButton(this->m_board, wxID_ANY, "Connect");
     joinButton = new wxButton(this->m_board, wxID_ANY, "Join");
     publishButton = new wxButton(this->m_board, wxID_ANY, "Publish");
-    hostURLInput = new wxTextCtrl(this->m_board, wxID_ANY, "http://webrtc2.s24.simplito.com:3000");
-    privKeyInput = new wxTextCtrl(this->m_board, wxID_ANY, "KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8");
-    solutionIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "fc47c4e4-e1dc-414a-afa4-71d436398cfc");
+    hostURLInput = new wxTextCtrl(this->m_board, wxID_ANY, "https://webrtc-demo-app-server.test.simplito.com");
+    loginInput = new wxTextCtrl(this->m_board, wxID_ANY, "Login");
+    passwordInput = new wxTextCtrl(this->m_board, wxID_ANY, "Default password", wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD, wxDefaultValidator);
     streamRoomIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "stream room Id");
 
 
+    controlSizer->Add(loginInput, 1, wxEXPAND | wxALL,5);
+    controlSizer->Add(passwordInput, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(hostURLInput, 1, wxEXPAND | wxALL,5);
-    controlSizer->Add(privKeyInput, 1, wxEXPAND | wxALL,5);
-    controlSizer->Add(solutionIdInput, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(connectButton, 1, wxEXPAND | wxALL,5);
     
     controlSizer->Add(streamRoomIdInput, 1, wxEXPAND | wxALL,5);
@@ -271,7 +286,10 @@ MyFrame::MyFrame()
 
     this->connectButton->Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
         try {
-            Connect(privKeyInput->GetValue().ToStdString(), solutionIdInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());
+
+            
+
+            Connect(loginInput->GetValue().ToStdString(), passwordInput->GetValue().ToStdString(), hostURLInput->GetValue().ToStdString());
         } catch (const privmx::endpoint::core::Exception& e) {
 
         };
@@ -325,40 +343,88 @@ MyFrame::MyFrame()
     });
 }
 
-void MyFrame::Connect(std::string privKey, std::string solutionId, std::string url) {
-    connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, url));
-    eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
-    streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
-    crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
-    auto context = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
-    auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
-    std::string streamRoomId;
+void MyFrame::Connect(std::string login, std::string password, std::string url) {
+    // generate KeyPair
+    privmx::endpoint::crypto::CryptoApi cryptoApi = privmx::endpoint::crypto::CryptoApi();
+    auto privKey = cryptoApi.derivePrivateKey2(password, login);
+    auto pubKey = cryptoApi.derivePublicKey(privKey);
+    // setup ttpChannel
+    Poco::URI uri {url};
+    std::string contentType {"application/json"};
+    auto httpChannel {privmx::rpc::ChannelEnv::getHttpChannel(uri, false)};
+    // get Info
+    auto result_info = httpChannel->send("", "/info", {}, privmx::utils::CancellationToken::create(), contentType, true, false).get();
+    auto info = privmx::utils::Utils::parseJsonObject(result_info);
+    
 
-    if(streamRoomList.readItems.size() == 0 || streamRoomList.readItems[0].statusCode != 0) {
-        if(streamRoomList.readItems.size() > 0) streamApi->deleteStreamRoom(streamRoomList.readItems[0].streamRoomId);
-        auto pubKey = cryptoApi.derivePublicKey(privKey);
-        std::vector<privmx::endpoint::core::UserWithPubKey> users = {
-            privmx::endpoint::core::UserWithPubKey{.userId="patryk", .pubKey="51ciywf56WuDKxyEuquMsfoydEK2NavoFtFBvoKWEi7VuqHkur"},
-            privmx::endpoint::core::UserWithPubKey{.userId="user1",  .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}
-        };
-        streamRoomId = streamApi->createStreamRoom(
-            context.contextId,
-            users,
-            users,
-            privmx::endpoint::core::Buffer::from(""),
-            privmx::endpoint::core::Buffer::from(""),
-            std::nullopt
-        );
-        
-    } else {
-        streamRoomId = streamRoomList.readItems[0].streamRoomId;
-    }
+    std::string bridgeUrl = "";
+    if(info->has("bridgeUrl")) bridgeUrl = info->getValue<std::string>("bridgeUrl");
+    std::string solutionId = "";
+    if(info->has("solutionId")) bridgeUrl = info->getValue<std::string>("solutionId");
+    std::string contextId = "";
+    if(info->has("contextId")) bridgeUrl = info->getValue<std::string>("contextId");
+    std::string streamRoomId = "";
+    if(info->has("streamRoomId")) bridgeUrl = info->getValue<std::string>("streamRoomId");
     streamRoomIdInput->SetValue(streamRoomId);
+
+
+    Poco::JSON::Object::Ptr request_json = new Poco::JSON::Object();
+    request_json->set("contextId", contextId);
+    request_json->set("userId", login);
+    request_json->set("userPubKey", privKey);
+    auto requestString {privmx::utils::Utils::stringify(request_json)};
+    auto result_addUser = httpChannel->send(requestString, "/addUser", {}, privmx::utils::CancellationToken::create(), contentType, false, false).get();
+    std::cout << result_addUser << std::endl;
+    auto addUser = privmx::utils::Utils::parseJsonObject(result_addUser);
+    if(addUser->has("success") && addUser->getValue<bool>("success")) {
+        connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, url));
+        eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
+        streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
+    } else {
+        loginInput->SetValue("Using Default User");
+        connection = std::make_shared<core::Connection>(core::Connection::connect(
+            "L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", 
+            "fc47c4e4-e1dc-414a-afa4-71d436398cfc", 
+            "http://webrtc2.s24.simplito.com:3000"
+        ));
+        eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
+        streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
+        auto context = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
+        auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
+        std::string streamRoomId;
+
+        if(streamRoomList.readItems.size() == 0 || streamRoomList.readItems[0].statusCode != 0) {
+            if(streamRoomList.readItems.size() > 0) streamApi->deleteStreamRoom(streamRoomList.readItems[0].streamRoomId);
+            std::vector<privmx::endpoint::core::UserWithPubKey> users = {
+                privmx::endpoint::core::UserWithPubKey{.userId="patryk", .pubKey="51ciywf56WuDKxyEuquMsfoydEK2NavoFtFBvoKWEi7VuqHkur"},
+                privmx::endpoint::core::UserWithPubKey{.userId="user1",  .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}
+            };
+            streamRoomId = streamApi->createStreamRoom(
+                context.contextId,
+                users,
+                users,
+                privmx::endpoint::core::Buffer::from(""),
+                privmx::endpoint::core::Buffer::from(""),
+                std::nullopt
+            );
+            
+        } else {
+            streamRoomId = streamRoomList.readItems[0].streamRoomId;
+        }
+        streamRoomIdInput->SetValue(streamRoomId);
+    }
+    streamApi->subscribeForStreamEvents();
     
 }
 
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
+    streamApi->subscribeForStreamEvents();
+    if(publishedStream.has_value()) {
+        PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Unpublishing Stream")
+        streamApi->unpublishStream(publishedStream.value());
+    }
     auto streamId = streamApi->createStream(streamRoomId);
+    publishedStream = streamId;
     auto listAudioRecordingDevices = streamApi->listAudioRecordingDevices();
     streamApi->trackAdd(streamId,  stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
     auto listVideoRecordingDevices = streamApi->listVideoRecordingDevices();
@@ -367,6 +433,13 @@ void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
 }
 
 void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
+    if(joinedStream.has_value()) {
+        PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Leaving Stream")
+        streamApi->leaveStream(joinedStream.value());
+        PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Reseting VideoPanels")
+        mapOfVideoPanels.clear();
+    }
+
     auto streamlist = streamApi->listStreams(streamRoomId);
     std::vector<int64_t> streamsId;
     if(streamlist.size() == 0) return;
@@ -378,7 +451,7 @@ void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
             this->OnFrame(w, h, frame, id);
         }
     };
-    streamApi->joinStream(streamRoomId, streamsId, ssettings);
+    joinedStream = streamApi->joinStream(streamRoomId, streamsId, ssettings);
 }
 
 std::vector<privmx::endpoint::stream::StreamRoom> MyFrame::ListStreamRooms(std::string contextId) {

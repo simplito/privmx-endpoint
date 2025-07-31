@@ -107,11 +107,11 @@ std::string SubscriptionHelper::getChannel(const std::vector<std::string>& subsc
 }
 
 void SubscriptionHelper::subscribeForModule() {
-    subscribeFor({_moduleName+"/create",_moduleName+"/update",_moduleName+"/delete",_moduleName+"/stats"});
+    subscribeFor({_moduleName}); //Quick fix for streams
 }
 
 void SubscriptionHelper::unsubscribeFromModule() {
-    unsubscribeFor({_moduleName+"/create",_moduleName+"/update",_moduleName+"/delete",_moduleName+"/stats"});
+    unsubscribeFor({_moduleName}); //Quick fix for streams
 }
 
 void SubscriptionHelper::subscribeForModuleEntry(const std::string& moduleId) {
