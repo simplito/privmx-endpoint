@@ -24,9 +24,9 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::THREAD_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID}},
     {EventType::THREAD_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID}},
     {EventType::THREAD_STATS, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID}},
-    {EventType::MESSAGE_CREATE, {EventSelectorType::THREAD_ID}},
-    {EventType::MESSAGE_UPDATE, {EventSelectorType::THREAD_ID, EventSelectorType::MESSAGE_ID}},
-    {EventType::MESSAGE_DELETE, {EventSelectorType::THREAD_ID, EventSelectorType::MESSAGE_ID}}
+    {EventType::MESSAGE_CREATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID}},
+    {EventType::MESSAGE_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID, EventSelectorType::MESSAGE_ID}},
+    {EventType::MESSAGE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID, EventSelectorType::MESSAGE_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},

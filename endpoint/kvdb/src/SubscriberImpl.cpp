@@ -24,9 +24,9 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::KVDB_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID}},
     {EventType::KVDB_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID}},
     {EventType::KVDB_STATS, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID}},
-    {EventType::ENTRY_CREATE, {EventSelectorType::KVDB_ID}},
-    {EventType::ENTRY_UPDATE, {EventSelectorType::KVDB_ID, EventSelectorType::ENTRY_ID}},
-    {EventType::ENTRY_DELETE, {EventSelectorType::KVDB_ID, EventSelectorType::ENTRY_ID}}
+    {EventType::ENTRY_CREATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID}},
+    {EventType::ENTRY_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID, EventSelectorType::ENTRY_ID}},
+    {EventType::ENTRY_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID, EventSelectorType::ENTRY_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},

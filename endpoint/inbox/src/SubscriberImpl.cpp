@@ -21,8 +21,8 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::INBOX_CREATE, {EventSelectorType::CONTEXT_ID}},
     {EventType::INBOX_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}},
     {EventType::INBOX_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}},
-    {EventType::ENTRY_CREATE, {EventSelectorType::INBOX_ID}},
-    {EventType::ENTRY_DELETE, {EventSelectorType::INBOX_ID, EventSelectorType::ENTRY_ID}}
+    {EventType::ENTRY_CREATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}},
+    {EventType::ENTRY_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID, EventSelectorType::ENTRY_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},

@@ -24,9 +24,9 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::STORE_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID}},
     {EventType::STORE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID}},
     {EventType::STORE_STATS, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID}},
-    {EventType::FILE_CREATE, {EventSelectorType::STORE_ID}},
-    {EventType::FILE_UPDATE, {EventSelectorType::FILE_ID}},
-    {EventType::FILE_DELETE, {EventSelectorType::STORE_ID, EventSelectorType::FILE_ID}}
+    {EventType::FILE_CREATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID}},
+    {EventType::FILE_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID, EventSelectorType::FILE_ID}},
+    {EventType::FILE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID, EventSelectorType::FILE_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
