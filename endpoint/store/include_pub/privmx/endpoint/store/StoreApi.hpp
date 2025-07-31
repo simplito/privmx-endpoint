@@ -133,6 +133,7 @@ public:
      *
      * @param handle handle to write file data
      * @param dataChunk file data chunk
+     * @param truncate truncate the file from: current pos + dataChunk size
      */
     void writeToFile(const int64_t fileHandle, const core::Buffer& dataChunk, bool truncate = false);
 
