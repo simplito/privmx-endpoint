@@ -210,7 +210,7 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::Janus
     if (jsep.has_value() && !jsep.value().sdpEmpty() && !jsep.value().typeEmpty()) {
         auto t = std::thread([&](const int64_t session_id_copy, server::JanusVideoRoomUpdated updateEvent_copy, std::shared_ptr<StreamData> streamData_copy, server::JanusJSEP jsep_copy) {
             std::cerr << __LINE__ << std::endl;
-            auto sdp = streamData_copy->webRtc->createAnswerAndSetDescriptions(jsep_copy.sdp(), jsep_copy.type());
+            // auto sdp = streamData_copy->webRtc->createAnswerAndSetDescriptions(jsep_copy.sdp(), jsep_copy.type());
             // auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
             // janusJSEP.sdp(sdp);
             // janusJSEP.type("answer");
