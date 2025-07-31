@@ -139,8 +139,17 @@ void StreamKeyManager::respondToRequestKey(const std::string& userId, const std:
     respond.subtype("RequestKeyRespondEvent");
     respond.encKey(streamEncKey);
     // send data by event
-    sendStreamKeyManagementEvent(respond, {privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}});
-    _connectedUsers.push_back(privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey});
+    auto userWithPubKey = privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey};
+    sendStreamKeyManagementEvent(respond, {userWithPubKey});
+    bool hasUser = false;
+    std::unique_lock<std::mutex> lock(_connectedUsersMutex);
+    for(auto& connectedUser : _connectedUsers) {
+        if(userWithPubKey.pubKey == connectedUser.pubKey && userWithPubKey.userId == connectedUser.userId) {
+            hasUser = true;
+            break;
+        }
+    }
+    if(!hasUser) _connectedUsers.push_back(userWithPubKey);
 }
 
 void StreamKeyManager::setRequestKeyResult(dynamic::RequestKeyRespondEvent result) {
@@ -176,26 +185,36 @@ void StreamKeyManager::removeUser(core::UserWithPubKey user) {
 
 void StreamKeyManager::updateKey() {
     // create date
+    
+
     auto newKey = prepareCurrenKeyToUpdate();
+    bool wait = false;
     {
-        std::unique_lock<std::shared_mutex> lock(_userUpdateKeyConfirmationStatusMutex);
-        _userUpdateKeyConfirmationStatus.clear();
-        for(auto user : _connectedUsers) {
-            _userUpdateKeyConfirmationStatus.insert_or_assign(user.pubKey, false);
+        std::unique_lock<std::mutex> lock(_connectedUsersMutex);
+        {
+            std::unique_lock<std::shared_mutex> lock(_userUpdateKeyConfirmationStatusMutex);
+            _userUpdateKeyConfirmationStatus.clear();
+            
+            for(auto user : _connectedUsers) {
+                _userUpdateKeyConfirmationStatus.insert_or_assign(user.pubKey, false);
+            }
+        }
+        // prepare data to send
+        dynamic::UpdateKeyEvent respond = privmx::utils::TypedObjectFactory::createNewObject<dynamic::UpdateKeyEvent>();
+        respond.subtype("UpdateKeyEvent");
+        respond.encKey(newKey);
+        // send to users
+        if(!disableKeyUpdateForEncryptors) {
+            sendStreamKeyManagementEvent(respond, _connectedUsers);
+        }
+        //update timeout
+        if(_connectedUsers.size() > 0) {
+            wait = true;
         }
     }
-    // prepare data to send
-    dynamic::UpdateKeyEvent respond = privmx::utils::TypedObjectFactory::createNewObject<dynamic::UpdateKeyEvent>();
-    respond.subtype("UpdateKeyEvent");
-    respond.encKey(newKey);
-    // send to users
-    if(!disableKeyUpdateForEncryptors) {
-        sendStreamKeyManagementEvent(respond, _connectedUsers);
-    }
-    //update timeout
-    std::unique_lock<std::mutex> lock(_updateKeyMutex);
 
-    if(_connectedUsers.size() > 0) {
+    std::unique_lock<std::mutex> lock(_updateKeyMutex);
+    if(wait) {
         PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey _updateKeyCV.wait_for");
         _updateKeyCV.wait_for(lock, std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
         PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey _updateKeyCV.wait_for done");

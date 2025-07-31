@@ -126,6 +126,10 @@ StreamRoomDeletedEvent Events::extractStreamRoomDeletedEvent(const core::EventHo
     }
 }
 
+bool Events::isStreamPublishedEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamPublished";
+}
+
 StreamPublishedEvent Events::extractStreamPublishedEvent(const core::EventHolder& handler) {
     try {
         auto event = std::dynamic_pointer_cast<StreamPublishedEvent>(handler.get());
@@ -156,8 +160,8 @@ StreamJoinedEvent Events::extractStreamJoinedEvent(const core::EventHolder& hand
     }
 }
 
-bool Events::isStreamDeletedMessageEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamMessageDeleted";
+bool Events::isStreamUnpublishedEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamUnpublished";
 }
 
 StreamUnpublishedEvent Events::extractStreamUnpublishedEvent(const core::EventHolder& handler) {

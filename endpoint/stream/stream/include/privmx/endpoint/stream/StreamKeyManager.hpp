@@ -89,6 +89,7 @@ private:
     std::shared_mutex _keysStrageMutex;
     std::map<std::string, std::shared_ptr<StreamEncKey>> _keysStrage;
     std::vector<privmx::endpoint::core::UserWithPubKey> _connectedUsers;
+    std::mutex _connectedUsersMutex;
     std::string _currentKeyId;
     std::shared_ptr<StreamEncKey> _keyForUpdate;
     std::shared_mutex _userUpdateKeyConfirmationStatusMutex;
