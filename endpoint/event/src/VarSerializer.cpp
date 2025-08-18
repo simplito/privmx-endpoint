@@ -40,6 +40,8 @@ Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEventData>(const
     obj->set("contextId", serialize(val.contextId));
     obj->set("userId", serialize(val.userId));
     obj->set("payload", serialize(val.payload));
+    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("schemaVersion", serialize(val.schemaVersion));
 
     return obj;
 }
