@@ -14,5 +14,5 @@ source ./build/Release/generators/conanrun.sh
 
 Now you can run the built app:
 ```bash
-./using_context_users
+./using_Kvdb
 ```
