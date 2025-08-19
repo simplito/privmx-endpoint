@@ -514,14 +514,8 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     auto decryptionParams = _storeApi.getImpl()->getFileDecryptionParams(file, fileMetaEncKey);
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, createInboxFileHandleForRead, file_key_extracted)
     std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
-        file.id(), 
-        decryptionParams.originalSize,
-        decryptionParams.sizeOnServer,
-        decryptionParams.chunkSize,
+        decryptionParams,
         _serverRequestChunkSize,
-        file.version(),
-        decryptionParams.key,
-        decryptionParams.hmac,
         _serverApi
     );
     PRIVMX_DEBUG_TIME_STOP(InboxApi, createInboxFileHandleForRead, handle_created)

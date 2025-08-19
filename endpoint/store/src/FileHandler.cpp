@@ -216,13 +216,13 @@ size_t FileHandler::posInindex(size_t position) {
 }
 
 void FileHandler::sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) {
-    _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getChecksums());
     _fileMeta = fileMeta;
     _version = newParms.version;
     _plainfileSize = newParms.originalSize;
     _encryptedFileSize = newParms.sizeOnServer;
     _fileEncKey = fileEncKey;
     _chunkDataProvider->sync(_version, _encryptedFileSize);
+    _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
 }
 
 std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFromUpdateChunkData(const std::vector<FileHandler::UpdateChunkData>& updatedChunks) {

@@ -12,10 +12,14 @@ limitations under the License.
 #include "privmx/endpoint/store/FileHandle.hpp"
 
 #include "privmx/endpoint/store/StoreException.hpp"
-#include "privmx/endpoint/store/ChunkedFileReader.hpp"
+
+#include "privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/FileReader.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
-#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
+#include "privmx/endpoint/store/FileHandler.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint::store;
@@ -50,35 +54,36 @@ bool FileHandle::getRandomWriteSupport() {
 
 FileReadHandle::FileReadHandle(
     int64_t id, 
-    const std::string& fileId,
-    const std::string& resourceId, 
-    uint64_t fileSize,
-    uint64_t serverFileSize,
-    size_t chunkSize,
+    const store::FileDecryptionParams& decryptionParams,
     size_t serverChunkSize,
-    int64_t fileVersion,
-    const std::string& fileKey,
-    const std::string& fileHmac,
     std::shared_ptr<ServerApi> server
 ) 
-    : FileHandle(id, std::string(), fileId, resourceId, fileSize, false) 
+    : FileHandle(id, std::string(), decryptionParams.fileId, decryptionParams.resourceId, decryptionParams.originalSize, false) 
 {
-    std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(server, ChunkReader::getEncryptedChunkSize(chunkSize), serverChunkSize, fileId, serverFileSize, fileVersion);
-    std::shared_ptr<ChunkReader> chunkReader = std::make_shared<ChunkReader>(chunkDataProvider, chunkSize, fileKey, fileHmac);
-    _reader = std::make_shared<ChunkedFileReader>(chunkReader, fileSize, serverFileSize);
-    _size = fileSize;
+    std::shared_ptr<ChunkEncryptor> chunkEncryptor = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
+    std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(
+        server, 
+        chunkEncryptor->getEncryptedChunkSize(), 
+        serverChunkSize, 
+        decryptionParams.fileId, 
+        decryptionParams.sizeOnServer, 
+        decryptionParams.version
+    );
+    std::shared_ptr<IHashList> hashList = std::make_shared<HmacList>(
+        decryptionParams.key, 
+        decryptionParams.hmac, 
+        chunkDataProvider->getCurrentChecksumsFromBridge()
+    );
+    std::shared_ptr<ChunkReader> chunkReader = std::make_shared<ChunkReader>(chunkDataProvider, chunkEncryptor, hashList, decryptionParams);
+    _reader = std::make_shared<FileReader>(chunkReader, decryptionParams);
+    _size = decryptionParams.originalSize;
 }
 
 void FileReadHandle::sync(
-    uint64_t fileSize,
-    uint64_t serverFileSize,
-    size_t chunkSize,
-    size_t serverChunkSize,
-    int64_t fileVersion,
-    const std::string& fileKey,
-    const std::string& fileHmac
+    const store::FileDecryptionParams& newDecryptionParams
 ) {
-    _reader->sync(fileVersion, fileSize, serverFileSize, fileHmac, chunkSize, ChunkReader::getEncryptedChunkSize(chunkSize), fileKey, serverChunkSize);
+    _reader->sync(newDecryptionParams);
+    _size = newDecryptionParams.originalSize;
 }
 
 std::string FileReadHandle::read(uint64_t length) {
@@ -157,23 +162,53 @@ void FileWriteHandle::setRequestData(const std::string& requestId, const std::st
     _streamer.setRequestData(requestId, key, fileIndex);
 }
 
+FileReadWriteHandle::FileReadWriteHandle(
+    int64_t id,
+    const store::FileInfo &fileInfo,
+    const store::FileEncryptionParams& encryptionParams,
+    size_t serverChunkSize,
+    const privmx::crypto::PrivateKey &userPrivKey,
+    const privmx::endpoint::core::Connection &connection,
+    std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
+) : FileHandle(id, fileInfo.storeId, encryptionParams.fileDecryptionParams.fileId, encryptionParams.fileDecryptionParams.resourceId, 0, true) {
+    std::shared_ptr<FileMetaEncryptor> fileMetaEncryptor = std::make_shared<FileMetaEncryptor>(userPrivKey, connection);
+    std::shared_ptr<ChunkEncryptor> chunkEncryptor = std::make_shared<ChunkEncryptor>(encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.chunkSize);
+    std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(
+        serverApi, 
+        chunkEncryptor->getEncryptedChunkSize(),
+        serverChunkSize, 
+        encryptionParams.fileDecryptionParams.fileId, 
+        encryptionParams.fileDecryptionParams.sizeOnServer, 
+        encryptionParams.fileDecryptionParams.version
+    );
+    std::shared_ptr<IHashList> hashList = std::make_shared<HmacList>(
+        encryptionParams.fileDecryptionParams.key, 
+        encryptionParams.fileDecryptionParams.hmac, 
+        chunkDataProvider->getCurrentChecksumsFromBridge()
+    );
+    std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
+        chunkDataProvider, chunkEncryptor, hashList, fileMetaEncryptor, 
+        encryptionParams.fileDecryptionParams.originalSize,
+        encryptionParams.fileDecryptionParams.sizeOnServer,
+        encryptionParams.fileDecryptionParams.version,
+        fileInfo,
+        encryptionParams.fileMeta,
+        encryptionParams.encKey,
+        serverApi
+    );
+    std::shared_ptr<IFileHandler> file = std::make_shared<FileHandlerImpl>(fileHandler);
+}
+
 FileHandleManager::FileHandleManager(std::shared_ptr<core::HandleManager> handleManager, const std::string& labelPrefix) : 
     _handleManager(handleManager), _labelPrefix(labelPrefix) {}
 
 std::shared_ptr<FileReadHandle> FileHandleManager::createFileReadHandle(
-    const std::string& fileId,
-    const std::string& resourceId, 
-    uint64_t fileSize,
-    uint64_t serverFileSize,
-    size_t chunkSize,
+    const store::FileDecryptionParams& decryptionParams,
     size_t serverChunkSize,
-    int64_t fileVersion,
-    const std::string& fileKey,
-    const std::string& fileHmac,
     std::shared_ptr<ServerApi> server
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileRead");
-    std::shared_ptr<FileReadHandle> result = std::make_shared<FileReadHandle>(id, fileId, resourceId, fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
+    std::shared_ptr<FileReadHandle> result = std::make_shared<FileReadHandle>(id, decryptionParams, serverChunkSize, server);
     _map.set(id, result);
     return result;
 }
@@ -196,14 +231,16 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
     return result;
 }
 
-std::shared_ptr<FileRandomWriteHandle> FileHandleManager::createFileRandomWriteHandle(
-    const std::string &storeId,
-    const std::string &fileId,
-    const std::string &resourceId,
-    std::shared_ptr<IFileHandler> file
+std::shared_ptr<FileReadWriteHandle> FileHandleManager::createFileReadWriteHandle(
+    const store::FileInfo &fileInfo,
+    const store::FileEncryptionParams& encryptionParams,
+    size_t serverChunkSize,
+    const privmx::crypto::PrivateKey &userPrivKey,
+    const privmx::endpoint::core::Connection &connection,
+    std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
 ) {
-    int64_t id = _handleManager->createHandle("FileRandomWrite");
-    std::shared_ptr<FileRandomWriteHandle> result = std::make_shared<FileRandomWriteHandle>(id, storeId, fileId, resourceId, file);
+    int64_t id = _handleManager->createHandle("FileReadWrite");
+    std::shared_ptr<FileReadWriteHandle> result = std::make_shared<FileReadWriteHandle>(id, fileInfo, encryptionParams, serverChunkSize, userPrivKey, connection, serverApi);
     _map.set(id, result);
     return result;
 }
@@ -224,12 +261,12 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::getFileWriteHandle(int64_t i
     return std::dynamic_pointer_cast<FileWriteHandle>(handle);
 }
 
-std::shared_ptr<FileRandomWriteHandle> FileHandleManager::tryGetFileRandomWriteHandle(int64_t id) {
+std::shared_ptr<FileReadWriteHandle> FileHandleManager::tryGetFileReadWriteHandle(int64_t id) {
     std::shared_ptr<FileHandle> handle = getFileHandle(id);
-    if (!handle->isRandomWriteHandle()) {
-        return std::shared_ptr<FileRandomWriteHandle>();
+    if (!handle->isFileReadWriteHandle()) {
+        return std::shared_ptr<FileReadWriteHandle>();
     }
-    return std::dynamic_pointer_cast<FileRandomWriteHandle>(handle);
+    return std::dynamic_pointer_cast<FileReadWriteHandle>(handle);
 }
 
 std::shared_ptr<FileHandle> FileHandleManager::getFileHandle(int64_t id) {

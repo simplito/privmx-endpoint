@@ -30,7 +30,6 @@ public:
     size_t getPlainChunkSize() override;
     size_t getEncryptedChunkSize() override;
     size_t getEncryptedFileSize(const size_t& fileSize) override;
-    size_t getChunkIndex(const size_t& pos) override;
 private:
     std::string chunkIndexToBE(const size_t index);
 
