@@ -3,7 +3,7 @@ add_definitions(
     -Wfatal-errors
     )
 project(privmxlib)
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -g -O1")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g -O1")
 
 include(FindOpenSSL)
 
@@ -14,7 +14,7 @@ option(PRIVMX_BUILD_BENCHMARK "Building privmxBenchmark client" OFF)
 option(PRIVMX_CLI_IMPORTED_LIBRARIES "Using CLI imported libraries" OFF)
 option(PRIVMX_IMPORTED_LIBRARIES "Using imported libraries" OFF)
 option(PRIVMX_ENABLE_TESTS "Enable tests" OFF)
-option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" OFF)
+option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" ON)
 option(PRIVMX_ENABLE_TESTS_E2E "Enable End to End tests" OFF)
 option(PRIVMX_BUILD_DEBUG "Enable extra debug data for lib" OFF)
 
@@ -27,7 +27,7 @@ message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 option(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
-# add_compile_options(-fsanitize=thread -O1)
+add_compile_options(-fsanitize=address -O1)
 
 if(PRIVMX_EMSCRIPTEN)
     set(BUILD_SHARED_LIBS OFF)
@@ -53,20 +53,6 @@ endif()
 
 if(PRIVMX_BUILD_ALL)
     set(PRIVMX_BUILD_CLI ON)
-    set(PRIVMX_BUILD_ENDPOINT ON)
-endif()
-
-if(PRIVMX_BUILD_ENDPOINT)
-    #set(PRIVMX_BUILD_STORE ON)
-endif()
-
-# For CLI programs pocket required
-if(PRIVMX_BUILD_CLI)
-    set(PRIVMX_BUILD_POCKET ON)
-endif()
-
-# Fix for PRIVMX_ENABLE_TESTS_E2E
-if(PRIVMX_ENABLE_TESTS_E2E)
     set(PRIVMX_BUILD_ENDPOINT ON)
 endif()
 
