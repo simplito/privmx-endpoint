@@ -3,8 +3,8 @@ add_definitions(
     -Wfatal-errors
     )
 project(privmxlib)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g -O1")
-
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g -O1")
+# add_compile_options(-fsanitize=address -O1)
 include(FindOpenSSL)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
@@ -27,7 +27,7 @@ message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 option(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
-add_compile_options(-fsanitize=address -O1)
+
 
 if(PRIVMX_EMSCRIPTEN)
     set(BUILD_SHARED_LIBS OFF)
