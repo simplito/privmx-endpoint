@@ -4,10 +4,9 @@ set(INCLUDE_PUB_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include_pub)
 
 add_library(libwebrtc SHARED IMPORTED)
 set_target_properties(libwebrtc PROPERTIES
-    IMPORTED_LOCATION "<path_to_libwebrtc>"
-    INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
+    IMPORTED_LOCATION "/home/zurek/projects/simplito/webrtc/libwebrtc2/webrtc/src/out/Linux-x64/libwebrtc.so"
+    INTERFACE_INCLUDE_DIRECTORIES "/home/zurek/projects/simplito/webrtc/libwebrtc2/webrtc/src/libwebrtc/include"
 )
-
 add_library(privmxendpointstream_webrtc OBJECT ${SOURCES})
 target_include_directories(privmxendpointstream_webrtc PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointstream_webrtc PRIVATE -fPIC -Wall -Wextra)

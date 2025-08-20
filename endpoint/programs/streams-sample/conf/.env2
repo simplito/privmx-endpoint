@@ -1,0 +1,9 @@
+SOLUTION_ID="fc47c4e4-e1dc-414a-afa4-71d436398cfc"
+CONTEXT_ID="8033938b-bd28-4268-aa5f-74aedf5a96c7"
+BRIDGE_URL="http://webrtc2.s24.simplito.com:3000"
+
+USER_ID="test2"
+USER_PASSWORD="testtest"
+STREAM_ROOM_ID="6852aa6bb99965314551fd5f"
+PUBLISHER="false"
+LISTENER="true"

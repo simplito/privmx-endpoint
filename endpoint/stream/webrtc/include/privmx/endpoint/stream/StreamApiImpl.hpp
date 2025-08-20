@@ -116,7 +116,7 @@ private:
 
 
     int64_t generateNumericId();
-
+    void ensureInitWebRtcLibraryUtils();
     void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
     void trackAddVideo(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
     void trackAddDesktop(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
@@ -135,6 +135,7 @@ private:
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLow> _api;
+    bool _webRtcLibraryUtilsInitialized;
 };
 
 }  // namespace stream

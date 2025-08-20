@@ -26,6 +26,7 @@ limitations under the License.
 
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
+#include <rtc_audio_source.h>
 #include <rtc_peerconnection.h>
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
@@ -35,12 +36,22 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi eventApi) {
-    _api = std::make_shared<StreamApiLow>(StreamApiLow::create(connection, eventApi));
-    auto credentials = _api->getTurnCredentials();
-    libwebrtc::LibWebRTC::Initialize();
-    _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
+void StreamApiImpl::ensureInitWebRtcLibraryUtils() {
+    if (_webRtcLibraryUtilsInitialized == true) {
+        return;
+    }
+    
+    std::cout << "-> Create RTCConfiguration.." << std::endl;
     _configuration = libwebrtc::RTCConfiguration();
+    
+    std::cout << "-> Create constraints (empty - to be implemented).." << std::endl;
+    _constraints = libwebrtc::RTCMediaConstraints::Create();
+    std::cout << "-> Constraints created." << std::endl;
+
+    std::cout << "-> Getting credentials.." << std::endl;
+    auto credentials = _api->getTurnCredentials();
+
+    std::cout << "-> Configure ICE.." << std::endl;
     for(size_t i = 0; i < credentials.size(); i++) {
         libwebrtc::IceServer iceServer = {
             .uri=credentials[i].url, 
@@ -49,13 +60,31 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
         };
         _configuration.ice_servers[i] = iceServer;
     }
-    _constraints = libwebrtc::RTCMediaConstraints::Create();
+
+    std::cout << "-> Set cryptors.." << std::endl;
     _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed=false};
+    
+    _webRtcLibraryUtilsInitialized = true;
+    std::cout << "-> Done." << std::endl;
+}
+
+StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi eventApi) {
+    _api = std::make_shared<StreamApiLow>(StreamApiLow::create(connection, eventApi));
+
+    std::cout << "-> Init libwebrtc.." << std::endl;
+    libwebrtc::LibWebRTC::Initialize();
+
+    std::cout << "-> Create peerConnFactory.." << std::endl;
+    _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
+
+    _webRtcLibraryUtilsInitialized = false;
 }
 
 int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
+    ensureInitWebRtcLibraryUtils();
     int64_t streamId = generateNumericId();
 
+    std::cout << "-> Create WebRTC .." << std::endl;
     std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, _frameCryptorOptions, std::nullopt);
     _streamDataMap.set( 
         streamId, 
@@ -65,7 +94,9 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
             StreamStatus::Offline
         )
     );
+    std::cout << "-> WebRTC created." << std::endl;
     _api->createStream(streamRoomId, streamId, peerConnectionWebRTC);
+    std::cout << "-> _api->createStream() called." << std::endl;
     return streamId;
 }
 
@@ -103,6 +134,7 @@ std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listDesktopRecording
 }
 // int64_t id, DeviceType type, const std::string& params_JSON can be merged to one struct [Track info]
 void StreamApiImpl::trackAdd(int64_t streamId, const TrackParam& track) {
+    std::cout << "StreamApiImpl::trackAdd()..." << std::endl;
     switch (track.type) {
         case DeviceType::Audio :
             return trackAddAudio(streamId, track.id, track.params_JSON);
@@ -114,38 +146,79 @@ void StreamApiImpl::trackAdd(int64_t streamId, const TrackParam& track) {
 }
 
 void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON) {
-    libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> audioDevice = _peerConnectionFactory->GetAudioDevice();
-    audioDevice->SetRecordingDevice(id);
-    auto audioSource = _peerConnectionFactory->CreateAudioSource("audio_source");
-    auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
-    audioTrack->SetVolume(10);
-    // Add tracks to the peer connection
-    auto streamData = _streamDataMap.get(streamId);
-    if(!streamData.has_value()) {
-        throw IncorrectStreamIdException();
+    try {
+        std::cout << "StreamApiImpl::trackAddAudio()..." << std::endl;
+        auto audioDevice = _peerConnectionFactory->GetAudioDevice();
+        std::cerr << __LINE__ << std::endl;
+        // auto recDeviceResult = audioDevice->SetRecordingDevice(id);
+        // if (recDeviceResult != 0) {
+        //     std::cerr << "Cannot set recording device" << std::endl;
+        // } else {
+        //     std::cout << "Recording Device set." << std::endl;
+        // }
+        std::cerr << __LINE__ << std::endl;
+
+        auto audioSource = _peerConnectionFactory->CreateAudioSource("audio_source");
+        if (!audioSource) {
+            throw std::runtime_error("createAudioSource() returned null!");
+        } else {
+            std::cout << "AudioSource created." << std::endl;
+        }
+        std::cout << "Creating AudioTrack..." << std::endl;
+        auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
+        if (!audioTrack) {
+            throw std::runtime_error("CreateAudioTrack() returned null!");
+        } else {
+            std::cout << "AudioTrack created." << std::endl;
+        }
+
+        std::cerr << __LINE__ << std::endl;
+        audioTrack->SetVolume(10);
+        // Add tracks to the peer connection
+        auto streamData = _streamDataMap.get(streamId);
+        if(!streamData.has_value()) {
+            throw IncorrectStreamIdException();
+        }
+        std::cerr << __LINE__ << std::endl;
+        streamData.value()->webrtc->AddAudioTrack(audioTrack, id);
+        std::cerr << __LINE__ << std::endl;
+
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Error catched" << std::endl;
     }
-    streamData.value()->webrtc->AddAudioTrack(audioTrack, id);
 }
 
 void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
+    std::cout << "StreamApiImpl::trackAddVideo..." << std::endl;
+    
+    std::cout << "_peerConnectionFactory->GetVideoDevice()..." << std::endl;
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> videoDevice = _peerConnectionFactory->GetVideoDevice();
-    // params_JSON
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> videoCapturer = videoDevice->Create("video_capturer", id, 1280, 720, 30);
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", _constraints);
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
 
-    // Add tracks to the peer connection
-    auto streamData = _streamDataMap.get(streamId);
-    if(!streamData.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    streamData.value()->webrtc->AddVideoTrack(videoTrack, id);
-    std::lock_guard<std::mutex> lock(streamData.value()->streamMutex);
-    streamData.value()->streamCapturers.set(id, videoCapturer);
-    if(streamData.value()->status == StreamStatus::Online) {
-        videoCapturer->StartCapture();
-    }
-    // if stream is published start Capture if not dont
+    // params_JSON    
+    std::cout << "videoDevice->Create()..." << std::endl;
+    libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> videoCapturer = videoDevice->Create("video_capturer", id, 1280, 720, 30);
+        std::cout << "videoDevice->CreateVideoSource()..." << std::endl;
+    libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", _constraints);
+        std::cout << "videoDevice->CreateVideoTrack()..." << std::endl;
+    // libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
+
+    // // Add tracks to the peer connection
+    // auto streamData = _streamDataMap.get(streamId);
+    // if(!streamData.has_value()) {
+    //     throw IncorrectStreamIdException();
+    // }
+    // streamData.value()->webrtc->AddVideoTrack(videoTrack, id);
+    // std::lock_guard<std::mutex> lock(streamData.value()->streamMutex);
+    // streamData.value()->streamCapturers.set(id, videoCapturer);
+    // std::cerr << __LINE__ << std::endl;
+    // if(streamData.value()->status == StreamStatus::Online) {
+    //     std::cerr << __LINE__ << std::endl;
+    //     videoCapturer->StartCapture();
+    // }
+    // std::cerr << __LINE__ << std::endl;
+    // // if stream is published start Capture if not dont
 
 }
 

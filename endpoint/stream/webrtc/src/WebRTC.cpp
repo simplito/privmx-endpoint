@@ -13,15 +13,18 @@ WebRTC::WebRTC(
     privmx::webrtc::FrameCryptorOptions frameCryptorOptions,
     std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame
     
-) :
+) 
+:
     _peerConnectionFactory(peerConnectionFactory),
     _constraints(constraints),
     _peerConnection(_peerConnectionFactory->Create(configuration, constraints)),
-    _mediaStream(_peerConnectionFactory->CreateStream(std::to_string(streamId))),
+    // _mediaStream(_peerConnectionFactory->CreateStream(std::to_string(streamId))),
     _frameCryptorOptions(frameCryptorOptions),
     _peerConnectionObserver(std::make_shared<PmxPeerConnectionObserver>(peerConnectionFactory, streamId, privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()), OnFrame, _frameCryptorOptions)),
     _streamId(streamId)
 {
+    std::cout << "========================> WEBRTC constructor\n************************\n*********************\n****************" << std::endl;
+    std::cout << __LINE__ << std::endl;
     _currentWebRtcKeys = privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>());
     _peerConnection->RegisterRTCPeerConnectionObserver(_peerConnectionObserver.get());
 }
@@ -120,8 +123,17 @@ void WebRTC::updateKeys(const std::vector<Key>& keys) {
 }
 
 void WebRTC::AddAudioTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, int64_t id) {
+    if (! _mediaStream) {
+        std::cout << "creating media stream..." << std::endl;
+        _mediaStream = _peerConnectionFactory->CreateStream(/**std::to_string(_streamId)*/"my_stream");
+        std::cout << "created." << std::endl;
+    }
+    if (!_mediaStream) {
+        throw std::runtime_error("createStream returned null!");
+    }
+    std::cout << "AddAudioTrack.... \n*******************\n*******************\n***************" << std::endl;
     _mediaStream->AddTrack(audioTrack);
-    auto sender = _peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(_streamId)}});
+    auto sender = _peerConnection->AddTrack(audioTrack, std::vector<std::string>{std::to_string(_streamId)});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
         _peerConnectionFactory,
         sender, 
@@ -140,8 +152,11 @@ void WebRTC::AddAudioTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> au
 }
 
 void WebRTC::AddVideoTrack(libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, int64_t id) {
+    // if (! _mediaStream) {
+    //     _mediaStream = _peerConnectionFactory->CreateStream(std::to_string(_streamId));
+    // }
     _mediaStream->AddTrack(videoTrack);
-    auto sender = _peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(_streamId)}});
+    auto sender = _peerConnection->AddTrack(videoTrack, std::vector<std::string>{std::to_string(_streamId)});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
         _peerConnectionFactory,
         sender, 
