@@ -203,7 +203,7 @@ FileReadWriteHandle::FileReadWriteHandle(
         encryptionParams.encKey,
         serverApi
     );
-    std::shared_ptr<IFileHandler> file = std::make_shared<FileHandlerImpl>(fileHandler);
+    file = std::make_shared<FileHandlerImpl>(fileHandler);
 }
 
 FileHandleManager::FileHandleManager(std::shared_ptr<core::HandleManager> handleManager, const std::string& labelPrefix) : 

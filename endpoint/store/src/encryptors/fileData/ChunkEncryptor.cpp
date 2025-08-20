@@ -58,8 +58,19 @@ size_t ChunkEncryptor::getEncryptedChunkSize() {
 }
 
 size_t ChunkEncryptor::getEncryptedFileSize(const size_t& fileSize) {
-    size_t numberOfChunks = (fileSize + getPlainChunkSize() - 1) / getPlainChunkSize();
-    return numberOfChunks * getEncryptedChunkSize();
+    if (fileSize == 0) {
+        return 0;
+    }
+    Poco::Int64 parts = (fileSize + _chunkSize - 1) / _chunkSize;
+    Poco::Int64 lastChunkSize = fileSize % _chunkSize;
+    if (lastChunkSize == 0) {
+        lastChunkSize = _chunkSize;
+    }
+    // 16 iv + 32 hmac + max 16 padding
+    Poco::Int64 fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
+    Poco::Int64 lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
+    Poco::Int64 encryptedFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) + lastChunkSize + HMAC_SIZE + IV_SIZE + lastChunkPaddingSize;
+    return encryptedFileSize;
 }
 
 std::string ChunkEncryptor::chunkIndexToBE(const size_t index) {

@@ -55,7 +55,8 @@ void ChunkReader::sync(const store::FileDecryptionParams& newParms) {
 }
 
 void ChunkReader::update(int64_t newfileVersion, size_t index) {
-    if(!_lastChunk.has_value() || _lastChunk->index != index) {
+    _version = newfileVersion;
+    if(_lastChunk.has_value() && _lastChunk->index == index) {
         _lastChunk = std::nullopt;
     }
 }
