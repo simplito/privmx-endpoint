@@ -50,11 +50,6 @@ std::string ChunkReader::getDecryptedChunk(size_t index) {
 }
 
 void ChunkReader::sync(const store::FileDecryptionParams& newParms) {
-    if(newParms.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(newParms.originalSize)) {
-        throw FileCorruptedException();
-    }
-    _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
-    _chunkDataProvider->sync(_version, newParms.sizeOnServer);
     _version = newParms.version;
     _lastChunk = std::nullopt;
 }

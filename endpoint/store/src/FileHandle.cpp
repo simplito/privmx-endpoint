@@ -60,29 +60,35 @@ FileReadHandle::FileReadHandle(
 ) 
     : FileHandle(id, std::string(), decryptionParams.fileId, decryptionParams.resourceId, decryptionParams.originalSize, false) 
 {
-    std::shared_ptr<ChunkEncryptor> chunkEncryptor = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
-    std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(
+    _chunkEncryptor = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
+    _chunkDataProvider = std::make_shared<ChunkDataProvider>(
         server, 
-        chunkEncryptor->getEncryptedChunkSize(), 
+        _chunkEncryptor->getEncryptedChunkSize(), 
         serverChunkSize, 
         decryptionParams.fileId, 
         decryptionParams.sizeOnServer, 
         decryptionParams.version
     );
-    std::shared_ptr<IHashList> hashList = std::make_shared<HmacList>(
+    _hashList = std::make_shared<HmacList>(
         decryptionParams.key, 
         decryptionParams.hmac, 
-        chunkDataProvider->getCurrentChecksumsFromBridge()
+        _chunkDataProvider->getCurrentChecksumsFromBridge()
     );
-    std::shared_ptr<ChunkReader> chunkReader = std::make_shared<ChunkReader>(chunkDataProvider, chunkEncryptor, hashList, decryptionParams);
-    _reader = std::make_shared<FileReader>(chunkReader, decryptionParams);
+    _chunkReader = std::make_shared<ChunkReader>(_chunkDataProvider, _chunkEncryptor, _hashList, decryptionParams);
+    _fileReader = std::make_shared<FileReader>(_chunkReader, decryptionParams);
     _size = decryptionParams.originalSize;
 }
 
 void FileReadHandle::sync(
     const store::FileDecryptionParams& newDecryptionParams
 ) {
-    _reader->sync(newDecryptionParams);
+    if(newDecryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(newDecryptionParams.originalSize)) {
+        throw FileCorruptedException();
+    }
+    _hashList->sync(newDecryptionParams.key, newDecryptionParams.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
+    _chunkDataProvider->sync(newDecryptionParams.version, newDecryptionParams.sizeOnServer);
+    _chunkReader->sync(newDecryptionParams);
+    _fileReader->sync(newDecryptionParams);
     _size = newDecryptionParams.originalSize;
 }
 
@@ -90,7 +96,7 @@ std::string FileReadHandle::read(uint64_t length) {
     if (length > SIZE_MAX) {
         throw NumberToBigForCPUArchitectureException("length to big for this CPU Architecture");
     }
-    std::string result = _reader->read(_pos, length);
+    std::string result = _fileReader->read(_pos, length);
     _pos += length;
     return result;
 }
@@ -186,8 +192,9 @@ FileReadWriteHandle::FileReadWriteHandle(
         encryptionParams.fileDecryptionParams.hmac, 
         chunkDataProvider->getCurrentChecksumsFromBridge()
     );
+    std::shared_ptr<IChunkReader> chunkReader = std::make_shared<ChunkReader>(chunkDataProvider, chunkEncryptor, hashList, encryptionParams.fileDecryptionParams);
     std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
-        chunkDataProvider, chunkEncryptor, hashList, fileMetaEncryptor, 
+        chunkDataProvider, chunkEncryptor, hashList, chunkReader, fileMetaEncryptor, 
         encryptionParams.fileDecryptionParams.originalSize,
         encryptionParams.fileDecryptionParams.sizeOnServer,
         encryptionParams.fileDecryptionParams.version,

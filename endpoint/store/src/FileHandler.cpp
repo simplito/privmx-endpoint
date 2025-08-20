@@ -19,6 +19,7 @@ FileHandler::FileHandler (
     std::shared_ptr<IChunkDataProvider> chunkDataProvider,
     std::shared_ptr<IChunkEncryptor> chunkEncryptor,
     std::shared_ptr<IHashList> hashList,
+    std::shared_ptr<IChunkReader> chunkReader,
     std::shared_ptr<FileMetaEncryptor> metaEncryptor,
     size_t plainfileSize,
     size_t encryptedFileSize,
@@ -31,6 +32,7 @@ FileHandler::FileHandler (
     _chunkDataProvider(chunkDataProvider),
     _chunkEncryptor(chunkEncryptor),
     _hashList(hashList),
+    _chunkReader(chunkReader),
     _fileMetaEncryptor(metaEncryptor),
     _plainfileSize(plainfileSize),
     _encryptedFileSize(encryptedFileSize),
@@ -52,8 +54,8 @@ void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) 
         toSend = emptyChars + toSend;
     }
     // start writing to offset chunk
-    size_t startIndex = posToindex(offset);
-    size_t stopIndex = posToindex(offset+toSend.size()-1);
+    size_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
+    size_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size()-1);
     size_t dataSend = 0;
     std::vector<FileHandler::UpdateChunkData> chunksToUpdate;
     auto newPlainfileSize = _plainfileSize;
@@ -110,6 +112,7 @@ void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) 
     _encryptedFileSize = newEncryptedFileSize;
     for(auto& updateInfo : chunksToUpdate) {
         _chunkDataProvider->update(_version, updateInfo.chunkIndex, updateInfo.chunk.data, _encryptedFileSize, truncate);
+        _chunkReader->update(_version, updateInfo.chunkIndex);
     }
     PRIVMX_DEBUG("FileHandler", "write", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
 }
@@ -117,13 +120,13 @@ void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) 
 core::Buffer FileHandler::read(size_t offset, size_t size) {
     if(size > _plainfileSize) size = _plainfileSize;
     if(size == 0) return core::Buffer();
-    size_t startIndex = posToindex(offset);
-    size_t stopIndex = posToindex(offset+size-1);
+    size_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
+    size_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+size-1);
     std::string data = std::string();
     for(size_t i = startIndex; i <= stopIndex; i++) {
-        data.append(getDecryptedChunk(i));
+        data.append(_chunkReader->getDecryptedChunk(i));
     }
-    return core::Buffer::from( data.substr(posInindex(offset), size) );
+    return core::Buffer::from( data.substr(_chunkReader->filePosToPosInFileChunk(offset), size) );
 }
 
 size_t FileHandler::getFileSize() {
@@ -202,27 +205,15 @@ void FileHandler::updateOnServer(const std::vector<FileHandler::UpdateChanges>& 
     }
 }
 
-std::string FileHandler::getDecryptedChunk(size_t index) {
-    std::string chunk = _chunkDataProvider->getChunk(index, _version);
-    std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
-    return plain;
-}
-size_t FileHandler::posToindex(size_t position) {
-    return position / _chunkEncryptor->getPlainChunkSize();
-}
-
-size_t FileHandler::posInindex(size_t position) {
-    return position % _chunkEncryptor->getPlainChunkSize();
-}
-
 void FileHandler::sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) {
+    _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
+    _chunkDataProvider->sync(_version, _encryptedFileSize);
+    _chunkReader->sync(newParms);
     _fileMeta = fileMeta;
     _version = newParms.version;
     _plainfileSize = newParms.originalSize;
     _encryptedFileSize = newParms.sizeOnServer;
     _fileEncKey = fileEncKey;
-    _chunkDataProvider->sync(_version, _encryptedFileSize);
-    _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
 }
 
 std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFromUpdateChunkData(const std::vector<FileHandler::UpdateChunkData>& updatedChunks) {

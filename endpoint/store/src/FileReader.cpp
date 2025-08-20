@@ -24,7 +24,6 @@ FileReader::FileReader(
 {}
 
 void FileReader::sync(const store::FileDecryptionParams& newParms) {
-    _chunkReader->sync(newParms);
     _plainfileSize = newParms.originalSize;
     _version = newParms.version;
 }

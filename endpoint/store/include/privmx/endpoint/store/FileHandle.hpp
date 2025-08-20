@@ -24,6 +24,10 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkStreamer.hpp"
 #include "privmx/endpoint/store/interfaces/IFileReader.hpp"
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
+#include "privmx/endpoint/store/interfaces/IHashList.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkReader.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 
 
@@ -70,7 +74,11 @@ public:
     std::string read(uint64_t length);
     void seek(uint64_t pos);
 private:
-    std::shared_ptr<store::IFileReader> _reader;
+    std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
+    std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
+    std::shared_ptr<IHashList> _hashList;
+    std::shared_ptr<IChunkReader> _chunkReader;
+    std::shared_ptr<store::IFileReader> _fileReader;
     uint64_t _pos = 0;
 };
 
