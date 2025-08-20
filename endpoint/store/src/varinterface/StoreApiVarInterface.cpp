@@ -104,12 +104,13 @@ Poco::Dynamic::Var StoreApiVarInterface::deleteFile(const Poco::Dynamic::Var& ar
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::createFile(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 5);
     auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "privateMeta");
     auto size = _deserializer.deserialize<int64_t>(argsArr->get(3), "size");
-    auto result = _storeApi.createFile(storeId, publicMeta, privateMeta, size);
+    auto randomWriteSupport = _deserializer.deserialize<bool>(argsArr->get(4), "randomWriteSupport");
+    auto result = _storeApi.createFile(storeId, publicMeta, privateMeta, size, randomWriteSupport);
     return _serializer.serialize(result);
 }
 
