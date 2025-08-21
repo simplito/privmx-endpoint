@@ -91,7 +91,9 @@ void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped
 
 void PmxPeerConnectionObserver::UpdateCurrentKeys(std::shared_ptr<privmx::webrtc::KeyStore> newKeys) {
     _currentKeys = newKeys;
+    PRIVMX_DEBUG("STREAMS", "PmxPeerConnectionObserver", "PmxPeerConnectionObserver::UpdateCurrentKeys");
     _frameCryptors.forAll([&]([[maybe_unused]]const std::string &id, const std::shared_ptr<privmx::webrtc::FrameCryptor> &frameCryptor) {
+        PRIVMX_DEBUG("STREAMS", "PmxPeerConnectionObserver", "PmxPeerConnectionObserver::UpdateCurrentKeys::forAll::single");
         frameCryptor->setKeyStore(_currentKeys);
     });
 }

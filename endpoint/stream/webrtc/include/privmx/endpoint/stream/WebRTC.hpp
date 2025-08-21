@@ -81,8 +81,11 @@ private:
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::shared_ptr<PmxPeerConnectionObserver> _peerConnectionObserver;
     int64_t _streamId;
+    std::shared_mutex _webRtcKeysMutex;
     std::shared_ptr<privmx::webrtc::KeyStore> _currentWebRtcKeys;
     std::atomic_int64_t _nextKeyUpdateCallbackId = 0;
+
+    std::shared_mutex _mediaMutex;
     std::map<int64_t, AudioTrackInfo> _audioTracks;
     std::map<int64_t, VideoTrackInfo> _videoTracks;
 

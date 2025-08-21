@@ -22,6 +22,7 @@ WebRTC::WebRTC(
     _peerConnectionObserver(std::make_shared<PmxPeerConnectionObserver>(peerConnectionFactory, streamId, privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()), OnFrame, _frameCryptorOptions)),
     _streamId(streamId)
 {
+    
     _currentWebRtcKeys = privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>());
     _peerConnection->RegisterRTCPeerConnectionObserver(_peerConnectionObserver.get());
 }
@@ -99,35 +100,50 @@ void WebRTC::setAnswerAndSetRemoteDescription(const std::string& sdp, const std:
 
 void WebRTC::close() {
     PRIVMX_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTC::close()");
+    std::unique_lock<std::shared_mutex> lock(_mediaMutex);
     _videoTracks.clear();
     _audioTracks.clear();
     _peerConnection->Close();
 }
 
 void WebRTC::updateKeys(const std::vector<Key>& keys) {
-    _currentWebRtcKeys =  createWebRtcKeyStore(keys);
+    PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys createWebRtcKeyStore");
+    _currentWebRtcKeys = createWebRtcKeyStore(keys);
+    PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys _peerConnectionObserver->UpdateCurrentKeys");
+    // update input data keys 
     _peerConnectionObserver->UpdateCurrentKeys(_currentWebRtcKeys);
-    std::for_each(
-        _audioTracks.begin(),
-        _audioTracks.end(), 
-        [&](const auto& p) {p.second.frameCryptor->setKeyStore(_currentWebRtcKeys);}
-    );
-    std::for_each(
-        _videoTracks.begin(),
-        _videoTracks.end(), 
-        [&](const auto& p) {p.second.frameCryptor->setKeyStore(_currentWebRtcKeys);}
-    );
+    PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys for_each->_audioTracks");
+    {
+        // update out data keys
+        std::shared_lock<std::shared_mutex> lock(_mediaMutex);
+        std::for_each(
+            _audioTracks.begin(),
+            _audioTracks.end(), 
+            [&](const auto& p) {p.second.frameCryptor->setKeyStore(_currentWebRtcKeys);}
+        );
+        PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys for_each->_videoTracks");
+        std::for_each(
+            _videoTracks.begin(),
+            _videoTracks.end(), 
+            [&](const auto& p) {p.second.frameCryptor->setKeyStore(_currentWebRtcKeys);}
+        );
+    }
 }
 
 void WebRTC::AddAudioTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, int64_t id) {
+    std::unique_lock<std::shared_mutex> lock(_mediaMutex);
     _mediaStream->AddTrack(audioTrack);
     auto sender = _peerConnection->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(_streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-        _peerConnectionFactory,
-        sender, 
-        _currentWebRtcKeys,
-        _frameCryptorOptions
-    );
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
+    {
+        std::shared_lock<std::shared_mutex> lock(_webRtcKeysMutex);
+        frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
+            _peerConnectionFactory,
+            sender, 
+            _currentWebRtcKeys,
+            _frameCryptorOptions
+        );
+    }
     _audioTracks.insert(std::make_pair(
         id, 
         AudioTrackInfo{
@@ -140,14 +156,19 @@ void WebRTC::AddAudioTrack(libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> au
 }
 
 void WebRTC::AddVideoTrack(libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, int64_t id) {
+    std::unique_lock<std::shared_mutex> lock(_mediaMutex);
     _mediaStream->AddTrack(videoTrack);
     auto sender = _peerConnection->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(_streamId)}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-        _peerConnectionFactory,
-        sender, 
-        _currentWebRtcKeys,
-        _frameCryptorOptions
-    );
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
+    {
+        std::shared_lock<std::shared_mutex> lock(_webRtcKeysMutex);
+        frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
+            _peerConnectionFactory,
+            sender, 
+            _currentWebRtcKeys,
+            _frameCryptorOptions
+        );
+    }
     _videoTracks.insert(std::make_pair(
         id, 
         VideoTrackInfo{
@@ -159,6 +180,7 @@ void WebRTC::AddVideoTrack(libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> vi
 }
 
 void WebRTC::RemoveAudioTrack(int64_t id) {
+    std::unique_lock<std::shared_mutex> lock(_mediaMutex);
     auto it = _audioTracks.find(id);
     if(it != _audioTracks.end()) {
         _mediaStream->RemoveTrack(it->second.track);
@@ -170,6 +192,7 @@ void WebRTC::RemoveAudioTrack(int64_t id) {
 }
 
 void WebRTC::RemoveVideoTrack(int64_t id) {
+    std::unique_lock<std::shared_mutex> lock(_mediaMutex);
     auto it = _videoTracks.find(id);
     if(it != _videoTracks.end()) {
         _mediaStream->RemoveTrack(it->second.track);
@@ -196,6 +219,7 @@ std::shared_ptr<privmx::webrtc::KeyStore> WebRTC::createWebRtcKeyStore(const std
 
 void WebRTC::setCryptorOptions(const privmx::webrtc::FrameCryptorOptions& options) {
     _frameCryptorOptions = options;
+    std::shared_lock<std::shared_mutex> lock(_mediaMutex);
     std::for_each(
         _audioTracks.begin(),
         _audioTracks.end(), 

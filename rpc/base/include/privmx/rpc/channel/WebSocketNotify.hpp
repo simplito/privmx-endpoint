@@ -75,6 +75,7 @@ public:
     using Ptr = Poco::SharedPtr<WebSocketNotify>;
     using CallbackFunc = std::function<void(const std::string&)>;
     using OnWsCloseFunc = std::function<void(void)>;
+    ~WebSocketNotify();
 
     void add(Poco::Int32 wschannelid, CallbackFunc callback, OnWsCloseFunc on_websocket_close);
     void remove(Poco::Int32 wschannelid);
@@ -91,13 +92,13 @@ private:
     void cancelNotifier();
     utils::Mutex _mutex;
     std::unordered_map<Poco::Int32, WsChannelFuncs> _ws_channel_funcs;
-    TSQueue<CallbackWithData> notificationsQueue;
-    bool data_to_notify = false;
-    bool notifier_active = false;
+    TSQueue<CallbackWithData> _notificationsQueue;
+    std::atomic_bool _data_to_notify = false;
+    std::atomic_bool _notifier_active = false;
     std::mutex _notifyMutex;
-    std::condition_variable notify_cv;
-    std::thread consumer_thread;
-    privmx::utils::CancellationToken::Ptr notifier_cancellation_token;
+    std::condition_variable _notify_cv;
+    std::thread _consumer_thread;
+    privmx::utils::CancellationToken::Ptr _notifier_cancellation_token;
 };
 
 } // rpc

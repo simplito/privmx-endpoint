@@ -20,9 +20,25 @@ limitations under the License.
 #include <map>
 #include <memory>
 #include <iomanip>
+#include <thread>
 
 
 #ifdef PRIVMX_USE_DEBUG
+
+#ifdef PRIVMX_DEBUG_USE_PRINT_LOCK
+    std::mutex DEBUG_WRITE_MUTEX;
+    #define PRIVMX_DEBUG_PRINT_LOCK DEBUG_WRITE_MUTEX.lock();
+    #define PRIVMX_DEBUG_PRINT_UNLOCK DEBUG_WRITE_MUTEX.unlock();
+#else // PRIVMX_DEBUG_USE_PRINT_LOCK 
+    #define PRIVMX_DEBUG_PRINT_LOCK
+    #define PRIVMX_DEBUG_PRINT_UNLOCK
+#endif // PRIVMX_DEBUG_USE_PRINT_LOCK
+
+#ifdef PRIVMX_DEBUG_PRINT_TID
+    #define PRIVMX_DEBUG_STD_INFO "TID:" << std::this_thread::get_id() << " [PRIVMX_DEBUG] "
+#else // PRIVMX_DEBUG_PRINT_TID
+    #define PRIVMX_DEBUG_STD_INFO "[PRIVMX_DEBUG] "
+#endif // PRIVMX_USE_DEBUG_PRINT_TID
 
 #ifdef PRIVMX_DEBUG_USE_CERR
     #define PRIVMX_DEBUG_OUTPUT_ARGS_6(ARG) \
@@ -38,7 +54,7 @@ limitations under the License.
     #define PRIVMX_DEBUG_OUTPUT_ARGS_1(ARG, ...) \
         std::setw(13) << ARG __VA_OPT__(<< PRIVMX_DEBUG_OUTPUT_ARGS_2(__VA_ARGS__))
     #define PRIVMX_DEBUG_OUTPUT(LABEL ,MSG, ...) \
-        std::cerr << std::left << "[PRIVMX_DEBUG] " << std::setw(40) << LABEL << " - " << std::setw(28) << MSG __VA_OPT__( << PRIVMX_DEBUG_OUTPUT_ARGS_1(__VA_ARGS__)) << std::endl;
+        std::cerr << std::left << PRIVMX_DEBUG_STD_INFO << std::setw(40) << LABEL << " - " << std::setw(28) << MSG __VA_OPT__( << PRIVMX_DEBUG_OUTPUT_ARGS_1(__VA_ARGS__)) << std::endl;
 
 #else // PRIVMX_DEBUG_USE_CERR
     #define PRIVMX_DEBUG_OUTPUT_ARGS_6(ARG) \
@@ -54,7 +70,8 @@ limitations under the License.
     #define PRIVMX_DEBUG_OUTPUT_ARGS_1(ARG, ...) \
         std::setw(13) << ARG __VA_OPT__(<< PRIVMX_DEBUG_OUTPUT_ARGS_2(__VA_ARGS__))
     #define PRIVMX_DEBUG_OUTPUT(LABEL ,MSG, ...) \
-        std::cout << std::left << "[PRIVMX_DEBUG] " << std::setw(40) << LABEL << " - " << std::setw(28) << MSG __VA_OPT__( << PRIVMX_DEBUG_OUTPUT_ARGS_1(__VA_ARGS__)) << std::endl;
+        std::cout << std::left << PRIVMX_DEBUG_STD_INFO << std::setw(40) << LABEL << " - " << std::setw(28) << MSG __VA_OPT__( << PRIVMX_DEBUG_OUTPUT_ARGS_1(__VA_ARGS__)) << std::endl;
+
 #endif // PRIVMX_DEBUG_USE_CERR
 namespace privmx {
 namespace utils {
@@ -79,7 +96,9 @@ public:
 
 
 #define PRIVMX_DEBUG(...) \
-    privmx::utils::debug::Debug::print( __VA_OPT__(PRIVMX_DEBUG_ARG_1(__VA_ARGS__)));
+    PRIVMX_DEBUG_PRINT_LOCK \
+    privmx::utils::debug::Debug::print( __VA_OPT__(PRIVMX_DEBUG_ARG_1(__VA_ARGS__))); \
+    PRIVMX_DEBUG_PRINT_UNLOCK 
 
 #ifdef PRIVMX_DEBUG_TIME
 
@@ -114,11 +133,17 @@ private:
     #ARG __VA_OPT__(, PRIVMX_DEBUG_TIME_ARG_2(__VA_ARGS__))
 
 #define PRIVMX_DEBUG_TIME_START(...) \
-    privmx::utils::debug::DebugTimer::getInstance()->start( __VA_OPT__(PRIVMX_DEBUG_TIME_ARG_1(__VA_ARGS__)));
+    PRIVMX_DEBUG_PRINT_LOCK \
+    privmx::utils::debug::DebugTimer::getInstance()->start( __VA_OPT__(PRIVMX_DEBUG_TIME_ARG_1(__VA_ARGS__))); \
+    PRIVMX_DEBUG_PRINT_UNLOCK 
 #define PRIVMX_DEBUG_TIME_CHECKPOINT(...) \
-    privmx::utils::debug::DebugTimer::getInstance()->checkpoint( __VA_OPT__(PRIVMX_DEBUG_TIME_ARG_1(__VA_ARGS__)));
+    PRIVMX_DEBUG_PRINT_LOCK \
+    privmx::utils::debug::DebugTimer::getInstance()->checkpoint( __VA_OPT__(PRIVMX_DEBUG_TIME_ARG_1(__VA_ARGS__))); \
+    PRIVMX_DEBUG_PRINT_UNLOCK 
 #define PRIVMX_DEBUG_TIME_STOP(...) \
-    privmx::utils::debug::DebugTimer::getInstance()->stop( __VA_OPT__(PRIVMX_DEBUG_TIME_ARG_1(__VA_ARGS__)));
+    PRIVMX_DEBUG_PRINT_LOCK \
+    privmx::utils::debug::DebugTimer::getInstance()->stop( __VA_OPT__(PRIVMX_DEBUG_TIME_ARG_1(__VA_ARGS__))); \
+    PRIVMX_DEBUG_PRINT_UNLOCK 
 
 
 

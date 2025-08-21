@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_STOREPROVIDER_HPP_
-#define _PRIVMXLIB_ENDPOINT_STORE_STORECACHE_HPP_
+#define _PRIVMXLIB_ENDPOINT_STORE_STOREPROVIDER_HPP_
 
 #include <privmx/endpoint/core/ContainerProvider.hpp>
 #include "privmx/endpoint/store/ServerTypes.hpp"

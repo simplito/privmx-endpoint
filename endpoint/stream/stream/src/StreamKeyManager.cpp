@@ -16,7 +16,7 @@ limitations under the License.
 
 #define UPDATE_INTERVAL 1000*1
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*3+MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL
+#define MAX_STD_KEY_TTL 1000*15+(MAX_UPDATE_TIMEOUT*2)+UPDATE_INTERVAL
 
 using namespace privmx::endpoint::stream; 
 
@@ -103,16 +103,16 @@ void StreamKeyManager::respondToEvent(dynamic::StreamKeyManagementEvent event, c
 
     PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToEvent data: " + privmx::utils::Utils::stringifyVar(event));  
     if(event.subtype() == "RequestKeyEvent") {
-        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Responding RequestKeyEvent");
         respondToRequestKey(userId, userPubKey);
     } else if(event.subtype() == "RequestKeyRespondEvent") {
-        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Responding RequestKeyRespondEvent");
         setRequestKeyResult(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::RequestKeyRespondEvent>(event));
     } else if(event.subtype() == "UpdateKeyEvent") {
-        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Responding UpdateKeyEvent");
         respondToUpdateRequest(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyEvent>(event), userId, userPubKey);
     } else if(event.subtype() == "UpdateKeyACKEvent") {
-        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToUpdateRequest updateWebRtcKeyStore");
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Responding UpdateKeyACKEvent");
         respondUpdateKeyConfirmation(privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::UpdateKeyACKEvent>(event), userPubKey);
     }
 }
@@ -216,8 +216,8 @@ void StreamKeyManager::updateKey() {
     std::unique_lock<std::mutex> lock(_updateKeyMutex);
     if(wait) {
         PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey _updateKeyCV.wait_for");
-        _updateKeyCV.wait_for(lock, std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
-        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateKey _updateKeyCV.wait_for done");
+        auto status = _updateKeyCV.wait_for(lock, std::chrono::milliseconds(MAX_UPDATE_TIMEOUT));
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", status == std::cv_status::timeout ? "updateKey _updateKeyCV.wait_for: timeout" : "updateKey _updateKeyCV.wait_for: ack form everyone");
     }
     if(!_cancellationToken->isCancelled()) {
         {
@@ -326,26 +326,24 @@ void StreamKeyManager::updateWebRtcKeyStore() {
     }
     _currentWebRtcKeys = webRtcKeys;
     if(!disableKeyUpdateForEncryptors) {
-        std::shared_lock<std::shared_mutex> lock(_webRtcKeyUpdateCallbacksMutex);
-        for(auto& webRtcKeyUpdateCallback: _webRtcKeyUpdateCallbacks) {
+        std::shared_lock<std::shared_mutex> lock(_webRtcKeyUpdateCallbacksMutex); // <- T1
+        PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "updateWebRtcKeyStore updating list int webrtc")
+        for(auto& webRtcKeyUpdateCallback: _webRtcKeyUpdateCallbacks) { // <- T2
             webRtcKeyUpdateCallback.second(_currentWebRtcKeys);
         };
     }
 }
 
 void StreamKeyManager::removeOldKeyFormKeysStrage() {
+    std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
     std::vector<std::string> keysToDelete;
-    {
-        std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
-        for(auto& key: _keysStrage) {
-            if(key.second->creation_time + key.second->TTL < std::chrono::system_clock::now()) {
-                keysToDelete.push_back(key.first);
-            }
-        };
-    }
+    for(auto& key: _keysStrage) {
+        if(key.second->creation_time + key.second->TTL < std::chrono::system_clock::now()) {
+            keysToDelete.push_back(key.first);
+        }
+    };
     if(keysToDelete.size() > 0) {
         {
-            std::unique_lock<std::shared_mutex> lock(_keysStrageMutex);
             for(auto& keyToDelete: keysToDelete) {
                 _keysStrage.erase(keyToDelete);
             }

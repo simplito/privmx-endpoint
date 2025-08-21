@@ -21,6 +21,10 @@ using namespace std;
 using namespace Poco;
 using namespace Poco::JSON;
 
+WebSocketNotify::~WebSocketNotify() {
+    cancelNotifier();
+}
+
 
 void WebSocketNotify::add(Int32 wschannelid, function<void(const string&)> callback, function<void(void)> on_websocket_close) {
     Lock lock(_mutex);
@@ -39,9 +43,9 @@ void WebSocketNotify::remove(Int32 wschannelid) {
     if (_ws_channel_funcs.size() <= 0 && on_close_all_channels) {
         on_close_all_channels();
     }
-    if (notifier_active) {
-        consumer_thread.detach();
-        notifier_active = false;
+    if (_notifier_active) {
+        _consumer_thread.detach();
+        _notifier_active = false;
     }
 }
 
@@ -62,14 +66,14 @@ void WebSocketNotify::notify(const string& data) {
 }
 
 void WebSocketNotify::queueForNotify(const string data) {
-    if (!notifier_active) {
-        notifier_active = true;
-        notifier_cancellation_token = privmx::utils::CancellationToken::create();
-        consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
+    if (!_notifier_active) {
+        _notifier_active = true;
+        _notifier_cancellation_token = privmx::utils::CancellationToken::create();
+        _consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
             while(!token->isCancelled()) {
                 notifier();
             }
-        }, notifier_cancellation_token);
+        }, _notifier_cancellation_token);
     }
 
     Int32 wschannelid = ByteOrder::fromBigEndian(*((Int32*)data.data()));
@@ -87,11 +91,11 @@ void WebSocketNotify::queueForNotify(const string data) {
             .data = data,
             .callback = callback
         };
-        notificationsQueue.push(pair);
+        _notificationsQueue.push(pair);
 
         lock_guard<std::mutex>lock(_notifyMutex);
-        data_to_notify = true;
-        notify_cv.notify_one();
+        _data_to_notify = true;
+        _notify_cv.notify_one();
     }
 }
 
@@ -109,21 +113,21 @@ void WebSocketNotify::onWebSocketClose() {
 
 void WebSocketNotify::notifier() {
     unique_lock<std::mutex>lock(_notifyMutex);
-    notify_cv.wait(lock, [&] {
-        return data_to_notify;
+    _notify_cv.wait(lock, [&] {
+        return _data_to_notify.load();
     });
-    while(notificationsQueue.size() > 0) {
-        auto ret {notificationsQueue.pop()};
+    while(_notificationsQueue.size() > 0) {
+        auto ret {_notificationsQueue.pop()};
         ret.callback(ret.data.substr(4));
     };
 
-    data_to_notify = false;
-    notify_cv.notify_one();
+    _data_to_notify.store(false);
 }
 
 void WebSocketNotify::cancelNotifier() {
-    if(!notifier_cancellation_token.isNull()) {
-        notifier_cancellation_token->cancel();
+    if(!_notifier_cancellation_token.isNull()) {
+        _notifier_cancellation_token->cancel();
     }
-    data_to_notify = true;
+    _data_to_notify.store(true);
+    _notify_cv.notify_one();
 }
