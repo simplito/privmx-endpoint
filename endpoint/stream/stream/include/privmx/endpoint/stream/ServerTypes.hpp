@@ -185,7 +185,7 @@ ENDPOINT_SERVER_TYPE(StreamLeaveModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamReconfigureModel)
-    OBJECT_PTR_FIELD(options)
+    OBJECT_FIELD(answer, SessionDescription)
     INT64_FIELD(sessionId)
 TYPE_END
 

@@ -217,8 +217,8 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::Janus
         auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
         model.sessionId(session_id);
         model.answer(sessionDescription);
-        _serverApi->streamAcceptOffer(model);
-        std::cerr << "===========> AFTER streamAcceptOffer!!!" << std::endl;
+        _serverApi->streamReconfigure(model);
+        std::cerr << "===========> AFTER streamReconfigure!!!" << std::endl;
     } else {
         std::cerr << "onVideoRoomUpdate (but without jsep)" << std::endl;
     }

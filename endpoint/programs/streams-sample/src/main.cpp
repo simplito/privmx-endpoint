@@ -54,7 +54,6 @@ int main(int argc, char *argv[]) {
     auto privKey {cryptoApi.derivePrivateKey2(userPassword, userId)};
     auto pubKey {cryptoApi.derivePublicKey(privKey)};
     std::cerr << "pub for pass: "<< userPassword << " and userId: "<< userId << " is: " << pubKey << std::endl;
-	std::cerr << __LINE__ << std::endl;
 
 	std::thread t([&](){
 		while(true) {

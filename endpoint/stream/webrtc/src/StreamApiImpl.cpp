@@ -43,10 +43,8 @@ void StreamApiImpl::ensureInitWebRtcLibraryUtils() {
     
     std::cout << "-> Create RTCConfiguration.." << std::endl;
     _configuration = libwebrtc::RTCConfiguration();
-    
-    std::cout << "-> Create constraints (empty - to be implemented).." << std::endl;
-    _constraints = libwebrtc::RTCMediaConstraints::Create();
-    std::cout << "-> Constraints created." << std::endl;
+
+
 
     std::cout << "-> Getting credentials.." << std::endl;
     auto credentials = _api->getTurnCredentials();
@@ -84,8 +82,12 @@ int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
     ensureInitWebRtcLibraryUtils();
     int64_t streamId = generateNumericId();
 
+    std::cout << "-> Create constraints (empty - to be implemented).." << std::endl;
+    auto constraints = libwebrtc::RTCMediaConstraints::Create();
+    std::cout << "-> Constraints created." << std::endl;
+
     std::cout << "-> Create WebRTC .." << std::endl;
-    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, _constraints, _configuration, streamId, _frameCryptorOptions, std::nullopt);
+    std::shared_ptr<WebRTC> peerConnectionWebRTC = std::make_shared<WebRTC>(_peerConnectionFactory, constraints, _configuration, streamId, _frameCryptorOptions, std::nullopt);
     _streamDataMap.set( 
         streamId, 
         std::make_shared<StreamData>(
@@ -202,23 +204,23 @@ void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::strin
         std::cout << "videoDevice->CreateVideoSource()..." << std::endl;
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", _constraints);
         std::cout << "videoDevice->CreateVideoTrack()..." << std::endl;
-    // libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
+    libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
 
-    // // Add tracks to the peer connection
-    // auto streamData = _streamDataMap.get(streamId);
-    // if(!streamData.has_value()) {
-    //     throw IncorrectStreamIdException();
-    // }
-    // streamData.value()->webrtc->AddVideoTrack(videoTrack, id);
-    // std::lock_guard<std::mutex> lock(streamData.value()->streamMutex);
-    // streamData.value()->streamCapturers.set(id, videoCapturer);
-    // std::cerr << __LINE__ << std::endl;
-    // if(streamData.value()->status == StreamStatus::Online) {
-    //     std::cerr << __LINE__ << std::endl;
-    //     videoCapturer->StartCapture();
-    // }
-    // std::cerr << __LINE__ << std::endl;
-    // // if stream is published start Capture if not dont
+    // Add tracks to the peer connection
+    auto streamData = _streamDataMap.get(streamId);
+    if(!streamData.has_value()) {
+        throw IncorrectStreamIdException();
+    }
+    streamData.value()->webrtc->AddVideoTrack(videoTrack, id);
+    std::lock_guard<std::mutex> lock(streamData.value()->streamMutex);
+    streamData.value()->streamCapturers.set(id, videoCapturer);
+    std::cerr << __LINE__ << std::endl;
+    if(streamData.value()->status == StreamStatus::Online) {
+        std::cerr << __LINE__ << std::endl;
+        videoCapturer->StartCapture();
+    }
+    std::cerr << __LINE__ << std::endl;
+    // if stream is published start Capture if not dont
 
 }
 
