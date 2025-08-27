@@ -139,10 +139,10 @@ Poco::Dynamic::Var VarSerializer::serialize<CollectionItemChange>(const Collecti
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<CollectionChangeEventData>(const CollectionChangeEventData& val) {
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEventData>(const CollectionChangedEventData& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "core$CollectionChangeEventData");
+        obj->set("__type", "core$CollectionChangedEventData");
     }
     obj->set("moduleType", serialize(val.moduleType));
     obj->set("moduleId", serialize(val.moduleId));
@@ -152,10 +152,10 @@ Poco::Dynamic::Var VarSerializer::serialize<CollectionChangeEventData>(const Col
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<CollectionChangeEvent>(const CollectionChangeEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEvent>(const CollectionChangedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "core$CollectionChangeEvent");
+        obj->set("__type", "core$CollectionChangedEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));

@@ -478,12 +478,12 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
-    } else if (type == "kvdbCollectionChange") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangeEventData>(notification.data);
+    } else if (type == "kvdbCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
         if (raw.containerTypeOpt(KVDB_TYPE_FILTER_FLAG) == KVDB_TYPE_FILTER_FLAG) {
-            std::shared_ptr<core::CollectionChangeEvent> event(new core::CollectionChangeEvent());
-            event->channel = "kvdb/collectionChange";
-            event->data = core::Mapper::mapToCollectionChangeEventData(KVDB_TYPE_FILTER_FLAG, raw);
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "kvdb/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(KVDB_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

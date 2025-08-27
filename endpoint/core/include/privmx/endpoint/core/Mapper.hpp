@@ -21,9 +21,9 @@ namespace core {
 
 class Mapper {
 public:
-    static CollectionItemChange mapToCollectionChangeItem(const server::CollectionItemChange& data);
-    static std::vector<CollectionItemChange> mapToCollectionChangeItems(const privmx::utils::List<server::CollectionItemChange>& data);
-    static CollectionChangeEventData mapToCollectionChangeEventData(const std::string& moduleType, const server::CollectionChangeEventData& data);
+    static CollectionItemChange mapToCollectionItemChange(const server::CollectionItemChange& data);
+    static std::vector<CollectionItemChange> mapToCollectionItemChanges(const privmx::utils::List<server::CollectionItemChange>& data);
+    static CollectionChangedEventData mapToCollectionChangedEventData(const std::string& moduleType, const server::CollectionChangedEventData& data);
 };
 
 }  // namespace core

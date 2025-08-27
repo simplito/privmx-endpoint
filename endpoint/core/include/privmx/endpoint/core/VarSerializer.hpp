@@ -112,10 +112,10 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<CollectionItemChange>(const CollectionItemChange& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<CollectionChangeEventData>(const CollectionChangeEventData& val);
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEventData>(const CollectionChangedEventData& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<CollectionChangeEvent>(const CollectionChangeEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEvent>(const CollectionChangedEvent& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const ContainerPolicyWithoutItem& val);

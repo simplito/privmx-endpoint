@@ -1059,12 +1059,12 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
-    } else if (type == "threadCollectionChange") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangeEventData>(notification.data);
+    } else if (type == "threadCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
         if (raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
-            std::shared_ptr<core::CollectionChangeEvent> event(new core::CollectionChangeEvent());
-            event->channel = "inbox/collectionChange";
-            event->data = core::Mapper::mapToCollectionChangeEventData(INBOX_TYPE_FILTER_FLAG, raw);
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "inbox/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(INBOX_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

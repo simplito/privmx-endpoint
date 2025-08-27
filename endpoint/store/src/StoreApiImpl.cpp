@@ -780,12 +780,12 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
-    } else if (type == "storeCollectionChange") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangeEventData>(notification.data);
+    } else if (type == "storeCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
         if (raw.containerTypeOpt(STORE_TYPE_FILTER_FLAG) == STORE_TYPE_FILTER_FLAG) {
-            std::shared_ptr<core::CollectionChangeEvent> event(new core::CollectionChangeEvent());
-            event->channel = "store/collectionChange";
-            event->data = core::Mapper::mapToCollectionChangeEventData(STORE_TYPE_FILTER_FLAG, raw);
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "store/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(STORE_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

@@ -120,7 +120,7 @@ ENDPOINT_SERVER_TYPE(CollectionItemChange)
     STRING_FIELD(action)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(CollectionChangeEventData)
+ENDPOINT_SERVER_TYPE(CollectionChangedEventData)
     STRING_FIELD(containerId)
     INT64_FIELD(affectedItemsCount)
     STRING_FIELD(containerType)

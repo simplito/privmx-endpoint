@@ -499,12 +499,12 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
-    } else if (type == "threadCollectionChange") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangeEventData>(notification.data);
+    } else if (type == "threadCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
         if (raw.containerTypeOpt(THREAD_TYPE_FILTER_FLAG) == THREAD_TYPE_FILTER_FLAG) {
-            std::shared_ptr<core::CollectionChangeEvent> event(new core::CollectionChangeEvent());
-            event->channel = "thread/collectionChange";
-            event->data = core::Mapper::mapToCollectionChangeEventData(THREAD_TYPE_FILTER_FLAG, raw);
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "thread/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(THREAD_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

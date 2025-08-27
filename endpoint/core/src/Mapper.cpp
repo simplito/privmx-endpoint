@@ -13,28 +13,28 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-CollectionItemChange Mapper::mapToCollectionChangeItem(const server::CollectionItemChange& data) {
+CollectionItemChange Mapper::mapToCollectionItemChange(const server::CollectionItemChange& data) {
     return {
         .itemId = data.itemId(),
         .action = data.action()
     };
 }
 
-std::vector<CollectionItemChange> Mapper::mapToCollectionChangeItems(const privmx::utils::List<server::CollectionItemChange>& data) {
+std::vector<CollectionItemChange> Mapper::mapToCollectionItemChanges(const privmx::utils::List<server::CollectionItemChange>& data) {
     std::vector<CollectionItemChange> result;
     result.reserve(data.size());
     for (auto item : data) {
-        result.push_back(mapToCollectionChangeItem(item));
+        result.push_back(mapToCollectionItemChange(item));
     }
     return result;
 }
 
-CollectionChangeEventData Mapper::mapToCollectionChangeEventData(const std::string& moduleType, const server::CollectionChangeEventData& data) {
+CollectionChangedEventData Mapper::mapToCollectionChangedEventData(const std::string& moduleType, const server::CollectionChangedEventData& data) {
     return {
         .moduleType = moduleType,
         .moduleId = data.containerId(),
         .affectedItemsCount = data.affectedItemsCount(),
-        .items = mapToCollectionChangeItems(data.items())
+        .items = mapToCollectionItemChanges(data.items())
 
     };
 }

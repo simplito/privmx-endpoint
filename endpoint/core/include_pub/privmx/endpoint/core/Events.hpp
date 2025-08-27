@@ -220,7 +220,7 @@ struct CollectionItemChange {
 /**
  * Contains information about the changed collection.
 */
-struct CollectionChangeEventData {
+struct CollectionChangedEventData {
     /**
      * Type of the module
     */
@@ -245,8 +245,8 @@ struct CollectionChangeEventData {
 /**
  * Holds data of event that arrives when the collection is changed.
 */
-struct CollectionChangeEvent : public Event {
-    CollectionChangeEvent() : Event("collectionChange") {}
+struct CollectionChangedEvent : public Event {
+    CollectionChangedEvent() : Event("collectionChanged") {}
 
     /**
      * Get Event as JSON string
@@ -263,7 +263,7 @@ struct CollectionChangeEvent : public Event {
     /**
      * Information about the changed collection.
     */
-    CollectionChangeEventData data;
+    CollectionChangedEventData data;
 };
 
 /**
@@ -337,20 +337,20 @@ public:
     static LibDisconnectedEvent extractLibDisconnectedEvent(const EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'CollectionChangeEvent' 
+     * Checks whether event held in the 'EventHolder' is an 'CollectionChangedEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'CollectionChangeEvent', else otherwise
+     * @return true for 'CollectionChangedEvent', else otherwise
     */
-    static bool isCollectionChangeEvent(const EventHolder& eventHolder);
+    static bool isCollectionChangedEvent(const EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'CollectionChangeEvent'
+     * Gets Event held in the 'EventHolder' as an 'CollectionChangedEvent'
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'CollectionChangeEvent' object
+     * @return 'CollectionChangedEvent' object
     */
-    static CollectionChangeEvent extractCollectionChangeEvent(const EventHolder& eventHolder);
+    static CollectionChangedEvent extractCollectionChangedEvent(const EventHolder& eventHolder);
 };
 
 }  // namespace core

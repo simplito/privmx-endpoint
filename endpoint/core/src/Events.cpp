@@ -35,8 +35,8 @@ std::string LibDisconnectedEvent::toJSON() const {
     return core::JsonSerializer<LibDisconnectedEvent>::serialize(*this);
 }
 
-std::string CollectionChangeEvent::toJSON() const {
-    return core::JsonSerializer<CollectionChangeEvent>::serialize(*this);
+std::string CollectionChangedEvent::toJSON() const {
+    return core::JsonSerializer<CollectionChangedEvent>::serialize(*this);
 }
 
 std::shared_ptr<SerializedEvent> LibBreakEvent::serialize() const {
@@ -55,7 +55,7 @@ std::shared_ptr<SerializedEvent> LibDisconnectedEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<SerializedEvent> CollectionChangeEvent::serialize() const {
+std::shared_ptr<SerializedEvent> CollectionChangedEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
 
@@ -123,13 +123,13 @@ LibDisconnectedEvent Events::extractLibDisconnectedEvent(const core::EventHolder
     }
 }
 
-bool Events::isCollectionChangeEvent(const core::EventHolder& eventHolder) { return eventHolder.type() == "collectionChange"; }
+bool Events::isCollectionChangedEvent(const core::EventHolder& eventHolder) { return eventHolder.type() == "collectionChanged"; }
 
-CollectionChangeEvent Events::extractCollectionChangeEvent(const core::EventHolder& eventHolder) {
+CollectionChangedEvent Events::extractCollectionChangedEvent(const core::EventHolder& eventHolder) {
     try {
-        auto event = std::dynamic_pointer_cast<CollectionChangeEvent>(eventHolder.get());
+        auto event = std::dynamic_pointer_cast<CollectionChangedEvent>(eventHolder.get());
         if (!event) {
-            throw CannotExtractCollectionChangeEventException();
+            throw CannotExtractCollectionChangedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

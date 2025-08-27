@@ -57,7 +57,7 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
         case EventType::MESSAGE_DELETE:
             return std::string(_moduleName) + "/" + std::string(_itemName) + "/" + _eventTypeNames.at(eventType);
         case EventType::COLLECTION_CHANGE:
-            return std::string(_moduleName) + "/collectionChange";
+            return std::string(_moduleName) + "/collectionChanged";
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }
