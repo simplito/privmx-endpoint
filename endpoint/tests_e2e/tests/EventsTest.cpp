@@ -126,6 +126,7 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
         EXPECT_EQ(event->type, "contextCustom");
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
         if(event::Events::isContextCustomEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);
             EXPECT_EQ(customContextEvent.data.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(customContextEvent.data.userId, reader->getString("Login.user_1_id"));
@@ -149,6 +150,7 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
         EXPECT_EQ(event->type, "contextCustom");
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
         if(event::Events::isContextCustomEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);
             EXPECT_EQ(customContextEvent.data.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(customContextEvent.data.userId, reader->getString("Login.user_1_id"));
