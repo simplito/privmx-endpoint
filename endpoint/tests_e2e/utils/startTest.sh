@@ -7,7 +7,7 @@ if [[ ! -f "$INI_FILE_PATH" ]]; then
 fi
 if [ $# -ne 1 ]; then
     echo "Poszę podać nazwę testu"
-    echo "lista testów: CoreTest, CoreModuleEventsTest, ThreadTest, ThreadModuleEventsTest, StoreTest, StoreModuleEventsTest, InboxTest, InboxModuleEventsTest, EventsTest, CryptoTest, UtilsTest"
+    echo "lista testów: CoreTest, CoreModuleEventsTest, ThreadTest, ThreadModuleEventsTest, StoreTest, StoreModuleEventsTest, InboxTest, InboxModuleEventsTest, KvdbModule, KvdbModuleEventsTest, EventsTest, CryptoTest, UtilsTest"
     exit -1
 else
     first_arg="$1"
