@@ -31,7 +31,10 @@ public:
         ListContexts = 3,
         Disconnect = 4,
         GetContextUsers = 5,
-        SetUserVerifier = 6
+        SetUserVerifier = 6,
+        SubscribeFor = 7,
+        UnsubscribeFrom = 8,
+        BuildSubscriptionQuery = 9,
     };
     
 
@@ -45,6 +48,9 @@ public:
     Poco::Dynamic::Var disconnect(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getContextUsers(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setUserVerifier(const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback);
+    Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
