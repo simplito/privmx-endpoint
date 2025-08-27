@@ -30,6 +30,7 @@ public:
     size_t getPlainChunkSize() override;
     size_t getEncryptedChunkSize() override;
     size_t getEncryptedFileSize(const size_t& fileSize) override;
+    void sync(std::string key, size_t chunkSize) override;
 private:
     std::string chunkIndexToBE(const size_t index);
 

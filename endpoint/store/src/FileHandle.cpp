@@ -85,6 +85,7 @@ void FileReadHandle::sync(
     if(newDecryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(newDecryptionParams.originalSize)) {
         throw FileCorruptedException();
     }
+    _chunkEncryptor->sync(newDecryptionParams.key, newDecryptionParams.chunkSize);
     _hashList->sync(newDecryptionParams.key, newDecryptionParams.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
     _chunkDataProvider->sync(newDecryptionParams.version, newDecryptionParams.sizeOnServer);
     _chunkReader->sync(newDecryptionParams);

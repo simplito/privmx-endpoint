@@ -73,6 +73,11 @@ size_t ChunkEncryptor::getEncryptedFileSize(const size_t& fileSize) {
     return encryptedFileSize;
 }
 
+void ChunkEncryptor::sync(std::string key, size_t chunkSize) {
+    _key = key;
+    _chunkSize = chunkSize; 
+}
+
 std::string ChunkEncryptor::chunkIndexToBE(const size_t index) {
     uint32_t index_be = Poco::ByteOrder::toBigEndian(static_cast<uint32_t>(index));
     return std::string((char *)&index_be, 4);
