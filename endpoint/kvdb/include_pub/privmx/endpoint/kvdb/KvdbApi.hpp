@@ -187,7 +187,7 @@ public:
      * @param selectorType scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData = std::nullopt);
 
     std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
 private:

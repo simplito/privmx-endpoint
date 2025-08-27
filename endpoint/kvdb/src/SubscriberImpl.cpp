@@ -57,14 +57,21 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }
-std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const std::string& selectorId) {
+std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData) {
+    if(selectorType == EventSelectorType::ENTRY_ID && extraSelectorData.has_value()) {
+        return "|" + _selectorTypeNames.at(selectorType) + "=" + extraSelectorData.value() + ":" + selectorId;
+    } else if(selectorType == EventSelectorType::ENTRY_ID && !extraSelectorData.has_value()) {
+        throw core::InvalidParamsException(
+            ("EventSelectorType::ENTRY_ID missing extraSelectorData")
+        ); 
+    }
     return "|" + _selectorTypeNames.at(selectorType) + "=" + selectorId;
 }
-std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData) {
     std::set<EventSelectorType> allowedSelectorTypes = _eventTypeAllowedSelectorTypes.at(eventType);
     std::set<EventSelectorType>::iterator it = allowedSelectorTypes.find(selectorType);
     if(it != allowedSelectorTypes.end()) {
-        return getChannel(eventType) + getSelector(selectorType, selectorId);
+        return getChannel(eventType) + getSelector(selectorType, selectorId, extraSelectorData);
     }
     std::string allowedSelectorTypesString;
     for(auto allowedSelectorType: allowedSelectorTypes) {

@@ -24,13 +24,13 @@ class SubscriberImpl : public privmx::endpoint::core::Subscriber
 public:
     
     SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
-    static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData);
 private:
     virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
     virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);;
 
     static std::string getChannel(EventType eventType);
-    static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
+    static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData);
     static constexpr std::string_view _moduleName = "kvdb";
     static constexpr std::string_view _itemName = "entries";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;

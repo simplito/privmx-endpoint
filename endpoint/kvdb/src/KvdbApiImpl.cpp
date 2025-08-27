@@ -1022,8 +1022,8 @@ void KvdbApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionId
     _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
-std::string KvdbApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
-    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
+std::string KvdbApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData) {
+    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId, extraSelectorData);
 }
 
 

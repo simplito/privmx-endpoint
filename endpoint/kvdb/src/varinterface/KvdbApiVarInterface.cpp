@@ -173,7 +173,8 @@ Poco::Dynamic::Var KvdbApiVarInterface::buildSubscriptionQuery(const Poco::Dynam
     auto eventType = _deserializer.deserialize<kvdb::EventType>(argsArr->get(0), "eventType");
     auto selectorType = _deserializer.deserialize<kvdb::EventSelectorType>(argsArr->get(1), "selectorType");
     auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
-    auto result = _kvdbApi.buildSubscriptionQuery(eventType, selectorType, selectorId);
+    auto extraSelectorData = _deserializer.deserializeOptional<std::string>(argsArr->get(3), "extraSelectorData");
+    auto result = _kvdbApi.buildSubscriptionQuery(eventType, selectorType, selectorId, extraSelectorData);
     return _serializer.serialize(result);
 }
 
