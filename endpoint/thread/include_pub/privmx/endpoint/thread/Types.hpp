@@ -169,6 +169,7 @@ enum EventType: int64_t {
     MESSAGE_CREATE = 4,
     MESSAGE_UPDATE = 5,
     MESSAGE_DELETE = 6,
+    COLLECTION_CHANGE = 7,
 };
 
 enum EventSelectorType: int64_t {

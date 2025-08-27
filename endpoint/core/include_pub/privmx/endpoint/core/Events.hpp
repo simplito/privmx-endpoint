@@ -202,6 +202,71 @@ struct LibDisconnectedEvent : public Event {
 };
 
 /**
+ * Contains information about the changed item in the collection.
+*/
+struct CollectionItemChange {
+
+    /**
+     * ID of the item
+    */
+    std::string itemId;
+
+    /**
+     * Item change action, which can be "create", "update" or "delete"
+    */
+    std::string action;
+};
+
+/**
+ * Contains information about the changed collection.
+*/
+struct CollectionChangeEventData {
+    /**
+     * Type of the module
+    */
+    std::string moduleType;
+
+    /**
+     * ID of the module
+    */
+    std::string moduleId;
+
+    /**
+     * Count of affected items
+    */
+    int64_t affectedItemsCount;
+
+    /**
+     * List of item changes
+    */
+    std::vector<CollectionItemChange> items;
+};
+
+/**
+ * Holds data of event that arrives when the collection is changed.
+*/
+struct CollectionChangeEvent : public Event {
+    CollectionChangeEvent() : Event("collectionChange") {}
+
+    /**
+     * Get Event as JSON string
+     * 
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<SerializedEvent> serialize() const override;
+
+    /**
+     * Information about the changed collection.
+    */
+    CollectionChangeEventData data;
+};
+
+/**
  * 'Events' provides the helpers methods for module's events management.
  */
 class Events {
@@ -270,6 +335,22 @@ public:
      * @return 'LibDisconnectedEvent' object
      */
     static LibDisconnectedEvent extractLibDisconnectedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'CollectionChangeEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'CollectionChangeEvent', else otherwise
+    */
+    static bool isCollectionChangeEvent(const EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'CollectionChangeEvent'
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'CollectionChangeEvent' object
+    */
+    static CollectionChangeEvent extractCollectionChangeEvent(const EventHolder& eventHolder);
 };
 
 }  // namespace core

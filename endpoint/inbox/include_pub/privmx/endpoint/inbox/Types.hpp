@@ -185,6 +185,7 @@ enum EventType: int64_t {
     INBOX_DELETE = 2,
     ENTRY_CREATE = 3,
     ENTRY_DELETE = 4,
+    COLLECTION_CHANGE = 5,
 
 };
 enum EventSelectorType: int64_t {

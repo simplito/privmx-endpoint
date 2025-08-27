@@ -35,6 +35,10 @@ std::string LibDisconnectedEvent::toJSON() const {
     return core::JsonSerializer<LibDisconnectedEvent>::serialize(*this);
 }
 
+std::string CollectionChangeEvent::toJSON() const {
+    return core::JsonSerializer<CollectionChangeEvent>::serialize(*this);
+}
+
 std::shared_ptr<SerializedEvent> LibBreakEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
@@ -48,6 +52,10 @@ std::shared_ptr<SerializedEvent> LibConnectedEvent::serialize() const {
 }
 
 std::shared_ptr<SerializedEvent> LibDisconnectedEvent::serialize() const {
+    return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
+}
+
+std::shared_ptr<SerializedEvent> CollectionChangeEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
 
@@ -107,6 +115,21 @@ LibDisconnectedEvent Events::extractLibDisconnectedEvent(const core::EventHolder
         auto event = std::dynamic_pointer_cast<LibDisconnectedEvent>(handler.get());
         if (!event) {
             throw CannotExtractLibDisconnectedEventException();
+        }
+        return *event;
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+bool Events::isCollectionChangeEvent(const core::EventHolder& eventHolder) { return eventHolder.type() == "collectionChange"; }
+
+CollectionChangeEvent Events::extractCollectionChangeEvent(const core::EventHolder& eventHolder) {
+    try {
+        auto event = std::dynamic_pointer_cast<CollectionChangeEvent>(eventHolder.get());
+        if (!event) {
+            throw CannotExtractCollectionChangeEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

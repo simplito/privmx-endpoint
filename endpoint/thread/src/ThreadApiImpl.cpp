@@ -30,6 +30,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
+#include "privmx/endpoint/core/Mapper.hpp"
 
 using namespace privmx::endpoint;
 using namespace thread;
@@ -495,6 +496,15 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
             event->channel = "thread/" + raw.threadId() + "/messages";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "threadCollectionChange") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangeEventData>(notification.data);
+        if (raw.containerTypeOpt(THREAD_TYPE_FILTER_FLAG) == THREAD_TYPE_FILTER_FLAG) {
+            std::shared_ptr<core::CollectionChangeEvent> event(new core::CollectionChangeEvent());
+            event->channel = "thread/collectionChange";
+            event->data = core::Mapper::mapToCollectionChangeEventData(THREAD_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

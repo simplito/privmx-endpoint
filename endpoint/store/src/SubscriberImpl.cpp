@@ -26,7 +26,8 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::STORE_STATS, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID}},
     {EventType::FILE_CREATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID}},
     {EventType::FILE_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID, EventSelectorType::FILE_ID}},
-    {EventType::FILE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID, EventSelectorType::FILE_ID}}
+    {EventType::FILE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID, EventSelectorType::FILE_ID}},
+    {EventType::COLLECTION_CHANGE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STORE_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
@@ -40,7 +41,8 @@ const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
     {EventType::STORE_STATS, "STORE_STATS"},
     {EventType::FILE_CREATE, "FILE_CREATE"},
     {EventType::FILE_UPDATE, "FILE_UPDATE"},
-    {EventType::FILE_DELETE, "FILE_DELETE"}
+    {EventType::FILE_DELETE, "FILE_DELETE"},
+    {EventType::COLLECTION_CHANGE, "COLLECTION_CHANGE"}
 };
 
 std::string SubscriberImpl::getChannel(EventType eventType) {
@@ -54,6 +56,8 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
         case EventType::FILE_UPDATE:
         case EventType::FILE_DELETE:
             return std::string(_moduleName) + "/" + std::string(_itemName) + "/" + _eventTypeNames.at(eventType);
+        case EventType::COLLECTION_CHANGE:
+            return std::string(_moduleName) + "/collectionChange";
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }

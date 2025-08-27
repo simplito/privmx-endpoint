@@ -26,7 +26,8 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::THREAD_STATS, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID}},
     {EventType::MESSAGE_CREATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID}},
     {EventType::MESSAGE_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID, EventSelectorType::MESSAGE_ID}},
-    {EventType::MESSAGE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID, EventSelectorType::MESSAGE_ID}}
+    {EventType::MESSAGE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID, EventSelectorType::MESSAGE_ID}},
+    {EventType::COLLECTION_CHANGE, {EventSelectorType::CONTEXT_ID, EventSelectorType::THREAD_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
@@ -40,7 +41,8 @@ const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
     {EventType::THREAD_STATS, "THREAD_STATS"},
     {EventType::MESSAGE_CREATE, "MESSAGE_CREATE"},
     {EventType::MESSAGE_UPDATE, "MESSAGE_UPDATE"},
-    {EventType::MESSAGE_DELETE, "MESSAGE_DELETE"}
+    {EventType::MESSAGE_DELETE, "MESSAGE_DELETE"},
+    {EventType::COLLECTION_CHANGE, "COLLECTION_CHANGE"}
 };
 
 std::string SubscriberImpl::getChannel(EventType eventType) {
@@ -54,6 +56,8 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
         case EventType::MESSAGE_UPDATE:
         case EventType::MESSAGE_DELETE:
             return std::string(_moduleName) + "/" + std::string(_itemName) + "/" + _eventTypeNames.at(eventType);
+        case EventType::COLLECTION_CHANGE:
+            return std::string(_moduleName) + "/collectionChange";
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }

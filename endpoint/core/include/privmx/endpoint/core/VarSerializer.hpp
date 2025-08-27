@@ -109,6 +109,15 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<LibBreakEvent>(const LibBreakEvent& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<CollectionItemChange>(const CollectionItemChange& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangeEventData>(const CollectionChangeEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangeEvent>(const CollectionChangeEvent& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const ContainerPolicyWithoutItem& val);
 
 template<>
