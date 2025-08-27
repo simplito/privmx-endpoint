@@ -308,7 +308,7 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
     } else if (type == "contextUserRemoved") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
         auto data = Mapper::mapToContextUserEventData(raw);
-        std::shared_ptr<ContextUserAddedEvent> event(std::make_shared<ContextUserAddedEvent>());
+        std::shared_ptr<ContextUserRemovedEvent> event(std::make_shared<ContextUserRemovedEvent>());
         event->channel = "context/userRemoved";
         event->data = data;
         event->subscriptions = notification.subscriptions;
