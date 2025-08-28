@@ -730,3 +730,55 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbDeletedKvdbEntry_disabled) {
         FAIL();
     }
 }
+
+TEST_F(KvdbEventTest, Subscribe_for_singel_entry) {
+    std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
+    EXPECT_NO_THROW({
+        eventQueue.waitEvent(); // pop libConnected form queue
+    });
+    EXPECT_NO_THROW({
+        kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQueryForSelectedEntry(
+                kvdb::EventType::ENTRY_UPDATE, 
+                reader->getString("Kvdb_1.kvdbId"),
+                reader->getString("KvdbEntry_1.info_key")
+            )
+        });
+    });
+    EXPECT_NO_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            reader->getString("KvdbEntry_1.info_key"),
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta"),
+            core::Buffer::from("data"),
+            1
+        );
+    });
+    EXPECT_NO_THROW({
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event != nullptr) {
+        EXPECT_EQ(event->connectionId, connection->getConnectionId());
+        EXPECT_EQ(event->type, "kvdbEntryUpdated");
+        EXPECT_EQ(event->channel, "kvdb/"+reader->getString("Kvdb_1.kvdbId")+"/entries");
+        if(kvdb::Events::isKvdbEntryUpdatedEvent(event)) {
+            kvdb::KvdbEntry kvdbEntry = kvdb::Events::extractKvdbEntryUpdatedEvent(event).data;
+            EXPECT_EQ(kvdbEntry.info.key, reader->getString("KvdbEntry_1.info_key"));
+            EXPECT_EQ(kvdbEntry.publicMeta.stdString(), "publicMeta");
+            EXPECT_EQ(kvdbEntry.privateMeta.stdString(), "privateMeta");
+            EXPECT_EQ(kvdbEntry.data.stdString(), "data");
+            EXPECT_EQ(kvdbEntry.info.kvdbId, reader->getString("Kvdb_1.kvdbId"));
+        } else {
+            FAIL();
+        }
+    } else {
+        FAIL();
+    }
+}

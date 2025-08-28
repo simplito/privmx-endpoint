@@ -19,24 +19,33 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
+
+
 class SubscriberImpl : public privmx::endpoint::core::Subscriber
 {
 public:
     
     SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    static std::string buildQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryId);
+
 private:
+    enum EventInternalSelectorType: int64_t{
+        CONTEXT_ID = 0,
+        KVDB_ID = 1,
+        ENTRY_ID = 2
+    };
     virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
     virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);;
 
     static std::string getChannel(EventType eventType);
-    static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
+    static std::string getSelector(EventInternalSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData = std::nullopt);
     static constexpr std::string_view _moduleName = "kvdb";
     static constexpr std::string_view _itemName = "entries";
-    static const std::map<EventSelectorType, std::string> _selectorTypeNames;
+    static const std::map<EventInternalSelectorType, std::string> _selectorTypeNames;
     static const std::map<EventType, std::string> _eventTypeNames;
-    static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;
-    static const std::map<EventSelectorType, std::string> _readableSelectorTyp;
+    static const std::map<EventType, std::set<EventInternalSelectorType>> _eventTypeAllowedSelectorTypes;
+    static const std::map<EventInternalSelectorType, std::string> _readableSelectorTyp;
     static const std::map<EventType, std::string> _readableEventType;
 };
 
