@@ -74,7 +74,7 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
     return _lastServerChunk.substr(serverChunkPos, _encryptedChunkSize);
 }
 
-std::string ChunkDataProvider::getChecksums() {
+std::string ChunkDataProvider::getCurrentChecksumsFromBridge() {
     auto range = utils::TypedObjectFactory::createNewObject<server::BufferReadRangeChecksum>();
     auto fileDataModel = utils::TypedObjectFactory::createNewObject<server::StoreFileReadModel>();
     fileDataModel.fileId(_fileId);

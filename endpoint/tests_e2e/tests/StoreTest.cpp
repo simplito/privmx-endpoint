@@ -2407,7 +2407,6 @@ TEST_F(StoreTest, random_write_multipleChunks) {
     EXPECT_EQ(writtenData, Ix64k+Tx64k+Ix64k);
 }
 
-
 TEST_F(StoreTest, random_write_sync_oneChunk) {
     auto connection_user2 = std::make_shared<core::Connection>(
         core::Connection::connect(
@@ -2559,6 +2558,7 @@ TEST_F(StoreTest, random_write_bufferSize) {
         storeApi->writeToFile(rwFileHandle, core::Buffer::from(std::string(512*1025+1, 'H')));
     }, core::InvalidParamsException);
 }
+
 TEST_F(StoreTest, sendMessage_cacheManipulation) {
     // load store to cache
     EXPECT_NO_THROW({
@@ -2823,4 +2823,57 @@ TEST_F(StoreTest, userValidator_false) {
             reader->getString("File_2.info_fileId")
         );
     });
+}
+
+TEST_F(StoreTest, sync_file) {
+
+    int64_t handle = 0;
+    int64_t readHandle = 0;
+    EXPECT_NO_THROW({
+        readHandle = storeApi->openFile(reader->getString("File_1.info_fileId"));
+    });
+    EXPECT_NO_THROW({
+        handle = storeApi->updateFile(
+            reader->getString("File_1.info_fileId"),
+            privmx::endpoint::core::Buffer::from("publicMeta"),
+            privmx::endpoint::core::Buffer::from("privateMeta"),
+            7
+        );
+    });
+    if(handle != 0) {
+        std::string fileId;
+        storeApi->writeToFile(
+            handle, 
+            core::Buffer::from("testing")
+        );
+        // updateFile size
+        EXPECT_NO_THROW({
+            fileId = storeApi->closeFile(handle);
+        });
+    } else {
+        std::cout << "updateFile Failed" << std::endl;
+        FAIL();
+    }
+    
+    if(readHandle != 0) {
+        core::Buffer fileData;
+        EXPECT_NO_THROW({
+            try {
+                fileData = storeApi->readFromFile(
+                    readHandle,
+                    7
+                );
+            } catch (const store::FileVersionMismatchException& e) {
+                storeApi->syncFile(readHandle);
+                fileData = storeApi->readFromFile(
+                    readHandle,
+                    7
+                );
+            }
+        });
+        EXPECT_EQ(fileData.stdString(), "testing");
+    } else {
+        std::cout << "openFile Failed" << std::endl;
+        FAIL();
+    }
 }

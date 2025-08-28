@@ -15,6 +15,7 @@ limitations under the License.
 #include <cstdint>
 #include <string>
 #include <optional>
+#include "privmx/endpoint/store/StoreTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -24,17 +25,8 @@ class IFileReader
 {
 public:
     virtual ~IFileReader() = default;
-    virtual void sync(
-        int64_t newfileVersion, 
-        uint64_t originalFileSize,
-        uint64_t encryptedFileSize, 
-        const std::string& hmac, 
-        std::optional<size_t> chunkSize = std::nullopt, 
-        std::optional<size_t> encryptedChunkSize = std::nullopt, 
-        const std::optional<std::string>& key = std::nullopt,
-        std::optional<size_t> serverChunkSize = std::nullopt
-    ) = 0;
-    virtual std::string read(uint64_t pos, size_t length) = 0;
+    virtual std::string read(size_t pos, size_t length) = 0;
+    virtual void sync(const store::FileDecryptionParams& newParms) = 0;
 };
 
 } // store
