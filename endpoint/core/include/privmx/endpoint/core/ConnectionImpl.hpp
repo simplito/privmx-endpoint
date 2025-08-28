@@ -34,6 +34,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ContextProvider.hpp"
 #include <mutex>
 #include <shared_mutex>
+#include "privmx/endpoint/core/SubscriberImpl.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -55,7 +56,10 @@ public:
     );
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
-    std::vector<UserInfo> getContextUsers(const std::string& contextId);
+    PagingList<UserInfo> listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery);
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
     void disconnect();
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
     const privmx::crypto::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
@@ -100,6 +104,7 @@ private:
     );
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
+    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
 
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
@@ -113,6 +118,8 @@ private:
     std::shared_ptr<UserVerifier> _userVerifier;
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
+    std::shared_ptr<SubscriberImpl> _subscriber;
+    int _notificationListenerId;
 };
 
 }  // namespace core

@@ -32,6 +32,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/inbox/InboxDataHelper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/core/Mapper.hpp"
 
 
 using namespace privmx::endpoint::inbox;
@@ -514,14 +515,8 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     auto decryptionParams = _storeApi.getImpl()->getFileDecryptionParams(file, fileMetaEncKey);
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, createInboxFileHandleForRead, file_key_extracted)
     std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
-        file.id(), 
-        decryptionParams.originalSize,
-        decryptionParams.sizeOnServer,
-        decryptionParams.chunkSize,
+        decryptionParams,
         _serverRequestChunkSize,
-        file.version(),
-        decryptionParams.key,
-        decryptionParams.hmac,
         _serverApi
     );
     PRIVMX_DEBUG_TIME_STOP(InboxApi, createInboxFileHandleForRead, handle_created)
@@ -1005,6 +1000,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<InboxCreatedEvent> event(new InboxCreatedEvent());
             event->channel = "inbox";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "inboxUpdated") {
@@ -1015,6 +1011,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<InboxUpdatedEvent> event(new InboxUpdatedEvent());
             event->channel = "inbox";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "inboxDeleted") {
@@ -1055,6 +1052,15 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
                 .inboxId = inboxId,
                 .entryId = raw.messageId()
             };
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "threadCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
+        if (raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "inbox/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(INBOX_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

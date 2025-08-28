@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "privmx/endpoint/core/Types.hpp"
+
 namespace privmx {
 namespace endpoint {
 namespace core {
@@ -202,6 +204,188 @@ struct LibDisconnectedEvent : public Event {
 };
 
 /**
+ * Contains information about the changed item in the collection.
+*/
+struct CollectionItemChange {
+
+    /**
+     * ID of the item
+    */
+    std::string itemId;
+
+    /**
+     * Item change action, which can be "create", "update" or "delete"
+    */
+    std::string action;
+};
+
+/**
+ * Contains information about the changed collection.
+*/
+struct CollectionChangedEventData {
+    /**
+     * Type of the module
+    */
+    std::string moduleType;
+
+    /**
+     * ID of the module
+    */
+    std::string moduleId;
+
+    /**
+     * Count of affected items
+    */
+    int64_t affectedItemsCount;
+
+    /**
+     * List of item changes
+    */
+    std::vector<CollectionItemChange> items;
+};
+
+/**
+ * Holds data of event that arrives when the collection is changed.
+*/
+struct CollectionChangedEvent : public Event {
+    CollectionChangedEvent() : Event("collectionChanged") {}
+
+    /**
+     * Get Event as JSON string
+     * 
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<SerializedEvent> serialize() const override;
+
+    /**
+     * Information about the changed collection.
+    */
+    CollectionChangedEventData data;
+};
+
+/**
+ * Contains information about the user of the Context
+*/
+struct ContextUserEventData {
+    /**
+     * ID of the Context
+    */
+    std::string contextId;
+
+    /**
+     * User
+    */
+    UserWithPubKey user;
+};
+
+/**
+ * Contains the user with their status change action
+*/
+struct UserWithAction {
+    /**
+     * User
+    */
+    UserWithPubKey user;
+
+    /**
+     * User status change action, which can be "login" or "logout"
+    */
+    std::string action;
+};
+
+/**
+ * Contains information about changed statuses of users in the Context.
+*/
+struct ContextUsersStatusChangeData {
+    /**
+     * ID of the Context
+    */
+    std::string contextId;
+
+    /**
+     * List of users with their changed statuses
+    */
+    std::vector<UserWithAction> users;
+};
+
+struct ContextUserAddedEvent : public Event {
+    /**
+     * Event constructor
+     */
+    ContextUserAddedEvent() : Event("contextUserAdded") {}
+
+    /**
+     * Get Event as JSON string
+     * 
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<SerializedEvent> serialize() const override;
+
+    /**
+     * Information about the added user
+    */
+    ContextUserEventData data;
+};
+
+struct ContextUserRemovedEvent : public Event {
+    /**
+     * Event constructor
+     */
+    ContextUserRemovedEvent() : Event("contextUserRemoved") {}
+
+    /**
+     * Get Event as JSON string
+     * 
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<SerializedEvent> serialize() const override;
+
+    /**
+     * Information about the removed user
+    */
+    ContextUserEventData data;
+};
+
+struct ContextUsersStatusChangeEvent : public Event {
+    /**
+     * Event constructor
+     */
+    ContextUsersStatusChangeEvent() : Event("contextUserStatusChanged") {}
+
+    /**
+     * Get Event as JSON string
+     * 
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<SerializedEvent> serialize() const override;
+
+    /**
+     * User status changes
+    */
+    ContextUsersStatusChangeData data;
+};
+
+/**
  * 'Events' provides the helpers methods for module's events management.
  */
 class Events {
@@ -270,6 +454,70 @@ public:
      * @return 'LibDisconnectedEvent' object
      */
     static LibDisconnectedEvent extractLibDisconnectedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'CollectionChangedEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'CollectionChangedEvent', else otherwise
+    */
+    static bool isCollectionChangedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'CollectionChangedEvent'
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'CollectionChangedEvent' object
+    */
+    static CollectionChangedEvent extractCollectionChangedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'ContextUserAddedEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'ContextUserAddedEvent', else otherwise
+     */    
+    static bool isContextUserAddedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'ContextUserAddedEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'ContextUserAddedEvent' object
+     */
+    static ContextUserAddedEvent extractContextUserAddedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'ContextUserRemovedEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'ContextUserRemovedEvent', else otherwise
+     */    
+    static bool isContextUserRemovedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'ContextUserRemovedEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'ContextUserRemovedEvent' object
+     */
+    static ContextUserRemovedEvent extractContextUserRemovedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'ContextUsersStatusChangeEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'ContextUsersStatusChangeEvent', else otherwise
+     */    
+    static bool isContextUsersStatusChangeEvent(const EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'ContextUsersStatusChangeEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'ContextUsersStatusChangeEvent' object
+     */
+    static ContextUsersStatusChangeEvent extractContextUsersStatusChangeEvent(const EventHolder& eventHolder);
 };
 
 }  // namespace core

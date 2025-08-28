@@ -114,6 +114,7 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxCreated_enabled) {
         EXPECT_EQ(event->type, "inboxCreated");
         EXPECT_EQ(event->channel, "inbox");
         if(inbox::Events::isInboxCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             inbox::Inbox inbox = inbox::Events::extractInboxCreatedEvent(event).data;
             EXPECT_EQ(inbox.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(inbox.users.size(), 1);
@@ -246,6 +247,7 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxUpdated_enabled) {
         EXPECT_EQ(event->type, "inboxUpdated");
         EXPECT_EQ(event->channel, "inbox");
         if(inbox::Events::isInboxUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             inbox::Inbox inbox = inbox::Events::extractInboxUpdatedEvent(event).data;
             EXPECT_EQ(inbox.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(inbox.users.size(), 1);
@@ -367,6 +369,7 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxDeleted_enabled) {
         EXPECT_EQ(event->type, "inboxDeleted");
         EXPECT_EQ(event->channel, "inbox");
         if(inbox::Events::isInboxDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             inbox::InboxDeletedEventData inboxDeletedEventData = inbox::Events::extractInboxDeletedEvent(event).data;
             EXPECT_EQ(inboxDeletedEventData.inboxId, reader->getString("Inbox_1.inboxId"));
         } else {
@@ -492,6 +495,7 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryCreated_enabled) {
         EXPECT_EQ(event->type, "inboxEntryCreated");
         EXPECT_EQ(event->channel, "inbox/" + reader->getString("Inbox_1.inboxId") + "/entries");
         if(inbox::Events::isInboxEntryCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             inbox::InboxEntry inboxEntry = inbox::Events::extractInboxEntryCreatedEvent(event).data;
             EXPECT_EQ(inboxEntry.inboxId, reader->getString("Inbox_1.inboxId"));
             EXPECT_EQ(inboxEntry.data.stdString(), "test_inboxSendCommit");
@@ -608,6 +612,7 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryDeleted_enabled) {
         EXPECT_EQ(event->type, "inboxEntryDeleted");
         EXPECT_EQ(event->channel, "inbox/" + reader->getString("Inbox_1.inboxId") + "/entries");
         if(inbox::Events::isInboxEntryDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             inbox::InboxEntryDeletedEventData inboxEntryDeletedEventData = inbox::Events::extractInboxEntryDeletedEvent(event).data;
             EXPECT_EQ(inboxEntryDeletedEventData.inboxId, reader->getString("Inbox_1.inboxId"));
             EXPECT_EQ(inboxEntryDeletedEventData.entryId, reader->getString("Entry_1.entryId"));

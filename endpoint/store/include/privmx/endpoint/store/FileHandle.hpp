@@ -15,14 +15,21 @@ limitations under the License.
 #include <string>
 
 #include <privmx/utils/ThreadSaveMap.hpp>
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/HandleManager.hpp>
+#include <privmx/endpoint/core/Buffer.hpp>
+#include <privmx/endpoint/core/Connection.hpp>
 
 #include "privmx/endpoint/store/ChunkBufferedStream.hpp"
 #include "privmx/endpoint/store/ChunkStreamer.hpp"
 #include "privmx/endpoint/store/interfaces/IFileReader.hpp"
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
-#include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
+#include "privmx/endpoint/store/interfaces/IHashList.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkReader.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
+
 
 namespace privmx {
 namespace endpoint {
@@ -35,7 +42,7 @@ public:
     virtual ~FileHandle() = default;
     virtual bool isReadHandle() const { return false; }
     virtual bool isWriteHandle() const { return false; }
-    virtual bool isRandomWriteHandle() const { return false; }
+    virtual bool isFileReadWriteHandle() const { return false; }
     int64_t getId();
     std::string getStoreId();
     std::string getFileId();
@@ -56,31 +63,22 @@ class FileReadHandle : public FileHandle
 public:
     FileReadHandle(
         int64_t id, 
-        const std::string& fileId,
-        const std::string& resourceId, 
-        uint64_t fileSize,
-        uint64_t serverFileSize,
-        size_t chunkSize,
+        const store::FileDecryptionParams& decryptionParams,
         size_t serverChunkSize,
-        int64_t fileVersion,
-        const std::string& fileKey,
-        const std::string& fileHmac,
         std::shared_ptr<ServerApi> server
     );
     void sync(
-        uint64_t fileSize,
-        uint64_t serverFileSize,
-        size_t chunkSize,
-        size_t serverChunkSize,
-        int64_t fileVersion,
-        const std::string& fileKey,
-        const std::string& fileHmac
+        const store::FileDecryptionParams& newDecryptionParams
     );
     bool isReadHandle() const override { return true; }
     std::string read(uint64_t length);
     void seek(uint64_t pos);
 private:
-    std::shared_ptr<store::IFileReader> _reader;
+    std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
+    std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
+    std::shared_ptr<IHashList> _hashList;
+    std::shared_ptr<IChunkReader> _chunkReader;
+    std::shared_ptr<store::IFileReader> _fileReader;
     uint64_t _pos = 0;
 };
 
@@ -117,18 +115,19 @@ private:
 };
 
 
-class FileRandomWriteHandle : public FileHandle
+class FileReadWriteHandle : public FileHandle
 {
 public:
-    FileRandomWriteHandle(
+    FileReadWriteHandle(
         int64_t id,
-        const std::string &storeId,
-        const std::string &fileId,
-        const std::string &resourceId,
-        std::shared_ptr<IFileHandler> file
-    ) : FileHandle(id, storeId, fileId, resourceId, 0, true), file(file) {}
-    bool isRandomWriteHandle() const override { return true; }
-
+        const store::FileInfo &fileInfo,
+        const store::FileEncryptionParams& encryptionParams,
+        size_t serverChunkSize,
+        const privmx::crypto::PrivateKey &userPrivKey,
+        const privmx::endpoint::core::Connection &connection,
+        std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
+    );
+    bool isFileReadWriteHandle() const override { return true; }
     std::shared_ptr<IFileHandler> file;
 };
 
@@ -138,15 +137,8 @@ class FileHandleManager
 public:
     FileHandleManager(std::shared_ptr<core::HandleManager> handleManager, const std::string& labelPrefix = "");
     std::shared_ptr<FileReadHandle> createFileReadHandle(
-        const std::string& fileId,
-        const std::string& resourceId, 
-        uint64_t fileSize,
-        uint64_t serverFileSize,
-        size_t chunkSize,
+        const store::FileDecryptionParams& decryptionParams,
         size_t serverChunkSize,
-        int64_t fileVersion,
-        const std::string& fileKey,
-        const std::string& fileHmac,
         std::shared_ptr<ServerApi> server
     );
     std::shared_ptr<FileWriteHandle> createFileWriteHandle(
@@ -161,15 +153,17 @@ public:
         std::shared_ptr<RequestApi> requestApi,
         bool randomWriteSupport
     );
-    std::shared_ptr<FileRandomWriteHandle> createFileRandomWriteHandle(
-        const std::string &storeId,
-        const std::string &fileId,
-        const std::string &resourceId,
-        std::shared_ptr<IFileHandler> file
+    std::shared_ptr<FileReadWriteHandle> createFileReadWriteHandle(
+        const store::FileInfo &fileInfo,
+        const store::FileEncryptionParams& encryptionParams,
+        size_t serverChunkSize,
+        const privmx::crypto::PrivateKey &userPrivKey,
+        const privmx::endpoint::core::Connection &connection,
+        std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
     );
     std::shared_ptr<FileReadHandle> getFileReadHandle(int64_t id);
     std::shared_ptr<FileWriteHandle> getFileWriteHandle(int64_t id);
-    std::shared_ptr<FileRandomWriteHandle> tryGetFileRandomWriteHandle(int64_t id);
+    std::shared_ptr<FileReadWriteHandle> tryGetFileReadWriteHandle(int64_t id);
     std::shared_ptr<FileHandle> getFileHandle(int64_t id);
     void removeHandle(int64_t id);
 

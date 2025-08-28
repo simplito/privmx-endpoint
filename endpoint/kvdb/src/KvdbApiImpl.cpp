@@ -29,6 +29,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
+#include "privmx/endpoint/core/Mapper.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
@@ -474,6 +475,15 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             std::shared_ptr<KvdbEntryDeletedEvent> event(new KvdbEntryDeletedEvent());
             event->channel = "kvdb/" + raw.kvdbId() + "/entries";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "kvdbCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
+        if (raw.containerTypeOpt(KVDB_TYPE_FILTER_FLAG) == KVDB_TYPE_FILTER_FLAG) {
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "kvdb/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(KVDB_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

@@ -26,7 +26,8 @@ const std::map<EventType, std::set<SubscriberImpl::EventInternalSelectorType>> S
     {EventType::KVDB_STATS, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID}},
     {EventType::ENTRY_CREATE, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID}},
     {EventType::ENTRY_UPDATE, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID, EventInternalSelectorType::ENTRY_ID}},
-    {EventType::ENTRY_DELETE, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID, EventInternalSelectorType::ENTRY_ID}}
+    {EventType::ENTRY_DELETE, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID, EventInternalSelectorType::ENTRY_ID}},
+    {EventType::COLLECTION_CHANGE, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID}}
 };
 const std::map<SubscriberImpl::EventInternalSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventInternalSelectorType::CONTEXT_ID, "CONTEXT_ID"},
@@ -40,7 +41,8 @@ const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
     {EventType::KVDB_STATS, "KVDB_STATS"},
     {EventType::ENTRY_CREATE, "ENTRY_CREATE"},
     {EventType::ENTRY_UPDATE, "ENTRY_UPDATE"},
-    {EventType::ENTRY_DELETE, "ENTRY_DELETE"}
+    {EventType::ENTRY_DELETE, "ENTRY_DELETE"},
+    {EventType::COLLECTION_CHANGE, "COLLECTION_CHANGE"}
 };
 
 std::string SubscriberImpl::getChannel(EventType eventType) {
@@ -54,6 +56,8 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
         case EventType::ENTRY_UPDATE:
         case EventType::ENTRY_DELETE:
             return std::string(_moduleName) + "/" + std::string(_itemName) + "/" + _eventTypeNames.at(eventType);
+        case EventType::COLLECTION_CHANGE:
+            return std::string(_moduleName) + "/collectionChanged";
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }

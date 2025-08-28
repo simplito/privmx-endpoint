@@ -65,13 +65,35 @@ public:
     PagingList<Context> listContexts(const PagingQuery& pagingQuery);
 
     /**
-     * Gets a list of users of given context.
+     * Gets a list of users with their status and the last status change.
      * 
-     * @param contextId ID of the context
+     * @param contextId ID of the Context
      * 
-     * @return vector containing a list of users Info
+     * @return List of users with their status and the last status change
+    */
+    PagingList<UserInfo> listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery);
+
+    /**
+     * Subscribe for the Context events on the given subscription query.
+     * 
+     * @param subscriptionQueries List of queries
+     * @return List of subscriptionIds in matching order to subscriptionQueries
      */
-    std::vector<UserInfo> getContextUsers(const std::string& contextId);
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+
+    /**
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds List of subscriptionId
+     */
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+
+    /**
+     * Generate subscription Query for the Context events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     /**
      * Disconnects from the PrivMX Bridge server.

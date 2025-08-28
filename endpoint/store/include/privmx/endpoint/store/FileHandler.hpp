@@ -26,6 +26,7 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkReader.hpp"
 
 
 namespace privmx {
@@ -39,6 +40,7 @@ public:
         std::shared_ptr<IChunkDataProvider> chunkDataProvider,
         std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         std::shared_ptr<IHashList> hashList,
+        std::shared_ptr<IChunkReader> chunkReader,
         std::shared_ptr<FileMetaEncryptor> metaEncryptor,
         size_t plainfileSize,
         size_t encryptedFileSize,
@@ -72,14 +74,12 @@ private:
 
     UpdateChunkData createUpdateChunk(size_t index, size_t chunkOffset, const std::string& data, bool truncate = false);
     void updateOnServer(const std::vector<UpdateChanges>& updatedChunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate);
-    std::string getDecryptedChunk(size_t index);
     std::vector<UpdateChanges> createListOfUpdateChangesFromUpdateChunkData(const std::vector<UpdateChunkData>& updatedChunks);
-    size_t posToindex(size_t position);
-    size_t posInindex(size_t position);
 
     std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
     std::shared_ptr<IHashList> _hashList;
+    std::shared_ptr<IChunkReader> _chunkReader;
     std::shared_ptr<store::FileMetaEncryptor> _fileMetaEncryptor;
     size_t _plainfileSize = 0;
     size_t _encryptedFileSize = 0;
