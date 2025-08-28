@@ -91,6 +91,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_enabled) {
         EXPECT_EQ(event->type, "storeCreated");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::Store store = store::Events::extractStoreCreatedEvent(event).data;
             EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(store.publicMeta.stdString(),"public");
@@ -206,6 +207,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_enabled) {
         EXPECT_EQ(event->type, "storeUpdated");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::Store store = store::Events::extractStoreUpdatedEvent(event).data;
             EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(store.publicMeta.stdString(),"public");
@@ -310,6 +312,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_enabled) {
         EXPECT_EQ(event->type, "storeDeleted");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::StoreDeletedEventData storeDeleted = store::Events::extractStoreDeletedEvent(event).data;
             EXPECT_EQ(storeDeleted.storeId, reader->getString("Store_1.storeId"));
         } else {
@@ -391,6 +394,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_enabled) {
         EXPECT_EQ(event->type, "storeStatsChanged");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreStatsChangedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::StoreStatsChangedEventData storeStat = store::Events::extractStoreStatsChangedEvent(event).data;
             EXPECT_EQ(storeStat.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeStat.contextId, reader->getString("Context_1.contextId"));
@@ -491,6 +495,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_enabled) {
         EXPECT_EQ(event->type, "storeFileCreated");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::File storeFile = store::Events::extractStoreFileCreatedEvent(event).data;
             EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeFile.size, 0);
@@ -610,6 +615,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_enabled) {
         EXPECT_EQ(event->type, "storeFileUpdated");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::File storeFile = store::Events::extractStoreFileUpdatedEvent(event).data.file;
             EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeFile.size, 0);
@@ -712,6 +718,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_enabled) {
         EXPECT_EQ(event->type, "storeFileDeleted");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::StoreFileDeletedEventData storeFileDeleted = store::Events::extractStoreFileDeletedEvent(event).data;
             EXPECT_EQ(storeFileDeleted.fileId, reader->getString("File_1.info_fileId"));
             EXPECT_EQ(storeFileDeleted.storeId, reader->getString("File_1.info_storeId"));

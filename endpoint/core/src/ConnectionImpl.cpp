@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Constants.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
+#include "privmx/endpoint/core/Mapper.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -80,6 +81,9 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(
+        std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
+    _subscriber = std::make_shared<SubscriberImpl>(_gateway);
     assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
@@ -132,6 +136,9 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(
+        std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
+    _subscriber = std::make_shared<SubscriberImpl>(_gateway);
     assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
@@ -184,6 +191,21 @@ PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& context
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
     std::unique_lock lock(_mutex);
     _userVerifier = std::make_shared<UserVerifier>(verifier);
+}
+
+std::vector<std::string> ConnectionImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    auto result = _subscriber->subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
+}
+
+void ConnectionImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    _subscriber->unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
+}
+
+std::string ConnectionImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }
 
 void ConnectionImpl::disconnect() {
@@ -268,5 +290,37 @@ void ConnectionImpl::assertServerVersion() {
             "PrivMX Ednpoint library current version: " + ENDPOINT_VERSION + "\n"
             "Bridge Server minimal expected version: " + MINIMUM_REQUIRED_BRIDGE_VERSION
         );
+    }
+}
+
+void ConnectionImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    auto subscriptionQuery = _subscriber->getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
+        return;
+    }
+    if (type == "contextUserAdded") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+        auto data = Mapper::mapToContextUserEventData(raw);
+        std::shared_ptr<ContextUserAddedEvent> event(std::make_shared<ContextUserAddedEvent>());
+        event->channel = "context/userAdded";
+        event->data = data;
+        event->subscriptions = notification.subscriptions;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "contextUserRemoved") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+        auto data = Mapper::mapToContextUserEventData(raw);
+        std::shared_ptr<ContextUserRemovedEvent> event(std::make_shared<ContextUserRemovedEvent>());
+        event->channel = "context/userRemoved";
+        event->data = data;
+        event->subscriptions = notification.subscriptions;
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "contextUserStatusChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUsersStatusChangeEventData>(notification.data);
+        auto data = Mapper::mapToContextUsersStatusChangeData(raw);
+        std::shared_ptr<ContextUsersStatusChangeEvent> event(std::make_shared<ContextUsersStatusChangeEvent>());
+        event->channel = "context/userStatus";
+        event->data = data;
+        event->subscriptions = notification.subscriptions;
+        _eventMiddleware->emitApiEvent(event);
     }
 }

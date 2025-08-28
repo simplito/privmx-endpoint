@@ -180,8 +180,7 @@ enum EventType: int64_t {
 
 enum EventSelectorType: int64_t {
     CONTEXT_ID = 0,
-    KVDB_ID = 1,
-    ENTRY_ID = 2,
+    KVDB_ID = 1
 };
 
 }  // namespace kvdb

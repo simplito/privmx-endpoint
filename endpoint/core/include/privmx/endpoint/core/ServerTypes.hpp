@@ -122,6 +122,23 @@ ENDPOINT_CLIENT_TYPE(SubscribeToChannelsResult)
     LIST_FIELD(subscriptions, Subscription)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(ContextUserEventData)
+    STRING_FIELD(contextId)
+    STRING_FIELD(userId)
+    STRING_FIELD(pubKey)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(ContextUsersStatusChange)
+    STRING_FIELD(userId)
+    STRING_FIELD(pubKey)
+    STRING_FIELD(action)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(ContextUsersStatusChangeEventData)
+    STRING_FIELD(contextId)
+    LIST_FIELD(users, ContextUsersStatusChange)
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(CollectionItemChange)
     STRING_FIELD(itemId)
     STRING_FIELD(action)

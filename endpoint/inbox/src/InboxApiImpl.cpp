@@ -1000,6 +1000,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<InboxCreatedEvent> event(new InboxCreatedEvent());
             event->channel = "inbox";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "inboxUpdated") {
@@ -1010,6 +1011,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<InboxUpdatedEvent> event(new InboxUpdatedEvent());
             event->channel = "inbox";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "inboxDeleted") {

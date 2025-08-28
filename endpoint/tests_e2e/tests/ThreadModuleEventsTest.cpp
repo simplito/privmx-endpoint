@@ -90,6 +90,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadCreated_enabled) {
         EXPECT_EQ(event->type, "threadCreated");
         EXPECT_EQ(event->channel, "thread");
         if(thread::Events::isThreadCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             thread::Thread thread = thread::Events::extractThreadCreatedEvent(event).data;
             EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(thread.publicMeta.stdString(), "public");
@@ -208,6 +209,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdated_enabled) {
         EXPECT_EQ(event->type, "threadUpdated");
         EXPECT_EQ(event->channel, "thread");
         if(thread::Events::isThreadUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             thread::Thread thread = thread::Events::extractThreadUpdatedEvent(event).data;
             EXPECT_EQ(thread.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(thread.publicMeta.stdString(), "public");
@@ -314,6 +316,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeleted_enabled) {
         EXPECT_EQ(event->type, "threadDeleted");
         EXPECT_EQ(event->channel, "thread");
         if(thread::Events::isThreadDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             thread::ThreadDeletedEventData threadDeleted = thread::Events::extractThreadDeletedEvent(event).data;
             EXPECT_EQ(threadDeleted.threadId, reader->getString("Thread_1.threadId"));
         } else {
@@ -397,6 +400,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadStats_enabled) {
         EXPECT_EQ(event->type, "threadStatsChanged");
         EXPECT_EQ(event->channel, "thread");
         if(thread::Events::isThreadStatsEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             thread::ThreadStatsEventData threadStat = thread::Events::extractThreadStatsEvent(event).data;
             EXPECT_EQ(threadStat.threadId, reader->getString("Thread_1.threadId"));
             EXPECT_EQ(threadStat.messagesCount, 1);
@@ -484,6 +488,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadNewMessage_enabled) {
         EXPECT_EQ(event->type, "threadNewMessage");
         EXPECT_EQ(event->channel, "thread/"+reader->getString("Thread_1.threadId")+"/messages");
         if(thread::Events::isThreadNewMessageEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             thread::Message message = thread::Events::extractThreadNewMessageEvent(event).data;
             EXPECT_EQ(message.publicMeta.stdString(), "publicMeta");
             EXPECT_EQ(message.privateMeta.stdString(), "privateMeta");
@@ -575,6 +580,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadUpdatedMessage_enabled) {
         EXPECT_EQ(event->type, "threadUpdatedMessage");
         EXPECT_EQ(event->channel, "thread/"+reader->getString("Thread_1.threadId")+"/messages");
         if(thread::Events::isThreadMessageUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             thread::Message message = thread::Events::extractThreadMessageUpdatedEvent(event).data;
             EXPECT_EQ(message.info.messageId, reader->getString("Message_1.info_messageId"));
             EXPECT_EQ(message.publicMeta.stdString(), "publicMeta");
@@ -663,6 +669,7 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeletedMessage_enabled) {
         EXPECT_EQ(event->type, "threadMessageDeleted");
         EXPECT_EQ(event->channel, "thread/"+reader->getString("Thread_1.threadId")+"/messages");
         if(thread::Events::isThreadMessageDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             thread::ThreadDeletedMessageEventData threadDeletedMessage = thread::Events::extractThreadMessageDeletedEvent(event).data;
             EXPECT_EQ(threadDeletedMessage.messageId, reader->getString("Message_1.info_messageId"));
             EXPECT_EQ(threadDeletedMessage.threadId, reader->getString("Thread_1.threadId"));

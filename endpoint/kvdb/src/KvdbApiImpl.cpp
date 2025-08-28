@@ -1036,4 +1036,8 @@ std::string KvdbApiImpl::buildSubscriptionQuery(EventType eventType, EventSelect
     return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }
 
+std::string KvdbApiImpl::buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey) {
+    return SubscriberImpl::buildQueryForSelectedEntry(eventType, kvdbId, kvdbEntryKey);
+}
+
 
