@@ -104,6 +104,8 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
             } else {
                 result.add( query+"|"+selector);
             }
+        } else if (channelData.size() >= 2 && channelData[1] == "collectionChanged") {
+            result.add("thread/collectionChanged|" + selector);
         } else {
             result.add(subscriptionQuery);
         }
