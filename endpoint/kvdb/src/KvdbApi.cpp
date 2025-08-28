@@ -218,10 +218,20 @@ void KvdbApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     }
 }
 
-std::string KvdbApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData) {
+std::string KvdbApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     validateEndpoint();
     try {
-        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId, extraSelectorData);
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string KvdbApi::buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQueryForSelectedEntry(eventType, kvdbId, kvdbEntryKey);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

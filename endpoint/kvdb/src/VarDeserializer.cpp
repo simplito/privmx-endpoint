@@ -49,8 +49,6 @@ kvdb::EventSelectorType VarDeserializer::deserialize<kvdb::EventSelectorType>(co
             return kvdb::EventSelectorType::CONTEXT_ID;
         case kvdb::EventSelectorType::KVDB_ID:
             return kvdb::EventSelectorType::KVDB_ID;
-        case kvdb::EventSelectorType::ENTRY_ID:
-            return kvdb::EventSelectorType::ENTRY_ID;
     }
     throw InvalidParamsException(name + " | " + ("Unknown kvdb::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }

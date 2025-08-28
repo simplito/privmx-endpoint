@@ -187,7 +187,15 @@ public:
      * @param selectorType scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId, const std::optional<std::string>& extraSelectorData = std::nullopt);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+
+    /**
+     * Generate subscription Query for the KVDB events for single KvdbEntry.
+     * @param eventType type of event which you listen for (Works ony For ENTRY_UPDATE, ENTRY_DELETE = 6,)
+     * @param kvdbId Id of Kvdb 
+     * @param kvdbEntryId Key of Kvdb Entry
+     */
+    std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
 
     std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
 private:

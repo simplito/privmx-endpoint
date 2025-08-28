@@ -33,7 +33,8 @@ std::map<KvdbApiVarInterface::METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*
                                         {HasEntry, &KvdbApiVarInterface::hasEntry},
                                         {SubscribeFor, &KvdbApiVarInterface::subscribeFor},
                                         {UnsubscribeFrom, &KvdbApiVarInterface::unsubscribeFrom},
-                                        {BuildSubscriptionQuery, &KvdbApiVarInterface::buildSubscriptionQuery}};
+                                        {BuildSubscriptionQuery, &KvdbApiVarInterface::buildSubscriptionQuery},
+                                        {BuildSubscriptionQueryForSelectedEntry, &KvdbApiVarInterface::buildSubscriptionQueryForSelectedEntry}};
 
 Poco::Dynamic::Var KvdbApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -169,12 +170,19 @@ Poco::Dynamic::Var KvdbApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var
 }
 
 Poco::Dynamic::Var KvdbApiVarInterface::buildSubscriptionQuery(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto eventType = _deserializer.deserialize<kvdb::EventType>(argsArr->get(0), "eventType");
     auto selectorType = _deserializer.deserialize<kvdb::EventSelectorType>(argsArr->get(1), "selectorType");
     auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
-    auto extraSelectorData = _deserializer.deserializeOptional<std::string>(argsArr->get(3), "extraSelectorData");
-    auto result = _kvdbApi.buildSubscriptionQuery(eventType, selectorType, selectorId, extraSelectorData);
+    auto result = _kvdbApi.buildSubscriptionQuery(eventType, selectorType, selectorId);
+    return _serializer.serialize(result);
+}
+Poco::Dynamic::Var KvdbApiVarInterface::buildSubscriptionQueryForSelectedEntry(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto eventType = _deserializer.deserialize<kvdb::EventType>(argsArr->get(0), "eventType");
+    auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(1), "kvdbId");
+    auto kvdbEntryKey = _deserializer.deserialize<std::string>(argsArr->get(2), "kvdbEntryKey");
+    auto result = _kvdbApi.buildSubscriptionQueryForSelectedEntry(eventType, kvdbId, kvdbEntryKey);
     return _serializer.serialize(result);
 }
 

@@ -731,11 +731,10 @@ TEST_F(KvdbEventTest, Subscribe_for_singel_entry) {
     });
     EXPECT_NO_THROW({
         kvdbApi->subscribeFor({
-            kvdbApi->buildSubscriptionQuery(
+            kvdbApi->buildSubscriptionQueryForSelectedEntry(
                 kvdb::EventType::ENTRY_UPDATE, 
-                kvdb::EventSelectorType::ENTRY_ID,
-                reader->getString("KvdbEntry_1.info_key"),
-                reader->getString("Kvdb_1.kvdbId")
+                reader->getString("Kvdb_1.kvdbId"),
+                reader->getString("KvdbEntry_1.info_key")
             )
         });
     });
