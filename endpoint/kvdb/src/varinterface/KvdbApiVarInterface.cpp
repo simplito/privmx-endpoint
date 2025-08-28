@@ -170,7 +170,7 @@ Poco::Dynamic::Var KvdbApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var
 }
 
 Poco::Dynamic::Var KvdbApiVarInterface::buildSubscriptionQuery(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto eventType = _deserializer.deserialize<kvdb::EventType>(argsArr->get(0), "eventType");
     auto selectorType = _deserializer.deserialize<kvdb::EventSelectorType>(argsArr->get(1), "selectorType");
     auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
@@ -178,7 +178,7 @@ Poco::Dynamic::Var KvdbApiVarInterface::buildSubscriptionQuery(const Poco::Dynam
     return _serializer.serialize(result);
 }
 Poco::Dynamic::Var KvdbApiVarInterface::buildSubscriptionQueryForSelectedEntry(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto eventType = _deserializer.deserialize<kvdb::EventType>(argsArr->get(0), "eventType");
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(1), "kvdbId");
     auto kvdbEntryKey = _deserializer.deserialize<std::string>(argsArr->get(2), "kvdbEntryKey");
