@@ -228,6 +228,16 @@ struct BridgeIdentity {
     std::optional<std::string> instanceId;
 };
 
+enum EventType: int64_t {
+    USER_ADD = 0,
+    USER_REMOVE = 1,
+    USER_STATUS = 2
+};
+
+enum EventSelectorType: int64_t {
+    CONTEXT_ID = 0
+};
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

@@ -166,6 +166,81 @@ Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEvent>(const Collec
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUserEventData>(const ContextUserEventData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$ContextUserEventData");
+    }
+    obj->set("contextId", serialize(val.contextId));
+    obj->set("user", serialize(val.user));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserWithAction>(const UserWithAction& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$UserWithAction");
+    }
+    obj->set("user", serialize(val.user));
+    obj->set("action", serialize(val.action));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeData>(const ContextUsersStatusChangeData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$ContextUsersStatusChangeData");
+    }
+    obj->set("contextId", serialize(val.contextId));
+    obj->set("users", serialize(val.users));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUserAddedEvent>(const ContextUserAddedEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$ContextUserAddedEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
+    obj->set("data", serialize(val.data));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUserRemovedEvent>(const ContextUserRemovedEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$ContextUserRemovedEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
+    obj->set("data", serialize(val.data));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeEvent>(const ContextUsersStatusChangeEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$ContextUsersStatusChangeEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("subscriptions", serialize(val.subscriptions));
+    obj->set("data", serialize(val.data));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const ContainerPolicyWithoutItem& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
