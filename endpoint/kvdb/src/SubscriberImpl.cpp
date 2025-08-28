@@ -29,7 +29,7 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::ENTRY_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID, EventSelectorType::ENTRY_ID}},
     {EventType::COLLECTION_CHANGE, {EventSelectorType::CONTEXT_ID, EventSelectorType::KVDB_ID}}
 };
-const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
+const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorType = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
     {EventSelectorType::KVDB_ID, "KVDB_ID"},
     {EventSelectorType::ENTRY_ID, "ENTRY_ID"}
@@ -72,13 +72,13 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
     }
     std::string allowedSelectorTypesString;
     for(auto allowedSelectorType: allowedSelectorTypes) {
-        allowedSelectorTypesString += _readableSelectorTyp.at(allowedSelectorType) + " or ";
+        allowedSelectorTypesString += _readableSelectorType.at(allowedSelectorType) + " or ";
     }
     if(allowedSelectorTypes.size() > 0) {
         allowedSelectorTypesString = allowedSelectorTypesString.substr(0, allowedSelectorTypesString.size()-4);
     }
     throw core::InvalidParamsException(
-        ("Invalid SelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedSelectorTypesString+ ", received " + _readableSelectorTyp.at(selectorType))
+        ("Invalid SelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedSelectorTypesString+ ", received " + _readableSelectorType.at(selectorType))
     ); 
 }
 

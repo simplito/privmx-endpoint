@@ -14,7 +14,7 @@ const std::set<std::string> SubscriberImpl::_forbiddenChannelsNames {
     INTERNAL_EVENT_CHANNEL_NAME
 };
 
-const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
+const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorType = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"}
 };
 
