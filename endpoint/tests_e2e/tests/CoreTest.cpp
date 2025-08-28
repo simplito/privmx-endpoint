@@ -336,22 +336,35 @@ TEST_F(CoreTest, listContexts_correct_data) {
     }
 }
 
-TEST_F(CoreTest, getContextUsers) {
-    std::vector<privmx::endpoint::core::UserInfo> userInfo;
+TEST_F(CoreTest, listContextUsers) {
+    core::PagingList<core::UserInfo> userInfo;
     EXPECT_THROW({
-        connection->getContextUsers("blach-blach");
+        connection->listContextUsers("blach-blach",
+            {
+                .skip=3, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
     }, core::Exception);
     
     EXPECT_NO_THROW({
-        userInfo = connection->getContextUsers(reader->getString("Context_1.contextId"));
+        userInfo = connection->listContextUsers(reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=3, 
+                .sortOrder="asc"
+            }
+        );
     });
-    EXPECT_EQ(userInfo.size(), 2);
-    EXPECT_EQ(userInfo[0].isActive, true);
-    EXPECT_EQ(userInfo[0].user.userId, reader->getString("Login.user_1_id"));
-    EXPECT_EQ(userInfo[0].user.pubKey, reader->getString("Login.user_1_pubKey"));
-    EXPECT_EQ(userInfo[1].isActive, false);
-    EXPECT_EQ(userInfo[1].user.userId, reader->getString("Login.user_2_id"));
-    EXPECT_EQ(userInfo[1].user.pubKey, reader->getString("Login.user_2_pubKey"));
+    EXPECT_EQ(userInfo.totalAvailable, 2);
+    EXPECT_EQ(userInfo.readItems.size(), 2);
+    EXPECT_EQ(userInfo.readItems[0].isActive, true);
+    EXPECT_EQ(userInfo.readItems[0].user.userId, reader->getString("Login.user_1_id"));
+    EXPECT_EQ(userInfo.readItems[0].user.pubKey, reader->getString("Login.user_1_pubKey"));
+    EXPECT_EQ(userInfo.readItems[1].isActive, false);
+    EXPECT_EQ(userInfo.readItems[1].user.userId, reader->getString("Login.user_2_id"));
+    EXPECT_EQ(userInfo.readItems[1].user.pubKey, reader->getString("Login.user_2_pubKey"));
     //connect second user
     std::shared_ptr<core::Connection> connection_2;
     EXPECT_NO_THROW({
@@ -365,13 +378,20 @@ TEST_F(CoreTest, getContextUsers) {
     });
 
     EXPECT_NO_THROW({
-        userInfo = connection->getContextUsers(reader->getString("Context_2.contextId"));
+        userInfo = connection->listContextUsers(reader->getString("Context_2.contextId"),
+            {
+                .skip=0, 
+                .limit=3, 
+                .sortOrder="asc"
+            }
+        );
     });
-    EXPECT_EQ(userInfo.size(), 2);
-    EXPECT_EQ(userInfo[0].isActive, true);
-    EXPECT_EQ(userInfo[0].user.userId, reader->getString("Login.user_1_id"));
-    EXPECT_EQ(userInfo[0].user.pubKey, reader->getString("Login.user_1_pubKey"));
-    EXPECT_EQ(userInfo[1].isActive, true);
-    EXPECT_EQ(userInfo[1].user.userId, reader->getString("Login.user_2_id"));
-    EXPECT_EQ(userInfo[1].user.pubKey, reader->getString("Login.user_2_pubKey"));
+    EXPECT_EQ(userInfo.totalAvailable, 2);
+    EXPECT_EQ(userInfo.readItems.size(), 2);
+    EXPECT_EQ(userInfo.readItems[0].isActive, true);
+    EXPECT_EQ(userInfo.readItems[0].user.userId, reader->getString("Login.user_1_id"));
+    EXPECT_EQ(userInfo.readItems[0].user.pubKey, reader->getString("Login.user_1_pubKey"));
+    EXPECT_EQ(userInfo.readItems[1].isActive, true);
+    EXPECT_EQ(userInfo.readItems[1].user.userId, reader->getString("Login.user_2_id"));
+    EXPECT_EQ(userInfo.readItems[1].user.pubKey, reader->getString("Login.user_2_pubKey"));
 }
