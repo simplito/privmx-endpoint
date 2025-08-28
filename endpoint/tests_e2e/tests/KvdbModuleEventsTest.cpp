@@ -91,6 +91,7 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbCreated_enabled) {
         EXPECT_EQ(event->type, "kvdbCreated");
         EXPECT_EQ(event->channel, "kvdb");
         if(kvdb::Events::isKvdbCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             kvdb::Kvdb kvdb = kvdb::Events::extractKvdbCreatedEvent(event).data;
             EXPECT_EQ(kvdb.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(kvdb.publicMeta.stdString(), "public");
@@ -208,6 +209,7 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbUpdated_enabled) {
         EXPECT_EQ(event->type, "kvdbUpdated");
         EXPECT_EQ(event->channel, "kvdb");
         if(kvdb::Events::isKvdbUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             kvdb::Kvdb kvdb = kvdb::Events::extractKvdbUpdatedEvent(event).data;
             EXPECT_EQ(kvdb.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(kvdb.publicMeta.stdString(), "public");
@@ -314,6 +316,7 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbDeleted_enabled) {
         EXPECT_EQ(event->type, "kvdbDeleted");
         EXPECT_EQ(event->channel, "kvdb");
         if(kvdb::Events::isKvdbDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             kvdb::KvdbDeletedEventData kvdbDeleted = kvdb::Events::extractKvdbDeletedEvent(event).data;
             EXPECT_EQ(kvdbDeleted.kvdbId, reader->getString("Kvdb_1.kvdbId"));
         } else {
@@ -398,6 +401,7 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbStats_enabled) {
         EXPECT_EQ(event->type, "kvdbStatsChanged");
         EXPECT_EQ(event->channel, "kvdb");
         if(kvdb::Events::isKvdbStatsEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             kvdb::KvdbStatsEventData kvdbStat = kvdb::Events::extractKvdbStatsEvent(event).data;
             EXPECT_EQ(kvdbStat.kvdbId, reader->getString("Kvdb_1.kvdbId"));
             EXPECT_EQ(kvdbStat.entries, 1);
@@ -488,6 +492,7 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbNewKvdbEntry_enabled) {
         EXPECT_EQ(event->type, "kvdbNewEntry");
         EXPECT_EQ(event->channel, "kvdb/"+reader->getString("Kvdb_1.kvdbId")+"/entries");
         if(kvdb::Events::isKvdbNewEntryEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             kvdb::KvdbEntry kvdbEntry = kvdb::Events::extractKvdbNewEntryEvent(event).data;
             EXPECT_EQ(kvdbEntry.publicMeta.stdString(), "publicMeta");
             EXPECT_EQ(kvdbEntry.privateMeta.stdString(), "privateMeta");
@@ -583,6 +588,7 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbUpdatedKvdbEntry_enabled) {
         EXPECT_EQ(event->type, "kvdbEntryUpdated");
         EXPECT_EQ(event->channel, "kvdb/"+reader->getString("Kvdb_1.kvdbId")+"/entries");
         if(kvdb::Events::isKvdbEntryUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             kvdb::KvdbEntry kvdbEntry = kvdb::Events::extractKvdbEntryUpdatedEvent(event).data;
             EXPECT_EQ(kvdbEntry.info.key, reader->getString("KvdbEntry_1.info_key"));
             EXPECT_EQ(kvdbEntry.publicMeta.stdString(), "publicMeta");
@@ -674,6 +680,7 @@ TEST_F(KvdbEventTest, waitEvent_getEvent_kvdbDeletedKvdbEntry_enabled) {
         EXPECT_EQ(event->type, "kvdbEntryDeleted");
         EXPECT_EQ(event->channel, "kvdb/"+reader->getString("Kvdb_1.kvdbId")+"/entries");
         if(kvdb::Events::isKvdbEntryDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             kvdb::KvdbDeletedEntryEventData kvdbDeletedKvdbEntry = kvdb::Events::extractKvdbEntryDeletedEvent(event).data;
             EXPECT_EQ(kvdbDeletedKvdbEntry.kvdbEntryKey, reader->getString("KvdbEntry_1.info_key"));
             EXPECT_EQ(kvdbDeletedKvdbEntry.kvdbId, reader->getString("Kvdb_1.kvdbId"));
