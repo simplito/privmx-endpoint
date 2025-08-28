@@ -37,6 +37,7 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
+#include "privmx/endpoint/core/Mapper.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -776,6 +777,15 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
             event->channel = "store/" + raw.storeId() + "/files";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "storeCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
+        if (raw.containerTypeOpt(STORE_TYPE_FILTER_FLAG) == STORE_TYPE_FILTER_FLAG) {
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "store/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(STORE_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

@@ -115,6 +115,18 @@ ENDPOINT_CLIENT_TYPE(SubscribeToChannelsResult)
     LIST_FIELD(subscriptions, Subscription)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(CollectionItemChange)
+    STRING_FIELD(itemId)
+    STRING_FIELD(action)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(CollectionChangedEventData)
+    STRING_FIELD(containerId)
+    INT64_FIELD(affectedItemsCount)
+    STRING_FIELD(containerType)
+    LIST_FIELD(items, CollectionItemChange)
+TYPE_END
+
 } // server
 } // core
 } // endpoint

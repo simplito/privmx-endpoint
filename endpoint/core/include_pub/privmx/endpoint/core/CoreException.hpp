@@ -76,6 +76,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataSmallerThanDeclaredE
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataDifferentThanDeclaredException, "Data different than declared", 0x0007)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibBreakEventException, "Cannot extract LibBreakEvent", 0x0008)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, ServerVersionMismatchException, "The Bridge Server and the PrivMX Endpoint library versions mismatch", 0x0009)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractCollectionChangedEventException, "Cannot extract CollectionChangedEvent", 0x000A)
 
 } // core
 } // endpoint
