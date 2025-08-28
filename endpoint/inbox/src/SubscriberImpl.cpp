@@ -25,7 +25,7 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::ENTRY_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID, EventSelectorType::ENTRY_ID}},
     {EventType::COLLECTION_CHANGE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}}
 };
-const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
+const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorType = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
     {EventSelectorType::INBOX_ID, "INBOX_ID"},
     {EventSelectorType::ENTRY_ID, "ENTRY_ID"}
@@ -64,13 +64,13 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
     }
     std::string allowedEventSelectorTypesString;
     for(auto allowedEventSelectorType: allowedEventSelectorTypes) {
-        allowedEventSelectorTypesString += _readableSelectorTyp.at(allowedEventSelectorType) + " or ";
+        allowedEventSelectorTypesString += _readableSelectorType.at(allowedEventSelectorType) + " or ";
     }
     if(allowedEventSelectorTypes.size() > 0) {
         allowedEventSelectorTypesString = allowedEventSelectorTypesString.substr(0, allowedEventSelectorTypesString.size()-4);
     }
     throw core::InvalidParamsException(
-        ("Invalid EventSelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedEventSelectorTypesString+ ", received " + _readableSelectorTyp.at(selectorType))
+        ("Invalid EventSelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedEventSelectorTypesString+ ", received " + _readableSelectorType.at(selectorType))
     ); 
 }
 

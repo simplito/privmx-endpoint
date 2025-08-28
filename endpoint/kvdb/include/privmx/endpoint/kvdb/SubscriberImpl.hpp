@@ -45,7 +45,7 @@ private:
     static const std::map<EventInternalSelectorType, std::string> _selectorTypeNames;
     static const std::map<EventType, std::string> _eventTypeNames;
     static const std::map<EventType, std::set<EventInternalSelectorType>> _eventTypeAllowedSelectorTypes;
-    static const std::map<EventInternalSelectorType, std::string> _readableSelectorTyp;
+    static const std::map<EventInternalSelectorType, std::string> _readableSelectorType;
     static const std::map<EventType, std::string> _readableEventType;
 };
 

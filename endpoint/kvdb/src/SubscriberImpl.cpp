@@ -29,7 +29,7 @@ const std::map<EventType, std::set<SubscriberImpl::EventInternalSelectorType>> S
     {EventType::ENTRY_DELETE, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID, EventInternalSelectorType::ENTRY_ID}},
     {EventType::COLLECTION_CHANGE, {EventInternalSelectorType::CONTEXT_ID, EventInternalSelectorType::KVDB_ID}}
 };
-const std::map<SubscriberImpl::EventInternalSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
+const std::map<SubscriberImpl::EventInternalSelectorType, std::string> SubscriberImpl::_readableSelectorType = {
     {EventInternalSelectorType::CONTEXT_ID, "CONTEXT_ID"},
     {EventInternalSelectorType::KVDB_ID, "KVDB_ID"},
     {EventInternalSelectorType::ENTRY_ID, "ENTRY_KEY"}
@@ -89,13 +89,13 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
     }
     std::string allowedSelectorTypesString;
     for(auto allowedSelectorType: allowedSelectorTypes) {
-        allowedSelectorTypesString += _readableSelectorTyp.at(allowedSelectorType) + " or ";
+        allowedSelectorTypesString += _readableSelectorType.at(allowedSelectorType) + " or ";
     }
     if(allowedSelectorTypes.size() > 0) {
         allowedSelectorTypesString = allowedSelectorTypesString.substr(0, allowedSelectorTypesString.size()-4);
     }
     throw core::InvalidParamsException(
-        ("Invalid SelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedSelectorTypesString+ ", received " + _readableSelectorTyp.at(selectorTypeInternal))
+        ("Invalid SelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedSelectorTypesString+ ", received " + _readableSelectorType.at(selectorTypeInternal))
     );
 }
 
@@ -107,13 +107,13 @@ std::string SubscriberImpl::buildQueryForSelectedEntry(EventType eventType, cons
     }
     std::string allowedSelectorTypesString;
     for(auto allowedSelectorType: allowedSelectorTypes) {
-        allowedSelectorTypesString += _readableSelectorTyp.at(allowedSelectorType) + " or ";
+        allowedSelectorTypesString += _readableSelectorType.at(allowedSelectorType) + " or ";
     }
     if(allowedSelectorTypes.size() > 0) {
         allowedSelectorTypesString = allowedSelectorTypesString.substr(0, allowedSelectorTypesString.size()-4);
     }
     throw core::InvalidParamsException(
-        ("Invalid SelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedSelectorTypesString+ ", received " + _readableSelectorTyp.at(EventInternalSelectorType::ENTRY_ID))
+        ("Invalid SelectorType for EventType::"+_readableEventType.at(eventType)+", expected " +allowedSelectorTypesString+ ", received " + _readableSelectorType.at(EventInternalSelectorType::ENTRY_ID))
     );
 }
 

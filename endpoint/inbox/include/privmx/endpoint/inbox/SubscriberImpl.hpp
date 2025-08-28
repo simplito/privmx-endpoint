@@ -39,7 +39,7 @@ private:
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
     static const std::map<EventType, std::string> _eventTypeNames;
     static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;
-    static const std::map<EventSelectorType, std::string> _readableSelectorTyp;
+    static const std::map<EventSelectorType, std::string> _readableSelectorType;
     static const std::map<EventType, std::string> _readableEventType;
     std::map<std::string, std::string> _threadIdToInboxId;
 };

@@ -34,7 +34,7 @@ private:
     static constexpr std::string_view _moduleName = "event";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
     static const std::set<std::string> _forbiddenChannelsNames;
-    static const std::map<EventSelectorType, std::string> _readableSelectorTyp;
+    static const std::map<EventSelectorType, std::string> _readableSelectorType;
 };
 
 } // event
