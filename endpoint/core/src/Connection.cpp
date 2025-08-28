@@ -77,11 +77,12 @@ PagingList<Context> Connection::listContexts(const PagingQuery& pagingQuery) {
     }
 }
 
-std::vector<UserInfo> Connection::getContextUsers(const std::string& contextId) {
+PagingList<UserInfo> Connection::listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery) {
     validateEndpoint();
     Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
-        return _impl->getContextUsers(contextId);
+        return _impl->listContextUsers(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

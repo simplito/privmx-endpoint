@@ -163,28 +163,29 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
     return PagingList<Context>{.totalAvailable = response.count(), .readItems = contexts};
 }
 
-std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& contextId) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, getContextUsers)
-    auto model = utils::TypedObjectFactory::createNewObject<server::ContextGetUsersModel>();
+PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery) {
+    auto model = utils::TypedObjectFactory::createNewObject<server::ContextListUsersModel>();
     model.contextId(contextId);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data)
-    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(
-        _gateway->request("context.contextGetUsers", model));
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data send)
-    std::vector<UserInfo> usersInfo {};
+    ListQueryMapper::map(model, pagingQuery);
+    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextListUsersResult>(
+        _gateway->request("context.contextListUsers", model));
+    PagingList<UserInfo> result;
+    result.readItems.reserve(response.users().size());
     for (auto user : response.users()) {
-        usersInfo.push_back(
-            UserInfo{
-                .user=UserWithPubKey{
-                    .userId=user.id(), 
-                    .pubKey=user.pub()
-                }, 
-                .isActive= user.status() == "active"
-            }
-        );
+        result.readItems.push_back(UserInfo {
+            .user=UserWithPubKey{
+                .userId=user.id(), 
+                .pubKey=user.pub()
+            }, 
+            .isActive= user.status() == "active",
+            .lastStatusChange = user.lastStatusChangeEmpty() ? std::nullopt : std::make_optional(UserStatusChange{
+                .action = user.lastStatusChange().action(),
+                .timestamp = user.lastStatusChange().timestamp()
+            })
+        });
     }
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, getContextUsers)
-    return usersInfo;
+    result.totalAvailable = response.count();
+    return result;
 }
 
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {

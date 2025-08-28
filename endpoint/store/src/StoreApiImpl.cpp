@@ -37,6 +37,7 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
+#include "privmx/endpoint/core/Mapper.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -429,22 +430,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
     auto encryptionParams = getFileEncryptionParams(file_raw.file(), file_raw.store());
     if (encryptionParams.fileMeta.internalFileMeta.randomWriteOpt(false)) {
-        std::shared_ptr<IChunkDataProvider> cdp = std::make_shared<ChunkDataProvider>(
-            _serverApi, 
-            ChunkReader::getEncryptedChunkSize(encryptionParams.fileDecryptionParams.chunkSize),
-            _serverRequestChunkSize, 
-            encryptionParams.fileDecryptionParams.fileId, 
-            encryptionParams.fileDecryptionParams.sizeOnServer, 
-            encryptionParams.fileDecryptionParams.version
-        );
-        std::shared_ptr<FileMetaEncryptor> me = std::make_shared<FileMetaEncryptor>(_userPrivKey, _connection);
-        std::shared_ptr<ChunkEncryptor> che = std::make_shared<ChunkEncryptor>(encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.chunkSize);
-        std::shared_ptr<IHashList> hash = std::make_shared<HmacList>(encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.hmac, cdp->getChecksums());
-        std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
-            cdp, che, hash, me, 
-            encryptionParams.fileDecryptionParams.originalSize,
-            encryptionParams.fileDecryptionParams.sizeOnServer,
-            encryptionParams.fileDecryptionParams.version,
+        std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file().contextId(), 
                 .storeId = file_raw.file().storeId(),
@@ -452,16 +438,11 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
                 .fileId = file_raw.file().id(),
                 .resourceId = file_raw.file().resourceIdOpt("")
             },
-            encryptionParams.fileMeta,
-            encryptionParams.encKey,
+            encryptionParams,
+            _serverRequestChunkSize,
+            _userPrivKey,
+            _connection,
             _serverApi
-        );
-        std::shared_ptr<IFileHandler> file = std::make_shared<FileHandlerImpl>(fileHandler);
-        std::shared_ptr<FileRandomWriteHandle> handle = _fileHandleManager.createFileRandomWriteHandle(
-            file_raw.store().id(),
-            fileId,
-            file_raw.file().resourceIdOpt(""),
-            file
         );
         return handle->getId();
     }
@@ -495,22 +476,15 @@ int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFile
         throw UnsupportedCipherTypeException(std::to_string(storeFileDecryptionParams.cipherType) + " expected type: 1");
     }
     std::shared_ptr<FileReadHandle> handle = _fileHandleManager.createFileReadHandle(
-        storeFileDecryptionParams.fileId, 
-        storeFileDecryptionParams.resourceId,
-        storeFileDecryptionParams.originalSize,
-        storeFileDecryptionParams.sizeOnServer,
-        storeFileDecryptionParams.chunkSize,
+        storeFileDecryptionParams,
         _serverRequestChunkSize,
-        storeFileDecryptionParams.version,
-        storeFileDecryptionParams.key,
-        storeFileDecryptionParams.hmac,
         _serverApi
     );
     return handle->getId();
 }
 
 void StoreApiImpl::writeToFile(const int64_t handleId, const core::Buffer& dataChunk, bool truncate) {
-    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handleId);
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handleId);
     if (rw_handle) {
         core::Validator::validateBufferSize(dataChunk, 0, 512*1024, "field:dataChunk");
         rw_handle->file->write(dataChunk, truncate);
@@ -521,7 +495,7 @@ void StoreApiImpl::writeToFile(const int64_t handleId, const core::Buffer& dataC
 }
 
 core::Buffer StoreApiImpl::readFromFile(const int64_t handle, const int64_t length) {
-    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
         return rw_handle->file->read(length);
     }
@@ -530,7 +504,7 @@ core::Buffer StoreApiImpl::readFromFile(const int64_t handle, const int64_t leng
 }
 
 void StoreApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
-    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
         rw_handle->file->seekg(pos);
         rw_handle->file->seekp(pos);
@@ -547,7 +521,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
     auto encryptionParams = getFileEncryptionParams(file_raw.file(), file_raw.store());
 
-    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
         rw_handle->file->sync(
             encryptionParams.fileMeta,
@@ -559,13 +533,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
     try {
         handlePtr->sync(
-            encryptionParams.fileDecryptionParams.originalSize,
-            encryptionParams.fileDecryptionParams.sizeOnServer,
-            encryptionParams.fileDecryptionParams.chunkSize,
-            _serverRequestChunkSize,
-            encryptionParams.fileDecryptionParams.version,
-            encryptionParams.fileDecryptionParams.key,
-            encryptionParams.fileDecryptionParams.hmac
+            encryptionParams.fileDecryptionParams
         );
     } catch (const store::FileCorruptedException& e) {
         _fileHandleManager.removeHandle(handle);
@@ -574,7 +542,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
 }
 
 std::string StoreApiImpl::closeFile(const int64_t handle) {
-    std::shared_ptr<FileRandomWriteHandle> rw_handle = _fileHandleManager.tryGetFileRandomWriteHandle(handle);
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
         rw_handle->file->close();
         _fileHandleManager.removeHandle(handle);
@@ -776,6 +744,15 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
             event->channel = "store/" + raw.storeId() + "/files";
             event->data = data;
+            event->subscriptions = notification.subscriptions;
+            _eventMiddleware->emitApiEvent(event);
+        }
+    } else if (type == "storeCollectionChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
+        if (raw.containerTypeOpt(STORE_TYPE_FILTER_FLAG) == STORE_TYPE_FILTER_FLAG) {
+            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
+            event->channel = "store/collectionChanged";
+            event->data = core::Mapper::mapToCollectionChangedEventData(STORE_TYPE_FILTER_FLAG, raw);
             event->subscriptions = notification.subscriptions;
             _eventMiddleware->emitApiEvent(event);
         }

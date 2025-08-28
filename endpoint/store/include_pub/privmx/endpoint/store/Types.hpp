@@ -195,7 +195,7 @@ enum EventType: int64_t {
     FILE_CREATE = 4,
     FILE_UPDATE = 5,
     FILE_DELETE = 6,
-
+    COLLECTION_CHANGE = 7,
 };
 
 enum EventSelectorType: int64_t {

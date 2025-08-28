@@ -56,7 +56,7 @@ public:
     );
     int64_t getConnectionId();
     core::PagingList<Context> listContexts(const PagingQuery& pagingQuery);
-    std::vector<UserInfo> getContextUsers(const std::string& contextId);
+    PagingList<UserInfo> listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);

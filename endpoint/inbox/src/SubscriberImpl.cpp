@@ -22,7 +22,8 @@ const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTyp
     {EventType::INBOX_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}},
     {EventType::INBOX_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}},
     {EventType::ENTRY_CREATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}},
-    {EventType::ENTRY_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID, EventSelectorType::ENTRY_ID}}
+    {EventType::ENTRY_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID, EventSelectorType::ENTRY_ID}},
+    {EventType::COLLECTION_CHANGE, {EventSelectorType::CONTEXT_ID, EventSelectorType::INBOX_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorTyp = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
@@ -34,7 +35,8 @@ const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
     {EventType::INBOX_UPDATE, "INBOX_UPDATE"},
     {EventType::INBOX_DELETE, "INBOX_DELETE"},
     {EventType::ENTRY_CREATE, "ENTRY_CREATE"},
-    {EventType::ENTRY_DELETE, "ENTRY_DELETE"}
+    {EventType::ENTRY_DELETE, "ENTRY_DELETE"},
+    {EventType::COLLECTION_CHANGE, "COLLECTION_CHANGE"}
 };
 
 std::string SubscriberImpl::getChannel(EventType eventType) {
@@ -46,6 +48,8 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
         case EventType::ENTRY_CREATE:
         case EventType::ENTRY_DELETE:
             return std::string(_moduleName) + "/" + std::string(_itemName) + "/" + _eventTypeNames.at(eventType);
+        case EventType::COLLECTION_CHANGE:
+            return std::string(_moduleName) + "/collectionChanged";
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }
@@ -100,6 +104,8 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
             } else {
                 result.add( query+"|"+selector);
             }
+        } else if (channelData.size() >= 2 && channelData[1] == "collectionChanged") {
+            result.add("thread/collectionChanged|" + selector);
         } else {
             result.add(subscriptionQuery);
         }

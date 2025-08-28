@@ -35,6 +35,10 @@ std::string LibDisconnectedEvent::toJSON() const {
     return core::JsonSerializer<LibDisconnectedEvent>::serialize(*this);
 }
 
+std::string CollectionChangedEvent::toJSON() const {
+    return core::JsonSerializer<CollectionChangedEvent>::serialize(*this);
+}
+
 std::string ContextUserAddedEvent::toJSON() const {
     return core::JsonSerializer<ContextUserAddedEvent>::serialize(*this);
 }
@@ -63,6 +67,10 @@ std::shared_ptr<SerializedEvent> LibDisconnectedEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
 
+std::shared_ptr<SerializedEvent> CollectionChangedEvent::serialize() const {
+    return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
+}
+
 std::shared_ptr<SerializedEvent> ContextUserAddedEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
@@ -74,6 +82,7 @@ std::shared_ptr<SerializedEvent> ContextUserRemovedEvent::serialize() const {
 std::shared_ptr<SerializedEvent> ContextUsersStatusChangeEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
+
 
 bool Events::isLibBreakEvent(const core::EventHolder& handler) {
     return handler.type() == "libBreak";
@@ -132,6 +141,20 @@ LibDisconnectedEvent Events::extractLibDisconnectedEvent(const core::EventHolder
         if (!event) {
             throw CannotExtractLibDisconnectedEventException();
         }
+        return *event;
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+bool Events::isCollectionChangedEvent(const core::EventHolder& eventHolder) { return eventHolder.type() == "collectionChanged"; }
+
+CollectionChangedEvent Events::extractCollectionChangedEvent(const core::EventHolder& eventHolder) {
+    try {
+        auto event = std::dynamic_pointer_cast<CollectionChangedEvent>(eventHolder.get());
+        if (!event) {
+            throw CannotExtractCollectionChangedEventException();}
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);

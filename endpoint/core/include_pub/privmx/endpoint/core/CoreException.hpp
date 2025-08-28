@@ -77,6 +77,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataSmallerThanDeclaredE
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataDifferentThanDeclaredException, "Data different than declared", 0x0007)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibBreakEventException, "Cannot extract LibBreakEvent", 0x0008)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, ServerVersionMismatchException, "The Bridge Server and the PrivMX Endpoint library versions mismatch", 0x0009)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractCollectionChangedEventException, "Cannot extract CollectionChangedEvent", 0x000A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserAddedEventException, "Cannot extract ContextUserAddedEvent", 0x000B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserRemovedEventException, "Cannot extract ContextUserRemovedEvent", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUsersStatusChangeEventException, "Cannot extract ContextUsersStatusChangeEvent", 0x000D)

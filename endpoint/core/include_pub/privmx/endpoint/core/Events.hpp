@@ -204,6 +204,71 @@ struct LibDisconnectedEvent : public Event {
 };
 
 /**
+ * Contains information about the changed item in the collection.
+*/
+struct CollectionItemChange {
+
+    /**
+     * ID of the item
+    */
+    std::string itemId;
+
+    /**
+     * Item change action, which can be "create", "update" or "delete"
+    */
+    std::string action;
+};
+
+/**
+ * Contains information about the changed collection.
+*/
+struct CollectionChangedEventData {
+    /**
+     * Type of the module
+    */
+    std::string moduleType;
+
+    /**
+     * ID of the module
+    */
+    std::string moduleId;
+
+    /**
+     * Count of affected items
+    */
+    int64_t affectedItemsCount;
+
+    /**
+     * List of item changes
+    */
+    std::vector<CollectionItemChange> items;
+};
+
+/**
+ * Holds data of event that arrives when the collection is changed.
+*/
+struct CollectionChangedEvent : public Event {
+    CollectionChangedEvent() : Event("collectionChanged") {}
+
+    /**
+     * Get Event as JSON string
+     * 
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<SerializedEvent> serialize() const override;
+
+    /**
+     * Information about the changed collection.
+    */
+    CollectionChangedEventData data;
+};
+
+/**
  * Contains information about the user of the Context
 */
 struct ContextUserEventData {
@@ -389,6 +454,22 @@ public:
      * @return 'LibDisconnectedEvent' object
      */
     static LibDisconnectedEvent extractLibDisconnectedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'CollectionChangedEvent' 
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'CollectionChangedEvent', else otherwise
+    */
+    static bool isCollectionChangedEvent(const EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'CollectionChangedEvent'
+     * 
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'CollectionChangedEvent' object
+    */
+    static CollectionChangedEvent extractCollectionChangedEvent(const EventHolder& eventHolder);
 
     /**
      * Checks whether event held in the 'EventHolder' is an 'ContextUserAddedEvent' 
