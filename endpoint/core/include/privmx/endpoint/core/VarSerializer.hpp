@@ -130,7 +130,13 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserWithPubKey>(const UserWithPubKey& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserStatusChange>(const UserStatusChange& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<PagingList<UserInfo>>(const PagingList<UserInfo>& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity& val);

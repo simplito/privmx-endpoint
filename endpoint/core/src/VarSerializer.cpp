@@ -218,6 +218,17 @@ Poco::Dynamic::Var VarSerializer::serialize<UserWithPubKey>(const UserWithPubKey
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserStatusChange>(const UserStatusChange& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$UserStatusChange");
+    }
+    obj->set("action", serialize(val.action));
+    obj->set("timestamp", serialize(val.timestamp));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
@@ -225,6 +236,18 @@ Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val) {
     }
     obj->set("user", serialize(val.user));
     obj->set("isActive", serialize(val.isActive));
+    obj->set("lastStatusChange", serialize(val.lastStatusChange));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<PagingList<UserInfo>>(const PagingList<UserInfo>& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$PagingList<core$UserInfo>");
+    }
+    obj->set("totalAvailable", serialize(val.totalAvailable));
+    obj->set("readItems", serialize(val.readItems));
     return obj;
 }
 

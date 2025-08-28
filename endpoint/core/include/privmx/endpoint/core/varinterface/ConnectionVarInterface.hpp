@@ -30,8 +30,9 @@ public:
         GetConnectionId = 2,
         ListContexts = 3,
         Disconnect = 4,
-        GetContextUsers = 5,
-        SetUserVerifier = 6
+        Deleted_Function_0 = 5,
+        SetUserVerifier = 6,
+        ListContextUsers = 7
     };
     
 
@@ -43,7 +44,7 @@ public:
     Poco::Dynamic::Var getConnectionId(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listContexts(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var disconnect(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var getContextUsers(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var listContextUsers(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setUserVerifier(const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);

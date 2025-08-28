@@ -65,12 +65,12 @@ ENDPOINT_SERVER_TYPE(ContextListResult)
     INT64_FIELD(count)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
-    STRING_FIELD(contextId)
-TYPE_END
-
 ENDPOINT_SERVER_TYPE(ContextGetModel)
     STRING_FIELD(id)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(ContextListUsersModel, core::server::ListModel)
+    STRING_FIELD(contextId)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(ContextGetResult)
@@ -82,8 +82,19 @@ ENDPOINT_CLIENT_TYPE(UserIdentity)
     STRING_FIELD(pub)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatus, UserIdentity)
+ENDPOINT_CLIENT_TYPE(KnownKeyStatusChange)
+    STRING_FIELD(action)
+    INT64_FIELD(timestamp)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatusAndAction, UserIdentity)
     STRING_FIELD(status)
+    OBJECT_FIELD(lastStatusChange, KnownKeyStatusChange)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(ContextListUsersResult)
+    LIST_FIELD(users, UserIdentityWithStatusAndAction)
+    INT64_FIELD(count)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(RpcEvent)
@@ -92,10 +103,6 @@ ENDPOINT_CLIENT_TYPE(RpcEvent)
     INT64_FIELD(version)
     INT64_FIELD(timestamp)
     LIST_FIELD(subscriptions, std::string)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
-    LIST_FIELD(users, server::UserIdentityWithStatus)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(UnsubscribeFromChannelsModel)
