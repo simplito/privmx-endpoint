@@ -28,7 +28,7 @@ void FileReader::sync(const store::FileDecryptionParams& newParms) {
     _version = newParms.version;
 }
 
-std::string FileReader::read(uint64_t pos, size_t length) {
+std::string FileReader::read(size_t pos, size_t length) {
     if(length == 0) return std::string();
     if(pos+length > _plainfileSize) length = _plainfileSize-pos;
     size_t startIndex = _chunkReader->filePosToFileChunkIndex(pos);
