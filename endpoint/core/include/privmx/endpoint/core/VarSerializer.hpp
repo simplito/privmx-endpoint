@@ -115,7 +115,7 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserWithAction>(const UserWithAction& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeData>(const ContextUsersStatusChangeData& val);
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(const ContextUsersStatusChangedEventData& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContextUserAddedEvent>(const ContextUserAddedEvent& val);
@@ -124,7 +124,7 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContextUserRemovedEvent>(const ContextUserRemovedEvent& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeEvent>(const ContextUsersStatusChangeEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEvent>(const ContextUsersStatusChangedEvent& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<CollectionItemChange>(const CollectionItemChange& val);

@@ -301,7 +301,7 @@ struct UserWithAction {
 /**
  * Contains information about changed statuses of users in the Context.
 */
-struct ContextUsersStatusChangeData {
+struct ContextUsersStatusChangedEventData {
     /**
      * ID of the Context
     */
@@ -361,11 +361,11 @@ struct ContextUserRemovedEvent : public Event {
     ContextUserEventData data;
 };
 
-struct ContextUsersStatusChangeEvent : public Event {
+struct ContextUsersStatusChangedEvent : public Event {
     /**
      * Event constructor
      */
-    ContextUsersStatusChangeEvent() : Event("contextUserStatusChanged") {}
+    ContextUsersStatusChangedEvent() : Event("contextUserStatusChanged") {}
 
     /**
      * Get Event as JSON string
@@ -382,7 +382,7 @@ struct ContextUsersStatusChangeEvent : public Event {
     /**
      * User status changes
     */
-    ContextUsersStatusChangeData data;
+    ContextUsersStatusChangedEventData data;
 };
 
 /**
@@ -504,20 +504,20 @@ public:
     static ContextUserRemovedEvent extractContextUserRemovedEvent(const EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'ContextUsersStatusChangeEvent' 
+     * Checks whether event held in the 'EventHolder' is an 'ContextUsersStatusChangedEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'ContextUsersStatusChangeEvent', else otherwise
+     * @return true for 'ContextUsersStatusChangedEvent', else otherwise
      */    
-    static bool isContextUsersStatusChangeEvent(const EventHolder& eventHolder);
+    static bool isContextUsersStatusChangedEvent(const EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'ContextUsersStatusChangeEvent' 
+     * Gets Event held in the 'EventHolder' as an 'ContextUsersStatusChangedEvent' 
      * 
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'ContextUsersStatusChangeEvent' object
+     * @return 'ContextUsersStatusChangedEvent' object
      */
-    static ContextUsersStatusChangeEvent extractContextUsersStatusChangeEvent(const EventHolder& eventHolder);
+    static ContextUsersStatusChangedEvent extractContextUsersStatusChangedEvent(const EventHolder& eventHolder);
 };
 
 }  // namespace core

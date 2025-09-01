@@ -316,8 +316,8 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "contextUserStatusChanged") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUsersStatusChangeEventData>(notification.data);
-        auto data = Mapper::mapToContextUsersStatusChangeData(raw);
-        std::shared_ptr<ContextUsersStatusChangeEvent> event(std::make_shared<ContextUsersStatusChangeEvent>());
+        auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
+        std::shared_ptr<ContextUsersStatusChangedEvent> event(std::make_shared<ContextUsersStatusChangedEvent>());
         event->channel = "context/userStatus";
         event->data = data;
         event->subscriptions = notification.subscriptions;

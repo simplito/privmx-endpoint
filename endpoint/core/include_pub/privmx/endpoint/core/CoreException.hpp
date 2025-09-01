@@ -80,7 +80,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, ServerVersionMismatchExc
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractCollectionChangedEventException, "Cannot extract CollectionChangedEvent", 0x000A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserAddedEventException, "Cannot extract ContextUserAddedEvent", 0x000B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserRemovedEventException, "Cannot extract ContextUserRemovedEvent", 0x000C)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUsersStatusChangeEventException, "Cannot extract ContextUsersStatusChangeEvent", 0x000D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUsersStatusChangedEventException, "Cannot extract ContextUsersStatusChangedEvent", 0x000D)
 
 } // core
 } // endpoint

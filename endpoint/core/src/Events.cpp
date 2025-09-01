@@ -47,8 +47,8 @@ std::string ContextUserRemovedEvent::toJSON() const {
     return core::JsonSerializer<ContextUserRemovedEvent>::serialize(*this);
 }
 
-std::string ContextUsersStatusChangeEvent::toJSON() const {
-    return core::JsonSerializer<ContextUsersStatusChangeEvent>::serialize(*this);
+std::string ContextUsersStatusChangedEvent::toJSON() const {
+    return core::JsonSerializer<ContextUsersStatusChangedEvent>::serialize(*this);
 }
 
 std::shared_ptr<SerializedEvent> LibBreakEvent::serialize() const {
@@ -79,7 +79,7 @@ std::shared_ptr<SerializedEvent> ContextUserRemovedEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<SerializedEvent> ContextUsersStatusChangeEvent::serialize() const {
+std::shared_ptr<SerializedEvent> ContextUsersStatusChangedEvent::serialize() const {
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
 
@@ -192,13 +192,13 @@ ContextUserRemovedEvent Events::extractContextUserRemovedEvent(const core::Event
     }
 }
 
-bool Events::isContextUsersStatusChangeEvent(const core::EventHolder& handler) { return handler.type() == "contextUserStatusChanged"; }
+bool Events::isContextUsersStatusChangedEvent(const core::EventHolder& handler) { return handler.type() == "contextUserStatusChanged"; }
 
-ContextUsersStatusChangeEvent Events::extractContextUsersStatusChangeEvent(const core::EventHolder& handler) {
+ContextUsersStatusChangedEvent Events::extractContextUsersStatusChangedEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<ContextUsersStatusChangeEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<ContextUsersStatusChangedEvent>(handler.get());
         if (!event) {
-            throw CannotExtractContextUsersStatusChangeEventException();
+            throw CannotExtractContextUsersStatusChangedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
