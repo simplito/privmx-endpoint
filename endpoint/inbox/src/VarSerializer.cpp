@@ -109,30 +109,12 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<inbox::InboxEntry>>
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxCreatedEvent>(const inbox::InboxCreatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "inbox$InboxCreatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "inbox$InboxCreatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxUpdatedEvent>(const inbox::InboxUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "inbox$InboxUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "inbox$InboxUpdatedEvent");
 }
 
 template<>
@@ -148,30 +130,12 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxDeletedEventData>(const 
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxDeletedEvent>(const inbox::InboxDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "inbox$InboxDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "inbox$InboxDeletedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryCreatedEvent>(const inbox::InboxEntryCreatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "inbox$InboxEntryCreatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "inbox$InboxEntryCreatedEvent");
 }
 
 
@@ -188,14 +152,5 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEventData>(c
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEvent>(const inbox::InboxEntryDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "inbox$InboxEntryDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "inbox$InboxEntryDeletedEvent");
 }

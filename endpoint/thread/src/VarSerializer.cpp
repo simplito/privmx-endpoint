@@ -89,101 +89,38 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsEventData>(const 
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadCreatedEvent>(const thread::ThreadCreatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "thread$ThreadCreatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "thread$ThreadCreatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadUpdatedEvent>(const thread::ThreadUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "thread$ThreadUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "thread$ThreadUpdatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadDeletedEvent>(const thread::ThreadDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "thread$ThreadDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "thread$ThreadDeletedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadNewMessageEvent>(const thread::ThreadNewMessageEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "thread$ThreadNewMessageEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "thread$ThreadNewMessageEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageUpdatedEvent>(const thread::ThreadMessageUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "thread$ThreadMessageUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "thread$ThreadMessageUpdatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageDeletedEvent>(
     const thread::ThreadMessageDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "thread$ThreadMessageDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "thread$ThreadMessageDeletedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsChangedEvent>(const thread::ThreadStatsChangedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "thread$ThreadStatsChangedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "thread$ThreadStatsChangedEvent");
 }
 
 template<>

@@ -130,101 +130,38 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEntryEventData>(
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbCreatedEvent>(const kvdb::KvdbCreatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbCreatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "kvdb$KvdbCreatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbUpdatedEvent>(const kvdb::KvdbUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "kvdb$KvdbUpdatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEvent>(const kvdb::KvdbDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "kvdb$KvdbDeletedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsChangedEvent>(const kvdb::KvdbStatsChangedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbStatsChangedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "kvdb$KvdbStatsChangedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbNewEntryEvent>(const kvdb::KvdbNewEntryEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbNewEntryEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "kvdb$KvdbNewEntryEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryUpdatedEvent>(const kvdb::KvdbEntryUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbEntryUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "kvdb$KvdbEntryUpdatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(
     const kvdb::KvdbEntryDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "kvdb$KvdbEntryDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "kvdb$KvdbEntryDeletedEvent");
 }
 
 template<>

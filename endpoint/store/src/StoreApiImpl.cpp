@@ -38,6 +38,7 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/EventBuilder.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -676,10 +677,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             // Add Keys to cache
             setNewModuleKeysInCache(raw.id(), storeToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertStoreDataToStore(raw);
-            std::shared_ptr<StoreCreatedEvent> event(new StoreCreatedEvent());
-            event->channel = "store";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<StoreCreatedEvent>("store", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeUpdated") {
@@ -688,10 +686,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             // Add Keys to cache
             setNewModuleKeysInCache(raw.id(), storeToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertStoreDataToStore(raw);
-            std::shared_ptr<StoreUpdatedEvent> event(new StoreUpdatedEvent());
-            event->channel = "store";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<StoreUpdatedEvent>("store", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeDeleted") {
@@ -699,31 +694,21 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             invalidateModuleKeysInCache(raw.storeId());
             auto data = Mapper::mapToStoreDeletedEventData(raw);
-            std::shared_ptr<StoreDeletedEvent> event(new StoreDeletedEvent());
-            event->channel = "store";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<StoreDeletedEvent>("store", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeStatsChanged") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreStatsChangedEventData>(notification.data);
         if(raw.typeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             auto data = Mapper::mapToStoreStatsChangedEventData(raw);
-            std::shared_ptr<StoreStatsChangedEvent> event(new StoreStatsChangedEvent());
-            event->channel = "store";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<StoreStatsChangedEvent>("store", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeFileCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileEventData>(notification.data);
         if(raw.containerTypeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
-            // auto data = _dataResolver->decrypt(std::vector<server::File>{raw})[0];
-            std::shared_ptr<StoreFileCreatedEvent> event(new StoreFileCreatedEvent());
-            event->channel = "store/" + raw.storeId() + "/files";
-            event->data = file;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<StoreFileCreatedEvent>("store/" + raw.storeId() + "/files", file, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeFileUpdated") {
@@ -731,29 +716,21 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
         if(raw.containerTypeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
             auto data = Mapper::mapTostoreFileUpdatedEventData(raw, file);
-            std::shared_ptr<StoreFileUpdatedEvent> event(new StoreFileUpdatedEvent());
-            event->channel = "store/" + raw.storeId() + "/files";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<StoreFileUpdatedEvent>("store/" + raw.storeId() + "/files", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeFileDeleted") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileDeletedEventData>(notification.data);
         if(raw.containerTypeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
             auto data = Mapper::mapToStoreFileDeletedEventData(raw);
-            std::shared_ptr<StoreFileDeletedEvent> event(new StoreFileDeletedEvent());
-            event->channel = "store/" + raw.storeId() + "/files";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<StoreFileDeletedEvent>("store/" + raw.storeId() + "/files", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "storeCollectionChanged") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
         if (raw.containerTypeOpt(STORE_TYPE_FILTER_FLAG) == STORE_TYPE_FILTER_FLAG) {
-            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
-            event->channel = "store/collectionChanged";
-            event->data = core::Mapper::mapToCollectionChangedEventData(STORE_TYPE_FILTER_FLAG, raw);
-            event->subscriptions = notification.subscriptions;
+            auto data = core::Mapper::mapToCollectionChangedEventData(STORE_TYPE_FILTER_FLAG, raw);
+            auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("store/collectionChanged", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     }

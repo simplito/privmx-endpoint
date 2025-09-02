@@ -76,55 +76,37 @@ Poco::Dynamic::Var VarSerializer::serialize<PagingList<Context>>(const PagingLis
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<LibPlatformDisconnectedEvent>(const LibPlatformDisconnectedEvent& val) {
+Poco::JSON::Object::Ptr VarSerializer::serializeBase<Event>(const Event& val, const std::string& type) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "core$LibPlatformDisconnectedEvent");
+        obj->set("__type", type);
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
     obj->set("connectionId", serialize(val.connectionId));
     obj->set("subscriptions", serialize(val.subscriptions));
+    obj->set("timestamp", serialize(val.timestamp));
     return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<LibPlatformDisconnectedEvent>(const LibPlatformDisconnectedEvent& val) {
+    return serializeBase<Event>(val, "core$LibPlatformDisconnectedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<LibConnectedEvent>(const LibConnectedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "core$LibConnectedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    return obj;
+    return serializeBase<Event>(val, "core$LibConnectedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<LibDisconnectedEvent>(const LibDisconnectedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "core$LibDisconnectedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    return obj;
+    return serializeBase<Event>(val, "core$LibDisconnectedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<LibBreakEvent>(const LibBreakEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "core$LibBreakEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    return obj;
+    return serializeBase<Event>(val, "core$LibBreakEvent");
 }
 
 template<>
@@ -153,16 +135,7 @@ Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEventData>(const Co
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEvent>(const CollectionChangedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "core$CollectionChangedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "core$CollectionChangedEvent");
 }
 
 template<>
@@ -200,44 +173,17 @@ Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeData>(const 
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContextUserAddedEvent>(const ContextUserAddedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "core$ContextUserAddedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "core$ContextUserAddedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContextUserRemovedEvent>(const ContextUserRemovedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "core$ContextUserRemovedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "core$ContextUserRemovedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeEvent>(const ContextUsersStatusChangeEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "core$ContextUsersStatusChangeEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "core$ContextUsersStatusChangeEvent");
 }
 
 template<>
