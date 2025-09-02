@@ -193,7 +193,7 @@ public:
      * Generate subscription Query for the KVDB events for single KvdbEntry.
      * @param eventType type of event which you listen for
      * @param kvdbId Id of Kvdb 
-     * @param kvdbEntryId Key of Kvdb Entry
+     * @param kvdbEntryKey Key of Kvdb Entry
      */
     std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
 
