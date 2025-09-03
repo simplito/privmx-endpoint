@@ -31,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/EventBuilder.hpp"
 
 using namespace privmx::endpoint;
 using namespace thread;
@@ -431,10 +432,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertThreadDataToThread(raw);
-            std::shared_ptr<ThreadCreatedEvent> event(new ThreadCreatedEvent());
-            event->channel = "thread";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<ThreadCreatedEvent>("thread", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadUpdated") {
@@ -442,10 +440,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
             auto data = validateDecryptAndConvertThreadDataToThread(raw);
-            std::shared_ptr<ThreadUpdatedEvent> event(new ThreadUpdatedEvent());
-            event->channel = "thread";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<ThreadUpdatedEvent>("thread", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadDeleted") {
@@ -453,59 +448,42 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             invalidateModuleKeysInCache(raw.threadId());
             auto data = Mapper::mapToThreadDeletedEventData(raw);
-            std::shared_ptr<ThreadDeletedEvent> event(new ThreadDeletedEvent());
-            event->channel = "thread";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<ThreadDeletedEvent>("thread", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadStats") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(notification.data);
         if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             auto data = Mapper::mapToThreadStatsEventData(raw);
-            std::shared_ptr<ThreadStatsChangedEvent> event(new ThreadStatsChangedEvent());
-            event->channel = "thread";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<ThreadStatsChangedEvent>("thread", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadNewMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
         if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
-            std::shared_ptr<ThreadNewMessageEvent> event(new ThreadNewMessageEvent());
-            event->channel = "thread/" + raw.threadId() + "/messages";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<ThreadNewMessageEvent>("thread/" + raw.threadId() + "/messages", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadUpdatedMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
         if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
-            std::shared_ptr<ThreadMessageUpdatedEvent> event(new ThreadMessageUpdatedEvent());
-            event->channel = "thread/" + raw.threadId() + "/messages";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<ThreadMessageUpdatedEvent>("thread/" + raw.threadId() + "/messages", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadDeletedMessage") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(notification.data);
         if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
             auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
-            std::shared_ptr<ThreadMessageDeletedEvent> event(new ThreadMessageDeletedEvent());
-            event->channel = "thread/" + raw.threadId() + "/messages";
-            event->data = data;
-            event->subscriptions = notification.subscriptions;
+            auto event = core::EventBuilder::buildEvent<ThreadMessageDeletedEvent>("thread/" + raw.threadId() + "/messages", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     } else if (type == "threadCollectionChanged") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
         if (raw.containerTypeOpt(THREAD_TYPE_FILTER_FLAG) == THREAD_TYPE_FILTER_FLAG) {
-            std::shared_ptr<core::CollectionChangedEvent> event(new core::CollectionChangedEvent());
-            event->channel = "thread/collectionChanged";
-            event->data = core::Mapper::mapToCollectionChangedEventData(THREAD_TYPE_FILTER_FLAG, raw);
-            event->subscriptions = notification.subscriptions;
+            auto data = core::Mapper::mapToCollectionChangedEventData(THREAD_TYPE_FILTER_FLAG, raw);
+            auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("thread/collectionChanged", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }
     }

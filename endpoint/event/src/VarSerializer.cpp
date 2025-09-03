@@ -19,16 +19,7 @@ using namespace privmx::endpoint::core;
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEvent>(const event::ContextCustomEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "event$ContextCustomEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "event$ContextCustomEvent");
 }
 
 template<>
