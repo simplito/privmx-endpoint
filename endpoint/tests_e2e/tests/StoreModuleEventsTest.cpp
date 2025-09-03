@@ -768,3 +768,66 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_disabled) {
         FAIL();
     }
 }
+
+TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_changes) {
+    std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
+    EXPECT_NO_THROW({
+        eventQueue.waitEvent(); // pop libConnected form queue
+    });
+    EXPECT_NO_THROW({
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_UPDATE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
+    });
+    std::string fileId;
+    
+    EXPECT_NO_THROW({
+        auto writeHandle = storeApi->createFile(reader->getString("Store_1.storeId"), core::Buffer::from("pub"), core::Buffer::from("priv"), 2*128*1024, true);  
+        storeApi->writeToFile(writeHandle, core::Buffer::from(std::string(2*128*1024, 'H')));
+        fileId = storeApi->closeFile(writeHandle);
+        auto RWHandle = storeApi->openFile(fileId);
+        storeApi->seekInFile(RWHandle, 128*1024);
+        storeApi->writeToFile(RWHandle, core::Buffer::from(std::string(64*1024, 'J')), true);
+        storeApi->closeFile(RWHandle);
+    });
+    EXPECT_NO_THROW({
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event != nullptr) {
+        EXPECT_EQ(event->connectionId, connection->getConnectionId());
+        EXPECT_EQ(event->type, "storeFileUpdated");
+        EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
+        if(store::Events::isStoreFileUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
+            auto eventData = store::Events::extractStoreFileUpdatedEvent(event).data;
+            store::File storeFile = eventData.file;
+            EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
+            EXPECT_EQ(storeFile.size, (128+64)*1024);
+            EXPECT_EQ(storeFile.publicMeta.stdString(), "pub");
+            EXPECT_EQ(storeFile.privateMeta.stdString(), "priv");
+            EXPECT_EQ(eventData.changes.size(), 1);
+            if(eventData.changes.size() >= 1) {
+                auto change = eventData.changes[0];
+                EXPECT_EQ(change.pos, 128*1024);
+                EXPECT_EQ(change.length, 64*1024);
+                EXPECT_EQ(change.truncate, true);
+            } else {
+                FAIL();
+            }
+        } else {
+            FAIL();
+        }
+    } else {
+        FAIL();
+    }
+}
