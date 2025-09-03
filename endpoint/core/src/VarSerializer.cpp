@@ -161,7 +161,7 @@ Poco::Dynamic::Var VarSerializer::serialize<UserWithAction>(const UserWithAction
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeData>(const ContextUsersStatusChangeData& val) {
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(const ContextUsersStatusChangedEventData& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "core$ContextUsersStatusChangeData");
@@ -182,8 +182,8 @@ Poco::Dynamic::Var VarSerializer::serialize<ContextUserRemovedEvent>(const Conte
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangeEvent>(const ContextUsersStatusChangeEvent& val) {
-    return serializeBaseWithData<Event>(val, "core$ContextUsersStatusChangeEvent");
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEvent>(const ContextUsersStatusChangedEvent& val) {
+    return serializeBaseWithData<Event>(val, "core$ContextUsersStatusChangedEvent");
 }
 
 template<>

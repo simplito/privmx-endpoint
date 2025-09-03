@@ -58,7 +58,7 @@ std::vector<UserWithAction> Mapper::mapToUserWithActions(const privmx::utils::Li
     return result;
 }
 
-ContextUsersStatusChangeData Mapper::mapToContextUsersStatusChangeData(const server::ContextUsersStatusChangeEventData& data) {
+ContextUsersStatusChangedEventData Mapper::mapToContextUsersStatusChangedEventData(const server::ContextUsersStatusChangeEventData& data) {
     return {
         .contextId = data.contextId(),
         .users = mapToUserWithActions(data.users())

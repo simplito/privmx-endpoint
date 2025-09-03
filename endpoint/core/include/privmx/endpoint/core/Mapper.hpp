@@ -26,7 +26,7 @@ public:
     static CollectionChangedEventData mapToCollectionChangedEventData(const std::string& moduleType, const server::CollectionChangedEventData& data);
     static UserWithAction mapToUserWithAction(const server::ContextUsersStatusChange& data);
     static std::vector<UserWithAction> mapToUserWithActions(const privmx::utils::List<server::ContextUsersStatusChange>& data);
-    static ContextUsersStatusChangeData mapToContextUsersStatusChangeData(const server::ContextUsersStatusChangeEventData& data);
+    static ContextUsersStatusChangedEventData mapToContextUsersStatusChangedEventData(const server::ContextUsersStatusChangeEventData& data);
     static ContextUserEventData mapToContextUserEventData(const server::ContextUserEventData& data);
 };
 
