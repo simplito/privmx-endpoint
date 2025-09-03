@@ -63,6 +63,15 @@ struct Event {
      * List of subscriptions Id for witch it is
      */
     std::vector<std::string> subscriptions;
+
+    /**
+     * Timestamp of the event
+     * 
+     * Represents the point in time when event occurred.
+     * - For events received from Bridge, this value comes from Bridge.
+     * - For events generated in the library, this is a local timestamp.
+    */
+    int64_t timestamp;
 };
 
 /**

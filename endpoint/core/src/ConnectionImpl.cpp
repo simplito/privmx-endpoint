@@ -22,6 +22,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Constants.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/EventBuilder.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -56,7 +57,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
@@ -65,11 +66,11 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         return utils::TypedObjectFactory::createObjectFromVar<server::ContextGetResult>(_gateway->request("context.contextGet", model)).context();
     });
     if (_gateway->isConnected()) {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
-        std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
@@ -110,7 +111,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
@@ -120,11 +121,11 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         return context;
     });
     if (_gateway->isConnected()) {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
-        std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
@@ -213,7 +214,7 @@ void ConnectionImpl::disconnect() {
         _gateway->destroy();
     }
     _gateway.reset();
-    std::shared_ptr<LibPlatformDisconnectedEvent> event(new LibPlatformDisconnectedEvent());
+    auto event = EventBuilder::buildLibEvent<LibPlatformDisconnectedEvent>();
     _eventMiddleware->emitApiEvent(event);
 }
 
@@ -301,26 +302,17 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
     if (type == "contextUserAdded") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
         auto data = Mapper::mapToContextUserEventData(raw);
-        std::shared_ptr<ContextUserAddedEvent> event(std::make_shared<ContextUserAddedEvent>());
-        event->channel = "context/userAdded";
-        event->data = data;
-        event->subscriptions = notification.subscriptions;
+        auto event = EventBuilder::buildEvent<ContextUserAddedEvent>("context/userAdded", data, notification);
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "contextUserRemoved") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
         auto data = Mapper::mapToContextUserEventData(raw);
-        std::shared_ptr<ContextUserRemovedEvent> event(std::make_shared<ContextUserRemovedEvent>());
-        event->channel = "context/userRemoved";
-        event->data = data;
-        event->subscriptions = notification.subscriptions;
+        auto event = EventBuilder::buildEvent<ContextUserRemovedEvent>("context/userRemoved", data, notification);
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "contextUserStatusChanged") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUsersStatusChangeEventData>(notification.data);
         auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
-        std::shared_ptr<ContextUsersStatusChangedEvent> event(std::make_shared<ContextUsersStatusChangedEvent>());
-        event->channel = "context/userStatus";
-        event->data = data;
-        event->subscriptions = notification.subscriptions;
+        auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
         _eventMiddleware->emitApiEvent(event);
     }
 }

@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/event/EventException.hpp"
 #include "privmx/endpoint/event/Events.hpp"
 #include "privmx/endpoint/event/Constants.hpp"
+#include "privmx/endpoint/core/EventBuilder.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
@@ -156,11 +157,8 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
             resultEventData.payload = tmp.data;
             resultEventData.statusCode = tmp.statusCode;
         }
-        std::shared_ptr<privmx::endpoint::event::ContextCustomEvent> event(new privmx::endpoint::event::ContextCustomEvent());
         auto customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
-        event->channel = "context/" + rawEvent.id() + "/" + customChannelName;
-        event->data = resultEventData;
-        event->subscriptions = notification.subscriptions;
+        auto event = core::EventBuilder::buildEvent<privmx::endpoint::event::ContextCustomEvent>("context/" + rawEvent.id() + "/" + customChannelName, resultEventData, notification);
         _eventMiddleware->emitApiEvent(event);
     }
 }

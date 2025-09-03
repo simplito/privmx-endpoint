@@ -117,100 +117,37 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEventData>(
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreCreatedEvent>(const store::StoreCreatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreCreatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "store$StoreCreatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreUpdatedEvent>(const store::StoreUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "store$StoreUpdatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreDeletedEvent>(const store::StoreDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "store$StoreDeletedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreStatsChangedEvent>(const store::StoreStatsChangedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreStatsChangedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "store$StoreStatsChangedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileCreatedEvent>(const store::StoreFileCreatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreFileCreatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "store$StoreFileCreatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEvent>(const store::StoreFileUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreFileUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "store$StoreFileUpdatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEvent>(const store::StoreFileDeletedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "store$StoreFileDeletedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("subscriptions", serialize(val.subscriptions));
-    obj->set("data", serialize(val.data));
-    return obj;
+    return serializeBaseWithData<Event>(val, "store$StoreFileDeletedEvent");
 }
 
 
