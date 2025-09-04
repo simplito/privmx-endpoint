@@ -714,8 +714,11 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
     } else if (type == "storeFileUpdated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StoreFileUpdatedEventData>(notification.data);
         if(raw.containerTypeOpt(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-            auto file = validateDecryptAndConvertFileDataToFileInfo(raw, getFileDecryptionKeys(raw));
-            auto data = Mapper::mapTostoreFileUpdatedEventData(raw, file);
+            auto storeKeys = getFileDecryptionKeys(raw);
+            auto file = validateDecryptAndConvertFileDataToFileInfo(raw, storeKeys);
+            auto internalMeta = validateDecryptFileInternalMeta(raw, storeKeys);
+            auto fileDecryptionParams = getFileDecryptionParams(raw, internalMeta);
+            auto data = Mapper::mapToStoreFileUpdatedEventData(raw, file, fileDecryptionParams);
             auto event = core::EventBuilder::buildEvent<StoreFileUpdatedEvent>("store/" + raw.storeId() + "/files", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }

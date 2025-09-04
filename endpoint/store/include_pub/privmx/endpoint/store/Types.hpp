@@ -39,11 +39,11 @@ struct ServerFileInfo {
  */
 struct FileChange {
     /**
-     * position of file change
+     * position of the first changed chunk
      */
     int64_t pos;
     /**
-     * length of file change
+     * length aligned to full chunks
      */
     int64_t length;
     /**
