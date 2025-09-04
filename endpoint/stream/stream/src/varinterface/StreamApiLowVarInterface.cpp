@@ -45,6 +45,18 @@ Poco::Dynamic::Var StreamApiLowVarInterface::getTurnCredentials(const Poco::Dyna
     return _serializer.serialize(result);
 }
 
+Poco::Dynamic::Var StreamApiLowVarInterface::subscribeForStreamEvents(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 0);
+    _streamApi.subscribeForStreamEvents();
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromStreamEvents(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 0);
+    _streamApi.unsubscribeFromStreamEvents();
+    return {};
+}
+
 Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
