@@ -25,7 +25,7 @@ public:
     static StoreDeletedEventData mapToStoreDeletedEventData(const server::StoreDeletedEventData& data);
     static StoreFileDeletedEventData mapToStoreFileDeletedEventData(const server::StoreFileDeletedEventData& data);
     static StoreStatsChangedEventData mapToStoreStatsChangedEventData(const server::StoreStatsChangedEventData& data);
-    static StoreFileUpdatedEventData mapTostoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams);
+    static StoreFileUpdatedEventData mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams);
 };
 
 }  // namespace store

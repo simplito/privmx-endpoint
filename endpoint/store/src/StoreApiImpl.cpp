@@ -718,7 +718,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto file = validateDecryptAndConvertFileDataToFileInfo(raw, storeKeys);
             auto internalMeta = validateDecryptFileInternalMeta(raw, storeKeys);
             auto fileDecryptionParams = getFileDecryptionParams(raw, internalMeta);
-            auto data = Mapper::mapTostoreFileUpdatedEventData(raw, file, fileDecryptionParams);
+            auto data = Mapper::mapToStoreFileUpdatedEventData(raw, file, fileDecryptionParams);
             auto event = core::EventBuilder::buildEvent<StoreFileUpdatedEvent>("store/" + raw.storeId() + "/files", data, notification);
             _eventMiddleware->emitApiEvent(event);
         }

@@ -29,7 +29,7 @@ StoreStatsChangedEventData Mapper::mapToStoreStatsChangedEventData(const server:
             .filesCount = data.files()};
 }
 
-StoreFileUpdatedEventData Mapper::mapTostoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams) {
+StoreFileUpdatedEventData Mapper::mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams) {
     auto result = StoreFileUpdatedEventData{.file = file, .changes = {}};
 
     if (!data.changesEmpty()) {
