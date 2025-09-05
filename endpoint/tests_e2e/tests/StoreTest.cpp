@@ -87,7 +87,7 @@ protected:
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
 };
-/*
+
 TEST_F(StoreTest, getStore) {
     store::Store store;
     // incorrect storeId
@@ -2877,7 +2877,7 @@ TEST_F(StoreTest, sync_file) {
         FAIL();
     }
 }
-*/
+
 TEST_F(StoreTest, read_file_size_0) {
 
     int64_t handle = 0;
