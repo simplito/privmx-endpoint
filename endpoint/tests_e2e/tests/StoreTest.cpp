@@ -2877,3 +2877,51 @@ TEST_F(StoreTest, sync_file) {
         FAIL();
     }
 }
+
+TEST_F(StoreTest, read_file_size_0) {
+
+    int64_t handle = 0;
+    int64_t readHandle = 0;
+    EXPECT_NO_THROW({
+        handle = storeApi->updateFile(
+            reader->getString("File_1.info_fileId"),
+            privmx::endpoint::core::Buffer::from("publicMeta"),
+            privmx::endpoint::core::Buffer::from("privateMeta"),
+            0
+        );
+    });
+    if(handle != 0) {
+        std::string fileId;
+        // updateFile size
+        EXPECT_NO_THROW({
+            fileId = storeApi->closeFile(handle);
+        });
+    } else {
+        std::cout << "updateFile Failed" << std::endl;
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        readHandle = storeApi->openFile(reader->getString("File_1.info_fileId"));
+    });
+    if(readHandle != 0) {
+        core::Buffer fileData;
+        EXPECT_NO_THROW({
+            fileData = storeApi->readFromFile(
+                readHandle,
+                0
+            );
+        });
+        EXPECT_EQ(fileData.stdString(), "");
+        EXPECT_NO_THROW({
+            fileData = storeApi->readFromFile(
+                readHandle,
+                8
+            );
+        });
+        EXPECT_EQ(fileData.stdString(), "");
+    } else {
+        std::cout << "openFile Failed" << std::endl;
+        FAIL();
+    }
+}
+
