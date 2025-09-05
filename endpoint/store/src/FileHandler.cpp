@@ -118,7 +118,7 @@ void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) 
 }
 
 core::Buffer FileHandler::read(size_t offset, size_t size) {
-    if(size > _plainfileSize) size = _plainfileSize;
+    if(offset+size > _plainfileSize) size = _plainfileSize-offset;
     if(size == 0) return core::Buffer();
     size_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
     size_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+size-1);
