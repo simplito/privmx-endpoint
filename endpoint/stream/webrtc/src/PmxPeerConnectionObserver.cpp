@@ -33,15 +33,51 @@ PmxPeerConnectionObserver::PmxPeerConnectionObserver(
 ) : _peerConnectionFactory(peerConnectionFactory), _streamId(streamId), _currentKeys(keys), _onFrameCallback(onFrameCallback), _options(options) {}
 
 void PmxPeerConnectionObserver::OnSignalingState([[maybe_unused]] libwebrtc::RTCSignalingState state) {
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON SIGNALING STATE")
+    std::map<libwebrtc::RTCSignalingState, std::string> map = {
+        {libwebrtc::RTCSignalingState::RTCSignalingStateStable, "RTCSignalingStateStable"},
+        {libwebrtc::RTCSignalingState::RTCSignalingStateHaveLocalOffer, "RTCSignalingStateHaveLocalOffer"},
+        {libwebrtc::RTCSignalingState::RTCSignalingStateHaveRemoteOffer, "RTCSignalingStateHaveRemoteOffer"},
+        {libwebrtc::RTCSignalingState::RTCSignalingStateHaveLocalPrAnswer, "RTCSignalingStateHaveLocalPrAnswer"},
+        {libwebrtc::RTCSignalingState::RTCSignalingStateHaveRemotePrAnswer, "RTCSignalingStateHaveRemotePrAnswer"},
+        {libwebrtc::RTCSignalingState::RTCSignalingStateClosed, "RTCSignalingStateClosed"}
+    };
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON SIGNALING STATE " + map[state])
 }
 void PmxPeerConnectionObserver::OnPeerConnectionState([[maybe_unused]] libwebrtc::RTCPeerConnectionState state) {
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON PEER CONNECTION STATE")
+    std::map<libwebrtc::RTCPeerConnectionState, std::string> map = {
+        {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateNew, "RTCPeerConnectionStateNew"},
+        {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateConnecting, "RTCPeerConnectionStateConnecting"},
+        {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateConnected, "RTCPeerConnectionStateConnected"},
+        {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateDisconnected, "RTCPeerConnectionStateDisconnected"},
+        {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateFailed, "RTCPeerConnectionStateFailed"},
+        {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateClosed, "RTCPeerConnectionStateClosed"}
+    };
+
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON PEER CONNECTION STATE " + map[state])
 }
 void PmxPeerConnectionObserver::OnIceGatheringState([[maybe_unused]] libwebrtc::RTCIceGatheringState state) {
+    std::map<libwebrtc::RTCIceGatheringState, std::string> map = {
+        {libwebrtc::RTCIceGatheringState::RTCIceGatheringStateNew, "RTCIceGatheringStateNew"},
+        {libwebrtc::RTCIceGatheringState::RTCIceGatheringStateGathering, "RTCIceGatheringStateGathering"},
+        {libwebrtc::RTCIceGatheringState::RTCIceGatheringStateComplete, "RTCIceGatheringStateComplete"}
+    };
+
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON ICE GATHERING STATE " + map[state])
 
 }
 void PmxPeerConnectionObserver::OnIceConnectionState([[maybe_unused]] libwebrtc::RTCIceConnectionState state) {
+    std::map<libwebrtc::RTCIceConnectionState, std::string> map = {
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateNew, "RTCIceConnectionStateNew"},
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateChecking, "RTCIceConnectionStateChecking"},
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateCompleted, "RTCIceConnectionStateCompleted"},
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateConnected, "RTCIceConnectionStateConnected"},
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateFailed, "RTCIceConnectionStateFailed"},
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateDisconnected, "RTCIceConnectionStateDisconnected"},
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateClosed, "RTCIceConnectionStateClosed"},
+        {libwebrtc::RTCIceConnectionState::RTCIceConnectionStateMax, "RTCIceConnectionStateMax"}
+    };
+
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON ICE CONNECTION STATE " + map[state])
 
 }
 void PmxPeerConnectionObserver::OnIceCandidate([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate> candidate) {
@@ -72,8 +108,9 @@ void PmxPeerConnectionObserver::OnDataChannel([[maybe_unused]] libwebrtc::scoped
 
 }
 void PmxPeerConnectionObserver::OnRenegotiationNeeded() {
-
+    PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON RENEGOTIATION NEEDED")
 };
+
 void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) {
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(_streamId) + ": ON TRACK")
 }

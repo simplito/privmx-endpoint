@@ -82,8 +82,7 @@ private:
     std::string _contextId;
     core::DataEncryptorV4 _dataEncryptor;
     privmx::utils::CancellationToken::Ptr _cancellationToken;
-    std::thread _keyCollector;
-    std::optional<std::thread> _keyUpdater;
+    std::thread _keyUpdater;
     std::shared_mutex _webRtcKeyUpdateCallbacksMutex;
     std::map<int64_t, std::function<void(const std::vector<privmx::endpoint::stream::Key>&)>> _webRtcKeyUpdateCallbacks; 
     std::shared_mutex _keysStrageMutex;

@@ -114,6 +114,7 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         // std::cerr << __LINE__ << std::endl;
         return;
     }
+    PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
     if (isInternalJanusEvent(type, data)) {
         auto janusEventData = data->getObject("data");
         processJanusEvent(janusEventData);
@@ -208,55 +209,51 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::Janus
     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "session_id :" + std::to_string(session_id));
     if (jsep.has_value() && !jsep.value().sdpEmpty() && !jsep.value().typeEmpty()) {
             std::cerr << __LINE__ << std::endl;
-            auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(jsep.value().sdp(), jsep.value().type());
-            auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
-            janusJSEP.sdp(sdp);
-            janusJSEP.type("answer");
-            auto options = utils::Utils::parseJsonObject("{}");
-            options->set("restart", true);
-            options->set("jsep", janusJSEP);
-
-            auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
-            model.sessionId(session_id); //TODO
-            model.options(options);
-            PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure: \n" + privmx::utils::Utils::stringifyVar(model, true));
-            _serverApi->streamReconfigure(model);
-            PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure Done");
+            // auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(jsep.value().sdp(), jsep.value().type());
+            // auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+            // janusJSEP.sdp(sdp);
+            // janusJSEP.type("answer");
+            // auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
+            // model.sessionId(streamData->sessionId.value()); //TODO
+            // model.answer(janusJSEP);
+            // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure: \n" + privmx::utils::Utils::stringifyVar(model, true));
+            // _serverApi->streamReconfigure(model);
+            // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure Done");
 
             // auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
             // sessionDescription.sdp(sdp);
             // sessionDescription.type("answer");
             // auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
-            // model.sessionId(session_id);
+            // model.sessionId(streamData->sessionId.value());
             // model.answer(sessionDescription);
             // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamAcceptOffer");
             // _serverApi->streamAcceptOffer(model);
             // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamAcceptOffer Done");
 
 
-            auto room = getStreamRoomData(_sessionIdToStreamId.get(streamData->sessionId.value()).value());
-            auto streamRoomId = room->id;
-            // get Room for contextId
-            auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
-            modelGetRoom.id(streamRoomId);
-            auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
-            // get Streams for userId
-            auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
-            modelStreams.streamRoomId(streamRoomId);
-            auto streamsList = _serverApi->streamList(modelStreams).list();
-            // get all users for pubKey
-            std::vector<core::UserInfo> allUsersList = _connection->getContextUsers(streamRoom.contextId()); 
-            std::vector<std::string> usersIds;
-            for(auto s: streamsList) {
-                usersIds.push_back(s.userId());
-            }
-            std::vector<core::UserWithPubKey> toSend;
-            for(auto userInfo: allUsersList) {
-                if(std::find(usersIds.begin(), usersIds.end(), userInfo.user.userId) != usersIds.end() ) {
-                    toSend.push_back(userInfo.user);
-                }
-            }
-            room->streamKeyManager->requestKey(toSend);
+            // auto room = getStreamRoomData(_sessionIdToStreamId.get(streamData->sessionId.value()).value());
+            // auto streamRoomId = room->id;
+            // // get Room for contextId
+            // auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+            // modelGetRoom.id(streamRoomId);
+            // auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
+            // // get Streams for userId
+            // auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
+            // modelStreams.streamRoomId(streamRoomId);
+            // auto streamsList = _serverApi->streamList(modelStreams).list();
+            // // get all users for pubKey
+            // std::vector<core::UserInfo> allUsersList = _connection->getContextUsers(streamRoom.contextId()); 
+            // std::vector<std::string> usersIds;
+            // for(auto s: streamsList) {
+            //     usersIds.push_back(s.userId());
+            // }
+            // std::vector<core::UserWithPubKey> toSend;
+            // for(auto userInfo: allUsersList) {
+            //     if(std::find(usersIds.begin(), usersIds.end(), userInfo.user.userId) != usersIds.end() ) {
+            //         toSend.push_back(userInfo.user);
+            //     }
+            // }
+            // room->streamKeyManager->requestKey(toSend);
 
             return;
     } else {
@@ -860,23 +857,23 @@ void StreamApiLowImpl::keyManagement(bool disable) {
 }
 
 void StreamApiLowImpl::reconfigureStream(int64_t localStreamId, const std::string& optionsJSON) {
-    auto room = getStreamRoomData(localStreamId);
-    auto streamData = getStreamData(localStreamId, room);
+    // auto room = getStreamRoomData(localStreamId);
+    // auto streamData = getStreamData(localStreamId, room);
 
-    std::shared_ptr<WebRTCInterface> webRtc = streamData->webRtc;
-    webRtc->updateKeys(room->streamKeyManager->getCurrentWebRtcKeys());
-    std::string sdp = webRtc->createOfferAndSetLocalDescription();
-    // Publish data on bridge
-    auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
-    janusJSEP.sdp(sdp);
-    janusJSEP.type("offer");
-    auto options = utils::Utils::parseJsonObject(optionsJSON);
-    options->set("restart", true);
-    options->set("jsep", janusJSEP);
-    auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
-    model.sessionId(streamData->sessionId.value()); //TODO
-    model.options(options);
-    _serverApi->streamReconfigure(model);
+    // std::shared_ptr<WebRTCInterface> webRtc = streamData->webRtc;
+    // webRtc->updateKeys(room->streamKeyManager->getCurrentWebRtcKeys());
+    // std::string sdp = webRtc->createOfferAndSetLocalDescription();
+    // // Publish data on bridge
+    // auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+    // janusJSEP.sdp(sdp);
+    // janusJSEP.type("offer");
+    // auto options = utils::Utils::parseJsonObject(optionsJSON);
+    // options->set("restart", true);
+    // options->set("jsep", janusJSEP);
+    // auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
+    // model.sessionId(streamData->sessionId.value()); //TODO
+    // model.answer(options);
+    // _serverApi->streamReconfigure(model);
 }
 
 void StreamApiLowImpl::subscribeForStreamEvents() {

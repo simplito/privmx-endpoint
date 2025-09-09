@@ -142,16 +142,16 @@ int main(int argc, char** argv) {
         auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
         streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
         streamApi.publishStream(streamId);
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream trackRemove~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
-        streamApi.trackRemove(streamId, stream::Track{.id=0, .type=stream::DeviceType::Video});
-        // std::this_thread::sleep_for(std::chrono::seconds(10));
-        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream trackAdd~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
-        // streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
+        while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
+        // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream trackRemove~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+        // streamApi.trackRemove(streamId, stream::Track{.id=0, .type=stream::DeviceType::Video});
+        // // std::this_thread::sleep_for(std::chrono::seconds(10));
+        // // std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream trackAdd~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+        // // streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
         
-        streamApi.reconfigureStream(streamId, "{}");
-        std::this_thread::sleep_for(std::chrono::seconds(20));
-
+        // streamApi.reconfigureStream(streamId, "{}");
+        // std::this_thread::sleep_for(std::chrono::seconds(20));
+        
         std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream Reset done~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
         streamApi.unpublishStream(streamId);
         connection.disconnect();

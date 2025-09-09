@@ -67,7 +67,7 @@ public:
             windowEventsLoop();
         }
         uint32_t* pixels = new uint32_t[768 * 432];
-        // std::cout << w << " - " << h << " frame Size" << std::endl;
+        std::cout << w << " - " << h << " frame Size" << std::endl;
         frame->ConvertToRGBA((uint8_t*)pixels, 4, 768, 432);
         SDL_UpdateTexture(texture, NULL, pixels, 768 * sizeof(uint32_t));
         SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
@@ -137,20 +137,19 @@ int main(int argc, char** argv) {
                 r.OnFrame(w, h, frame, id);
             }
         };
-        // while (true) {
-            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream joinStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
-            auto streamlist = streamApi.listStreams(streamRoomId);
-            std::vector<int64_t> streamsId;
-            for(int i = 0; i < streamlist.size(); i++) {
-                std::cout << "streamlist[" << i << "]:" <<  streamlist[i].streamId << std::endl;
-                streamsId.push_back(streamlist[i].streamId);
-            }
-            auto watchedStream = streamApi.joinStream(streamRoomId, streamsId, ssettings);
-            std::this_thread::sleep_for(std::chrono::seconds(60));
-            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream leaveStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
-            streamApi.leaveStream(watchedStream);
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-        // }
+        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream joinStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+        auto streamlist = streamApi.listStreams(streamRoomId);
+        std::vector<int64_t> streamsId;
+        for(int i = 0; i < streamlist.size(); i++) {
+            std::cout << "streamlist[" << i << "]:" <<  streamlist[i].streamId << std::endl;
+            streamsId.push_back(streamlist[i].streamId);
+        }
+        auto watchedStream = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+        
+        while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
+        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream leaveStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+        streamApi.leaveStream(watchedStream);
+        std::this_thread::sleep_for(std::chrono::seconds(5));
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
