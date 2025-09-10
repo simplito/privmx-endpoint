@@ -4,6 +4,7 @@
 #include <wx/rawbmp.h>
 #include <wx/dcgraph.h>
 #include <wx/textentry.h>
+#include <wx/glcanvas.h>
 
 #include <iostream>
 #include <sstream>
@@ -87,13 +88,13 @@ class VideoPanel : public wxPanel {
 public:
     VideoPanel(wxWindow * parent);
     void Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame);
+    std::atomic_bool haveNewFrame = false;
 
 private:
     void OnPaint(wxPaintEvent& event);
     std::mutex m;
     std::vector<unsigned char> picDataVector;
     std::shared_ptr<wxBitmap> bmp = std::make_shared<wxBitmap>(MAX_VIDEO_W, MAX_VIDEO_H, 32);
-    bool haveFrame = false;
 };
 
 VideoPanel::VideoPanel(wxWindow * parent) :
@@ -104,19 +105,24 @@ VideoPanel::VideoPanel(wxWindow * parent) :
 }
 
 void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame) {
+    // PRIVMX_DEBUG("StreamProgram wx", "Render", "Frame Size : " + std::to_string(w) + "-"+ std::to_string(h))
     auto panel_size = this->GetClientSize();
     double scaleW = (double)panel_size.GetWidth() / w;
     double scaleH = (double)panel_size.GetHeight() / h;
+
+    // PRIVMX_DEBUG("StreamProgram wx", "Render", "Frame Scale: " + std::to_string(scaleW) + "-" + std::to_string(scaleH))
     double scale = scaleW < scaleH ? scaleW : scaleH;
     int64_t W =  scale * w;
     int64_t H =  scale * h;
+    // PRIVMX_DEBUG("StreamProgram wx", "Render", "Frame Rescaled: " + std::to_string(W) + "-" + std::to_string(H) + " * " + std::to_string(scale))
     if(H < 1 || W < 1) return;
     picDataVector.reserve(4*W*H);
     frame->ConvertToRGBA(&picDataVector[0], 1, W, H);
+    std::shared_ptr<wxBitmap> tmp_bmp = RGBAintoBitmap(W, H, &picDataVector[0]);
     {
         std::unique_lock<std::mutex> lock(m); 
-        bmp = RGBAintoBitmap(W, H, &picDataVector[0]);
-        haveFrame = true;
+        bmp = tmp_bmp;
+        haveNewFrame = true;
     }
     
 }
@@ -124,10 +130,15 @@ void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::
 void VideoPanel::OnPaint(wxPaintEvent& event)
 {
     wxPaintDC dc(this);
-    dc.Clear();
-    if(haveFrame) {
-        std::unique_lock<std::mutex> lock(m);
-        std::shared_ptr<wxBitmap> tmp_bmp = bmp;
+    PRIVMX_DEBUG("StreamProgram wx", "OnPaint", "before Lock")
+    if(haveNewFrame) {
+        std::shared_ptr<wxBitmap> tmp_bmp;
+        {
+            std::unique_lock<std::mutex> lock(m);
+            PRIVMX_DEBUG("StreamProgram wx", "OnPaint", "After Lock")
+            tmp_bmp = bmp;
+            haveNewFrame = false;
+        }
         dc.DrawBitmap(tmp_bmp->GetSubBitmap(wxRect(0, 0, tmp_bmp->GetWidth(), tmp_bmp->GetHeight())), 0, 0, false);
     }
 }
@@ -199,6 +210,13 @@ void MyFrame::OnResize(wxSizeEvent& event) {
     int numberOfVideos = mapOfVideoPanels.size() != 0 ? mapOfVideoPanels.size() : 1;
     int numberCol = numberOfMaxCol < numberOfVideos ? numberOfMaxCol : numberOfVideos;
     sizer->SetCols(numberCol);
+    {
+        std::shared_lock<std::shared_mutex> lock(_videoPanels);
+        // this->Refresh();
+        std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {
+            p.second->haveNewFrame = true; 
+        });
+    }
     event.Skip(); 
 }
 
@@ -239,7 +257,6 @@ MyFrame::MyFrame()
     loginInput = new wxTextCtrl(this->m_board, wxID_ANY, "Login");
     passwordInput = new wxTextCtrl(this->m_board, wxID_ANY, "Default password", wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD, wxDefaultValidator);
     streamRoomIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "stream room Id");
-
 
     controlSizer->Add(loginInput, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(passwordInput, 1, wxEXPAND | wxALL,5);
@@ -322,10 +339,16 @@ MyFrame::MyFrame()
         try {
             while(!cancellationToken.isCancelled()) {
                 cancellationToken.sleep(std::chrono::milliseconds(50));
+
+                PRIVMX_DEBUG("StreamProgram wx", "Update", "Loop")
                 {
                     std::shared_lock<std::shared_mutex> lock(_videoPanels);
-                    this->Refresh();
-                    // std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {if(p.second!=nullptr) p.second->Refresh(); ;});
+                    // this->Refresh();
+                    std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {
+                        if(p.second!=nullptr && p.second->haveNewFrame) {
+                            p.second->Refresh();
+                        } 
+                    });
                 }
             }
         } catch (const privmx::utils::OperationCancelledException& e) {
@@ -569,7 +592,7 @@ std::vector<privmx::endpoint::stream::StreamRoom> MyFrame::ListStreamRooms(std::
 
 void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
 
-    PRIVMX_DEBUG("StreamProgram wx", "OnFrame", "Start Frame Id: " + id)
+    // PRIVMX_DEBUG("StreamProgram wx", "OnFrame", "Start Frame Id: " + id)
     std::shared_ptr<VideoPanel> videoPanel;
     {
         std::unique_lock<std::shared_mutex> lock(_videoPanels);
@@ -585,9 +608,9 @@ void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::st
         } else {
             videoPanel = mapOfVideoPanels[id];
         }
-    }
-    if(videoPanel != nullptr) {
-        videoPanel->Render(w,h,frame);
+        if(videoPanel != nullptr) {
+            videoPanel->Render(w,h,frame);
+        }
     }
 }
  
