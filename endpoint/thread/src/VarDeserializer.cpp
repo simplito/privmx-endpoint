@@ -36,6 +36,8 @@ thread::EventType VarDeserializer::deserialize<thread::EventType>(const Poco::Dy
             return thread::EventType::MESSAGE_UPDATE;
         case thread::EventType::MESSAGE_DELETE:
             return thread::EventType::MESSAGE_DELETE;
+        case thread::EventType::COLLECTION_CHANGE:
+            return thread::EventType::COLLECTION_CHANGE;
     }
     throw InvalidParamsException(name + " | " + ("Unknown thread::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }

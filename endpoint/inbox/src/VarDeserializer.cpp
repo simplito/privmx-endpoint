@@ -44,6 +44,8 @@ inbox::EventType VarDeserializer::deserialize<inbox::EventType>(const Poco::Dyna
             return inbox::EventType::ENTRY_CREATE;
         case inbox::EventType::ENTRY_DELETE:
             return inbox::EventType::ENTRY_DELETE;
+        case inbox::EventType::COLLECTION_CHANGE:
+            return inbox::EventType::COLLECTION_CHANGE;
     }
     throw InvalidParamsException(name + " | " + ("Unknown inbox::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }
