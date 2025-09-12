@@ -37,6 +37,8 @@ store::EventType VarDeserializer::deserialize<store::EventType>(const Poco::Dyna
             return store::EventType::FILE_UPDATE;
         case store::EventType::FILE_DELETE:
             return store::EventType::FILE_DELETE;
+        case store::EventType::COLLECTION_CHANGE:
+            return store::EventType::COLLECTION_CHANGE;
     }
     throw InvalidParamsException(name + " | " + ("Unknown store::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }

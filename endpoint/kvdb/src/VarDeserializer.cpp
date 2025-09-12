@@ -37,6 +37,8 @@ kvdb::EventType VarDeserializer::deserialize<kvdb::EventType>(const Poco::Dynami
             return kvdb::EventType::ENTRY_UPDATE;
         case kvdb::EventType::ENTRY_DELETE:
             return kvdb::EventType::ENTRY_DELETE;
+        case kvdb::EventType::COLLECTION_CHANGE:
+            return kvdb::EventType::COLLECTION_CHANGE;
     }
     throw InvalidParamsException(name + " | " + ("Unknown kvdb::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }
