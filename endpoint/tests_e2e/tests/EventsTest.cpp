@@ -125,6 +125,7 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
     EXPECT_NO_THROW({
         EXPECT_EQ(event->type, "contextCustom");
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
+        PRIVMX_DEBUG("EventTest", "Event channel", "context/" + reader->getString("Context_1.contextId") + "/testing");
         if(event::Events::isContextCustomEvent(event)) {
             EXPECT_EQ(event->subscriptions.size(), 1);
             event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);

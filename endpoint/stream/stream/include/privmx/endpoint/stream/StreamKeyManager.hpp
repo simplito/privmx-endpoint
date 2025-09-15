@@ -22,8 +22,6 @@ limitations under the License.
 #include <privmx/utils/CancellationToken.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/event/EventApiImpl.hpp>
 
 #include "privmx/endpoint/stream/ServerTypes.hpp"
@@ -44,7 +42,8 @@ public:
         std::shared_ptr<ServerApi> serverApi,
         privmx::crypto::PrivateKey userPrivKey, 
         const std::string& streamRoomId, 
-        const std::string& contextId
+        const std::string& contextId,
+        int notificationListenerId
     );
     ~StreamKeyManager();
     
@@ -80,6 +79,7 @@ private:
     privmx::crypto::PublicKey _userPubKey;
     std::string _streamRoomId;
     std::string _contextId;
+    int _notificationListenerId;
     core::DataEncryptorV4 _dataEncryptor;
     privmx::utils::CancellationToken::Ptr _cancellationToken;
     std::thread _keyUpdater;
@@ -98,6 +98,7 @@ private:
     std::vector<privmx::endpoint::stream::Key> _currentWebRtcKeys;
     std::atomic_int64_t _nextKeyUpdateCallbackId = 0;
     bool disableKeyUpdateForEncryptors = false;
+    std::vector<std::string> _subscriptionIds;
 };
 
 } // stream

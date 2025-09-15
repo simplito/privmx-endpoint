@@ -28,8 +28,9 @@ StreamKeyManager::StreamKeyManager(
     std::shared_ptr<ServerApi> serverApi,
     privmx::crypto::PrivateKey userPrivKey, 
     const std::string& streamRoomId,
-    const std::string& contextId
-) : _eventApi(eventApi), _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId) {
+    const std::string& contextId,
+    int notificationListenerId
+) : _eventApi(eventApi), _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId), _notificationListenerId(notificationListenerId) {
     _userPubKey = _userPrivKey.getPublicKey();
     // generate curren key
     auto currentKey = _keyProvider->generateKey();
@@ -77,14 +78,18 @@ StreamKeyManager::StreamKeyManager(
             throw e;
         }
     }, _cancellationToken); 
-    _eventApi->subscribeForInternalEvents(_contextId);
+    _subscriptionIds = _eventApi->subscribeForInternal(
+        {_eventApi->buildSubscriptionQueryInternal(event::EventSelectorType::CONTEXT_ID, _contextId)},
+        _notificationListenerId
+    );
+
 }
 
 StreamKeyManager::~StreamKeyManager() {
     std::cerr << "Created _cancellationToken at StreamKeyManager deconstructor: " << _cancellationToken.get() << std::endl; // Debug by Patryk
     _cancellationToken->cancel();
     _updateKeyCV.notify_all();
-    _eventApi->unsubscribeFromInternalEvents(_contextId);
+    _eventApi->unsubscribeFromInternal(_subscriptionIds, _notificationListenerId);
     if(_keyUpdater.joinable()) _keyUpdater.join();
     PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Successfully Deconstructed : " + _streamRoomId);
 }
@@ -223,13 +228,12 @@ void StreamKeyManager::updateKey() {
         respond.subtype("UpdateKeyEvent");
         respond.encKey(newKey);
         // send to users
-        if(!disableKeyUpdateForEncryptors) {
+        if(!disableKeyUpdateForEncryptors && _connectedUsers.size() > 0 ) {
             sendStreamKeyManagementEvent(respond, _connectedUsers);
-        }
-        //update timeout
-        if(_connectedUsers.size() > 0) {
+            //update timeout
             wait = true;
         }
+        
     }
 
     std::unique_lock<std::mutex> lock(_updateKeyMutex);

@@ -80,8 +80,10 @@ public:
     void unpublishStream(int64_t streamId);
 
     void leaveStream(int64_t streamId);
-    void subscribeForStreamEvents();
-    void unsubscribeFromStreamEvents();
+    
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     void keyManagement(bool disable);
     void dropBrokenFrames(bool enable);

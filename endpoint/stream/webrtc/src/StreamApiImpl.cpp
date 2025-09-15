@@ -270,12 +270,17 @@ void StreamApiImpl::leaveStream(int64_t streamId) {
     _streamDataMap.erase(streamId);
 }
 
-void StreamApiImpl::subscribeForStreamEvents() {
-    _api->subscribeForStreamEvents();
+
+std::vector<std::string> StreamApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    return _api->subscribeFor(subscriptionQueries);
 }
 
-void StreamApiImpl::unsubscribeFromStreamEvents() {
-    _api->unsubscribeFromStreamEvents();
+void StreamApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    return _api->unsubscribeFrom(subscriptionIds);
+}
+
+std::string StreamApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    return _api->buildSubscriptionQuery(eventType, selectorType, selectorId);
 }
 
 void StreamApiImpl::keyManagement(bool disable) {

@@ -30,16 +30,16 @@ StreamApiLow StreamApiLow::create(const core::Connection& connection, event::Eve
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<event::EventApiImpl> eventApiImpl = eventApi.getImpl();
-        std::shared_ptr<StreamApiLowImpl> impl(new StreamApiLowImpl(
+        std::shared_ptr<StreamApiLowImpl> impl(new stream::StreamApiLowImpl(
             eventApiImpl,
             connection,
             connectionImpl->getGateway(),
             connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
-            connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager()
+            connectionImpl->getEventMiddleware()
         ));
+        
         return StreamApiLow(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -105,7 +105,7 @@ void StreamApiLow::updateStreamRoom(
 core::PagingList<StreamRoom> StreamApiLow::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<core::PagingQuery>(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
     try {
         return _impl->listStreamRooms(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -198,20 +198,30 @@ void StreamApiLow::leaveStream(int64_t streamId) {
     }
 }
 
-void StreamApiLow::subscribeForStreamEvents() {
+std::vector<std::string> StreamApiLow::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     validateEndpoint();
     try {
-        return _impl->subscribeForStreamEvents();
+        return _impl->subscribeFor(subscriptionQueries);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApiLow::unsubscribeFromStreamEvents() {
+void StreamApiLow::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     validateEndpoint();
     try {
-        return _impl->unsubscribeFromStreamEvents();
+        return _impl->unsubscribeFrom(subscriptionIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string StreamApiLow::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

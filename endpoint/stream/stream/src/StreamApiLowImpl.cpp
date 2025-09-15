@@ -39,9 +39,8 @@ StreamApiLowImpl::StreamApiLowImpl(
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
-    const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const std::shared_ptr<core::EventChannelManager>& eventChannelManager
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, eventChannelManager, connection),
+    const std::shared_ptr<core::EventMiddleware>& eventMiddleware
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
      _eventApi(eventApi),
     _connection(connection.getImpl()),
     _gateway(gateway),
@@ -50,14 +49,15 @@ StreamApiLowImpl::StreamApiLowImpl(
     _host(host),
     _eventMiddleware(eventMiddleware),
     _serverApi(std::make_shared<ServerApi>(gateway)),
-    _streamSubscriptionHelper(core::SubscriptionHelper(eventChannelManager, "stream", "streams")) {
-        // streamGetTurnCredentials
-        auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
-        auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
-        _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
-        _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
-        _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
-    }
+    _subscriber(stream::SubscriberImpl(gateway)) 
+{
+    // streamGetTurnCredentials
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
+    auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
+    _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
+    _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
+}
 
 StreamApiLowImpl::~StreamApiLowImpl() {
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> value) {
@@ -70,6 +70,7 @@ StreamApiLowImpl::~StreamApiLowImpl() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
+    _eventApi->unsubscribeFrom(_internalSubscriptionIds);
 }
 
 std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
@@ -83,6 +84,7 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 }
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "event type:"+ type);
     if (type == "janus") {
         // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
     }
@@ -109,8 +111,8 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         }
         return;
     }
-
-    if(!_streamSubscriptionHelper.hasSubscription(notification.subscriptions) && !isInternalJanusEvent(type, data)) {
+    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value() && !isInternalJanusEvent(type, data)) {
         // std::cerr << __LINE__ << std::endl;
         return;
     }
@@ -278,7 +280,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
-        std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId()),
+        std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _notificationListenerId),
         streamRoomId
     );
     _streamRoomMap.set(
@@ -388,19 +390,38 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
     modelStreams.streamRoomId(streamRoomId);
     auto streamsList = _serverApi->streamList(modelStreams).list();
-    // get all users for pubKey
-    std::vector<core::UserInfo> allUsersList = _connection->getContextUsers(streamRoom.contextId()); 
-    std::vector<std::string> usersIds;
+    // get users for pubKey
+    Poco::JSON::Object::Ptr query = new Poco::JSON::Object;
+    Poco::JSON::Object::Ptr queryId = new Poco::JSON::Object;
+    Poco::JSON::Array::Ptr usersIds = new Poco::JSON::Array;
+
     for(auto s: streamsList) {
         if ( std::find(streamsId.begin(), streamsId.end(), s.streamId()) != streamsId.end() ) {
-            usersIds.push_back(s.userId());
+            usersIds->add(s.userId());
         }
     }
-    std::vector<core::UserWithPubKey> toSend;
-    for(auto userInfo: allUsersList) {
-        if(std::find(usersIds.begin(), usersIds.end(), userInfo.user.userId) != usersIds.end() ) {
-            toSend.push_back(userInfo.user);
+    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
+    queryId->set("$in", usersIds);
+    query->set("#userId", queryId);
+    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers querry:  " + privmx::utils::Utils::stringify(query))
+    core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
+        streamRoom.contextId(), 
+        core::PagingQuery{
+            .skip = 0,
+            .limit = usersIds->size(),
+            .sortOrder = "desc",
+            .lastId = std::nullopt,
+            .sortBy = std::nullopt,
+            .queryAsJson = privmx::utils::Utils::stringify(query)
         }
+    ); 
+    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers result.size(): " + std::to_string(userInfoList.readItems.size()));
+
+    
+    std::vector<core::UserWithPubKey> toSend;
+    for(auto userInfo: userInfoList.readItems) {
+        PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
+        toSend.push_back(userInfo.user);
     }
     room->streamKeyManager->requestKey(toSend);
     return localStreamId;
@@ -876,26 +897,45 @@ void StreamApiLowImpl::reconfigureStream(int64_t localStreamId, const std::strin
     // _serverApi->streamReconfigure(model);
 }
 
-void StreamApiLowImpl::subscribeForStreamEvents() {
-    if(_streamSubscriptionHelper.hasSubscriptionForModule()) {
-        throw AlreadySubscribedException();
-    }
-    _streamSubscriptionHelper.subscribeForModule();
+std::vector<std::string> StreamApiLowImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    auto result = _subscriber.subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
 }
 
-void StreamApiLowImpl::unsubscribeFromStreamEvents() {
-    if(!_streamSubscriptionHelper.hasSubscriptionForModule()) {
-        throw NotSubscribedException();
-    }
-    _streamSubscriptionHelper.unsubscribeFromModule();
+void StreamApiLowImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    _subscriber.unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
-uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom) {
+std::string StreamApiLowImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
+}
+
+std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
+    auto params = privmx::utils::TypedObjectFactory::createNewObject<stream::server::StreamRoomGetModel>();
+    params.id(moduleId);
+    auto stream = _serverApi->streamRoomGet(params).streamRoom();
+    // validate stream Data before returning data
+    assertStreamRoomDataIntegrity(stream);
+    return std::make_pair(streamRoomToModuleKeys(stream), stream.version());
+}
+
+core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo stream) {
+    return core::ModuleKeys{
+        .keys=stream.keys(),
+        .currentKeyId=stream.keyId(),
+        .moduleSchemaVersion=getStreamRoomEntryDataStructureVersion(stream.data().get(stream.data().size()-1)),
+        .moduleResourceId=stream.resourceIdOpt(""),
+        .contextId = stream.contextId()
+    };
+}
+
+void StreamApiLowImpl::assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom) {
     auto streamRoom_data_entry = streamRoom.data().get(streamRoom.data().size()-1);
-    try {
         switch (getStreamRoomEntryDataStructureVersion(streamRoom_data_entry)) {
             case StreamRoomDataSchema::Version::UNKNOWN:
-                return UnknownStreamRoomFormatException().getCode();
+                throw UnknowStreamRoomFormatException();
             case StreamRoomDataSchema::Version::VERSION_5: {
                 auto streamRoom_data = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(streamRoom_data_entry.data());
                 auto dio = _streamRoomDataEncryptorV5.getDIOAndAssertIntegrity(streamRoom_data);
@@ -905,11 +945,17 @@ uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInf
                     dio.creatorUserId != streamRoom.lastModifier() ||
                     !core::TimestampValidator::validate(dio.timestamp, streamRoom.lastModificationDate())
                 ) {
-                    return StreamRoomDataIntegrityException().getCode();
+                    throw StreamRoomDataIntegrityException();
                 }
-                return 0;
+                return;
             }
         }
+    throw UnknowStreamRoomFormatException();
+}
+
+uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom) {
+    try {
+        assertStreamRoomDataIntegrity(streamRoom);
     } catch (const core::Exception& e) {
         return e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {

@@ -136,7 +136,6 @@ void WebSocketNotify::cancelNotifier() {
     }
     _data_to_notify.store(true);
     _notify_cv.notify_one();
-
     if (_consumer_thread.joinable()) {
         _consumer_thread.join();
     }

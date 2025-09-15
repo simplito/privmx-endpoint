@@ -134,7 +134,12 @@ int main(int argc, char** argv) {
             streamRoomId = streamList.readItems[0].streamRoomId;
         }
         auto pubKey = cryptoApi.derivePublicKey("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN");        
-        streamApi.subscribeForStreamEvents();
+        streamApi.subscribeFor({
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN, stream::EventSelectorType::CONTEXT_ID, context.contextId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE, stream::EventSelectorType::CONTEXT_ID, context.contextId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH, stream::EventSelectorType::CONTEXT_ID, context.contextId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH, stream::EventSelectorType::CONTEXT_ID, context.contextId)
+        });
         
         auto streamId = streamApi.createStream(streamRoomId);
         auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();

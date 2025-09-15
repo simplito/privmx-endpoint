@@ -34,7 +34,9 @@ public:
     DecryptedInternalContextEventDataV1 extractInternalEventData(const Poco::JSON::Object::Ptr& eventData);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    std::vector<std::string> subscribeForInternal(const std::vector<std::string>& subscriptionQueries, int notificationListenerId);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    void unsubscribeFromInternal(const std::vector<std::string>& subscriptionIds, int notificationListenerId);
     std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
     std::string buildSubscriptionQueryInternal(EventSelectorType selectorType, const std::string& selectorId);
 private:

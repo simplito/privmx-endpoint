@@ -26,6 +26,12 @@ namespace core {
 template<>
 stream::Settings VarDeserializer::deserialize<stream::Settings>(const Poco::Dynamic::Var& val, const std::string& name);
 
+template<>
+stream::EventType VarDeserializer::deserialize<stream::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+stream::EventSelectorType VarDeserializer::deserialize<stream::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

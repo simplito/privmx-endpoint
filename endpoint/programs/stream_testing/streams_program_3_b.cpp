@@ -128,7 +128,12 @@ int main(int argc, char** argv) {
         } else {
             streamRoomId = streamList.readItems[0].streamRoomId;
         } 
-        streamApi.subscribeForStreamEvents();
+        streamApi.subscribeFor({
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN, stream::EventSelectorType::CONTEXT_ID, context.contextId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE, stream::EventSelectorType::CONTEXT_ID, context.contextId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH, stream::EventSelectorType::CONTEXT_ID, context.contextId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH, stream::EventSelectorType::CONTEXT_ID, context.contextId)
+        });
         
         std::cout << "streamRoomId: " << streamRoomId << std::endl;
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
@@ -146,10 +151,11 @@ int main(int argc, char** argv) {
         }
         auto watchedStream = streamApi.joinStream(streamRoomId, streamsId, ssettings);
         
-        while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
+        // while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
         std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream leaveStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
         streamApi.leaveStream(watchedStream);
         std::this_thread::sleep_for(std::chrono::seconds(5));
+        connection.disconnect();
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
