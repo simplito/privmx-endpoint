@@ -460,7 +460,6 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
             PRIVMX_DEBUG("StreamProgram wx", "Connect", "Connection To bridge failed")
         }
         try {
-
             PRIVMX_DEBUG("StreamProgram wx", "Connect", "Getting StreamRoom")
             auto room = streamApi->getStreamRoom(streamRoomId);
             PRIVMX_DEBUG("StreamProgram wx", "Connect", "StreamRoom status code = " + std::to_string(room.statusCode));
@@ -471,14 +470,29 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
             bool stop = false;
             for (size_t i = 0;!stop;i++) {
                 PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Getting StreamRoomInfo")
-                auto streamRoomInfo = admin_streamApi->getStreamRoom(streamRoomId);
                 auto users_list = admin_connection->getContextUsers(contextId);
                 std::vector<privmx::endpoint::core::UserWithPubKey> users;
                 for(const auto& userInfo: users_list) {
                     users.push_back(userInfo.user);
                 }
+                privmx::endpoint::stream::StreamRoom streamRoomInfo;
                 try {
-
+                    streamRoomInfo = admin_streamApi->getStreamRoom(streamRoomId);
+                } catch (const privmx::endpoint::core::Exception& e) {
+                    PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Updating StreamRoomInfo")
+                    streamRoomIdInput->SetValue(admin_streamApi->createStreamRoom(
+                        contextId,
+                        users,
+                        users,
+                        core::Buffer::from("publicMeta"),
+                        core::Buffer::from("privateMeta"),
+                        std::nullopt
+                    ));
+                    stop = true;
+                    break;
+                }
+                try {
+                    
                     PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Updating StreamRoomInfo")
                     admin_streamApi->updateStreamRoom(
                         streamRoomId,

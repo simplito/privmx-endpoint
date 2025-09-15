@@ -44,7 +44,13 @@ void WebSocketNotify::remove(Int32 wschannelid) {
         on_close_all_channels();
     }
     if (_notifier_active) {
-        _consumer_thread.detach();
+        if(!_notifier_cancellation_token.isNull()) {
+            _notifier_cancellation_token->cancel();
+        }
+        _notify_cv.notify_one();
+        if (_consumer_thread.joinable()) {
+            _consumer_thread.join();
+        }
         _notifier_active = false;
     }
 }
@@ -130,4 +136,8 @@ void WebSocketNotify::cancelNotifier() {
     }
     _data_to_notify.store(true);
     _notify_cv.notify_one();
+
+    if (_consumer_thread.joinable()) {
+        _consumer_thread.join();
+    }
 }
