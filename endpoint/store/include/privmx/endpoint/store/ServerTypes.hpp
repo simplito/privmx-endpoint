@@ -256,6 +256,22 @@ ENDPOINT_SERVER_TYPE(StoreFileWriteModel)
     INT64_FIELD(thumbIndex)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StoreFileRandomWriteOperation)
+    STRING_FIELD(type)
+    INT64_FIELD(pos)
+    BINARYSTRING_FIELD(data)
+    BOOL_FIELD(truncate)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StoreFileWriteModelByOperations)
+    STRING_FIELD(fileId)
+    LIST_FIELD(operations, StoreFileRandomWriteOperation)
+    VAR_FIELD(meta) // meta: unknown
+    STRING_FIELD(keyId)
+    INT64_FIELD(version)
+    BOOL_FIELD(force)
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(StoreFileUpdateModel)
     STRING_FIELD(fileId)     
     VAR_FIELD(meta) // meta: unknown
@@ -269,6 +285,7 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(FileDefinition)
     INT64_FIELD(size)
     INT64_FIELD(checksumSize)
+    BOOL_FIELD(randomWrite)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(CreateRequestModel)
@@ -320,6 +337,22 @@ ENDPOINT_SERVER_TYPE(StoreFileDeletedEventData)
     STRING_FIELD(id)
     STRING_FIELD(contextId)
     STRING_FIELD(storeId)
+    STRING_FIELD(containerType)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StoreFileChange)
+    STRING_FIELD(type)
+    INT64_FIELD(pos)
+    INT64_FIELD(length)
+    BOOL_FIELD(truncate)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(StoreFileEventData, File)
+    STRING_FIELD(containerType)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(StoreFileUpdatedEventData, StoreFileEventData)
+    LIST_FIELD(changes, StoreFileChange)
 TYPE_END
 
 } // server

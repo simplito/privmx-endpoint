@@ -59,6 +59,10 @@ void ServerApi::storeFileWrite(const server::StoreFileWriteModel& model) {
     request("storeFileWrite", model);
 }
 
+void ServerApi::storeFileWrite(const server::StoreFileWriteModelByOperations& model) {
+    request("storeFileWrite", model);
+}
+
 void ServerApi::storeFileUpdate(const server::StoreFileUpdateModel& model) {
     request("storeFileUpdate", model);
 }

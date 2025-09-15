@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "privmx/endpoint/event/Events.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
-#include "privmx/endpoint/event/EventVarSerializer.hpp"
+#include "privmx/endpoint/event/VarSerializer.hpp"
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 

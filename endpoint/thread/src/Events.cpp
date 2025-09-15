@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
-#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
+#include "privmx/endpoint/thread/VarSerializer.hpp"
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 

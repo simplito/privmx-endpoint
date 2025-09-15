@@ -94,6 +94,7 @@ namespace server {
         LIST_FIELD(managers, std::string)
         LIST_FIELD(keys, privmx::endpoint::core::server::KeyEntry)
         INT64_FIELD(version)
+        STRING_FIELD(type)
         VAR_FIELD(policy)
     };
 
@@ -278,6 +279,7 @@ namespace server {
         void initialize() override {
         }
         STRING_FIELD(inboxId)
+        STRING_FIELD(type)
     };
 
     class InboxDeleteModel : public utils::TypedObject

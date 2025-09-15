@@ -87,6 +87,12 @@ ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynami
 template<>
 PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name);
 
+template<>
+core::EventType VarDeserializer::deserialize<core::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+core::EventSelectorType VarDeserializer::deserialize<core::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

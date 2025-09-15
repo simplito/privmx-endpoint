@@ -141,26 +141,26 @@ public:
                             const core::Buffer& privateMeta, const core::Buffer& data);
 
     /**
-     * Subscribes for the Thread module main events.
+     * Subscribe for the Thread events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
      */
-    void subscribeForThreadEvents();
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
 
     /**
-     * Unsubscribes from the Thread module main events.
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
      */
-    void unsubscribeFromThreadEvents();
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
 
     /**
-     * Subscribes for events in given Thread.
-     * @param thread ID of the Thread to subscribe
-     */    
-    void subscribeForMessageEvents(const std::string& threadId);
-
-    /**
-     * Unsubscribes from events in given Thread.
-     * @param thread ID of the Thread to unsubscribe
-     */    
-    void unsubscribeFromMessageEvents(const std::string& threadId);
+     * Generate subscription Query for the Thread events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     std::shared_ptr<ThreadApiImpl> getImpl() const { return _impl; }
     

@@ -53,7 +53,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_CREATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
     std::string storeId;
     EXPECT_NO_THROW({
@@ -85,6 +91,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_enabled) {
         EXPECT_EQ(event->type, "storeCreated");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::Store store = store::Events::extractStoreCreatedEvent(event).data;
             EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(store.publicMeta.stdString(),"public");
@@ -111,8 +118,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeCreated_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_CREATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
     std::string storeId;
     EXPECT_NO_THROW({
@@ -154,7 +167,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_UPDATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
     EXPECT_NO_THROW({
         storeApi->updateStore(
@@ -188,6 +207,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_enabled) {
         EXPECT_EQ(event->type, "storeUpdated");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::Store store = store::Events::extractStoreUpdatedEvent(event).data;
             EXPECT_EQ(store.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(store.publicMeta.stdString(),"public");
@@ -213,9 +233,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeUpdated_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
-     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+    EXPECT_NO_THROW({
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_UPDATE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
     EXPECT_NO_THROW({
         storeApi->updateStore(
@@ -259,7 +285,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_DELETE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
     EXPECT_NO_THROW({
         storeApi->deleteStore(
@@ -280,6 +312,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_enabled) {
         EXPECT_EQ(event->type, "storeDeleted");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::StoreDeletedEventData storeDeleted = store::Events::extractStoreDeletedEvent(event).data;
             EXPECT_EQ(storeDeleted.storeId, reader->getString("Store_1.storeId"));
         } else {
@@ -295,9 +328,15 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeDeleted_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
-     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+    EXPECT_NO_THROW({
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_DELETE, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
     EXPECT_NO_THROW({
         storeApi->deleteStore(
@@ -328,7 +367,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_STATS, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
     EXPECT_NO_THROW({
         storeApi->deleteFile(
@@ -349,6 +394,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_enabled) {
         EXPECT_EQ(event->type, "storeStatsChanged");
         EXPECT_EQ(event->channel, "store");
         if(store::Events::isStoreStatsChangedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::StoreStatsChangedEventData storeStat = store::Events::extractStoreStatsChangedEvent(event).data;
             EXPECT_EQ(storeStat.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeStat.contextId, reader->getString("Context_1.contextId"));
@@ -367,8 +413,14 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeStatsChanged_disabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForStoreEvents();
-        storeApi->unsubscribeFromStoreEvents();
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::STORE_STATS, 
+                store::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
     EXPECT_NO_THROW({
         storeApi->deleteFile(
@@ -399,7 +451,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_CREATE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
     });
     int64_t handle;
     EXPECT_NO_THROW({
@@ -437,6 +495,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_enabled) {
         EXPECT_EQ(event->type, "storeFileCreated");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileCreatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::File storeFile = store::Events::extractStoreFileCreatedEvent(event).data;
             EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeFile.size, 0);
@@ -454,10 +513,16 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileCreated_disabled) {
     std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
-    });
+    });    
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_CREATE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
     });
     int64_t handle;
     EXPECT_NO_THROW({
@@ -505,7 +570,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_UPDATE, 
+                store::EventSelectorType::FILE_ID,
+                reader->getString("File_1.info_fileId")
+            )
+        });
     });
     int64_t handle;
     EXPECT_NO_THROW({
@@ -544,7 +615,8 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_enabled) {
         EXPECT_EQ(event->type, "storeFileUpdated");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileUpdatedEvent(event)) {
-            store::File storeFile = store::Events::extractStoreFileUpdatedEvent(event).data;
+            EXPECT_EQ(event->subscriptions.size(), 1);
+            store::File storeFile = store::Events::extractStoreFileUpdatedEvent(event).data.file;
             EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
             EXPECT_EQ(storeFile.size, 0);
             EXPECT_EQ(storeFile.publicMeta.stdString(), "publicMeta");
@@ -562,9 +634,16 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
-    }, core::Exception);
+    EXPECT_NO_THROW({
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_UPDATE, 
+                store::EventSelectorType::FILE_ID,
+                reader->getString("File_1.info_fileId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
+    });
     int64_t handle;
     EXPECT_NO_THROW({
         handle = storeApi->updateFile(
@@ -612,7 +691,13 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_enabled) {
         eventQueue.waitEvent(); // pop libConnected form queue
     });
     EXPECT_NO_THROW({
-        storeApi->subscribeForFileEvents(reader->getString("Store_1.storeId"));;
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_DELETE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
     });
     EXPECT_NO_THROW({
         storeApi->deleteFile(
@@ -633,6 +718,7 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_enabled) {
         EXPECT_EQ(event->type, "storeFileDeleted");
         EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
         if(store::Events::isStoreFileDeletedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             store::StoreFileDeletedEventData storeFileDeleted = store::Events::extractStoreFileDeletedEvent(event).data;
             EXPECT_EQ(storeFileDeleted.fileId, reader->getString("File_1.info_fileId"));
             EXPECT_EQ(storeFileDeleted.storeId, reader->getString("File_1.info_storeId"));
@@ -650,9 +736,16 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_disabled) {
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
-    EXPECT_THROW({
-        storeApi->unsubscribeFromFileEvents(reader->getString("Store_1.storeId"));
-    }, core::Exception);
+    EXPECT_NO_THROW({
+        auto tmp = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_DELETE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
+        storeApi->unsubscribeFrom(tmp);
+    });
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_1.info_fileId")
@@ -672,6 +765,69 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileDeleted_disabled) {
     } else {
         std::cout << "Received Event with type " << event->type << std::endl;
         std::cout << "Expected null" << std::endl;
+        FAIL();
+    }
+}
+
+TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_changes) {
+    std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
+    EXPECT_NO_THROW({
+        eventQueue.waitEvent(); // pop libConnected form queue
+    });
+    EXPECT_NO_THROW({
+        storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(
+                store::EventType::FILE_UPDATE, 
+                store::EventSelectorType::STORE_ID,
+                reader->getString("Store_1.storeId")
+            )
+        });
+    });
+    std::string fileId;
+    
+    EXPECT_NO_THROW({
+        auto writeHandle = storeApi->createFile(reader->getString("Store_1.storeId"), core::Buffer::from("pub"), core::Buffer::from("priv"), 2*128*1024, true);  
+        storeApi->writeToFile(writeHandle, core::Buffer::from(std::string(2*128*1024, 'H')));
+        fileId = storeApi->closeFile(writeHandle);
+        auto RWHandle = storeApi->openFile(fileId);
+        storeApi->seekInFile(RWHandle, 128*1024);
+        storeApi->writeToFile(RWHandle, core::Buffer::from(std::string(64*1024, 'J')), true);
+        storeApi->closeFile(RWHandle);
+    });
+    EXPECT_NO_THROW({
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event != nullptr) {
+        EXPECT_EQ(event->connectionId, connection->getConnectionId());
+        EXPECT_EQ(event->type, "storeFileUpdated");
+        EXPECT_EQ(event->channel, "store/" + reader->getString("Store_1.storeId") + "/files");
+        if(store::Events::isStoreFileUpdatedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
+            auto eventData = store::Events::extractStoreFileUpdatedEvent(event).data;
+            store::File storeFile = eventData.file;
+            EXPECT_EQ(storeFile.info.storeId, reader->getString("Store_1.storeId"));
+            EXPECT_EQ(storeFile.size, (128+64)*1024);
+            EXPECT_EQ(storeFile.publicMeta.stdString(), "pub");
+            EXPECT_EQ(storeFile.privateMeta.stdString(), "priv");
+            EXPECT_EQ(eventData.changes.size(), 1);
+            if(eventData.changes.size() >= 1) {
+                auto change = eventData.changes[0];
+                EXPECT_EQ(change.pos, 128*1024);
+                EXPECT_EQ(change.length, 64*1024);
+                EXPECT_EQ(change.truncate, true);
+            } else {
+                FAIL();
+            }
+        } else {
+            FAIL();
+        }
+    } else {
         FAIL();
     }
 }

@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/EventMiddleware.hpp"
+#include <algorithm>
 
 using namespace privmx::endpoint::core;
 
@@ -20,7 +21,7 @@ int EventMiddleware::addNotificationEventListener(
     const std::function<void(const std::string& type, const NotificationEvent& notification)>& callback)
 {
     int id = _id.fetch_add(1);
-    _notificationsListeners.set(id, callback);
+    _notificationsListeners.set(id, std::make_pair(callback, std::vector<std::string>()));
     return id;
 }
 
@@ -34,6 +35,40 @@ int EventMiddleware::addDisconnectedEventListener(const std::function<void()>& c
     int id = _id.fetch_add(1);
     _disconnectedListeners.set(id, callback);
     return id;
+}
+
+void EventMiddleware::notificationEventListenerAddSubscriptionIds(int id, const std::vector<std::string>& subscriptionIds) {
+    _notificationsListeners.updateValueIfExist(
+        id, 
+        [&](const std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>& listener) {
+            std::vector<std::string> newSubscriptionIds(listener.second);
+            newSubscriptionIds.insert(newSubscriptionIds.end(), subscriptionIds.begin(), subscriptionIds.end());
+            return std::make_pair(listener.first, newSubscriptionIds);
+        }
+    );
+}
+
+void EventMiddleware::notificationEventListenerRemoveSubscriptionIds(int id, const std::vector<std::string>& subscriptionIds) {
+    _notificationsListeners.updateValueIfExist(
+        id, 
+        [&](const std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>& listener) {
+            std::vector<std::string> toRemove = subscriptionIds;
+            std::vector<std::string> newSubscriptionIds;
+            for(size_t i = 0; i < listener.second.size(); i++) {
+                if(toRemove.size() > 0) {
+                    auto it = std::find(toRemove.begin(), toRemove.end(), listener.second[i]);
+                    if(it == toRemove.end()) {
+                        toRemove.erase(it);
+                    } else {
+                        newSubscriptionIds.push_back(listener.second[i]);
+                    }
+                } else {
+                    newSubscriptionIds.push_back(listener.second[i]);
+                }
+            } 
+            return std::make_pair(listener.first, newSubscriptionIds);
+        }
+    );
 }
 
 void EventMiddleware::removeNotificationEventListener(int id) noexcept {
@@ -59,11 +94,15 @@ void EventMiddleware::emitNotificationEvent(const std::string& type, const Notif
     _notificationsListeners.forAll(
         [&](
             [[maybe_unused]] const int& i, 
-            const std::function<void(const std::string& type, const NotificationEvent& notification)>& listener
+            const std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>& listener
         ) {
             try {
-                if (listener) {
-                    listener(type, notification);
+                for(auto& s : notification.subscriptions) {
+                   if(std::find(listener.second.begin(), listener.second.end(), s) != listener.second.end()) {
+                        if(listener.first) {
+                            return listener.first(type, notification);
+                        }
+                   }
                 }
             } catch (...) {}
         });

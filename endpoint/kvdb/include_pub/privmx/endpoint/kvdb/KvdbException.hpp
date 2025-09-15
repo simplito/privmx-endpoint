@@ -55,6 +55,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknownKvdbFormatException, "U
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknownKvdbEntryFormatException, "Unknown item format", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbDataIntegrityException, "Failed kvdb data integrity check", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEntryDataIntegrityException, "Failed kvdb entry data integrity check", 0x0012)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, NotImplementedException, "Not Implemented", 0x00013)
+DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00014)
 
 } // kvdb
 } // endpoint

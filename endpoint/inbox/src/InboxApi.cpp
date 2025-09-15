@@ -18,7 +18,6 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/InboxApi.hpp"
 #include "privmx/endpoint/inbox/InboxApiImpl.hpp"
-#include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
 
@@ -40,7 +39,6 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
         connectionImpl->getHost(),
         connectionImpl->getUserPrivKey(),
         connectionImpl->getEventMiddleware(),
-        connectionImpl->getEventChannelManager(),
         connectionImpl->getHandleManager(),
         connectionImpl->getServerConfig().requestChunkSize
     ));
@@ -109,7 +107,7 @@ Inbox InboxApi::getInbox(const std::string& inboxId) {
 core::PagingList<inbox::Inbox> InboxApi::listInboxes(const std::string& contextId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::StructValidator<core::PagingQuery>::validate(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate", "lastModificationDate"}, "field:query ");
     try {
         return _impl->listInboxes(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -194,7 +192,7 @@ void InboxApi::deleteEntry(const std::string& inboxEntryId) {
 core::PagingList<inbox::InboxEntry> InboxApi::listEntries(const std::string& inboxId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(inboxId, "field:inboxId ");
-    core::StructValidator<core::PagingQuery>::validate(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
     try {
         return _impl->listEntries(inboxId, query);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -267,42 +265,30 @@ std::string InboxApi::closeFile(const int64_t handle) {
     }
 }
 
-void InboxApi::subscribeForInboxEvents() {
+std::vector<std::string> InboxApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     validateEndpoint();
     try {
-        return _impl->subscribeForInboxEvents();
+        return _impl->subscribeFor(subscriptionQueries);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void InboxApi::unsubscribeFromInboxEvents() {
+void InboxApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     validateEndpoint();
     try {
-        return _impl->unsubscribeFromInboxEvents();
+        return _impl->unsubscribeFrom(subscriptionIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void InboxApi::subscribeForEntryEvents(const std::string& inboxId) {
+std::string InboxApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
     try {
-        return _impl->subscribeForEntryEvents(inboxId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void InboxApi::unsubscribeFromEntryEvents(const std::string& inboxId) {
-    validateEndpoint();
-    core::Validator::validateId(inboxId, "field:inboxId ");
-    try {
-        return _impl->unsubscribeFromEntryEvents(inboxId);
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

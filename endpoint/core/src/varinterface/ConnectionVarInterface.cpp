@@ -22,7 +22,10 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
                                          {GetConnectionId, &ConnectionVarInterface::getConnectionId},
                                          {ListContexts, &ConnectionVarInterface::listContexts},
                                          {Disconnect, &ConnectionVarInterface::disconnect},
-                                         {GetContextUsers, &ConnectionVarInterface::getContextUsers}
+                                         {SubscribeFor, &ConnectionVarInterface::subscribeFor},
+                                         {UnsubscribeFrom, &ConnectionVarInterface::unsubscribeFrom},
+                                         {BuildSubscriptionQuery, &ConnectionVarInterface::buildSubscriptionQuery},
+                                         {ListContextUsers, &ConnectionVarInterface::listContextUsers}
                                         };
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
@@ -69,10 +72,11 @@ Poco::Dynamic::Var ConnectionVarInterface::disconnect(const Poco::Dynamic::Var& 
     return {};
 }
 
-Poco::Dynamic::Var ConnectionVarInterface::getContextUsers(const Poco::Dynamic::Var& args) {
-    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 1);
+Poco::Dynamic::Var ConnectionVarInterface::listContextUsers(const Poco::Dynamic::Var& args) {
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto result = _connection.getContextUsers(contextId);
+    auto pagingQuery = _deserializer.deserialize<PagingQuery>(argsArr->get(1), "pagingQuery");
+    auto result = _connection.listContextUsers(contextId, pagingQuery);
     return _serializer.serialize(result);
 }
 
@@ -80,6 +84,29 @@ Poco::Dynamic::Var ConnectionVarInterface::setUserVerifier(const std::function<P
     std::shared_ptr<VarUserVerifierInterface> verifier = std::make_shared<VarUserVerifierInterface>(verifierCallback, _deserializer, _serializer);
     _connection.setUserVerifier(verifier);
     return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto result = _connection.subscribeFor(subscriptionQueries);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    _connection.unsubscribeFrom(subscriptionIds);
+    return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::buildSubscriptionQuery(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto eventType = _deserializer.deserialize<core::EventType>(argsArr->get(0), "eventType");
+    auto selectorType = _deserializer.deserialize<core::EventSelectorType>(argsArr->get(1), "selectorType");
+    auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
+    auto result = _connection.buildSubscriptionQuery(eventType, selectorType, selectorId);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var ConnectionVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {

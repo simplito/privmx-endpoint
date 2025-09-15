@@ -111,7 +111,7 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandl
         uint64_t serverRequestChunkSize,
         std::shared_ptr<store::RequestApi> requestApi
 ) {
-    return _fileHandleManager.createFileWriteHandle(storeId, fileId, std::string(), size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi);
+    return _fileHandleManager.createFileWriteHandle(storeId, fileId, std::string(), size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi, false);
 }
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {
@@ -122,17 +122,11 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(i
 }
 
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::createFileReadHandle(
-        const std::string& fileId,
-        uint64_t fileSize,
-        uint64_t serverFileSize,
-        size_t chunkSize,
-        size_t serverChunkSize,
-        int64_t fileVersion,
-        const std::string& fileKey,
-        const std::string& fileHmac,
-        std::shared_ptr<store::ServerApi> server
+    const store::FileDecryptionParams& decryptionParams,
+    size_t serverChunkSize,
+    std::shared_ptr<store::ServerApi> server
 ) {
-    return _fileHandleManager.createFileReadHandle(fileId, std::string(), fileSize, serverFileSize, chunkSize, serverChunkSize, fileVersion, fileKey, fileHmac, server);
+    return _fileHandleManager.createFileReadHandle(decryptionParams, serverChunkSize, server);
 }
 bool InboxHandleManager::isFileReadHandle(int64_t fileHandleId) {
     auto fileHandle = _fileHandleManager.getFileHandle(fileHandleId);

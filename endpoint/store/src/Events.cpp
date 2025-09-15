@@ -16,7 +16,7 @@ limitations under the License.
 
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
+#include "privmx/endpoint/store/VarSerializer.hpp"
 #include "privmx/endpoint/store/StoreValidator.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
 

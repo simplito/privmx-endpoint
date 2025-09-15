@@ -22,8 +22,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 
@@ -36,9 +34,10 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV5.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/thread/ThreadProvider.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
+#include "privmx/endpoint/thread/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include "privmx/endpoint/core/ContainerKeyCache.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -53,7 +52,6 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const core::Connection& connection
     );
     ~ThreadApiImpl();
@@ -80,10 +78,9 @@ public:
     void updateMessage(const std::string& messageId, const core::Buffer& publicMeta,
                             const core::Buffer& privateMeta, const core::Buffer& data);
 
-    void subscribeForThreadEvents();
-    void unsubscribeFromThreadEvents();
-    void subscribeForMessageEvents(std::string threadId);
-    void unsubscribeFromMessageEvents(std::string threadId);
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string _createThreadEx(
         const std::string& contextId, 
@@ -94,7 +91,7 @@ private:
         const std::string& type,
         const std::optional<core::ContainerPolicy>& policies
     );
-    server::ThreadInfo getRawThreadFromCacheOrBridge(const std::string& threadId);
+    
     Thread _getThreadEx(const std::string& threadId, const std::string& type);
     core::PagingList<Thread> _listThreadsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
 
@@ -115,9 +112,14 @@ private:
     Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV5& threadData);
     ThreadDataSchema::Version getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry);
     std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Thread> decryptAndConvertThreadsDataToThreads(utils::List<server::ThreadInfo> threads);
-    Thread decryptAndConvertThreadDataToThread(server::ThreadInfo thread);
+    std::vector<Thread> validateDecryptAndConvertThreadsDataToThreads(utils::List<server::ThreadInfo> threads);
+    Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo thread);
+    void assertThreadDataIntegrity(server::ThreadInfo thread);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
+    core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
+
+
 
     dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
     dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
@@ -138,10 +140,34 @@ private:
     Message convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData);
     MessageDataSchema::Version getMessagesDataStructureVersion(server::Message message);
     std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey);
-    std::vector<Message> decryptAndConvertMessagesDataToMessages(server::ThreadInfo thread, utils::List<server::Message> messages);
-    Message decryptAndConvertMessageDataToMessage(server::ThreadInfo thread, server::Message message);
-    Message decryptAndConvertMessageDataToMessage(server::Message message);
+    std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(utils::List<server::Message> messages, const core::ModuleKeys& threadKeys);
+    Message validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleKeys& threadKeys);
+    core::ModuleKeys getMessageDecryptionKeys(server::Message message);
     uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);
+    Poco::Dynamic::Var encryptMessageData(
+        const std::string& threadId, 
+        const std::string& resourceId, 
+        const core::Buffer& publicMeta, 
+        const core::Buffer& privateMeta, 
+        const core::Buffer& data, 
+        const core::ModuleKeys& threadKeys
+    );
+    std::string sendMessageRequest(
+        const std::string& threadId, 
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta, 
+        const core::Buffer& data,
+        const core::ModuleKeys& keys
+    );
+    void updateMessageRequest(
+        const std::string& messageId, 
+        const std::string& resourceId, 
+        const std::string& threadId, 
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta, 
+        const core::Buffer& data,
+        const core::ModuleKeys& keys
+    );
 
     void assertThreadExist(const std::string& threadId);
     privfs::RpcGateway::Ptr _gateway;
@@ -155,9 +181,7 @@ private:
     MessageDataV2Encryptor _messageDataV2Encryptor;
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
-    ThreadProvider _threadProvider;
-    std::atomic_bool _threadCache;
-    core::SubscriptionHelper _threadSubscriptionHelper;
+    SubscriberImpl _subscriber;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _messageDeleterId;

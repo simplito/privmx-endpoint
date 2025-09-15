@@ -193,18 +193,6 @@ private:
         {thread_deleteMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->thread->deleteMessage(args);
         }},
-        {thread_subscribeForThreadEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread->subscribeForThreadEvents(args);
-        }},
-        {thread_unsubscribeFromThreadEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread->unsubscribeFromThreadEvents(args);
-        }},
-        {thread_subscribeForMessageEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread->subscribeForMessageEvents(args);
-        }},
-        {thread_unsubscribeFromMessageEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->thread->unsubscribeFromMessageEvents(args);
-        }},
         {store_createStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->store->createStore(args);
         }},
@@ -252,18 +240,6 @@ private:
         }},
         {store_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->store->closeFile(args);
-        }},
-        {store_subscribeForStoreEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store->subscribeForStoreEvents(args);
-        }},
-        {store_unsubscribeFromStoreEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store->unsubscribeFromStoreEvents(args);
-        }},
-        {store_subscribeForFileEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store->subscribeForFileEvents(args);
-        }},
-        {store_unsubscribeFromFileEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->store->unsubscribeFromFileEvents(args);
         }},
         {inbox_createInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->inbox->createInbox(args);
@@ -318,19 +294,6 @@ private:
         }},
         {inbox_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->inbox->closeFile(args);
-        }},
-
-        {inbox_subscribeForInboxEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox->subscribeForInboxEvents(args);
-        }},
-        {inbox_unsubscribeFromInboxEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox->unsubscribeFromInboxEvents(args);
-        }},
-        {inbox_subscribeForEntryEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox->subscribeForEntryEvents(args);
-        }},
-        {inbox_unsubscribeFromEntryEvents, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->inbox->unsubscribeFromEntryEvents(args);
         }},
     };
 
@@ -537,24 +500,6 @@ private:
             "\tjson format - [messageId]\n"
             "\t\tmessageId [STRING] - ID of the message to delete"
         },
-        {thread_subscribeForThreadEvents, 
-            "subscribeForThreadEvents JSON_ARRAY\n"
-            "\tjson format - []"
-        },
-        {thread_unsubscribeFromThreadEvents, 
-            "unsubscribeFromThreadEvents JSON_ARRAY\n"
-            "\tjson format - []"
-        },
-        {thread_subscribeForMessageEvents, 
-            "subscribeForMessageEvents JSON_ARRAY\n"
-            "\tjson format - [threadId]\n"
-            "\t\tthreadId [STRING] - ID of the Thread to subscribe"
-        },
-        {thread_unsubscribeFromMessageEvents, 
-            "unsubscribeFromMessageEvents JSON_ARRAY\n"
-            "\tjson format - [threadId]\n"
-            "\t\tthreadId [STRING] - ID of the Thread to unsubscribe"
-        },
         {store_createStore, 
             "createStore JSON_ARRAY\n"
             "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta]\n"
@@ -674,24 +619,6 @@ private:
             "closeFile JSON_ARRAY\n"
             "\tjson format - [fileHandle]\n"
             "\t\tfileHandle [NUMBER] - handle to read/write file data"
-        },
-        {store_subscribeForStoreEvents, 
-            "subscribeForStoreEvents JSON_ARRAY\n"
-            "\tjson format - []"
-        },
-        {store_unsubscribeFromStoreEvents, 
-            "unsubscribeFromStoreEvents JSON_ARRAY\n"
-            "\tjson format - []"
-        },
-        {store_subscribeForFileEvents, 
-            "subscribeForFileEvents JSON_ARRAY\n"
-            "\tjson format - [storeId]\n"
-            "\t\tstoreId [STRING] - ID of the Store to subscribe"
-        },
-        {store_unsubscribeFromFileEvents, 
-            "unsubscribeFromFileEvents JSON_ARRAY\n"
-            "\tjson format - [storeId]\n"
-            "\t\tstoreId [STRING] - ID of the Store to unsubscribe"
         },
         {inbox_createInbox, 
             "createInbox JSON_ARRAY\n"
@@ -826,25 +753,7 @@ private:
             "closeFile JSON_ARRAY\n"
             "\tjson format - [fileHandle]\n"
             "\t\tfileHandle [NUMBER] - handle to the file"
-        },
-        {inbox_subscribeForInboxEvents, 
-            "subscribeForInboxEvents JSON_ARRAY\n"
-            "\tjson format - []"
-        },
-        {inbox_unsubscribeFromInboxEvents, 
-            "unsubscribeFromInboxEvents JSON_ARRAY\n"
-            "\tjson format - []"
-        },
-        {inbox_subscribeForEntryEvents, 
-            "subscribeForEntryEvents JSON_ARRAY\n"
-            "\tjson format - [inboxId]\n"
-            "\t\tinboxId [STRING] - ID of the Inbox to subscribe"
-        },
-        {inbox_unsubscribeFromEntryEvents, 
-            "unsubscribeFromEntryEvents JSON_ARRAY\n"
-            "\tjson format - [inboxId]\n"
-            "\t\tinboxId [STRING] - ID of the Inbox to unsubscribe"
-        },
+        }
     };
 
     const std::unordered_map<func_enum, std::string> functions_endpoint_help_short_description = {
@@ -877,10 +786,6 @@ private:
         {thread_getMessage, "Gets a message by given message ID."},
         {thread_listMessages, "Gets a list of messages from a Thread."},
         {thread_deleteMessage, "Deletes a message by given message ID."},
-        {thread_subscribeForThreadEvents, "Subscribes for the Thread module main events."},
-        {thread_unsubscribeFromThreadEvents, "Unsubscribes from the Thread module main events."},
-        {thread_subscribeForMessageEvents, "Subscribes for events in given Thread."},
-        {thread_unsubscribeFromMessageEvents, "Unsubscribes from events in given Thread."},
         {store_createStore, "Creates a new Store in given Context."},
         {store_updateStore, "Updates an existing Store."},
         {store_getStore, "Gets a single Store by given Store ID."},
@@ -897,10 +802,6 @@ private:
         {store_writeToFile, "Writes a file data."},
         {store_seekInFile, "Moves read cursor."},
         {store_closeFile, "Closes the file handle."},
-        {store_subscribeForStoreEvents, "Subscribes for the Store module main events."},
-        {store_unsubscribeFromStoreEvents, "Unsubscribes from the Store module main events."},
-        {store_subscribeForFileEvents, "Subscribes for events in given Store."},
-        {store_unsubscribeFromFileEvents, "Unsubscribes from events in given Store."},
         {inbox_createInbox, "Creates a new Inbox."},
         {inbox_updateInbox, "Updates an existing Inbox."},
         {inbox_getInbox, "Gets a single Inbox by given Inbox ID."},
@@ -918,10 +819,6 @@ private:
         {inbox_readFromFile, "Reads file data."},
         {inbox_seekInFile, "Moves file's read cursor."},
         {inbox_closeFile, "Closes a file by given handle."},
-        {inbox_subscribeForInboxEvents, "Subscribes for the Inbox module main events."},
-        {inbox_unsubscribeFromInboxEvents, "Unsubscribes from the Inbox module main events."},
-        {inbox_subscribeForEntryEvents, "Subscribes for events in given Inbox."},
-        {inbox_unsubscribeFromEntryEvents, "Unsubscribes from events in given Inbox."},
     };
 
     const std::unordered_map<func_enum, std::string> functions_endpoint_action_description = {
@@ -949,10 +846,6 @@ private:
         {thread_getThread, "Getting thread"},
         {thread_listThreads, "Getting threads"},
         {thread_deleteThread, "Deleting thread"},
-        {thread_subscribeForThreadEvents, "Subscribing for thread events"},
-        {thread_unsubscribeFromThreadEvents, "Unsubscribing from thread events"},
-        {thread_subscribeForMessageEvents, "Subscribing for message events"},
-        {thread_unsubscribeFromMessageEvents, "Unsubscribing from message events"},
         {store_createStore, "Creating store"},
         {store_updateStore, "Updating store"},
         {store_getStore, "Getting store"},
@@ -969,10 +862,6 @@ private:
         {store_writeToFile, "Writing to store file"},
         {store_seekInFile, "Seeking in store file"},
         {store_closeFile, "Closing store file"},
-        {store_subscribeForStoreEvents, "Subscribing for store events"},
-        {store_unsubscribeFromStoreEvents, "Unsubscribing from store events"},
-        {store_subscribeForFileEvents, "Subscribing for file events"},
-        {store_unsubscribeFromFileEvents, "Unsubscribing from file events"},
         {inbox_createInbox, "Creating inbox"},
         {inbox_updateInbox, "Updating inbox"},
         {inbox_getInbox, "Getting inbox"},
@@ -990,10 +879,6 @@ private:
         {inbox_readFromFile, "Reading form file"},
         {inbox_seekInFile, "Seeking in file"},
         {inbox_closeFile, "Closing file"},
-        {inbox_subscribeForInboxEvents, "Subscribing for inbox events"},
-        {inbox_unsubscribeFromInboxEvents, "Unsubscribing from inbox events"},
-        {inbox_subscribeForEntryEvents, "Subscribing for entry events"},
-        {inbox_unsubscribeFromEntryEvents, "Unsubscribing from entry events"},
     };
 };
 

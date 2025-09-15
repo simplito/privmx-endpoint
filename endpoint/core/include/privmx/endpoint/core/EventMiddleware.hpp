@@ -35,6 +35,8 @@ public:
     );
     int addConnectedEventListener(const std::function<void()>& callback);
     int addDisconnectedEventListener(const std::function<void()>& callback);
+    void notificationEventListenerAddSubscriptionIds(int id, const std::vector<std::string>& subscriptionIds);
+    void notificationEventListenerRemoveSubscriptionIds(int id, const std::vector<std::string>& subscriptionIds);
     void removeNotificationEventListener(int id) noexcept;
     void removeConnectedEventListener(int id) noexcept;
     void removeDisconnectedEventListener(int id) noexcept;
@@ -47,7 +49,7 @@ private:
     int64_t _connectionId;
     utils::ThreadSaveMap<
         int, 
-        std::function<void(const std::string& type, const NotificationEvent& notification)>
+        std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>
     > _notificationsListeners;
     utils::ThreadSaveMap<int, std::function<void()>> _connectedListeners;
     utils::ThreadSaveMap<int, std::function<void()>> _disconnectedListeners;

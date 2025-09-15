@@ -408,3 +408,24 @@ TEST_F(CryptoTest, ExtKey_isPrivate) {
     });
     EXPECT_FALSE(ext_key.isPrivate());
 }
+
+TEST_F(CryptoTest, ExtKey_privateKey_operation_on_publicKey) {
+    privmx::endpoint::crypto::ExtKey extKeyRandom = privmx::endpoint::crypto::ExtKey::generateRandom();
+    std::string publicPartAsBase58 = extKeyRandom.getPublicPartAsBase58();
+    privmx::endpoint::crypto::ExtKey extKey = privmx::endpoint::crypto::ExtKey::fromBase58(publicPartAsBase58);
+    EXPECT_THROW({
+        extKey.derive(4);
+    }, core::Exception);
+    EXPECT_THROW({
+        extKey.deriveHardened(4);
+    }, core::Exception);
+    EXPECT_THROW({
+        extKey.getPrivatePartAsBase58();
+    }, core::Exception);
+    EXPECT_THROW({
+        extKey.getPrivateKey();
+    }, core::Exception);
+    EXPECT_THROW({
+        extKey.getPrivateEncKey();
+    }, core::Exception);
+}
