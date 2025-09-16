@@ -8,6 +8,7 @@
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/event/Events.hpp>
 #include <privmx/endpoint/event/EventException.hpp>
+#include <privmx/endpoint/event/Constants.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/crypto/Crypto.hpp>
@@ -48,6 +49,7 @@ protected:
     Poco::Util::IniFileConfiguration::Ptr reader;
 };
 
+
 TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
     auto connection2 = core::Connection::connect(
         reader->getString("Login.user_2_privKey"), 
@@ -84,8 +86,20 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
         FAIL();
     }
     EXPECT_NO_THROW({
-        eventApi->subscribeForCustomEvents(reader->getString("Context_1.contextId"), "testing");
-        eventApi2.subscribeForCustomEvents(reader->getString("Context_1.contextId"), "testing");
+        eventApi->subscribeFor({
+            eventApi->buildSubscriptionQuery(
+                "testing", 
+                event::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        eventApi2.subscribeFor({
+            eventApi2.buildSubscriptionQuery(
+                "testing", 
+                event::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     });
     EXPECT_NO_THROW({
         std::vector<privmx::endpoint::core::UserWithPubKey> users;
@@ -112,10 +126,13 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
         EXPECT_EQ(event->type, "contextCustom");
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
         if(event::Events::isContextCustomEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);
             EXPECT_EQ(customContextEvent.data.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(customContextEvent.data.userId, reader->getString("Login.user_1_id"));
             EXPECT_EQ(customContextEvent.data.payload.stdString(), "test event");
+            EXPECT_EQ(customContextEvent.data.statusCode, 0);
+            EXPECT_EQ(customContextEvent.data.schemaVersion, event::CURRENT_EVENT_DATA_SCHEMA_VERSION);
         } else {
             FAIL();
         }
@@ -133,10 +150,13 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_enabled) {
         EXPECT_EQ(event->type, "contextCustom");
         EXPECT_EQ(event->channel, "context/" + reader->getString("Context_1.contextId") + "/testing");
         if(event::Events::isContextCustomEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
             event::ContextCustomEvent customContextEvent = event::Events::extractContextCustomEvent(event);
             EXPECT_EQ(customContextEvent.data.contextId, reader->getString("Context_1.contextId"));
             EXPECT_EQ(customContextEvent.data.userId, reader->getString("Login.user_1_id"));
             EXPECT_EQ(customContextEvent.data.payload.stdString(), "test event");
+            EXPECT_EQ(customContextEvent.data.statusCode, 0);
+            EXPECT_EQ(customContextEvent.data.schemaVersion, event::CURRENT_EVENT_DATA_SCHEMA_VERSION);
         } else {
             FAIL();
         }
@@ -160,11 +180,24 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_disabled) {
         FAIL();
     }
     EXPECT_THROW({
-        eventApi->unsubscribeFromCustomEvents(reader->getString("Context_1.contextId"), "internal");
+        eventApi->subscribeFor({
+            eventApi->buildSubscriptionQuery(
+                "internal", 
+                event::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
     }, event::ForbiddenChannelNameException);
-    EXPECT_THROW({
-        eventApi->unsubscribeFromCustomEvents(reader->getString("Context_1.contextId"), "testing");
-    }, core::Exception);
+    EXPECT_NO_THROW({
+        auto tmp = eventApi->subscribeFor({
+            eventApi->buildSubscriptionQuery(
+                "testing", 
+                event::EventSelectorType::CONTEXT_ID,
+                reader->getString("Context_1.contextId")
+            )
+        });
+        eventApi->unsubscribeFrom(tmp);
+    });
     EXPECT_NO_THROW({
         std::vector<privmx::endpoint::core::UserWithPubKey> users;
         users.push_back(privmx::endpoint::core::UserWithPubKey{.userId=reader->getString("Login.user_1_id"), .pubKey=reader->getString("Login.user_1_pubKey")});
@@ -192,3 +225,6 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_disabled) {
         FAIL();
     }
 }
+
+// context/custom/testing|containerId=a91334b8-9c8c-4125-bebc-f32b996f9bdd
+// context/custom/testing|contextId=a91334b8-9c8c-4125-bebc-f32b996f9bdd

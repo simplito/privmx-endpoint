@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
-#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/thread/ThreadValidator.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
@@ -32,7 +31,6 @@ ThreadApi ThreadApi::create(core::Connection& connection) {
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
             connection
         ));
         return ThreadApi(impl);
@@ -116,7 +114,7 @@ Thread ThreadApi::getThread(const std::string& threadId) {
 core::PagingList<Thread> ThreadApi::listThreads(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<core::PagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "lastModificationDate", "lastMsgDate"}, "field:pagingQuery ");
     try {
         return _impl->listThreads(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -139,7 +137,7 @@ Message ThreadApi::getMessage(const std::string& messageId) {
 core::PagingList<Message> ThreadApi::listMessages(const std::string& threadId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(threadId, "field:threadId ");
-    core::StructValidator<core::PagingQuery>::validate(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "updates"}, "field:pagingQuery ");
     try {
         return _impl->listMessages(threadId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -181,42 +179,30 @@ void ThreadApi::updateMessage(const std::string& messageId, const core::Buffer& 
     }
 }
 
-void ThreadApi::subscribeForThreadEvents() {
+std::vector<std::string> ThreadApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     validateEndpoint();
     try {
-        return _impl->subscribeForThreadEvents();
+        return _impl->subscribeFor(subscriptionQueries);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void ThreadApi::unsubscribeFromThreadEvents() {
+void ThreadApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     validateEndpoint();
     try {
-        return _impl->unsubscribeFromThreadEvents();
+        return _impl->unsubscribeFrom(subscriptionIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void ThreadApi::subscribeForMessageEvents(const std::string& threadId) {
+std::string ThreadApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     validateEndpoint();
-    core::Validator::validateId(threadId, "field:threadId ");
     try {
-        return _impl->subscribeForMessageEvents(threadId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ThreadApi::unsubscribeFromMessageEvents(const std::string& threadId) {
-    validateEndpoint();
-    core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return _impl->unsubscribeFromMessageEvents(threadId);
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

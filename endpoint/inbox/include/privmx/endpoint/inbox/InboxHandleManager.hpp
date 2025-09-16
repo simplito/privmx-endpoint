@@ -75,15 +75,9 @@ public:
         std::shared_ptr<store::RequestApi> requestApi
     );
     std::shared_ptr<store::FileWriteHandle> getFileWriteHandle(int64_t fileHandleId);
-    std::shared_ptr<store::FileReadHandle> createFileReadHandle(
-        const std::string& fileId,
-        uint64_t fileSize,
-        uint64_t serverFileSize,
-        size_t chunkSize,
+    std::shared_ptr<store::FileReadHandle> createFileReadHandle( 
+        const store::FileDecryptionParams& decryptionParams,
         size_t serverChunkSize,
-        int64_t fileVersion,
-        const std::string& fileKey,
-        const std::string& fileHmac,
         std::shared_ptr<store::ServerApi> server
     );
     bool isFileReadHandle(int64_t fileHandleId);

@@ -21,6 +21,8 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Constants.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
+#include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/EventBuilder.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -53,10 +55,9 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
-    _eventChannelManager = std::make_shared<EventChannelManager>(_gateway, _eventMiddleware);
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
@@ -65,11 +66,11 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         return utils::TypedObjectFactory::createObjectFromVar<server::ContextGetResult>(_gateway->request("context.contextGet", model)).context();
     });
     if (_gateway->isConnected()) {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
-        std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
@@ -81,6 +82,9 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(
+        std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
+    _subscriber = std::make_shared<SubscriberImpl>(_gateway);
     assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
@@ -105,10 +109,9 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
-    _eventChannelManager = std::make_shared<EventChannelManager>(_gateway, _eventMiddleware);
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
@@ -118,11 +121,11 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         return context;
     });
     if (_gateway->isConnected()) {
-        std::shared_ptr<LibConnectedEvent> event(new LibConnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     }
     _eventMiddleware->addDisconnectedEventListener([&] {
-        std::shared_ptr<LibDisconnectedEvent> event(new LibDisconnectedEvent());
+        auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
@@ -134,6 +137,9 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(
+        std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
+    _subscriber = std::make_shared<SubscriberImpl>(_gateway);
     assertServerVersion();
     PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
 }
@@ -158,28 +164,29 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
     return PagingList<Context>{.totalAvailable = response.count(), .readItems = contexts};
 }
 
-std::vector<UserInfo> ConnectionImpl::getContextUsers(const std::string& contextId) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, getContextUsers)
-    auto model = utils::TypedObjectFactory::createNewObject<server::ContextGetUsersModel>();
+PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery) {
+    auto model = utils::TypedObjectFactory::createNewObject<server::ContextListUsersModel>();
     model.contextId(contextId);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data)
-    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextGetUserResult>(
-        _gateway->request("context.contextGetUsers", model));
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getContextUsers, data send)
-    std::vector<UserInfo> usersInfo {};
+    ListQueryMapper::map(model, pagingQuery);
+    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextListUsersResult>(
+        _gateway->request("context.contextListUsers", model));
+    PagingList<UserInfo> result;
+    result.readItems.reserve(response.users().size());
     for (auto user : response.users()) {
-        usersInfo.push_back(
-            UserInfo{
-                .user=UserWithPubKey{
-                    .userId=user.id(), 
-                    .pubKey=user.pub()
-                }, 
-                .isActive= user.status() == "active"
-            }
-        );
+        result.readItems.push_back(UserInfo {
+            .user=UserWithPubKey{
+                .userId=user.id(), 
+                .pubKey=user.pub()
+            }, 
+            .isActive= user.status() == "active",
+            .lastStatusChange = user.lastStatusChangeEmpty() ? std::nullopt : std::make_optional(UserStatusChange{
+                .action = user.lastStatusChange().action(),
+                .timestamp = user.lastStatusChange().timestamp()
+            })
+        });
     }
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, getContextUsers)
-    return usersInfo;
+    result.totalAvailable = response.count();
+    return result;
 }
 
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
@@ -187,12 +194,27 @@ void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> veri
     _userVerifier = std::make_shared<UserVerifier>(verifier);
 }
 
+std::vector<std::string> ConnectionImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    auto result = _subscriber->subscribeFor(subscriptionQueries);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
+    return result;
+}
+
+void ConnectionImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    _subscriber->unsubscribeFrom(subscriptionIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
+}
+
+std::string ConnectionImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
+}
+
 void ConnectionImpl::disconnect() {
     if (!_gateway.isNull()) {
         _gateway->destroy();
     }
     _gateway.reset();
-    std::shared_ptr<LibPlatformDisconnectedEvent> event(new LibPlatformDisconnectedEvent());
+    auto event = EventBuilder::buildLibEvent<LibPlatformDisconnectedEvent>();
     _eventMiddleware->emitApiEvent(event);
 }
 
@@ -269,5 +291,28 @@ void ConnectionImpl::assertServerVersion() {
             "PrivMX Ednpoint library current version: " + ENDPOINT_VERSION + "\n"
             "Bridge Server minimal expected version: " + MINIMUM_REQUIRED_BRIDGE_VERSION
         );
+    }
+}
+
+void ConnectionImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    auto subscriptionQuery = _subscriber->getSubscriptionQuery(notification.subscriptions);
+    if(!subscriptionQuery.has_value()) {
+        return;
+    }
+    if (type == "contextUserAdded") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+        auto data = Mapper::mapToContextUserEventData(raw);
+        auto event = EventBuilder::buildEvent<ContextUserAddedEvent>("context/userAdded", data, notification);
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "contextUserRemoved") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+        auto data = Mapper::mapToContextUserEventData(raw);
+        auto event = EventBuilder::buildEvent<ContextUserRemovedEvent>("context/userRemoved", data, notification);
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "contextUserStatusChanged") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUsersStatusChangeEventData>(notification.data);
+        auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
+        auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
+        _eventMiddleware->emitApiEvent(event);
     }
 }

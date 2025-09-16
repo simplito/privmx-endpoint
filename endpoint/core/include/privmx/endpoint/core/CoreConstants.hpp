@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <cstdint>
 
+#define INTERNAL_EVENT_CHANNEL_NAME "internal"
 namespace privmx {
 namespace endpoint {
 namespace core {

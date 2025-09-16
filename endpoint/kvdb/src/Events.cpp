@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
-#include "privmx/endpoint/kvdb/KvdbVarSerializer.hpp"
+#include "privmx/endpoint/kvdb/VarSerializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;

@@ -16,9 +16,7 @@ limitations under the License.
 
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
-#include "privmx/endpoint/store/StoreVarSerializer.hpp"
 #include "privmx/endpoint/store/StoreValidator.hpp"
-#include "privmx/endpoint/core/EventVarSerializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -34,11 +32,8 @@ StoreApi StoreApi::create(core::Connection& connection) {
             connectionImpl->getHost(),
             connectionImpl->getUserPrivKey(),
             requestApi,
-            // std::shared_ptr<FilesUtils>(new FilesUtils(requestApi)),
             std::shared_ptr<FileDataProvider>(new FileDataProvider(serverApi)),
             connectionImpl->getEventMiddleware(),
-            connectionImpl->getEventChannelManager(),
-            // connectionImpl->getDataResolver(),
             connectionImpl->getHandleManager(),
             connection,
             connectionImpl->getServerConfig().requestChunkSize
@@ -121,7 +116,7 @@ Store StoreApi::getStore(const std::string& storeId) {
 core::PagingList<Store> StoreApi::listStores(const std::string& contextId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<core::PagingQuery>(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate", "lastModificationDate", "lastFileDate"}, "field:query ");
     try {
         return _impl->listStores(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -141,12 +136,12 @@ void StoreApi::deleteFile(const std::string& fileId) {
     }
 }
 
-int64_t StoreApi::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
+int64_t StoreApi::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size, bool randomWriteSupport) {
     validateEndpoint();
     core::Validator::validateId(storeId, "field:storeId ");
     core::Validator::validateNumberNonNegative(size, "field:size ");
     try {
-        return _impl->createFile(storeId, publicMeta, privateMeta, size);
+        return _impl->createFile(storeId, publicMeta, privateMeta, size, randomWriteSupport);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -176,10 +171,10 @@ int64_t StoreApi::openFile(const std::string& fileId) {
     }
 }
 
-void StoreApi::writeToFile(const int64_t handle, const core::Buffer& dataChunk) {
+void StoreApi::writeToFile(const int64_t handle, const core::Buffer& dataChunk, bool truncate) {
     validateEndpoint();
     try {
-        return _impl->writeToFile(handle, dataChunk);
+        return _impl->writeToFile(handle, dataChunk, truncate);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -230,51 +225,9 @@ File StoreApi::getFile(const std::string& fileId) {
 
 core::PagingList<File> StoreApi::listFiles(const std::string& storeId, const core::PagingQuery& listQuery) {
     core::Validator::validateId(storeId, "field:storeId ");
-    core::Validator::validateClass<core::PagingQuery>(listQuery, "field:listQuery ");
+    core::Validator::validatePagingQuery(listQuery, {"createDate", "updates"}, "field:listQuery ");
     try {
         return _impl->listFiles(storeId, listQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::subscribeForStoreEvents() {
-    validateEndpoint();
-    try {
-        return _impl->subscribeForStoreEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::unsubscribeFromStoreEvents() {
-    validateEndpoint();
-    try {
-        return _impl->unsubscribeFromStoreEvents();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::subscribeForFileEvents(const std::string& storeId) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->subscribeForFileEvents(storeId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StoreApi::unsubscribeFromFileEvents(const std::string& storeId) {
-    validateEndpoint();
-    core::Validator::validateId(storeId, "field:storeId ");
-    try {
-        return _impl->unsubscribeFromFileEvents(storeId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -286,6 +239,46 @@ void StoreApi::updateFileMeta(const std::string& fileId, const core::Buffer& pub
     core::Validator::validateId(fileId, "field:fileId ");
     try {
         return _impl->updateFileMeta(fileId, publicMeta, privateMeta);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StoreApi::syncFile(const int64_t handle) {
+    validateEndpoint();
+    try {
+        return _impl->syncFile(handle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::vector<std::string> StoreApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    validateEndpoint();
+    try {
+        return _impl->subscribeFor(subscriptionQueries);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StoreApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    validateEndpoint();
+    try {
+        return _impl->unsubscribeFrom(subscriptionIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string StoreApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

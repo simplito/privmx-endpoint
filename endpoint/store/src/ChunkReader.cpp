@@ -10,82 +10,53 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/store/ChunkReader.hpp"
-
-#include <privmx/crypto/Crypto.hpp>
-#include <Poco/ByteOrder.h>
-
 #include "privmx/endpoint/store/StoreException.hpp"
-#include "privmx/endpoint/store/StoreTypes.hpp"
-#include <privmx/utils/Utils.hpp>
-#include <iostream>
 
 using namespace privmx::endpoint::store;
 
 ChunkReader::ChunkReader(
-    std::shared_ptr<store::IChunkDataProvider> chunkDataProvider,
-    size_t chunkSize,
-    const std::string& key,
-    const std::string& hmac
+    std::shared_ptr<IChunkDataProvider> chunkDataProvider,
+    std::shared_ptr<IChunkEncryptor> chunkEncryptor,
+    std::shared_ptr<IHashList> hashList,
+    const store::FileDecryptionParams& decryptionParams
 )
     : _chunkDataProvider(chunkDataProvider),
-    _chunkSize(chunkSize),
-    _key(key)
+    _chunkEncryptor(chunkEncryptor),
+    _hashList(hashList),
+    _chunkSize(chunkEncryptor->getPlainChunkSize()),
+    _version(decryptionParams.version),
+    _lastChunk(std::nullopt)
 {
-    _checksums = _chunkDataProvider->getChecksums();
-    if (hmac != crypto::Crypto::hmacSha256(_key, _checksums)) {
-        throw FileInvalidChecksumException();
+    if(decryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(decryptionParams.originalSize)) {
+        throw FileCorruptedException();
     }
 }
 
-std::string ChunkReader::getChunk(uint32_t chunkNumber) {
-    if(!_lastChunkNumber.has_value() || _lastChunkNumber.value() != chunkNumber) {
-        _lastChunkDecrypted = decryptChunk(_chunkDataProvider->getChunk(chunkNumber), chunkNumber);
-        _lastChunkNumber = chunkNumber;
-    }
-    return _lastChunkDecrypted;
+size_t ChunkReader::filePosToFileChunkIndex(size_t position) {
+    return position / _chunkEncryptor->getPlainChunkSize();
 }
 
-size_t ChunkReader::getChunkSize() {
-    return _chunkSize;
+size_t ChunkReader::filePosToPosInFileChunk(size_t position) {
+    return position % _chunkEncryptor->getPlainChunkSize();
 }
 
-std::string ChunkReader::decryptChunk(std::string encryptedChunk, uint32_t chunkNumber) {
-    std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkNumberToBE(chunkNumber));
-    std::string hmac = encryptedChunk.substr(0, HMAC_SIZE);
-    if (_checksums.substr(chunkNumber * HMAC_SIZE, HMAC_SIZE) != hmac) {
-        throw FileChunkInvalidChecksumException();
+std::string ChunkReader::getDecryptedChunk(size_t index) {
+    if(!_lastChunk.has_value() || _lastChunk->index != index) {
+        std::string chunk = _chunkDataProvider->getChunk(index, _version);
+        std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
+        _lastChunk = ChunkReader::DecryptedChunk{plain, index};
     }
-    std::string hmac2 = crypto::Crypto::hmacSha256(chunkKey, encryptedChunk.substr(HMAC_SIZE));
-    if (hmac != hmac2) {
-        throw FileChunkInvalidCipherChecksumException();
-    }
-    std::string iv = encryptedChunk.substr(HMAC_SIZE, IV_SIZE);
-    std::string chunk = crypto::Crypto::aes256CbcPkcs7Decrypt(encryptedChunk.substr(HMAC_SIZE + IV_SIZE), chunkKey, iv);
-    return chunk;
+    return _lastChunk->decryptedData;
 }
 
-std::string ChunkReader::chunkNumberToBE(uint32_t chunkNumber) {
-    uint32_t seq_be = Poco::ByteOrder::toBigEndian(chunkNumber);
-    return std::string((char *)&seq_be, 4);
+void ChunkReader::sync(const store::FileDecryptionParams& newParms) {
+    _version = newParms.version;
+    _lastChunk = std::nullopt;
 }
 
-uint64_t ChunkReader::getEncryptedFileSize(uint64_t fileSize) {
-    if (fileSize == 0) {
-        return 0;
+void ChunkReader::update(int64_t newfileVersion, size_t index) {
+    _version = newfileVersion;
+    if(_lastChunk.has_value() && _lastChunk->index == index) {
+        _lastChunk = std::nullopt;
     }
-    Poco::Int64 parts = (fileSize + _chunkSize - 1) / _chunkSize;
-    Poco::Int64 lastChunkSize = fileSize % _chunkSize;
-    if (lastChunkSize == 0) {
-        lastChunkSize = _chunkSize;
-    }
-    // 16 iv + 32 hmac + max 16 padding
-    Poco::Int64 fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
-    Poco::Int64 lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
-    Poco::Int64 encryptedFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) + lastChunkSize + HMAC_SIZE + IV_SIZE + lastChunkPaddingSize;
-    return encryptedFileSize;
-}
-
-size_t ChunkReader::getEncryptedChunkSize(size_t chunkSize) {
-    Poco::Int64 CHUNK_PADDINGSize = CHUNK_PADDING - (chunkSize % CHUNK_PADDING);
-    return chunkSize + CHUNK_PADDINGSize + HMAC_SIZE + IV_SIZE;
 }

@@ -15,8 +15,8 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 
 #include "privmx/endpoint/inbox/InboxApi.hpp"
-#include "privmx/endpoint/inbox/InboxVarDeserializer.hpp"
-#include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
+#include "privmx/endpoint/inbox/VarDeserializer.hpp"
+#include "privmx/endpoint/inbox/VarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -43,10 +43,13 @@ public:
         ReadFromFile = 15,
         SeekInFile = 16,
         CloseFile = 17,
-        SubscribeForInboxEvents = 18,
-        UnsubscribeFromInboxEvents = 19,
-        SubscribeForEntryEvents = 20,
-        UnsubscribeFromEntryEvents = 21
+        Deleted_Function_0 = 18,
+        Deleted_Function_1 = 19,
+        Deleted_Function_2 = 20,
+        Deleted_Function_3 = 21,
+        SubscribeFor = 22,
+        UnsubscribeFrom = 23,
+        BuildSubscriptionQuery = 24,
     };
 
     InboxApiVarInterface(core::Connection connection, thread::ThreadApi threadApi, store::StoreApi storeApi, const core::VarSerializer& serializer)
@@ -70,10 +73,9 @@ public:
     Poco::Dynamic::Var readFromFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var seekInFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var closeFile(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForInboxEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromInboxEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForEntryEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromEntryEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

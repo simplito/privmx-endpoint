@@ -167,6 +167,22 @@ struct KvdbEntry {
     int64_t schemaVersion;
 };
 
+enum EventType: int64_t {
+    KVDB_CREATE = 0,
+    KVDB_UPDATE = 1,
+    KVDB_DELETE = 2,
+    KVDB_STATS = 3,
+    ENTRY_CREATE = 4,
+    ENTRY_UPDATE = 5,
+    ENTRY_DELETE = 6,
+    COLLECTION_CHANGE = 7,
+};
+
+enum EventSelectorType: int64_t {
+    CONTEXT_ID = 0,
+    KVDB_ID = 1
+};
+
 }  // namespace kvdb
 }  // namespace endpoint
 }  // namespace privmx

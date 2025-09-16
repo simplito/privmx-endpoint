@@ -204,6 +204,7 @@ TYPE_END
 ENDPOINT_CLIENT_TYPE(KvdbDeletedEntryEventData)
     STRING_FIELD(kvdbEntryKey)
     STRING_FIELD(kvdbId)
+    STRING_FIELD(containerType)
 TYPE_END
 
 ENDPOINT_CLIENT_TYPE(KvdbStatsEventData)
@@ -212,7 +213,10 @@ ENDPOINT_CLIENT_TYPE(KvdbStatsEventData)
     STRING_FIELD(type)
     INT64_FIELD(lastEntryDate)
     INT64_FIELD(entries)
+TYPE_END
 
+ENDPOINT_SERVER_TYPE_INHERIT(KvdbEntryEventData, KvdbEntryInfo)
+    STRING_FIELD(containerType)
 TYPE_END
 
 } // server

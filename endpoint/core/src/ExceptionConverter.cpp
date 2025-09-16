@@ -25,19 +25,19 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0xFFFF:
             // Server Request
             switch (code_second_two_bytes) {
-                case 0xFFFF8043: // -32700 PARSE_ERROR
+                case 0x8043: // -32700 PARSE_ERROR
                     throw server::ParseErrorException(e.getData());
-                case 0xFFFF80A8: // -32600 INVALID_REQUEST
+                case 0x80A8: // -32600 INVALID_REQUEST
                     throw server::InvalidRequestAException(e.getData());
-                case 0xFFFF80A7: // -32601 METHOD_NOT_FOUND
+                case 0x80A7: // -32601 METHOD_NOT_FOUND
                     throw server::MethodNotFoundException(e.getData());
-                case 0xFFFF80A6: // -32602 INVALID_PARAMS
+                case 0x80A6: // -32602 INVALID_PARAMS
                     throw server::InvalidParamsException(e.getData());
-                case 0xFFFF80A5: // -32603 INTERNAL_ERROR
+                case 0x80A5: // -32603 INTERNAL_ERROR
                     throw server::InternalErrorException(e.getData());
-                case 0xFFFF80A4: // -32604 NOT_YET_INSTALLED
+                case 0x80A4: // -32604 NOT_YET_INSTALLED
                     throw server::InvalidRequestBException(e.getData());
-                case 0xFFFF80A3: // -32605 ONLY_POST_METHOD_ALLOWED
+                case 0x80A3: // -32605 ONLY_POST_METHOD_ALLOWED
                     throw server::InvalidRequestCException(e.getData());
                 default:
                     throw server::EndpointServerRequestException(e.getData());
@@ -46,16 +46,24 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             switch (code_second_two_bytes) {
                 case 0x0030: // ACCESS_DENIED
                     throw server::AccessDeniedException(e.getData());
+                case 0x0070: // INVALID_KEY
+                    throw server::InvalidKeyException(e.getData());
                 case 0x6001: // THREAD_DOES_NOT_EXIST
                     throw server::ThreadDoesNotExistException(e.getData());
+                case 0x6002: // INVALID_THREAD_KEY
+                    throw server::InvalidThreadKeyException(e.getData());
                 case 0x600D: // THREAD_MESSAGE_DOES_NOT_EXIST
                     throw server::ThreadMessageDoesNotExistException(e.getData());
+                case 0x6015: // INVALID_KEY_ID
+                    throw server::InvalidKeyIdException(e.getData());
                 case 0x6116: // CONTEXT_DOES_NOT_EXIST
                     throw server::ContextDoesNotExistException(e.getData());
                 case 0x6117: // STORE_DOES_NOT_EXIST
                     throw server::StoreDoesNotExistException(e.getData());
                 case 0x6118: // STORE_FILE_DOES_NOT_EXIST
                     throw server::StoreFileDoesNotExistException(e.getData());
+                case 0x6128: // STORE_FILE_VERSION_MISMATCH
+                    throw server::StoreFileVersionMismatchException(e.getData());
                 case 0x611E: // INBOX_DOES_NOT_EXIST
                     throw server::InboxDoesNotExistException(e.getData());
                 case 0x613C: // KVDB_DOES_NOT_EXIST
@@ -184,8 +192,6 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw crypto::InvalidVersionException(e.what());
                 case 0x0020:
                     throw crypto::InvalidParentFingerprintException(e.what());
-                case 0x0021:
-                    throw crypto::DeriveFromPublicKeyNotImplementedException(e.what());
                 case 0x0022:
                     throw crypto::InvalidResultSizeException(e.what());
                 case 0x0023:
@@ -200,6 +206,10 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw crypto::PrivmxDriverCryptoException(e.what());
                 case 0x0028:
                     throw crypto::PrivmxDriverEccException(e.what());
+                case 0x0029:
+                    throw crypto::GivenPublicKeyDoesNotMatchWithSignatureException(e.what());
+                case 0x002A:
+                    throw crypto::ExtKeyDoesNotHoldPrivateKeyException(e.what());
                 default:
                     throw crypto::EndpointCryptoException(e.what());
             }

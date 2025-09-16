@@ -92,20 +92,39 @@ struct UserWithPubKey {
 };
 
 /**
- * Contains Information about user
- */
+ * Contains information about the change of user status.
+*/
+struct UserStatusChange {
+    /**
+     * User status change action, which can be "login" or "logout"
+    */
+    std::string action;
+
+    /**
+     * Timestamp of the change
+    */
+    int64_t timestamp;
+};
+
+/**
+ * Contains information about the user, their status, and the last status change.
+*/
 struct UserInfo {
     /**
-     * User publicKey and userId
-     */
+     * User public key and their ID
+    */
     UserWithPubKey user;
 
     /**
-     *  is user connected to bridge
-     */
+     * Determines whether the user is connected to Bridge
+    */
     bool isActive;
-};
 
+    /**
+     * User last status change or no value if they have never logged in
+    */
+    std::optional<UserStatusChange> lastStatusChange;
+};
 
 /**
  * Contains container's policies.
@@ -207,6 +226,16 @@ struct BridgeIdentity {
      * Bridge instance Id given by PKI.
      */
     std::optional<std::string> instanceId;
+};
+
+enum EventType: int64_t {
+    USER_ADD = 0,
+    USER_REMOVE = 1,
+    USER_STATUS = 2
+};
+
+enum EventSelectorType: int64_t {
+    CONTEXT_ID = 0
 };
 
 }  // namespace core

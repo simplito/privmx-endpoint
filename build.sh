@@ -1,13 +1,14 @@
 #!/bin/bash
 mkdir -p ./build
-conan install . --output-folder=build --build=missing
+BUILD_TYPE="Debug"
+conan install . --output-folder=build --build=missing -s build_type=$BUILD_TYPE
 cd build
 
-GENERATORS_DIR="build/Release/generators"
+GENERATORS_DIR="build/$BUILD_TYPE/generators"
 
 source $GENERATORS_DIR/conanbuild.sh
 cmake .. -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$GENERATORS_DIR/conan_toolchain.cmake \
-       -DCMAKE_POLICY_DEFAULT_CMP0091=NEW  -DCMAKE_BUILD_TYPE=Release \
+       -DCMAKE_POLICY_DEFAULT_CMP0091=NEW  -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
        -DPRIVMX_DRIVER_NET=ON \
        -DPRIVMX_DRIVER_CRYPTO=ON \
        -DPRIVMX_CONAN=ON \
