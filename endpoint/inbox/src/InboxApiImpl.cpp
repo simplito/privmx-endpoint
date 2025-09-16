@@ -70,8 +70,7 @@ InboxApiImpl::InboxApiImpl(
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
     _serverRequestChunkSize(serverRequestChunkSize),
-    _subscriber(connection.getImpl()->getGateway()),
-    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "inbox", "entries"})
+    _subscriber(connection.getImpl()->getGateway(), INBOX_TYPE_FILTER_FLAG)
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&InboxApiImpl::processConnectedEvent, this));

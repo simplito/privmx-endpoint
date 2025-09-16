@@ -87,7 +87,7 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
 privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std::string>& subscriptionQueries) {
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for(auto& s: subscriptionQueries) {
-        result.add(s);
+        result.add(s + ",containerType=" + _typeFilterFlag);
     }
     return result;
 }

@@ -50,7 +50,7 @@ KvdbApiImpl::KvdbApiImpl(
     _eventMiddleware(eventMiddleware),
     _connection(connection),
     _serverApi(ServerApi(gateway)),
-    _subscriber(gateway)
+    _subscriber(gateway, KVDB_TYPE_FILTER_FLAG)
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
