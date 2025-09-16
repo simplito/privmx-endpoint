@@ -782,3 +782,16 @@ TEST_F(KvdbEventTest, Subscribe_for_singel_entry) {
         FAIL();
     }
 }
+
+TEST_F(KvdbEventTest, subscribeFor_query_from_other_module) {
+    EXPECT_THROW({
+        kvdbApi->subscribeFor({
+            "kvdbs/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, kvdb::InvalidSubscriptionQueryException);
+    EXPECT_THROW({
+        kvdbApi->subscribeFor({
+            "thread/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, kvdb::InvalidSubscriptionQueryException);
+}

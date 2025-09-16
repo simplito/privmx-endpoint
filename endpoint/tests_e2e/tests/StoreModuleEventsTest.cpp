@@ -831,3 +831,16 @@ TEST_F(StoreEventTest, waitEvent_getEvent_storeFileUpdated_changes) {
         FAIL();
     }
 }
+
+TEST_F(StoreEventTest, subscribeFor_query_from_other_module) {
+    EXPECT_THROW({
+        storeApi->subscribeFor({
+            "stores/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, store::InvalidSubscriptionQueryException);
+    EXPECT_THROW({
+        storeApi->subscribeFor({
+            "thread/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, store::InvalidSubscriptionQueryException);
+}
