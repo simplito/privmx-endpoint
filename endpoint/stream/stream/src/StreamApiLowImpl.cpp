@@ -208,7 +208,7 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::Janus
     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "session_id :" + std::to_string(session_id));
     if (jsep.has_value() && !jsep.value().sdpEmpty() && !jsep.value().typeEmpty()) {
             std::cerr << __LINE__ << std::endl;
-            auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(jsep.value().sdp(), jsep.value().type());
+            auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(updateEvent.room(), session_id, jsep.value().sdp(), jsep.value().type());
             auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::JanusJSEP>();
             janusJSEP.sdp(sdp);
             janusJSEP.type("answer");
@@ -374,7 +374,8 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
         )
     );
     _sessionIdToStreamId.set(streamJoinResult.sessionId(), localStreamId);
-    std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
+    // std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
+    std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, streamJoinResult.sessionId(), streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
     sessionDescription.type("answer");
@@ -921,4 +922,12 @@ uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInf
         return ENDPOINT_CORE_EXCEPTION_CODE;
     } 
     return UnknownStreamRoomFormatException().getCode();
+}
+
+void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
+    auto candidate {privmx::utils::Utils::parseJsonObject(candidateAsJson)};
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamTrickleModel>();
+    model.sessionId(sessionId);
+    model.candidate(candidate);
+    _serverApi->trickle(model);
 }

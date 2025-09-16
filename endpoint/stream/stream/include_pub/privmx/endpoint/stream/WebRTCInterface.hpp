@@ -38,7 +38,8 @@ class WebRTCInterface
 {
 public:
     virtual std::string createOfferAndSetLocalDescription() = 0;
-    virtual std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) = 0;
+    // virtual std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) = 0;
+    virtual std::string createAnswerAndSetDescriptions(const std::string& streamRoomId, const int64_t sessionId, const std::string& sdp, const std::string& type) = 0;
     virtual void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) = 0;
     virtual void close() = 0;
     virtual void updateKeys(const std::vector<Key>& keys) = 0;

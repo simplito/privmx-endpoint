@@ -70,6 +70,10 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stream::SdpWithTypeModel& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeAndSessionModel>(const stream::SdpWithTypeAndSessionModel& val);
+
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::Key>(const stream::Key& val);
 
 template<>

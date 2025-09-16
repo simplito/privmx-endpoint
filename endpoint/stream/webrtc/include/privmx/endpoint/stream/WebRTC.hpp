@@ -46,7 +46,8 @@ public:
     );
     ~WebRTC();
     std::string createOfferAndSetLocalDescription() override;
-    std::string createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) override;
+    std::string createAnswerAndSetDescriptions(const std::string& streamRoomId, const int64_t sessionId, const std::string& sdp, const std::string& type) override;
+    std::string onRoomUpdated(const std::string& streamRoomId, const std::string& sessionId, const std::string& sdp, const std::string& type) override;
     std::string negotiationNeeded();
     void setAnswerAndSetRemoteDescription(const std::string& sdp, const std::string& type) override;
     void close() override;

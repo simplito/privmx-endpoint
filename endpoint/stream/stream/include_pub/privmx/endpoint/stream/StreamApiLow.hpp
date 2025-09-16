@@ -17,7 +17,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 #include <functional>
-
+#include <Poco/Dynamic/Var.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
@@ -77,6 +77,8 @@ public:
     void unpublishStream(int64_t localStreamId);
 
     void leaveStream(int64_t localStreamId);
+
+    void trickle(const int64_t sessionId, const std::string& candidateAsJson);
 
     void subscribeForStreamEvents();
     void unsubscribeFromStreamEvents();

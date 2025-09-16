@@ -8,7 +8,8 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
+#include <Poco/JSON/Parser.h>
+#include "privmx/endpoint/core/TypesMacros.hpp"
 #include "privmx/endpoint/stream/varinterface/StreamApiLowVarInterface.hpp"
 
 #include "privmx/endpoint/core/CoreException.hpp"
@@ -18,20 +19,28 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
 std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)>
-    StreamApiLowVarInterface::methodMap = {{Create, &StreamApiLowVarInterface::create},
-                                       {GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
-                                       {CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
-                                       {UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
-                                       {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
-                                       {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
-                                       {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
-                                       {CreateStream, &StreamApiLowVarInterface::createStream},
-                                       {PublishStream, &StreamApiLowVarInterface::publishStream},
-                                       {JoinStream, &StreamApiLowVarInterface::joinStream},
-                                       {ListStreams, &StreamApiLowVarInterface::listStreams},
-                                       {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
-                                       {LeaveStream, &StreamApiLowVarInterface::leaveStream},
-                                       {KeyManagement, &StreamApiLowVarInterface::keyManagement}};
+    StreamApiLowVarInterface::methodMap = {
+    {Create, &StreamApiLowVarInterface::create},
+{GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
+{CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
+{UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
+{ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
+{GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
+{DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
+{CreateStream, &StreamApiLowVarInterface::createStream},
+{PublishStream, &StreamApiLowVarInterface::publishStream},
+{JoinStream, &StreamApiLowVarInterface::joinStream},
+{ListStreams, &StreamApiLowVarInterface::listStreams},
+{UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
+{LeaveStream, &StreamApiLowVarInterface::leaveStream},
+{KeyManagement, &StreamApiLowVarInterface::keyManagement},
+ {SubscribeForStreamEvents, &StreamApiLowVarInterface::keyManagement},
+ {UnsubscribeFromStreamEvents, &StreamApiLowVarInterface::keyManagement},
+ {Trickle, &StreamApiLowVarInterface::keyManagement}};
+
+
+
+
 
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -162,6 +171,18 @@ Poco::Dynamic::Var StreamApiLowVarInterface::leaveStream(const Poco::Dynamic::Va
 Poco::Dynamic::Var StreamApiLowVarInterface::keyManagement(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto disable = _deserializer.deserialize<bool>(argsArr->get(0), "disable");
+    _streamApi.keyManagement(disable);
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::trickle(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto sessionId = _deserializer.deserialize<int64_t>(argsArr->get(0), "sessionId");
+    auto serializedRtcCandidate = _deserializer.deserialize<std::string>(argsArr->get(1), "candidate");
+
+    Poco::JSON::Parser parser;
+    auto var = parser.parse(serializedRtcCandidate);
+    return utils::TypedObjectFactory::createObjectFromVar<>(var);
     _streamApi.keyManagement(disable);
     return {};
 }

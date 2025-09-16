@@ -42,6 +42,7 @@ public:
     void streamUnpublish(server::StreamUnpublishModel model);
     void streamLeave(server::StreamLeaveModel model);
     void streamReconfigure(server::StreamReconfigureModel model);
+    void trickle(server::StreamTrickleModel model);
 
 private:
     template<typename T>

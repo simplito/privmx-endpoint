@@ -101,6 +101,7 @@ public:
 
     void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
 
+    void trickle(const int64_t sessionId, const std::string& candidateAsJson);
 private:
     struct StreamData {
         std::shared_ptr<WebRTCInterface> webRtc;

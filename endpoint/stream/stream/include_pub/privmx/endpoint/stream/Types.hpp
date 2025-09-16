@@ -60,6 +60,13 @@ struct SdpWithTypeModel {
     std::string type;
 };
 
+struct SdpWithTypeAndSessionModel {
+    std::string roomId;
+    int64_t sessionId;
+    std::string sdp;
+    std::string type;
+};
+
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx

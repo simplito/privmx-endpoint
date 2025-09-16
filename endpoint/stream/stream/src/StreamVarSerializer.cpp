@@ -204,6 +204,19 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stre
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeAndSessionModel>(const stream::SdpWithTypeAndSessionModel& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$SdpWithTypeAndSessionModel");
+    }
+    obj->set("roomId", serialize(val.roomId));
+    obj->set("sessionId", serialize(val.sessionId));
+    obj->set("sdp", serialize(val.sdp));
+    obj->set("type", serialize(val.type));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::Key>(const stream::Key& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

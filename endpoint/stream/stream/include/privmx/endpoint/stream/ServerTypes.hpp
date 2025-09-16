@@ -189,6 +189,11 @@ ENDPOINT_SERVER_TYPE(StreamReconfigureModel)
     INT64_FIELD(sessionId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamTrickleModel)
+    OBJECT_PTR_FIELD(candidate)
+    INT64_FIELD(sessionId)
+TYPE_END
+
 ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
     STRING_FIELD(contextId)
 TYPE_END
@@ -238,7 +243,7 @@ ENDPOINT_SERVER_TYPE(JanusVideoRoom)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE_INHERIT(JanusVideoRoomUpdated, JanusVideoRoom)
-    INT64_FIELD(room)
+    STRING_FIELD(room)
     LIST_FIELD(streams, JanusVideoRoomStream)    
 TYPE_END
 
