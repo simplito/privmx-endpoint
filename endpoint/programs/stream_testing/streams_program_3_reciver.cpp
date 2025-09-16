@@ -4,57 +4,18 @@
 #include <fstream>
 #include <vector>
 #include <thread>
-// #include <privmx/utils/IniFileReader.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
-#include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/utils/PrivmxException.hpp>
+#include <privmx/utils/Debug.hpp>
 #include <SDL2/SDL.h>
 
 using namespace std;
 using namespace privmx::endpoint;
-
-
-
-#define PRINT_LIST(list, f1, f2)                \
-    cout << #list << " list:" << endl;  \
-    for (const auto& item : list) {                    \
-        cout << #f1 << ": " << item.f1 << ", " << #f2 << ": " << item.f2 << endl;    \
-    }
-
-
-static vector<string_view> getParamsList(int argc, char* argv[]) {
-    vector<string_view> args(argv + 1, argv + argc);
-    return args;
-}
-
-static string readFile(const string filePath) {
-    // string homeDir{getenv("HOME")};
-    // string fName{"testImg.png"};
-    // string fPath{homeDir + "/" + fName};
-    ifstream input(filePath, ios::binary);
-    stringstream strStream;
-    strStream << input.rdbuf();
-    return strStream.str();
-}
-
-
-#include <nanogui/screen.h>
-#include <nanogui/layout.h>
-#include <nanogui/window.h>
-#include <nanogui/button.h>
-#include <nanogui/canvas.h>
-#include <nanogui/shader.h>
-#include <nanogui/texture.h>
-#include <nanogui/renderpass.h>
-#include <GLFW/glfw3.h>
 
 class RTCVideoRendererImpl {
 public:
@@ -67,7 +28,7 @@ public:
             windowEventsLoop();
         }
         uint32_t* pixels = new uint32_t[768 * 432];
-        std::cout << w << " - " << h << " frame Size" << std::endl;
+        PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h))
         frame->ConvertToRGBA((uint8_t*)pixels, 4, 768, 432);
         SDL_UpdateTexture(texture, NULL, pixels, 768 * sizeof(uint32_t));
         SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
@@ -81,7 +42,6 @@ private:
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 SDL_Event event;
                 while (SDL_PollEvent(&event)) {
-                    std::cerr << "SDL_Event.type = " << event.type << std::endl;
                     if (event.type == SDL_QUIT) exit(0);
                     if (event.type == SDL_WINDOWEVENT) {
                         if (event.window.event == SDL_WINDOWEVENT_CLOSE)
@@ -100,49 +60,36 @@ private:
     std::shared_ptr<std::thread> eventThreadLoop;
 };
 
+static vector<string_view> getParamsList(int argc, char* argv[]) {
+    vector<string_view> args(argv + 1, argv + argc);
+    return args;
+}
+
 int main(int argc, char** argv) {
-
     auto params = getParamsList(argc, argv);
-
+    if(params.size() != 5) {
+        std::cout << "Invalid params required params are 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId', 'StreamRoomId'" << std::endl;
+        return -1;
+    }
+    std::string privKey = {params[0].begin(),  params[0].end()};
+    std::string solutionId = {params[1].begin(),  params[1].end()};
+    std::string bridgeUrl = {params[2].begin(),  params[2].end()};
+    std::string contextId = {params[3].begin(),  params[3].end()};
+    std::string streamRoomId = {params[4].begin(),  params[4].end()};
     try {
-        crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
-        core::Connection connection = core::Connection::connect("KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
+        core::Connection connection = core::Connection::connect(
+            privKey, 
+            solutionId, 
+            bridgeUrl
+        );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
-        auto context = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
-        auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
-        std::string streamRoomId = "";
-        std::vector<privmx::endpoint::core::UserWithPubKey> users = {
-            privmx::endpoint::core::UserWithPubKey{.userId="patryk", .pubKey="51ciywf56WuDKxyEuquMsfoydEK2NavoFtFBvoKWEi7VuqHkur"},
-            privmx::endpoint::core::UserWithPubKey{.userId="user1",  .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}
-        };
-        if(streamList.readItems.size() == 0) {
-            streamRoomId = streamApi.createStreamRoom(
-                context.contextId,
-                users,
-                users,
-                privmx::endpoint::core::Buffer::from(""),
-                privmx::endpoint::core::Buffer::from(""),
-                std::nullopt
-            );
-        } else {
-            streamRoomId = streamList.readItems[0].streamRoomId;
-        } 
-        streamApi.subscribeFor({
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN, stream::EventSelectorType::CONTEXT_ID, context.contextId),
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE, stream::EventSelectorType::CONTEXT_ID, context.contextId),
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH, stream::EventSelectorType::CONTEXT_ID, context.contextId),
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH, stream::EventSelectorType::CONTEXT_ID, context.contextId)
-        });
-        
-        std::cout << "streamRoomId: " << streamRoomId << std::endl;
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
         stream::StreamJoinSettings ssettings {
             .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
                 r.OnFrame(w, h, frame, id);
             }
         };
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream joinStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
         auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<int64_t> streamsId;
         for(int i = 0; i < streamlist.size(); i++) {
@@ -151,8 +98,8 @@ int main(int argc, char** argv) {
         }
         auto watchedStream = streamApi.joinStream(streamRoomId, streamsId, ssettings);
         
-        // while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
-        std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Stream leaveStream~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+        while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
+
         streamApi.leaveStream(watchedStream);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         connection.disconnect();

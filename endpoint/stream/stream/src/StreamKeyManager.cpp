@@ -42,29 +42,22 @@ StreamKeyManager::StreamKeyManager(
     _keysStrage.insert_or_assign(_keyForUpdate->key.id, _keyForUpdate);
     _currentKeyId = _keyForUpdate->key.id;
     updateWebRtcKeyStore();
-    // ->setKey(currentKey.id, currentKey.key);
     _cancellationToken = privmx::utils::CancellationToken::create();
-    // create thread to remove old keys
+    // create thread to update keys
     _keyUpdater = std::thread([&](privmx::utils::CancellationToken::Ptr token) {
         try {
             while (!token->isCancelled()) {
 
-                PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "_keyUpdater Loop sleep")  
                 _cancellationToken->sleep( std::chrono::milliseconds(UPDATE_INTERVAL));
-                PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "_keyUpdater Loop wake up") 
                 
                 std::shared_ptr<StreamKeyManager::StreamEncKey> key;
                 {
-                    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "_keyUpdater -> lock(_keysStrageMutex)") 
                     std::shared_lock<std::shared_mutex> lock(_keysStrageMutex);
-
-                    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "_keyUpdater -> _keysStrage.find") 
                     if (_keysStrage.find(_currentKeyId) != _keysStrage.end()) {
                         key = _keysStrage.at(_currentKeyId); 
                     }
                 }
                 if(!key || (key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL) < std::chrono::system_clock::now())) {
-                    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "_keyUpdater -> updateKey")
                     updateKey();
                 }
             }
@@ -86,7 +79,6 @@ StreamKeyManager::StreamKeyManager(
 }
 
 StreamKeyManager::~StreamKeyManager() {
-    std::cerr << "Created _cancellationToken at StreamKeyManager deconstructor: " << _cancellationToken.get() << std::endl; // Debug by Patryk
     _cancellationToken->cancel();
     _updateKeyCV.notify_all();
     _eventApi->unsubscribeFromInternal(_subscriptionIds, _notificationListenerId);
@@ -155,7 +147,7 @@ void StreamKeyManager::respondToRequestKey(const std::string& userId, const std:
     auto userWithPubKey = privmx::endpoint::core::UserWithPubKey{.userId=userId, .pubKey=userPubKey};
     sendStreamKeyManagementEvent(respond, {userWithPubKey});
 
-    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToRequestKey sendStreamKeyManagementEvent Doen");
+    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToRequestKey sendStreamKeyManagementEvent Done");
     bool hasUser = false;
     std::unique_lock<std::mutex> lock(_connectedUsersMutex);
     PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "respondToRequestKey _connectedUsers.size():" + std::to_string(_connectedUsers.size()));

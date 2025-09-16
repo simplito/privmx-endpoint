@@ -105,16 +105,12 @@ VideoPanel::VideoPanel(wxWindow * parent) :
 }
 
 void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame) {
-    // PRIVMX_DEBUG("StreamProgram wx", "Render", "Frame Size : " + std::to_string(w) + "-"+ std::to_string(h))
     auto panel_size = this->GetClientSize();
     double scaleW = (double)panel_size.GetWidth() / w;
     double scaleH = (double)panel_size.GetHeight() / h;
-
-    // PRIVMX_DEBUG("StreamProgram wx", "Render", "Frame Scale: " + std::to_string(scaleW) + "-" + std::to_string(scaleH))
     double scale = scaleW < scaleH ? scaleW : scaleH;
     int64_t W =  scale * w;
     int64_t H =  scale * h;
-    // PRIVMX_DEBUG("StreamProgram wx", "Render", "Frame Rescaled: " + std::to_string(W) + "-" + std::to_string(H) + " * " + std::to_string(scale))
     if(H < 1 || W < 1) return;
     picDataVector.reserve(4*W*H);
     frame->ConvertToRGBA(&picDataVector[0], 1, W, H);
@@ -129,20 +125,16 @@ void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::
 
 void VideoPanel::OnPaint(wxPaintEvent& event)
 {
-    PRIVMX_DEBUG("StreamProgram wx", "OnPaint", "Paint Start")
     wxPaintDC dc(this);
-    PRIVMX_DEBUG("StreamProgram wx", "OnPaint", "before Lock")
     if(haveNewFrame) {
         std::shared_ptr<wxBitmap> tmp_bmp;
         {
             std::unique_lock<std::mutex> lock(m);
-            PRIVMX_DEBUG("StreamProgram wx", "OnPaint", "After Lock")
             tmp_bmp = bmp;
             haveNewFrame = false;
         }
         dc.DrawBitmap(tmp_bmp->GetSubBitmap(wxRect(0, 0, tmp_bmp->GetWidth(), tmp_bmp->GetHeight())), 0, 0, false);
     }
-    PRIVMX_DEBUG("StreamProgram wx", "OnPaint", "Paint Done")
 }
 
 
@@ -240,21 +232,17 @@ void MyFrame::OnExit(wxCloseEvent& event) {
     if(connection) {
         PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Disconnecting")
         connection->disconnect();
-
-        PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Cleaning connection pointer")
         connection.reset();
     }
     privmx::endpoint::core::EventQueue::getInstance().emitBreakEvent();
 
-    PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Closing threads")
-    // if(_event_handler.joinable()) {
-        PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Closing _event_handler")
+    PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Join threads")
+    if(_event_handler.joinable()) {
         _event_handler.join();
-    // }
-    // if(_renderer_handler.joinable()) {
-        PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Closing _renderer_handler")
+    }
+    if(_renderer_handler.joinable()) {
         _renderer_handler.join();
-    // }
+    }
     PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Closed")
     Destroy();
 }
@@ -353,8 +341,6 @@ MyFrame::MyFrame()
         try {
             while(!cancellationToken.isCancelled()) {
                 cancellationToken.sleep(std::chrono::milliseconds(50));
-
-                PRIVMX_DEBUG("StreamProgram wx", "Update", "Loop")
                 {
                     std::shared_lock<std::shared_mutex> lock(_videoPanels);
                     // this->Refresh();
@@ -385,24 +371,6 @@ MyFrame::MyFrame()
                     mapOfVideoPanels.clear();
                     Layout();
                 }
-                // if(joinedStream.has_value()) {
-                //     PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent", "Leaving Stream")
-                //     streamApi->leaveStream(joinedStream.value());
-                //     PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent", "Reseting VideoPanels")
-                //     std::unique_lock<std::shared_mutex> lock(_videoPanels);
-                //     mapOfVideoPanels.clear();
-                // }
-                // auto tmp = privmx::endpoint::stream::Events::extractStreamPublishedEvent(eventHolder);
-                // stream::StreamJoinSettings ssettings {
-                //     .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-                //         this->OnFrame(w, h, frame, id);
-                //     }
-                // };
-                // if(tmp.data.streamIds.size() != 0) {
-                //     joinedStream = streamApi->joinStream(tmp.data.streamRoomId, tmp.data.streamIds, ssettings);
-                // }
-
-                // JoinToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
             } else if (privmx::endpoint::stream::Events::isStreamUnpublishedEvent(eventHolder)) {
                 auto eventData = privmx::endpoint::stream::Events::extractStreamUnpublishedEvent(eventHolder);
                 if(eventData.data.streamRoomId == streamRoomIdInput->GetValue()) {
@@ -412,10 +380,6 @@ MyFrame::MyFrame()
                     mapOfVideoPanels.clear();
                     Layout();
                 }
-                // std::unique_lock<std::shared_mutex> lock(_videoPanels);
-                // mapOfVideoPanels.clear();
-
-                // Layout();
             } 
         }
     });
@@ -623,8 +587,6 @@ std::vector<privmx::endpoint::stream::StreamRoom> MyFrame::ListStreamRooms(std::
 }
 
 void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-
-    PRIVMX_DEBUG("StreamProgram wx", "OnFrame", "Start Frame Id: " + id)
     std::shared_ptr<VideoPanel> videoPanel;
     {
         std::unique_lock<std::shared_mutex> lock(_videoPanels);

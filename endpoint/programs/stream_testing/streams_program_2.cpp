@@ -10,10 +10,7 @@
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
-#include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 
 using namespace std;
@@ -21,66 +18,40 @@ using namespace privmx::endpoint;
 
 
 
-#define PRINT_LIST(list, f1, f2)                \
-    cout << #list << " list:" << endl;  \
-    for (const auto& item : list) {                    \
-        cout << #f1 << ": " << item.f1 << ", " << #f2 << ": " << item.f2 << endl;    \
-    }
-
-
 static vector<string_view> getParamsList(int argc, char* argv[]) {
     vector<string_view> args(argv + 1, argv + argc);
     return args;
 }
 
-static string readFile(const string filePath) {
-    // string homeDir{getenv("HOME")};
-    // string fName{"testImg.png"};
-    // string fPath{homeDir + "/" + fName};
-    ifstream input(filePath, ios::binary);
-    stringstream strStream;
-    strStream << input.rdbuf();
-    return strStream.str();
-}
-
 int main(int argc, char** argv) {
-
     auto params = getParamsList(argc, argv);
-
+    if(params.size() != 5) {
+        std::cout << "Invalid params required params are 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId', 'StreamRoomId'" << std::endl;
+        return -1;
+    }
+    std::string privKey = {params[0].begin(),  params[0].end()};
+    std::string solutionId = {params[1].begin(),  params[1].end()};
+    std::string bridgeUrl = {params[2].begin(),  params[2].end()};
+    std::string contextId = {params[3].begin(),  params[3].end()};
+    std::string streamRoomId = {params[4].begin(),  params[4].end()};
     try {
-        crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
-        core::Connection connection = core::Connection::connect("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", "fc47c4e4-e1dc-414a-afa4-71d436398cfc", "http://webrtc2.s24.simplito.com:3000");
+        core::Connection connection = core::Connection::connect(
+            privKey, 
+            solutionId, 
+            bridgeUrl
+        );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
-        
-        auto context = connection.listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
-        auto streamList = streamApi.listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
-        auto pubKey = cryptoApi.derivePublicKey("L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN");
-        std::vector<privmx::endpoint::core::UserWithPubKey> users = {
-            privmx::endpoint::core::UserWithPubKey{.userId=context.userId, .pubKey=pubKey}
-        };
-        std::string streamRoomId = streamApi.createStreamRoom(
-            context.contextId,
-            users,
-            users,
-            privmx::endpoint::core::Buffer::from(""),
-            privmx::endpoint::core::Buffer::from(""),
-            std::nullopt
-        );
         auto streamId_1 = streamApi.createStream(streamRoomId);
         auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
         streamApi.trackAdd(streamId_1, stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
-        // auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
-        // streamApi.trackAdd(streamId_1, stream::DeviceType::Video);
         streamApi.publishStream(streamId_1);
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        
         auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<int64_t> streamsId;
         for(int i = 0; i < streamlist.size(); i++) {
             streamsId.push_back(streamlist[i].streamId);
         }
-
         stream::StreamJoinSettings ssettings;
         auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
 

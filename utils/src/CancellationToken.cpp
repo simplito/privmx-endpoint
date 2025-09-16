@@ -41,7 +41,6 @@ CancellationToken::CancellationToken(CancellationToken::Ptr token) : _cancelled(
 }
 
 void CancellationToken::cancel() {
-    std::cerr << "CancellationToken cancel: " << this << std::endl; // Debug by Patryk
     UniqueLock lock(_mutex);
     _cancelled.store(true);
     _cv.notify_all();

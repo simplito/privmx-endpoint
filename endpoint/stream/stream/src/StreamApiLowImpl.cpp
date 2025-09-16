@@ -85,15 +85,11 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "event type:"+ type);
-    if (type == "janus") {
-        // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
-    }
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
     try {
         isInternalJanusEvent(type, data);
     } catch (const std::exception& e) {
         PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Error in isInternalJanusEvent():"+ std::string(e.what()));
-        // std::cerr << "Error in isInternalJanusEvent(): " << e.what() << std::endl;
     }
 
 
@@ -113,7 +109,6 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
     }
     auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
     if(!subscriptionQuery.has_value() && !isInternalJanusEvent(type, data)) {
-        // std::cerr << __LINE__ << std::endl;
         return;
     }
     PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
@@ -179,7 +174,6 @@ bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco:
 }
 
 void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
-    // std::cerr << "=========> PROCESSING JANUS EVENT <==================" << std::endl;
     auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
     PRIVMX_DEBUG("StreamApiLowImpl", "processJanusEvent", "janusPluginEvent :\n" + privmx::utils::Utils::stringifyVar(janusPluginEvent, true));
     
@@ -191,7 +185,6 @@ void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
         auto streamData = getStreamData(localStreamId.value(), room);
     
         if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
-            // std::cerr << __LINE__ << std::endl;
             auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata().data());
 
             if(janusVideoRoom.videoroomOpt("") == "updated") {
@@ -200,7 +193,6 @@ void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
                 if (!janusPluginEvent.jsepEmpty()) {
                     jsep = janusPluginEvent.jsep();
                 }
-                // std::cerr << __LINE__ << std::endl;
                 onVideoRoomUpdate(janusPluginEvent.session_id(), janusVideoRoomUpdated, streamData, jsep);
             }
         }
@@ -210,7 +202,6 @@ void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
 void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep) {
     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "session_id :" + std::to_string(session_id));
     if (jsep.has_value() && !jsep.value().sdpEmpty() && !jsep.value().typeEmpty()) {
-            std::cerr << __LINE__ << std::endl;
             // auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(jsep.value().sdp(), jsep.value().type());
             // auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
             // janusJSEP.sdp(sdp);
@@ -260,10 +251,8 @@ void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::Janus
             return;
     } else {
         PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
-        // std::cerr << "onVideoRoomUpdate (but without jsep)" << std::endl;
     }
     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
-    // TODO: update list of available streams and emit user event about update
 } 
 
 void StreamApiLowImpl::processConnectedEvent() {
@@ -403,7 +392,6 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
     queryId->set("$in", usersIds);
     query->set("#userId", queryId);
-    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers querry:  " + privmx::utils::Utils::stringify(query))
     core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
         streamRoom.contextId(), 
         core::PagingQuery{
@@ -415,7 +403,6 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
             .queryAsJson = privmx::utils::Utils::stringify(query)
         }
     ); 
-    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers result.size(): " + std::to_string(userInfoList.readItems.size()));
 
     
     std::vector<core::UserWithPubKey> toSend;
