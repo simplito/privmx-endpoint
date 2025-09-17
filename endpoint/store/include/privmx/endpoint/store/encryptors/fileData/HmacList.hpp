@@ -28,18 +28,18 @@ public:
     HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes = std::string());
     virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) override;
     virtual void setAll(const std::string& hashes) override;
-    virtual void set(const int64_t& chunkIndex, const std::string& hash, bool truncate = false) override;
-    virtual const std::string getHash(const int64_t& chunkIndex) override;
+    virtual void set(const uint64_t& chunkIndex, const std::string& hash, bool truncate = false) override;
+    virtual const std::string getHash(const uint64_t& chunkIndex) override;
     virtual const std::string& getAll() override;
     virtual const std::string& getTopHash() override;
-    virtual bool verifyHash(const int64_t& chunkIndex, const std::string& hash) override;
+    virtual bool verifyHash(const uint64_t& chunkIndex, const std::string& hash) override;
     virtual bool verifyTopHash(const std::string& topHash) override;
-    virtual inline size_t getHashSize() override { return HMAC_SIZE; };
+    virtual inline uint64_t getHashSize() override { return HMAC_SIZE; };
 
 private:
     std::string _topHashKey;
     std::optional<std::string> _topHash;
-    int64_t _size = 0;
+    uint64_t _size = 0;
     std::string _hashes;
 };
 

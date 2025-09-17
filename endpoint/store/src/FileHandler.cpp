@@ -21,8 +21,8 @@ FileHandler::FileHandler (
     std::shared_ptr<IHashList> hashList,
     std::shared_ptr<IChunkReader> chunkReader,
     std::shared_ptr<FileMetaEncryptor> metaEncryptor,
-    size_t plainfileSize,
-    size_t encryptedFileSize,
+    uint64_t plainfileSize,
+    uint64_t encryptedFileSize,
     int64_t version,
     FileInfo fileInfo,
     FileMeta fileMeta,
@@ -45,7 +45,7 @@ FileHandler::FileHandler (
     _encryptedChunkSize(chunkEncryptor->getEncryptedChunkSize())
 {}
 
-void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) { // data = buf + size
+void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate) { // data = buf + size
     auto toSend = data.stdString();
     if (_plainfileSize < offset) { 
         // if fileSize smaller than offset fill here empty space with 0
@@ -54,21 +54,21 @@ void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) 
         toSend = emptyChars + toSend;
     }
     // start writing to offset chunk
-    size_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
-    size_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size()-1);
-    size_t dataSend = 0;
+    uint64_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
+    uint64_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size()-1);
+    uint64_t dataSend = 0;
     std::vector<FileHandler::UpdateChunkData> chunksToUpdate;
     auto newPlainfileSize = _plainfileSize;
     auto newEncryptedFileSize = _encryptedFileSize;
     // prepare chunk to update
-    for(size_t i = startIndex; i <= stopIndex; i++) {
+    for(uint64_t i = startIndex; i <= stopIndex; i++) {
         if(i == startIndex) {
-            size_t chunkOffset = offset % _chunkEncryptor->getPlainChunkSize();
+            uint64_t chunkOffset = offset % _chunkEncryptor->getPlainChunkSize();
             std::string chunkData = toSend.substr(dataSend, _plainChunkSize -(offset % _plainChunkSize));
             chunksToUpdate.push_back(createUpdateChunk(i, chunkOffset, chunkData, i == stopIndex ? truncate: false));
             dataSend += chunkData.size();
         } else {
-            size_t chunkOffset = 0;
+            uint64_t chunkOffset = 0;
             std::string chunkData = toSend.substr(dataSend, _plainChunkSize);
             chunksToUpdate.push_back(createUpdateChunk(i, chunkOffset, chunkData, i == stopIndex ? truncate: false));
             dataSend += chunkData.size();
@@ -117,14 +117,14 @@ void FileHandler::write(size_t offset, const core::Buffer& data, bool truncate) 
     PRIVMX_DEBUG("FileHandler", "write", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
 }
 
-core::Buffer FileHandler::read(size_t offset, size_t size) {
+core::Buffer FileHandler::read(uint64_t offset, size_t size) {
     if(offset >= _plainfileSize) return core::Buffer();
     if(offset+size > _plainfileSize) size = _plainfileSize-offset;
     if(size == 0) return core::Buffer();
-    size_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
-    size_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+size-1);
+    uint64_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
+    uint64_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+size-1);
     std::string data = std::string();
-    for(size_t i = startIndex; i <= stopIndex; i++) {
+    for(uint64_t i = startIndex; i <= stopIndex; i++) {
         data.append(_chunkReader->getDecryptedChunk(i));
     }
     return core::Buffer::from( data.substr(_chunkReader->filePosToPosInFileChunk(offset), size) );
@@ -134,7 +134,7 @@ size_t FileHandler::getFileSize() {
     return _plainfileSize;
 }
 
-FileHandler::UpdateChunkData FileHandler::createUpdateChunk(size_t index, size_t chunkOffset, const std::string& data, bool truncate){
+FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, size_t chunkOffset, const std::string& data, bool truncate){
     // check if new data fit in _plainChunkSize
     if ((chunkOffset + data.size()) > _plainChunkSize) {
         // "Given data with offset won't fit Chunk
@@ -250,18 +250,18 @@ std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFr
 
 FileHandlerImpl::FileHandlerImpl(std::shared_ptr<FileHandler> file) : _file(file) {}
 
-size_t FileHandlerImpl::size() {
+uint64_t FileHandlerImpl::size() {
     return _file->getFileSize();
 }
 
-void FileHandlerImpl::seekg(const size_t pos) {
+void FileHandlerImpl::seekg(const uint64_t pos) {
     if (pos > _file->getFileSize()) {
         throw PosOutOfBoundsException("seekg out of bounds");
     }
     _readPos = pos;
 }
 
-void FileHandlerImpl::seekp(const size_t pos) {
+void FileHandlerImpl::seekp(const uint64_t pos) {
     if (pos > _file->getFileSize()) {
         throw PosOutOfBoundsException("seekg out of bounds");
     }

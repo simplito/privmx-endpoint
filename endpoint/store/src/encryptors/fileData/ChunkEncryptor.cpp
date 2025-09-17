@@ -21,7 +21,7 @@ using namespace privmx::endpoint::store;
 
 ChunkEncryptor::ChunkEncryptor(std::string key, size_t chunkSize) : _key(key), _chunkSize(chunkSize) {}
 
-IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const size_t index, const std::string& data) {
+IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const uint64_t index, const std::string& data) {
     std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
     std::string iv = privmx::crypto::Crypto::randomBytes(IV_SIZE);
     std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
@@ -33,7 +33,7 @@ IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const size_t index, const std::st
     };
 }
 
-std::string ChunkEncryptor::decrypt(const size_t index, const Chunk& chunk) {
+std::string ChunkEncryptor::decrypt(const uint64_t index, const Chunk& chunk) {
     std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
     std::string hmac = chunk.data.substr(0, HMAC_SIZE);
     if (chunk.hmac != hmac) {
@@ -57,7 +57,7 @@ size_t ChunkEncryptor::getEncryptedChunkSize() {
     return _chunkSize + CHUNK_PADDINGSize + HMAC_SIZE + IV_SIZE;
 }
 
-size_t ChunkEncryptor::getEncryptedFileSize(const size_t& fileSize) {
+uint64_t ChunkEncryptor::getEncryptedFileSize(const uint64_t& fileSize) {
     if (fileSize == 0) {
         return 0;
     }
@@ -78,7 +78,7 @@ void ChunkEncryptor::sync(std::string key, size_t chunkSize) {
     _chunkSize = chunkSize; 
 }
 
-std::string ChunkEncryptor::chunkIndexToBE(const size_t index) {
+std::string ChunkEncryptor::chunkIndexToBE(const uint64_t index) {
     uint32_t index_be = Poco::ByteOrder::toBigEndian(static_cast<uint32_t>(index));
     return std::string((char *)&index_be, 4);
 }
