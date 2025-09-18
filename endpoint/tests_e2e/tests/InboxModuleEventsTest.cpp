@@ -661,3 +661,16 @@ TEST_F(InboxEventTest, waitEvent_getEvent_inboxEntryDeleted_disabled) {
         FAIL();
     }
 }
+
+TEST_F(InboxEventTest, subscribeFor_query_from_other_module) {
+    EXPECT_THROW({
+        inboxApi->subscribeFor({
+            "inboxes/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, inbox::InvalidSubscriptionQueryException);
+    EXPECT_THROW({
+        inboxApi->subscribeFor({
+            "thread/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, inbox::InvalidSubscriptionQueryException);
+}

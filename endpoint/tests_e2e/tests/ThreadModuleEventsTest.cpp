@@ -719,3 +719,16 @@ TEST_F(ThreadEventTest, waitEvent_getEvent_threadDeletedMessage_disabled) {
         FAIL();
     }
 }
+
+TEST_F(ThreadEventTest, subscribeFor_query_from_other_module) {
+    EXPECT_THROW({
+        auto tmp = threadApi->subscribeFor({
+            "treads/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, thread::InvalidSubscriptionQueryException);
+    EXPECT_THROW({
+        auto tmp = threadApi->subscribeFor({
+            "store/update|contextId="+reader->getString("Context_1.contextId")
+        });
+    }, thread::InvalidSubscriptionQueryException);
+}
