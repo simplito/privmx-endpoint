@@ -11,8 +11,16 @@
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/VarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/UserVerifierInterface.hpp>
+
 using namespace privmx::endpoint;
 
+class FalseUserVerifierInterface: public virtual core::UserVerifierInterface {
+public:
+    std::vector<bool> verify(const std::vector<core::VerificationRequest>& request) override {
+        return std::vector<bool>(request.size(), false);
+    };
+};
 
 enum ConnectionType {
     User1,
@@ -2106,4 +2114,54 @@ TEST_F(ThreadTest, userValidator_false) {
             reader->getString("Message_2.info_messageId")
         );
     });
+}
+
+TEST_F(ThreadTest, falseUserVerifierInterface) {
+    EXPECT_NO_THROW({
+        threadApi->updateThread(
+            reader->getString("Thread_1.threadId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    });
+
+    EXPECT_NO_THROW({
+        std::shared_ptr<FalseUserVerifierInterface> falseUserVerifierInterface = std::make_shared<FalseUserVerifierInterface>();
+        connection->setUserVerifier(falseUserVerifierInterface);
+    });
+    
+    core::PagingList<thread::Thread> threadListResult;
+    EXPECT_NO_THROW({
+        threadListResult = threadApi->listThreads(reader->getString("Context_1.contextId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(threadListResult.readItems.size() == 1) {
+        EXPECT_EQ(threadListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
+        FAIL();
+    }
+
+    core::PagingList<thread::Message> messagesListResult;
+    EXPECT_NO_THROW({
+        messagesListResult = threadApi->listMessages(reader->getString("Thread_1.threadId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(messagesListResult.readItems.size() == 1) {
+        EXPECT_EQ(messagesListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
+        FAIL();
+    }
 }
