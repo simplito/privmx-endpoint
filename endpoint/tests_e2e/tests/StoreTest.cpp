@@ -12,8 +12,16 @@
 #include <privmx/endpoint/store/VarSerializer.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/UserVerifierInterface.hpp>
 
 using namespace privmx::endpoint;
+
+class FalseUserVerifierInterface: public virtual core::UserVerifierInterface {
+public:
+    std::vector<bool> verify(const std::vector<core::VerificationRequest>& request) override {
+        return std::vector<bool>(request.size(), false);
+    };
+};
 
 enum ConnectionType {
     User1,
@@ -2925,3 +2933,52 @@ TEST_F(StoreTest, read_file_size_0) {
     }
 }
 
+TEST_F(StoreTest, falseUserVerifierInterface) {
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            reader->getString("Store_1.storeId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    });
+
+    EXPECT_NO_THROW({
+        std::shared_ptr<FalseUserVerifierInterface> falseUserVerifierInterface = std::make_shared<FalseUserVerifierInterface>();
+        connection->setUserVerifier(falseUserVerifierInterface);
+    });
+    
+    core::PagingList<store::Store> storeListResult;
+    EXPECT_NO_THROW({
+        storeListResult = storeApi->listStores(reader->getString("Context_1.contextId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(storeListResult.readItems.size() == 1) {
+        EXPECT_EQ(storeListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
+        FAIL();
+    }
+
+    core::PagingList<store::File> fileListResult;
+    EXPECT_NO_THROW({
+        fileListResult = storeApi->listFiles(reader->getString("Store_1.storeId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(fileListResult.readItems.size() == 1) {
+        EXPECT_EQ(fileListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
+        FAIL();
+    }
+}
