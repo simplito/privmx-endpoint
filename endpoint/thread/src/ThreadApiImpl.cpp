@@ -55,7 +55,7 @@ ThreadApiImpl::ThreadApiImpl(
     _messageDataV2Encryptor(MessageDataV2Encryptor()),
     _messageDataV3Encryptor(MessageDataV3Encryptor()),
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
-    _subscriber(gateway),
+    _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) 
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));

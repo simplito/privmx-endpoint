@@ -23,12 +23,13 @@ class SubscriberImpl : public privmx::endpoint::core::Subscriber
 {
 public:
     
-    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
+    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway, std::string typeFilterFlag) : Subscriber(gateway), _typeFilterFlag(typeFilterFlag) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
     virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);
 
+    std::string _typeFilterFlag;
     static std::string getChannel(EventType eventType);
     static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
     static constexpr std::string_view _moduleName = "store";

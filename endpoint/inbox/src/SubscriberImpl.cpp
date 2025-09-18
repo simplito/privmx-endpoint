@@ -77,10 +77,11 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
 privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std::string>& subscriptionQueries) {
     std::map<std::string, std::string> inboxIdToThreadId;
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
-    for(auto& subscriptionQuery: subscriptionQueries) {
+    for(auto subscriptionQuery: subscriptionQueries) {
         auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
         auto selector = tmp[1];
         auto channelData = privmx::utils::Utils::split(tmp[0], "/");
+        std::string transformedSubscriptionQuery = subscriptionQuery;
         if(channelData.size() >= 2 && channelData[1] == std::string(_itemName)) {
             std::string query = "thread/messages";
             for(auto it = channelData.begin()+2; it != channelData.end(); it+=1) {
@@ -102,13 +103,12 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
                 inboxIdToThreadId.insert_or_assign(inboxId, threadId);
                 result.add( query+"|"+selectorData[0]+"="+threadId);
             } else {
-                result.add( query+"|"+selector);
+                transformedSubscriptionQuery = query+"|"+selector + ",containerType=" + _typeFilterFlag;
             }
         } else if (channelData.size() >= 2 && channelData[1] == "collectionChanged") {
-            result.add("thread/collectionChanged|" + selector);
-        } else {
-            result.add(subscriptionQuery);
+            transformedSubscriptionQuery = "thread/collectionChanged|" + selector + ",containerType=" + _typeFilterFlag;
         }
+        result.add(transformedSubscriptionQuery);
     }
     return result;        
 }

@@ -72,9 +72,8 @@ StoreApiImpl::StoreApiImpl(
     _dataEncryptorCompatV1(core::DataEncryptor<dynamic::compat_v1::StoreData>()),
     _fileMetaEncryptorV1(FileMetaEncryptorV1()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
-    _subscriber(connection.getImpl()->getGateway()),
-    _fileMetaEncryptorV4(FileMetaEncryptorV4()),
-    _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "store", "files"}) 
+    _subscriber(connection.getImpl()->getGateway(), STORE_TYPE_FILTER_FLAG),
+    _fileMetaEncryptorV4(FileMetaEncryptorV4())
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StoreApiImpl::processConnectedEvent, this));
