@@ -83,6 +83,7 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 }
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
+    std::cerr << "Event type arrived: " << type << std::endl;
     if (type == "janus") {
         // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
     }
@@ -166,6 +167,8 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
             event->data = eventData;
             _eventMiddleware->emitApiEvent(event);
         }
+    } else {
+        std::cerr << "UNRESOLVED EVENT in CPP layer: '" << type << "'"<< std::endl;
     }
 }
 
@@ -924,8 +927,7 @@ uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInf
     return UnknownStreamRoomFormatException().getCode();
 }
 
-void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
-    auto candidate {privmx::utils::Utils::parseJsonObject(candidateAsJson)};
+void StreamApiLowImpl::trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamTrickleModel>();
     model.sessionId(sessionId);
     model.candidate(candidate);

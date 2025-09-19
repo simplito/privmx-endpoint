@@ -22,6 +22,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 
@@ -78,7 +79,7 @@ public:
 
     void leaveStream(int64_t localStreamId);
 
-    void trickle(const int64_t sessionId, const std::string& candidateAsJson);
+    void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
 
     void subscribeForStreamEvents();
     void unsubscribeFromStreamEvents();

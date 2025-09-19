@@ -14,6 +14,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/stream/DynamicTypes.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -181,9 +182,9 @@ Poco::Dynamic::Var StreamApiLowVarInterface::trickle(const Poco::Dynamic::Var& a
     auto serializedRtcCandidate = _deserializer.deserialize<std::string>(argsArr->get(1), "candidate");
 
     Poco::JSON::Parser parser;
-    auto var = parser.parse(serializedRtcCandidate);
-    return utils::TypedObjectFactory::createObjectFromVar<>(var);
-    _streamApi.keyManagement(disable);
+    auto var {parser.parse(serializedRtcCandidate)};
+    auto iceCandidate {utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(var)};
+    _streamApi.trickle(sessionId, iceCandidate);
     return {};
 }
 
