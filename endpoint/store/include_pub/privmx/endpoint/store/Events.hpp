@@ -66,6 +66,21 @@ struct StoreFileDeletedEventData {
 };
 
 /**
+ * Holds information of `StoreFileUpdatedEvent`.
+ */
+struct StoreFileUpdatedEventData {
+    /**
+     * File meta
+     */
+    File file;
+    
+    /**
+     * List of file changes
+     */
+    std::vector<FileChange> changes;
+};
+
+/**
  * Holds data of event that arrives when Store is created.
  */
 struct StoreCreatedEvent : public core::Event {
@@ -227,7 +242,7 @@ struct StoreFileUpdatedEvent : public core::Event {
     /**
      * detailed Store file info
      */
-    store::File data;
+    store::StoreFileUpdatedEventData data;
 };
 
 /**

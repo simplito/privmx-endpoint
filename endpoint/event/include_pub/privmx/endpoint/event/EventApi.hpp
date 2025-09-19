@@ -2,7 +2,7 @@
 #define _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_HPP_
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/event/Types.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 
 namespace privmx {
@@ -36,22 +36,28 @@ public:
      * @param eventData event's data
      */
     void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
-    
+
     /**
-     * Subscribe for the custom events on the given channel.
+     * Subscribe for the custom events on the given subscription query.
      * 
-     * @param contextId ID of the Context
-     * @param channelName name of the Channel
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
      */
-    void subscribeForCustomEvents(const std::string& contextId, const std::string& channelName);
-    
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+
     /**
-     * Unsubscribe from the custom events on the given channel.
-     * 
-     * @param contextId ID of the Context
-     * @param channelName name of the Channel
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
      */
-    void unsubscribeFromCustomEvents(const std::string& contextId, const std::string& channelName);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+
+    /**
+     * Generate subscription Query for the custom events.
+     * @param channelName name of the Channel
+     * @param selectorType selector of scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
+    std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
 
     std::shared_ptr<EventApiImpl> getImpl() const { return _impl; }
 private:

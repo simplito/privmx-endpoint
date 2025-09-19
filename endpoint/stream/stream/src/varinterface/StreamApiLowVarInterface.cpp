@@ -22,22 +22,23 @@ using namespace privmx::endpoint::stream;
 std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)>
     StreamApiLowVarInterface::methodMap = {
     {Create, &StreamApiLowVarInterface::create},
-{GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
-{CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
-{UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
-{ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
-{GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
-{DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
-{CreateStream, &StreamApiLowVarInterface::createStream},
-{PublishStream, &StreamApiLowVarInterface::publishStream},
-{JoinStream, &StreamApiLowVarInterface::joinStream},
-{ListStreams, &StreamApiLowVarInterface::listStreams},
-{UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
-{LeaveStream, &StreamApiLowVarInterface::leaveStream},
-{KeyManagement, &StreamApiLowVarInterface::keyManagement},
- {SubscribeForStreamEvents, &StreamApiLowVarInterface::keyManagement},
- {UnsubscribeFromStreamEvents, &StreamApiLowVarInterface::keyManagement},
- {Trickle, &StreamApiLowVarInterface::keyManagement}};
+    {GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
+    {CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
+    {UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
+    {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
+    {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
+    {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
+    {CreateStream, &StreamApiLowVarInterface::createStream},
+    {PublishStream, &StreamApiLowVarInterface::publishStream},
+    {JoinStream, &StreamApiLowVarInterface::joinStream},
+    {ListStreams, &StreamApiLowVarInterface::listStreams},
+    {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
+    {LeaveStream, &StreamApiLowVarInterface::leaveStream},
+    {KeyManagement, &StreamApiLowVarInterface::keyManagement},
+    {SubscribeFor, &StreamApiLowVarInterface::subscribeFor},
+    {UnsubscribeFrom, &StreamApiLowVarInterface::unsubscribeFrom},
+    {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery},
+    {Trickle, &StreamApiLowVarInterface::keyManagement}};
 
 
 
@@ -55,16 +56,27 @@ Poco::Dynamic::Var StreamApiLowVarInterface::getTurnCredentials(const Poco::Dyna
     return _serializer.serialize(result);
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::subscribeForStreamEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _streamApi.subscribeForStreamEvents();
+Poco::Dynamic::Var StreamApiLowVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto result = _streamApi.subscribeFor(subscriptionQueries);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    _streamApi.unsubscribeFrom(subscriptionIds);
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromStreamEvents(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _streamApi.unsubscribeFromStreamEvents();
-    return {};
+Poco::Dynamic::Var StreamApiLowVarInterface::buildSubscriptionQuery(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto eventType = _deserializer.deserialize<stream::EventType>(argsArr->get(0), "eventType");
+    auto selectorType = _deserializer.deserialize<stream::EventSelectorType>(argsArr->get(1), "selectorType");
+    auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
+    auto result = _streamApi.buildSubscriptionQuery(eventType, selectorType, selectorId);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynamic::Var& args) {

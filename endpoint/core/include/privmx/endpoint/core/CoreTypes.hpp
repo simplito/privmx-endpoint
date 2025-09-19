@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -85,6 +86,14 @@ struct NotificationEvent {
     int64_t timestamp;
     std::vector<std::string> subscriptions;
 };
+
+struct ModuleKeys {
+        privmx::utils::List<server::KeyEntry> keys;
+        std::string currentKeyId;
+        int64_t moduleSchemaVersion;
+        std::string moduleResourceId;
+        std::string contextId;
+    };
 
 }  // namespace core
 }  // namespace endpoint

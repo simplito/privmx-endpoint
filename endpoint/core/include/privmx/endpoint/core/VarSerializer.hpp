@@ -44,6 +44,10 @@ public:
     Poco::Dynamic::Var serialize(const std::optional<T>& value);
     template<typename T>
     Poco::Dynamic::Var serialize(const std::map<std::string, T>& value);
+    template<typename B>
+    Poco::JSON::Object::Ptr serializeBase(const B& value, const std::string& type) = delete;
+    template<typename B, typename D>
+    Poco::JSON::Object::Ptr serializeBaseWithData(const D& value, const std::string& type);
 
     const Options& getOptions() const {
         return _options;
@@ -91,6 +95,16 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<bool>(const bool& val);
 
 template<>
+Poco::JSON::Object::Ptr VarSerializer::serializeBase<Event>(const Event& val, const std::string& type);
+
+template<typename B, typename D>
+inline Poco::JSON::Object::Ptr VarSerializer::serializeBaseWithData(const D& value, const std::string& type) {
+    Poco::JSON::Object::Ptr obj = serializeBase<B>(value, type);
+    obj->set("data", serialize(value.data));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<Context>(const Context& val);
 
 template<>
@@ -109,6 +123,33 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<LibBreakEvent>(const LibBreakEvent& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUserEventData>(const ContextUserEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserWithAction>(const UserWithAction& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(const ContextUsersStatusChangedEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUserAddedEvent>(const ContextUserAddedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUserRemovedEvent>(const ContextUserRemovedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEvent>(const ContextUsersStatusChangedEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<CollectionItemChange>(const CollectionItemChange& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEventData>(const CollectionChangedEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEvent>(const CollectionChangedEvent& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const ContainerPolicyWithoutItem& val);
 
 template<>
@@ -121,7 +162,13 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserWithPubKey>(const UserWithPubKey& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<UserStatusChange>(const UserStatusChange& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<PagingList<UserInfo>>(const PagingList<UserInfo>& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity& val);

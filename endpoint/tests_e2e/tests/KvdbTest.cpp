@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
+#include "../utils/FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -8,7 +9,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
-#include <privmx/endpoint/kvdb/KvdbVarSerializer.hpp>
+#include <privmx/endpoint/kvdb/VarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 
@@ -85,7 +86,6 @@ protected:
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
 };
-
 
 TEST_F(KvdbTest, getKvdb) {
     kvdb::Kvdb kvdb;
@@ -196,6 +196,20 @@ TEST_F(KvdbTest, listKvdbs_incorrect_input_data) {
                 .sortOrder="desc",
                 .lastId=std::nullopt,
                 .queryAsJson="{BLACH,}"
+            }
+        );
+    }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        kvdbApi->listKvdbs(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
             }
         );
     }, core::InvalidParamsException);
@@ -508,10 +522,6 @@ TEST_F(KvdbTest, updateKvdb_incorrect_data) {
 }
 
 TEST_F(KvdbTest, updateKvdb_correct_data) {
-    //enable cache
-    EXPECT_NO_THROW({
-        kvdbApi->subscribeForKvdbEvents();
-    });
     kvdb::Kvdb kvdb;
     // new users
     EXPECT_NO_THROW({
@@ -877,6 +887,20 @@ TEST_F(KvdbTest, listEntriesKeys_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect sortBy
+    EXPECT_THROW({
+        kvdbApi->listEntriesKeys(
+            reader->getString("Kvdb_1.kvdbId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
@@ -911,7 +935,7 @@ TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
         auto entry = listEntriesKeys.readItems[0];
         EXPECT_EQ(entry, reader->getString("KvdbEntry_1.info_key"));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on kvdb
+    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on kvdb
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             reader->getString("Kvdb_1.kvdbId"),
@@ -935,14 +959,22 @@ TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
         );
     });
     EXPECT_NO_THROW({
-        listEntriesKeys = kvdbApi->listEntriesKeys(
-            reader->getString("Kvdb_1.kvdbId"),
-            {
-                .skip=0, 
-                .limit=3, 
-                .sortOrder="asc"
-            }
-        );
+        try {
+            listEntriesKeys = kvdbApi->listEntriesKeys(
+                reader->getString("Kvdb_1.kvdbId"),
+                {
+                    .skip=0, 
+                    .limit=3, 
+                    .sortOrder="asc",
+                    .lastId=std::nullopt,
+                    .sortBy="createDate",
+                    .queryAsJson=std::nullopt
+                }
+            );
+        } catch (const core::Exception& e) {
+            std::cout << e.getFull() << std::endl;
+            e.rethrow();
+        }
     });
     EXPECT_EQ(listEntriesKeys.totalAvailable, 2);
     EXPECT_EQ(listEntriesKeys.readItems.size(), 2);
@@ -1092,7 +1124,10 @@ TEST_F(KvdbTest, listEntries_correct_input_data) {
             {
                 .skip=0, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
@@ -1397,4 +1432,158 @@ TEST_F(KvdbTest, deleteEntries) {
             reader->getString("KvdbEntry_2.info_key")
         );
     }, core::Exception);
+}
+
+TEST_F(KvdbTest, sendMessage_cacheManipulation) {
+    // load kvdb to cache
+    EXPECT_NO_THROW({
+        kvdbApi->getKvdb(reader->getString("Kvdb_1.kvdbId"));
+    });
+    // update kvdb
+    EXPECT_NO_THROW({
+        kvdbApi->updateKvdb(
+            reader->getString("Kvdb_1.kvdbId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    });    
+    // correct data
+    EXPECT_NO_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            "test",
+            core::Buffer::from("publicMeta"),
+            core::Buffer::from("privateMeta"),
+            core::Buffer::from("data"),
+            0
+        );
+    });
+    kvdb::KvdbEntry entry;
+    EXPECT_NO_THROW({
+        entry = kvdbApi->getEntry(
+            reader->getString("Kvdb_1.kvdbId"),
+            "test"
+        );
+    });
+    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(entry.data.stdString(), "data");
+    EXPECT_EQ(entry.privateMeta.stdString(), "privateMeta");
+    EXPECT_EQ(entry.publicMeta.stdString(), "publicMeta");
+}
+    
+TEST_F(KvdbTest, userValidator_false) {
+    auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
+    connection->setUserVerifier(verifier);
+    // getKvdb
+    EXPECT_NO_THROW({
+        auto Kvdb = kvdbApi->getKvdb(
+            reader->getString("Kvdb_1.KvdbId")
+        );
+        EXPECT_FALSE(Kvdb.statusCode == 0);
+    });
+    // listKvdbs
+    EXPECT_NO_THROW({
+        auto Kvdbs = kvdbApi->listKvdbs(
+            reader->getString("Context_1.contextId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(Kvdbs.readItems[0].statusCode == 0);
+    });
+    // createKvdb
+    EXPECT_NO_THROW({
+        kvdbApi->createKvdb(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private")
+        );
+    });
+    EXPECT_THROW({
+        kvdbApi->updateKvdb(
+            reader->getString("Kvdb_1.KvdbId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            true,
+            true
+        );
+    }, core::Exception);
+    // deleteKvdb
+    EXPECT_NO_THROW({
+        kvdbApi->deleteKvdb(
+            reader->getString("Kvdb_2.KvdbId")
+        );
+    });
+    // getEntry
+    EXPECT_NO_THROW({
+        auto entry = kvdbApi->getEntry(
+            reader->getString("KvdbEntry_1.info_kvdbId"),
+            reader->getString("KvdbEntry_1.info_key")
+        );
+        EXPECT_FALSE(entry.statusCode == 0);
+    });
+    // listMessages
+    EXPECT_NO_THROW({
+        auto entries = kvdbApi->listEntries(
+            reader->getString("Kvdb_1.KvdbId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc"
+            }
+        );
+        EXPECT_FALSE(entries.readItems[0].statusCode == 0);
+    });
+    // setEntry
+    EXPECT_THROW({
+        kvdbApi->setEntry(
+            reader->getString("Kvdb_1.KvdbId"),
+            "key",
+            core::Buffer::from("pubMeta"),
+            core::Buffer::from("privMeta"),
+            core::Buffer::from("data")
+        );
+    }, core::Exception);
+    // deleteEntry
+    EXPECT_NO_THROW({
+        kvdbApi->deleteEntry(
+            reader->getString("KvdbEntry_2.info_kvdbId"),
+            reader->getString("KvdbEntry_2.info_key")
+        );
+    });
 }

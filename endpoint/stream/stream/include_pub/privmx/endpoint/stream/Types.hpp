@@ -67,6 +67,22 @@ struct SdpWithTypeAndSessionModel {
     std::string type;
 };
 
+enum EventType: int64_t {
+    STREAMROOM_CREATE = 0,
+    STREAMROOM_UPDATE = 1,
+    STREAMROOM_DELETE = 2,
+    STREAM_JOIN = 4,
+    STREAM_LEAVE = 5,
+    STREAM_PUBLISH = 6,
+    STREAM_UNPUBLISH = 7,
+};
+
+enum EventSelectorType: int64_t {
+    CONTEXT_ID = 0,
+    STREAMROOM_ID = 1,
+    STREAM_ID = 2,
+};
+
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx

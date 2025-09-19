@@ -42,9 +42,10 @@ public:
         UnpublishStream = 11,
         LeaveStream = 12,
         KeyManagement = 13,
-        SubscribeForStreamEvents = 14,
-        UnsubscribeFromStreamEvents = 15,
-        Trickle = 16
+        SubscribeFor = 14,
+        UnsubscribeFrom = 15,
+        BuildSubscriptionQuery = 16,
+        Trickle = 17
     };
 
     StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
@@ -65,8 +66,9 @@ public:
     Poco::Dynamic::Var unpublishStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var leaveStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var keyManagement(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForStreamEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromStreamEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

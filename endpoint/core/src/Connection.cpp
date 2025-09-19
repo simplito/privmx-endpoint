@@ -68,7 +68,7 @@ int64_t Connection::getConnectionId() {
 
 PagingList<Context> Connection::listContexts(const PagingQuery& pagingQuery) {
     validateEndpoint();
-    Validator::validateClass<PagingQuery>(pagingQuery, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
         return _impl->listContexts(pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -77,11 +77,12 @@ PagingList<Context> Connection::listContexts(const PagingQuery& pagingQuery) {
     }
 }
 
-std::vector<UserInfo> Connection::getContextUsers(const std::string& contextId) {
+PagingList<UserInfo> Connection::listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery) {
     validateEndpoint();
     Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
-        return _impl->getContextUsers(contextId);
+        return _impl->listContextUsers(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -92,6 +93,35 @@ void Connection::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier
     _impl->setUserVerifier(verifier);
 }
 
+std::vector<std::string> Connection::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+    validateEndpoint();
+    try {
+        return _impl->subscribeFor(subscriptionQueries);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void Connection::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
+    validateEndpoint();
+    try {
+        return _impl->unsubscribeFrom(subscriptionIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string Connection::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
 
 void Connection::disconnect() {
     validateEndpoint();

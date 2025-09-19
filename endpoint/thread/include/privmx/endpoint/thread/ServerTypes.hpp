@@ -146,6 +146,7 @@ ENDPOINT_SERVER_TYPE(ThreadMessageGetResult)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadMessagesGetResult)
+    OBJECT_FIELD(thread, ThreadInfo)
     LIST_FIELD(messages, server::Message)
     INT64_FIELD(count)
 TYPE_END
@@ -164,9 +165,11 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(ThreadDeletedMessageEventData)
     STRING_FIELD(messageId)
     STRING_FIELD(threadId)
+    STRING_FIELD(containerType)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(ThreadStatsEventData)
+    STRING_FIELD(contextId)
     STRING_FIELD(threadId)
     INT64_FIELD(lastMsgDate)
     INT64_FIELD(messages)
@@ -190,6 +193,10 @@ ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedMessageDataV5, core::dynamic::VersionedDat
     STRING_FIELD(internalMeta)
     STRING_FIELD(authorPubKey)
     STRING_FIELD(dio)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE_INHERIT(ThreadMessageEventData, Message)
+    STRING_FIELD(containerType)
 TYPE_END
 
 } // server

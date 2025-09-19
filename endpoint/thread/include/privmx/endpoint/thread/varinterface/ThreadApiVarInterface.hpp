@@ -15,8 +15,8 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 
 #include "privmx/endpoint/thread/ThreadApi.hpp"
-#include "privmx/endpoint/thread/ThreadVarDeserializer.hpp"
-#include "privmx/endpoint/thread/ThreadVarSerializer.hpp"
+#include "privmx/endpoint/thread/VarDeserializer.hpp"
+#include "privmx/endpoint/thread/VarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -36,10 +36,13 @@ public:
         SendMessage = 8,
         DeleteMessage = 9,
         UpdateMessage = 10,
-        SubscribeForThreadEvents = 11,
-        UnsubscribeFromThreadEvents = 12,
-        SubscribeForMessageEvents = 13,
-        UnsubscribeFromMessageEvents = 14
+        Deleted_Function_0 = 11,
+        Deleted_Function_1 = 12,
+        Deleted_Function_2 = 13,
+        Deleted_Function_3 = 14,
+        SubscribeFor = 15,
+        UnsubscribeFrom = 16,
+        BuildSubscriptionQuery = 17,
     };
 
     ThreadApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -56,10 +59,10 @@ public:
     Poco::Dynamic::Var sendMessage(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteMessage(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateMessage(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForThreadEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromThreadEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var subscribeForMessageEvents(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromMessageEvents(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
+
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

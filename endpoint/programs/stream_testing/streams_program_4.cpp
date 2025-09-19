@@ -219,10 +219,10 @@ MyFrame::MyFrame()
     connectButton = new wxButton(this->m_board, wxID_ANY, "Connect");
     joinButton = new wxButton(this->m_board, wxID_ANY, "Join");
     publishButton = new wxButton(this->m_board, wxID_ANY, "Publish");
-    hostURLInput = new wxTextCtrl(this->m_board, wxID_ANY, "http://webrtc2.s24.simplito.com:3000");
-    privKeyInput = new wxTextCtrl(this->m_board, wxID_ANY, "KxVnzhhH2zMpumuhzBRoAC6dv9a7pKEzoKuftjP5Vr4MGYoAbgn8");
-    solutionIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "fc47c4e4-e1dc-414a-afa4-71d436398cfc");
-    streamRoomIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "stream room Id");
+    hostURLInput = new wxTextCtrl(this->m_board, wxID_ANY, "<BridgeUrl>");
+    privKeyInput = new wxTextCtrl(this->m_board, wxID_ANY, "<PrivKey>");
+    solutionIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "<SolutionId>");
+    streamRoomIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "<Stream Room Id>");
 
 
     controlSizer->Add(hostURLInput, 1, wxEXPAND | wxALL,5);
@@ -332,29 +332,14 @@ void MyFrame::Connect(std::string privKey, std::string solutionId, std::string u
     crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
     auto context = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
     auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
-    std::string streamRoomId;
-
-    if(streamRoomList.readItems.size() == 0 || streamRoomList.readItems[0].statusCode != 0) {
-        if(streamRoomList.readItems.size() > 0) streamApi->deleteStreamRoom(streamRoomList.readItems[0].streamRoomId);
-        auto pubKey = cryptoApi.derivePublicKey(privKey);
-        std::vector<privmx::endpoint::core::UserWithPubKey> users = {
-            privmx::endpoint::core::UserWithPubKey{.userId="patryk", .pubKey="51ciywf56WuDKxyEuquMsfoydEK2NavoFtFBvoKWEi7VuqHkur"},
-            privmx::endpoint::core::UserWithPubKey{.userId="user1",  .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}
-        };
-        streamRoomId = streamApi->createStreamRoom(
-            context.contextId,
-            users,
-            users,
-            privmx::endpoint::core::Buffer::from(""),
-            privmx::endpoint::core::Buffer::from(""),
-            std::nullopt
-        );
-        
-    } else {
-        streamRoomId = streamRoomList.readItems[0].streamRoomId;
+    std::string streamRoomId = "<Stream Room Id>";
+    for(auto streamRoom : streamRoomList.readItems) {
+        if(streamRoom.statusCode == 0) {
+            streamRoomId = streamRoom.streamRoomId;
+            break;
+        }
     }
     streamRoomIdInput->SetValue(streamRoomId);
-    
 }
 
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {

@@ -20,9 +20,11 @@ class IChunkReader
 {
 public:
     virtual ~IChunkReader() = default;
-    virtual std::string getChunk(uint32_t chunkNumber) = 0;
-    virtual size_t getChunkSize() = 0;
-    virtual uint64_t getEncryptedFileSize(uint64_t originalFileSize) = 0;
+    virtual size_t filePosToFileChunkIndex(size_t pos) = 0;
+    virtual size_t filePosToPosInFileChunk(size_t pos) = 0;
+    virtual std::string getDecryptedChunk(size_t index) = 0;
+    virtual void sync(const store::FileDecryptionParams& newParms) = 0;
+    virtual void update(int64_t newfileVersion, size_t index) = 0;
 };
 
 

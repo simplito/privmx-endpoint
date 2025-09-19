@@ -22,8 +22,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
@@ -91,8 +89,9 @@ public:
 
     void leaveStream(int64_t streamId);
     
-    void subscribeForStreamEvents();
-    void unsubscribeFromStreamEvents();
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     void keyManagement(bool disable);
     void dropBrokenFrames(bool enable);
@@ -127,9 +126,6 @@ private:
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     privmx::utils::ThreadSaveMap<uint64_t, std::shared_ptr<StreamData>> _streamDataMap;
-    
-
-
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;

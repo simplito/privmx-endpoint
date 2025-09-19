@@ -4,6 +4,7 @@
 #include <wx/rawbmp.h>
 #include <wx/dcgraph.h>
 #include <wx/textentry.h>
+#include <wx/glcanvas.h>
 
 #include <iostream>
 #include <sstream>
@@ -87,13 +88,13 @@ class VideoPanel : public wxPanel {
 public:
     VideoPanel(wxWindow * parent);
     void Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame);
+    std::atomic_bool haveNewFrame = false;
 
 private:
     void OnPaint(wxPaintEvent& event);
     std::mutex m;
     std::vector<unsigned char> picDataVector;
     std::shared_ptr<wxBitmap> bmp = std::make_shared<wxBitmap>(MAX_VIDEO_W, MAX_VIDEO_H, 32);
-    bool haveFrame = false;
 };
 
 VideoPanel::VideoPanel(wxWindow * parent) :
@@ -113,10 +114,11 @@ void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::
     if(H < 1 || W < 1) return;
     picDataVector.reserve(4*W*H);
     frame->ConvertToRGBA(&picDataVector[0], 1, W, H);
+    std::shared_ptr<wxBitmap> tmp_bmp = RGBAintoBitmap(W, H, &picDataVector[0]);
     {
         std::unique_lock<std::mutex> lock(m); 
-        bmp = RGBAintoBitmap(W, H, &picDataVector[0]);
-        haveFrame = true;
+        bmp = tmp_bmp;
+        haveNewFrame = true;
     }
     
 }
@@ -124,10 +126,13 @@ void VideoPanel::Render(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::
 void VideoPanel::OnPaint(wxPaintEvent& event)
 {
     wxPaintDC dc(this);
-    dc.Clear();
-    if(haveFrame) {
-        std::unique_lock<std::mutex> lock(m);
-        std::shared_ptr<wxBitmap> tmp_bmp = bmp;
+    if(haveNewFrame) {
+        std::shared_ptr<wxBitmap> tmp_bmp;
+        {
+            std::unique_lock<std::mutex> lock(m);
+            tmp_bmp = bmp;
+            haveNewFrame = false;
+        }
         dc.DrawBitmap(tmp_bmp->GetSubBitmap(wxRect(0, 0, tmp_bmp->GetWidth(), tmp_bmp->GetHeight())), 0, 0, false);
     }
 }
@@ -175,7 +180,8 @@ private:
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApi> streamApi;
-    std::thread _event_chandler;
+    std::thread _event_handler;
+    std::thread _renderer_handler;
     std::optional<int64_t> joinedStream;
     std::optional<int64_t> publishedStream;
 
@@ -199,6 +205,13 @@ void MyFrame::OnResize(wxSizeEvent& event) {
     int numberOfVideos = mapOfVideoPanels.size() != 0 ? mapOfVideoPanels.size() : 1;
     int numberCol = numberOfMaxCol < numberOfVideos ? numberOfMaxCol : numberOfVideos;
     sizer->SetCols(numberCol);
+    {
+        std::shared_lock<std::shared_mutex> lock(_videoPanels);
+        // this->Refresh();
+        std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {
+            p.second->haveNewFrame = true; 
+        });
+    }
     event.Skip(); 
 }
 
@@ -222,7 +235,14 @@ void MyFrame::OnExit(wxCloseEvent& event) {
         connection.reset();
     }
     privmx::endpoint::core::EventQueue::getInstance().emitBreakEvent();
-    _event_chandler.join();
+
+    PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Join threads")
+    if(_event_handler.joinable()) {
+        _event_handler.join();
+    }
+    if(_renderer_handler.joinable()) {
+        _renderer_handler.join();
+    }
     PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Closed")
     Destroy();
 }
@@ -239,7 +259,6 @@ MyFrame::MyFrame()
     loginInput = new wxTextCtrl(this->m_board, wxID_ANY, "Login");
     passwordInput = new wxTextCtrl(this->m_board, wxID_ANY, "Default password", wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD, wxDefaultValidator);
     streamRoomIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "stream room Id");
-
 
     controlSizer->Add(loginInput, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(passwordInput, 1, wxEXPAND | wxALL,5);
@@ -318,21 +337,25 @@ MyFrame::MyFrame()
     sizer->Add(m_board, 1, wxEXPAND | wxALL,5);
     this->SetSizerAndFit(sizer);
 
-    std::thread t([&]() {
+    _renderer_handler = std::thread([&]() {
         try {
             while(!cancellationToken.isCancelled()) {
                 cancellationToken.sleep(std::chrono::milliseconds(50));
                 {
                     std::shared_lock<std::shared_mutex> lock(_videoPanels);
-                    std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {if(p.second!=nullptr) p.second->Refresh(); ;});
+                    // this->Refresh();
+                    std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {
+                        if(p.second!=nullptr && p.second->haveNewFrame) {
+                            p.second->Refresh();
+                        } 
+                    });
                 }
             }
         } catch (const privmx::utils::OperationCancelledException& e) {
             return;
         }
     }); 
-    t.detach();
-    _event_chandler = std::thread([&]() {
+    _event_handler = std::thread([&]() {
         auto eventQueue = privmx::endpoint::core::EventQueue::getInstance();
         while (!cancellationToken.isCancelled()) {
             auto eventHolder = eventQueue.waitEvent();
@@ -341,29 +364,22 @@ MyFrame::MyFrame()
             }
             PRIVMX_DEBUG("StreamProgram wx", "Event recived", eventHolder.toJSON())
             if(privmx::endpoint::stream::Events::isStreamPublishedEvent(eventHolder)) {
-                // if(joinedStream.has_value()) {
-                //     PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent", "Leaving Stream")
-                //     streamApi->leaveStream(joinedStream.value());
-                //     PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent", "Reseting VideoPanels")
-                //     std::unique_lock<std::shared_mutex> lock(_videoPanels);
-                //     mapOfVideoPanels.clear();
-                // }
-                // auto tmp = privmx::endpoint::stream::Events::extractStreamPublishedEvent(eventHolder);
-                // stream::StreamJoinSettings ssettings {
-                //     .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-                //         this->OnFrame(w, h, frame, id);
-                //     }
-                // };
-                // if(tmp.data.streamIds.size() != 0) {
-                //     joinedStream = streamApi->joinStream(tmp.data.streamRoomId, tmp.data.streamIds, ssettings);
-                // }
-                JoinToStreamRoom(streamRoomIdInput->GetValue().ToStdString());
+                auto eventData = privmx::endpoint::stream::Events::extractStreamPublishedEvent(eventHolder);
+                if(eventData.data.streamRoomId == streamRoomIdInput->GetValue()) {
+                    PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent", "Reseting VideoPanels")
+                    std::unique_lock<std::shared_mutex> lock(_videoPanels);
+                    mapOfVideoPanels.clear();
+                    Layout();
+                }
             } else if (privmx::endpoint::stream::Events::isStreamUnpublishedEvent(eventHolder)) {
-                PRIVMX_DEBUG("StreamProgram wx", "isStreamUnpublishedEvent", "Reseting VideoPanels")
-                // std::unique_lock<std::shared_mutex> lock(_videoPanels);
-                // mapOfVideoPanels.clear();
+                auto eventData = privmx::endpoint::stream::Events::extractStreamUnpublishedEvent(eventHolder);
+                if(eventData.data.streamRoomId == streamRoomIdInput->GetValue()) {
 
-                // Layout();
+                    PRIVMX_DEBUG("StreamProgram wx", "isStreamUnpublishedEvent", "Reseting VideoPanels")
+                    std::unique_lock<std::shared_mutex> lock(_videoPanels);
+                    mapOfVideoPanels.clear();
+                    Layout();
+                }
             } 
         }
     });
@@ -393,23 +409,92 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
     std::string streamRoomId = "";
     if(info->has("streamRoomId")) streamRoomId = info->getValue<std::string>("streamRoomId");
     streamRoomIdInput->SetValue(streamRoomId);
+    // admin account
+    std::string adminUserId = "";
+    if(info->has("adminUserId")) adminUserId = info->getValue<std::string>("adminUserId");
+    std::string adminUserPubKey = "";
+    if(info->has("adminUserPubKey")) adminUserPubKey = info->getValue<std::string>("adminUserPubKey");
+    std::string adminUserPrivKey = "";
+    if(info->has("adminUserPrivKey")) adminUserPrivKey = info->getValue<std::string>("adminUserPrivKey");
 
 
     Poco::JSON::Object::Ptr request_json = new Poco::JSON::Object();
     request_json->set("contextId", contextId);
     request_json->set("userId", login);
-    request_json->set("userPubKey", privKey);
+    request_json->set("userPubKey", pubKey);
     auto requestString {privmx::utils::Utils::stringify(request_json)};
     std::cout << requestString << std::endl;
     auto result_addUser = httpChannel->send(requestString, "/addUser", {}, privmx::utils::CancellationToken::create(), contentType, false, false).get();
     std::cout << result_addUser << std::endl;
     auto addUser = privmx::utils::Utils::parseJsonObject(result_addUser);
     if(addUser->has("success") && addUser->getValue<bool>("success")) {
-        connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, url));
-        eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
-        streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
+        PRIVMX_DEBUG("StreamProgram wx", "Connect", "Connected with Application Server")
+        try {
+            connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, bridgeUrl));
+            eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
+            streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
+        } catch (const privmx::endpoint::core::Exception& e) {
+            PRIVMX_DEBUG("StreamProgram wx", "Connect", "Connection To bridge failed")
+        }
+        try {
+            PRIVMX_DEBUG("StreamProgram wx", "Connect", "Getting StreamRoom")
+            auto room = streamApi->getStreamRoom(streamRoomId);
+            PRIVMX_DEBUG("StreamProgram wx", "Connect", "StreamRoom status code = " + std::to_string(room.statusCode));
+        } catch (const privmx::endpoint::core::Exception& e) {
+            PRIVMX_DEBUG("StreamProgram wx", "Connect", "User not added to StreamRoom")
+            auto admin_connection = std::make_shared<core::Connection>(core::Connection::connect(adminUserPrivKey, solutionId, bridgeUrl));
+            auto admin_streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*admin_connection, *eventApi));
+            bool stop = false;
+            for (size_t i = 0;!stop;i++) {
+                PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Getting StreamRoomInfo")
+                auto users_list = admin_connection->listContextUsers(contextId, core::PagingQuery{0, 100, "desc"});
+                std::vector<privmx::endpoint::core::UserWithPubKey> users;
+                for(const auto& userInfo: users_list.readItems) {
+                    users.push_back(userInfo.user);
+                }
+                privmx::endpoint::stream::StreamRoom streamRoomInfo;
+                try {
+                    streamRoomInfo = admin_streamApi->getStreamRoom(streamRoomId);
+                } catch (const privmx::endpoint::core::Exception& e) {
+                    PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Updating StreamRoomInfo")
+                    streamRoomIdInput->SetValue(admin_streamApi->createStreamRoom(
+                        contextId,
+                        users,
+                        users,
+                        core::Buffer::from("publicMeta"),
+                        core::Buffer::from("privateMeta"),
+                        std::nullopt
+                    ));
+                    stop = true;
+                    break;
+                }
+                try {
+                    
+                    PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Updating StreamRoomInfo")
+                    admin_streamApi->updateStreamRoom(
+                        streamRoomId,
+                        users,
+                        users,
+                        streamRoomInfo.publicMeta,
+                        streamRoomInfo.privateMeta,
+                        streamRoomInfo.version,
+                        false,
+                        false,
+                        std::nullopt
+                    );
+                    stop = true;
+                    break;
+                } catch (const privmx::endpoint::core::Exception& e) {
+                    std::cout << "Failed to add user to Stream Room, try: " << i+1 << std::endl;
+                    continue;
+                }
+            }
+            admin_connection->disconnect();
+        }
+
     } else {
-        loginInput->SetValue("Using Default User");
+        PRIVMX_DEBUG("StreamProgram wx", "Connect", "Failed in connecting with Application Server, using backup default User")
+        loginInput->SetValue("backup Default User");
         connection = std::make_shared<core::Connection>(core::Connection::connect(
             "L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", 
             "fc47c4e4-e1dc-414a-afa4-71d436398cfc", 
@@ -418,6 +503,7 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
         eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
         streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
         auto context = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
+        contextId = context.contextId;
         auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
         std::string streamRoomId;
 
@@ -441,12 +527,16 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
         }
         streamRoomIdInput->SetValue(streamRoomId);
     }
-    streamApi->subscribeForStreamEvents();
+    streamApi->subscribeFor({
+        streamApi->buildSubscriptionQuery(stream::EventType::STREAM_JOIN, stream::EventSelectorType::CONTEXT_ID, contextId),
+        streamApi->buildSubscriptionQuery(stream::EventType::STREAM_LEAVE, stream::EventSelectorType::CONTEXT_ID, contextId),
+        streamApi->buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH, stream::EventSelectorType::CONTEXT_ID, contextId),
+        streamApi->buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH, stream::EventSelectorType::CONTEXT_ID, contextId)
+    });
     
 }
 
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
-    streamApi->subscribeForStreamEvents();
     if(publishedStream.has_value()) {
         PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Unpublishing Stream")
         streamApi->unpublishStream(publishedStream.value());
@@ -461,11 +551,14 @@ void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
 }
 
 void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
-
+    
+    PRIVMX_DEBUG("StreamProgram wx", "JoinToStreamRoom", "streamApi->listStreams StreamRoomId: " + streamRoomId);
     auto streamlist = streamApi->listStreams(streamRoomId);
+    PRIVMX_DEBUG("StreamProgram wx", "JoinToStreamRoom", "streamApi->listStreams.size(): " + std::to_string(streamlist.size()));
     std::vector<int64_t> streamsId;
     if(streamlist.size() == 0) return;
     for(int i = 0; i < streamlist.size(); i++) {
+        PRIVMX_DEBUG("StreamProgram wx", "JoinToStreamRoom", "Stream Id: " + std::to_string(streamlist[i].streamId));
         streamsId.push_back(streamlist[i].streamId);
     }
     stream::StreamJoinSettings ssettings {
@@ -477,9 +570,13 @@ void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
     if(joinedStream.has_value()) {
         PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Leaving Stream")
         streamApi->leaveStream(joinedStream.value());
+        {
+            std::unique_lock<std::shared_mutex> lock(_videoPanels);
+            mapOfVideoPanels.clear();
+            Layout();
+        }
         PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Reseting VideoPanels")
         std::unique_lock<std::shared_mutex> lock(_videoPanels);
-        mapOfVideoPanels.clear();
     }
     joinedStream = streamApi->joinStream(streamRoomId, streamsId, ssettings);
 }
@@ -497,7 +594,7 @@ void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::st
         
         if (it == mapOfVideoPanels.end()) {
             //add video panel 
-            PRIVMX_DEBUG("StreamProgram wx", "Adding New", "VideoPanel")
+            PRIVMX_DEBUG("StreamProgram wx", "Adding New", "VideoPanel, Frame id: " + id)
             videoPanel = std::make_shared<VideoPanel>(this);
             mapOfVideoPanels[id] = videoPanel;
             sizer->Add(videoPanel.get(), 1, wxEXPAND | wxALL,5);
@@ -505,9 +602,9 @@ void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::st
         } else {
             videoPanel = mapOfVideoPanels[id];
         }
-    }
-    if(videoPanel != nullptr) {
-        videoPanel->Render(w,h,frame);
+        if(videoPanel != nullptr) {
+            videoPanel->Render(w,h,frame);
+        }
     }
 }
  

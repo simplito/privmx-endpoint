@@ -85,7 +85,7 @@ void StreamApi::updateStreamRoom(
 core::PagingList<StreamRoom> StreamApi::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<core::PagingQuery>(query, "field:query ");
+    core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
     try {
         return _impl->listStreamRooms(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -229,20 +229,30 @@ void StreamApi::leaveStream(int64_t streamId) {
     }
 }
 
-void StreamApi::subscribeForStreamEvents() {
+std::vector<std::string> StreamApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     validateEndpoint();
     try {
-        return _impl->subscribeForStreamEvents();
+        return _impl->subscribeFor(subscriptionQueries);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::unsubscribeFromStreamEvents() {
+void StreamApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     validateEndpoint();
     try {
-        return _impl->unsubscribeFromStreamEvents();
+        return _impl->unsubscribeFrom(subscriptionIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string StreamApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+    validateEndpoint();
+    try {
+        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

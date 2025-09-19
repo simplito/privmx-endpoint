@@ -161,6 +161,22 @@ struct Thread {
     int64_t schemaVersion;
 };
 
+enum EventType: int64_t {
+    THREAD_CREATE = 0,
+    THREAD_UPDATE = 1,
+    THREAD_DELETE = 2,
+    THREAD_STATS = 3,
+    MESSAGE_CREATE = 4,
+    MESSAGE_UPDATE = 5,
+    MESSAGE_DELETE = 6,
+    COLLECTION_CHANGE = 7,
+};
+
+enum EventSelectorType: int64_t {
+    CONTEXT_ID = 0,
+    THREAD_ID = 1,
+    MESSAGE_ID = 2,
+};
 
 }  // namespace thread
 }  // namespace endpoint

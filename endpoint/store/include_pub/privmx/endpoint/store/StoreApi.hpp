@@ -101,10 +101,11 @@ public:
      * @param publicMeta public file metadata
      * @param privateMeta private file metadata
      * @param size size of the file
+     * @param randomWriteSupport enable random write support for file
      * @return handle to write data
      */
     int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                            const int64_t size);
+                            const int64_t size, bool randomWriteSupport = false);
 
     /**
      * Update an existing file in a Store.
@@ -132,8 +133,9 @@ public:
      *
      * @param handle handle to write file data
      * @param dataChunk file data chunk
+     * @param truncate truncate the file from: current pos + dataChunk size
      */
-    void writeToFile(const int64_t fileHandle, const core::Buffer& dataChunk);
+    void writeToFile(const int64_t fileHandle, const core::Buffer& dataChunk, bool truncate = false);
 
     /**
      * Deletes a file by given ID.
@@ -194,26 +196,32 @@ public:
     std::string closeFile(const int64_t fileHandle);
 
     /**
-     * Subscribes for the Store module main events.
+     * Subscribe for the Store events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
      */
-    void subscribeForStoreEvents();
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
 
     /**
-     * Unsubscribes from the Store module main events.
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
      */
-    void unsubscribeFromStoreEvents();
-    
-    /**
-     * Subscribes for events in given Store.
-     * @param store ID of the Store to subscribe
-     */
-    void subscribeForFileEvents(const std::string& storeId);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
 
     /**
-     * Unsubscribes from events in given Store.
-     * @param store ID of the Store to unsubscribe
-     */    
-    void unsubscribeFromFileEvents(const std::string& storeId);
+     * Generate subscription Query for the Store events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+
+    /**
+     * Synchronize file handle data with newset data on serwer
+     * @param handle handle to read/write file data
+     */ 
+    void syncFile(const int64_t handle);
 
     std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }
 private:

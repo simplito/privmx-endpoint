@@ -133,3 +133,26 @@ PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(cons
     result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".bridgeInstanceId");
     return result;
 }
+
+template<>
+EventType VarDeserializer::deserialize<EventType>(const Poco::Dynamic::Var& val, const std::string& name) {
+    switch (val.convert<int64_t>()) {
+        case core::EventType::USER_ADD:
+            return core::EventType::USER_ADD;
+        case core::EventType::USER_REMOVE:
+            return core::EventType::USER_REMOVE;
+        case core::EventType::USER_STATUS:
+            return core::EventType::USER_STATUS;
+    }
+    throw InvalidParamsException(name + " | " + ("Unknown thread::EventType value, received " + std::to_string(val.convert<int64_t>())));
+}
+
+template<>
+EventSelectorType VarDeserializer::deserialize<EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name) {
+
+    switch (val.convert<int64_t>()) {
+        case core::EventSelectorType::CONTEXT_ID:
+            return core::EventSelectorType::CONTEXT_ID;
+    }
+    throw InvalidParamsException(name + " | " + ("Unknown thread::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
+}

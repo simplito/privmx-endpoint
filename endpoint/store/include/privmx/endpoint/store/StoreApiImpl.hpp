@@ -26,14 +26,12 @@ limitations under the License.
 #include <privmx/endpoint/core/encryptors/DataEncryptor.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/EventChannelManager.hpp>
-#include <privmx/endpoint/core/SubscriptionHelper.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/FileDataProvider.hpp"
-#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
+#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV1.hpp"
 #include "privmx/endpoint/store/RequestApi.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
@@ -43,8 +41,8 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
 #include "privmx/endpoint/store/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/store/StoreProvider.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
+#include "privmx/endpoint/store/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 
 namespace privmx {
@@ -62,7 +60,6 @@ public:
         const std::shared_ptr<RequestApi>& requestApi,
         const std::shared_ptr<FileDataProvider>& fileDataProvider,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const std::shared_ptr<core::EventChannelManager>& eventChannelManager,
         const std::shared_ptr<core::HandleManager>& handleManager,
         const core::Connection& connection,
         size_t serverRequestChunkSize
@@ -93,28 +90,32 @@ public:
     File getFile(const std::string& fileId);
     core::PagingList<store::File> listFiles(const std::string& storeId, const core::PagingQuery& query);
     void deleteFile(const std::string& fileId);
-    int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size);
+    int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size, bool randomWriteSupport = false);
     int64_t updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size);
     void updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta);
     int64_t openFile(const std::string& fileId);
-    void writeToFile(const int64_t handle, const core::Buffer& dataChunk);
+    void writeToFile(const int64_t handle, const core::Buffer& dataChunk, bool truncate = false);
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
+    void syncFile(const int64_t handle);
     std::string closeFile(const int64_t handle);
-
-    void subscribeForStoreEvents();
-    void unsubscribeFromStoreEvents();
-    void subscribeForFileEvents(const std::string& storeId);
-    void unsubscribeFromFileEvents(const std::string& storeId);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
+
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
     std::string _storeCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 
                 const core::Buffer& publicMeta, const core::Buffer& privateMeta, const std::string& type,
                 const std::optional<core::ContainerPolicy>& policies);
-    server::Store getRawStoreFromCacheOrBridge(const std::string& storeId);
     Store _storeGetEx(const std::string& storeId, const std::string& type);
     core::PagingList<Store> _storeListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
+    std::string storeFileFinalizeWriteRequest(
+        const std::shared_ptr<FileWriteHandle>& handle, 
+        const ChunksSentInfo& data,
+        const core::ModuleKeys& storeKey
+    );
 
     std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey> &users);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
@@ -133,10 +134,12 @@ private:
     Store convertDecryptedStoreDataV5ToStore(server::Store store, const core::DecryptedModuleDataV5& storeData);
     StoreDataSchema::Version getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry);
     std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Store> decryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
-    Store decryptAndConvertStoreDataToStore(server::Store store);
+    std::vector<Store> validateDecryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
+    Store validateDecryptAndConvertStoreDataToStore(server::Store store);
+    void assertStoreDataIntegrity(server::Store store);
     uint32_t validateStoreDataIntegrity(server::Store store);
-
+    virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
+    core::ModuleKeys storeToModuleKeys(server::Store store);
 
     // OLD CODE    
     StoreFile decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey);
@@ -153,21 +156,26 @@ private:
         const int64_t& size = 0,
         const std::string& authorPubKey = std::string(),
         const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN
+        const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN,
+        const bool& randomWrite = false
     );
     File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
     FileDataSchema::Version getFileDataStructureVersion(server::File file);
-    std::vector<File> decryptAndConvertFilesDataToFilesInfo(server::Store store, utils::List<server::File> files);
-    File decryptAndConvertFileDataToFileInfo(server::Store store, server::File file);
-    File decryptAndConvertFileDataToFileInfo(server::File file);
+    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(utils::List<server::File> files, const core::ModuleKeys& storeKeys);
+    File validateDecryptAndConvertFileDataToFileInfo(server::File file, const core::ModuleKeys& storeKeys);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
-    dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::Store store, server::File file);
+    dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(server::File file, const core::ModuleKeys& storeKeys);
+    core::ModuleKeys getFileDecryptionKeys(server::File file);
     uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
+    FileEncryptionParams getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey);
+    FileEncryptionParams getFileEncryptionParams(server::File file, server::Store store);
+    FileDecryptionParams getFileDecryptionParams(server::File file, dynamic::InternalStoreFileMeta internalMeta);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
+    int64_t createFileRandomWriteHandle(const FileDecryptionParams& storeFileDecryptionParams, const FileMeta& fileMeta);
     void assertStoreExist(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
     
@@ -180,19 +188,15 @@ private:
     std::shared_ptr<RequestApi> _requestApi;
     std::shared_ptr<FileDataProvider> _fileDataProvider;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    std::shared_ptr<core::EventChannelManager> _eventChannelManager;
     std::shared_ptr<core::HandleManager> _handleManager;
     core::Connection _connection;
     size_t _serverRequestChunkSize;
     
-    
     FileHandleManager _fileHandleManager;
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
-    FileMetaEncryptor _fileMetaEncryptor;
+    FileMetaEncryptorV1 _fileMetaEncryptorV1;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
-    StoreProvider _storeProvider;
-    std::atomic_bool _storeCache;
-    core::SubscriptionHelper _storeSubscriptionHelper;
+    SubscriberImpl _subscriber;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId; 
 
@@ -203,7 +207,6 @@ private:
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
     
-
     inline static const std::string STORE_TYPE_FILTER_FLAG = "store";
 };
 

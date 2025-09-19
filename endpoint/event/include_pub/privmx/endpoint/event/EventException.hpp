@@ -42,6 +42,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, CannotExtractContextCustomEve
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, NotSubscribedException, "Not subscribed", 0x0004)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, AlreadySubscribedException, "Already subscribed", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, InvalidEncryptedEventDataVersionException, "Invalid version of encrypted event data", 0x0005)
+DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0006)
 
 } // event
 } // endpoint

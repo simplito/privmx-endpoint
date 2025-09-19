@@ -8,11 +8,11 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
-#include <privmx/endpoint/store/StoreVarSerializer.hpp>
+#include <privmx/endpoint/store/VarSerializer.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/endpoint/thread/ThreadVarSerializer.hpp>
+#include <privmx/endpoint/thread/VarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
-#include <privmx/endpoint/inbox/InboxVarSerializer.hpp>
+#include <privmx/endpoint/inbox/VarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxException.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
@@ -206,6 +206,20 @@ TEST_F(InboxTest, listInboxes_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
+    // incorrect sortBy
+    EXPECT_THROW({
+        inboxApi->listInboxes(
+            reader->getString("Context_1.contextId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(InboxTest, listInboxes_correct_input_data) {
@@ -259,14 +273,17 @@ TEST_F(InboxTest, listInboxes_correct_input_data) {
             EXPECT_EQ(inbox.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc"}
+    // {.skip=1, .limit=3, .sortOrder="asc", .sortBy="createDate"}
     EXPECT_NO_THROW({
         listInboxes = inboxApi->listInboxes(
             reader->getString("Context_1.contextId"),
             {
                 .skip=1, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
@@ -565,10 +582,6 @@ TEST_F(InboxTest, updateInbox_incorrect_data) {
 }
 
 TEST_F(InboxTest, updateInbox_correct_data) {
-    //enable cache
-    EXPECT_NO_THROW({
-        inboxApi->subscribeForInboxEvents();
-    });
     inbox::Inbox inbox;
     // new users
     EXPECT_NO_THROW({
@@ -983,6 +996,21 @@ TEST_F(InboxTest, listEntries_incorrect_input_data) {
             }
         );
     }, core::Exception);
+    // incorrect sortBy
+    EXPECT_THROW({
+        inboxApi->listEntries(
+            reader->getString("Inbox_1.inboxId"),
+            core::PagingQuery{
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="desc",
+                .lastId=std::nullopt,
+                .sortBy="blach",
+                .queryAsJson=std::nullopt
+            }
+        );
+    }, core::InvalidParamsException);
+
 }
 
 TEST_F(InboxTest, listEntries_correct_input_data) {
@@ -1056,7 +1084,7 @@ TEST_F(InboxTest, listEntries_correct_input_data) {
             EXPECT_EQ(file.size, reader->getInt64("Entry_1.uploaded_file_1_size"));
         }
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on inbox
+    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on inbox
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),
@@ -1086,7 +1114,10 @@ TEST_F(InboxTest, listEntries_correct_input_data) {
             {
                 .skip=0, 
                 .limit=3, 
-                .sortOrder="asc"
+                .sortOrder="asc",
+                .lastId=std::nullopt,
+                .sortBy="createDate",
+                .queryAsJson=std::nullopt
             }
         );
     });
@@ -2016,4 +2047,71 @@ TEST_F(InboxTest, update_access_to_old_entries) {
         );
     });
     EXPECT_EQ(entry.statusCode, 0);
+}
+
+TEST_F(InboxTest, sendEntry_cacheManipulation) {
+    // load inbox to cache
+    EXPECT_NO_THROW({
+        inboxApi->getInbox(reader->getString("Inbox_1.inboxId"));
+    });
+    // update inbox
+    EXPECT_NO_THROW({
+        inboxApi->updateInbox(
+            reader->getString("Inbox_1.inboxId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            1,
+            true,
+            true
+        );
+    }); 
+    // correct data
+
+    int64_t inboxHandle = 0;
+    EXPECT_NO_THROW({
+        inboxHandle = inboxApi->prepareEntry(
+            reader->getString("Inbox_2.inboxId"),
+            core::Buffer::from("test_sendEntry"),
+            {},
+            reader->getString("Login.user_1_privKey")
+        );
+    });
+    EXPECT_EQ(inboxHandle, 1);
+    if(inboxHandle == 1) {        
+        EXPECT_NO_THROW({
+            inboxApi->sendEntry(inboxHandle);
+        });
+        auto entries = inboxApi->listEntries(
+            reader->getString("Inbox_2.inboxId"),
+            {
+                .skip=0, 
+                .limit=1, 
+                .sortOrder="asc"
+            }
+        );
+        EXPECT_EQ(entries.totalAvailable, 1);
+        EXPECT_EQ(entries.readItems.size(), 1);
+        if(entries.readItems.size() >= 1) {
+            auto entry = entries.readItems[0];
+            EXPECT_EQ(entry.inboxId, reader->getString("Inbox_2.inboxId"));
+            EXPECT_EQ(entry.data.stdString(), "test_sendEntry");
+            EXPECT_EQ(entry.files.size(), 0);
+        }
+    } else {
+        std::cout << "prepareEntry Failed" << std::endl;
+        FAIL();
+    }
 }

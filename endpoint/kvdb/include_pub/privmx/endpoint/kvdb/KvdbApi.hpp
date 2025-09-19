@@ -168,26 +168,34 @@ public:
     std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
 
     /**
-     * Subscribes for the KVDB module main events.
+     * Subscribe for the KVDB events on the given subscription query.
+     * 
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in maching order to subscriptionQueries
      */
-    void subscribeForKvdbEvents();
-    
-    /**
-     * Unsubscribes from the KVDB module main events.
-     */
-    void unsubscribeFromKvdbEvents();
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
 
     /**
-     * Subscribes for events in given KVDB.
-     * @param ID of the KVDB to subscribe
-     */    
-    void subscribeForEntryEvents(std::string kvdbId);
+     * Unsubscribe from events for the given subscriptionId.
+     * @param subscriptionIds list of subscriptionId
+     */
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
 
     /**
-     * Unsubscribes from events in given KVDB.
-     * @param {string} kvdbId ID of the KVDB to unsubscribe
-     */    
-    void unsubscribeFromEntryEvents(std::string kvdbId);
+     * Generate subscription Query for the KVDB events.
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events  
+     * @param selectorId ID of the selector
+     */
+    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+
+    /**
+     * Generate subscription Query for the KVDB events for single KvdbEntry.
+     * @param eventType type of event which you listen for (Works ony For ENTRY_UPDATE, ENTRY_DELETE = 6,)
+     * @param kvdbId Id of Kvdb 
+     * @param kvdbEntryId Key of Kvdb Entry
+     */
+    std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
 
     std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
 private:

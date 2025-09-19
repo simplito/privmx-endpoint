@@ -15,7 +15,7 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/Events.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
-#include "privmx/endpoint/inbox/InboxVarSerializer.hpp"
+#include "privmx/endpoint/inbox/VarSerializer.hpp"
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
