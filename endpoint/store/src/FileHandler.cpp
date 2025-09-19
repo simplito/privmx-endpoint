@@ -54,22 +54,22 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
         toSend = emptyChars + toSend;
     }
     // start writing to offset chunk
-    uint64_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
-    uint64_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size()-1);
+    auto startIndex = _chunkReader->filePosToFileChunkIndex(offset);
+    auto stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size()-1);
     uint64_t dataSend = 0;
     std::vector<FileHandler::UpdateChunkData> chunksToUpdate;
     auto newPlainfileSize = _plainfileSize;
     auto newEncryptedFileSize = _encryptedFileSize;
     // prepare chunk to update
-    for(uint64_t i = startIndex; i <= stopIndex; i++) {
+    for(auto i = startIndex; i <= stopIndex; i++) {
         if(i == startIndex) {
-            uint64_t chunkOffset = offset % _chunkEncryptor->getPlainChunkSize();
-            std::string chunkData = toSend.substr(dataSend, _plainChunkSize -(offset % _plainChunkSize));
+            auto chunkOffset = offset % _chunkEncryptor->getPlainChunkSize();
+            auto chunkData = toSend.substr(dataSend, _plainChunkSize -(offset % _plainChunkSize));
             chunksToUpdate.push_back(createUpdateChunk(i, chunkOffset, chunkData, i == stopIndex ? truncate: false));
             dataSend += chunkData.size();
         } else {
-            uint64_t chunkOffset = 0;
-            std::string chunkData = toSend.substr(dataSend, _plainChunkSize);
+            auto chunkOffset = 0;
+            auto chunkData = toSend.substr(dataSend, _plainChunkSize);
             chunksToUpdate.push_back(createUpdateChunk(i, chunkOffset, chunkData, i == stopIndex ? truncate: false));
             dataSend += chunkData.size();
         }
@@ -121,10 +121,10 @@ core::Buffer FileHandler::read(uint64_t offset, size_t size) {
     if(offset >= _plainfileSize) return core::Buffer();
     if(offset+size > _plainfileSize) size = _plainfileSize-offset;
     if(size == 0) return core::Buffer();
-    uint64_t startIndex = _chunkReader->filePosToFileChunkIndex(offset);
-    uint64_t stopIndex = _chunkReader->filePosToFileChunkIndex(offset+size-1);
+    auto startIndex = _chunkReader->filePosToFileChunkIndex(offset);
+    auto stopIndex = _chunkReader->filePosToFileChunkIndex(offset+size-1);
     std::string data = std::string();
-    for(uint64_t i = startIndex; i <= stopIndex; i++) {
+    for(auto i = startIndex; i <= stopIndex; i++) {
         data.append(_chunkReader->getDecryptedChunk(i));
     }
     return core::Buffer::from( data.substr(_chunkReader->filePosToPosInFileChunk(offset), size) );

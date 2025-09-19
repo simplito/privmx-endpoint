@@ -53,7 +53,7 @@ size_t ChunkEncryptor::getPlainChunkSize() {
 }
 
 size_t ChunkEncryptor::getEncryptedChunkSize() {
-    Poco::Int64 CHUNK_PADDINGSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
+    auto CHUNK_PADDINGSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
     return _chunkSize + CHUNK_PADDINGSize + HMAC_SIZE + IV_SIZE;
 }
 
@@ -61,15 +61,15 @@ uint64_t ChunkEncryptor::getEncryptedFileSize(const uint64_t& fileSize) {
     if (fileSize == 0) {
         return 0;
     }
-    Poco::Int64 parts = (fileSize + _chunkSize - 1) / _chunkSize;
-    Poco::Int64 lastChunkSize = fileSize % _chunkSize;
+    auto parts = (fileSize + _chunkSize - 1) / _chunkSize;
+    auto lastChunkSize = fileSize % _chunkSize;
     if (lastChunkSize == 0) {
         lastChunkSize = _chunkSize;
     }
     // 16 iv + 32 hmac + max 16 padding
-    Poco::Int64 fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
-    Poco::Int64 lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
-    Poco::Int64 encryptedFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) + lastChunkSize + HMAC_SIZE + IV_SIZE + lastChunkPaddingSize;
+    auto fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
+    auto lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
+    auto encryptedFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) + lastChunkSize + HMAC_SIZE + IV_SIZE + lastChunkPaddingSize;
     return encryptedFileSize;
 }
 
