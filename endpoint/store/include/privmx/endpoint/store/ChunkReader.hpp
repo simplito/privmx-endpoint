@@ -39,15 +39,15 @@ public:
         const store::FileDecryptionParams& decryptionParams
     );
 
-    virtual size_t filePosToFileChunkIndex(size_t pos) override;
-    virtual size_t filePosToPosInFileChunk(size_t pos) override;
-    virtual std::string getDecryptedChunk(size_t index) override;
+    virtual uint64_t filePosToFileChunkIndex(uint64_t pos) override;
+    virtual uint64_t filePosToPosInFileChunk(uint64_t pos) override;
+    virtual std::string getDecryptedChunk(uint64_t index) override;
     virtual void sync(const store::FileDecryptionParams& newParms) override;
-    virtual void update(int64_t newfileVersion, size_t index) override;
+    virtual void update(int64_t newfileVersion, uint64_t index) override;
 private:
     struct DecryptedChunk {
         std::string decryptedData;
-        size_t index;
+        uint64_t index;
     };
     std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;

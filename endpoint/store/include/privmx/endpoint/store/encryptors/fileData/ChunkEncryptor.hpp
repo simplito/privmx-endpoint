@@ -25,11 +25,11 @@ class ChunkEncryptor : public IChunkEncryptor
 {
 public:
     ChunkEncryptor(std::string key, size_t chunkSize);
-    IChunkEncryptor::Chunk encrypt(const size_t index, const std::string& data) override;
+    IChunkEncryptor::Chunk encrypt(const uint64_t index, const std::string& data) override;
     std::string decrypt(const size_t index, const Chunk& chunk) override;
     size_t getPlainChunkSize() override;
     size_t getEncryptedChunkSize() override;
-    size_t getEncryptedFileSize(const size_t& fileSize) override;
+    uint64_t getEncryptedFileSize(const uint64_t& fileSize) override;
     void sync(std::string key, size_t chunkSize) override;
 private:
     std::string chunkIndexToBE(const size_t index);
