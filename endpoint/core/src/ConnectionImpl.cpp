@@ -78,6 +78,7 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
             // emit as raw
             _eventMiddleware->emitNotificationEvent(event.type, convertJanusEventToCoreNotificationEvent(event));
         } else {
+            std::cerr << "Emit notification in ConnectionImpl..." << "eventType" << event.type << std::endl;
             _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
         }
     });
@@ -273,19 +274,25 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
 }
 
 NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
-    std::vector<std::string> subscriptions;
-    auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
-    for(auto subscription : tmp.subscriptions()) {
-        subscriptions.push_back(subscription);
+    try {
+        std::vector<std::string> subscriptions;
+        auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
+        for(auto subscription : tmp.subscriptions()) {
+            subscriptions.push_back(subscription);
+        }
+        return NotificationEvent{
+            .source = EventSource::SERVER,
+            .type = event.type,
+            .data = tmp.data(),
+            .version = tmp.version(),
+            .timestamp = tmp.timestamp(),
+            .subscriptions = subscriptions
+        };
     }
-    return NotificationEvent{
-        .source = EventSource::SERVER,
-        .type = event.type,
-        .data = tmp.data(),
-        .version = tmp.version(),
-        .timestamp = tmp.timestamp(),
-        .subscriptions = subscriptions
-    };
+    catch (std::exception& e) {
+        std::cerr << "Error on event: " << privmx::utils::Utils::stringifyVar(event.data, true) << std::endl;
+        std::cerr << "convertRpcNotificationEventToCoreNotificationEvent: " << e.what() << std::endl;
+    }
 }
 
 NotificationEvent ConnectionImpl::convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {

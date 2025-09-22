@@ -64,3 +64,49 @@ stream::EventSelectorType VarDeserializer::deserialize<stream::EventSelectorType
     }
     throw InvalidParamsException(name + " | " + ("Unknown stream::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }
+
+template<>
+stream::VideoRoomStreamTrack VarDeserializer::deserialize<stream::VideoRoomStreamTrack>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .type = deserialize<std::string>(obj->get("type"), name + ".type"),
+        .codec = deserialize<std::string>(obj->get("codec"), name + ".codec"),
+        .mid = deserialize<std::string>(obj->get("mid"), name + ".mid"),
+        .mindex = deserialize<int64_t>(obj->get("mindex"), name + ".mindex")
+    };
+}
+
+template<>
+stream::NewPublisherEvent VarDeserializer::deserialize<stream::NewPublisherEvent>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+
+    std::vector<stream::VideoRoomStreamTrack> streams {};
+    auto varArray {obj->getArray("streams")};
+    for (const auto& item: *varArray) {
+        streams.push_back(deserialize<stream::VideoRoomStreamTrack>(item, name + ".streams"));
+    }
+    return {
+        .id = deserialize<std::string>(obj->get("id"), name + ".id"),
+        .video_codec = deserialize<std::string>(obj->get("video_codec"), name + ".video_codec"),
+        .streams = streams
+    };
+}
+
+template<>
+stream::CurrentPublishersData VarDeserializer::deserialize<stream::CurrentPublishersData>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+
+    std::vector<stream::NewPublisherEvent> publishers {};
+    auto varArray {obj->getArray("publishers")};
+    for (const auto& item: *varArray) {
+        publishers.push_back(deserialize<stream::NewPublisherEvent>(item, name + ".publishers"));
+    }
+    return {
+        .room = deserialize<std::string>(obj->get("room"), name + ".room"),
+        .publishers = publishers
+    };
+}
+

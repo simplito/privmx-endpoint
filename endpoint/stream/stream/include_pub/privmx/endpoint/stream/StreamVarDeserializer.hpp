@@ -32,6 +32,15 @@ stream::EventType VarDeserializer::deserialize<stream::EventType>(const Poco::Dy
 template<>
 stream::EventSelectorType VarDeserializer::deserialize<stream::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
 
+template<>
+stream::VideoRoomStreamTrack VarDeserializer::deserialize<stream::VideoRoomStreamTrack>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+stream::NewPublisherEvent VarDeserializer::deserialize<stream::NewPublisherEvent>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+stream::CurrentPublishersData VarDeserializer::deserialize<stream::CurrentPublishersData>(const Poco::Dynamic::Var& val, const std::string& name);
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

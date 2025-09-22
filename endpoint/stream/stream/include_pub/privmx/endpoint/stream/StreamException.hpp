@@ -71,7 +71,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamLeftEvent
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomEncryptionKeyValidationException, "Failed StreamRoom encryption key validation", 0x0016);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownStreamRoomFormatException, "Unknown StreamRoom format", 0x0017);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomDataIntegrityException, "Failed StreamRoom data integrity check", 0x0018);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0019)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0019);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamAvailablePublishersEventException, "Cannot extract StreamAvailablePublishersEvent", 0x0014)
 
 
 } // stream

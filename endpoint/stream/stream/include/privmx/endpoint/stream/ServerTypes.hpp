@@ -257,6 +257,23 @@ ENDPOINT_SERVER_TYPE_INHERIT(JanusPluginEvent, JanusEventData)
     OBJECT_FIELD(plugindata, JanusPluginDataEvent)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(VideoRoomStreamTrack)
+    STRING_FIELD(type)
+    STRING_FIELD(codec)
+    STRING_FIELD(mid)
+    INT64_FIELD(mindex)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(NewPublisherEvent)
+    STRING_FIELD(id)
+    STRING_FIELD(video_codec)
+    LIST_FIELD(streams, VideoRoomStreamTrack)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(CurrentPublishersData)
+    STRING_FIELD(room)
+    LIST_FIELD(publishers, NewPublisherEvent)
+TYPE_END
 
 } // server
 } // stream

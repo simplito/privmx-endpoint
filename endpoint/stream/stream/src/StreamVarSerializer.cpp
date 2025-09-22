@@ -193,6 +193,83 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamLeftEvent>(const strea
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::VideoRoomStreamTrack>(const stream::VideoRoomStreamTrack& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$VideoRoomStreamTrack");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("codec", serialize(val.codec));
+    obj->set("mid", serialize(val.mid));
+    obj->set("mindex", serialize(val.mindex));
+
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::NewPublisherEvent>(const stream::NewPublisherEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$NewPublisherEvent");
+    }
+    Poco::JSON::Array::Ptr streamsArr = new Poco::JSON::Array();
+    for (auto stream: val.streams) {
+        streamsArr->add(serialize<stream::VideoRoomStreamTrack>(stream));
+    }
+
+    obj->set("id", serialize(val.id));
+    obj->set("video_codec", serialize(val.video_codec));
+    obj->set("streams", streamsArr);
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::CurrentPublishersData>(const stream::CurrentPublishersData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$CurrentPublishersData");
+    }
+    Poco::JSON::Array::Ptr publishersArr = new Poco::JSON::Array();
+    for (auto pub: val.publishers) {
+        publishersArr->add(serialize<stream::NewPublisherEvent>(pub));
+    }
+    obj->set("room", serialize(val.room));
+    obj->set("publishers", publishersArr);
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamAvailablePublishersEvent>(const stream::StreamAvailablePublishersEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamAvailablePublishersEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("data", serialize(val.data));
+    return obj;
+}
+
+struct VideoRoomStreamTrack {
+    std::string type;
+    std::string codec;
+    std::string mid;
+    int64_t mindex;
+};
+
+struct NewPublisherEvent {
+    std::string id;
+    std::string video_codec;
+    std::vector<VideoRoomStreamTrack> streams;
+};
+
+struct CurrentPublishersData {
+    std::string room;
+    std::vector<NewPublisherEvent> publishers;
+};
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stream::SdpWithTypeModel& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

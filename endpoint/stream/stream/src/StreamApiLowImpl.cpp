@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/stream/StreamVarDeserializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -168,6 +169,15 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
             event->data = eventData;
             _eventMiddleware->emitApiEvent(event);
         }
+
+    } else if(type == "publisherAvailablePublishers") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::CurrentPublishersData>(data);
+        auto deserializer = std::make_shared<core::VarDeserializer>();
+        auto parsed = deserializer->deserialize<CurrentPublishersData>(Poco::Dynamic::Var(data), "CurrentPublishersData");
+        std::shared_ptr<StreamAvailablePublishersEvent> event(new StreamAvailablePublishersEvent());
+        event->channel = "stream";
+        event->data = parsed;
+        _eventMiddleware->emitApiEvent(event);
     } else {
         std::cerr << "UNRESOLVED EVENT in CPP layer: '" << type << "'"<< std::endl;
     }

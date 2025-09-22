@@ -214,7 +214,7 @@ struct StreamUnpublishedEvent : public core::Event {
 };
 
 /**
- * Holds data of event that arrives when Stream is published.
+ * Holds data of event that arrives when Stream is left.
  */
 struct StreamLeftEvent : public core::Event {
 
@@ -240,6 +240,36 @@ struct StreamLeftEvent : public core::Event {
      */
     StreamEventData data;
 };
+
+
+/**
+ * Holds data of event that arrives on StreamPublish - contains information about available publishers/streams one can subscribe to.
+ */
+struct StreamAvailablePublishersEvent : public core::Event {
+
+    /**
+     * Event constructor
+     */
+    StreamAvailablePublishersEvent() : core::Event("publisherAvailablePublishers") {}
+
+    /**
+     * Get Event as JSON string
+     *
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<core::SerializedEvent> serialize() const override;
+
+    /**
+     * event data
+     */
+    CurrentPublishersData data;
+};
+
 
 
 /**
@@ -359,6 +389,23 @@ public:
      * @return 'StreamLeftEvent' object
      */
     static StreamLeftEvent extractStreamLeftEvent(const core::EventHolder& eventHolder);
+
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'StreamAvailablePublishersEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'StreamAvailablePublishersEvent', else otherwise
+     */
+    static bool isStreamAvailablePublishersEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'StreamAvailablePublishersEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'StreamAvailablePublishersEvent' object
+     */
+    static StreamAvailablePublishersEvent extractStreamAvailablePublishersEvent(const core::EventHolder& eventHolder);
 };
 
 }  // namespace stream

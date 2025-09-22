@@ -83,6 +83,24 @@ enum EventSelectorType: int64_t {
     STREAM_ID = 2,
 };
 
+struct VideoRoomStreamTrack {
+    std::string type;
+    std::string codec;
+    std::string mid;
+    int64_t mindex;
+};
+
+struct NewPublisherEvent {
+    std::string id;
+    std::string video_codec;
+    std::vector<VideoRoomStreamTrack> streams;
+};
+
+struct CurrentPublishersData {
+    std::string room;
+    std::vector<NewPublisherEvent> publishers;
+};
+
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx

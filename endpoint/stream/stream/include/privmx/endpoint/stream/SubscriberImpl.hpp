@@ -31,8 +31,8 @@ private:
 
     static std::string getChannel(EventType eventType);
     static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
-    static constexpr std::string_view _moduleName = "stream";
-    static constexpr std::string_view _itemName = "???";
+    static constexpr std::string_view _moduleName = "streamroom";
+    static constexpr std::string_view _itemName = "streams";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
     static const std::map<EventType, std::string> _eventTypeNames;
     static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;

@@ -53,7 +53,7 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
         case EventType::STREAM_LEAVE:
         case EventType::STREAM_PUBLISH:
         case EventType::STREAM_UNPUBLISH:
-            return std::string(_moduleName) + "/" + _eventTypeNames.at(eventType);
+            return std::string(_moduleName) + "/" + std::string(_itemName)+ "/" + _eventTypeNames.at(eventType);
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }
