@@ -101,3 +101,36 @@ TEST_F(CoreEventTest, waitEvent_getEvent_libDisconnected) {
         FAIL();
     } 
 }
+
+TEST_F(CoreEventTest, subscribeFor_unsubscribeFor) {
+    std::vector<std::string> valid_subscriptions;
+    EXPECT_NO_THROW({
+        valid_subscriptions = connection->subscribeFor({
+            connection->buildSubscriptionQuery(  
+                core::EventType::USER_ADD,  
+                core::EventSelectorType::CONTEXT_ID,  
+                reader->getString("Context_1.contextId")  
+            )
+        });
+    });
+    std::vector<std::string> invalid_subscriptions;
+    EXPECT_NO_THROW({
+        invalid_subscriptions = connection->subscribeFor({
+            connection->buildSubscriptionQuery(  
+                core::EventType::USER_ADD,  
+                core::EventSelectorType::CONTEXT_ID,  
+                "error"
+            )
+        });
+    });
+    EXPECT_NO_THROW({
+        connection->unsubscribeFrom({
+            valid_subscriptions 
+        });
+    });
+    EXPECT_NO_THROW({
+        connection->unsubscribeFrom({
+            invalid_subscriptions 
+        });
+    });
+}

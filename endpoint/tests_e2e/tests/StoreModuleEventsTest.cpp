@@ -844,3 +844,36 @@ TEST_F(StoreEventTest, subscribeFor_query_from_other_module) {
         });
     }, store::InvalidSubscriptionQueryException);
 }
+
+TEST_F(StoreEventTest, subscribeFor_unsubscribeFor) {
+    std::vector<std::string> valid_subscriptions;
+    EXPECT_NO_THROW({
+        valid_subscriptions = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(  
+                store::EventType::STORE_CREATE,  
+                store::EventSelectorType::CONTEXT_ID,  
+                reader->getString("Context_1.contextId")  
+            )
+        });
+    });
+    std::vector<std::string> invalid_subscriptions;
+    EXPECT_NO_THROW({
+        invalid_subscriptions = storeApi->subscribeFor({
+            storeApi->buildSubscriptionQuery(  
+                store::EventType::STORE_CREATE,  
+                store::EventSelectorType::CONTEXT_ID,  
+                "error" 
+            )
+        });
+    });
+    EXPECT_NO_THROW({
+        storeApi->unsubscribeFrom({
+            valid_subscriptions 
+        });
+    });
+    EXPECT_NO_THROW({
+        storeApi->unsubscribeFrom({
+            invalid_subscriptions 
+        });
+    });
+}
