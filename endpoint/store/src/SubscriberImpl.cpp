@@ -17,7 +17,8 @@ const std::map<EventType, std::string> SubscriberImpl::_eventTypeNames = {
     {EventType::STORE_STATS, "stats"},
     {EventType::FILE_CREATE, "create"},
     {EventType::FILE_UPDATE, "update"},
-    {EventType::FILE_DELETE, "delete"}
+    {EventType::FILE_DELETE, "delete"},
+    {EventType::COLLECTION_CHANGE, "collectionChanged"}
 };
 const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTypeAllowedSelectorTypes = {
     {EventType::STORE_CREATE, {EventSelectorType::CONTEXT_ID}},
@@ -45,30 +46,34 @@ const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
     {EventType::COLLECTION_CHANGE, "COLLECTION_CHANGE"}
 };
 
-std::string SubscriberImpl::getChannel(EventType eventType) {
+std::vector<std::string> SubscriberImpl::getChannelPath(EventType eventType) {
     switch (eventType) {
         case EventType::STORE_CREATE:
         case EventType::STORE_UPDATE:
         case EventType::STORE_DELETE:
         case EventType::STORE_STATS:
-            return std::string(_moduleName) + "/" + _eventTypeNames.at(eventType);
+        case EventType::COLLECTION_CHANGE:
+            return {std::string(_moduleName), _eventTypeNames.at(eventType)};
         case EventType::FILE_CREATE:
         case EventType::FILE_UPDATE:
         case EventType::FILE_DELETE:
-            return std::string(_moduleName) + "/" + std::string(_itemName) + "/" + _eventTypeNames.at(eventType);
-        case EventType::COLLECTION_CHANGE:
-            return std::string(_moduleName) + "/collectionChanged";
+            return {std::string(_moduleName), std::string(_itemName), _eventTypeNames.at(eventType)};
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }
-std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const std::string& selectorId) {
-    return "|" + _selectorTypeNames.at(selectorType) + "=" + selectorId;
+
+std::vector<core::SubscriptionQueryObj::QuerySelector> SubscriberImpl::getSelectors(EventSelectorType selectorType, const std::string& selectorId) {
+    return {core::SubscriptionQueryObj::QuerySelector{
+        .selectorKey=_selectorTypeNames.at(selectorType), 
+        .selectorValue=selectorId
+    }};
 }
+
 std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     std::set<EventSelectorType> allowedEventSelectorTypes = _eventTypeAllowedSelectorTypes.at(eventType);
     std::set<EventSelectorType>::iterator it = allowedEventSelectorTypes.find(selectorType);
     if(it != allowedEventSelectorTypes.end()) {
-        return getChannel(eventType) + getSelector(selectorType, selectorId);
+        return core::SubscriptionQueryObj(getChannelPath(eventType), getSelectors(selectorType, selectorId)).toSubscriptionQueryString();
     }
     std::string allowedEventSelectorTypesString;
     for(auto allowedEventSelectorType: allowedEventSelectorTypes) {
@@ -82,26 +87,25 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
     ); 
 }
 
-privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std::string>& subscriptionQueries) {
+privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
-    for(auto& s: subscriptionQueries) {
-        result.add(s + ",containerType=" + _typeFilterFlag);
+    for(auto s: subscriptionQueries) {
+        s.selectorsPushBack(core::SubscriptionQueryObj::QuerySelector{.selectorKey="containerType", .selectorValue=_typeFilterFlag});
+        result.add(s.toSubscriptionQueryString());
     }
     return result;
 }
 
-void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
+void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     for(auto& subscriptionQuery : subscriptionQueries) {
-        auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
-        if(tmp.size() != 2) {
+        if(subscriptionQuery.selectors().size() != 1) {
             throw InvalidSubscriptionQueryException();
         }
-        auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
-        if(selectorData.size() != 2) {
-            throw InvalidSubscriptionQueryException();
-        }
-        auto channelData = privmx::utils::Utils::split(tmp[0], "/");
-        if(channelData.size() < 2 || channelData.size() > 3 || channelData[0] != std::string(_moduleName)) {
+        if(
+            subscriptionQuery.channelPath().size() < 2 || 
+            subscriptionQuery.channelPath().size() > 3 || 
+            subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName)
+        ) {
             throw InvalidSubscriptionQueryException();
         }
     }
