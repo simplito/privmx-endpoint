@@ -28,14 +28,14 @@ void FileReader::sync(const store::FileDecryptionParams& newParms) {
     _version = newParms.version;
 }
 
-std::string FileReader::read(size_t pos, size_t length) {
+std::string FileReader::read(uint64_t pos, size_t length) {
     if(pos >= _plainfileSize) return std::string();
     if(pos+length > _plainfileSize) length = _plainfileSize-pos;
     if(length == 0) return std::string();
-    size_t startIndex = _chunkReader->filePosToFileChunkIndex(pos);
-    size_t stopIndex = _chunkReader->filePosToFileChunkIndex(pos+length-1);
+    auto startIndex = _chunkReader->filePosToFileChunkIndex(pos);
+    auto stopIndex = _chunkReader->filePosToFileChunkIndex(pos+length-1);
     std::string data = std::string();
-    for(size_t i = startIndex; i <= stopIndex; i++) {
+    for(auto i = startIndex; i <= stopIndex; i++) {
         data.append(_chunkReader->getDecryptedChunk(i));
     }
     return data.substr(_chunkReader->filePosToPosInFileChunk(pos), length);

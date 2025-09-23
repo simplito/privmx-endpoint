@@ -24,9 +24,9 @@ namespace store {
 class IFileHandler
 {
 public:
-    virtual size_t size() = 0;
-    virtual void seekg(const size_t pos) = 0;
-    virtual void seekp(const size_t pos) = 0;
+    virtual uint64_t size() = 0;
+    virtual void seekg(const uint64_t pos) = 0;
+    virtual void seekp(const uint64_t pos) = 0;
     virtual core::Buffer read(const size_t length) = 0;
     virtual void write(const core::Buffer& chunk, bool truncate = false) = 0;
     virtual void close() = 0;

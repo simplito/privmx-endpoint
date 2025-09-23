@@ -42,8 +42,8 @@ public:
         std::shared_ptr<IHashList> hashList,
         std::shared_ptr<IChunkReader> chunkReader,
         std::shared_ptr<FileMetaEncryptor> metaEncryptor,
-        size_t plainfileSize,
-        size_t encryptedFileSize,
+        uint64_t plainfileSize,
+        uint64_t encryptedFileSize,
         int64_t version,
         FileInfo fileInfo,
         FileMeta fileMeta,
@@ -51,9 +51,9 @@ public:
         std::shared_ptr<ServerApi> server
     );
 
-    void write(size_t offset, const core::Buffer& data, bool truncate = false);
-    core::Buffer read(size_t offset, size_t size);
-    size_t getFileSize();
+    void write(uint64_t offset, const core::Buffer& data, bool truncate = false);
+    core::Buffer read(uint64_t offset, uint64_t size);
+    uint64_t getFileSize();
     void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey);
     void close();
     void flush();
@@ -67,12 +67,12 @@ private:
     };
     struct UpdateChanges {
         std::string data;
-        size_t dataPos;
+        uint64_t dataPos;
         std::string checksum;
-        size_t checksumPos;
+        uint64_t checksumPos;
     };
 
-    UpdateChunkData createUpdateChunk(size_t index, size_t chunkOffset, const std::string& data, bool truncate = false);
+    UpdateChunkData createUpdateChunk(uint64_t index, uint64_t chunkOffset, const std::string& data, bool truncate = false);
     void updateOnServer(const std::vector<UpdateChanges>& updatedChunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate);
     std::vector<UpdateChanges> createListOfUpdateChangesFromUpdateChunkData(const std::vector<UpdateChunkData>& updatedChunks);
 
@@ -81,8 +81,8 @@ private:
     std::shared_ptr<IHashList> _hashList;
     std::shared_ptr<IChunkReader> _chunkReader;
     std::shared_ptr<store::FileMetaEncryptor> _fileMetaEncryptor;
-    size_t _plainfileSize = 0;
-    size_t _encryptedFileSize = 0;
+    uint64_t _plainfileSize = 0;
+    uint64_t _encryptedFileSize = 0;
     int64_t _version = 0;
     FileInfo _fileInfo;
     FileMeta _fileMeta;
@@ -99,9 +99,9 @@ class FileHandlerImpl : public IFileHandler
 public:
     FileHandlerImpl(std::shared_ptr<FileHandler> file);
 
-    size_t size() override;
-    void seekg(const size_t pos) override;
-    void seekp(const size_t pos) override;
+    uint64_t size() override;
+    void seekg(const uint64_t pos) override;
+    void seekp(const uint64_t pos) override;
     core::Buffer read(const size_t length) override;
     void write(const core::Buffer& chunk, bool truncate = false) override;
 
@@ -113,8 +113,8 @@ public:
 
 private:
     std::shared_ptr<FileHandler> _file;
-    size_t _readPos = 0;
-    size_t _writePos = 0;
+    uint64_t _readPos = 0;
+    uint64_t _writePos = 0;
 };
 
 } // store
