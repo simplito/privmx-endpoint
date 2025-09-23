@@ -11,8 +11,16 @@
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/VarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/UserVerifierInterface.hpp>
+
 using namespace privmx::endpoint;
 
+class FalseUserVerifierInterface: public virtual core::UserVerifierInterface {
+public:
+    std::vector<bool> verify(const std::vector<core::VerificationRequest>& request) override {
+        return std::vector<bool>(request.size(), false);
+    };
+};
 
 enum ConnectionType {
     User1,
@@ -1586,4 +1594,54 @@ TEST_F(KvdbTest, userValidator_false) {
             reader->getString("KvdbEntry_2.info_key")
         );
     });
+}
+
+TEST_F(KvdbTest, falseUserVerifierInterface) {
+    EXPECT_NO_THROW({
+        kvdbApi->updateKvdb(
+            reader->getString("Kvdb_1.kvdbId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    });
+
+    EXPECT_NO_THROW({
+        std::shared_ptr<FalseUserVerifierInterface> falseUserVerifierInterface = std::make_shared<FalseUserVerifierInterface>();
+        connection->setUserVerifier(falseUserVerifierInterface);
+    });
+    
+    core::PagingList<kvdb::Kvdb> kvdbListResult;
+    EXPECT_NO_THROW({
+        kvdbListResult = kvdbApi->listKvdbs(reader->getString("Context_1.contextId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(kvdbListResult.readItems.size() == 1) {
+        EXPECT_EQ(kvdbListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
+        FAIL();
+    }
+
+    core::PagingList<kvdb::KvdbEntry> kvdbEntriesListResult;
+    EXPECT_NO_THROW({
+        kvdbEntriesListResult = kvdbApi->listEntries(reader->getString("Kvdb_1.kvdbId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(kvdbEntriesListResult.readItems.size() == 1) {
+        EXPECT_EQ(kvdbEntriesListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
+        FAIL();
+    }
 }

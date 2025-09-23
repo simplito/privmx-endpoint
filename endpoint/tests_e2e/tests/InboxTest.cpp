@@ -15,16 +15,23 @@
 #include <privmx/endpoint/inbox/VarSerializer.hpp>
 #include <privmx/endpoint/inbox/InboxException.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/UserVerifierInterface.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::utils;
+
+class FalseUserVerifierInterface: public virtual core::UserVerifierInterface {
+public:
+    std::vector<bool> verify(const std::vector<core::VerificationRequest>& request) override {
+        return std::vector<bool>(request.size(), false);
+    };
+};
 
 enum ConnectionType {
     User1,
     User2,
     Public
 };
-
 class InboxTest : public privmx::test::BaseTest {
 protected:
     InboxTest() : BaseTest(privmx::test::BaseTestMode::online) {}
@@ -2112,6 +2119,57 @@ TEST_F(InboxTest, sendEntry_cacheManipulation) {
         }
     } else {
         std::cout << "prepareEntry Failed" << std::endl;
+        FAIL();
+    }
+}
+
+TEST_F(InboxTest, falseUserVerifierInterface) {
+    EXPECT_NO_THROW({
+        inboxApi->updateInbox(
+            reader->getString("Inbox_1.inboxId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            1,
+            false,
+            false
+        );
+    });
+
+    EXPECT_NO_THROW({
+        std::shared_ptr<FalseUserVerifierInterface> falseUserVerifierInterface = std::make_shared<FalseUserVerifierInterface>();
+        connection->setUserVerifier(falseUserVerifierInterface);
+    });
+    
+    core::PagingList<inbox::Inbox> inboxListResult;
+    EXPECT_NO_THROW({
+        inboxListResult = inboxApi->listInboxes(reader->getString("Context_1.contextId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(inboxListResult.readItems.size() == 1) {
+        EXPECT_EQ(inboxListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
+        FAIL();
+    }
+
+    core::PagingList<inbox::InboxEntry> inboxEntriesListResult;
+    EXPECT_NO_THROW({
+        inboxEntriesListResult = inboxApi->listEntries(reader->getString("Inbox_1.inboxId"),{.skip=0, .limit=1, .sortOrder="desc"});
+    });
+    if(inboxEntriesListResult.readItems.size() == 1) {
+        EXPECT_EQ(inboxEntriesListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+    } else {
         FAIL();
     }
 }
