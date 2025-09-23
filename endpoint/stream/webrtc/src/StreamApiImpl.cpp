@@ -42,6 +42,7 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
     _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
     _configuration = libwebrtc::RTCConfiguration();
     for(size_t i = 0; i < credentials.size(); i++) {
+        PRIVMX_DEBUG("STREAMS", "StreamApiImpl", "IceServer.uri: " + credentials[i].url)
         libwebrtc::IceServer iceServer = {
             .uri=credentials[i].url, 
             .username=portable::string(credentials[i].username), 

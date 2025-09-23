@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include <Poco/URI.h>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -78,6 +79,7 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
     auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
     std::vector<TurnCredentials> result;
     for(auto credential : credentials) {
+        StreamApiLowImpl::assertTurnServerUri(credential.url());
         result.push_back(TurnCredentials{.url=credential.url(), .username=credential.username(), .password=credential.password(), .expirationTime=credential.expirationTime()});
     }
     return result;
@@ -951,4 +953,15 @@ uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInf
         return ENDPOINT_CORE_EXCEPTION_CODE;
     } 
     return UnknownStreamRoomFormatException().getCode();
+}
+
+void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
+    try {
+        Poco::URI tmp(uri);
+        if(tmp.getScheme() != "turn") {
+            throw InvalidTurnServerURIException();
+        }
+    }catch (Poco::SyntaxException &e){
+        throw InvalidTurnServerURIException();
+    }
 }
