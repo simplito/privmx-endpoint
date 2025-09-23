@@ -21,7 +21,7 @@ SubscriptionQueryObj::SubscriptionQueryObj(const std::vector<std::string>& chann
 SubscriptionQueryObj::SubscriptionQueryObj(const std::string& subscriptionQueryString) {
     auto splittedQuery = privmx::utils::Utils::split(subscriptionQueryString, QUERY_MAIN_SEPARATOR);
     if(splittedQuery.size() > QUERY_MAIN_MAX_SIZE) {
-        throw core::InvalidSubscriptionQueryException("query have more then one '|'");
+        throw core::InvalidSubscriptionQueryException("Only one separator '|' allowed in the query");
     }
     // extracting query path
     if(splittedQuery.size() > QUERY_PATH_POS) {
@@ -33,7 +33,7 @@ SubscriptionQueryObj::SubscriptionQueryObj(const std::string& subscriptionQueryS
         for(const auto& selector: selectors) {
             auto splittedSelector = privmx::utils::Utils::split(selector, SELECTOR_SEPARATOR);
             if(splittedSelector.size() != SELECTOR_SIZE) {
-                throw core::InvalidSubscriptionQueryException("selector not in format <key>=<value>");
+                throw core::InvalidSubscriptionQueryException("Invalid query selector format. Expected: <key>=<value>");
             }
             _selectors.push_back(
                 SubscriptionQueryObj::QuerySelector{
