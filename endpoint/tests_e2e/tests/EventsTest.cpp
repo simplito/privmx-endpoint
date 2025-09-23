@@ -226,5 +226,35 @@ TEST_F(EventTest, waitEvent_getEvent_getCustom_event_disabled) {
     }
 }
 
-// context/custom/testing|containerId=a91334b8-9c8c-4125-bebc-f32b996f9bdd
-// context/custom/testing|contextId=a91334b8-9c8c-4125-bebc-f32b996f9bdd
+TEST_F(EventTest, subscribeFor_unsubscribeFor) {
+    std::vector<std::string> valid_subscriptions;
+    EXPECT_NO_THROW({
+        valid_subscriptions = eventApi->subscribeFor({
+            eventApi->buildSubscriptionQuery(
+                "test_channel_0",  
+                event::EventSelectorType::CONTEXT_ID,  
+                reader->getString("Context_1.contextId")  
+            )
+        });
+    });
+    std::vector<std::string> invalid_subscriptions;
+    EXPECT_NO_THROW({
+        invalid_subscriptions = eventApi->subscribeFor({
+            eventApi->buildSubscriptionQuery(
+                "test_channel_1",   
+                event::EventSelectorType::CONTEXT_ID,  
+                "error"
+            )
+        });
+    });
+    EXPECT_NO_THROW({
+        eventApi->unsubscribeFrom({
+            valid_subscriptions 
+        });
+    });
+    EXPECT_NO_THROW({
+        eventApi->unsubscribeFrom({
+            invalid_subscriptions 
+        });
+    });
+}

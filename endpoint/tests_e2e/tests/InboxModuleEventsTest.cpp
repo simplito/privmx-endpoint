@@ -674,3 +674,36 @@ TEST_F(InboxEventTest, subscribeFor_query_from_other_module) {
         });
     }, inbox::InvalidSubscriptionQueryException);
 }
+
+TEST_F(InboxEventTest, subscribeFor_unsubscribeFor) {
+    std::vector<std::string> valid_subscriptions;
+    EXPECT_NO_THROW({
+        valid_subscriptions = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(  
+                inbox::EventType::INBOX_CREATE,  
+                inbox::EventSelectorType::CONTEXT_ID,  
+                reader->getString("Context_1.contextId")  
+            )
+        });
+    });
+    std::vector<std::string> invalid_subscriptions;
+    EXPECT_NO_THROW({
+        invalid_subscriptions = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(  
+                inbox::EventType::INBOX_CREATE,  
+                inbox::EventSelectorType::CONTEXT_ID,  
+                "error"
+            )
+        });
+    });
+    EXPECT_NO_THROW({
+        inboxApi->unsubscribeFrom({
+            valid_subscriptions 
+        });
+    });
+    EXPECT_NO_THROW({
+        inboxApi->unsubscribeFrom({
+            invalid_subscriptions 
+        });
+    });
+}
