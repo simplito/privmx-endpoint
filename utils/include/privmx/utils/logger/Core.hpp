@@ -43,6 +43,7 @@ public:
     }
 
     void addLoggerOutput(std::unique_ptr<LoggerOutput> output);
+    inline bool hasLoggerOutputs() {return _outputs.size() != 0;}
 
     template<typename... Args>
     void log(LogLevel level, Args&&... args);
@@ -80,6 +81,7 @@ void Logger::log(LogLevel level, Args&&... args) {
     std::ostringstream oss;
     (oss << ... << args);
     std::lock_guard<std::mutex> lock(_mutex);
+
     for (auto& output : _outputs) {
         output->log(level, oss.str());
     }

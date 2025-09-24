@@ -147,10 +147,11 @@
 #endif
 
 #define INITIALIZE_LOGGER \
-    INITIALIZE_PRIVMX_LOGGER_STDOUT \
-    INITIALIZE_PRIVMX_LOGGER_STDERR \
-    INITIALIZE_PRIVMX_LOGGER_FILE
-
+    if(!privmx::logger::Logger::instance().hasLoggerOutputs()) { \
+        INITIALIZE_PRIVMX_LOGGER_STDOUT \
+        INITIALIZE_PRIVMX_LOGGER_STDERR \
+        INITIALIZE_PRIVMX_LOGGER_FILE  \
+    }
 #else 
     #define LOG_TRACE(...)
     #define LOG_TIME_TRACE_START(LABEL, ...)
@@ -185,4 +186,5 @@
     #define INITIALIZE_LOGGER
 
 #endif // PRIVMX_ENABLE_LOGGER
+
 #endif // _PRIVMXLIB_UTILS_UTILS_HPP_

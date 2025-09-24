@@ -20,7 +20,7 @@ std::string Logger::timerStart(const std::string& label) {
     _first_times[label] = std::chrono::system_clock::now();
     _last_times[label] = std::chrono::system_clock::now();
     std::ostringstream ss;
-    ss << std::left << std::setw(40) << label << " - " << std::setw(27) << "Timer start" << std::setw(12) << " " ;
+    ss << std::left << std::setw(40) << label << " - " << std::setw(28) << "Timer start" << std::setw(11) << " " ;
     return ss.str();
 }
 
@@ -28,12 +28,12 @@ std::string Logger::timerCheckpoint(const std::string& label) {
     std::ostringstream ss;
     if(std::chrono::system_clock::to_time_t(_first_times[label]) == 0) {
         log(LogLevel::WARN , label, "- Label is not initialized");
-        ss << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since last checkpoint" << std::setw(8) << "UNKNOWN" << "ms";
+        ss << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since last checkpoint" << std::setw(9) << "UNKNOWN" << "ms";
     } else {
         auto current_time = std::chrono::system_clock::now();
         const std::chrono::duration<double> diff = current_time - _last_times[label];
         _last_times[label] = current_time;
-        ss << std::left << std::setw(40) << label << " - " << std::setw(27) << "Time since last checkpoint" << std::setw(8) << diff.count()*1000 <<"ms";
+        ss << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since last checkpoint" << std::setw(9) << diff.count()*1000 <<"ms";
     } 
     return ss.str();
 }
@@ -43,8 +43,8 @@ std::pair<std::string, std::string> Logger::timerStop(const std::string& label) 
     std::ostringstream ss_checkpoint;
     if(std::chrono::system_clock::to_time_t(_first_times[label]) == 0) {
         log(LogLevel::WARN , label, "- Label is not initialized");
-        ss_start      << std::left << std::setw(40) << label << " - " << std::setw(27) << "Time since start" << std::setw(8) << "UNKNOWN" << "ms";
-        ss_checkpoint << std::left << std::setw(40) << label << " - " << std::setw(27) << "Time since last checkpoint" << std::setw(8) << "UNKNOWN" << "ms";
+        ss_start      << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since start" << std::setw(9) << "UNKNOWN" << "ms";
+        ss_checkpoint << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since last checkpoint" << std::setw(9) << "UNKNOWN" << "ms";
         
     } else {
     auto current_time = std::chrono::system_clock::now();
@@ -52,13 +52,12 @@ std::pair<std::string, std::string> Logger::timerStop(const std::string& label) 
     const std::chrono::duration<double> diff_start = current_time - _first_times[label];
     _last_times.erase(label);
     _first_times.erase(label);
-
-        ss_start      << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since start" << std::setw(8) << diff_checkpoint.count()*1000 <<  " ms";
-        ss_checkpoint << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since last checkpoint" << std::setw(8) << diff_start.count()*1000 << " ms";
+        ss_checkpoint << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since last checkpoint" << std::setw(9) << diff_checkpoint.count()*1000 << "ms";
+        ss_start      << std::left << std::setw(40) << label << " - " << std::setw(28) << "Time since start" << std::setw(9) << diff_start.count()*1000 <<  "ms";
     }
     return std::make_pair(
-       ss_start.str(),
-       ss_checkpoint.str()
+       ss_checkpoint.str(),
+       ss_start.str()
     );
 }
 #endif
