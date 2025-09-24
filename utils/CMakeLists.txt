@@ -7,10 +7,17 @@ elseif(PRIVMX_BUILD_DEBUG)
     set(PRIVMX_DEBUG_TIME OFF)
     set(PRIVMX_DEBUG_OUTPUT_TIMESTAMP_ON_START OFF)
 endif()
+
+if(PRIVMX_BUILD_LOGGER)
+    set(PRIVMX_ENABLE_LOGGER ON)
+endif()
+
 message(STATUS "Enable utils debug - PRIVMX_BUILD_DEBUG=${PRIVMX_BUILD_DEBUG}")
 set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/include)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/privmx/utils/DebugConfig.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/DebugConfig.hpp @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/DebugConfig.hpp DESTINATION include/privmx/utils)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/privmx/utils/logger/Config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/logger/Config.hpp)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/logger/Config.hpp DESTINATION include/privmx/utils/logger)
 
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp)
 add_library(privmxutils OBJECT ${SOURCES})
