@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -17,6 +18,7 @@ std::shared_ptr<EventQueueImpl> EventQueueImpl::impl= nullptr;
 
 std::shared_ptr<EventQueueImpl> EventQueueImpl::getInstance() {
     if(impl == nullptr) {
+        INITIALIZE_LOGGER
         impl = std::shared_ptr<EventQueueImpl>(new EventQueueImpl());
     }
     return impl;
