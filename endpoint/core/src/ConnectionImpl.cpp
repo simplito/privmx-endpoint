@@ -13,7 +13,7 @@ limitations under the License.
 
 #include <cstdint>
 #include <privmx/rpc/Types.hpp>
-#include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
@@ -32,7 +32,7 @@ ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
                              const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
-    PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
+    LOG_TIME_DEBUG_START(Platform platformConnect, "")
     rpc::ConnectionOptions options;
     auto port = Poco::URI(platformUrl).getPort();
     options.host = Poco::URI(platformUrl).getHost() + ":" + std::to_string(port);
@@ -86,12 +86,12 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _subscriber = std::make_shared<SubscriberImpl>(_gateway);
     assertServerVersion();
-    PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
+    LOG_TIME_DEBUG_STOP(Platform platformConnect, "")
 }
 
 void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
     // TODO: solutionId is reserved for future use
-    PRIVMX_DEBUG_TIME_START(Platform, platformConnect)
+    LOG_TIME_DEBUG_START(Platform platformConnectPublic, "")
     rpc::ConnectionOptions options;
     auto port = Poco::URI(platformUrl).getPort();
     options.host = Poco::URI(platformUrl).getHost() + ":" + std::to_string(port);
@@ -141,7 +141,7 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _subscriber = std::make_shared<SubscriberImpl>(_gateway);
     assertServerVersion();
-    PRIVMX_DEBUG_TIME_STOP(Platform, platformConnect)
+    LOG_TIME_DEBUG_STOP(Platform platformConnectPublic, "")
 }
 
 int64_t ConnectionImpl::getConnectionId() {
@@ -149,18 +149,19 @@ int64_t ConnectionImpl::getConnectionId() {
 }
 
 PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, contextList)
+
+    LOG_TIME_DEBUG_START(PlatformThread contextList, "")
     auto listModel = utils::TypedObjectFactory::createNewObject<server::ListModel>();
     ListQueryMapper::map(listModel, pagingQuery);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data)
+    LOG_TIME_DEBUG_CHECKPOINT(PlatformThread contextList, "data")
     auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextListResult>(
         _gateway->request("context.contextList", listModel));
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, contextList, data send)
+    LOG_TIME_DEBUG_CHECKPOINT(PlatformThread contextList, "data send")
     std::vector<Context> contexts{};
     for (auto resp : response.contexts()) {
         contexts.push_back({.userId = resp.userId(), .contextId = resp.contextId()});
     }
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, contextList)
+    LOG_TIME_DEBUG_STOP(PlatformThread contextList , "")
     return PagingList<Context>{.totalAvailable = response.count(), .readItems = contexts};
 }
 

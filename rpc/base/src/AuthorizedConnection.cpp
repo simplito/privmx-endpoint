@@ -16,7 +16,7 @@ limitations under the License.
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/rpc/RpcException.hpp>
 #include <privmx/rpc/RpcConfig.hpp>
-#include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 
 #ifdef PRIVMX_ENABLE_NET_EMSCRIPTEN
 #include <emscripten/emscripten.h>
@@ -390,6 +390,7 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
         _ticket_updater_cancellation_token = utils::CancellationToken::create();
     }
     auto t = std::thread([&](privmx::utils::CancellationToken::Ptr token){
+        LOG_INFO("AuthorizedConnection:TicketLoop Created")
         while(!token->isCancelled()) {
             try {
                 if(_tickets_manager.shouldAskForNewTickets(ClientEndpoint::TICKETS_MIN_COUNT)) {
@@ -398,15 +399,15 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
                     endpoint.connection.ticketHandshake();
                     endpoint.connection.ticketRequest(ClientEndpoint::TICKETS_MAX_COUNT);
                     sendRequest(endpoint);
-                    PRIVMX_DEBUG("activateUpdateTicketLoop", "succes")
+                    LOG_INFO("AuthorizedConnection:TicketLoop AskForNewTickets:success")
                 } else {
                     token->sleep(std::chrono::seconds(10));
                 }
             } catch (const privmx::utils::OperationCancelledException &e) {
-                PRIVMX_DEBUG("activateUpdateTicketLoop", "cancel")
+                LOG_INFO("AuthorizedConnection:TicketLoop Cancel:Closing")
                 return;
             } catch (...) {
-                PRIVMX_DEBUG("activateUpdateTicketLoop", "fail")
+                LOG_ERROR("AuthorizedConnection:TicketLoop catch(...)")
                 token->sleep(std::chrono::seconds(1));
             }
         }
