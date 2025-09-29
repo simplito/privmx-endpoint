@@ -13,7 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_TIMESTAMPVALIDATOR_HPP_
 
 #include <algorithm>
-
+#include <cstdint>
 
 namespace privmx {
 namespace endpoint {
