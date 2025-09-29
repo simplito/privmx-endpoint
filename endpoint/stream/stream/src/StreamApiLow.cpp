@@ -262,3 +262,14 @@ void StreamApiLow::trickle(const int64_t sessionId, const dynamic::RTCIceCandida
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
+
+void StreamApiLow::acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
+    validateEndpoint();
+    core::Validator::validateNumberPositive(sessionId, "field:sessionId ");
+    try {
+        return _impl->acceptOfferOnReconfigure(sessionId, sdp);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}

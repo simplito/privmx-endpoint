@@ -105,7 +105,9 @@ void EventMiddleware::emitNotificationEvent(const std::string& type, const Notif
                         }
                    }
                 }
-            } catch (...) {}
+            } catch (std::exception& e) {
+                std::cerr << "Error on emitNotificationEvent:" << e.what() << std::endl;
+            }
         });
 }
 

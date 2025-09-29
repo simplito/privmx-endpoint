@@ -62,6 +62,10 @@ std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const st
     return "|" + _selectorTypeNames.at(selectorType) + "=" + selectorId;
 }
 
+std::string SubscriberImpl::getInternalEventsSubscriptionQuery() {
+    return std::string(_moduleName) + "/internal";
+}
+
 std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     std::set<EventSelectorType> allowedEventSelectorTypes = _eventTypeAllowedSelectorTypes.at(eventType);
     std::set<EventSelectorType>::iterator it = allowedEventSelectorTypes.find(selectorType);
@@ -89,7 +93,11 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
 }
 
 void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
+    std::cerr << "Stream::AssertQuery" << std::endl;
     for(auto& subscriptionQuery : subscriptionQueries) {
+        if (subscriptionQuery == "streamroom/internal") {
+            continue;
+        }
         auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
         if(tmp.size() != 2) {
             throw InvalidSubscriptionQueryException();

@@ -60,11 +60,20 @@ struct SdpWithTypeModel {
     std::string type;
 };
 
-struct SdpWithTypeAndSessionModel {
+struct SdpWithRoomModel {
     std::string roomId;
-    int64_t sessionId;
     std::string sdp;
     std::string type;
+};
+
+struct UpdateSessionIdModel {
+    std::string streamRoomId;
+    std::string connectionType;
+    int64_t sessionId;
+};
+
+struct RoomModel {
+    std::string roomId;
 };
 
 enum EventType: int64_t {
@@ -90,16 +99,35 @@ struct VideoRoomStreamTrack {
     int64_t mindex;
 };
 
+
 struct NewPublisherEvent {
-    std::string id;
+    int64_t id;
     std::string video_codec;
     std::vector<VideoRoomStreamTrack> streams;
 };
 
 struct CurrentPublishersData {
-    std::string room;
+    int64_t room;
     std::vector<NewPublisherEvent> publishers;
 };
+
+struct UpdatedStreamData {
+    std::string type;
+    int64_t streamId; // feed_id
+    int64_t streamMid; // feed_mid
+    std::string stream_display; // feed_display
+    int64_t mindex;
+    std::string mid;
+    bool send;
+    bool ready;
+};
+
+struct StreamsUpdatedData {
+    std::string room;
+    std::vector<UpdatedStreamData> streams;
+    std::optional<SdpWithTypeModel> jsep;
+};
+
 
 }  // namespace stream
 }  // namespace endpoint

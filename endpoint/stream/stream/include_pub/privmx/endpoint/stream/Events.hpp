@@ -271,6 +271,33 @@ struct StreamAvailablePublishersEvent : public core::Event {
 };
 
 
+/**
+ * Holds data of event that arrives after StreamJoin - contains information about updates on publishers streams one can subscribe to.
+ */
+struct PublishersStreamsUpdatedEvent : public core::Event {
+
+    /**
+     * Event constructor
+     */
+    PublishersStreamsUpdatedEvent() : core::Event("streamsUpdated") {}
+
+    /**
+     * Get Event as JSON string
+     *
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<core::SerializedEvent> serialize() const override;
+
+    /**
+     * event data
+     */
+    StreamsUpdatedData data;
+};
 
 /**
  * 'Events' provides the helpers methods for module's events management.
@@ -390,7 +417,6 @@ public:
      */
     static StreamLeftEvent extractStreamLeftEvent(const core::EventHolder& eventHolder);
 
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'StreamAvailablePublishersEvent'
      *
@@ -400,12 +426,29 @@ public:
     static bool isStreamAvailablePublishersEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'StreamAvailablePublishersEvent'
+     * Gets Event held in the 'EventHolder' as an 'PublishersStreamsUpdatedEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
      * @return 'StreamAvailablePublishersEvent' object
      */
     static StreamAvailablePublishersEvent extractStreamAvailablePublishersEvent(const core::EventHolder& eventHolder);
+
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'PublishersStreamsUpdatedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'StreamAvailablePublishersEvent', else otherwise
+     */
+    static bool isPublishersStreamsUpdatedEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'PublishersStreamsUpdatedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'StreamAvailablePublishersEvent' object
+     */
+    static PublishersStreamsUpdatedEvent extractPublishersStreamsUpdatedEvent(const core::EventHolder& eventHolder);
 };
 
 }  // namespace stream

@@ -265,7 +265,7 @@ ENDPOINT_SERVER_TYPE(VideoRoomStreamTrack)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(NewPublisherEvent)
-    STRING_FIELD(id)
+    INT64_FIELD(id)
     STRING_FIELD(video_codec)
     LIST_FIELD(streams, VideoRoomStreamTrack)
 TYPE_END
@@ -274,6 +274,25 @@ ENDPOINT_SERVER_TYPE(CurrentPublishersData)
     STRING_FIELD(room)
     LIST_FIELD(publishers, NewPublisherEvent)
 TYPE_END
+
+ENDPOINT_SERVER_TYPE(UpdatedStreamData)
+    STRING_FIELD(type)
+    INT64_FIELD(feed_id)
+    INT64_FIELD(feed_mid)
+    STRING_FIELD(feed_display)
+    INT64_FIELD(mindex)
+    STRING_FIELD(mid)
+    BOOL_FIELD(send)
+    BOOL_FIELD(ready)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamsUpdatedData)
+    STRING_FIELD(room)
+    LIST_FIELD(streams, UpdatedStreamData)
+    OBJECT_FIELD(jsep, JanusJSEP)
+TYPE_END
+
+
 
 } // server
 } // stream

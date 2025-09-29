@@ -39,7 +39,16 @@ template<>
 stream::NewPublisherEvent VarDeserializer::deserialize<stream::NewPublisherEvent>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
+stream::UpdateSessionIdModel VarDeserializer::deserialize<stream::UpdateSessionIdModel>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+stream::SdpWithTypeModel VarDeserializer::deserialize<stream::SdpWithTypeModel>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
 stream::CurrentPublishersData VarDeserializer::deserialize<stream::CurrentPublishersData>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+stream::StreamsUpdatedData VarDeserializer::deserialize<stream::StreamsUpdatedData>(const Poco::Dynamic::Var& val, const std::string& name);
 
 }  // namespace core
 }  // namespace endpoint

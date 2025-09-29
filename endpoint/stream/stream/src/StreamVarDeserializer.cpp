@@ -66,6 +66,27 @@ stream::EventSelectorType VarDeserializer::deserialize<stream::EventSelectorType
 }
 
 template<>
+stream::SdpWithTypeModel VarDeserializer::deserialize<stream::SdpWithTypeModel>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .sdp = deserialize<std::string>(obj->get("sdp"), name + ".sdp"),
+        .type = deserialize<std::string>(obj->get("type"), name + ".type")
+    };
+}
+
+template<>
+stream::UpdateSessionIdModel VarDeserializer::deserialize<stream::UpdateSessionIdModel>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
+        .connectionType = deserialize<std::string>(obj->get("connectionType"), name + ".connectionType"),
+        .sessionId = deserialize<int64_t>(obj->get("sessionId"), name + ".sessionId")
+    };
+}
+
+template<>
 stream::VideoRoomStreamTrack VarDeserializer::deserialize<stream::VideoRoomStreamTrack>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
@@ -81,16 +102,10 @@ template<>
 stream::NewPublisherEvent VarDeserializer::deserialize<stream::NewPublisherEvent>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-
-    std::vector<stream::VideoRoomStreamTrack> streams {};
-    auto varArray {obj->getArray("streams")};
-    for (const auto& item: *varArray) {
-        streams.push_back(deserialize<stream::VideoRoomStreamTrack>(item, name + ".streams"));
-    }
     return {
-        .id = deserialize<std::string>(obj->get("id"), name + ".id"),
+        .id = deserialize<int64_t>(obj->get("id"), name + ".id"),
         .video_codec = deserialize<std::string>(obj->get("video_codec"), name + ".video_codec"),
-        .streams = streams
+        .streams = deserializeVector<stream::VideoRoomStreamTrack>(obj->get("streams"), name + ".streams")
     };
 }
 
@@ -98,15 +113,40 @@ template<>
 stream::CurrentPublishersData VarDeserializer::deserialize<stream::CurrentPublishersData>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-
-    std::vector<stream::NewPublisherEvent> publishers {};
-    auto varArray {obj->getArray("publishers")};
-    for (const auto& item: *varArray) {
-        publishers.push_back(deserialize<stream::NewPublisherEvent>(item, name + ".publishers"));
-    }
     return {
         .room = deserialize<std::string>(obj->get("room"), name + ".room"),
-        .publishers = publishers
+        .publishers = deserializeVector<stream::NewPublisherEvent>(obj->get("publishers"), name + ".publishers")
     };
 }
 
+template<>
+stream::UpdatedStreamData VarDeserializer::deserialize<stream::UpdatedStreamData>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .type = deserialize<std::string>(obj->get("type"), name + ".type"),
+        .streamId = deserialize<int64_t>(obj->get("feed_id"), name + ".streamId"),
+        .streamMid = deserialize<int64_t>(obj->get("feed_mid"), name + ".streamMid"),
+        .stream_display = deserialize<std::string>(obj->get("feed_display"), name + ".streamDisplay"),
+        .mindex = deserialize<int64_t>(obj->get("mindex"), name + ".mindex"),
+        .mid = deserialize<std::string>(obj->get("mid"), name + ".mid"),
+        .send = deserialize<bool>(obj->get("send"), name + ".send"),
+        .ready = deserialize<bool>(obj->get("ready"), name + ".ready")
+    };
+}
+
+
+template<>
+stream::StreamsUpdatedData VarDeserializer::deserialize<stream::StreamsUpdatedData>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    std::optional<stream::SdpWithTypeModel> jsep = std::nullopt;
+    if (obj->has("jsep")) {
+        jsep.emplace(deserialize<stream::SdpWithTypeModel>(obj->get("jsep"), name + ".jsep"));
+    }
+    return {
+        .room = deserialize<std::string>(obj->get("room"), name + ".room"),
+        .streams = deserializeVector<stream::UpdatedStreamData>(obj->get("streams"), name + ".streams"),
+        .jsep = jsep
+    };
+}

@@ -80,7 +80,9 @@ public:
     void leaveStream(int64_t localStreamId);
 
     void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
-    
+
+    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
+
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);

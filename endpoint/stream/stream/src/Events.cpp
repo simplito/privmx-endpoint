@@ -51,6 +51,10 @@ std::string StreamAvailablePublishersEvent::toJSON() const {
     return core::JsonSerializer<StreamAvailablePublishersEvent>::serialize(*this);
 }
 
+std::string PublishersStreamsUpdatedEvent::toJSON() const {
+    return core::JsonSerializer<PublishersStreamsUpdatedEvent>::serialize(*this);
+}
+
 std::shared_ptr<core::SerializedEvent> StreamRoomCreatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
@@ -80,6 +84,10 @@ std::shared_ptr<core::SerializedEvent> StreamLeftEvent::serialize() const {
 }
 
 std::shared_ptr<core::SerializedEvent> StreamAvailablePublishersEvent::serialize() const {
+    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+}
+
+std::shared_ptr<core::SerializedEvent> PublishersStreamsUpdatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
@@ -211,6 +219,23 @@ StreamAvailablePublishersEvent Events::extractStreamAvailablePublishersEvent(con
         auto event = std::dynamic_pointer_cast<StreamAvailablePublishersEvent>(handler.get());
         if (!event) {
             throw CannotExtractStreamAvailablePublishersEventException();
+        }
+        return *event;
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+bool Events::isPublishersStreamsUpdatedEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamsUpdated";
+}
+
+PublishersStreamsUpdatedEvent Events::extractPublishersStreamsUpdatedEvent(const core::EventHolder& handler) {
+    try {
+        auto event = std::dynamic_pointer_cast<PublishersStreamsUpdatedEvent>(handler.get());
+        if (!event) {
+            throw CannotExtractPublishersStreamsUpdatedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
