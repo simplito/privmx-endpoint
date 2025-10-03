@@ -167,6 +167,17 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamJoinedEvent>(const str
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEventData>(const stream::StreamUnpublishedEventData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamUnpublishedEventData");
+    }
+    obj->set("streamRoomId", serialize(val.streamRoomId));
+    obj->set("streamId", serialize(val.streamId));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEvent>(const stream::StreamUnpublishedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
@@ -219,6 +230,7 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::NewPublisherEvent>(const str
 
     obj->set("id", serialize(val.id));
     obj->set("video_codec", serialize(val.video_codec));
+    obj->set("userId", serialize(val.userId));
     obj->set("streams", streamsArr);
     return obj;
 }
@@ -320,11 +332,11 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::UpdatedStreamData>(const str
     if (_options.addType) {
         obj->set("__type", "stream$UpdatedStreamData");
     }
+    obj->set("active", serialize(val.active));
     obj->set("type", serialize(val.type));
-    obj->set("feed_id", serialize(val.streamId));
-    obj->set("feed_mid", serialize(val.streamMid));
-    obj->set("feed_mid", serialize(val.streamMid));
-    obj->set("feed_display", serialize(val.stream_display));
+    obj->set("streamId", serialize(val.streamId));
+    obj->set("streamMid", serialize(val.streamMid));
+    obj->set("stream_display", serialize(val.stream_display));
     obj->set("mindex", serialize(val.mindex));
     obj->set("mid", serialize(val.mid));
     obj->set("send", serialize(val.send));
@@ -344,9 +356,9 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamsUpdatedData>(const st
     }
     obj->set("room", serialize(val.room));
     obj->set("streams", streamsArr);
-    if (val.jsep.has_value()) {
-        obj->set("jsep", serialize(val.jsep.value()));
-    }
+    // if (val.jsep.has_value()) {
+    //     obj->set("jsep", serialize(val.jsep.value()));
+    // }
     return obj;
 }
 

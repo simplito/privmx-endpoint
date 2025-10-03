@@ -175,9 +175,10 @@ Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::leaveStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(0), "localStreamId");
-    _streamApi.leaveStream(localStreamId);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto streamsIds = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsIds");
+    _streamApi.leaveStream(streamRoomId, streamsIds);
     return {};
 }
 

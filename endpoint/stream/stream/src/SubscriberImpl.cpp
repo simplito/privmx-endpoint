@@ -93,7 +93,6 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
 }
 
 void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
-    std::cerr << "Stream::AssertQuery" << std::endl;
     for(auto& subscriptionQuery : subscriptionQueries) {
         if (subscriptionQuery == "streamroom/internal") {
             continue;

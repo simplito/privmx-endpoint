@@ -77,7 +77,7 @@ public:
 
     void unpublishStream(int64_t localStreamId);
 
-    void leaveStream(int64_t localStreamId);
+    void leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds);
 
     void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
 

@@ -103,31 +103,37 @@ struct VideoRoomStreamTrack {
 struct NewPublisherEvent {
     int64_t id;
     std::string video_codec;
+    std::string userId;
     std::vector<VideoRoomStreamTrack> streams;
 };
 
 struct CurrentPublishersData {
-    int64_t room;
+    std::string room;
     std::vector<NewPublisherEvent> publishers;
 };
 
 struct UpdatedStreamData {
+    bool active;
     std::string type;
-    int64_t streamId; // feed_id
-    int64_t streamMid; // feed_mid
-    std::string stream_display; // feed_display
+    std::optional<std::string> codec;
+    std::optional<int64_t> streamId; // feed_id
+    std::optional<std::string> streamMid; // feed_mid
+    std::optional<std::string> stream_display; // feed_display
     int64_t mindex;
     std::string mid;
     bool send;
     bool ready;
 };
 
-struct StreamsUpdatedData {
+struct StreamsUpdatedDataInternal {
     std::string room;
     std::vector<UpdatedStreamData> streams;
     std::optional<SdpWithTypeModel> jsep;
 };
-
+struct StreamsUpdatedData {
+    std::string room;
+    std::vector<UpdatedStreamData> streams;
+};
 
 }  // namespace stream
 }  // namespace endpoint

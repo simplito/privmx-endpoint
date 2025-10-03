@@ -315,8 +315,6 @@ void AuthorizedConnection::authorizeWebsocket() {
         if (type == "disconnected") {
             return;
         }
-        std::cerr << "Event-Debug[AuthConn] - type: " << type << std::endl;
-        // std::cerr << "Event-Debug[AuthConn] - type: " << type << "data" << privmx::utils::Utils::stringifyVar(decoded, true) << std::endl;
 
         PRIVMX_DEBUG("AuthorizedConnection", "Recived event with type: " + type + " | data:\n" + privmx::utils::Utils::stringifyVar(decoded, true))
         _notification_event_dispatcher.dispatch({.type = type, .data = decoded});

@@ -61,6 +61,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamJoinedEvent>(const stream::StreamJoinedEvent& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEventData>(const stream::StreamUnpublishedEventData& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEvent>(const stream::StreamUnpublishedEvent& val);
 
 template<>

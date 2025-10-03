@@ -100,13 +100,12 @@ void EventMiddleware::emitNotificationEvent(const std::string& type, const Notif
                 for(auto& s : notification.subscriptions) {
                    if(std::find(listener.second.begin(), listener.second.end(), s) != listener.second.end()) {
                         if(listener.first) {
-                            std::cerr << "Pass event to listener... " << std::endl;
                             return listener.first(type, notification);
                         }
                    }
                 }
             } catch (std::exception& e) {
-                std::cerr << "Error on emitNotificationEvent:" << e.what() << std::endl;
+                std::cerr << "Error on emitNotificationEvent:" << e.what() << " / Notification type: " << type << "/ payload: " << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
             }
         });
 }

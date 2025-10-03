@@ -45,6 +45,18 @@ struct StreamEventData {
     std::string userId;
 };
 
+struct StreamUnpublishedEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID's
+     */
+    int64_t streamId;
+};
+
 /**
  * Holds data of event that arrives when StreamRoom is created.
  */
@@ -210,7 +222,7 @@ struct StreamUnpublishedEvent : public core::Event {
     /**
      * event data
      */
-    StreamEventData data;
+    StreamUnpublishedEventData data;
 };
 
 /**
@@ -298,6 +310,7 @@ struct PublishersStreamsUpdatedEvent : public core::Event {
      */
     StreamsUpdatedData data;
 };
+
 
 /**
  * 'Events' provides the helpers methods for module's events management.

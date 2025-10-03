@@ -181,7 +181,8 @@ ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamLeaveModel)
-    INT64_FIELD(sessionId)
+    STRING_FIELD(streamRoomId)
+    LIST_FIELD(streamIds, int64_t)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamReconfigureModel)
@@ -215,7 +216,10 @@ ENDPOINT_SERVER_TYPE(StreamEventData)
     STRING_FIELD(userId)
 TYPE_END
 
-
+ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
+    STRING_FIELD(streamRoomId)
+    INT64_FIELD(streamId)
+TYPE_END
 // JANUS events data
 
 ENDPOINT_SERVER_TYPE(JanusEventData)
@@ -266,6 +270,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(NewPublisherEvent)
     INT64_FIELD(id)
+    STRING_FIELD(userId)
     STRING_FIELD(video_codec)
     LIST_FIELD(streams, VideoRoomStreamTrack)
 TYPE_END

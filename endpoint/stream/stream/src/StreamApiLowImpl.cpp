@@ -89,18 +89,17 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 }
 
 void StreamApiLowImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    std::cerr << "Event type arrived: " << type << std::endl;
-    if (type == "janus") {
-        // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
-    }
+    // if (type == "janus") {
+    //     // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
+    // }
     PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "event type:"+ type);
     Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    try {
-        isInternalJanusEvent(type, data);
-    } catch (const std::exception& e) {
-        std::cerr << "cannot parse janus event: " << e.what() << std::endl;
-        PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Error in isInternalJanusEvent():"+ std::string(e.what()));
-    }
+    // try {
+    //     isInternalJanusEvent(type, data);
+    // } catch (const std::exception& e) {
+    //     std::cerr << "cannot parse janus event: " << e.what() << std::endl;
+    //     PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Error in isInternalJanusEvent():"+ std::string(e.what()));
+    // }
 
     if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
         
@@ -117,17 +116,16 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         return;
     }
     auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
-    if(!subscriptionQuery.has_value() && !isInternalJanusEvent(type, data)) {
-        std::cerr << "==> no subscription for event: " << type << std::endl;
+    if(!subscriptionQuery.has_value()) {
         return;
     }
     PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
-    if (isInternalJanusEvent(type, data)) {
-        std::cerr << "catched by isInternalJanusEvent..." << std::endl;
-        auto janusEventData = data->getObject("data");
-        processJanusEvent(janusEventData);
-        return;
-    }
+    // if (isInternalJanusEvent(type, data)) {
+    //     std::cerr << "catched by isInternalJanusEvent..." << std::endl;
+    //     auto janusEventData = data->getObject("data");
+    //     processJanusEvent(janusEventData);
+    //     return;
+    // }
     
     if (type == "streamRoomCreated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
@@ -149,7 +147,7 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         event->channel = "stream";
         event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUnpublished" || type == "streamLeft" ) {
+    } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" ) {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
         std::vector<int64_t> streamIds;
         for(auto i : raw.streamIds()) streamIds.push_back(i);
@@ -164,11 +162,6 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
             event->channel = "stream";
             event->data = eventData;
             _eventMiddleware->emitApiEvent(event);
-        } else if(type == "streamUnpublished") {
-            std::shared_ptr<StreamUnpublishedEvent> event(new StreamUnpublishedEvent());
-            event->channel = "stream";
-            event->data = eventData;
-            _eventMiddleware->emitApiEvent(event);
         } else if(type == "streamLeft") {
             std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
             event->channel = "stream";
@@ -176,15 +169,18 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
             _eventMiddleware->emitApiEvent(event);
         }
     }
+    else if (type == "streamUnpublished") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUnpublishedEventData>(data);
+        auto eventData = StreamUnpublishedEventData{.streamRoomId=raw.streamRoomId(), .streamId=raw.streamId()};
+        std::shared_ptr<StreamUnpublishedEvent> event(new StreamUnpublishedEvent());
+        event->channel = "stream";
+        event->data = eventData;
+        _eventMiddleware->emitApiEvent(event);
+    }
     else if (type == "publisherAvailablePublishers") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::CurrentPublishersData>(data);
         auto deserializer = std::make_shared<core::VarDeserializer>();
         auto parsed = deserializer->deserialize<CurrentPublishersData>(Poco::Dynamic::Var(data), "CurrentPublishersData");
-
-        // keep avail publishers in subscriptionsManager
-        for (auto &pub: parsed.publishers) {
-            _subscriptionsManager->addNewPublisherAsAvailable(parsed.room, pub);
-        }
 
         std::shared_ptr<StreamAvailablePublishersEvent> event(new StreamAvailablePublishersEvent());
         event->channel = "stream";
@@ -192,6 +188,31 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         _eventMiddleware->emitApiEvent(event);
     }
     else if (type == "streamsUpdated") {
+        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamsUpdatedData>(data);
+
+        // update offer via WebRtcInterface
+        auto streamRoomId {raw.room()};
+        auto roomOpt = _streamRoomMap.get(streamRoomId);
+        std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
+        if(!roomOpt.has_value()) {
+            throw CannotGetRoomOnStreamsUpdateEventException();
+        } else {
+            room = roomOpt.value();
+        }
+        if (!raw.jsepEmpty()) {
+            // std::cerr << "Pass new JSEP to the WebRtcInterface on 'streamsUpdated' event..." << std::endl;
+            room->webRtc->createAnswerAndSetDescriptions(room->id, raw.jsep().sdp(), raw.jsep().type());
+        }
+
+        // pass event to client
+        auto deserializer = std::make_shared<core::VarDeserializer>();
+        auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
+        std::shared_ptr<PublishersStreamsUpdatedEvent> event(new PublishersStreamsUpdatedEvent());
+        event->channel = "stream";
+        event->data = parsed;
+        _eventMiddleware->emitApiEvent(event);
+    } else 
+    if (type == "streamsUpdated") {
         auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamsUpdatedData>(data);
 
         // update offer via WebRtcInterface
@@ -220,93 +241,93 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
     }
 }
 
-bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr event) {
-    return type == "janus" 
-    && event->has("data") 
-    && event->getObject("data")->has("janus");
-}
+// bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr event) {
+//     return type == "janus" 
+//     && event->has("data") 
+//     && event->getObject("data")->has("janus");
+// }
 
-void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
-    auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
-    PRIVMX_DEBUG("StreamApiLowImpl", "processJanusEvent", "janusPluginEvent :\n" + privmx::utils::Utils::stringifyVar(janusPluginEvent, true));
+// void StreamApiLowImpl::processJanusEvent(const Poco::JSON::Object::Ptr data) {
+//     auto janusPluginEvent = utils::TypedObjectFactory::createObjectFromVar<server::JanusPluginEvent>(data);
+//     PRIVMX_DEBUG("StreamApiLowImpl", "processJanusEvent", "janusPluginEvent :\n" + privmx::utils::Utils::stringifyVar(janusPluginEvent, true));
     
-    auto localStreamId = _sessionIdToStreamId.get(janusPluginEvent.session_id());
-    // if stream is about me
-    if(localStreamId.has_value() && _streamIdToRoomId.has(localStreamId.value())) {
-        //if streamId exist that mens stream and room exist
-        auto room = getStreamRoomData(localStreamId.value());
-        auto streamData = getStreamData(localStreamId.value(), room);
+//     auto localStreamId = _sessionIdToStreamId.get(janusPluginEvent.session_id());
+//     // if stream is about me
+//     if(localStreamId.has_value() && _streamIdToRoomId.has(localStreamId.value())) {
+//         //if streamId exist that mens stream and room exist
+//         auto room = getStreamRoomData(localStreamId.value());
+//         auto streamData = getStreamData(localStreamId.value(), room);
     
-        if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
-            auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata().data());
+//         if(!janusPluginEvent.plugindataEmpty() && janusPluginEvent.plugindata().pluginOpt("") == "janus.plugin.videoroom") {
+//             auto janusVideoRoom = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoom>(janusPluginEvent.plugindata().data());
 
-            if(janusVideoRoom.videoroomOpt("") == "updated") {
-                auto janusVideoRoomUpdated = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoomUpdated>(janusVideoRoom);
-                std::optional<server::JanusJSEP> jsep = std::nullopt;
-                if (!janusPluginEvent.jsepEmpty()) {
-                    jsep = janusPluginEvent.jsep();
-                }
-                onVideoRoomUpdate(janusPluginEvent.session_id(), janusVideoRoomUpdated, streamData, jsep);
-            }
-        }
-    }
-}
+//             if(janusVideoRoom.videoroomOpt("") == "updated") {
+//                 auto janusVideoRoomUpdated = utils::TypedObjectFactory::createObjectFromVar<server::JanusVideoRoomUpdated>(janusVideoRoom);
+//                 std::optional<server::JanusJSEP> jsep = std::nullopt;
+//                 if (!janusPluginEvent.jsepEmpty()) {
+//                     jsep = janusPluginEvent.jsep();
+//                 }
+//                 onVideoRoomUpdate(janusPluginEvent.session_id(), janusVideoRoomUpdated, streamData, jsep);
+//             }
+//         }
+//     }
+// }
 
-void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep) {
-    PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "session_id :" + std::to_string(session_id));
-    if (jsep.has_value() && !jsep.value().sdpEmpty() && !jsep.value().typeEmpty()) {
-            // auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(jsep.value().sdp(), jsep.value().type());
-            // auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
-            // janusJSEP.sdp(sdp);
-            // janusJSEP.type("answer");
-            // auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
-            // model.sessionId(streamData->sessionId.value()); //TODO
-            // model.answer(janusJSEP);
-            // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure: \n" + privmx::utils::Utils::stringifyVar(model, true));
-            // _serverApi->streamReconfigure(model);
-            // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure Done");
+// void StreamApiLowImpl::onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep) {
+//     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "session_id :" + std::to_string(session_id));
+//     if (jsep.has_value() && !jsep.value().sdpEmpty() && !jsep.value().typeEmpty()) {
+//             // auto sdp = streamData->webRtc->createAnswerAndSetDescriptions(jsep.value().sdp(), jsep.value().type());
+//             // auto janusJSEP = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+//             // janusJSEP.sdp(sdp);
+//             // janusJSEP.type("answer");
+//             // auto model = utils::TypedObjectFactory::createNewObject<server::StreamReconfigureModel>();
+//             // model.sessionId(streamData->sessionId.value()); //TODO
+//             // model.answer(janusJSEP);
+//             // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure: \n" + privmx::utils::Utils::stringifyVar(model, true));
+//             // _serverApi->streamReconfigure(model);
+//             // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamReconfigure Done");
 
-            // auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
-            // sessionDescription.sdp(sdp);
-            // sessionDescription.type("answer");
-            // auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
-            // model.sessionId(streamData->sessionId.value());
-            // model.answer(sessionDescription);
-            // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamAcceptOffer");
-            // _serverApi->streamAcceptOffer(model);
-            // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamAcceptOffer Done");
+//             // auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+//             // sessionDescription.sdp(sdp);
+//             // sessionDescription.type("answer");
+//             // auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
+//             // model.sessionId(streamData->sessionId.value());
+//             // model.answer(sessionDescription);
+//             // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamAcceptOffer");
+//             // _serverApi->streamAcceptOffer(model);
+//             // PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "_serverApi->streamAcceptOffer Done");
 
 
-            // auto room = getStreamRoomData(_sessionIdToStreamId.get(streamData->sessionId.value()).value());
-            // auto streamRoomId = room->id;
-            // // get Room for contextId
-            // auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
-            // modelGetRoom.id(streamRoomId);
-            // auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
-            // // get Streams for userId
-            // auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
-            // modelStreams.streamRoomId(streamRoomId);
-            // auto streamsList = _serverApi->streamList(modelStreams).list();
-            // // get all users for pubKey
-            // std::vector<core::UserInfo> allUsersList = _connection->getContextUsers(streamRoom.contextId()); 
-            // std::vector<std::string> usersIds;
-            // for(auto s: streamsList) {
-            //     usersIds.push_back(s.userId());
-            // }
-            // std::vector<core::UserWithPubKey> toSend;
-            // for(auto userInfo: allUsersList) {
-            //     if(std::find(usersIds.begin(), usersIds.end(), userInfo.user.userId) != usersIds.end() ) {
-            //         toSend.push_back(userInfo.user);
-            //     }
-            // }
-            // room->streamKeyManager->requestKey(toSend);
+//             // auto room = getStreamRoomData(_sessionIdToStreamId.get(streamData->sessionId.value()).value());
+//             // auto streamRoomId = room->id;
+//             // // get Room for contextId
+//             // auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+//             // modelGetRoom.id(streamRoomId);
+//             // auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
+//             // // get Streams for userId
+//             // auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
+//             // modelStreams.streamRoomId(streamRoomId);
+//             // auto streamsList = _serverApi->streamList(modelStreams).list();
+//             // // get all users for pubKey
+//             // std::vector<core::UserInfo> allUsersList = _connection->getContextUsers(streamRoom.contextId()); 
+//             // std::vector<std::string> usersIds;
+//             // for(auto s: streamsList) {
+//             //     usersIds.push_back(s.userId());
+//             // }
+//             // std::vector<core::UserWithPubKey> toSend;
+//             // for(auto userInfo: allUsersList) {
+//             //     if(std::find(usersIds.begin(), usersIds.end(), userInfo.user.userId) != usersIds.end() ) {
+//             //         toSend.push_back(userInfo.user);
+//             //     }
+//             // }
+//             // room->streamKeyManager->requestKey(toSend);
 
-            return;
-    } else {
-        PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
-    }
-    PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
-} 
+//             return;
+//     } else {
+//         PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
+//     }
+//     PRIVMX_DEBUG("StreamApiLowImpl", "onVideoRoomUpdate", "Done");
+// } 
 
 void StreamApiLowImpl::processConnectedEvent() {
 
@@ -336,10 +357,8 @@ int64_t StreamApiLowImpl::createStream(const std::string& streamRoomId, int64_t 
     auto roomOpt = _streamRoomMap.get(streamRoomId);
     std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
     if(!roomOpt.has_value()) {
-        std::cerr << "[streamApiLowImpl::streamCreate]: creating empty roomData with provided webRtc instance" << std::endl;
         room = createEmptyStreamRoomData(streamRoomId, webRtc);
     } else {
-        std::cerr << "[streamApiLowImpl::streamCreate]: Getting roomData from existing _streamRoomMap" << std::endl;
         room = roomOpt.value();
     }
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(localStreamId) + ": STREAM Sender")
@@ -386,34 +405,51 @@ void StreamApiLowImpl::publishStream(int64_t localStreamId) {
 
 // Joining to Stream
 int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, [[maybe_unused]] const Settings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
-    
+    std::cerr << __LINE__ << std::endl;
+
     auto roomOpt = _streamRoomMap.get(streamRoomId);
     std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
     if(!roomOpt.has_value()) {
+    std::cerr << __LINE__ << std::endl;
+
         room = createEmptyStreamRoomData(streamRoomId, webRtc);
     } else {
+    std::cerr << __LINE__ << std::endl;
+
         room = roomOpt.value();
     }
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(localStreamId) + ": STREAM Receiver")
+    std::cerr << __LINE__ << std::endl;
+
     _streamIdToRoomId.set(localStreamId, streamRoomId);
     // Get data from bridge
     auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
     streamJoinModel.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
+    std::cerr << __LINE__ << std::endl;
+
     for(size_t i = 0; i < streamsId.size(); i++) {
         streamJoinModel.streamIds().add(streamsId[i]);
     }
     streamJoinModel.streamRoomId(streamRoomId);
+    std::cerr << __LINE__ << std::endl;
+
     auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
     PRIVMX_DEBUG("STREAMS", "joinStream", "SessionId: " + std::to_string(streamJoinResult.sessionIdOpt(0)))
 
     // update/set sessionId in webrtc (for Janus - trickle)
+    std::cerr << __LINE__ << std::endl;
+
     webRtc->updateSessionId(streamRoomId, streamJoinResult.sessionId(), std::string("subscriber"));
 
     // creating peerConnectio
+    std::cerr << __LINE__ << std::endl;
+
 
     auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
         webRtc->updateKeys(keys);
     });
+    std::cerr << __LINE__ << std::endl;
+
     room->streamMap.set(
         localStreamId, 
         std::make_shared<StreamData>(
@@ -424,30 +460,48 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
             }
         )
     );
+    std::cerr << __LINE__ << std::endl;
+    std::cerr << "====> StreamJoinResult: " << privmx::utils::Utils::stringify(streamJoinResult) << std::endl;
     _sessionIdToStreamId.set(streamJoinResult.sessionId(), localStreamId);
+
     // std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
     std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
+    std::cerr << __LINE__ << std::endl;
+
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+    std::cerr << __LINE__ << std::endl;
+
     sessionDescription.sdp(sdp);
+    std::cerr << __LINE__ << std::endl;
+
     sessionDescription.type("answer");
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
     model.sessionId(streamJoinResult.sessionId());
     model.answer(sessionDescription);
+    std::cerr << __LINE__ << std::endl;
+
     _serverApi->streamAcceptOffer(model);
     
     // get Room for contextId
+    std::cerr << __LINE__ << std::endl;
+
     auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     modelGetRoom.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
     // get Streams for userId
+    std::cerr << __LINE__ << std::endl;
+
     auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
     modelStreams.streamRoomId(streamRoomId);
     auto streamsList = _serverApi->streamList(modelStreams).list();
+    std::cerr << __LINE__ << std::endl;
+
     // get users for pubKey
     Poco::JSON::Object::Ptr query = new Poco::JSON::Object;
     Poco::JSON::Object::Ptr queryId = new Poco::JSON::Object;
     Poco::JSON::Array::Ptr usersIds = new Poco::JSON::Array;
 
+    std::cerr << __LINE__ << std::endl;
     for(auto s: streamsList) {
         if ( std::find(streamsId.begin(), streamsId.end(), s.streamId()) != streamsId.end() ) {
             usersIds->add(s.userId());
@@ -456,6 +510,7 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
     queryId->set("$in", usersIds);
     query->set("#userId", queryId);
+    std::cerr << __LINE__ << std::endl;
     core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
         streamRoom.contextId(), 
         core::PagingQuery{
@@ -474,6 +529,8 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
         PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
         toSend.push_back(userInfo.user);
     }
+        std::cerr << __LINE__ << std::endl;
+
     room->streamKeyManager->requestKey(toSend);
     return localStreamId;
 }
@@ -874,15 +931,19 @@ void StreamApiLowImpl::unpublishStream(int64_t localStreamId) {
     removeStream(room, streamData, localStreamId);
 }
 
-void StreamApiLowImpl::leaveStream(int64_t localStreamId) {
-    auto room = getStreamRoomData(localStreamId);
-    auto streamData = getStreamData(localStreamId, room);
-    if(streamData->sessionId.has_value()) {
-        server::StreamLeaveModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamLeaveModel>();
-        model.sessionId(streamData->sessionId.value());
-        _serverApi->streamLeave(model);
+void StreamApiLowImpl::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds) {
+    std::cerr << __LINE__ << std::endl;
+    server::StreamLeaveModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamLeaveModel>();
+    std::cerr << __LINE__ << std::endl;
+    model.streamRoomId(streamRoomId);
+    std::cerr << __LINE__ << std::endl;
+    model.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
+    std::cerr << __LINE__ << std::endl;
+    for(size_t i = 0; i < streamsIds.size(); i++) {
+        model.streamIds().add(streamsIds[i]);
     }
-    removeStream(room, streamData, localStreamId);
+    std::cerr << __LINE__ << std::endl;
+    _serverApi->streamLeave(model);
 }
 
 void StreamApiLowImpl::removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, int64_t localStreamId) {

@@ -89,7 +89,7 @@ public:
 
     void unpublishStream(int64_t localStreamId);
 
-    void leaveStream(int64_t localStreamId);
+    void leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -124,9 +124,9 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    bool isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data);
-    void processJanusEvent(const Poco::JSON::Object::Ptr data);
-    void onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep = std::nullopt);
+    // bool isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data);
+    // void processJanusEvent(const Poco::JSON::Object::Ptr data);
+    // void onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep = std::nullopt);
 
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     StreamRoom convertServerStreamRoomToLibStreamRoom(

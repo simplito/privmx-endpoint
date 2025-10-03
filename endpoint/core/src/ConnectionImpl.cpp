@@ -78,7 +78,6 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
             // emit as raw
             _eventMiddleware->emitNotificationEvent(event.type, convertJanusEventToCoreNotificationEvent(event));
         } else {
-            std::cerr << "Emit notification in ConnectionImpl..." << "eventType" << event.type << std::endl;
             _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
         }
     });

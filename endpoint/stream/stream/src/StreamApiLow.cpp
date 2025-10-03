@@ -188,10 +188,10 @@ void StreamApiLow::unpublishStream(int64_t streamId) {
     }
 }
 
-void StreamApiLow::leaveStream(int64_t streamId) {
+void StreamApiLow::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds) {
     validateEndpoint();
     try {
-        return _impl->leaveStream(streamId);
+        return _impl->leaveStream(streamRoomId, streamsIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

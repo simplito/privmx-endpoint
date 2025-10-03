@@ -48,7 +48,11 @@ template<>
 stream::CurrentPublishersData VarDeserializer::deserialize<stream::CurrentPublishersData>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
+stream::StreamsUpdatedDataInternal VarDeserializer::deserialize<stream::StreamsUpdatedDataInternal>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
 stream::StreamsUpdatedData VarDeserializer::deserialize<stream::StreamsUpdatedData>(const Poco::Dynamic::Var& val, const std::string& name);
+
 
 }  // namespace core
 }  // namespace endpoint
