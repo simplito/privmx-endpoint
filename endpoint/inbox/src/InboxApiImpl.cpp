@@ -1046,6 +1046,12 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
         if (raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
             auto data = core::Mapper::mapToCollectionChangedEventData(INBOX_TYPE_FILTER_FLAG, raw);
             auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("inbox/collectionChanged", data, notification);
+            auto tmp = _subscriber.convertKnownThreadIdToInboxId(event->data.moduleId);
+            if(tmp.has_value()) {
+                event->data.moduleId = tmp.value();
+            } else {
+                event->data.moduleId = "";
+            }
             _eventMiddleware->emitApiEvent(event);
         }
     }
