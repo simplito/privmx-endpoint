@@ -32,6 +32,7 @@ private:
     virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     static std::vector<std::string> getChannelPath(EventType eventType);
     static std::vector<core::SubscriptionQueryObj::QuerySelector> getSelectors(EventSelectorType selectorType, const std::string& selectorId);
+    void updateSubscriptionQuerySelectors(core::SubscriptionQueryObj& query);
     
     ServerApi _serverApi;
     std::string _typeFilterFlag;

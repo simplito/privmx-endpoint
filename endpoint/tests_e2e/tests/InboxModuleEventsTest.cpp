@@ -707,3 +707,142 @@ TEST_F(InboxEventTest, subscribeFor_unsubscribeFor) {
         });
     });
 }
+
+TEST_F(InboxEventTest, waitEvent_getEvent_collectionChanged_enabled) {
+    std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
+    EXPECT_NO_THROW({
+        eventQueue.waitEvent(); // pop libConnected form queue
+    });
+    EXPECT_NO_THROW({
+        inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::COLLECTION_CHANGE, 
+                inbox::EventSelectorType::INBOX_ID,
+                reader->getString("Inbox_1.inboxId")
+            )
+        });
+    });
+    int64_t fileHandle = 0;
+    std::string file_total_data_send = "";
+    EXPECT_NO_THROW({
+        fileHandle = inboxApi->createFileHandle(
+            privmx::endpoint::core::Buffer::from("publicMeta"),
+            privmx::endpoint::core::Buffer::from("privateMeta"),
+            0
+        );
+    });
+    EXPECT_EQ(fileHandle, 1);
+    if(fileHandle == 1) {
+        int64_t inboxHandle = 0;
+        EXPECT_NO_THROW({
+            inboxHandle = inboxApi->prepareEntry(
+                reader->getString("Inbox_1.inboxId"),
+                core::Buffer::from("test_inboxSendCommit"),
+                {fileHandle},
+                reader->getString("Login.user_1_privKey")
+            );
+        });
+        EXPECT_EQ(inboxHandle, 2);
+        if(inboxHandle == 2) {
+            EXPECT_NO_THROW({
+                inboxApi->sendEntry(inboxHandle);
+            });
+        } else {
+            std::cout << "inboxSendPrepare Failed" << std::endl;
+            FAIL();
+        }
+    } else {
+        std::cout << "inboxCreateFileHandle Failed" << std::endl;
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event != nullptr) {
+        EXPECT_EQ(event->connectionId, connection->getConnectionId());
+        EXPECT_EQ(event->type, "collectionChanged");
+        EXPECT_EQ(event->channel, "inbox/collectionChanged");
+        if(core::Events::isCollectionChangedEvent(event)) {
+            EXPECT_EQ(event->subscriptions.size(), 1);
+            core::CollectionChangedEventData collectionChanged = core::Events::extractCollectionChangedEvent(event).data;
+            EXPECT_EQ(collectionChanged.moduleId, reader->getString("Inbox_1.inboxId"));
+            EXPECT_EQ(collectionChanged.affectedItemsCount, 1);
+        } else {
+            FAIL();
+        }
+    } else {
+        FAIL();
+    }
+}
+
+TEST_F(InboxEventTest, waitEvent_getEvent_collectionChanged_disabled) {
+    std::shared_ptr<privmx::endpoint::core::Event> event = nullptr;
+    EXPECT_NO_THROW({
+        eventQueue.waitEvent(); // pop libConnected form queue
+    });
+    EXPECT_NO_THROW({
+        auto tmp = inboxApi->subscribeFor({
+            inboxApi->buildSubscriptionQuery(
+                inbox::EventType::ENTRY_CREATE, 
+                inbox::EventSelectorType::INBOX_ID,
+                reader->getString("Inbox_1.inboxId")
+            )
+        });
+        inboxApi->unsubscribeFrom(tmp);
+    });
+    int64_t fileHandle = 0;
+    std::string file_total_data_send = "";
+    EXPECT_NO_THROW({
+        fileHandle = inboxApi->createFileHandle(
+            privmx::endpoint::core::Buffer::from("publicMeta"),
+            privmx::endpoint::core::Buffer::from("privateMeta"),
+            0
+        );
+    });
+    EXPECT_EQ(fileHandle, 1);
+    if(fileHandle == 1) {
+        int64_t inboxHandle = 0;
+        EXPECT_NO_THROW({
+            inboxHandle = inboxApi->prepareEntry(
+                reader->getString("Inbox_1.inboxId"),
+                core::Buffer::from("test_inboxSendCommit"),
+                {fileHandle},
+                reader->getString("Login.user_1_privKey")
+            );
+        });
+        EXPECT_EQ(inboxHandle, 2);
+        if(inboxHandle == 2) {
+            EXPECT_NO_THROW({
+                inboxApi->sendEntry(inboxHandle);
+            });
+        } else {
+            std::cout << "inboxSendPrepare Failed" << std::endl;
+            FAIL();
+        }
+    } else {
+        std::cout << "inboxCreateFileHandle Failed" << std::endl;
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        std::optional<core::EventHolder> eventHolder = eventQueue.getEvent();
+        if(eventHolder.has_value()) {
+            event = eventHolder.value().get();
+        } else {
+            event = nullptr;
+        }
+    });
+    if(event == nullptr) {
+
+    } else {
+        std::cout << "Received Event with type " << event->type << std::endl;
+        std::cout << "Expected null" << std::endl;
+        FAIL();
+    }
+}
