@@ -732,3 +732,36 @@ TEST_F(ThreadEventTest, subscribeFor_query_from_other_module) {
         });
     }, thread::InvalidSubscriptionQueryException);
 }
+
+TEST_F(ThreadEventTest, subscribeFor_unsubscribeFor) {
+    std::vector<std::string> valid_subscriptions;
+    EXPECT_NO_THROW({
+        valid_subscriptions = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(  
+                thread::EventType::THREAD_CREATE,  
+                thread::EventSelectorType::CONTEXT_ID,  
+                reader->getString("Context_1.contextId")  
+            )
+        });
+    });
+    std::vector<std::string> invalid_subscriptions;
+    EXPECT_NO_THROW({
+        invalid_subscriptions = threadApi->subscribeFor({
+            threadApi->buildSubscriptionQuery(  
+                thread::EventType::THREAD_CREATE,  
+                thread::EventSelectorType::CONTEXT_ID,  
+                "error"
+            )
+        });
+    });
+    EXPECT_NO_THROW({
+        threadApi->unsubscribeFrom({
+            valid_subscriptions 
+        });
+    });
+    EXPECT_NO_THROW({
+        threadApi->unsubscribeFrom({
+            invalid_subscriptions 
+        });
+    });
+}

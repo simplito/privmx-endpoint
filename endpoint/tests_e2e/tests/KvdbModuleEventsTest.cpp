@@ -795,3 +795,36 @@ TEST_F(KvdbEventTest, subscribeFor_query_from_other_module) {
         });
     }, kvdb::InvalidSubscriptionQueryException);
 }
+
+TEST_F(KvdbEventTest, subscribeFor_unsubscribeFor) {
+    std::vector<std::string> valid_subscriptions;
+    EXPECT_NO_THROW({
+        valid_subscriptions = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(  
+                kvdb::EventType::KVDB_CREATE,  
+                kvdb::EventSelectorType::CONTEXT_ID,  
+                reader->getString("Context_1.contextId")  
+            )
+        });
+    });
+    std::vector<std::string> invalid_subscriptions;
+    EXPECT_NO_THROW({
+        invalid_subscriptions = kvdbApi->subscribeFor({
+            kvdbApi->buildSubscriptionQuery(  
+                kvdb::EventType::KVDB_CREATE,  
+                kvdb::EventSelectorType::CONTEXT_ID,  
+                "error"
+            )
+        });
+    });
+    EXPECT_NO_THROW({
+        kvdbApi->unsubscribeFrom({
+            valid_subscriptions 
+        });
+    });
+    EXPECT_NO_THROW({
+        kvdbApi->unsubscribeFrom({
+            invalid_subscriptions 
+        });
+    });
+}

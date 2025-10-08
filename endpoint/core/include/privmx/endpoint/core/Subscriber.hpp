@@ -28,6 +28,40 @@ namespace core {
 
 #define INTERNAL_EVENT_CHANNEL_NAME "internal"
 
+class SubscriptionQueryObj {
+public:
+    struct QuerySelector {
+        std::string selectorKey;
+        std::string selectorValue;
+    };
+
+    SubscriptionQueryObj(const std::vector<std::string>& channelPath, const std::vector<SubscriptionQueryObj::QuerySelector>& selectors);
+    SubscriptionQueryObj(const std::string& subscriptionQueryString);
+    std::string toSubscriptionQueryString() const;
+   
+    inline std::vector<std::string> channelPath() const {return _channelPath;}
+    inline void channelPath(const std::vector<std::string>& channelPath) {_channelPath = channelPath;}
+    inline std::vector<SubscriptionQueryObj::QuerySelector> selectors() const {return _selectors;}
+    inline void selectorsPushBack(const SubscriptionQueryObj::QuerySelector& selector) {_selectors.push_back(selector);}
+    inline void selectors(const std::vector<SubscriptionQueryObj::QuerySelector>& selectors) {_selectors = selectors;}
+
+private:
+    std::vector<std::string> _channelPath;
+    std::vector<QuerySelector> _selectors;
+
+    constexpr static char QUERY_MAIN_SEPARATOR = '|';
+    constexpr static size_t QUERY_PATH_POS = 0;
+    constexpr static size_t SELECTOR_POS = 1;
+    constexpr static size_t QUERY_MAIN_MAX_SIZE = 2;
+    constexpr static char QUERY_PATH_SEPARATOR = '/';
+
+    constexpr static char SELECTORS_SEPARATOR = ',';
+    constexpr static char SELECTOR_SEPARATOR = '=';
+    constexpr static size_t SELECTOR_TYPE_POS = 0;
+    constexpr static size_t SELECTOR_ID_POS = 1;
+    constexpr static size_t SELECTOR_SIZE = 2;
+};
+
 class Subscriber 
 {
 public:
@@ -38,8 +72,11 @@ public:
     std::optional<std::string> getSubscriptionQuery(const std::string& subscriptionId);
     std::optional<std::string> getSubscriptionQuery(const std::vector<std::string>& subscriptionIds);
 private:
-    virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries) = 0;
-    virtual void assertQuery(const std::vector<std::string>& subscriptionQueries) = 0;
+    
+
+    virtual privmx::utils::List<std::string> transform(const std::vector<SubscriptionQueryObj>& subscriptionQueries) = 0;
+    virtual void assertQuery(const std::vector<SubscriptionQueryObj>& subscriptionQueries) = 0;
+    
     privmx::privfs::RpcGateway::Ptr _gateway;
     std::shared_mutex _map_mutex;
     std::map<std::string, std::string> _subscriptionIdToSubscriptionQuery;

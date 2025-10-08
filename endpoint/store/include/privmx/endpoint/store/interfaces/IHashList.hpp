@@ -26,13 +26,13 @@ public:
     virtual ~IHashList() = default;
     virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) = 0;
     virtual void setAll(const std::string& hashes) = 0;
-    virtual void set(const int64_t& chunkIndex, const std::string& hash, bool truncate = false) = 0;
-    virtual const std::string getHash(const int64_t& chunkIndex) = 0;
+    virtual void set(const uint64_t& chunkIndex, const std::string& hash, bool truncate = false) = 0;
+    virtual const std::string getHash(const uint64_t& chunkIndex) = 0;
     virtual const std::string& getAll() = 0;
     virtual const std::string& getTopHash() = 0;
-    virtual bool verifyHash(const int64_t& chunkIndex, const std::string& hash) = 0;
+    virtual bool verifyHash(const uint64_t& chunkIndex, const std::string& hash) = 0;
     virtual bool verifyTopHash(const std::string& topHash) = 0;
-    virtual size_t getHashSize() = 0;
+    virtual uint64_t getHashSize() = 0;
     // virtual int64_t getAllSize() = 0;
 };
 
