@@ -120,8 +120,8 @@ private:
         std::shared_ptr<WebRTCInterface> webRtc;
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
-    
-    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
+    void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
+    void processNotificationEvent(const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
 
@@ -175,7 +175,9 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
 
-    std::shared_ptr<ThreadSafeQueue<core::NotificationEvent>> _notificationEventQueue;
+    std::thread _events_consumer_thread;
+    privmx::utils::CancellationToken::Ptr _ect_notifier_cancellation_token;
+    std::shared_ptr<ThreadSafeQueue<core::NotificationEvent>> _events_consumer_queue;
 };
 
 }  // namespace stream

@@ -54,8 +54,7 @@ server::StreamJoinResult ServerApi::streamJoin(server::StreamJoinModel model)  {
 }
 
 void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
-    // PRIVMX_DEBUG("ServerApi", "requestWS", "model:\n" + privmx::utils::Utils::stringifyVar(model));
-    // std::cerr << "sending: streamAcceptOffer to Bridge..." << std::endl;
+    PRIVMX_DEBUG("ServerApi", "requestWS", "model:\n" + privmx::utils::Utils::stringifyVar(model));
     requestWS("streamAcceptOffer", model);
 }
 

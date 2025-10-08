@@ -75,7 +75,6 @@ Var RpcGateway::request(const string& method, Object::Ptr params, MessageSendOpt
     if(isConnected()) {
         return _rpc->call(method, params, settings, token);
     }
-    std::cerr << "not connected on request" << std::endl;
     throw NotConnectedException();
     return Var();
 }

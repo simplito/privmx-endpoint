@@ -59,18 +59,31 @@ StreamApiLowImpl::StreamApiLowImpl(
     // streamGetTurnCredentials
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
     auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
-    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
 
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
     auto result = _subscriber.subscribeFor({internalSubscriptionQuery});
 
-    _notificationEventQueue = std::make_shared<ThreadSafeQueue<core::NotificationEvent>>();
+    _events_consumer_queue = std::make_shared<ThreadSafeQueue<core::NotificationEvent>>();
+    privmx::utils::CancellationToken::Ptr _ect_notifier_cancellation_token = privmx::utils::CancellationToken::create();
+    _events_consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token) {
+        while (!token->isCancelled()) {
+            token->sleep( std::chrono::milliseconds(10));
+            if (!_events_consumer_queue->empty()) {
+                processNotificationEvent(_events_consumer_queue->pop());
+            }
+        }
+    }, _ect_notifier_cancellation_token);
+
+
+
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {
+    _ect_notifier_cancellation_token->cancel();
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
         roomValue->streamMap.forAll([&]([[maybe_unused]]int64_t key, std::shared_ptr<StreamData> value) {
             value->webRtc->close(roomValue->id);
@@ -94,153 +107,157 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
     return result;
 }
 
-void StreamApiLowImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    // if (type == "janus") {
-    //     // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
-    // }
-    PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "event type:"+ type);
-    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-    // try {
-    //     isInternalJanusEvent(type, data);
-    // } catch (const std::exception& e) {
-    //     std::cerr << "cannot parse janus event: " << e.what() << std::endl;
-    //     PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Error in isInternalJanusEvent():"+ std::string(e.what()));
-    // }
+void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core::NotificationEvent& _notification) {
+    _events_consumer_queue->push(_notification);
+}
 
-    if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
-        
-        PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "isInternalContextEvent");
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<event::server::ContextCustomEventData>(data);
-        auto decryptedData = _eventApi->extractInternalEventData(data);
-        auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<dynamic::StreamKeyManagementEvent>(
-            privmx::utils::Utils::parseJson(decryptedData.data.stdString())
-        );
-        auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
-        if(roomOpt.has_value()) {
-            roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
+void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& notification) {
+        auto type {notification.type};
+        // if (type == "janus") {
+        //     // std::cerr << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
+        // }
+        PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "event type:"+ type);
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
+        // try {
+        //     isInternalJanusEvent(type, data);
+        // } catch (const std::exception& e) {
+        //     std::cerr << "cannot parse janus event: " << e.what() << std::endl;
+        //     PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Error in isInternalJanusEvent():"+ std::string(e.what()));
+        // }
+
+        if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
+            PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "isInternalContextEvent");
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<event::server::ContextCustomEventData>(data);
+            auto decryptedData = _eventApi->extractInternalEventData(data);
+            auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<dynamic::StreamKeyManagementEvent>(
+                privmx::utils::Utils::parseJson(decryptedData.data.stdString())
+            );
+            auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
+            if(roomOpt.has_value()) {
+                roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
+            }
+            return;
         }
-        return;
-    }
-    auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
-    if(!subscriptionQuery.has_value()) {
-        return;
-    }
-    PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
-    // if (isInternalJanusEvent(type, data)) {
-    //     std::cerr << "catched by isInternalJanusEvent..." << std::endl;
-    //     auto janusEventData = data->getObject("data");
-    //     processJanusEvent(janusEventData);
-    //     return;
-    // }
-    
-    if (type == "streamRoomCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
-        auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 
-        std::shared_ptr<StreamRoomCreatedEvent> event(new StreamRoomCreatedEvent());
-        event->channel = "stream";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamRoomUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
-        auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw); 
-        std::shared_ptr<StreamRoomUpdatedEvent> event(new StreamRoomUpdatedEvent());
-        event->channel = "stream";
-        event->data = data;
-        _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamRoomDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
-        std::shared_ptr<StreamRoomDeletedEvent> event(new StreamRoomDeletedEvent());
-        event->channel = "stream";
-        event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
-        _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" ) {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
-        std::vector<int64_t> streamIds;
-        for(auto i : raw.streamIds()) streamIds.push_back(i);
-        auto eventData = StreamEventData{.streamRoomId=raw.streamRoomId(), .streamIds=streamIds, .userId=raw.userId()};
-        if(type == "streamPublished") {
-            std::shared_ptr<StreamPublishedEvent> event(new StreamPublishedEvent());
+        auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
+        if(!subscriptionQuery.has_value()) {
+            return;
+        }
+        PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
+        // if (isInternalJanusEvent(type, data)) {
+        //     std::cerr << "catched by isInternalJanusEvent..." << std::endl;
+        //     auto janusEventData = data->getObject("data");
+        //     processJanusEvent(janusEventData);
+        //     return;
+        // }
+
+        if (type == "streamRoomCreated") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+            auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw);
+            std::shared_ptr<StreamRoomCreatedEvent> event(new StreamRoomCreatedEvent());
+            event->channel = "stream";
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        } else if (type == "streamRoomUpdated") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+            auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw);
+            std::shared_ptr<StreamRoomUpdatedEvent> event(new StreamRoomUpdatedEvent());
+            event->channel = "stream";
+            event->data = data;
+            _eventMiddleware->emitApiEvent(event);
+        } else if (type == "streamRoomDeleted") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
+            std::shared_ptr<StreamRoomDeletedEvent> event(new StreamRoomDeletedEvent());
+            event->channel = "stream";
+            event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
+            _eventMiddleware->emitApiEvent(event);
+        } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" ) {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
+            std::vector<int64_t> streamIds;
+            for(auto i : raw.streamIds()) streamIds.push_back(i);
+            auto eventData = StreamEventData{.streamRoomId=raw.streamRoomId(), .streamIds=streamIds, .userId=raw.userId()};
+            if(type == "streamPublished") {
+                std::shared_ptr<StreamPublishedEvent> event(new StreamPublishedEvent());
+                event->channel = "stream";
+                event->data = eventData;
+                _eventMiddleware->emitApiEvent(event);
+            } else if(type == "streamJoined") {
+                std::shared_ptr<StreamJoinedEvent> event(new StreamJoinedEvent());
+                event->channel = "stream";
+                event->data = eventData;
+                _eventMiddleware->emitApiEvent(event);
+            } else if(type == "streamLeft") {
+                std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
+                event->channel = "stream";
+                event->data = eventData;
+                _eventMiddleware->emitApiEvent(event);
+            }
+        }
+        else if (type == "streamUnpublished") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUnpublishedEventData>(data);
+            auto eventData = StreamUnpublishedEventData{.streamRoomId=raw.streamRoomId(), .streamId=raw.streamId()};
+            std::shared_ptr<StreamUnpublishedEvent> event(new StreamUnpublishedEvent());
             event->channel = "stream";
             event->data = eventData;
             _eventMiddleware->emitApiEvent(event);
-        } else if(type == "streamJoined") {
-            std::shared_ptr<StreamJoinedEvent> event(new StreamJoinedEvent());
+        }
+        else if (type == "publisherAvailablePublishers") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::CurrentPublishersData>(data);
+            auto deserializer = std::make_shared<core::VarDeserializer>();
+            auto parsed = deserializer->deserialize<CurrentPublishersData>(Poco::Dynamic::Var(data), "CurrentPublishersData");
+
+            std::shared_ptr<StreamAvailablePublishersEvent> event(new StreamAvailablePublishersEvent());
             event->channel = "stream";
-            event->data = eventData;
+            event->data = parsed;
             _eventMiddleware->emitApiEvent(event);
-        } else if(type == "streamLeft") {
-            std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
+        }
+        else if (type == "streamsUpdated") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamsUpdatedData>(data);
+
+            // update offer via WebRtcInterface
+            auto streamRoomId {raw.room()};
+            auto roomOpt = _streamRoomMap.get(streamRoomId);
+            std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
+            if(!roomOpt.has_value()) {
+                throw CannotGetRoomOnStreamsUpdateEventException();
+            } else {
+                room = roomOpt.value();
+            }
+            if (!raw.jsepEmpty()) {
+                // std::cerr << "Pass new JSEP to the WebRtcInterface on 'streamsUpdated' event..." << std::endl;
+                std::string sdp = room->webRtc->createAnswerAndSetDescriptions(room->id, raw.jsep().sdp(), raw.jsep().type());
+
+                auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+                // std::cerr << __LINE__ << std::endl;
+
+                // sessionDescription.sdp(sdp);
+                // std::cerr << __LINE__ << std::endl;
+
+                // sessionDescription.type("answer");
+                // auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
+                // model.sessionId(raw.sessionId());
+                // model.answer(sessionDescription);
+                // std::cerr << __LINE__ << std::endl;
+
+                // _serverApi->streamAcceptOffer(model);
+                SdpWithTypeModel sdpModel = {
+                    .sdp = sdp,
+                    .type = "answer"
+                };
+
+                acceptOfferOnReconfigure(raw.sessionId(), sdpModel);
+            }
+            std::cerr << "Emit api event on join..." << std::endl;
+            // pass event to client
+            auto deserializer = std::make_shared<core::VarDeserializer>();
+            auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
+            std::shared_ptr<PublishersStreamsUpdatedEvent> event(new PublishersStreamsUpdatedEvent());
             event->channel = "stream";
-            event->data = eventData;
+            event->data = parsed;
             _eventMiddleware->emitApiEvent(event);
         }
-    }
-    else if (type == "streamUnpublished") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUnpublishedEventData>(data);
-        auto eventData = StreamUnpublishedEventData{.streamRoomId=raw.streamRoomId(), .streamId=raw.streamId()};
-        std::shared_ptr<StreamUnpublishedEvent> event(new StreamUnpublishedEvent());
-        event->channel = "stream";
-        event->data = eventData;
-        _eventMiddleware->emitApiEvent(event);
-    }
-    else if (type == "publisherAvailablePublishers") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::CurrentPublishersData>(data);
-        auto deserializer = std::make_shared<core::VarDeserializer>();
-        auto parsed = deserializer->deserialize<CurrentPublishersData>(Poco::Dynamic::Var(data), "CurrentPublishersData");
-
-        std::shared_ptr<StreamAvailablePublishersEvent> event(new StreamAvailablePublishersEvent());
-        event->channel = "stream";
-        event->data = parsed;
-        _eventMiddleware->emitApiEvent(event);
-    }
-    else if (type == "streamsUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamsUpdatedData>(data);
-
-        // update offer via WebRtcInterface
-        auto streamRoomId {raw.room()};
-        auto roomOpt = _streamRoomMap.get(streamRoomId);
-        std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
-        if(!roomOpt.has_value()) {
-            throw CannotGetRoomOnStreamsUpdateEventException();
-        } else {
-            room = roomOpt.value();
+        else {
+            std::cerr << "UNRESOLVED EVENT in CPP layer: '" << type << "'"<< std::endl;
         }
-        if (!raw.jsepEmpty()) {
-            // std::cerr << "Pass new JSEP to the WebRtcInterface on 'streamsUpdated' event..." << std::endl;
-            std::string sdp = room->webRtc->createAnswerAndSetDescriptions(room->id, raw.jsep().sdp(), raw.jsep().type());
-
-            auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
-            // std::cerr << __LINE__ << std::endl;
-
-            // sessionDescription.sdp(sdp);
-            // std::cerr << __LINE__ << std::endl;
-
-            // sessionDescription.type("answer");
-            // auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
-            // model.sessionId(raw.sessionId());
-            // model.answer(sessionDescription);
-            // std::cerr << __LINE__ << std::endl;
-
-            // _serverApi->streamAcceptOffer(model);
-            SdpWithTypeModel sdpModel = {
-                .sdp = sdp,
-                .type = "answer"
-            };
-            
-            acceptOfferOnReconfigure(raw.sessionId(), sdpModel);
-        }
-        std::cerr << "Emit api event on join..." << std::endl;
-        // pass event to client
-        auto deserializer = std::make_shared<core::VarDeserializer>();
-        auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
-        std::shared_ptr<PublishersStreamsUpdatedEvent> event(new PublishersStreamsUpdatedEvent());
-        event->channel = "stream";
-        event->data = parsed;
-        _eventMiddleware->emitApiEvent(event);
-    }
-    else {
-        std::cerr << "UNRESOLVED EVENT in CPP layer: '" << type << "'"<< std::endl;
-    }
 }
 
 // bool StreamApiLowImpl::isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr event) {
