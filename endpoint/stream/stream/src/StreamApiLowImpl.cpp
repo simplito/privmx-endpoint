@@ -30,6 +30,10 @@ limitations under the License.
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/stream/StreamVarDeserializer.hpp"
 
+#include <chrono>
+#include <iomanip>
+#include <ctime>
+
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
@@ -61,6 +65,8 @@ StreamApiLowImpl::StreamApiLowImpl(
 
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
     auto result = _subscriber.subscribeFor({internalSubscriptionQuery});
+
+    _notificationEventQueue = std::make_shared<ThreadSafeQueue<core::NotificationEvent>>();
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
 }
 
@@ -201,33 +207,29 @@ void StreamApiLowImpl::processNotificationEvent(const std::string& type, const c
         }
         if (!raw.jsepEmpty()) {
             // std::cerr << "Pass new JSEP to the WebRtcInterface on 'streamsUpdated' event..." << std::endl;
-            room->webRtc->createAnswerAndSetDescriptions(room->id, raw.jsep().sdp(), raw.jsep().type());
-        }
+            std::string sdp = room->webRtc->createAnswerAndSetDescriptions(room->id, raw.jsep().sdp(), raw.jsep().type());
 
-        // pass event to client
-        auto deserializer = std::make_shared<core::VarDeserializer>();
-        auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
-        std::shared_ptr<PublishersStreamsUpdatedEvent> event(new PublishersStreamsUpdatedEvent());
-        event->channel = "stream";
-        event->data = parsed;
-        _eventMiddleware->emitApiEvent(event);
-    } else 
-    if (type == "streamsUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamsUpdatedData>(data);
+            auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+            // std::cerr << __LINE__ << std::endl;
 
-        // update offer via WebRtcInterface
-        auto streamRoomId {raw.room()};
-        auto roomOpt = _streamRoomMap.get(streamRoomId);
-        std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
-        if(!roomOpt.has_value()) {
-            throw CannotGetRoomOnStreamsUpdateEventException();
-        } else {
-            room = roomOpt.value();
-        }
-        if (!raw.jsepEmpty()) {
-            room->webRtc->createAnswerAndSetDescriptions(room->id, raw.jsep().sdp(), raw.jsep().type());
-        }
+            // sessionDescription.sdp(sdp);
+            // std::cerr << __LINE__ << std::endl;
 
+            // sessionDescription.type("answer");
+            // auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
+            // model.sessionId(raw.sessionId());
+            // model.answer(sessionDescription);
+            // std::cerr << __LINE__ << std::endl;
+
+            // _serverApi->streamAcceptOffer(model);
+            SdpWithTypeModel sdpModel = {
+                .sdp = sdp,
+                .type = "answer"
+            };
+            
+            acceptOfferOnReconfigure(raw.sessionId(), sdpModel);
+        }
+        std::cerr << "Emit api event on join..." << std::endl;
         // pass event to client
         auto deserializer = std::make_shared<core::VarDeserializer>();
         auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
@@ -464,24 +466,19 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     std::cerr << "====> StreamJoinResult: " << privmx::utils::Utils::stringify(streamJoinResult) << std::endl;
     _sessionIdToStreamId.set(streamJoinResult.sessionId(), localStreamId);
 
-    // std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
-    std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
-    std::cerr << __LINE__ << std::endl;
+    // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
+    if (!streamJoinResult.offerEmpty()) {
+        // std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
+        std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
 
-    auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
-    std::cerr << __LINE__ << std::endl;
-
-    sessionDescription.sdp(sdp);
-    std::cerr << __LINE__ << std::endl;
-
-    sessionDescription.type("answer");
-    auto model = utils::TypedObjectFactory::createNewObject<server::StreamAcceptOfferModel>();
-    model.sessionId(streamJoinResult.sessionId());
-    model.answer(sessionDescription);
-    std::cerr << __LINE__ << std::endl;
-
-    _serverApi->streamAcceptOffer(model);
+        SdpWithTypeModel sdpModel = {
+            .sdp = sdp,
+            .type = "answer"
+        };
     
+        acceptOfferOnReconfigure(streamJoinResult.sessionId(), sdpModel);
+    }
+
     // get Room for contextId
     std::cerr << __LINE__ << std::endl;
 
@@ -1086,6 +1083,12 @@ void StreamApiLowImpl::trickle(const int64_t sessionId, const dynamic::RTCIceCan
 }
 
 void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    std::tm local_tm = *std::localtime(&now_time_t);
+    std::cerr << "acceptOfferOnReconfigure() on: " << std::put_time(&local_tm, "%H:%M:%S") << "." << std::setw(3) << std::setfill('0') << now_ms.count() << '\n';
+
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp.sdp);
     sessionDescription.type("answer");

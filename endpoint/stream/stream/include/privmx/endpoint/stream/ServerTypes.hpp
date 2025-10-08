@@ -293,6 +293,7 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamsUpdatedData)
     STRING_FIELD(room)
+    INT64_FIELD(sessionId)
     LIST_FIELD(streams, UpdatedStreamData)
     OBJECT_FIELD(jsep, JanusJSEP)
 TYPE_END

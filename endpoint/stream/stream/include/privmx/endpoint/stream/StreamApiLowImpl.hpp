@@ -25,6 +25,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "ThreadSafeQueue.hpp"
 #include "privmx/endpoint/stream/Constants.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
@@ -173,6 +174,8 @@ private:
     privmx::utils::ThreadSaveMap<int64_t, int64_t> _sessionIdToStreamId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
+
+    std::shared_ptr<ThreadSafeQueue<core::NotificationEvent>> _notificationEventQueue;
 };
 
 }  // namespace stream
