@@ -76,7 +76,5 @@ class BaseLoggerOutput : public LoggerOutput {
 } // namespace logger
 } // namespace privmx
 
-#else 
-    #define INITIALIZE_LOGGER 
 #endif
 #endif // _PRIVMXLIB_UTILS_PRIVMX_LOGGER_PRINTER_HPP_
