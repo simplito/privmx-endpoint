@@ -246,7 +246,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
 
                 acceptOfferOnReconfigure(raw.sessionId(), sdpModel);
             }
-            std::cerr << "Emit api event on join..." << std::endl;
+
             // pass event to client
             auto deserializer = std::make_shared<core::VarDeserializer>();
             auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
@@ -424,50 +424,35 @@ void StreamApiLowImpl::publishStream(int64_t localStreamId) {
 
 // Joining to Stream
 int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, [[maybe_unused]] const Settings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
-    std::cerr << __LINE__ << std::endl;
-
     auto roomOpt = _streamRoomMap.get(streamRoomId);
     std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
     if(!roomOpt.has_value()) {
-    std::cerr << __LINE__ << std::endl;
-
         room = createEmptyStreamRoomData(streamRoomId, webRtc);
     } else {
-    std::cerr << __LINE__ << std::endl;
-
         room = roomOpt.value();
     }
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(localStreamId) + ": STREAM Receiver")
-    std::cerr << __LINE__ << std::endl;
 
     _streamIdToRoomId.set(localStreamId, streamRoomId);
     // Get data from bridge
     auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
     streamJoinModel.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
-    std::cerr << __LINE__ << std::endl;
 
     for(size_t i = 0; i < streamsId.size(); i++) {
         streamJoinModel.streamIds().add(streamsId[i]);
     }
     streamJoinModel.streamRoomId(streamRoomId);
-    std::cerr << __LINE__ << std::endl;
 
     auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
     PRIVMX_DEBUG("STREAMS", "joinStream", "SessionId: " + std::to_string(streamJoinResult.sessionIdOpt(0)))
 
     // update/set sessionId in webrtc (for Janus - trickle)
-    std::cerr << __LINE__ << std::endl;
-
     webRtc->updateSessionId(streamRoomId, streamJoinResult.sessionId(), std::string("subscriber"));
 
-    // creating peerConnectio
-    std::cerr << __LINE__ << std::endl;
-
-
+    // creating peerConnection
     auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
         webRtc->updateKeys(keys);
     });
-    std::cerr << __LINE__ << std::endl;
 
     room->streamMap.set(
         localStreamId, 
@@ -479,43 +464,34 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
             }
         )
     );
-    std::cerr << __LINE__ << std::endl;
-    std::cerr << "====> StreamJoinResult: " << privmx::utils::Utils::stringify(streamJoinResult) << std::endl;
     _sessionIdToStreamId.set(streamJoinResult.sessionId(), localStreamId);
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (!streamJoinResult.offerEmpty()) {
-        // std::string sdp = webRtc->createAnswerAndSetDescriptions(streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
         std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
 
         SdpWithTypeModel sdpModel = {
             .sdp = sdp,
             .type = "answer"
         };
-    
         acceptOfferOnReconfigure(streamJoinResult.sessionId(), sdpModel);
     }
 
     // get Room for contextId
-    std::cerr << __LINE__ << std::endl;
-
     auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     modelGetRoom.id(streamRoomId);
-    auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom(); 
-    // get Streams for userId
-    std::cerr << __LINE__ << std::endl;
+    auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom();
 
+    // get Streams for userId
     auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
     modelStreams.streamRoomId(streamRoomId);
     auto streamsList = _serverApi->streamList(modelStreams).list();
-    std::cerr << __LINE__ << std::endl;
 
     // get users for pubKey
     Poco::JSON::Object::Ptr query = new Poco::JSON::Object;
     Poco::JSON::Object::Ptr queryId = new Poco::JSON::Object;
     Poco::JSON::Array::Ptr usersIds = new Poco::JSON::Array;
 
-    std::cerr << __LINE__ << std::endl;
     for(auto s: streamsList) {
         if ( std::find(streamsId.begin(), streamsId.end(), s.streamId()) != streamsId.end() ) {
             usersIds->add(s.userId());
@@ -524,7 +500,7 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
     queryId->set("$in", usersIds);
     query->set("#userId", queryId);
-    std::cerr << __LINE__ << std::endl;
+
     core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
         streamRoom.contextId(), 
         core::PagingQuery{
@@ -543,8 +519,6 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
         PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
         toSend.push_back(userInfo.user);
     }
-        std::cerr << __LINE__ << std::endl;
-
     room->streamKeyManager->requestKey(toSend);
     return localStreamId;
 }
@@ -946,17 +920,12 @@ void StreamApiLowImpl::unpublishStream(int64_t localStreamId) {
 }
 
 void StreamApiLowImpl::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds) {
-    std::cerr << __LINE__ << std::endl;
     server::StreamLeaveModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamLeaveModel>();
-    std::cerr << __LINE__ << std::endl;
     model.streamRoomId(streamRoomId);
-    std::cerr << __LINE__ << std::endl;
     model.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
-    std::cerr << __LINE__ << std::endl;
     for(size_t i = 0; i < streamsIds.size(); i++) {
         model.streamIds().add(streamsIds[i]);
     }
-    std::cerr << __LINE__ << std::endl;
     _serverApi->streamLeave(model);
 }
 
@@ -1100,12 +1069,6 @@ void StreamApiLowImpl::trickle(const int64_t sessionId, const dynamic::RTCIceCan
 }
 
 void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
-    auto now = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-    std::tm local_tm = *std::localtime(&now_time_t);
-    std::cerr << "acceptOfferOnReconfigure() on: " << std::put_time(&local_tm, "%H:%M:%S") << "." << std::setw(3) << std::setfill('0') << now_ms.count() << '\n';
-
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp.sdp);
     sessionDescription.type("answer");
