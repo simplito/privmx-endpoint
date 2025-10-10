@@ -31,11 +31,12 @@ public:
     ~GuardedExecutor();
     void exec(std::function<void()> task);
 private:
-    bool isBisy();
+    bool isBusy();
     void waitToStopDataProcessing();
-    std::atomic_uint64_t _dataToProcess;
-    std::atomic_bool _stoping;
+    uint64_t _dataToProcess;
+    std::atomic_bool _stopping;
     std::condition_variable _allDataProcessed;
+    std::mutex _dataToProcessMutex;
 };
 
 } // utils

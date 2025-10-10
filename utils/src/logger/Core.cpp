@@ -2,10 +2,22 @@
 
 
 #include "privmx/utils/logger/Core.hpp"
+#include "privmx/utils/logger/Outputs.hpp"
 #include <iomanip>
 
 #ifdef PRIVMX_ENABLE_LOGGER
 using namespace privmx::logger;
+
+Logger* Logger::impl = nullptr;
+Logger* Logger::instance() {
+    if(!impl) {
+        impl = new Logger();
+        INITIALIZE_PRIVMX_LOGGER_STDOUT
+        INITIALIZE_PRIVMX_LOGGER_STDERR
+        INITIALIZE_PRIVMX_LOGGER_FILE
+    }
+    return impl;
+}
 
 void Logger::addLoggerOutput(std::unique_ptr<LoggerOutput> output) {
     std::lock_guard<std::mutex> lock(_mutex);

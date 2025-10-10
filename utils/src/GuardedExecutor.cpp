@@ -14,7 +14,7 @@ limitations under the License.
 
 using namespace privmx::utils;
 
-GuardedExecutor::GuardedExecutor() : _dataToProcess(0), _stoping(false) {}
+GuardedExecutor::GuardedExecutor() : _dataToProcess(0), _stopping(false) {}
 
 GuardedExecutor::~GuardedExecutor() {
     waitToStopDataProcessing();
@@ -22,8 +22,14 @@ GuardedExecutor::~GuardedExecutor() {
 }
 
 void GuardedExecutor::exec(std::function<void()> task) {
-    ++_dataToProcess;
-    privmx::utils::Executor::getInstance().exec([&, task]() {
+    if(_stopping) {
+        return;
+    }
+    {
+        std::unique_lock<std::mutex> lock(_dataToProcessMutex);
+        ++_dataToProcess;
+    }
+    privmx::utils::Executor::getInstance()->exec([&, task]() {
         try {
             task();
         } catch (const std::exception& e) {
@@ -31,23 +37,23 @@ void GuardedExecutor::exec(std::function<void()> task) {
         } catch (...) {
             LOG_ERROR("GuardedExecutor thread catch'ed unknown exception when processing task")
         }
-        --_dataToProcess;
-        if(_stoping.load() && _dataToProcess.load() == 0) {
-            _allDataProcessed.notify_all();
+        {
+            std::unique_lock<std::mutex> lock(_dataToProcessMutex);
+            --_dataToProcess;
+            if(_stopping && _dataToProcess == 0) {
+                _allDataProcessed.notify_all();
+            }
         }
     });
 }
 
-bool GuardedExecutor::isBisy() {
-    LOG_TRACE("GuardedExecutor dataToProcess ", _dataToProcess.load());
-    return _dataToProcess.load() != 0;
+bool GuardedExecutor::isBusy() {
+    LOG_TRACE("GuardedExecutor dataToProcess ", _dataToProcess);
+    return _dataToProcess != 0;
 }
 
 void GuardedExecutor::waitToStopDataProcessing() {
-    _stoping.store(true);
-    std::mutex m;
-    std::unique_lock<std::mutex> lock(m);
-    if(isBisy()) {
-        _allDataProcessed.wait(lock, [&]{ return isBisy() == 0; });
-    }
+    _stopping = true;
+    std::unique_lock<std::mutex> lock(_dataToProcessMutex);
+    _allDataProcessed.wait(lock, [&]{ return isBusy() == 0; });
 }

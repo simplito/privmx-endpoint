@@ -18,7 +18,6 @@ std::shared_ptr<EventQueueImpl> EventQueueImpl::impl= nullptr;
 
 std::shared_ptr<EventQueueImpl> EventQueueImpl::getInstance() {
     if(impl == nullptr) {
-        INITIALIZE_LOGGER
         impl = std::shared_ptr<EventQueueImpl>(new EventQueueImpl());
     }
     return impl;

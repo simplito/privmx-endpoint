@@ -11,8 +11,14 @@ limitations under the License.
 
 
 #include "privmx/utils/Executor.hpp"
-#include "privmx/utils/Logger.hpp"
 using namespace privmx::utils;
+std::shared_ptr<Executor> Executor::impl = nullptr;
+std::shared_ptr<Executor> Executor::getInstance() {
+    if(!impl) {
+        impl = std::shared_ptr<Executor>(new Executor());
+    }
+    return impl;
+}
 
 Executor::Executor() : _tasksToDo(std::make_shared<privmx::utils::ThreadSafeQueue<TaskData>>()) {
     initializeThreadPool();

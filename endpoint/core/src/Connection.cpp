@@ -24,7 +24,6 @@ using namespace privmx::endpoint::core;
 
 Connection Connection::connect(const std::string& userPrivKey, const std::string& solutionId,
                                 const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
-    INITIALIZE_LOGGER
     Validator::validatePrivKeyWIF(userPrivKey, "field:userPrivKey ");
     Validator::validateId(solutionId, "field:solutionId ");
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
@@ -40,7 +39,6 @@ Connection Connection::connect(const std::string& userPrivKey, const std::string
 
 Connection Connection::connectPublic(const std::string& solutionId, const std::string& platformUrl, 
                                         const PKIVerificationOptions& verificationOptions) {
-    INITIALIZE_LOGGER
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());

@@ -7,6 +7,7 @@
 #ifdef PRIVMX_ENABLE_LOGGER
 
 #include <memory>
+#include <shared_mutex>
 #include <vector>
 #include <string>
 #include <mutex>
@@ -14,7 +15,6 @@
 #include <chrono>
 #include <utility>
 #include <map>
-
 
 namespace privmx {
 namespace logger {
@@ -37,13 +37,12 @@ public:
 
 class Logger {
 public:
-    static Logger& instance() {
-        static Logger inst;
-        return inst;
-    }
-
+    static Logger* instance();
+    Logger(const Logger& obj) = delete; 
+    void operator=(const Logger &) = delete;
     void addLoggerOutput(std::unique_ptr<LoggerOutput> output);
     inline bool hasLoggerOutputs() {return _outputs.size() != 0;}
+    ~Logger();
 
     template<typename... Args>
     void log(LogLevel level, Args&&... args);
@@ -64,6 +63,7 @@ private:
     #endif
     // Singleton
     Logger() = default;
+    static Logger* impl;
     // Outputs
     std::mutex _mutex;
     std::vector<std::unique_ptr<LoggerOutput>> _outputs;

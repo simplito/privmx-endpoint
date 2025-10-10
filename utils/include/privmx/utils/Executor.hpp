@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/utils/CancellationToken.hpp"
 #include "privmx/utils/ThreadSafeQueue.hpp"
 #include "privmx/utils/ExecutorConfig.hpp"
+#include "privmx/utils/Logger.hpp"
 
 #ifndef PRIVMX_EXECUTOR_THREAD_POOL_SIZE
 #define PRIVMX_EXECUTOR_THREAD_POOL_SIZE 4
@@ -31,15 +32,14 @@ namespace utils {
 class Executor
 {
 public:
-    static Executor& getInstance() {
-        static Executor inst;
-        return inst;
-    }
+    static std::shared_ptr<Executor> getInstance();
+    Executor(const Executor& obj) = delete; 
+    void operator=(const Executor &) = delete;
     ~Executor();
     void exec(std::function<void()> task);
-private:
+protected:
     Executor();
-
+private:
     enum TaskType {
         STOP = 0,
         NORMAL = 1
@@ -57,6 +57,7 @@ private:
     void createThread();
     void initializeThreadPool();
 
+    static std::shared_ptr<Executor> impl;
     std::shared_ptr<privmx::utils::ThreadSafeQueue<TaskData>> _tasksToDo;
     std::vector<ExecutorThread> _threadPool;
 };
