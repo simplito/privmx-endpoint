@@ -11,7 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/Subscriber.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 using namespace privmx::endpoint::core;
 
 
@@ -63,7 +63,7 @@ std::string SubscriptionQueryObj::toSubscriptionQueryString() const {
 Subscriber::Subscriber(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
 std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    PRIVMX_DEBUG_TIME_START(Subscriber, subscribeFor)
+    LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
     auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelsModel>();
     std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
     for(const auto& subscriptionQueryString : subscriptionQueries) {
@@ -71,12 +71,12 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
     }
     assertQuery(parsedSubscriptionQueries);
     auto modelChannels = transform(parsedSubscriptionQueries);
-    PRIVMX_DEBUG("Subscriber", "subscribeFor", "channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
+    LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
     model.channels(modelChannels);
     auto value = privmx::utils::TypedObjectFactory::createObjectFromVar<server::SubscribeToChannelsResult>(
         _gateway->request("subscribeToChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET})
     );
-    PRIVMX_DEBUG_TIME_CHECKPOINT(Subscriber, subscribeFor, dataRecived)
+    LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")
     std::vector<std::string> result;
     {
         std::unique_lock<std::shared_mutex> lock(_map_mutex);
@@ -97,18 +97,18 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
             }
         }
     }
-    PRIVMX_DEBUG_TIME_STOP(Subscriber, subscribeFor)
+    LOG_TIME_DEBUG_STOP(Subscriber:subscribeFor, "")
     return result;
 }
 
 void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    PRIVMX_DEBUG_TIME_START(Subscriber, unsubscribeFrom)
+    LOG_TIME_DEBUG_START(Subscriber:unsubscribeFrom, "")
     auto model = utils::TypedObjectFactory::createNewObject<server::UnsubscribeFromChannelsModel>();
     auto subscriptionsIds = utils::TypedObjectFactory::createNewList<std::string>();
     for(auto subscriptionId: subscriptionIds) {
         subscriptionsIds.add(subscriptionId);
     }
-    PRIVMX_DEBUG("Subscriber", "unsubscribeFrom", "subscriptionsIds:" + privmx::utils::Utils::stringifyVar(subscriptionsIds));
+    LOG_INFO("Subscriber:unsubscribeFrom subscriptionsIds:" + privmx::utils::Utils::stringifyVar(subscriptionsIds));
     model.subscriptionsIds(subscriptionsIds);
     _gateway->request("unsubscribeFromChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
     {
@@ -117,7 +117,7 @@ void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds
             _subscriptionIdToSubscriptionQuery.erase(subscriptionId);
         }
     }
-    PRIVMX_DEBUG_TIME_STOP(Subscriber, unsubscribeFrom, dataRecived)
+    LOG_TIME_DEBUG_STOP(Subscriber:unsubscribeFrom, "dataRecived")
 }
 
 void Subscriber::unsubscribeFromCurrentlySubscribed() {

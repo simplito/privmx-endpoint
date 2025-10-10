@@ -12,7 +12,7 @@ limitations under the License.
 #include <algorithm>
 #include <Pson/BinaryString.hpp>
 
-#include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 #include <privmx/rpc/tls/TicketsManager.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -60,7 +60,7 @@ void TicketsManager::clear() {
 }
 
 unsigned int TicketsManager::ticketsCount() {
-    PRIVMX_DEBUG("ticketsCount", _tickets.size())
+    LOG_INFO("ticketsCount ", _tickets.size())
     lock_guard<mutex> lock(_tickets_mutex);
     return _tickets.size();
 }
