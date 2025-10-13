@@ -33,6 +33,7 @@ class Executor
 {
 public:
     static std::shared_ptr<Executor> getInstance();
+    static void freeInstance();
     Executor(const Executor& obj) = delete; 
     void operator=(const Executor &) = delete;
     ~Executor();
@@ -55,6 +56,7 @@ private:
     };
     
     void createThread();
+    void stopAllThreadInThePool();
     void initializeThreadPool();
 
     static std::shared_ptr<Executor> impl;

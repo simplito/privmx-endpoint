@@ -20,23 +20,18 @@ std::shared_ptr<Executor> Executor::getInstance() {
     return impl;
 }
 
+void Executor::freeInstance() {
+    if(impl) {
+        impl.reset();
+    }
+}
+
 Executor::Executor() : _tasksToDo(std::make_shared<privmx::utils::ThreadSafeQueue<TaskData>>()) {
     initializeThreadPool();
 }
 
 Executor::~Executor() {
-    LOG_INFO("Executor stopping ", PRIVMX_EXECUTOR_THREAD_POOL_SIZE, " threads")
-    _tasksToDo->clear();
-    for(auto& executorThread: _threadPool) {
-        executorThread.token->cancel();
-        _tasksToDo->push(TaskData{.type = TaskType::STOP, .callback = std::function<void()>()});
-    }
-    for(auto& executorThread: _threadPool) {
-        if(executorThread.thread.joinable()) {
-            LOG_TRACE("Executor thread join")
-            executorThread.thread.join();
-        }
-    }
+    stopAllThreadInThePool();
 }
 
 void Executor::exec(std::function<void()> task) {
@@ -75,6 +70,25 @@ void Executor::initializeThreadPool() {
     LOG_INFO("Executor initializing with ", PRIVMX_EXECUTOR_THREAD_POOL_SIZE, " threads")
     for(size_t i = _threadPool.size(); i < PRIVMX_EXECUTOR_THREAD_POOL_SIZE; i++) {
         createThread();
+    }
+}
+
+void Executor::stopAllThreadInThePool() {
+    if(_threadPool.size() != 0) {
+        _tasksToDo->clear();
+        LOG_INFO("Executor stopping ", PRIVMX_EXECUTOR_THREAD_POOL_SIZE, " threads")
+        for(auto& executorThread: _threadPool) {
+            executorThread.token->cancel();
+            _tasksToDo->push(TaskData{.type = TaskType::STOP, .callback = std::function<void()>()});
+        }
+        for(auto& executorThread: _threadPool) {
+            if(executorThread.thread.joinable()) {
+                LOG_TRACE("Executor thread joining")
+                executorThread.thread.join();
+                LOG_TRACE("Executor thread join")
+            }
+        }
+        _threadPool.clear();
     }
 }
 

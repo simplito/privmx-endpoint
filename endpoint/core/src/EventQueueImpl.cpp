@@ -23,6 +23,12 @@ std::shared_ptr<EventQueueImpl> EventQueueImpl::getInstance() {
     return impl;
 }
 
+void EventQueueImpl::freeInstance() {
+    if(impl) {
+        impl.reset();
+    }
+}
+
 void EventQueueImpl::emit(const std::shared_ptr<Event>& event) {
     _queue.enqueueNotification(new Notification(event));
 }

@@ -8,15 +8,23 @@
 #ifdef PRIVMX_ENABLE_LOGGER
 using namespace privmx::logger;
 
-Logger* Logger::impl = nullptr;
-Logger* Logger::instance() {
+std::shared_ptr<Logger> Logger::impl = nullptr;
+std::shared_ptr<Logger> Logger::getInstance() {
     if(!impl) {
-        impl = new Logger();
+        impl = std::shared_ptr<Logger>(new Logger());
         INITIALIZE_PRIVMX_LOGGER_STDOUT
         INITIALIZE_PRIVMX_LOGGER_STDERR
         INITIALIZE_PRIVMX_LOGGER_FILE
+        impl->log(LogLevel::TRACE , "Logger created");
     }
     return impl;
+}
+
+void Logger::freeInstance() {
+    if(impl) {
+        impl->log(LogLevel::TRACE , "Logger deleted");
+        impl.reset();
+    }
 }
 
 void Logger::addLoggerOutput(std::unique_ptr<LoggerOutput> output) {

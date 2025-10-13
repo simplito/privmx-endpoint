@@ -23,6 +23,7 @@ limitations under the License.
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/EventBuilder.hpp"
+#include <privmx/endpoint/core/SingletonsHolder.hpp>
 
 using namespace privmx::endpoint::core;
 
