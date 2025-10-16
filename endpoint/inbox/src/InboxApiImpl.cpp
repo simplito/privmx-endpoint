@@ -81,6 +81,7 @@ InboxApiImpl::~InboxApiImpl() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
+    _guardedExecutor.reset();
 }
 
 std::string InboxApiImpl::createInbox(
@@ -992,69 +993,71 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
     if(!subscriptionQuery.has_value()) {
         return;
     }
-    if (type == "inboxCreated") {
-        auto raw = Factory::createObject<server::Inbox>(notification.data);
-        if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
-            auto data = validateDecryptAndConvertInboxDataToInbox(raw);
-            auto event = core::EventBuilder::buildEvent<InboxCreatedEvent>("inbox", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "inboxUpdated") {
-        auto raw = Factory::createObject<server::Inbox>(notification.data);
-        if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
-            auto data = validateDecryptAndConvertInboxDataToInbox(raw);
-            auto event = core::EventBuilder::buildEvent<InboxUpdatedEvent>("inbox", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "inboxDeleted") {
-        auto raw = Factory::createObject<server::InboxDeletedEventData>(notification.data);
-        if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
-            invalidateModuleKeysInCache(raw.inboxId());
-            auto data = convertInboxDeletedEventData(raw);
-            auto event = core::EventBuilder::buildEvent<InboxDeletedEvent>("inbox", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadNewMessage") {
-        auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadMessageEventData>(notification.data); 
-        if(raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
-            auto inboxId = readInboxIdFromMessageKeyId(raw.keyId());
-            auto message = decryptAndConvertInboxEntryDataToInboxEntry(raw, getEntryDecryptionKeys(raw));
-            auto event = core::EventBuilder::buildEvent<InboxEntryCreatedEvent>("inbox/" + inboxId + "/entries", message, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadDeletedMessage") {
-        auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadDeletedMessageEventData>(notification.data); 
-        if(raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
-            std::string inboxId;
-            auto tmp = _subscriber.convertKnownThreadIdToInboxId(raw.threadId());
-            if(tmp.has_value()) {
-                inboxId = tmp.value();
-            } else {
-                inboxId = "";
+    _guardedExecutor->exec([&, type, notification]() {
+        if (type == "inboxCreated") {
+            auto raw = Factory::createObject<server::Inbox>(notification.data);
+            if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
+                setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
+                auto data = validateDecryptAndConvertInboxDataToInbox(raw);
+                auto event = core::EventBuilder::buildEvent<InboxCreatedEvent>("inbox", data, notification);
+                _eventMiddleware->emitApiEvent(event);
             }
-            auto data = InboxEntryDeletedEventData{
-                .inboxId = inboxId,
-                .entryId = raw.messageId()
-            };
-            auto event = core::EventBuilder::buildEvent<InboxEntryDeletedEvent>("inbox/" + inboxId + "/entries", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadCollectionChanged") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
-        if (raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
-            auto data = core::Mapper::mapToCollectionChangedEventData(INBOX_TYPE_FILTER_FLAG, raw);
-            auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("inbox/collectionChanged", data, notification);
-            auto tmp = _subscriber.convertKnownThreadIdToInboxId(event->data.moduleId);
-            if(tmp.has_value()) {
-                event->data.moduleId = tmp.value();
-            } else {
-                event->data.moduleId = "";
+        } else if (type == "inboxUpdated") {
+            auto raw = Factory::createObject<server::Inbox>(notification.data);
+            if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
+                setNewModuleKeysInCache(raw.id(), inboxToModuleKeys(raw), raw.version());
+                auto data = validateDecryptAndConvertInboxDataToInbox(raw);
+                auto event = core::EventBuilder::buildEvent<InboxUpdatedEvent>("inbox", data, notification);
+                _eventMiddleware->emitApiEvent(event);
             }
-            _eventMiddleware->emitApiEvent(event);
+        } else if (type == "inboxDeleted") {
+            auto raw = Factory::createObject<server::InboxDeletedEventData>(notification.data);
+            if(raw.typeOpt(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
+                invalidateModuleKeysInCache(raw.inboxId());
+                auto data = convertInboxDeletedEventData(raw);
+                auto event = core::EventBuilder::buildEvent<InboxDeletedEvent>("inbox", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadNewMessage") {
+            auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadMessageEventData>(notification.data); 
+            if(raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
+                auto inboxId = readInboxIdFromMessageKeyId(raw.keyId());
+                auto message = decryptAndConvertInboxEntryDataToInboxEntry(raw, getEntryDecryptionKeys(raw));
+                auto event = core::EventBuilder::buildEvent<InboxEntryCreatedEvent>("inbox/" + inboxId + "/entries", message, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadDeletedMessage") {
+            auto raw = Factory::createObject<privmx::endpoint::thread::server::ThreadDeletedMessageEventData>(notification.data); 
+            if(raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
+                std::string inboxId;
+                auto tmp = _subscriber.convertKnownThreadIdToInboxId(raw.threadId());
+                if(tmp.has_value()) {
+                    inboxId = tmp.value();
+                } else {
+                    inboxId = "";
+                }
+                auto data = InboxEntryDeletedEventData{
+                    .inboxId = inboxId,
+                    .entryId = raw.messageId()
+                };
+                auto event = core::EventBuilder::buildEvent<InboxEntryDeletedEvent>("inbox/" + inboxId + "/entries", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadCollectionChanged") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
+            if (raw.containerTypeOpt("") == INBOX_TYPE_FILTER_FLAG) {
+                auto data = core::Mapper::mapToCollectionChangedEventData(INBOX_TYPE_FILTER_FLAG, raw);
+                auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("inbox/collectionChanged", data, notification);
+                auto tmp = _subscriber.convertKnownThreadIdToInboxId(event->data.moduleId);
+                if(tmp.has_value()) {
+                    event->data.moduleId = tmp.value();
+                } else {
+                    event->data.moduleId = "";
+                }
+                _eventMiddleware->emitApiEvent(event);
+            }
         }
-    }
+    });
 }
 
 void InboxApiImpl::processConnectedEvent() {

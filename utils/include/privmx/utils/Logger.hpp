@@ -18,11 +18,11 @@
 #include "privmx/utils/logger/Outputs.hpp"
 
 #if PRIVMX_LOGGER_LEVEL >= 6
-    #define LOG_TRACE(...) privmx::logger::Logger::instance().log(privmx::logger::LogLevel::TRACE, __VA_ARGS__);
+    #define LOG_TRACE(...) privmx::logger::Logger::getInstance()->log(privmx::logger::LogLevel::TRACE, __VA_ARGS__);
     #ifdef PRIVMX_ENABLE_LOGGER_TIMER
-        #define LOG_TIME_TRACE_START(LABEL, ...) privmx::logger::Logger::instance().logTimerStart(privmx::logger::LogLevel::TRACE, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_TRACE_CHECKPOINT(LABEL, ...) privmx::logger::Logger::instance().logTimerCheckpoint(privmx::logger::LogLevel::TRACE, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_TRACE_STOP(LABEL, ...) privmx::logger::Logger::instance().logTimerStop(privmx::logger::LogLevel::TRACE, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_TRACE_START(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStart(privmx::logger::LogLevel::TRACE, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_TRACE_CHECKPOINT(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerCheckpoint(privmx::logger::LogLevel::TRACE, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_TRACE_STOP(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStop(privmx::logger::LogLevel::TRACE, #LABEL, __VA_ARGS__);
     #else
         #define LOG_TIME_TRACE_START(LABEL, ...)
         #define LOG_TIME_TRACE_CHECKPOINT(LABEL, ...)
@@ -36,11 +36,11 @@
 #endif
 
 #if PRIVMX_LOGGER_LEVEL >= 5
-    #define LOG_DEBUG(...) privmx::logger::Logger::instance().log(privmx::logger::LogLevel::DEBUG, __VA_ARGS__);
+    #define LOG_DEBUG(...) privmx::logger::Logger::getInstance()->log(privmx::logger::LogLevel::DEBUG, __VA_ARGS__);
     #ifdef PRIVMX_ENABLE_LOGGER_TIMER
-        #define LOG_TIME_DEBUG_START(LABEL, ...) privmx::logger::Logger::instance().logTimerStart(privmx::logger::LogLevel::DEBUG, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_DEBUG_CHECKPOINT(LABEL, ...) privmx::logger::Logger::instance().logTimerCheckpoint(privmx::logger::LogLevel::DEBUG, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_DEBUG_STOP(LABEL, ...) privmx::logger::Logger::instance().logTimerStop(privmx::logger::LogLevel::DEBUG, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_DEBUG_START(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStart(privmx::logger::LogLevel::DEBUG, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_DEBUG_CHECKPOINT(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerCheckpoint(privmx::logger::LogLevel::DEBUG, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_DEBUG_STOP(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStop(privmx::logger::LogLevel::DEBUG, #LABEL, __VA_ARGS__);
     #else
         #define LOG_TIME_DEBUG_START(LABEL, ...)
         #define LOG_TIME_DEBUG_CHECKPOINT(LABEL, ...)
@@ -54,11 +54,11 @@
 #endif
 
 #if PRIVMX_LOGGER_LEVEL >= 4
-    #define LOG_INFO(...)  privmx::logger::Logger::instance().log(privmx::logger::LogLevel::INFO, __VA_ARGS__);
+    #define LOG_INFO(...)  privmx::logger::Logger::getInstance()->log(privmx::logger::LogLevel::INFO, __VA_ARGS__);
     #ifdef PRIVMX_ENABLE_LOGGER_TIMER
-        #define LOG_TIME_INFO_START(LABEL, ...) privmx::logger::Logger::instance().logTimerStart(privmx::logger::LogLevel::INFO, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_INFO_CHECKPOINT(LABEL, ...) privmx::logger::Logger::instance().logTimerCheckpoint(privmx::logger::LogLevel::INFO, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_INFO_STOP(LABEL, ...) privmx::logger::Logger::instance().logTimerStop(privmx::logger::LogLevel::INFO, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_INFO_START(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStart(privmx::logger::LogLevel::INFO, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_INFO_CHECKPOINT(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerCheckpoint(privmx::logger::LogLevel::INFO, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_INFO_STOP(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStop(privmx::logger::LogLevel::INFO, #LABEL, __VA_ARGS__);
     #else
         #define LOG_TIME_INFO_START(LABEL, ...)
         #define LOG_TIME_INFO_CHECKPOINT(LABEL, ...)
@@ -72,11 +72,11 @@
 #endif
 
 #if PRIVMX_LOGGER_LEVEL >= 3
-    #define LOG_WARN(...)  privmx::logger::Logger::instance().log(privmx::logger::LogLevel::WARN, __VA_ARGS__);
+    #define LOG_WARN(...)  privmx::logger::Logger::getInstance()->log(privmx::logger::LogLevel::WARN, __VA_ARGS__);
     #ifdef PRIVMX_ENABLE_LOGGER_TIMER
-        #define LOG_TIME_WARN_START(LABEL, ...) privmx::logger::Logger::instance().logTimerStart(privmx::logger::LogLevel::WARN, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_WARN_CHECKPOINT(LABEL, ...) privmx::logger::Logger::instance().logTimerCheckpoint(privmx::logger::LogLevel::WARN, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_WARN_STOP(LABEL, ...) privmx::logger::Logger::instance().logTimerStop(privmx::logger::LogLevel::WARN, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_WARN_START(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStart(privmx::logger::LogLevel::WARN, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_WARN_CHECKPOINT(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerCheckpoint(privmx::logger::LogLevel::WARN, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_WARN_STOP(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStop(privmx::logger::LogLevel::WARN, #LABEL, __VA_ARGS__);
     #else
         #define LOG_TIME_WARN_START(LABEL, ...)
         #define LOG_TIME_WARN_CHECKPOINT(LABEL, ...)
@@ -90,11 +90,11 @@
 #endif
 
 #if PRIVMX_LOGGER_LEVEL >= 2
-    #define LOG_ERROR(...) privmx::logger::Logger::instance().log(privmx::logger::LogLevel::ERROR, __VA_ARGS__);
+    #define LOG_ERROR(...) privmx::logger::Logger::getInstance()->log(privmx::logger::LogLevel::ERROR, __VA_ARGS__);
     #ifdef PRIVMX_ENABLE_LOGGER_TIMER
-        #define LOG_TIME_ERROR_START(LABEL, ...) privmx::logger::Logger::instance().logTimerStart(privmx::logger::LogLevel::ERROR, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_ERROR_CHECKPOINT(LABEL, ...) privmx::logger::Logger::instance().logTimerCheckpoint(privmx::logger::LogLevel::ERROR, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_ERROR_STOP(LABEL, ...) privmx::logger::Logger::instance().logTimerStop(privmx::logger::LogLevel::ERROR, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_ERROR_START(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStart(privmx::logger::LogLevel::ERROR, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_ERROR_CHECKPOINT(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerCheckpoint(privmx::logger::LogLevel::ERROR, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_ERROR_STOP(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStop(privmx::logger::LogLevel::ERROR, #LABEL, __VA_ARGS__);
     #else
         #define LOG_TIME_ERROR_START(LABEL, ...)
         #define LOG_TIME_ERROR_CHECKPOINT(LABEL, ...)
@@ -108,11 +108,11 @@
 #endif
 
 #if PRIVMX_LOGGER_LEVEL >= 1
-    #define LOG_FATAL(...) privmx::logger::Logger::instance().log(privmx::logger::LogLevel::FATAL, __VA_ARGS__);
+    #define LOG_FATAL(...) privmx::logger::Logger::getInstance()->log(privmx::logger::LogLevel::FATAL, __VA_ARGS__);
     #ifdef PRIVMX_ENABLE_LOGGER_TIMER
-        #define LOG_TIME_FATAL_START(LABEL, ...) privmx::logger::Logger::instance().logTimerStart(privmx::logger::LogLevel::FATAL, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_FATAL_CHECKPOINT(LABEL, ...) privmx::logger::Logger::instance().logTimerCheckpoint(privmx::logger::LogLevel::FATAL, #LABEL, __VA_ARGS__);
-        #define LOG_TIME_FATAL_STOP(LABEL, ...) privmx::logger::Logger::instance().logTimerStop(privmx::logger::LogLevel::FATAL, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_FATAL_START(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStart(privmx::logger::LogLevel::FATAL, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_FATAL_CHECKPOINT(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerCheckpoint(privmx::logger::LogLevel::FATAL, #LABEL, __VA_ARGS__);
+        #define LOG_TIME_FATAL_STOP(LABEL, ...) privmx::logger::Logger::getInstance()->logTimerStop(privmx::logger::LogLevel::FATAL, #LABEL, __VA_ARGS__);
     #else
         #define LOG_TIME_FATAL_START(LABEL, ...)
         #define LOG_TIME_FATAL_CHECKPOINT(LABEL, ...)
@@ -125,33 +125,6 @@
     #define LOG_TIME_FATAL_STOP(LABEL, ...)
 #endif
 
-#ifdef PRIVMX_LOGGER_OUTPUT_STDOUT
-    #define INITIALIZE_PRIVMX_LOGGER_STDOUT privmx::logger::Logger::instance().addLoggerOutput(std::make_unique<privmx::logger::CoutLoggerOutput>());
-#else 
-    #define INITIALIZE_PRIVMX_LOGGER_STDOUT 
-#endif
-
-#ifdef PRIVMX_LOGGER_OUTPUT_STDERR
-    #define INITIALIZE_PRIVMX_LOGGER_STDERR privmx::logger::Logger::instance().addLoggerOutput(std::make_unique<privmx::logger::CerrLoggerOutput>());
-#else 
-    #define INITIALIZE_PRIVMX_LOGGER_STDERR 
-#endif
-
-#ifdef PRIVMX_LOGGER_OUTPUT_FILE
-    #ifndef PRIVMX_LOGGER_OUTPUT_FILE_PATH 
-        #define PRIVMX_LOGGER_OUTPUT_FILE_PATH "log.txt"
-    #endif
-    #define INITIALIZE_PRIVMX_LOGGER_FILE privmx::logger::Logger::instance().addLoggerOutput(std::make_unique<privmx::logger::FileLoggerOutput>(PRIVMX_LOGGER_OUTPUT_FILE_PATH));
-#else 
-    #define INITIALIZE_PRIVMX_LOGGER_FILE 
-#endif
-
-#define INITIALIZE_LOGGER \
-    if(!privmx::logger::Logger::instance().hasLoggerOutputs()) { \
-        INITIALIZE_PRIVMX_LOGGER_STDOUT \
-        INITIALIZE_PRIVMX_LOGGER_STDERR \
-        INITIALIZE_PRIVMX_LOGGER_FILE  \
-    }
 #else 
     #define LOG_TRACE(...)
     #define LOG_TIME_TRACE_START(LABEL, ...)
@@ -182,8 +155,6 @@
     #define LOG_TIME_FATAL_START(LABEL, ...)
     #define LOG_TIME_FATAL_CHECKPOINT(LABEL, ...)
     #define LOG_TIME_FATAL_STOP(LABEL, ...)
-
-    #define INITIALIZE_LOGGER
 
 #endif // PRIVMX_ENABLE_LOGGER
 

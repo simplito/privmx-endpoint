@@ -23,11 +23,15 @@ limitations under the License.
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/EventBuilder.hpp"
+#include <privmx/endpoint/core/SingletonsHolder.hpp>
 
 using namespace privmx::endpoint::core;
 
 ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
     _userVerifier = std::make_shared<core::UserVerifier>(std::make_shared<core::DefaultUserVerifierInterface>());
+}
+ConnectionImpl::~ConnectionImpl() {
+    _guardedExecutor.reset();
 }
 
 void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
@@ -300,20 +304,22 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
     if(!subscriptionQuery.has_value()) {
         return;
     }
-    if (type == "contextUserAdded") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
-        auto data = Mapper::mapToContextUserEventData(raw);
-        auto event = EventBuilder::buildEvent<ContextUserAddedEvent>("context/userAdded", data, notification);
-        _eventMiddleware->emitApiEvent(event);
-    } else if (type == "contextUserRemoved") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
-        auto data = Mapper::mapToContextUserEventData(raw);
-        auto event = EventBuilder::buildEvent<ContextUserRemovedEvent>("context/userRemoved", data, notification);
-        _eventMiddleware->emitApiEvent(event);
-    } else if (type == "contextUserStatusChanged") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUsersStatusChangeEventData>(notification.data);
-        auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
-        auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
-        _eventMiddleware->emitApiEvent(event);
-    }
+    _guardedExecutor->exec([&, type, notification]() {
+        if (type == "contextUserAdded") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+            auto data = Mapper::mapToContextUserEventData(raw);
+            auto event = EventBuilder::buildEvent<ContextUserAddedEvent>("context/userAdded", data, notification);
+            _eventMiddleware->emitApiEvent(event);
+        } else if (type == "contextUserRemoved") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+            auto data = Mapper::mapToContextUserEventData(raw);
+            auto event = EventBuilder::buildEvent<ContextUserRemovedEvent>("context/userRemoved", data, notification);
+            _eventMiddleware->emitApiEvent(event);
+        } else if (type == "contextUserStatusChanged") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUsersStatusChangeEventData>(notification.data);
+            auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
+            auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
+            _eventMiddleware->emitApiEvent(event);
+        }
+    });
 }

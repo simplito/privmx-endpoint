@@ -76,5 +76,26 @@ class BaseLoggerOutput : public LoggerOutput {
 } // namespace logger
 } // namespace privmx
 
+#ifdef PRIVMX_LOGGER_OUTPUT_STDOUT
+    #define INITIALIZE_PRIVMX_LOGGER_STDOUT privmx::logger::Logger::getInstance()->addLoggerOutput(std::make_unique<privmx::logger::CoutLoggerOutput>());
+#else 
+    #define INITIALIZE_PRIVMX_LOGGER_STDOUT 
+#endif
+
+#ifdef PRIVMX_LOGGER_OUTPUT_STDERR
+    #define INITIALIZE_PRIVMX_LOGGER_STDERR privmx::logger::Logger::getInstance()->addLoggerOutput(std::make_unique<privmx::logger::CerrLoggerOutput>());
+#else 
+    #define INITIALIZE_PRIVMX_LOGGER_STDERR 
+#endif
+
+#ifdef PRIVMX_LOGGER_OUTPUT_FILE
+    #ifndef PRIVMX_LOGGER_OUTPUT_FILE_PATH 
+        #define PRIVMX_LOGGER_OUTPUT_FILE_PATH "log.txt"
+    #endif
+    #define INITIALIZE_PRIVMX_LOGGER_FILE privmx::logger::Logger::getInstance()->addLoggerOutput(std::make_unique<privmx::logger::FileLoggerOutput>(PRIVMX_LOGGER_OUTPUT_FILE_PATH));
+#else 
+    #define INITIALIZE_PRIVMX_LOGGER_FILE 
+#endif
+
 #endif
 #endif // _PRIVMXLIB_UTILS_PRIVMX_LOGGER_PRINTER_HPP_

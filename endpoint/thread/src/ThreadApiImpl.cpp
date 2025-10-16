@@ -67,6 +67,7 @@ ThreadApiImpl::~ThreadApiImpl() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
+    _guardedExecutor.reset();
 }
 
 std::string ThreadApiImpl::createThread(
@@ -427,66 +428,68 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
     if(!subscriptionQuery.has_value()) {
         return;
     }
-    if (type == "threadCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
-        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
-            auto data = validateDecryptAndConvertThreadDataToThread(raw);
-            auto event = core::EventBuilder::buildEvent<ThreadCreatedEvent>("thread", data, notification);
-            _eventMiddleware->emitApiEvent(event);
+    _guardedExecutor->exec([&, type, notification]() {
+        if (type == "threadCreated") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
+            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
+                auto data = validateDecryptAndConvertThreadDataToThread(raw);
+                auto event = core::EventBuilder::buildEvent<ThreadCreatedEvent>("thread", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadUpdated") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
+            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
+                auto data = validateDecryptAndConvertThreadDataToThread(raw);
+                auto event = core::EventBuilder::buildEvent<ThreadUpdatedEvent>("thread", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadDeleted") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(notification.data);
+            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                invalidateModuleKeysInCache(raw.threadId());
+                auto data = Mapper::mapToThreadDeletedEventData(raw);
+                auto event = core::EventBuilder::buildEvent<ThreadDeletedEvent>("thread", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadStats") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(notification.data);
+            if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                auto data = Mapper::mapToThreadStatsEventData(raw);
+                auto event = core::EventBuilder::buildEvent<ThreadStatsChangedEvent>("thread", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadNewMessage") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
+            if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
+                auto event = core::EventBuilder::buildEvent<ThreadNewMessageEvent>("thread/" + raw.threadId() + "/messages", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadUpdatedMessage") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
+            if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
+                auto event = core::EventBuilder::buildEvent<ThreadMessageUpdatedEvent>("thread/" + raw.threadId() + "/messages", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadDeletedMessage") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(notification.data);
+            if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
+                auto event = core::EventBuilder::buildEvent<ThreadMessageDeletedEvent>("thread/" + raw.threadId() + "/messages", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "threadCollectionChanged") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
+            if (raw.containerTypeOpt(THREAD_TYPE_FILTER_FLAG) == THREAD_TYPE_FILTER_FLAG) {
+                auto data = core::Mapper::mapToCollectionChangedEventData(THREAD_TYPE_FILTER_FLAG, raw);
+                auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("thread/collectionChanged", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
         }
-    } else if (type == "threadUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadInfo>(notification.data);
-        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), threadToModuleKeys(raw), raw.version());
-            auto data = validateDecryptAndConvertThreadDataToThread(raw);
-            auto event = core::EventBuilder::buildEvent<ThreadUpdatedEvent>("thread", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedEventData>(notification.data);
-        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            invalidateModuleKeysInCache(raw.threadId());
-            auto data = Mapper::mapToThreadDeletedEventData(raw);
-            auto event = core::EventBuilder::buildEvent<ThreadDeletedEvent>("thread", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadStats") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadStatsEventData>(notification.data);
-        if(raw.typeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            auto data = Mapper::mapToThreadStatsEventData(raw);
-            auto event = core::EventBuilder::buildEvent<ThreadStatsChangedEvent>("thread", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadNewMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
-        if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
-            auto event = core::EventBuilder::buildEvent<ThreadNewMessageEvent>("thread/" + raw.threadId() + "/messages", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadUpdatedMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadMessageEventData>(notification.data);
-        if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            auto data = validateDecryptAndConvertMessageDataToMessage(raw, getMessageDecryptionKeys(raw));
-            auto event = core::EventBuilder::buildEvent<ThreadMessageUpdatedEvent>("thread/" + raw.threadId() + "/messages", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadDeletedMessage") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ThreadDeletedMessageEventData>(notification.data);
-        if(raw.containerTypeOpt(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-            auto data = Mapper::mapToThreadDeletedMessageEventData(raw);
-            auto event = core::EventBuilder::buildEvent<ThreadMessageDeletedEvent>("thread/" + raw.threadId() + "/messages", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "threadCollectionChanged") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
-        if (raw.containerTypeOpt(THREAD_TYPE_FILTER_FLAG) == THREAD_TYPE_FILTER_FLAG) {
-            auto data = core::Mapper::mapToCollectionChangedEventData(THREAD_TYPE_FILTER_FLAG, raw);
-            auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("thread/collectionChanged", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    }
+    });
 }
 
 void ThreadApiImpl::processConnectedEvent() {

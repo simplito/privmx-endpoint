@@ -31,6 +31,7 @@ class EventQueueImpl
 {
 public:
     static std::shared_ptr<EventQueueImpl> getInstance();
+    static void freeInstance();
     EventQueueImpl(const EventQueueImpl& obj) = delete; 
     void operator=(const EventQueueImpl &) = delete;
 
