@@ -22,6 +22,17 @@ SingletonsHolder* SingletonsHolder::getInstance() {
     return impl;
 }
 
+
+
+SingletonsHolder::SingletonsHolder() {
+    #ifdef PRIVMX_ENABLE_LOGGER
+        _logger = privmx::logger::Logger::getInstance();
+    #endif
+    _executor = privmx::utils::Executor::getInstance();
+    _eventQueueImpl = privmx::endpoint::core::EventQueueImpl::getInstance();
+    LOG_TRACE("SingletonsHolder created")
+}
+
 SingletonsHolder::~SingletonsHolder() {
     LOG_TRACE("SingletonsHolder deconstructing")
     _eventQueueImpl.reset();
@@ -33,15 +44,6 @@ SingletonsHolder::~SingletonsHolder() {
         privmx::logger::Logger::freeInstance();
     #endif
 
-}
-
-SingletonsHolder::SingletonsHolder() {
-    _eventQueueImpl = privmx::endpoint::core::EventQueueImpl::getInstance();
-    _executor = privmx::utils::Executor::getInstance();
-    #ifdef PRIVMX_ENABLE_LOGGER
-        _logger = privmx::logger::Logger::getInstance();
-    #endif
-    LOG_TRACE("SingletonsHolder created")
 }
 
 static SingletonsHolder_destroyer singletonsHolder_destroyer;

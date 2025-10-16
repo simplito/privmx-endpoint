@@ -31,11 +31,11 @@ private:
     SingletonsHolder();
     ~SingletonsHolder();
     static SingletonsHolder* impl;
-    std::shared_ptr<privmx::endpoint::core::EventQueueImpl> _eventQueueImpl;
-    std::shared_ptr<privmx::utils::Executor> _executor;
     #ifdef PRIVMX_ENABLE_LOGGER
         std::shared_ptr<privmx::logger::Logger> _logger;
     #endif
+    std::shared_ptr<privmx::utils::Executor> _executor;
+    std::shared_ptr<privmx::endpoint::core::EventQueueImpl> _eventQueueImpl;
 };
 
 class SingletonsHolder_destroyer {
