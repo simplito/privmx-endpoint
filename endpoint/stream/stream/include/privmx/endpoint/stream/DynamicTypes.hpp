@@ -61,6 +61,24 @@ ENDPOINT_CLIENT_TYPE_INHERIT(UpdateKeyACKEvent, StreamKeyManagementEvent)
     STRING_FIELD(keyId)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(RTCIceCandidate)
+/** [MDN Reference](https://developer.mozilla.org/docs/Web/API/RTCIceCandidate/candidate) */
+    STRING_FIELD(address) /** string | null */
+    STRING_FIELD(candidate)
+    STRING_FIELD(component) /** string enum: "rtcp" | "rtp" | null */
+    STRING_FIELD(foundation) /** string | null */
+    INT64_FIELD(port) /** number | null */
+    INT64_FIELD(priority) /** number | null */
+    STRING_FIELD(protocol) /** string enum: "tcp" | "udp" | null */
+    STRING_FIELD(relatedAddress) /** string | null */
+    INT64_FIELD(relatedPort) /** number | null */
+    INT64_FIELD(sdpMLineIndex) /** number | null */
+    STRING_FIELD(sdpMid) /** string | null */
+    STRING_FIELD(tcpType) /** string enum: "active" | "passive" | "so" | null */
+    STRING_FIELD(type) /** string enum: "host" | "prflx" | "relay" | "srflx" | null */
+    STRING_FIELD(usernameFragment) /** string | null */
+TYPE_END
+
 } // dynamic
 } // stream
 } // endpoint

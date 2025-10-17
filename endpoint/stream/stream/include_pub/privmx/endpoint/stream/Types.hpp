@@ -60,6 +60,22 @@ struct SdpWithTypeModel {
     std::string type;
 };
 
+struct SdpWithRoomModel {
+    std::string roomId;
+    std::string sdp;
+    std::string type;
+};
+
+struct UpdateSessionIdModel {
+    std::string streamRoomId;
+    std::string connectionType;
+    int64_t sessionId;
+};
+
+struct RoomModel {
+    std::string roomId;
+};
+
 enum EventType: int64_t {
     STREAMROOM_CREATE = 0,
     STREAMROOM_UPDATE = 1,
@@ -74,6 +90,49 @@ enum EventSelectorType: int64_t {
     CONTEXT_ID = 0,
     STREAMROOM_ID = 1,
     STREAM_ID = 2,
+};
+
+struct VideoRoomStreamTrack {
+    std::string type;
+    std::string codec;
+    std::string mid;
+    int64_t mindex;
+};
+
+
+struct NewPublisherEvent {
+    int64_t id;
+    std::string video_codec;
+    std::string userId;
+    std::vector<VideoRoomStreamTrack> streams;
+};
+
+struct CurrentPublishersData {
+    std::string room;
+    std::vector<NewPublisherEvent> publishers;
+};
+
+struct UpdatedStreamData {
+    bool active;
+    std::string type;
+    std::optional<std::string> codec;
+    std::optional<int64_t> streamId; // feed_id
+    std::optional<std::string> streamMid; // feed_mid
+    std::optional<std::string> stream_display; // feed_display
+    int64_t mindex;
+    std::string mid;
+    bool send;
+    bool ready;
+};
+
+struct StreamsUpdatedDataInternal {
+    std::string room;
+    std::vector<UpdatedStreamData> streams;
+    std::optional<SdpWithTypeModel> jsep;
+};
+struct StreamsUpdatedData {
+    std::string room;
+    std::vector<UpdatedStreamData> streams;
 };
 
 }  // namespace stream

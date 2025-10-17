@@ -14,24 +14,24 @@ limitations under the License.
 
 #include <memory>
 #include <optional>
-#include <string>
-#include <vector>
-#include <unordered_map>
-
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/event/EventApiImpl.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
+#include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
+#include <privmx/endpoint/event/EventApiImpl.hpp>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-#include "privmx/endpoint/stream/Types.hpp"
+#include "ThreadSafeQueue.hpp"
+#include "privmx/endpoint/stream/Constants.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
-#include "privmx/endpoint/stream/WebRTCInterface.hpp"
-#include "privmx/endpoint/stream/Constants.hpp"
 #include "privmx/endpoint/stream/SubscriberImpl.hpp"
+#include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 namespace privmx {
 namespace endpoint {
 namespace stream {
@@ -90,7 +90,7 @@ public:
 
     void unpublishStream(int64_t localStreamId);
 
-    void leaveStream(int64_t localStreamId);
+    void leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -100,6 +100,9 @@ public:
 
     void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
 
+    void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
+
+    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 private:
     struct StreamData {
         std::shared_ptr<WebRTCInterface> webRtc;
@@ -107,23 +110,24 @@ private:
         int64_t updateId;
     };
     struct StreamRoomData {
-        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _id) : 
+        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _id, std::shared_ptr<WebRTCInterface> _webRtc):
             streamMap(privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamData>>()), 
-            streamKeyManager(_streamKeyManager), id(_id) {}
+            streamKeyManager(_streamKeyManager), id(_id), webRtc(_webRtc) {}
         
         privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamData>> streamMap;
         std::shared_ptr<StreamKeyManager> streamKeyManager;
         std::string id;
+        std::shared_ptr<WebRTCInterface> webRtc;
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
-    
-    void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
+    void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
+    void processNotificationEvent(const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    bool isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data);
-    void processJanusEvent(const Poco::JSON::Object::Ptr data);
-    void onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep = std::nullopt);
+    // bool isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data);
+    // void processJanusEvent(const Poco::JSON::Object::Ptr data);
+    // void onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep = std::nullopt);
 
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     StreamRoom convertServerStreamRoomToLibStreamRoom(
@@ -141,7 +145,7 @@ private:
     void assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     int64_t generateNumericId();
-    std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId);
+    std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(int64_t localStreamId);
@@ -171,6 +175,10 @@ private:
     privmx::utils::ThreadSaveMap<int64_t, int64_t> _sessionIdToStreamId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
+
+    std::thread _events_consumer_thread;
+    privmx::utils::CancellationToken::Ptr _ect_notifier_cancellation_token;
+    std::shared_ptr<ThreadSafeQueue<core::NotificationEvent>> _events_consumer_queue;
 };
 
 }  // namespace stream

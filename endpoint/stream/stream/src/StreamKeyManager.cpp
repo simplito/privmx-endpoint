@@ -48,7 +48,7 @@ StreamKeyManager::StreamKeyManager(
         try {
             while (!token->isCancelled()) {
 
-                _cancellationToken->sleep( std::chrono::milliseconds(UPDATE_INTERVAL));
+                token->sleep( std::chrono::milliseconds(UPDATE_INTERVAL));
                 
                 std::shared_ptr<StreamKeyManager::StreamEncKey> key;
                 {

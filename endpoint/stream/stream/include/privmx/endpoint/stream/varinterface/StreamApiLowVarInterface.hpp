@@ -45,6 +45,7 @@ public:
         SubscribeFor = 14,
         UnsubscribeFrom = 15,
         BuildSubscriptionQuery = 16,
+        Trickle = 17
     };
 
     StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
@@ -68,6 +69,8 @@ public:
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var acceptOfferOnReconfigure(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
     std::shared_ptr<WebRTCInterface> getWebRtcInterface();

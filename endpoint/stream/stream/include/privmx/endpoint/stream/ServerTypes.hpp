@@ -181,11 +181,17 @@ ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamLeaveModel)
-    INT64_FIELD(sessionId)
+    STRING_FIELD(streamRoomId)
+    LIST_FIELD(streamIds, int64_t)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamReconfigureModel)
     OBJECT_FIELD(answer, SessionDescription)
+    INT64_FIELD(sessionId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamTrickleModel)
+    OBJECT_PTR_FIELD(candidate)
     INT64_FIELD(sessionId)
 TYPE_END
 
@@ -210,7 +216,10 @@ ENDPOINT_SERVER_TYPE(StreamEventData)
     STRING_FIELD(userId)
 TYPE_END
 
-
+ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
+    STRING_FIELD(streamRoomId)
+    INT64_FIELD(streamId)
+TYPE_END
 // JANUS events data
 
 ENDPOINT_SERVER_TYPE(JanusEventData)
@@ -238,7 +247,7 @@ ENDPOINT_SERVER_TYPE(JanusVideoRoom)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE_INHERIT(JanusVideoRoomUpdated, JanusVideoRoom)
-    INT64_FIELD(room)
+    STRING_FIELD(room)
     LIST_FIELD(streams, JanusVideoRoomStream)    
 TYPE_END
 
@@ -251,6 +260,44 @@ ENDPOINT_SERVER_TYPE_INHERIT(JanusPluginEvent, JanusEventData)
     OBJECT_FIELD(jsep, JanusJSEP)
     OBJECT_FIELD(plugindata, JanusPluginDataEvent)
 TYPE_END
+
+ENDPOINT_SERVER_TYPE(VideoRoomStreamTrack)
+    STRING_FIELD(type)
+    STRING_FIELD(codec)
+    STRING_FIELD(mid)
+    INT64_FIELD(mindex)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(NewPublisherEvent)
+    INT64_FIELD(id)
+    STRING_FIELD(userId)
+    STRING_FIELD(video_codec)
+    LIST_FIELD(streams, VideoRoomStreamTrack)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(CurrentPublishersData)
+    STRING_FIELD(room)
+    LIST_FIELD(publishers, NewPublisherEvent)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(UpdatedStreamData)
+    STRING_FIELD(type)
+    INT64_FIELD(feed_id)
+    INT64_FIELD(feed_mid)
+    STRING_FIELD(feed_display)
+    INT64_FIELD(mindex)
+    STRING_FIELD(mid)
+    BOOL_FIELD(send)
+    BOOL_FIELD(ready)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamsUpdatedData)
+    STRING_FIELD(room)
+    INT64_FIELD(sessionId)
+    LIST_FIELD(streams, UpdatedStreamData)
+    OBJECT_FIELD(jsep, JanusJSEP)
+TYPE_END
+
 
 
 } // server

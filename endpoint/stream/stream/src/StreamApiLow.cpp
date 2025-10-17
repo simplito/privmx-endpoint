@@ -188,10 +188,10 @@ void StreamApiLow::unpublishStream(int64_t streamId) {
     }
 }
 
-void StreamApiLow::leaveStream(int64_t streamId) {
+void StreamApiLow::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds) {
     validateEndpoint();
     try {
-        return _impl->leaveStream(streamId);
+        return _impl->leaveStream(streamRoomId, streamsIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -250,4 +250,26 @@ void StreamApiLow::reconfigureStream(int64_t localStreamId, const std::string& o
 
 void StreamApiLow::validateEndpoint() {
     if(!_impl) throw NotInitializedException();
+}
+
+void StreamApiLow::trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate) {
+    validateEndpoint();
+    core::Validator::validateNumberPositive(sessionId, "field:sessionId ");
+    try {
+        return _impl->trickle(sessionId, candidate);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
+    validateEndpoint();
+    core::Validator::validateNumberPositive(sessionId, "field:sessionId ");
+    try {
+        return _impl->acceptOfferOnReconfigure(sessionId, sdp);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
 }

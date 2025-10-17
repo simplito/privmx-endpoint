@@ -8,33 +8,41 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
+#include <Poco/JSON/Parser.h>
+#include "privmx/endpoint/core/TypesMacros.hpp"
 #include "privmx/endpoint/stream/varinterface/StreamApiLowVarInterface.hpp"
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/stream/DynamicTypes.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
 std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)>
-    StreamApiLowVarInterface::methodMap = {{Create, &StreamApiLowVarInterface::create},
-                                       {GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
-                                       {CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
-                                       {UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
-                                       {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
-                                       {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
-                                       {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
-                                       {CreateStream, &StreamApiLowVarInterface::createStream},
-                                       {PublishStream, &StreamApiLowVarInterface::publishStream},
-                                       {JoinStream, &StreamApiLowVarInterface::joinStream},
-                                       {ListStreams, &StreamApiLowVarInterface::listStreams},
-                                       {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
-                                       {LeaveStream, &StreamApiLowVarInterface::leaveStream},
-                                       {KeyManagement, &StreamApiLowVarInterface::keyManagement},
-                                       {SubscribeFor, &StreamApiLowVarInterface::subscribeFor},
-                                       {UnsubscribeFrom, &StreamApiLowVarInterface::unsubscribeFrom},
-                                       {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery}};
+    StreamApiLowVarInterface::methodMap = {
+    {Create, &StreamApiLowVarInterface::create},
+    {GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
+    {CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
+    {UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
+    {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
+    {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
+    {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
+    {CreateStream, &StreamApiLowVarInterface::createStream},
+    {PublishStream, &StreamApiLowVarInterface::publishStream},
+    {JoinStream, &StreamApiLowVarInterface::joinStream},
+    {ListStreams, &StreamApiLowVarInterface::listStreams},
+    {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
+    {LeaveStream, &StreamApiLowVarInterface::leaveStream},
+    {KeyManagement, &StreamApiLowVarInterface::keyManagement},
+    {SubscribeFor, &StreamApiLowVarInterface::subscribeFor},
+    {UnsubscribeFrom, &StreamApiLowVarInterface::unsubscribeFrom},
+    {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery},
+    {Trickle, &StreamApiLowVarInterface::keyManagement}};
+
+
+
+
 
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -167,9 +175,10 @@ Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::leaveStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(0), "localStreamId");
-    _streamApi.leaveStream(localStreamId);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto streamsIds = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsIds");
+    _streamApi.leaveStream(streamRoomId, streamsIds);
     return {};
 }
 
@@ -178,6 +187,23 @@ Poco::Dynamic::Var StreamApiLowVarInterface::keyManagement(const Poco::Dynamic::
     auto disable = _deserializer.deserialize<bool>(argsArr->get(0), "disable");
     _streamApi.keyManagement(disable);
     return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::trickle(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto sessionId = _deserializer.deserialize<int64_t>(argsArr->get(0), "sessionId");
+    auto serializedRtcCandidate = _deserializer.deserialize<std::string>(argsArr->get(1), "candidate");
+    Poco::JSON::Parser parser;
+    auto iceCandidate {utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(parser.parse(serializedRtcCandidate))};
+    _streamApi.trickle(sessionId, iceCandidate);
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::acceptOfferOnReconfigure(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto sessionId = _deserializer.deserialize<int64_t>(argsArr->get(0), "sessionId");
+    auto jsep = _deserializer.deserialize<stream::SdpWithTypeModel>(argsArr->get(1), "jsep");
+    _streamApi.acceptOfferOnReconfigure(sessionId, jsep);
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {

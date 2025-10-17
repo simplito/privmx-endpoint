@@ -54,7 +54,7 @@ std::string WebRTC::createOfferAndSetLocalDescription() {
     return sdp;
 }
 
-std::string WebRTC::createAnswerAndSetDescriptions(const std::string& sdp, const std::string& type) {
+std::string WebRTC::createAnswerAndSetDescriptions(const std::string& streamRoomId, const int64_t sessionId, const std::string& sdp, const std::string& type) {
     // Set remote description
     _peerConnection->SetRemoteDescription(
         sdp, 

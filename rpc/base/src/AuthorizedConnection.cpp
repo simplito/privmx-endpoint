@@ -315,6 +315,7 @@ void AuthorizedConnection::authorizeWebsocket() {
         if (type == "disconnected") {
             return;
         }
+
         PRIVMX_DEBUG("AuthorizedConnection", "Recived event with type: " + type + " | data:\n" + privmx::utils::Utils::stringifyVar(decoded, true))
         _notification_event_dispatcher.dispatch({.type = type, .data = decoded});
     }, [&]{

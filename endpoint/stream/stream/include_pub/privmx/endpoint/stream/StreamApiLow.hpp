@@ -17,11 +17,12 @@ limitations under the License.
 #include <string>
 #include <vector>
 #include <functional>
-
+#include <Poco/Dynamic/Var.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 
@@ -76,7 +77,11 @@ public:
 
     void unpublishStream(int64_t localStreamId);
 
-    void leaveStream(int64_t localStreamId);
+    void leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds);
+
+    void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
+
+    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);

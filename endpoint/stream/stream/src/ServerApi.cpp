@@ -70,6 +70,11 @@ void ServerApi::streamReconfigure(server::StreamReconfigureModel model) {
     requestWS("streamReconfigure", model);
 }
 
+void ServerApi::trickle(server::StreamTrickleModel model) {
+    requestWS("trickle", model);
+}
+
+
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
     PRIVMX_DEBUG("ServerApi", "request", method+ ":class");
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params));

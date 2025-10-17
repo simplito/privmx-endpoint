@@ -104,7 +104,9 @@ void EventMiddleware::emitNotificationEvent(const std::string& type, const Notif
                         }
                    }
                 }
-            } catch (...) {}
+            } catch (std::exception& e) {
+                std::cerr << "Error on emitNotificationEvent:" << e.what() << " / Notification type: " << type << "/ payload: " << privmx::utils::Utils::stringifyVar(notification.data, true) << std::endl;
+            }
         });
 }
 

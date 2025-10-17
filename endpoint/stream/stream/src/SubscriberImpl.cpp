@@ -53,13 +53,17 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
         case EventType::STREAM_LEAVE:
         case EventType::STREAM_PUBLISH:
         case EventType::STREAM_UNPUBLISH:
-            return std::string(_moduleName) + "/" + _eventTypeNames.at(eventType);
+            return std::string(_moduleName) + "/" + std::string(_itemName)+ "/" + _eventTypeNames.at(eventType);
     }
     throw NotImplementedException(_readableEventType.at(eventType));
 }
 
 std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const std::string& selectorId) {
     return "|" + _selectorTypeNames.at(selectorType) + "=" + selectorId;
+}
+
+std::string SubscriberImpl::getInternalEventsSubscriptionQuery() {
+    return std::string(_moduleName) + "/internal";
 }
 
 std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
@@ -90,6 +94,9 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
 
 void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
     for(auto& subscriptionQuery : subscriptionQueries) {
+        if (subscriptionQuery == "streamroom/internal") {
+            continue;
+        }
         auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
         if(tmp.size() != 2) {
             throw InvalidSubscriptionQueryException();
