@@ -76,6 +76,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamAvailable
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractPublishersStreamsUpdatedEventException, "Cannot extract PublishersStreamsUpdatedEvent", 0x001B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotGetRoomOnStreamsUpdateEventException, "Cannot get room on streamsUpdateEvent", 0x001C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidTurnServerURIException, "Invalid turn server URI", 0x001D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionAlreadyInitializedException, "Peer Connection already initialized", 0x001E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionNotInitializedException, "Peer Connection not initialized", 0x001F)
+
 } // stream
 } // endpoint
 } // privmx

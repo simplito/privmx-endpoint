@@ -390,6 +390,7 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
     privmx::endpoint::crypto::CryptoApi cryptoApi = privmx::endpoint::crypto::CryptoApi();
     auto privKey = cryptoApi.derivePrivateKey2(password, login);
     auto pubKey = cryptoApi.derivePublicKey(privKey);
+    std:: cout << "connected with privKey: " << privKey << " and userId: " << login << std::endl;
     // setup ttpChannel
     Poco::URI uri {url};
     std::string contentType {"application/json"};
@@ -494,38 +495,7 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
 
     } else {
         PRIVMX_DEBUG("StreamProgram wx", "Connect", "Failed in connecting with Application Server, using backup default User")
-        loginInput->SetValue("backup Default User");
-        connection = std::make_shared<core::Connection>(core::Connection::connect(
-            "L3DdgfGagr2yGFEHs1FcRQRGrpa4nwQKdPcfPiHxcDcZeEb3wYaN", 
-            "fc47c4e4-e1dc-414a-afa4-71d436398cfc", 
-            "http://webrtc2.s24.simplito.com:3000"
-        ));
-        eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
-        streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
-        auto context = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
-        contextId = context.contextId;
-        auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});
-        std::string streamRoomId;
-
-        if(streamRoomList.readItems.size() == 0 || streamRoomList.readItems[0].statusCode != 0) {
-            if(streamRoomList.readItems.size() > 0) streamApi->deleteStreamRoom(streamRoomList.readItems[0].streamRoomId);
-            std::vector<privmx::endpoint::core::UserWithPubKey> users = {
-                privmx::endpoint::core::UserWithPubKey{.userId="patryk", .pubKey="51ciywf56WuDKxyEuquMsfoydEK2NavoFtFBvoKWEi7VuqHkur"},
-                privmx::endpoint::core::UserWithPubKey{.userId="user1",  .pubKey="8RUGiizsLszXAfWXEaPxjrcnXCsgd48zCHmmK6ng2cZCquMoeZ"}
-            };
-            streamRoomId = streamApi->createStreamRoom(
-                context.contextId,
-                users,
-                users,
-                privmx::endpoint::core::Buffer::from(""),
-                privmx::endpoint::core::Buffer::from(""),
-                std::nullopt
-            );
-            
-        } else {
-            streamRoomId = streamRoomList.readItems[0].streamRoomId;
-        }
-        streamRoomIdInput->SetValue(streamRoomId);
+        return;
     }
     streamApi->subscribeFor({
         streamApi->buildSubscriptionQuery(stream::EventType::STREAM_JOIN, stream::EventSelectorType::CONTEXT_ID, contextId),

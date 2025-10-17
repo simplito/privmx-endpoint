@@ -31,6 +31,7 @@ StreamKeyManager::StreamKeyManager(
     const std::string& contextId,
     int notificationListenerId
 ) : _eventApi(eventApi), _keyProvider(keyProvider), _serverApi(serverApi), _userPrivKey(userPrivKey), _streamRoomId(streamRoomId), _contextId(contextId), _notificationListenerId(notificationListenerId) {
+    PRIVMX_DEBUG("STREAMS", "KEY-MANAGER", "Constructed")
     _userPubKey = _userPrivKey.getPublicKey();
     // generate curren key
     auto currentKey = _keyProvider->generateKey();

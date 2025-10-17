@@ -26,7 +26,8 @@ limitations under the License.
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
-#include "privmx/endpoint/stream/WebRTC.hpp"
+#include "privmx/endpoint/stream/WebRTCImpl.hpp"
+#include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
@@ -104,13 +105,13 @@ private:
     };
     struct StreamData {
         StreamData(
-            std::shared_ptr<WebRTC> _webrtc,
             privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> _streamCapturers,
-            StreamStatus _status) : webrtc(_webrtc), streamCapturers(_streamCapturers), status(_status) {}
-        std::shared_ptr<WebRTC> webrtc;
+            StreamStatus _status, std::string _streamRoomId
+        ) :streamCapturers(_streamCapturers), status(_status), streamRoomId(_streamRoomId) {}
         privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> streamCapturers;
         StreamStatus status;
         std::mutex streamMutex;
+        std::string streamRoomId;
     };
 
 
@@ -131,6 +132,7 @@ private:
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLow> _api;
+    std::shared_ptr<WebRTCImpl> _webRTC;
 };
 
 }  // namespace stream

@@ -384,8 +384,8 @@ int64_t StreamApiLowImpl::createStream(const std::string& streamRoomId, int64_t 
     }
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(localStreamId) + ": STREAM Sender")
     _streamIdToRoomId.set(localStreamId, streamRoomId);
-    auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
-        webRtc->updateKeys(keys);
+    auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc, streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
+        webRtc->updateKeys(streamRoomId, keys);
     });
     room->streamMap.set(
         localStreamId, 
@@ -405,7 +405,7 @@ void StreamApiLowImpl::publishStream(int64_t localStreamId) {
     auto room = getStreamRoomData(localStreamId);
     auto streamData = getStreamData(localStreamId, room);
     std::shared_ptr<WebRTCInterface> webRtc = streamData->webRtc;
-    webRtc->updateKeys(room->streamKeyManager->getCurrentWebRtcKeys());
+    webRtc->updateKeys(room->id, room->streamKeyManager->getCurrentWebRtcKeys());
     std::string sdp = webRtc->createOfferAndSetLocalDescription(room->id);
     // Publish data on bridge
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
@@ -452,8 +452,8 @@ int64_t StreamApiLowImpl::joinStream(const std::string& streamRoomId, const std:
     webRtc->updateSessionId(streamRoomId, streamJoinResult.sessionId(), std::string("subscriber"));
 
     // creating peerConnection
-    auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
-        webRtc->updateKeys(keys);
+    auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([streamRoomId, webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
+        webRtc->updateKeys(streamRoomId, keys);
     });
 
     room->streamMap.set(
