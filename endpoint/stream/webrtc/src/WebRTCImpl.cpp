@@ -275,5 +275,9 @@ std::shared_ptr<PeerConnection> WebRTCImpl::createPeerConnection(const std::stri
 void WebRTCImpl::setOnFrame(const std::string& streamRoomId, std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> OnFrame) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
     connection->peerConnection->observer->setOnFrame(OnFrame);
+}
 
+void WebRTCImpl::setOnRemoveVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnRemoveVideoTrack) {
+    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
+    connection->peerConnection->observer->setOnRemoveVideoTrack(OnRemoveVideoTrack);
 }

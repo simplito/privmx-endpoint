@@ -57,6 +57,7 @@ public:
     void RemoveAudioTrack(const std::string& streamRoomId, int64_t id = 0);
     void RemoveVideoTrack(const std::string& streamRoomId, int64_t id = 0);
     void setOnFrame(const std::string& streamRoomId, std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> OnFrame);
+    void setOnRemoveVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnRemoveVideoTrack);
 
 
 private:

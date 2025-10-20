@@ -147,7 +147,8 @@ public:
     void JoinToStreamRoom(std::string streamRoomId);
     std::vector<privmx::endpoint::stream::StreamRoom> ListStreamRooms(std::string streamRoomId);
 private:
-    void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id);
+    void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string& id);
+    void OnVideoRemove(const std::string& id);
     void OnResize(wxSizeEvent& event);
     void OnExit(wxCloseEvent& event);
 
@@ -218,14 +219,14 @@ void MyFrame::OnResize(wxSizeEvent& event) {
 void MyFrame::OnExit(wxCloseEvent& event) {
     cancellationToken.cancel();
     if(streamApi) {
-        if(joinedStream.has_value()) {
-            PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Leaving Stream")
-            streamApi->leaveStream(joinedStream.value());
-        }
-        if(publishedStream.has_value()) {
-            PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Unpublishing Stream")
-            streamApi->unpublishStream(publishedStream.value());
-        }
+        // if(publishedStream.has_value()) {
+        //     PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Unpublishing Stream")
+        //     streamApi->unpublishStream(publishedStream.value());
+        // }
+        // if(joinedStream.has_value()) {
+        //     PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Leaving Stream")
+        //     streamApi->leaveStream(joinedStream.value());
+        // }
         streamApi.reset();
     }
     if(eventApi) eventApi.reset();
@@ -364,23 +365,15 @@ MyFrame::MyFrame()
             }
             PRIVMX_DEBUG("StreamProgram wx", "Event recived", eventHolder.toJSON())
             if(privmx::endpoint::stream::Events::isStreamPublishedEvent(eventHolder)) {
+                PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent")
                 auto eventData = privmx::endpoint::stream::Events::extractStreamPublishedEvent(eventHolder);
-                if(eventData.data.streamRoomId == streamRoomIdInput->GetValue()) {
-                    PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent", "Reseting VideoPanels")
-                    std::unique_lock<std::shared_mutex> lock(_videoPanels);
-                    mapOfVideoPanels.clear();
-                    Layout();
-                }
             } else if (privmx::endpoint::stream::Events::isStreamUnpublishedEvent(eventHolder)) {
+                PRIVMX_DEBUG("StreamProgram wx", "isStreamUnpublishedEvent")
                 auto eventData = privmx::endpoint::stream::Events::extractStreamUnpublishedEvent(eventHolder);
-                if(eventData.data.streamRoomId == streamRoomIdInput->GetValue()) {
-
-                    PRIVMX_DEBUG("StreamProgram wx", "isStreamUnpublishedEvent", "Reseting VideoPanels")
-                    std::unique_lock<std::shared_mutex> lock(_videoPanels);
-                    mapOfVideoPanels.clear();
-                    Layout();
-                }
-            } 
+            } else if (privmx::endpoint::stream::Events::isPublishersStreamsUpdatedEvent(eventHolder)) {
+                PRIVMX_DEBUG("StreamProgram wx", "isPublishersStreamsUpdatedEvent")
+                auto eventData = privmx::endpoint::stream::Events::extractPublishersStreamsUpdatedEvent(eventHolder);
+            }
         }
     });
 }
@@ -532,22 +525,13 @@ void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
         streamsId.push_back(streamlist[i].streamId);
     }
     stream::StreamJoinSettings ssettings {
-        .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
+        .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string& id) {
             this->OnFrame(w, h, frame, id);
+        },
+        .OnVideoRemove=[&](const std::string& id) {
+            this->OnVideoRemove(id);
         }
     };
-
-    if(joinedStream.has_value()) {
-        PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Leaving Stream")
-        streamApi->leaveStream(joinedStream.value());
-        {
-            std::unique_lock<std::shared_mutex> lock(_videoPanels);
-            mapOfVideoPanels.clear();
-            Layout();
-        }
-        PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Reseting VideoPanels")
-        std::unique_lock<std::shared_mutex> lock(_videoPanels);
-    }
     joinedStream = streamApi->joinStream(streamRoomId, streamsId, ssettings);
 }
 
@@ -556,7 +540,7 @@ std::vector<privmx::endpoint::stream::StreamRoom> MyFrame::ListStreamRooms(std::
     return streamlist.readItems;
 }
 
-void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
+void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string& id) {
     std::shared_ptr<VideoPanel> videoPanel;
     {
         std::unique_lock<std::shared_mutex> lock(_videoPanels);
@@ -564,7 +548,7 @@ void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::st
         
         if (it == mapOfVideoPanels.end()) {
             //add video panel 
-            PRIVMX_DEBUG("StreamProgram wx", "Adding New", "VideoPanel, Frame id: " + id)
+            PRIVMX_DEBUG("StreamProgram wx", "Adding New VideoPanel", ", Frame id: " + id)
             videoPanel = std::make_shared<VideoPanel>(this);
             mapOfVideoPanels[id] = videoPanel;
             sizer->Add(videoPanel.get(), 1, wxEXPAND | wxALL,5);
@@ -574,6 +558,19 @@ void MyFrame::OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::st
         }
         if(videoPanel != nullptr) {
             videoPanel->Render(w,h,frame);
+        }
+    }
+}
+
+void MyFrame::OnVideoRemove(const std::string& id) {
+    PRIVMX_DEBUG("StreamProgram wx", "RemovingVideoPanel", "VideoPanel, id: " + id)
+    std::shared_ptr<VideoPanel> videoPanel;
+    {
+        std::unique_lock<std::shared_mutex> lock(_videoPanels);
+        auto it = mapOfVideoPanels.find(id);
+        if (it != mapOfVideoPanels.end()) {
+            mapOfVideoPanels.erase(it);
+            Layout();
         }
     }
 }

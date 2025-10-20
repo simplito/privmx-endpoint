@@ -224,8 +224,10 @@ int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::ve
     if(settings.OnFrame.has_value()) {
         _webRTC->setOnFrame(streamRoomId, settings.OnFrame.value());
     }
+    if(settings.OnVideoRemove.has_value()) {
+        _webRTC->setOnRemoveVideoTrack(streamRoomId, settings.OnVideoRemove.value());
+    }
     auto result = _api->joinStream(streamRoomId, streamsId, settings.settings, streamId, _webRTC);
-    
     return result;
     
 }

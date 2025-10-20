@@ -41,10 +41,6 @@ public:
         std::unique_lock<std::mutex> lock(m);
         _onFrameCallback(frame->width(), frame->height(), std::make_shared<FrameImpl>(frame), _id);
     }
-    void updateOnFrameCallback(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback) {
-        std::unique_lock<std::mutex> lock(m);
-        _onFrameCallback = onFrameCallback;
-    }
 private:
     std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
     std::mutex m;
@@ -88,11 +84,13 @@ public:
     inline void setOnAddTrack(std::function<void(libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver>)> callback) {_onAddTrack = callback;}
     inline void setOnRemoveTrack(std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver>)> callback) {_onRemoveTrack = callback;}
     inline void setOnFrame(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> callback) {_onFrameCallback = callback;}
+    inline void setOnRemoveVideoTrack(std::function<void(const std::string&)> callback) {_onRemoveVideoTrack = callback;}
 private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     std::string _streamRoomId; 
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
     std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> _onFrameCallback;
+    std::optional<std::function<void(const std::string&)>> _onRemoveVideoTrack;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
     privmx::webrtc::FrameCryptorOptions _options;
 
