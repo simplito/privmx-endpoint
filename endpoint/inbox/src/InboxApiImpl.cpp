@@ -904,7 +904,7 @@ InboxEntryResult InboxApiImpl::decryptInboxEntry(thread::server::Message message
         auto eccKey = crypto::ECC::fromPrivateKey(encKey.key);
         auto privKeyECC = crypto::PrivateKey(eccKey);
         auto decrypted = serializer->unpackMessage(msgData, privKeyECC);
-
+        result.statusCode = encKey.statusCode;
         result.publicData = decrypted.publicData;
         result.privateData = decrypted.privateData;
         result.storeId = inboxMessageServer.store();
