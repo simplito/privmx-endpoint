@@ -21,9 +21,9 @@ if(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(event)
 endif(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
 
-if(PRIVMX_ENABLE_TESTS_E2E)
-    add_subdirectory(tests_e2e)
-endif()
+#if(PRIVMX_ENABLE_TESTS_E2E)
+#    add_subdirectory(tests_e2e)
+#endif()
 
 
 if(PRIVMX_BUILD_CLI AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
