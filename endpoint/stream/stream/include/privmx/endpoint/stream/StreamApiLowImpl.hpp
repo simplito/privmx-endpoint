@@ -98,8 +98,6 @@ public:
 
     void keyManagement(bool disable);
 
-    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
-
     void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
 
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
@@ -124,10 +122,6 @@ private:
     void processNotificationEvent(const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-
-    // bool isInternalJanusEvent(const std::string& type, const Poco::JSON::Object::Ptr data);
-    // void processJanusEvent(const Poco::JSON::Object::Ptr data);
-    // void onVideoRoomUpdate(const int64_t session_id, server::JanusVideoRoomUpdated updateEvent, std::shared_ptr<StreamData> streamData, const std::optional<server::JanusJSEP>& jsep = std::nullopt);
 
     privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     StreamRoom convertServerStreamRoomToLibStreamRoom(

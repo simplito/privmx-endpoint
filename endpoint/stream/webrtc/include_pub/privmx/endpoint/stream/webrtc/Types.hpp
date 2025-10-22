@@ -25,6 +25,7 @@ public:
 
 struct StreamJoinSettings {
     Settings settings;
+    std::optional<std::function<void(const std::string&)>> OnVideo;
     std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame;
     std::optional<std::function<void(const std::string&)>> OnVideoRemove;
 };

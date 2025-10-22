@@ -272,9 +272,19 @@ std::shared_ptr<PeerConnection> WebRTCImpl::createPeerConnection(const std::stri
     return peerConnection;
 }
 
+void WebRTCImpl::setFrameCryptorOptions(const std::string& streamRoomId, const privmx::webrtc::FrameCryptorOptions& frameCryptorOptions) {
+    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
+    connection->peerConnection->observer->SetFrameCryptorOptions(frameCryptorOptions);
+}
+
 void WebRTCImpl::setOnFrame(const std::string& streamRoomId, std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> OnFrame) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
     connection->peerConnection->observer->setOnFrame(OnFrame);
+}
+
+void WebRTCImpl::setOnVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnVideoTrack) {
+    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
+    connection->peerConnection->observer->setOnVideoTrack(OnVideoTrack);
 }
 
 void WebRTCImpl::setOnRemoveVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnRemoveVideoTrack) {

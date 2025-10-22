@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
         
         while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
 
-        streamApi.leaveStream(watchedStream);
+        streamApi.leaveStream(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         connection.disconnect();
        

@@ -56,8 +56,8 @@ int main(int argc, char** argv) {
         auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
 
         std::this_thread::sleep_for(std::chrono::seconds(120));
-        streamApi.unpublishStream(streamId_1);
-        streamApi.leaveStream(streamId_2);
+        streamApi.unpublishStream(streamRoomId, streamId_1);
+        streamApi.leaveStream(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
        

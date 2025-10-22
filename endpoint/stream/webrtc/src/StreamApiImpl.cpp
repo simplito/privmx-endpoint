@@ -221,6 +221,9 @@ int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::ve
             streamRoomId
         )
     );
+    if(settings.OnVideo.has_value()) {
+        _webRTC->setOnVideoTrack(streamRoomId, settings.OnVideo.value());
+    }
     if(settings.OnFrame.has_value()) {
         _webRTC->setOnFrame(streamRoomId, settings.OnFrame.value());
     }
@@ -277,18 +280,15 @@ int64_t StreamApiImpl::generateNumericId() {
     return std::rand();
 }
 
-void StreamApiImpl::unpublishStream(int64_t streamId) {
+void StreamApiImpl::unpublishStream(const std::string& streamRoomId, int64_t streamId) {
     _api->unpublishStream(streamId);
     _streamDataMap.erase(streamId);
 }
 
-void StreamApiImpl::leaveStream(int64_t streamId) {
-    auto streamData = _streamDataMap.get(streamId);
-    if(!streamData.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    _api->leaveStream(streamData.value()->streamRoomId, {streamId});
-    _streamDataMap.erase(streamId);
+void StreamApiImpl::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId) {
+    // auto streamData = _streamDataMap.get(streamId);
+    _api->leaveStream(streamRoomId, streamsId);
+    // _streamDataMap.erase(streamId);
 }
 
 
@@ -308,13 +308,7 @@ void StreamApiImpl::keyManagement(bool disable) {
     _api->keyManagement(disable);
 }
 
-void StreamApiImpl::dropBrokenFrames(bool enable) {
-    // _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed=enable};
-    // _streamDataMap.forAll([&]([[maybe_unused]]const uint64_t &id, const std::shared_ptr<StreamData>& streamData) {
-    //     _webRTC->setCryptorOptions(_frameCryptorOptions);
-    // });
-}
-
-void StreamApiImpl::reconfigureStream(int64_t localStreamId, const std::string& optionsJSON) {
-    _api->reconfigureStream(localStreamId, optionsJSON);
+void StreamApiImpl::dropBrokenFrames(const std::string& streamRoomId, bool enable) {
+    _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed=enable};
+    _webRTC->setFrameCryptorOptions(streamRoomId, _frameCryptorOptions);
 }

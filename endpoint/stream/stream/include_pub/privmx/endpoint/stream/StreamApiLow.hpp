@@ -88,7 +88,6 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     void keyManagement(bool disable);
-    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
     std::shared_ptr<StreamApiLowImpl> getImpl() const { return _impl; }
 
 private:

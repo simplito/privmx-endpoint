@@ -86,17 +86,16 @@ public:
 
     std::vector<Stream> listStreams(const std::string& streamRoomId);
 
-    void unpublishStream(int64_t streamId);
+    void unpublishStream(const std::string& streamRoomId, int64_t streamId);
 
-    void leaveStream(int64_t streamId);
+    void leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId);
     
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     void keyManagement(bool disable);
-    void dropBrokenFrames(bool enable);
-    void reconfigureStream(int64_t localStreamId, const std::string& optionsJSON = "{}");
+    void dropBrokenFrames(const std::string& streamRoomId, bool enable);
 
 private:
     enum StreamStatus {

@@ -237,9 +237,7 @@ MyFrame::MyFrame()
     checkbox_board = new wxPanel(this, wxID_ANY);
     checkBoxSizer = new wxBoxSizer(wxVERTICAL);
     brickKeyManager = new wxCheckBox(this->checkbox_board, wxID_ANY, "brick Key Manager");
-    hideBrokenFrames = new wxCheckBox(this->checkbox_board, wxID_ANY, "hide broken frames");
     checkBoxSizer->Add(brickKeyManager, 1, wxALIGN_CENTER);
-    checkBoxSizer->Add(hideBrokenFrames, 1, wxALIGN_CENTER);
 
     this->brickKeyManager->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
         
@@ -251,17 +249,6 @@ MyFrame::MyFrame()
             streamApi->keyManagement(brickKeyManager->GetValue());
         } catch (const privmx::endpoint::core::Exception& e) {
 
-        };
-    });
-    this->hideBrokenFrames->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
-        try {
-            if(streamApi == nullptr) {
-                hideBrokenFrames->SetValue(false);
-                return;
-            }
-            streamApi->dropBrokenFrames(hideBrokenFrames->GetValue());
-        } catch (const privmx::endpoint::core::Exception& e) {
-            hideBrokenFrames->SetValue(false);
         };
     });
 

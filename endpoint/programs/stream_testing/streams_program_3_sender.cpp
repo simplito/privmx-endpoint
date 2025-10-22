@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
         streamApi.publishStream(streamId);
         while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
         
-        streamApi.unpublishStream(streamId);
+        streamApi.unpublishStream(streamRoomId, streamId);
         connection.disconnect();
         std::this_thread::sleep_for(std::chrono::seconds(5));
 
