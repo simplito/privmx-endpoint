@@ -1,0 +1,41 @@
+#ifndef _PRIVMXLIB_UTILS_LOGGER_CONFIG_HPP_
+#define _PRIVMXLIB_UTILS_LOGGER_CONFIG_HPP_
+
+// Enable Logger - Default OFF
+#cmakedefine PRIVMX_ENABLE_LOGGER
+// Enable Logger - Default OFF
+#cmakedefine PRIVMX_ENABLE_LOGGER_TIMER
+
+// Logger INFO 
+
+/* 
+Log level - Default value INFO
+TRACE = 6
+DEBUG = 5
+INFO = 4 
+WARN = 3
+ERROR = 2
+FATAL = 1
+USE DEFAULT = 0
+DISABLE = -1
+*/
+#cmakedefine PRIVMX_LOGGER_LEVEL ${PRIVMX_LOGGER_LEVEL}
+
+// Default OFF
+#cmakedefine PRIVMX_LOGGER_OUTPUT_INCLUDE_TIMESTAMP
+// Default OFF
+#cmakedefine PRIVMX_LOGGER_OUTPUT_INCLUDE_THREADID
+
+// Logger OUTPUT
+
+// Default ON <- if no other output is set it will use this
+#cmakedefine PRIVMX_LOGGER_OUTPUT_STDOUT
+// Default OFF
+#cmakedefine PRIVMX_LOGGER_OUTPUT_STDERR
+// Default OFF
+#cmakedefine PRIVMX_LOGGER_OUTPUT_FILE
+// Default log.txt
+#cmakedefine PRIVMX_LOGGER_OUTPUT_FILE_PATH "${PRIVMX_LOGGER_OUTPUT_FILE_PATH}"
+
+
+#endif // _PRIVMXLIB_UTILS_LOGGER_CONFIG_HPP_

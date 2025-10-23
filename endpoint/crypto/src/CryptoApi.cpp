@@ -13,6 +13,8 @@ limitations under the License.
 #include "privmx/endpoint/crypto/CryptoApiImpl.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include <privmx/utils/Logger.hpp>
+#include <privmx/endpoint/core/SingletonsHolder.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::crypto;

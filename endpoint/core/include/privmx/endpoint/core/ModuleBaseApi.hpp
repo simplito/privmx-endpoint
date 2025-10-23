@@ -34,6 +34,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
+#include <privmx/utils/GuardedExecutor.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -100,6 +101,9 @@ protected:
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);
 
+    
+
+    std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
 private:
     static core::ContainerKeyCache::CachedModuleKeys convertModuleKeysToContainerKeyCacheFormat(const ModuleKeys& moduleKeys, int64_t moduleVersion);
     static ModuleKeys convertContainerKeyCacheModuleKeysToModuleApiFormat(const core::ContainerKeyCache::CachedModuleKeys& moduleKeys);

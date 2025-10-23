@@ -18,6 +18,7 @@ limitations under the License.
 #include "privmx/endpoint/core/JsonSerializer.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::core;
 

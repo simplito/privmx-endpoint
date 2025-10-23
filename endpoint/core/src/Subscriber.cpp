@@ -10,22 +10,73 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/Subscriber.hpp"
-#include <privmx/utils/Debug.hpp>
+#include "privmx/endpoint/core/CoreException.hpp"
+#include <privmx/utils/Logger.hpp>
 using namespace privmx::endpoint::core;
+
+
+SubscriptionQueryObj::SubscriptionQueryObj(const std::vector<std::string>& channelPath, const std::vector<SubscriptionQueryObj::QuerySelector>& selectors) : 
+    _channelPath(channelPath), _selectors(selectors) {}
+
+SubscriptionQueryObj::SubscriptionQueryObj(const std::string& subscriptionQueryString) {
+    auto splittedQuery = privmx::utils::Utils::split(subscriptionQueryString, QUERY_MAIN_SEPARATOR);
+    if(splittedQuery.size() > QUERY_MAIN_MAX_SIZE) {
+        throw core::InvalidSubscriptionQueryException("Only one separator '|' allowed in the query");
+    }
+    // extracting query path
+    if(splittedQuery.size() > QUERY_PATH_POS) {
+        _channelPath = privmx::utils::Utils::split(splittedQuery[QUERY_PATH_POS], QUERY_PATH_SEPARATOR);
+    }
+    // extracting selectors
+    if(splittedQuery.size() > SELECTOR_POS) {
+        auto selectors = privmx::utils::Utils::split(splittedQuery[SELECTOR_POS], SELECTORS_SEPARATOR);
+        for(const auto& selector: selectors) {
+            auto splittedSelector = privmx::utils::Utils::split(selector, SELECTOR_SEPARATOR);
+            if(splittedSelector.size() != SELECTOR_SIZE) {
+                throw core::InvalidSubscriptionQueryException("Invalid query selector format. Expected: <key>=<value>");
+            }
+            _selectors.push_back(
+                SubscriptionQueryObj::QuerySelector{
+                    .selectorKey = splittedSelector[SELECTOR_TYPE_POS], 
+                    .selectorValue = splittedSelector[SELECTOR_ID_POS]
+                }
+            );
+        }
+    }
+}
+
+std::string SubscriptionQueryObj::toSubscriptionQueryString() const {
+    std::string result;
+    for(const auto& p: _channelPath) {
+        result += p + QUERY_PATH_SEPARATOR;
+    }
+    result.pop_back();
+    result += QUERY_MAIN_SEPARATOR;
+    for(const auto& s: _selectors) {
+        result += s.selectorKey + SELECTOR_SEPARATOR + s.selectorValue + SELECTORS_SEPARATOR;
+    }
+    result.pop_back();
+    return result;
+}
+
 
 Subscriber::Subscriber(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
 std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    PRIVMX_DEBUG_TIME_START(Subscriber, subscribeFor)
+    LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
     auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelsModel>();
-    assertQuery(subscriptionQueries);
-    auto modelChannels = transform(subscriptionQueries);
-    PRIVMX_DEBUG("Subscriber", "subscribeFor", "channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
+    std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
+    for(const auto& subscriptionQueryString : subscriptionQueries) {
+        parsedSubscriptionQueries.push_back(SubscriptionQueryObj(subscriptionQueryString));
+    }
+    assertQuery(parsedSubscriptionQueries);
+    auto modelChannels = transform(parsedSubscriptionQueries);
+    LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
     model.channels(modelChannels);
     auto value = privmx::utils::TypedObjectFactory::createObjectFromVar<server::SubscribeToChannelsResult>(
         _gateway->request("subscribeToChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET})
     );
-    PRIVMX_DEBUG_TIME_CHECKPOINT(Subscriber, subscribeFor, dataRecived)
+    LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")
     std::vector<std::string> result;
     {
         std::unique_lock<std::shared_mutex> lock(_map_mutex);
@@ -46,18 +97,18 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
             }
         }
     }
-    PRIVMX_DEBUG_TIME_STOP(Subscriber, subscribeFor)
+    LOG_TIME_DEBUG_STOP(Subscriber:subscribeFor, "")
     return result;
 }
 
 void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    PRIVMX_DEBUG_TIME_START(Subscriber, unsubscribeFrom)
+    LOG_TIME_DEBUG_START(Subscriber:unsubscribeFrom, "")
     auto model = utils::TypedObjectFactory::createNewObject<server::UnsubscribeFromChannelsModel>();
     auto subscriptionsIds = utils::TypedObjectFactory::createNewList<std::string>();
     for(auto subscriptionId: subscriptionIds) {
         subscriptionsIds.add(subscriptionId);
     }
-    PRIVMX_DEBUG("Subscriber", "unsubscribeFrom", "subscriptionsIds:" + privmx::utils::Utils::stringifyVar(subscriptionsIds));
+    LOG_INFO("Subscriber:unsubscribeFrom subscriptionsIds:" + privmx::utils::Utils::stringifyVar(subscriptionsIds));
     model.subscriptionsIds(subscriptionsIds);
     _gateway->request("unsubscribeFromChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
     {
@@ -66,7 +117,7 @@ void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds
             _subscriptionIdToSubscriptionQuery.erase(subscriptionId);
         }
     }
-    PRIVMX_DEBUG_TIME_STOP(Subscriber, unsubscribeFrom, dataRecived)
+    LOG_TIME_DEBUG_STOP(Subscriber:unsubscribeFrom, "dataRecived")
 }
 
 void Subscriber::unsubscribeFromCurrentlySubscribed() {

@@ -14,7 +14,6 @@ option(PRIVMX_CLI_IMPORTED_LIBRARIES "Using CLI imported libraries" OFF)
 option(PRIVMX_IMPORTED_LIBRARIES "Using imported libraries" OFF)
 option(PRIVMX_ENABLE_TESTS "Enable tests" OFF)
 option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" OFF)
-option(PRIVMX_ENABLE_TESTS_E2E "Enable End to End tests" OFF)
 option(PRIVMX_BUILD_DEBUG "Enable extra debug data for lib" OFF)
 
 option(PRIVMX_EMSCRIPTEN "Enable emscripten build" OFF)
@@ -62,11 +61,6 @@ endif()
 # For CLI programs pocket required
 if(PRIVMX_BUILD_CLI)
     set(PRIVMX_BUILD_POCKET ON)
-endif()
-
-# Fix for PRIVMX_ENABLE_TESTS_E2E
-if(PRIVMX_ENABLE_TESTS_E2E)
-    set(PRIVMX_BUILD_ENDPOINT ON)
 endif()
 
 message(STATUS "Using CLI imported libraries - PRIVMX_CLI_IMPORTED_LIBRARIES=${PRIVMX_CLI_IMPORTED_LIBRARIES}")
@@ -169,7 +163,6 @@ if(PRIVMX_CONAN)
 endif()
 
 message(STATUS "Enable tests - PRIVMX_ENABLE_TESTS=${PRIVMX_ENABLE_TESTS}")
-message(STATUS "Enable tests_e2e - PRIVMX_ENABLE_TESTS_E2E=${PRIVMX_ENABLE_TESTS_E2E}")
 
 if(PRIVMX_ENABLE_TESTS)
     include(FindGTest)
