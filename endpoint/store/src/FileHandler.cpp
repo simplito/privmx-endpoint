@@ -117,7 +117,7 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
     PRIVMX_DEBUG("FileHandler", "write", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
 }
 
-core::Buffer FileHandler::read(uint64_t offset, size_t size) {
+core::Buffer FileHandler::read(uint64_t offset, uint64_t size) {
     if(offset >= _plainfileSize) return core::Buffer();
     if(offset+size > _plainfileSize) size = _plainfileSize-offset;
     if(size == 0) return core::Buffer();
