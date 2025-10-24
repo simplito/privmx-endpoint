@@ -130,7 +130,7 @@ core::Buffer FileHandler::read(uint64_t offset, uint64_t size) {
     return core::Buffer::from( data.substr(_chunkReader->filePosToPosInFileChunk(offset), size) );
 }
 
-size_t FileHandler::getFileSize() {
+uint64_t FileHandler::getFileSize() {
     return _plainfileSize;
 }
 
