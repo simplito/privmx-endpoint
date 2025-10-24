@@ -23,11 +23,12 @@ public:
     virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
 };
 
-struct StreamJoinSettings {
+struct StreamSettings {
     Settings settings;
     std::optional<std::function<void(const std::string&)>> OnVideo;
     std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame;
     std::optional<std::function<void(const std::string&)>> OnVideoRemove;
+    bool dropCorruptedFrames = true;
 };
 
 enum DeviceType {
@@ -36,14 +37,11 @@ enum DeviceType {
     Desktop
 };
 
-struct Track {
+struct MediaDevice {
     int64_t id;
     DeviceType type;
 };
 
-struct TrackParam: public Track {
-    std::string params_JSON;
-};
 
 
 }  // namespace stream

@@ -164,8 +164,6 @@ private:
     wxCheckBox* brickKeyManager;
     wxCheckBox* hideBrokenFrames;
 
-
-
     std::vector<unsigned char> picData_vector = std::vector<unsigned char>(4 * MAX_VIDEO_W * MAX_VIDEO_W);
     wxBitmap bmp = wxBitmap(MAX_VIDEO_W, MAX_VIDEO_H, 32);
     int tmp = 0;
@@ -224,7 +222,6 @@ MyFrame::MyFrame()
     solutionIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "<SolutionId>");
     streamRoomIdInput = new wxTextCtrl(this->m_board, wxID_ANY, "<Stream Room Id>");
 
-
     controlSizer->Add(hostURLInput, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(privKeyInput, 1, wxEXPAND | wxALL,5);
     controlSizer->Add(solutionIdInput, 1, wxEXPAND | wxALL,5);
@@ -237,20 +234,6 @@ MyFrame::MyFrame()
     checkbox_board = new wxPanel(this, wxID_ANY);
     checkBoxSizer = new wxBoxSizer(wxVERTICAL);
     brickKeyManager = new wxCheckBox(this->checkbox_board, wxID_ANY, "brick Key Manager");
-    checkBoxSizer->Add(brickKeyManager, 1, wxALIGN_CENTER);
-
-    this->brickKeyManager->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
-        
-        try {
-            if(streamApi == nullptr) {
-                brickKeyManager->SetValue(false);
-                return;
-            }
-            streamApi->keyManagement(brickKeyManager->GetValue());
-        } catch (const privmx::endpoint::core::Exception& e) {
-
-        };
-    });
 
     checkbox_board->SetSizerAndFit(checkBoxSizer);
     controlSizer->Add(checkbox_board, 1, wxEXPAND | wxALL,5);

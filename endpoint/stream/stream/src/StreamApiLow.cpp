@@ -136,68 +136,6 @@ void StreamApiLow::deleteStreamRoom(const std::string& streamRoomId) {
     }
 }
 
-int64_t StreamApiLow::createStream(const std::string& streamRoomId, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
-    validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return _impl->createStream(streamRoomId, localStreamId, webRtc);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApiLow::publishStream(int64_t localStreamId) {
-    validateEndpoint();
-    try {
-        return _impl->publishStream(localStreamId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-int64_t StreamApiLow::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const Settings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc) {
-    validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return _impl->joinStream(streamRoomId, streamsId, settings, localStreamId, webRtc);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-std::vector<Stream> StreamApiLow::listStreams(const std::string& streamRoomId) {
-    validateEndpoint();
-    try {
-        return _impl->listStreams(streamRoomId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApiLow::unpublishStream(int64_t streamId) {
-    validateEndpoint();
-    try {
-        return _impl->unpublishStream(streamId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApiLow::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds) {
-    validateEndpoint();
-    try {
-        return _impl->leaveStream(streamRoomId, streamsIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 std::vector<std::string> StreamApiLow::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     validateEndpoint();
     try {
@@ -228,10 +166,120 @@ std::string StreamApiLow::buildSubscriptionQuery(EventType eventType, EventSelec
     }
 }
 
-void StreamApiLow::keyManagement(bool disable) {
+std::vector<Stream> StreamApiLow::listStreams(const std::string& streamRoomId) {
     validateEndpoint();
     try {
-        return _impl->keyManagement(disable);
+        return _impl->listStreams(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::joinRoom(const std::string& streamRoomId) {
+    validateEndpoint();
+    try {
+        return _impl->joinRoom(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::leaveRoom(const std::string& streamRoomId) {
+    validateEndpoint();
+    try {
+        return _impl->leaveRoom(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::createStream(const std::string& streamRoomId, const StreamHandle& streamHandle, std::shared_ptr<WebRTCInterface> webRtc) {
+    validateEndpoint();
+    try {
+        return _impl->createStream(streamRoomId, streamHandle, webRtc);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+RemoteStreamId StreamApiLow::publishStream(const StreamHandle& streamHandle) {
+    validateEndpoint();
+    try {
+        return _impl->publishStream(streamHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle) {
+    validateEndpoint();
+    try {
+        return _impl->unpublishStream(streamRoomId, streamHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options, std::shared_ptr<WebRTCInterface> webRtc) {
+    validateEndpoint();
+    try {
+        return _impl->openStream(streamRoomId, streamId, tracksIds, options, webRtc);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::openStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const Settings& options, std::shared_ptr<WebRTCInterface> webRtc) {
+    validateEndpoint();
+    try {
+        return _impl->openStreams(streamRoomId, streamId, options, webRtc);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove, std::shared_ptr<WebRTCInterface> webRtc) {
+    validateEndpoint();
+    try {
+        return _impl->modifyStream(streamRoomId, streamId, options, tracksIdsToAdd, tracksIdsToRemove, webRtc);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
+    validateEndpoint();
+    try {
+        return _impl->closeStream(streamRoomId, streamId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
+    validateEndpoint();
+    try {
+        return _impl->closeStreams(streamRoomId, streamsIds);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::keyManagement(const std::string& streamRoomId, bool disable) {
+    validateEndpoint();
+    try {
+        return _impl->keyManagement(streamRoomId, disable);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

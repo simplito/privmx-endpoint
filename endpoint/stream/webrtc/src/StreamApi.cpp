@@ -116,7 +116,40 @@ void StreamApi::deleteStreamRoom(const std::string& streamRoomId) {
     }
 }
 
-int64_t StreamApi::createStream(const std::string& streamRoomId) {
+std::vector<Stream> StreamApi::listStreams(const std::string& streamRoomId) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->listStreams(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::joinRoom(const std::string& streamRoomId) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->joinRoom(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::leaveRoom(const std::string& streamRoomId) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->leaveRoom(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+StreamHandle StreamApi::createStream(const std::string& streamRoomId) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
@@ -127,90 +160,49 @@ int64_t StreamApi::createStream(const std::string& streamRoomId) {
     }
 }
 
-std::vector<std::pair<int64_t, std::string>> StreamApi::listAudioRecordingDevices() {
+std::vector<MediaDevice> StreamApi::getMediaDevices() {
     validateEndpoint();
     try {
-        return _impl->listAudioRecordingDevices();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }   
-}
-
-std::vector<std::pair<int64_t, std::string>> StreamApi::listVideoRecordingDevices() {
-    validateEndpoint();
-    try {
-        return _impl->listVideoRecordingDevices();
+        return _impl->getMediaDevices();
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-std::vector<std::pair<int64_t, std::string>> StreamApi::listDesktopRecordingDevices() {
+void StreamApi::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
     validateEndpoint();
     try {
-        return _impl->listDesktopRecordingDevices();
+        return _impl->addTrack(streamHandle, track);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::trackAdd(int64_t streamId, const TrackParam& track) {
+void StreamApi::removeTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
     validateEndpoint();
     try {
-        return _impl->trackAdd(streamId, track);
+        return _impl->removeTrack(streamHandle, track);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-
-void StreamApi::trackRemove(int64_t streamId, const Track& track) {
+RemoteStreamId StreamApi::publishStream(const StreamHandle& streamHandle) {
     validateEndpoint();
     try {
-        return _impl->trackRemove(streamId, track);
+        return _impl->publishStream(streamHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::publishStream(int64_t streamId) {
-    validateEndpoint();
-    try {
-        return _impl->publishStream(streamId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-int64_t StreamApi::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings) {
+void StreamApi::unpublishStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return _impl->joinStream(streamRoomId, streamsId, settings);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-std::vector<Stream> StreamApi::listStreams(const std::string& streamRoomId) {
-    validateEndpoint();
-    try {
-        return _impl->listStreams(streamRoomId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApi::unpublishStream(const std::string& streamRoomId, int64_t streamId) {
-    validateEndpoint();
     try {
         return _impl->unpublishStream(streamRoomId, streamId);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -219,10 +211,55 @@ void StreamApi::unpublishStream(const std::string& streamRoomId, int64_t streamI
     }
 }
 
-void StreamApi::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId) {
+void StreamApi::openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options) {
     validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->leaveStream(streamRoomId, streamsId);
+        return _impl->openStream(streamRoomId, streamId, tracksIds, options);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::openStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const StreamSettings& options) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->openStreams(streamRoomId, streamId, options);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->modifyStream(streamRoomId, streamId, options, tracksIdsToAdd, tracksIdsToRemove);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->closeStream(streamRoomId, streamId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->closeStreams(streamRoomId, streamsIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -253,16 +290,6 @@ std::string StreamApi::buildSubscriptionQuery(EventType eventType, EventSelector
     validateEndpoint();
     try {
         return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApi::keyManagement(bool disable) {
-    validateEndpoint();
-    try {
-        return _impl->keyManagement(disable);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

@@ -63,180 +63,44 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
     );
 }
 
-int64_t StreamApiImpl::createStream(const std::string& streamRoomId) {
-    int64_t streamId = generateNumericId();
-    _streamDataMap.set( 
-        streamId, 
-        std::make_shared<StreamData>(
-            privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>(),
-            StreamStatus::Offline,
-            streamRoomId
-        )
-    );
-    _api->createStream(streamRoomId, streamId, _webRTC);
-    return streamId;
-}
-
-// Adding track
-std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listAudioRecordingDevices() {  
-    std::string name, deviceId;
-    name.resize(255);
-    deviceId.resize(255);
-    libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> audioDevice = _peerConnectionFactory->GetAudioDevice();
-    uint32_t num = audioDevice->RecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> result;
-    for (uint32_t i = 0; i < num; ++i) {
-        audioDevice->RecordingDeviceName(i, (char*)name.data(), (char*)deviceId.data());
-        result.push_back(std::make_pair((int64_t)i, name));
-    }
-    return result;
-}
-
-std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listVideoRecordingDevices() {
-    std::string name, deviceId;
-    name.resize(255);
-    deviceId.resize(255);
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> videoDevice = _peerConnectionFactory->GetVideoDevice();
-    uint32_t num = videoDevice->NumberOfDevices();
-    std::vector<std::pair<int64_t, std::string>> result;
-    for (uint32_t i = 0; i < num; ++i) {
-        videoDevice->GetDeviceName(i, (char*)name.data(), name.size(), (char*)deviceId.data(), deviceId.size());
-        result.push_back(std::make_pair((int64_t)i, name));
-    }
-    return result;
-}
-
-std::vector<std::pair<int64_t, std::string>> StreamApiImpl::listDesktopRecordingDevices() {
-   throw stream::NotImplementedException();
-}
-// int64_t id, DeviceType type, const std::string& params_JSON can be merged to one struct [Track info]
-void StreamApiImpl::trackAdd(int64_t streamId, const TrackParam& track) {
-    switch (track.type) {
-        case DeviceType::Audio :
-            return trackAddAudio(streamId, track.id, track.params_JSON);
-        case DeviceType::Video :
-            return trackAddVideo(streamId, track.id, track.params_JSON);
-        case DeviceType::Desktop :
-            return trackAddDesktop(streamId, track.id, track.params_JSON);
-    }
-}
-
-void StreamApiImpl::trackAddAudio(int64_t streamId, int64_t id, const std::string& params_JSON) {
-    auto streamDataOpt = _streamDataMap.get(streamId);
-    if(!streamDataOpt.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    auto streamData = streamDataOpt.value();
-    libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> audioDevice = _peerConnectionFactory->GetAudioDevice();
-    audioDevice->SetRecordingDevice(id);
-    auto audioSource = _peerConnectionFactory->CreateAudioSource("audio_source");
-    auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
-    audioTrack->SetVolume(10);
-    // Add tracks to the peer connection
-    
-    _webRTC->AddAudioTrack(streamData->streamRoomId, audioTrack, id);
-}
-
-void StreamApiImpl::trackAddVideo(int64_t streamId, int64_t id, const std::string& params_JSON) {
-    auto streamDataOpt = _streamDataMap.get(streamId);
-    if(!streamDataOpt.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    auto streamData = streamDataOpt.value();
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> videoDevice = _peerConnectionFactory->GetVideoDevice();
-    // params_JSON
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> videoCapturer = videoDevice->Create("video_capturer", id, 1280, 720, 30);
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", _constraints);
-    libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
-    // Add tracks to the peer connection
-    _webRTC->AddVideoTrack(streamData->streamRoomId, videoTrack, id);
-    std::lock_guard<std::mutex> lock(streamData->streamMutex);
-    streamData->streamCapturers.set(id, videoCapturer);
-    if(streamData->status == StreamStatus::Online) {
-        videoCapturer->StartCapture();
-    }
-    // if stream is published start Capture if not dont
+void joinRoom(const std::string& streamRoomId) {
 
 }
+void leaveRoom(const std::string& streamRoomId) {
 
-void StreamApiImpl::trackAddDesktop(int64_t streamId, int64_t id, const std::string& params_JSON) {
-    throw stream::NotImplementedException();
 }
+StreamHandle createStream(const std::string& streamRoomId) {
 
-void StreamApiImpl::trackRemove(int64_t streamId, const Track& track) {
-    switch (track.type) {
-        case DeviceType::Audio :
-            return trackRemoveAudio(streamId, track.id);
-        case DeviceType::Video :
-            return trackRemoveVideo(streamId, track.id);
-        case DeviceType::Desktop :
-            return trackRemoveDesktop(streamId, track.id);
-    }
 }
+std::vector<MediaDevice> getMediaDevices() {
 
-void StreamApiImpl::trackRemoveAudio(int64_t streamId, int64_t id) {
-    auto streamData = _streamDataMap.get(streamId);
-    if(!streamData.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    _webRTC->RemoveAudioTrack(streamData.value()->streamRoomId, id);
 }
+void addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
 
-void StreamApiImpl::trackRemoveVideo(int64_t streamId, int64_t id) {
-    auto streamData = _streamDataMap.get(streamId);
-    if(!streamData.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    _webRTC->RemoveVideoTrack(streamData.value()->streamRoomId, id);
-    std::lock_guard<std::mutex> lock(streamData.value()->streamMutex);
-    streamData.value()->streamCapturers.erase(id);
 }
+void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
 
-void StreamApiImpl::trackRemoveDesktop(int64_t streamId, int64_t id) {
-    throw stream::NotImplementedException();
 }
+RemoteStreamId publishStream(const RemoteStreamId& streamId) {
 
-// Publishing stream
-void StreamApiImpl::publishStream(int64_t streamId) {
-    auto streamData = _streamDataMap.get(streamId);
-    if(!streamData.has_value()) {
-        throw IncorrectStreamIdException();
-    }
-    std::lock_guard<std::mutex> lock(streamData.value()->streamMutex);
-    streamData.value()->status = StreamStatus::Online;
-    streamData.value()->streamCapturers.forAll([&]([[maybe_unused]]const int64_t& id, const libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>& videoCapturer) {
-        videoCapturer->StartCapture();
-    });
-    _api->publishStream(streamId);
 }
+void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle) {
 
-// Joining to Stream
-int64_t StreamApiImpl::joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings) {
-    int64_t streamId = generateNumericId();
-    _streamDataMap.set( 
-        streamId, 
-        std::make_shared<StreamData>(
-            privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>(),
-            StreamStatus::Online,
-            streamRoomId
-        )
-    );
-    if(settings.OnVideo.has_value()) {
-        _webRTC->setOnVideoTrack(streamRoomId, settings.OnVideo.value());
-    }
-    if(settings.OnFrame.has_value()) {
-        _webRTC->setOnFrame(streamRoomId, settings.OnFrame.value());
-    }
-    if(settings.OnVideoRemove.has_value()) {
-        _webRTC->setOnRemoveVideoTrack(streamRoomId, settings.OnVideoRemove.value());
-    }
-    auto result = _api->joinStream(streamRoomId, streamsId, settings.settings, streamId, _webRTC);
-    return result;
-    
 }
+void openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options) {
 
-std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {
-    return _api->listStreams(streamRoomId);
+}
+void openStreams(const std::string& streamRoomId, std::vector<RemoteStreamId> streamId, const StreamSettings& options) {
+
+}
+void modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
+
+}
+void closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
+
+}
+void closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
+
 }
 
 std::string StreamApiImpl::createStreamRoom(
@@ -280,18 +144,6 @@ int64_t StreamApiImpl::generateNumericId() {
     return std::rand();
 }
 
-void StreamApiImpl::unpublishStream(const std::string& streamRoomId, int64_t streamId) {
-    _api->unpublishStream(streamId);
-    _streamDataMap.erase(streamId);
-}
-
-void StreamApiImpl::leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId) {
-    // auto streamData = _streamDataMap.get(streamId);
-    _api->leaveStream(streamRoomId, streamsId);
-    // _streamDataMap.erase(streamId);
-}
-
-
 std::vector<std::string> StreamApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     return _api->subscribeFor(subscriptionQueries);
 }
@@ -302,10 +154,6 @@ void StreamApiImpl::unsubscribeFrom(const std::vector<std::string>& subscription
 
 std::string StreamApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
     return _api->buildSubscriptionQuery(eventType, selectorType, selectorId);
-}
-
-void StreamApiImpl::keyManagement(bool disable) {
-    _api->keyManagement(disable);
 }
 
 void StreamApiImpl::dropBrokenFrames(const std::string& streamRoomId, bool enable) {

@@ -129,7 +129,7 @@ void VideoPanel::OnPaint(wxPaintEvent& event)
     if(haveNewFrame) {
         std::shared_ptr<wxBitmap> tmp_bmp;
         {
-            std::unique_lock<std::mutex> lock(m);
+            // std::unique_lock<std::mutex> lock(m);
             tmp_bmp = bmp;
             haveNewFrame = false;
         }
@@ -278,21 +278,8 @@ MyFrame::MyFrame()
     brickKeyManager = new wxCheckBox(this->checkbox_board, wxID_ANY, "brick Key Manager");
     hideBrokenFrames = new wxCheckBox(this->checkbox_board, wxID_ANY, "hide broken frames");
     hideBrokenFrames->SetValue(true);
-    checkBoxSizer->Add(brickKeyManager, 1, wxALIGN_CENTER);
     checkBoxSizer->Add(hideBrokenFrames, 1, wxALIGN_CENTER);
 
-    this->brickKeyManager->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
-        
-        try {
-            if(streamApi != nullptr) {
-                streamApi->keyManagement(brickKeyManager->GetValue());
-                return;
-            }
-            brickKeyManager->SetValue(false);
-        } catch (const privmx::endpoint::core::Exception& e) {
-            brickKeyManager->SetValue(false);
-        };
-    });
     this->hideBrokenFrames->Bind(wxEVT_CHECKBOX, [&](wxCommandEvent& event) {
         try {
             if(streamApi != nullptr && joinedStreamRoomId.has_value()) {

@@ -20,6 +20,11 @@ namespace privmx {
 namespace endpoint {
 namespace stream {
 
+
+using StreamHandle = int64_t; // can be everything that is DTO
+using RemoteStreamId = int64_t;
+using RemoteTrackId = int64_t;
+
 /**
  * Additional stream settings.
  * Reserved for future use.

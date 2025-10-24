@@ -71,35 +71,30 @@ public:
         const bool forceGenerateNewKey, 
         const std::optional<core::ContainerPolicy>& policies
     );
-
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
-
     StreamRoom getStreamRoom(const std::string& streamRoomId);
-
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
-    int64_t createStream(const std::string& streamRoomId, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
-    
-    // Publishing stream
-    void publishStream(int64_t localStreamId);
-
-    // Joining to Stream
-    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const Settings& settings, int64_t localStreamId, std::shared_ptr<WebRTCInterface> webRtc);
-
     std::vector<Stream> listStreams(const std::string& streamRoomId);
+    void joinRoom(const std::string& streamRoomId); // required before createStream and openStream
+    void leaveRoom(const std::string& streamRoomId);
 
-    void unpublishStream(int64_t localStreamId);
+    void createStream(const std::string& streamRoomId, const StreamHandle& streamHandle, std::shared_ptr<WebRTCInterface> webRtc);
+    RemoteStreamId publishStream(const StreamHandle& streamHandle);
+    void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
 
-    void leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsIds);
+    void openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options, std::shared_ptr<WebRTCInterface> webRtc);
+    void openStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const Settings& options, std::shared_ptr<WebRTCInterface> webRtc);
+    void modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove, std::shared_ptr<WebRTCInterface> webRtc);
+    void closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
+    void closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    void keyManagement(bool disable);
-
+    void keyManagement(const std::string& streamRoomId, bool disable);
     void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
-
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 private:
     struct StreamData {
@@ -142,10 +137,10 @@ private:
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
-    std::shared_ptr<StreamRoomData> getStreamRoomData(int64_t localStreamId);
-    std::shared_ptr<StreamData> getStreamData(int64_t localStreamId, std::shared_ptr<StreamRoomData> room);
+    std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
+    std::shared_ptr<StreamData> getStreamData(const StreamHandle& streamHandle, std::shared_ptr<StreamRoomData> room);
 
-    void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, int64_t localStreamId);
+    void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, const StreamHandle& streamHandle);
 
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);
@@ -165,7 +160,7 @@ private:
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
-    privmx::utils::ThreadSaveMap<int64_t, std::string> _streamIdToRoomId;
+    privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
     privmx::utils::ThreadSaveMap<int64_t, int64_t> _sessionIdToStreamId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;

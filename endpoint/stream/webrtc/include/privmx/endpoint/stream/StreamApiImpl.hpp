@@ -70,32 +70,29 @@ public:
     StreamRoom getStreamRoom(const std::string& streamRoomId);
 
     void deleteStreamRoom(const std::string& streamRoomId);
-    // Stream
-    int64_t createStream(const std::string& streamRoomId);
 
-    std::vector<std::pair<int64_t, std::string>> listAudioRecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> listVideoRecordingDevices();
-    std::vector<std::pair<int64_t, std::string>> listDesktopRecordingDevices();
-
-    void trackAdd(int64_t streamId, const TrackParam& track);
-    void trackRemove(int64_t streamId, const Track& track);
-    
-    void publishStream(int64_t streamId);
-
-    int64_t joinStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId, const StreamJoinSettings& settings);
-
-    std::vector<Stream> listStreams(const std::string& streamRoomId);
-
-    void unpublishStream(const std::string& streamRoomId, int64_t streamId);
-
-    void leaveStream(const std::string& streamRoomId, const std::vector<int64_t>& streamsId);
-    
+    // Subscribing
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    void keyManagement(bool disable);
+    // Stream
+    std::vector<Stream> listStreams(const std::string& streamRoomId);
+    void joinRoom(const std::string& streamRoomId); // required before createStream and openStream
+    void leaveRoom(const std::string& streamRoomId);
+    StreamHandle createStream(const std::string& streamRoomId);
+    std::vector<MediaDevice> getMediaDevices();
+    void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
+    void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
+    RemoteStreamId publishStream(const StreamHandle& streamHandle);
+    void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
+    void openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options);
+    void openStreams(const std::string& streamRoomId, std::vector<RemoteStreamId> streamId, const StreamSettings& options);
+    void modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
+    void closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
+    void closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
+
 
 private:
     enum StreamStatus {
