@@ -268,7 +268,7 @@ void FileHandlerImpl::seekp(const uint64_t pos) {
     _writePos = pos;
 }
 
-core::Buffer FileHandlerImpl::read(const size_t length) {
+core::Buffer FileHandlerImpl::read(const uint64_t length) {
     auto buf = _file->read(_readPos, length);
     _readPos += buf.size();
     return buf;
