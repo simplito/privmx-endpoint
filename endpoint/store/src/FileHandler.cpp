@@ -134,7 +134,7 @@ uint64_t FileHandler::getFileSize() {
     return _plainfileSize;
 }
 
-FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, size_t chunkOffset, const std::string& data, bool truncate){
+FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, uint64_t chunkOffset, const std::string& data, bool truncate){
     // check if new data fit in _plainChunkSize
     if ((chunkOffset + data.size()) > _plainChunkSize) {
         // "Given data with offset won't fit Chunk

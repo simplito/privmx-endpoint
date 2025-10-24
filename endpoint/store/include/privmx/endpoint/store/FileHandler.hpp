@@ -61,7 +61,7 @@ public:
 private:
     struct UpdateChunkData {
         store::IChunkEncryptor::Chunk chunk;
-        size_t chunkIndex;
+        uint64_t chunkIndex;
         int64_t plainfileSizeChange;
         int64_t encryptedFileSizeChange;
     };
