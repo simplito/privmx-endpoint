@@ -25,7 +25,7 @@ class IFileReader
 {
 public:
     virtual ~IFileReader() = default;
-    virtual std::string read(uint64_t pos, size_t length) = 0;
+    virtual std::string read(uint64_t pos, uint64_t length) = 0;
     virtual void sync(const store::FileDecryptionParams& newParms) = 0;
 };
 
