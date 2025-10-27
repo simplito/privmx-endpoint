@@ -63,44 +63,46 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
     );
 }
 
-void joinRoom(const std::string& streamRoomId) {
+void StreamApiImpl::joinRoom(const std::string& streamRoomId) {
+    _api->joinRoom(streamRoomId, _webRTC);
+}
+void StreamApiImpl::leaveRoom(const std::string& streamRoomId) {
+    _api->leaveRoom(streamRoomId);
+}
+StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
+    auto streamHandle = generateNumericId();
+    _api->createStream(streamRoomId, streamHandle);
+    return streamHandle;
+}
+std::vector<MediaDevice> StreamApiImpl::getMediaDevices() {
 
 }
-void leaveRoom(const std::string& streamRoomId) {
+void StreamApiImpl::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
 
 }
-StreamHandle createStream(const std::string& streamRoomId) {
+void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
 
 }
-std::vector<MediaDevice> getMediaDevices() {
+RemoteStreamId StreamApiImpl::publishStream(const RemoteStreamId& streamId) {
 
 }
-void addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
+void StreamApiImpl::unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle) {
 
 }
-void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
-
+void StreamApiImpl::openRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options) {
+    _api->openRemoteStream(streamRoomId, streamId, tracksIds, options.settings);
 }
-RemoteStreamId publishStream(const RemoteStreamId& streamId) {
-
+void StreamApiImpl::openRemoteStreams(const std::string& streamRoomId, std::vector<RemoteStreamId> streamId, const StreamSettings& options) {
+    _api->openRemoteStreams(streamRoomId, streamId, options.settings);
 }
-void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle) {
-
+void StreamApiImpl::modifyRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
+    _api->modifyRemoteStream(streamRoomId, streamId, options.settings, tracksIdsToAdd, tracksIdsToRemove);
 }
-void openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options) {
-
+void StreamApiImpl::closeRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
+    _api->closeRemoteStream(streamRoomId, streamId);
 }
-void openStreams(const std::string& streamRoomId, std::vector<RemoteStreamId> streamId, const StreamSettings& options) {
-
-}
-void modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
-
-}
-void closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
-
-}
-void closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
-
+void StreamApiImpl::closeRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
+    _api->closeRemoteStreams(streamRoomId, streamsIds);
 }
 
 std::string StreamApiImpl::createStreamRoom(

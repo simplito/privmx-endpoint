@@ -68,18 +68,18 @@ public:
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
     std::vector<Stream> listStreams(const std::string& streamRoomId);
-    void joinRoom(const std::string& streamRoomId); // required before createStream and openStream
+    void joinRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
     void leaveRoom(const std::string& streamRoomId);
 
-    void createStream(const std::string& streamRoomId, const StreamHandle& streamHandle, std::shared_ptr<WebRTCInterface> webRtc);
+    void createStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
     RemoteStreamId publishStream(const StreamHandle& streamHandle);
     void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
 
-    void openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options, std::shared_ptr<WebRTCInterface> webRtc);
-    void openStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const Settings& options, std::shared_ptr<WebRTCInterface> webRtc);
-    void modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove, std::shared_ptr<WebRTCInterface> webRtc);
-    void closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
-    void closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
+    void openRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options);
+    void openRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const Settings& options);
+    void modifyRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
+    void closeRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
+    void closeRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
 
     void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);

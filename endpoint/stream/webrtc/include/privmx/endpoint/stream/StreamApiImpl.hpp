@@ -86,11 +86,11 @@ public:
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     RemoteStreamId publishStream(const StreamHandle& streamHandle);
     void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
-    void openStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options);
-    void openStreams(const std::string& streamRoomId, std::vector<RemoteStreamId> streamId, const StreamSettings& options);
-    void modifyStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
-    void closeStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
-    void closeStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
+    void openRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options);
+    void openRemoteStreams(const std::string& streamRoomId, std::vector<RemoteStreamId> streamId, const StreamSettings& options);
+    void modifyRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
+    void closeRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
+    void closeRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
 
 

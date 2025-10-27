@@ -38,12 +38,8 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
     {SubscribeFor, &StreamApiLowVarInterface::subscribeFor},
     {UnsubscribeFrom, &StreamApiLowVarInterface::unsubscribeFrom},
     {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery},
-    {Trickle, &StreamApiLowVarInterface::keyManagement}};
-
-
-
-
-
+    {Trickle, &StreamApiLowVarInterface::keyManagement}
+};
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
     _streamApi = StreamApiLow::create(_connection, _eventApi);

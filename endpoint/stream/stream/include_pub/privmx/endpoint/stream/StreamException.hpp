@@ -56,7 +56,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidStreamWebSocketReques
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamWebsocketDisconnectedException, "Stream websocket disconnected", 0x0007)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NetConnectionException, "Network connection error", 0x0008);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, WebRTCException, "WebRTC error", 0x0009);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectStreamIdException, "Incorrect stream id", 0x000A);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectStreamHandleException, "Incorrect stream handle", 0x000A);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamCacheException, "Incorrect Stream Cache state", 0x000B);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectTrackIdException, "Incorrect track id", 0x000C);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadySubscribedException, "Already subscribed", 0x000D)
@@ -78,6 +78,10 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotGetRoomOnStreamsUpdate
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidTurnServerURIException, "Invalid turn server URI", 0x001D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionAlreadyInitializedException, "Peer Connection already initialized", 0x001E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionNotInitializedException, "Peer Connection not initialized", 0x001F)
+
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomConnectionNotInitialized, "StreamRoom connection not initialized", 0x0020)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotInitialized, "StreamHandle not initialized", 0x0021)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamIsPublished, "Stream is published", 0x0021)
 
 } // stream
 } // endpoint
