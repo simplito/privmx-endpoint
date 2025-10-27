@@ -117,7 +117,7 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
     PRIVMX_DEBUG("FileHandler", "write", "_plainfileSize: " + std::to_string(_plainfileSize)+ " | _encryptedFileSize: " + std::to_string(_encryptedFileSize)); 
 }
 
-core::Buffer FileHandler::read(uint64_t offset, size_t size) {
+core::Buffer FileHandler::read(uint64_t offset, uint64_t size) {
     if(offset >= _plainfileSize) return core::Buffer();
     if(offset+size > _plainfileSize) size = _plainfileSize-offset;
     if(size == 0) return core::Buffer();
@@ -130,11 +130,11 @@ core::Buffer FileHandler::read(uint64_t offset, size_t size) {
     return core::Buffer::from( data.substr(_chunkReader->filePosToPosInFileChunk(offset), size) );
 }
 
-size_t FileHandler::getFileSize() {
+uint64_t FileHandler::getFileSize() {
     return _plainfileSize;
 }
 
-FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, size_t chunkOffset, const std::string& data, bool truncate){
+FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, uint64_t chunkOffset, const std::string& data, bool truncate){
     // check if new data fit in _plainChunkSize
     if ((chunkOffset + data.size()) > _plainChunkSize) {
         // "Given data with offset won't fit Chunk
@@ -268,7 +268,7 @@ void FileHandlerImpl::seekp(const uint64_t pos) {
     _writePos = pos;
 }
 
-core::Buffer FileHandlerImpl::read(const size_t length) {
+core::Buffer FileHandlerImpl::read(const uint64_t length) {
     auto buf = _file->read(_readPos, length);
     _readPos += buf.size();
     return buf;

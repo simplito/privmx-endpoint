@@ -8,13 +8,13 @@
 using namespace privmx::endpoint;
 int main() {
 	// the values below should be replaced by the ones corresponding to your Brigde Server instance.
-	auto solutionId {"6716bb7950041e112ddeaf18"};
-	auto contextId {"6716bb79763760280a77b6a0"};
-	auto userPubKey {"51WPnnGwztNPWUDEbhncYDxZCZWAFS4M9Yqv94N2335nL92fEn"};
-	auto userPrivKey {"L3ycXibEzJm9t9swoJ4KtSmJsenHmmgRnYY79Q2TqfJMwTGaWfA7"};
-	auto userId {"user1"};
-	
-	auto platformUrl {"http://localhost:9111"};
+        auto platformUrl {"<YOUR_BRIDGE_URL_HERE>"};
+        auto solutionId {"<YOUR_SOLUTION_ID_HERE>"};
+        auto contextId {"<YOUR_CONTEXT_ID_HERE>"};
+
+        auto userId {"<YOUR_USER_ID_HERE>"};
+        auto userPubKey {"<YOUR_USER_PUB_KEY_HERE>"};
+        auto userPrivKey {"<YOUR_USER_PRIV_KEY_HERE>"};
 	
 	// setup some defaults
 	core::PagingQuery defaultListQuery = {.skip = 0, .limit = 100, .sortOrder = "desc"};
