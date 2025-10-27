@@ -52,7 +52,7 @@ if(NOT PRIVMX_EXECUTOR_THREAD_POOL_SIZE)
 endif()
 message(STATUS "Privmx executor async thread poll - PRIVMX_EXECUTOR_THREAD_POOL_SIZE=${PRIVMX_EXECUTOR_THREAD_POOL_SIZE}")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/privmx/utils/ExecutorConfig.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/ExecutorConfig.hpp)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/ExecutorConfig.hpp.hpp DESTINATION include/privmx/utils)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/ExecutorConfig.hpp DESTINATION include/privmx/utils)
 
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp)
 add_library(privmxutils OBJECT ${SOURCES})
