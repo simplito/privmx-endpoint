@@ -84,16 +84,25 @@ int main(int argc, char** argv) {
         );        
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
-        
-        auto streamId = streamApi.createStream(streamRoomId);
-        auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-        streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
-        auto listVideoRecordingDevices = streamApi.listVideoRecordingDevices();
-        streamApi.trackAdd(streamId, stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
-        streamApi.publishStream(streamId);
+        streamApi.joinRoom(streamRoomId);
+        auto streamHandle = streamApi.createStream(streamRoomId);
+        auto mediaDevices = streamApi.getMediaDevices();
+        for(const auto& mediaDevice: mediaDevices) {
+            if(mediaDevice.type == stream::DeviceType::Audio) {
+                streamApi.addTrack(streamHandle, mediaDevice);
+                break;
+            }
+        }
+        for(const auto& mediaDevice: mediaDevices) {
+            if(mediaDevice.type == stream::DeviceType::Video) {
+                streamApi.addTrack(streamHandle, mediaDevice);
+                break;
+            }
+        }
+        streamApi.publishStream(streamHandle);
         while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
         
-        streamApi.unpublishStream(streamRoomId, streamId);
+        streamApi.unpublishStream(streamHandle);
         connection.disconnect();
         std::this_thread::sleep_for(std::chrono::seconds(5));
 

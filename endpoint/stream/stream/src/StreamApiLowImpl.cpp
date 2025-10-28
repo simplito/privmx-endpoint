@@ -285,6 +285,7 @@ std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomI
 }
 
 void StreamApiLowImpl::joinRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
+    std:: cout << (webRtc == nullptr) << std::endl;
     createEmptyStreamRoomData(streamRoomId, webRtc);
     // TODO
 }
@@ -318,7 +319,9 @@ void StreamApiLowImpl::createStream(const std::string& streamRoomId, const Strea
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamHandle) + ": STREAM Sender")
     _streamHandleToRoomId.set(streamHandle, streamRoomId);
     auto webRtc = room->webRtc;
+    std:: cout << (webRtc == nullptr) << std::endl;
     auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc, streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
+        std:: cout << (webRtc == nullptr) << std::endl;
         webRtc->updateKeys(streamRoomId, keys);
     });
     room->publisherStream = std::make_shared<StreamData>(
@@ -354,11 +357,12 @@ RemoteStreamId StreamApiLowImpl::publishStream(const StreamHandle& streamHandle)
     room->webRtc->updateSessionId(room->streamRoomId, result.sessionId(), std::string("publisher"));
     // Set remote description
     room->webRtc->setAnswerAndSetRemoteDescription(room->streamRoomId, result.answer().sdp(), result.answer().type());
+    return result.sessionId();
 }
 
-void StreamApiLowImpl::unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle) {
-    auto room = getStreamRoomData(streamRoomId);
-    if(!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
+void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
+    auto room = getStreamRoomData(streamHandle);
+    if(!room->publisherStream) {
         throw StreamHandleNotInitialized();
     }
     auto streamData = room->publisherStream;
@@ -373,10 +377,10 @@ void StreamApiLowImpl::unpublishStream(const std::string& streamRoomId, const St
     room->publisherStream.reset();
 }
 
-void StreamApiLowImpl::openRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options) {
-    // TODO
+void StreamApiLowImpl::subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options) {
+    throw NotImplementedException();
 }
-void StreamApiLowImpl::openRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamIds, const Settings& options) {
+void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamIds, const Settings& options) {
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
     auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
@@ -459,12 +463,11 @@ void StreamApiLowImpl::openRemoteStreams(const std::string& streamRoomId, const 
     }
     room->streamKeyManager->requestKey(toSend);
 }
-void StreamApiLowImpl::modifyRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
-    // TODO
-
+void StreamApiLowImpl::modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
+    throw NotImplementedException();
 }
 
-void StreamApiLowImpl::closeRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
+void StreamApiLowImpl::unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
     server::StreamLeaveModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamLeaveModel>();
     model.streamRoomId(streamRoomId);
     model.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
@@ -472,7 +475,7 @@ void StreamApiLowImpl::closeRemoteStream(const std::string& streamRoomId, const 
     _serverApi->streamLeave(model);
 }
 
-void StreamApiLowImpl::closeRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
+void StreamApiLowImpl::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
     server::StreamLeaveModel model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamLeaveModel>();
     model.streamRoomId(streamRoomId);
     model.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());

@@ -32,13 +32,14 @@ struct StreamSettings {
 };
 
 enum DeviceType {
-    Audio,
-    Video,
-    Desktop
+    Audio = 0,
+    Video = 1,
+    Desktop = 2
 };
 
 struct MediaDevice {
-    int64_t id;
+    std::string name;
+    std::string id;
     DeviceType type;
 };
 

@@ -45,8 +45,8 @@ struct VideoTrackInfo {
 struct PeerConnection {
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> pc;
     std::shared_ptr<PmxPeerConnectionObserver> observer;
-    std::map<int64_t, AudioTrackInfo> audioTracks;
-    std::map<int64_t, VideoTrackInfo> videoTracks;
+    std::map<std::string, AudioTrackInfo> audioTracks;
+    std::map<std::string, VideoTrackInfo> videoTracks;
     std::shared_mutex trackMutex;
     std::shared_ptr<privmx::webrtc::KeyStore> keys;
 };

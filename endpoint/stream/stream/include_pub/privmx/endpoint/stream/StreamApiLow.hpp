@@ -73,13 +73,13 @@ public:
 
     void createStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
     RemoteStreamId publishStream(const StreamHandle& streamHandle);
-    void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
+    void unpublishStream(const StreamHandle& streamHandle);
 
-    void openRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options);
-    void openRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const Settings& options);
-    void modifyRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
-    void closeRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
-    void closeRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
+    void subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options);
+    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const Settings& options);
+    void modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
+    void unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
+    void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
 
     void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);

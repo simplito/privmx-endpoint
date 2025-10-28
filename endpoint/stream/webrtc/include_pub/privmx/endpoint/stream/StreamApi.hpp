@@ -75,12 +75,12 @@ public:
     void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     RemoteStreamId publishStream(const StreamHandle& streamHandle);
-    void unpublishStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
-    void openRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options);
-    void openRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamId, const StreamSettings& options);
-    void modifyRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
-    void closeRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
-    void closeRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
+    void unpublishStream(const StreamHandle& streamHandle);
+    void subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options);
+    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds, const StreamSettings& options);
+    void modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
+    void unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
+    void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }

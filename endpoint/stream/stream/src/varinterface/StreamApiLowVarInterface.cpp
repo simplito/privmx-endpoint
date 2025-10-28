@@ -28,17 +28,26 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
     {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
     {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
     {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
-    {CreateStream, &StreamApiLowVarInterface::createStream},
-    {PublishStream, &StreamApiLowVarInterface::publishStream},
-    {JoinStream, &StreamApiLowVarInterface::joinStream},
-    {ListStreams, &StreamApiLowVarInterface::listStreams},
-    {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
-    {LeaveStream, &StreamApiLowVarInterface::leaveStream},
-    {KeyManagement, &StreamApiLowVarInterface::keyManagement},
+
     {SubscribeFor, &StreamApiLowVarInterface::subscribeFor},
     {UnsubscribeFrom, &StreamApiLowVarInterface::unsubscribeFrom},
     {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery},
-    {Trickle, &StreamApiLowVarInterface::keyManagement}
+
+    {ListStreams, &StreamApiLowVarInterface::listStreams},
+    {JoinRoom, &StreamApiLowVarInterface::joinRoom},
+    {LeaveRoom, &StreamApiLowVarInterface::leaveRoom},
+
+    {CreateStream, &StreamApiLowVarInterface::createStream},
+    {PublishStream, &StreamApiLowVarInterface::publishStream},
+    {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
+
+    {SubscribeToRemoteStream, &StreamApiLowVarInterface::subscribeToRemoteStream},
+    {SubscribeToRemoteStreams, &StreamApiLowVarInterface::subscribeToRemoteStreams},
+    {ModifyRemoteStreamSubscription, &StreamApiLowVarInterface::modifyRemoteStreamSubscription},
+    {UnsubscribeFromRemoteStream, &StreamApiLowVarInterface::unsubscribeFromRemoteStream},
+    {UnsubscribeFromRemoteStreams, &StreamApiLowVarInterface::unsubscribeFromRemoteStreams},
+    {Trickle, &StreamApiLowVarInterface::keyManagement},
+    {KeyManagement, &StreamApiLowVarInterface::keyManagement}
 };
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -125,36 +134,6 @@ Poco::Dynamic::Var StreamApiLowVarInterface::deleteStreamRoom(const Poco::Dynami
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::createStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "localStreamId");
-    // auto webRtcInt = _deserializer.deserialize<int64_t>(argsArr->get(2), "webRtc");
-    // std::shared_ptr<WebRTCInterface>* webRtcPtr = (std::shared_ptr<WebRTCInterface>*)webRtcInt;
-    // auto result = _streamApi.createStream(streamRoomId, localStreamId, (*webRtcPtr));
-    auto result = _streamApi.createStream(streamRoomId, localStreamId, getWebRtcInterface());
-    return _serializer.serialize(result);
-}
-
-Poco::Dynamic::Var StreamApiLowVarInterface::publishStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(0), "localStreamId");
-    _streamApi.publishStream(localStreamId);
-    return {};
-}
-
-Poco::Dynamic::Var StreamApiLowVarInterface::joinStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamsId = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsId");
-    auto settings = _deserializer.deserialize<Settings>(argsArr->get(2), "settings");
-    auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(3), "localStreamId");
-    // auto webRtcInt = _deserializer.deserialize<int64_t>(argsArr->get(4), "webRtc");
-    // std::shared_ptr<WebRTCInterface>* webRtcPtr = (std::shared_ptr<WebRTCInterface>*)webRtcInt;
-    // auto result = _streamApi.joinStream(streamRoomId, streamsId, settings, localStreamId, (*webRtcPtr));
-    auto result = _streamApi.joinStream(streamRoomId, streamsId, settings, localStreamId, getWebRtcInterface());
-    return _serializer.serialize(result);
-}
 
 Poco::Dynamic::Var StreamApiLowVarInterface::listStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
@@ -162,26 +141,79 @@ Poco::Dynamic::Var StreamApiLowVarInterface::listStreams(const Poco::Dynamic::Va
     auto result = _streamApi.listStreams(streamRoomId);
     return _serializer.serialize(result);
 }
-
-Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StreamApiLowVarInterface::joinRoom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto localStreamId = _deserializer.deserialize<int64_t>(argsArr->get(0), "localStreamId");
-    _streamApi.unpublishStream(localStreamId);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    _streamApi.joinRoom(streamRoomId, getWebRtcInterface());
+    return {};
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::leaveRoom(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    _streamApi.leaveRoom(streamRoomId);
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::leaveStream(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StreamApiLowVarInterface::createStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamsIds = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsIds");
-    _streamApi.leaveStream(streamRoomId, streamsIds);
+    auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamHandle");
+    _streamApi.createStream(streamRoomId, streamHandle);
+    return {};
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::publishStream(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamHandle");
+    _streamApi.publishStream(streamHandle);
+    return {};
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "streamHandle");
+    _streamApi.unpublishStream(streamHandle);
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::keyManagement(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto disable = _deserializer.deserialize<bool>(argsArr->get(0), "disable");
-    _streamApi.keyManagement(disable);
+Poco::Dynamic::Var StreamApiLowVarInterface::subscribeToRemoteStream(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto streamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamId");
+    auto tracksId = _deserializer.deserializeOptionalVector<int64_t>(argsArr->get(2), "tracksIds");
+    auto options = _deserializer.deserialize<Settings>(argsArr->get(3), "options");
+    _streamApi.subscribeToRemoteStream(streamRoomId, streamId, tracksId, options);
+    return {};
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::subscribeToRemoteStreams(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto streamsId = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsId");
+    auto options = _deserializer.deserialize<Settings>(argsArr->get(2), "options");
+    _streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, options);
+    return {};
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::modifyRemoteStreamSubscription(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 5);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto streamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamId");
+    auto options = _deserializer.deserialize<Settings>(argsArr->get(2), "options");
+    auto tracksIdsToAdd = _deserializer.deserializeOptionalVector<int64_t>(argsArr->get(3), "tracksIdsToAdd");
+    auto tracksIdsToRemove = _deserializer.deserializeOptionalVector<int64_t>(argsArr->get(4), "tracksIdsToRemove");
+    _streamApi.modifyRemoteStreamSubscription(streamRoomId, streamId, options, tracksIdsToAdd, tracksIdsToRemove);
+    return {};
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromRemoteStream(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto streamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamId");
+    auto options = _deserializer.deserialize<Settings>(argsArr->get(2), "options");
+    _streamApi.unsubscribeFromRemoteStream(streamRoomId, streamId);
+    return {};
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto streamsId = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsId");
+    _streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
     return {};
 }
 
@@ -200,6 +232,14 @@ Poco::Dynamic::Var StreamApiLowVarInterface::acceptOfferOnReconfigure(const Poco
     auto sessionId = _deserializer.deserialize<int64_t>(argsArr->get(0), "sessionId");
     auto jsep = _deserializer.deserialize<stream::SdpWithTypeModel>(argsArr->get(1), "jsep");
     _streamApi.acceptOfferOnReconfigure(sessionId, jsep);
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::keyManagement(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto disable = _deserializer.deserialize<bool>(argsArr->get(1), "disable");
+    _streamApi.keyManagement(streamRoomId, disable);
     return {};
 }
 

@@ -52,10 +52,10 @@ public:
     
     void close(const std::string& streamRoomId) override;
     void updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) override;
-    void AddAudioTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, int64_t id = 0);
-    void AddVideoTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, int64_t id = 0);
-    void RemoveAudioTrack(const std::string& streamRoomId, int64_t id = 0);
-    void RemoveVideoTrack(const std::string& streamRoomId, int64_t id = 0);
+    void AddAudioTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = 0);
+    void AddVideoTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id = 0);
+    void RemoveAudioTrack(const std::string& streamRoomId, std::string id = 0);
+    void RemoveVideoTrack(const std::string& streamRoomId, std::string id = 0);
 
     void setFrameCryptorOptions(const std::string& streamRoomId, const privmx::webrtc::FrameCryptorOptions& frameCryptorOptions);
     void setOnFrame(const std::string& streamRoomId, std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> OnFrame);

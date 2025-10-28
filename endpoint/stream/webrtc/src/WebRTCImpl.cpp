@@ -34,7 +34,7 @@ std::string WebRTCImpl::createOfferAndSetLocalDescription(const std::string& str
             t_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {
-            throw stream::WebRTCException("SdpCreateFailure" + std::string(error));
+            throw stream::WebRTCException("SdpCreateFailure " + std::string(error));
         }, 
         _constraints
     );
@@ -45,7 +45,7 @@ std::string WebRTCImpl::createOfferAndSetLocalDescription(const std::string& str
         "offer", 
         []() {}, 
         [](const char* error) {
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
+            throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
     return sdp;
@@ -61,7 +61,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
         [&](const char* error) {
             tmp.set_value(false);
             std::cout << "OnSetSdpFailure: " << std::string(error) << std::endl;
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
+            throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
     if (!tmp.get_future().get()) {
@@ -74,7 +74,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
             answer_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {
-            throw stream::WebRTCException("SdpCreateFailure" + std::string(error));
+            throw stream::WebRTCException("SdpCreateFailure " + std::string(error));
         }, 
         _constraints
     );
@@ -84,7 +84,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
         "answer",
         [&]() {}, 
         [&](const char* error) {
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
+            throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
     return result_sdp;
@@ -105,7 +105,7 @@ void WebRTCImpl::setAnswerAndSetRemoteDescription(const std::string& streamRoomI
         type,
         [&]() {}, 
         [&](const char* error) {
-            throw stream::WebRTCException("OnSetSdpFailure" + std::string(error));
+            throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
 }
@@ -170,9 +170,9 @@ void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<K
     }
 }
 
-void WebRTCImpl::AddAudioTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, int64_t id) {
+void WebRTCImpl::AddAudioTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
-    auto sender = connection->peerConnection->pc->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(id)}});
+    auto sender = connection->peerConnection->pc->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{id}});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
     {
         std::shared_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
@@ -196,9 +196,9 @@ void WebRTCImpl::AddAudioTrack(const std::string& streamRoomId, libwebrtc::scope
     }
 }
 
-void WebRTCImpl::AddVideoTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, int64_t id) {
+void WebRTCImpl::AddVideoTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
-    auto sender = connection->peerConnection->pc->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{std::to_string(id)}});
+    auto sender = connection->peerConnection->pc->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{id}});
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
     {
         std::shared_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
@@ -223,7 +223,7 @@ void WebRTCImpl::AddVideoTrack(const std::string& streamRoomId, libwebrtc::scope
     
 }
 
-void WebRTCImpl::RemoveAudioTrack(const std::string& streamRoomId, int64_t id) {
+void WebRTCImpl::RemoveAudioTrack(const std::string& streamRoomId, std::string id) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
     std::unique_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
     auto it = connection->peerConnection->audioTracks.find(id);
@@ -236,7 +236,7 @@ void WebRTCImpl::RemoveAudioTrack(const std::string& streamRoomId, int64_t id) {
     }
 }
 
-void WebRTCImpl::RemoveVideoTrack(const std::string& streamRoomId, int64_t id) {
+void WebRTCImpl::RemoveVideoTrack(const std::string& streamRoomId, std::string id) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
     std::unique_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
     auto it = connection->peerConnection->audioTracks.find(id);

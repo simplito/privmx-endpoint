@@ -42,9 +42,16 @@ int main(int argc, char** argv) {
         );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+        streamApi.joinRoom(streamRoomId);
         auto streamId_1 = streamApi.createStream(streamRoomId);
-        auto listAudioRecordingDevices = streamApi.listAudioRecordingDevices();
-        streamApi.trackAdd(streamId_1, stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
+        auto mediaDevices = streamApi.getMediaDevices();
+        for(const auto& mediaDevice: mediaDevices) {
+            if(mediaDevice.type == stream::DeviceType::Audio) {
+                streamApi.addTrack(streamId_1, mediaDevice);
+                break;
+            }
+        }
+        
         streamApi.publishStream(streamId_1);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto streamlist = streamApi.listStreams(streamRoomId);
@@ -52,12 +59,13 @@ int main(int argc, char** argv) {
         for(int i = 0; i < streamlist.size(); i++) {
             streamsId.push_back(streamlist[i].streamId);
         }
-        stream::StreamJoinSettings ssettings;
-        auto streamId_2 = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+        stream::StreamSettings ssettings;
+        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
 
         std::this_thread::sleep_for(std::chrono::seconds(120));
-        streamApi.unpublishStream(streamRoomId, streamId_1);
-        streamApi.leaveStream(streamRoomId, streamsId);
+        streamApi.unpublishStream(streamId_1);
+        streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
+        streamApi.leaveRoom(streamRoomId);
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
        

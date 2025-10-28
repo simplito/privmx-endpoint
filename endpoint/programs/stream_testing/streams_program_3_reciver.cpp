@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
-        stream::StreamJoinSettings ssettings {
+        stream::StreamSettings ssettings {
             .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
                 r.OnFrame(w, h, frame, id);
             }
@@ -96,11 +96,12 @@ int main(int argc, char** argv) {
             std::cout << "streamlist[" << i << "]:" <<  streamlist[i].streamId << std::endl;
             streamsId.push_back(streamlist[i].streamId);
         }
-        auto watchedStream = streamApi.joinStream(streamRoomId, streamsId, ssettings);
+        streamApi.joinRoom(streamRoomId);
+        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
         
         while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
 
-        streamApi.leaveStream(streamRoomId, streamsId);
+        streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         connection.disconnect();
        

@@ -81,13 +81,13 @@ public:
 
     void createStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
     RemoteStreamId publishStream(const StreamHandle& streamHandle);
-    void unpublishStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
+    void unpublishStream(const StreamHandle& streamHandle);
 
-    void openRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options);
-    void openRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamIds, const Settings& options);
-    void modifyRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
-    void closeRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
-    void closeRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamIds);
+    void subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options);
+    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamIds, const Settings& options);
+    void modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
+    void unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
+    void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamIds);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -103,8 +103,8 @@ private:
         int64_t keyUpdateCallbackId;
     };
     struct StreamRoomData {
-        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> webRtc):
-            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId) {}
+        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc):
+            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc) {}
         std::shared_ptr<StreamData> publisherStream;
         std::shared_ptr<StreamData> subscriberStream;
         std::shared_ptr<StreamKeyManager> streamKeyManager;
