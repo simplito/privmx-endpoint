@@ -49,9 +49,6 @@ server::StreamListResult ServerApi::streamList(server::StreamListModel model)  {
 server::StreamPublishResult ServerApi::streamPublish(server::StreamPublishModel model)  {
     return requestWS<server::StreamPublishResult>("streamPublish", model);
 }
-server::StreamJoinResult ServerApi::streamJoin(server::StreamJoinModel model)  {
-    return requestWS<server::StreamJoinResult>("streamJoin", model);
-}
 
 void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
     PRIVMX_DEBUG("ServerApi", "requestWS", "model:\n" + privmx::utils::Utils::stringifyVar(model));
@@ -62,12 +59,24 @@ void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
     requestWS("streamUnpublish", model);
 }
 
-void ServerApi::streamLeave(server::StreamLeaveModel model) {
-    requestWS("streamLeave", model);
+server::StreamsSubscribeResult streamsSubscribeToRemote(server::StreamsSubscribeModel model) {
+    return requestWS<server::StreamsSubscribeResult>("streamsSubscribeToRemote", model);
 }
 
-void ServerApi::streamReconfigure(server::StreamReconfigureModel model) {
-    requestWS("streamReconfigure", model);
+server::StreamsSubscribeResult streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model) {
+    return requestWS<server::StreamsSubscribeResult>("streamsModifyRemoteSubscriptions", model);
+}
+
+server::StreamsSubscribeResult streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model)  {
+    return requestWS<server::StreamsSubscribeResult>("streamsUnsubscribeFromRemote", model);
+}
+
+void streamRoomJoin(server::StreamJoinModel model) {
+    requestWS("streamRoomJoin", model);
+}
+
+void streamRoomLeave(server::StreamLeaveModel model)  {
+    requestWS("streamRoomLeave", model);
 }
 
 void ServerApi::trickle(server::StreamTrickleModel model) {

@@ -210,29 +210,18 @@ void StreamApi::unpublishStream(const StreamHandle& streamHandle) {
     }
 }
 
-void StreamApi::subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options) {
+void StreamApi::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->subscribeToRemoteStream(streamRoomId, streamId, tracksIds, options);
+        return _impl->subscribeToRemoteStreams(streamRoomId, streams, options);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds, const StreamSettings& options) {
-    validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return _impl->subscribeToRemoteStreams(streamRoomId, streamsIds, options);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApi::modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
+void StreamApi::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
@@ -243,18 +232,7 @@ void StreamApi::modifyRemoteStreamSubscription(const std::string& streamRoomId, 
     }
 }
 
-void StreamApi::unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
-    validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return _impl->unsubscribeFromRemoteStream(streamRoomId, streamId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApi::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds) {
+void StreamApi::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {

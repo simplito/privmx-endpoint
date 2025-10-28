@@ -43,6 +43,12 @@ struct MediaDevice {
     DeviceType type;
 };
 
+struct StreamSubscription {
+    int64_t streamId;
+    std::optional<std::string> streamTrackId;
+};
+
+
 
 
 }  // namespace stream

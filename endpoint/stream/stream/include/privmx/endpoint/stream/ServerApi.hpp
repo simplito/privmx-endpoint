@@ -36,12 +36,17 @@ public:
     server::StreamGetTurnCredentialsResult streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model);
     server::StreamListResult streamList(server::StreamListModel model);
     server::StreamPublishResult streamPublish(server::StreamPublishModel model);
-    server::StreamJoinResult streamJoin(server::StreamJoinModel model);
+
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
-    void streamLeave(server::StreamLeaveModel model);
-    void streamReconfigure(server::StreamReconfigureModel model);
+
+    server::StreamsSubscribeResult streamsSubscribeToRemote(StreamsSubscribeModel model);
+    server::StreamsSubscribeResult streamsModifyRemoteSubscriptions(StreamsModifySubscriptionsModel model);
+    server::StreamsSubscribeResult streamsUnsubscribeFromRemote(StreamsUnsubscribeModel model);
+    void streamRoomJoin(server::StreamJoinModel model);
+    void streamRoomLeave(server::StreamLeaveModel model);
+
     void trickle(server::StreamTrickleModel model);
 
 private:

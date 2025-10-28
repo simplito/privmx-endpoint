@@ -12,13 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_SERVERTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_SERVERTYPES_HPP_
 
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/endpoint/core/TypesMacros.hpp>
 #include <string>
 
-#include <privmx/endpoint/core/TypesMacros.hpp>
-
-
-#include <privmx/endpoint/core/TypesMacros.hpp>
-#include <privmx/endpoint/core/ServerTypes.hpp>
+#include "privmx/utils/TypesMacros.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -133,15 +131,62 @@ ENDPOINT_SERVER_TYPE(StreamPublishResult)
     INT64_FIELD(sessionId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamJoinModel)
-    LIST_FIELD(streamIds, int64_t)
-    STRING_FIELD(streamRoomId)
+// ENDPOINT_SERVER_TYPE(StreamJoinModel)
+//     LIST_FIELD(streamIds, int64_t)
+//     STRING_FIELD(streamRoomId)
+// TYPE_END
+
+// export interface StreamsSubscribeModel {
+//     streamRoomId: types.stream.StreamRoomId;
+//     subscriptionsToAdd: StreamSubscription[];
+// }
+//
+// export interface StreamsUnsubscribeModel {
+//     streamRoomId: types.stream.StreamRoomId;
+//     subscriptionsToRemove: StreamSubscription[];
+// }
+
+// export interface StreamSubscribeResult {
+//     offer?: {
+//         type: "offer";
+//         sdp: string;
+//     }
+// }
+
+ENDPOINT_SERVER_TYPE(StreamSubscription)
+    INT64_FIELD(streamId)
+    STRING_FIELD(streamTrackId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamJoinResult)
+ENDPOINT_SERVER_TYPE(StreamsSubscribeModel)
+    STRING_FIELD(streamRoomId)
+    LIST_FIELD(subscriptionsToAdd, StreamSubscription)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamsModifySubscriptionsModel)
+    STRING_FIELD(streamRoomId)
+    LIST_FIELD(subscriptionsToAdd, StreamSubscription)
+    LIST_FIELD(subscriptionsToRemove, StreamSubscription)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamsUnsubscribeModel)
+    STRING_FIELD(streamRoomId)
+    LIST_FIELD(subscriptionsToRemove, StreamSubscription)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamsSubscribeResult)
     OBJECT_FIELD(offer, SessionDescription)
     INT64_FIELD(sessionId)
 TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamRoomJoinModel)
+    STRING_FIELD(streamRoomId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamRoomLeaveModel)
+    STRING_FIELD(streamRoomId)
+TYPE_END
+
 
 ENDPOINT_SERVER_TYPE(StreamListModel)
     STRING_FIELD(streamRoomId)
@@ -177,16 +222,6 @@ ENDPOINT_SERVER_TYPE(StreamRoomSendCustomEventModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
-    INT64_FIELD(sessionId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamLeaveModel)
-    STRING_FIELD(streamRoomId)
-    LIST_FIELD(streamIds, int64_t)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamReconfigureModel)
-    OBJECT_FIELD(answer, SessionDescription)
     INT64_FIELD(sessionId)
 TYPE_END
 

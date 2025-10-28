@@ -12,16 +12,17 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 
+#include <functional>
 #include <memory>
 #include <optional>
+#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
-#include <functional>
 
-#include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include "webrtc/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -76,11 +77,9 @@ public:
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     RemoteStreamId publishStream(const StreamHandle& streamHandle);
     void unpublishStream(const StreamHandle& streamHandle);
-    void subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options);
-    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds, const StreamSettings& options);
-    void modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
-    void unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
-    void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
+    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options);
+    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
+    void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }

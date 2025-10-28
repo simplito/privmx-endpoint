@@ -9,31 +9,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/EndpointUtils.hpp>
-#include <privmx/utils/Debug.hpp>
-#include <privmx/endpoint/core/Factory.hpp>
-#include <privmx/endpoint/core/ListQueryMapper.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/endpoint/core/TimestampValidator.hpp>
-
 #include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
-#include "privmx/endpoint/stream/StreamTypes.hpp"
-#include "privmx/endpoint/stream/StreamException.hpp"
-#include "privmx/endpoint/stream/DynamicTypes.hpp"
-#include "privmx/endpoint/stream/Events.hpp"
-#include "privmx/endpoint/core/UsersKeysResolver.hpp"
+
 #include <Poco/URI.h>
-#include "privmx/endpoint/stream/StreamVarDeserializer.hpp"
 
 #include <chrono>
-#include <iomanip>
 #include <ctime>
+#include <iomanip>
+#include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/EndpointUtils.hpp>
+#include <privmx/endpoint/core/EventVarSerializer.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
+#include <privmx/endpoint/core/ListQueryMapper.hpp>
+#include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/utils/Debug.hpp>
+
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/stream/DynamicTypes.hpp"
+#include "privmx/endpoint/stream/Events.hpp"
+#include "privmx/endpoint/stream/StreamException.hpp"
+#include "privmx/endpoint/stream/StreamTypes.hpp"
+#include "privmx/endpoint/stream/StreamVarDeserializer.hpp"
+#include "privmx/utils/TypedObject.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -377,23 +379,22 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-void StreamApiLowImpl::subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const Settings& options) {
-    throw NotImplementedException();
-}
-void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamIds, const Settings& options) {
+void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
-    auto streamJoinModel = utils::TypedObjectFactory::createNewObject<server::StreamJoinModel>();
-    streamJoinModel.streamIds(utils::TypedObjectFactory::createNewList<int64_t>());
-    for(size_t i = 0; i < streamIds.size(); i++) {
-        streamJoinModel.streamIds().add(streamIds[i]);
+    auto subscribeModel = utils::TypedObjectFactory::createNewObject<server::StreamsSubscribeModel>();
+    subscribeModel.subscriptionsToAdd(utils::TypedObjectFactory::createNewList<server::StreamSubscription>());
+    for(size_t i = 0; i < subscriptions.size(); i++) {
+        auto item = utils::TypedObjectFactory::createNewObject<server::StreamSubscription>();
+        item.streamId(subscriptions[i].streamId);
+        item.streamTrackId(subscriptions[i].streamTrackId);
+        subscribeModel.subscribeModel().add(item);
     }
-    streamJoinModel.streamRoomId(streamRoomId);
-    auto streamJoinResult = _serverApi->streamJoin(streamJoinModel);
-    PRIVMX_DEBUG("STREAMS", "joinStream", "SessionId: " + std::to_string(streamJoinResult.sessionIdOpt(0)))
+    item.streamRoomId(streamRoomId);
+    auto subscribeResult = _serverApi->streamsSubscribeToRemote(streamJoinModel);
 
     // update/set sessionId in webrtc (for Janus - trickle)
-    room->webRtc->updateSessionId(streamRoomId, streamJoinResult.sessionId(), std::string("subscriber"));
+    room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId(), std::string("subscriber"));
 
     auto webRtc = room->webRtc;
     auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([streamRoomId, webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
@@ -402,21 +403,21 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
 
     room->subscriberStream = std::make_shared<StreamData>(
         StreamData{
-            .sessionId = streamJoinResult.sessionId(),
+            .sessionId = subscribeResult.sessionId(),
             .streamHandle = StreamHandle(),
             .keyUpdateCallbackId = keyUpdateId
         }
     );
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
-    if (!streamJoinResult.offerEmpty()) {
-        std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, streamJoinResult.offer().sdp(), streamJoinResult.offer().type());
+    if (!subscribeResult.offerEmpty()) {
+        std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, subscribeResult.offer().sdp(), subscribeResult.offer().type());
 
         SdpWithTypeModel sdpModel = {
             .sdp = sdp,
             .type = "answer"
         };
-        acceptOfferOnReconfigure(streamJoinResult.sessionId(), sdpModel);
+        acceptOfferOnReconfigure(subscribeResult.sessionId(), sdpModel);
     }
 
     // get Room for contextId
@@ -463,7 +464,7 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
     }
     room->streamKeyManager->requestKey(toSend);
 }
-void StreamApiLowImpl::modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
+void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
     throw NotImplementedException();
 }
 
