@@ -22,7 +22,6 @@ limitations under the License.
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
-#include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 
