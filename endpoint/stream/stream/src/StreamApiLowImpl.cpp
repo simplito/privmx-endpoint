@@ -305,6 +305,7 @@ void StreamApiLowImpl::leaveRoom(const std::string& streamRoomId) {
             _streamHandleToRoomId.erase(room->subscriberStream->streamHandle.value());
         }
     }
+    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
     //kill all webRTC pearConnections
     room->webRtc->close(room->streamRoomId);
     //stop StreamKeyManager
@@ -321,16 +322,10 @@ void StreamApiLowImpl::createStream(const std::string& streamRoomId, const Strea
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamHandle) + ": STREAM Sender")
     _streamHandleToRoomId.set(streamHandle, streamRoomId);
     auto webRtc = room->webRtc;
-    std:: cout << (webRtc == nullptr) << std::endl;
-    auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([webRtc, streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
-        std:: cout << (webRtc == nullptr) << std::endl;
-        webRtc->updateKeys(streamRoomId, keys);
-    });
     room->publisherStream = std::make_shared<StreamData>(
         StreamData{
             .sessionId=std::nullopt, 
-            .streamHandle=streamHandle,
-            .keyUpdateCallbackId=keyUpdateId
+            .streamHandle=streamHandle
         }
     );
     return;
@@ -373,7 +368,6 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
         model.sessionId(streamData->sessionId.value());
         _serverApi->streamUnpublish(model);
     }
-    room->streamKeyManager->removeKeyUpdateCallback(streamData->keyUpdateCallbackId);
     room->webRtc->close(room->streamRoomId);
     _streamHandleToRoomId.erase(streamHandle);
     room->publisherStream.reset();
@@ -396,22 +390,16 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId(), std::string("subscriber"));
 
-    auto webRtc = room->webRtc;
-    auto keyUpdateId = room->streamKeyManager->addKeyUpdateCallback([streamRoomId, webRtc](const std::vector<privmx::endpoint::stream::Key> keys) {
-        webRtc->updateKeys(streamRoomId, keys);
-    });
-
     room->subscriberStream = std::make_shared<StreamData>(
         StreamData{
             .sessionId = subscribeResult.sessionId(),
-            .streamHandle = StreamHandle(),
-            .keyUpdateCallbackId = keyUpdateId
+            .streamHandle = StreamHandle()
         }
     );
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (!subscribeResult.offerEmpty()) {
-        std::string sdp = webRtc->createAnswerAndSetDescriptions(streamRoomId, subscribeResult.offer().sdp(), subscribeResult.offer().type());
+        std::string sdp = room->webRtc->createAnswerAndSetDescriptions(streamRoomId, subscribeResult.offer().sdp(), subscribeResult.offer().type());
 
         SdpWithTypeModel sdpModel = {
             .sdp = sdp,
@@ -419,50 +407,12 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
         };
         acceptOfferOnReconfigure(subscribeResult.sessionId(), sdpModel);
     }
-
-    // get Room for contextId
-    auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
-    modelGetRoom.id(streamRoomId);
-    auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom();
-
-    // get Streams for userId
-    auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
-    modelStreams.streamRoomId(streamRoomId);
-    auto streamsList = _serverApi->streamList(modelStreams).list();
-
-    // get users for pubKey
-    Poco::JSON::Object::Ptr query = new Poco::JSON::Object;
-    Poco::JSON::Object::Ptr queryId = new Poco::JSON::Object;
-    Poco::JSON::Array::Ptr usersIds = new Poco::JSON::Array;
-
-    for(auto s: streamsList) {
-        if ( std::find(streamIds.begin(), streamIds.end(), s.streamId()) != streamIds.end() ) {
-            usersIds->add(s.userId());
-        }
-    }
-    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
-    queryId->set("$in", usersIds);
-    query->set("#userId", queryId);
-
-    core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
-        streamRoom.contextId(), 
-        core::PagingQuery{
-            .skip = 0,
-            .limit = usersIds->size(),
-            .sortOrder = "desc",
-            .lastId = std::nullopt,
-            .sortBy = std::nullopt,
-            .queryAsJson = privmx::utils::Utils::stringify(query)
-        }
-    ); 
-
     
-    std::vector<core::UserWithPubKey> toSend;
-    for(auto userInfo: userInfoList.readItems) {
-        PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
-        toSend.push_back(userInfo.user);
+    std::set<RemoteStreamId> streamIds;
+    for(const auto& subscription : subscriptions) {
+        streamIds.insert(subscription.streamId);
     }
-    room->streamKeyManager->requestKey(toSend);
+    sendStreamKeyRequest(room, streamIds)
 }
 void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const RemoteStreamId& streamId, const Settings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
     throw NotImplementedException();
@@ -976,4 +926,50 @@ void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const S
     model.sessionId(sessionId);
     model.answer(sessionDescription);
     _serverApi->streamAcceptOffer(model);
+}
+
+void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room, const std::set<RemoteStreamId>& streamIds) {
+    // get Room for contextId
+    auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+    modelGetRoom.id(room->streamRoomId);
+    auto streamRoom = _serverApi->streamRoomGet(modelGetRoom).streamRoom();
+
+    // get Streams for userId
+    auto modelStreams = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
+    modelStreams.streamRoomId(room->streamRoomId);
+    auto streamsList = _serverApi->streamList(modelStreams).list();
+
+    // get users for pubKey
+    Poco::JSON::Object::Ptr query = new Poco::JSON::Object;
+    Poco::JSON::Object::Ptr queryId = new Poco::JSON::Object;
+    Poco::JSON::Array::Ptr usersIds = new Poco::JSON::Array;
+
+    for(auto s: streamsList) {
+        if ( std::find(streamIds.begin(), streamIds.end(), s.streamId()) != streamIds.end() ) {
+            usersIds->add(s.userId());
+        }
+    }
+    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
+    queryId->set("$in", usersIds);
+    query->set("#userId", queryId);
+
+    core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
+        streamRoom.contextId(), 
+        core::PagingQuery{
+            .skip = 0,
+            .limit = usersIds->size(),
+            .sortOrder = "desc",
+            .lastId = std::nullopt,
+            .sortBy = std::nullopt,
+            .queryAsJson = privmx::utils::Utils::stringify(query)
+        }
+    ); 
+
+    
+    std::vector<core::UserWithPubKey> toSend;
+    for(auto userInfo: userInfoList.readItems) {
+        PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
+        toSend.push_back(userInfo.user);
+    }
+    room->streamKeyManager->requestKey(toSend);
 }

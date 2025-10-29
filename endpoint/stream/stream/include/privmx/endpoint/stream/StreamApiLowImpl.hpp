@@ -98,16 +98,21 @@ private:
     struct StreamData {
         std::optional<int64_t> sessionId;
         std::optional<StreamHandle> streamHandle;
-        int64_t keyUpdateCallbackId;
     };
     struct StreamRoomData {
         StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc):
-            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc) {}
+            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc) 
+        {
+            keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
+                _webRtc->updateKeys(_streamRoomId, keys);
+            });
+        }
         std::shared_ptr<StreamData> publisherStream;
         std::shared_ptr<StreamData> subscriberStream;
         std::shared_ptr<StreamKeyManager> streamKeyManager;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
+        int64_t keyUpdateCallbackId;
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
     void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
@@ -140,6 +145,8 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);
     void assertTurnServerUri(const std::string& uri);
+
+    void sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room, const std::set<RemoteStreamId>& streamIds);
 
     std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::ConnectionImpl> _connection;
