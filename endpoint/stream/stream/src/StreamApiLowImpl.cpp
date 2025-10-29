@@ -287,7 +287,6 @@ std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomI
 }
 
 void StreamApiLowImpl::joinRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
-    std:: cout << (webRtc == nullptr) << std::endl;
     createEmptyStreamRoomData(streamRoomId, webRtc);
     // TODO
 }
@@ -321,7 +320,6 @@ void StreamApiLowImpl::createStream(const std::string& streamRoomId, const Strea
     }
     PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamHandle) + ": STREAM Sender")
     _streamHandleToRoomId.set(streamHandle, streamRoomId);
-    auto webRtc = room->webRtc;
     room->publisherStream = std::make_shared<StreamData>(
         StreamData{
             .sessionId=std::nullopt, 
