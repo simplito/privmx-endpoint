@@ -79,7 +79,7 @@ public:
     void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
 
-    void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
+    void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);

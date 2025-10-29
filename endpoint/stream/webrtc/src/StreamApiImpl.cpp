@@ -56,8 +56,8 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
         _peerConnectionFactory, 
         _constraints, 
         _configuration,
-        [apiLow](const int64_t sessionId, const dynamic::RTCIceCandidate& candidate) {
-            apiLow->trickle(sessionId, candidate);
+        [apiLow](const int64_t sessionId, const std::string& candidateAsJson) {
+            apiLow->trickle(sessionId, candidateAsJson);
         },
         _frameCryptorOptions
     );

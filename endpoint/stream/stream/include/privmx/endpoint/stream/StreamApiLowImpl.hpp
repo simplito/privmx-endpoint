@@ -92,7 +92,7 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     void keyManagement(const std::string& streamRoomId, bool disable);
-    void trickle(const int64_t sessionId, const dynamic::RTCIceCandidate& candidate);
+    void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 private:
     struct StreamData {

@@ -62,7 +62,7 @@ class PeerConnectionManager {
 public:
     PeerConnectionManager(
         std::function<std::shared_ptr<PeerConnection>(const std::string&)> createPeerConnection,
-        std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> onTrickle
+        std::function<void(const int64_t, const std::string&)> onTrickle
     );
     void initialize(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId = -1);
     void updateSessionForConnection(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId);
@@ -70,7 +70,7 @@ public:
     std::shared_ptr<JanusConnection> getConnectionWithSession(const std::string& streamRoomId, ConnectionType connectionType);
 private:
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> _createPeerConnection;
-    std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> _onTrickle;
+    std::function<void(const int64_t, const std::string&)> _onTrickle;
     privmx::utils::ThreadSaveMap<std::string, std::map<ConnectionType,std::shared_ptr<JanusConnection>>> _connections;
 };
 

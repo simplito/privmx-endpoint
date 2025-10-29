@@ -16,7 +16,7 @@ using namespace privmx::endpoint::stream;
 
 PeerConnectionManager::PeerConnectionManager(
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> createPeerConnection,
-    std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> onTrickle
+    std::function<void(const int64_t, const std::string&)> onTrickle
 ) : _createPeerConnection(createPeerConnection), _onTrickle(onTrickle) {}
 
 void PeerConnectionManager::initialize(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId) {
@@ -35,7 +35,7 @@ void PeerConnectionManager::initialize(const std::string& streamRoomId, Connecti
         auto roomConnection = roomConnections[connectionType];
         if (rtcIceCandidate->candidate().std_string().size() > 0 && roomConnection->sessionId > -1) {
             try {
-                auto iceCandidate {utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(rtcIceCandidate->candidate().std_string()))};
+                auto iceCandidate {rtcIceCandidate->candidate().std_string()};
                 _onTrickle(roomConnection->sessionId, iceCandidate);
             } catch(...) {
                 

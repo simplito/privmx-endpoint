@@ -221,9 +221,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::trickle(const Poco::Dynamic::Var& a
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto sessionId = _deserializer.deserialize<int64_t>(argsArr->get(0), "sessionId");
     auto serializedRtcCandidate = _deserializer.deserialize<std::string>(argsArr->get(1), "candidate");
-    Poco::JSON::Parser parser;
-    auto iceCandidate {utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(parser.parse(serializedRtcCandidate))};
-    _streamApi.trickle(sessionId, iceCandidate);
+    _streamApi.trickle(sessionId, serializedRtcCandidate);
     return {};
 }
 
