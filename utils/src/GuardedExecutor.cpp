@@ -31,7 +31,9 @@ void GuardedExecutor::exec(std::function<void()> task) {
     }
     privmx::utils::Executor::getInstance()->exec([&, task]() {
         try {
-            task();
+            if(!_stopping) {
+                task();
+            }
         } catch (const std::exception& e) {
             LOG_ERROR("GuardedExecutor thread catch'ed exception '", e.what(), "' when processing task")
         } catch (...) {
