@@ -67,15 +67,15 @@ public:
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
     std::vector<Stream> listStreams(const std::string& streamRoomId);
-    void joinRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
-    void leaveRoom(const std::string& streamRoomId);
+    void joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
+    void leaveStreamRoom(const std::string& streamRoomId);
 
-    void createStream(const std::string& streamRoomId, const StreamHandle& streamHandle);
+    StreamHandle createStream(const std::string& streamRoomId);
     RemoteStreamId publishStream(const StreamHandle& streamHandle);
     void unpublishStream(const StreamHandle& streamHandle);
 
-    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options);
-    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
+    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options);
+    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const Settings& options);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);

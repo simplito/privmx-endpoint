@@ -68,12 +68,12 @@ std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) 
     return _api->listStreams(streamRoomId);
 }
 
-void StreamApiImpl::joinRoom(const std::string& streamRoomId) {
+void StreamApiImpl::joinStreamRoom(const std::string& streamRoomId) {
     std:: cout << (_webRTC == nullptr) << std::endl;
-    _api->joinRoom(streamRoomId, _webRTC);
+    _api->joinStreamRoom(streamRoomId, _webRTC);
 }
-void StreamApiImpl::leaveRoom(const std::string& streamRoomId) {
-    _api->leaveRoom(streamRoomId);
+void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
+    _api->leaveStreamRoom(streamRoomId);
 }
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle = generateNumericId();
@@ -217,8 +217,8 @@ void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, st
     }
     _api->subscribeToRemoteStreams(streamRoomId, streamIds, options.settings);
 }
-void StreamApiImpl::modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
-    _api->modifyRemoteStreamSubscription(streamRoomId, streamId, options.settings, tracksIdsToAdd, tracksIdsToRemove);
+void StreamApiImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove) {
+    _api->modifyRemoteStreamsSubscriptions(streamRoomId, streamId, options.settings, tracksIdsToAdd, tracksIdsToRemove);
 }
 void StreamApiImpl::unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId) {
     _api->unsubscribeFromRemoteStream(streamRoomId, streamId);

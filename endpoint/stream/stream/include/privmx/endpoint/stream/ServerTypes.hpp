@@ -136,23 +136,6 @@ TYPE_END
 //     STRING_FIELD(streamRoomId)
 // TYPE_END
 
-// export interface StreamsSubscribeModel {
-//     streamRoomId: types.stream.StreamRoomId;
-//     subscriptionsToAdd: StreamSubscription[];
-// }
-//
-// export interface StreamsUnsubscribeModel {
-//     streamRoomId: types.stream.StreamRoomId;
-//     subscriptionsToRemove: StreamSubscription[];
-// }
-
-// export interface StreamSubscribeResult {
-//     offer?: {
-//         type: "offer";
-//         sdp: string;
-//     }
-// }
-
 ENDPOINT_SERVER_TYPE(StreamSubscription)
     INT64_FIELD(streamId)
     STRING_FIELD(streamTrackId)

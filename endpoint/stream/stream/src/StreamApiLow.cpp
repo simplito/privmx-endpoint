@@ -178,30 +178,30 @@ std::vector<Stream> StreamApiLow::listStreams(const std::string& streamRoomId) {
     }
 }
 
-void StreamApiLow::joinRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
+void StreamApiLow::joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
     validateEndpoint();
     try {
-        return _impl->joinRoom(streamRoomId, webRtc);
+        return _impl->joinStreamRoom(streamRoomId, webRtc);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApiLow::leaveRoom(const std::string& streamRoomId) {
+void StreamApiLow::leaveStreamRoom(const std::string& streamRoomId) {
     validateEndpoint();
     try {
-        return _impl->leaveRoom(streamRoomId);
+        return _impl->leaveStreamRoom(streamRoomId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApiLow::createStream(const std::string& streamRoomId, const StreamHandle& streamHandle) {
+StreamHandle StreamApiLow::createStream(const std::string& streamRoomId) {
     validateEndpoint();
     try {
-        return _impl->createStream(streamRoomId, streamHandle);
+        return _impl->createStream(streamRoomId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -228,7 +228,7 @@ void StreamApiLow::unpublishStream(const StreamHandle& streamHandle) {
     }
 }
 
-void StreamApiLow::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
+void StreamApiLow::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options) {
     validateEndpoint();
     try {
         return _impl->subscribeToRemoteStreams(streamRoomId, subscriptions, options);
@@ -238,7 +238,7 @@ void StreamApiLow::subscribeToRemoteStreams(const std::string& streamRoomId, con
     }
 }
 
-void StreamApiLow::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options) {
+void StreamApiLow::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const Settings& options) {
     validateEndpoint();
     try {
         return _impl->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove, options);

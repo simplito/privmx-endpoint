@@ -41,11 +41,11 @@ public:
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
 
-    server::StreamsSubscribeResult streamsSubscribeToRemote(StreamsSubscribeModel model);
-    server::StreamsSubscribeResult streamsModifyRemoteSubscriptions(StreamsModifySubscriptionsModel model);
-    server::StreamsSubscribeResult streamsUnsubscribeFromRemote(StreamsUnsubscribeModel model);
-    void streamRoomJoin(server::StreamJoinModel model);
-    void streamRoomLeave(server::StreamLeaveModel model);
+    server::StreamsSubscribeResult streamsSubscribeToRemote(server::StreamsSubscribeModel model);
+    server::StreamsSubscribeResult streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model);
+    server::StreamsSubscribeResult streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model);
+    void streamRoomJoin(server::StreamRoomJoinModel model);
+    void streamRoomLeave(server::StreamRoomLeaveModel model);
 
     void trickle(server::StreamTrickleModel model);
 

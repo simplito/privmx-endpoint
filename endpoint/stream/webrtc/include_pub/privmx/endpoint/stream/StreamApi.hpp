@@ -69,8 +69,8 @@ public:
 
     // Stream
     std::vector<Stream> listStreams(const std::string& streamRoomId);
-    void joinRoom(const std::string& streamRoomId); // required before createStream and openStream
-    void leaveRoom(const std::string& streamRoomId);
+    void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
+    void leaveStreamRoom(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<MediaDevice> getMediaDevices();
     void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);

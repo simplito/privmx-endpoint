@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
         );        
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
-        streamApi.joinRoom(streamRoomId);
+        streamApi.joinStreamRoom(streamRoomId);
         auto streamHandle = streamApi.createStream(streamRoomId);
         auto mediaDevices = streamApi.getMediaDevices();
         for(const auto& mediaDevice: mediaDevices) {

@@ -59,23 +59,23 @@ void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
     requestWS("streamUnpublish", model);
 }
 
-server::StreamsSubscribeResult streamsSubscribeToRemote(server::StreamsSubscribeModel model) {
+server::StreamsSubscribeResult ServerApi::streamsSubscribeToRemote(server::StreamsSubscribeModel model) {
     return requestWS<server::StreamsSubscribeResult>("streamsSubscribeToRemote", model);
 }
 
-server::StreamsSubscribeResult streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model) {
+server::StreamsSubscribeResult ServerApi::streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model) {
     return requestWS<server::StreamsSubscribeResult>("streamsModifyRemoteSubscriptions", model);
 }
 
-server::StreamsSubscribeResult streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model)  {
+server::StreamsSubscribeResult ServerApi::streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model)  {
     return requestWS<server::StreamsSubscribeResult>("streamsUnsubscribeFromRemote", model);
 }
 
-void streamRoomJoin(server::StreamJoinModel model) {
+void ServerApi::streamRoomJoin(server::StreamRoomJoinModel model) {
     requestWS("streamRoomJoin", model);
 }
 
-void streamRoomLeave(server::StreamLeaveModel model)  {
+void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model)  {
     requestWS("streamRoomLeave", model);
 }
 

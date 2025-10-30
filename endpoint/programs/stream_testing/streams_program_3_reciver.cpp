@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
             std::cout << "streamlist[" << i << "]:" <<  streamlist[i].streamId << std::endl;
             streamsId.push_back(streamlist[i].streamId);
         }
-        streamApi.joinRoom(streamRoomId);
+        streamApi.joinStreamRoom(streamRoomId);
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
         
         while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}

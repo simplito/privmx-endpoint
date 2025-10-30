@@ -103,6 +103,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::Key>(const stream::Key& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const stream::StreamSubscription& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::KeyType>(const stream::KeyType& val);
 }  // namespace core
 }  // namespace endpoint

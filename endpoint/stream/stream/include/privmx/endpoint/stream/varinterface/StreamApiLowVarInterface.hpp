@@ -41,21 +41,18 @@ public:
         BuildSubscriptionQuery = 9,
 
         ListStreams = 10,
-        JoinRoom = 11,
-        LeaveRoom = 12,
+        JoinStreamRoom = 11,
+        LeaveStreamRoom = 12,
 
         CreateStream = 13,
         PublishStream = 14,
         UnpublishStream = 15,
-
-        SubscribeToRemoteStream = 16,
-        SubscribeToRemoteStreams = 17,
-        ModifyRemoteStreamSubscription = 18,
-        UnsubscribeFromRemoteStream = 19,
-        UnsubscribeFromRemoteStreams = 20,
-        Trickle = 21,
-        AcceptOfferOnReconfigure = 22,
-        KeyManagement = 23,
+        SubscribeToRemoteStreams = 16,
+        ModifyRemoteStreamsSubscriptions = 17,
+        UnsubscribeFromRemoteStreams = 18,
+        Trickle = 19,
+        AcceptOfferOnReconfigure = 20,
+        KeyManagement = 21,
     };
 
     StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
@@ -74,17 +71,15 @@ public:
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var listStreams(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var joinRoom(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var leaveRoom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var joinStreamRoom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var leaveStreamRoom(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var createStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var publishStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unpublishStream(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var subscribeToRemoteStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeToRemoteStreams(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var modifyRemoteStreamSubscription(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromRemoteStream(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var modifyRemoteStreamsSubscriptions(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);

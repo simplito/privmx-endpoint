@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
         );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
-        streamApi.joinRoom(streamRoomId);
+        streamApi.joinStreamRoom(streamRoomId);
         auto streamId_1 = streamApi.createStream(streamRoomId);
         auto mediaDevices = streamApi.getMediaDevices();
         for(const auto& mediaDevice: mediaDevices) {
@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::seconds(120));
         streamApi.unpublishStream(streamId_1);
         streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
-        streamApi.leaveRoom(streamRoomId);
+        streamApi.leaveStreamRoom(streamRoomId);
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
        

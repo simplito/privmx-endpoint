@@ -173,10 +173,18 @@ stream::StreamsUpdatedData VarDeserializer::deserialize<stream::StreamsUpdatedDa
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
 
-    auto room = deserialize<std::string>(obj->get("room"), name + ".room");
-    auto streams = deserializeVector<stream::UpdatedStreamData>(obj->get("streams"), name + ".streams");
     return {
         .room = deserialize<std::string>(obj->get("room"), name + ".room"),
         .streams = deserializeVector<stream::UpdatedStreamData>(obj->get("streams"), name + ".streams")
+    };
+}
+
+template<>
+stream::StreamSubscription VarDeserializer::deserialize<stream::StreamSubscription>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .streamId = deserialize<int64_t>(obj->get("streamId"), name + ".streamId"),
+        .streamTrackId = deserialize<std::string>(obj->get("streamTrackId"), name + ".streamTrackId")
     };
 }

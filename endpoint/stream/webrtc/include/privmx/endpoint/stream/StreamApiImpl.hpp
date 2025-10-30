@@ -78,8 +78,8 @@ public:
 
     // Stream
     std::vector<Stream> listStreams(const std::string& streamRoomId);
-    void joinRoom(const std::string& streamRoomId); // required before createStream and openStream
-    void leaveRoom(const std::string& streamRoomId);
+    void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
+    void leaveStreamRoom(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<MediaDevice> getMediaDevices();
     void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
@@ -88,7 +88,7 @@ public:
     void unpublishStream(const StreamHandle& streamHandle);
     void subscribeToRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId, const std::optional<std::vector<RemoteTrackId>>& tracksIds, const StreamSettings& options);
     void subscribeToRemoteStreams(const std::string& streamRoomId, std::vector<RemoteStreamId> streamsIds, const StreamSettings& options);
-    void modifyRemoteStreamSubscription(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
+    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const RemoteStreamId& streamId, const StreamSettings& options, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToAdd, const std::optional<std::vector<RemoteTrackId>>& tracksIdsToRemove);
     void unsubscribeFromRemoteStream(const std::string& streamRoomId, const RemoteStreamId& streamId);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<RemoteStreamId>& streamsIds);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);

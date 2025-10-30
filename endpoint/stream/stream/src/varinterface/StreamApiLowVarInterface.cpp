@@ -8,11 +8,13 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include <Poco/JSON/Parser.h>
-#include "privmx/endpoint/core/TypesMacros.hpp"
 #include "privmx/endpoint/stream/varinterface/StreamApiLowVarInterface.hpp"
 
+#include <Poco/JSON/Parser.h>
+
+#include "../../include/privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/TypesMacros.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 
@@ -34,17 +36,15 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
     {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery},
 
     {ListStreams, &StreamApiLowVarInterface::listStreams},
-    {JoinRoom, &StreamApiLowVarInterface::joinRoom},
-    {LeaveRoom, &StreamApiLowVarInterface::leaveRoom},
+    {JoinStreamRoom, &StreamApiLowVarInterface::joinStreamRoom},
+    {LeaveStreamRoom, &StreamApiLowVarInterface::leaveStreamRoom},
 
     {CreateStream, &StreamApiLowVarInterface::createStream},
     {PublishStream, &StreamApiLowVarInterface::publishStream},
     {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
 
-    {SubscribeToRemoteStream, &StreamApiLowVarInterface::subscribeToRemoteStream},
     {SubscribeToRemoteStreams, &StreamApiLowVarInterface::subscribeToRemoteStreams},
-    {ModifyRemoteStreamSubscription, &StreamApiLowVarInterface::modifyRemoteStreamSubscription},
-    {UnsubscribeFromRemoteStream, &StreamApiLowVarInterface::unsubscribeFromRemoteStream},
+    {ModifyRemoteStreamsSubscriptions, &StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions},
     {UnsubscribeFromRemoteStreams, &StreamApiLowVarInterface::unsubscribeFromRemoteStreams},
     {Trickle, &StreamApiLowVarInterface::keyManagement},
     {KeyManagement, &StreamApiLowVarInterface::keyManagement}
@@ -141,25 +141,24 @@ Poco::Dynamic::Var StreamApiLowVarInterface::listStreams(const Poco::Dynamic::Va
     auto result = _streamApi.listStreams(streamRoomId);
     return _serializer.serialize(result);
 }
-Poco::Dynamic::Var StreamApiLowVarInterface::joinRoom(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StreamApiLowVarInterface::joinStreamRoom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    _streamApi.joinRoom(streamRoomId, getWebRtcInterface());
+    _streamApi.joinStreamRoom(streamRoomId, getWebRtcInterface());
     return {};
 }
-Poco::Dynamic::Var StreamApiLowVarInterface::leaveRoom(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StreamApiLowVarInterface::leaveStreamRoom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    _streamApi.leaveRoom(streamRoomId);
+    _streamApi.leaveStreamRoom(streamRoomId);
     return {};
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::createStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamHandle");
-    _streamApi.createStream(streamRoomId, streamHandle);
-    return {};
+    auto result = _streamApi.createStream(streamRoomId);
+    return _serializer.serialize(result);
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::publishStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
@@ -174,46 +173,28 @@ Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::subscribeToRemoteStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamId");
-    auto tracksId = _deserializer.deserializeOptionalVector<int64_t>(argsArr->get(2), "tracksIds");
-    auto options = _deserializer.deserialize<Settings>(argsArr->get(3), "options");
-    _streamApi.subscribeToRemoteStream(streamRoomId, streamId, tracksId, options);
-    return {};
-}
 Poco::Dynamic::Var StreamApiLowVarInterface::subscribeToRemoteStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamsId = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsId");
+    auto subscriptions = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptions");
     auto options = _deserializer.deserialize<Settings>(argsArr->get(2), "options");
-    _streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, options);
+    _streamApi.subscribeToRemoteStreams(streamRoomId, subscriptions, options);
     return {};
 }
-Poco::Dynamic::Var StreamApiLowVarInterface::modifyRemoteStreamSubscription(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 5);
+Poco::Dynamic::Var StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamId");
-    auto options = _deserializer.deserialize<Settings>(argsArr->get(2), "options");
-    auto tracksIdsToAdd = _deserializer.deserializeOptionalVector<int64_t>(argsArr->get(3), "tracksIdsToAdd");
-    auto tracksIdsToRemove = _deserializer.deserializeOptionalVector<int64_t>(argsArr->get(4), "tracksIdsToRemove");
-    _streamApi.modifyRemoteStreamSubscription(streamRoomId, streamId, options, tracksIdsToAdd, tracksIdsToRemove);
-    return {};
-}
-Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromRemoteStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamId = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamId");
-    auto options = _deserializer.deserialize<Settings>(argsArr->get(2), "options");
-    _streamApi.unsubscribeFromRemoteStream(streamRoomId, streamId);
+    auto subscriptionsToAdd = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptionsToAdd");
+    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(2), "subscriptionsToRemove");
+    auto options = _deserializer.deserialize<Settings>(argsArr->get(3), "options");
+    _streamApi.modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove, options);
     return {};
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto streamsId = _deserializer.deserializeVector<int64_t>(argsArr->get(1), "streamsId");
-    _streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
+    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(2), "subscriptionsToRemove");
+    _streamApi.unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
     return {};
 }
 

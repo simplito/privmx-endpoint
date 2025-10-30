@@ -374,3 +374,14 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::PublishersStreamsUpdatedEven
     obj->set("data", serialize(val.data));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const stream::StreamSubscription& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamSubscription");
+    }
+    obj->set("streamId", serialize(val.streamId));
+    obj->set("streamTrackId", serialize(val.streamTrackId));
+    return obj;
+}

@@ -40,6 +40,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
+int32_t StreamApiLowImpl::nextIdCounter = 0;
+
 StreamApiLowImpl::StreamApiLowImpl(
     const std::shared_ptr<event::EventApiImpl>& eventApi,
     const core::Connection& connection,
@@ -286,11 +288,11 @@ std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomI
     return result;
 }
 
-void StreamApiLowImpl::joinRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
+void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
     createEmptyStreamRoomData(streamRoomId, webRtc);
     // TODO
 }
-void StreamApiLowImpl::leaveRoom(const std::string& streamRoomId) {
+void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     auto room = getStreamRoomData(streamRoomId);
     if(room->publisherStream) {
         //gently close publisherStream
@@ -313,7 +315,8 @@ void StreamApiLowImpl::leaveRoom(const std::string& streamRoomId) {
     _streamRoomMap.erase(streamRoomId);
 }
 
-void StreamApiLowImpl::createStream(const std::string& streamRoomId, const StreamHandle& streamHandle) {
+StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
+    auto streamHandle {nextId()};
     auto room = getStreamRoomData(streamRoomId);
     if(room->publisherStream) {
         throw StreamIsPublished();
@@ -326,7 +329,7 @@ void StreamApiLowImpl::createStream(const std::string& streamRoomId, const Strea
             .streamHandle=streamHandle
         }
     );
-    return;
+    return streamHandle;
 }
 
 
@@ -371,7 +374,7 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
+void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options) {
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsSubscribeModel>();
@@ -381,11 +384,13 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
     for(size_t i = 0; i < subscriptions.size(); i++) {
         auto item = utils::TypedObjectFactory::createNewObject<server::StreamSubscription>();
         item.streamId(subscriptions[i].streamId);
-        item.streamTrackId(subscriptions[i].streamTrackId);
+        if (subscriptions[i].streamTrackId) {
+            item.streamTrackId(subscriptions[i].streamTrackId.value());
+        }
         itemsToAdd.add(item);
     }
     model.subscriptionsToAdd(itemsToAdd);
-    auto subscribeResult = _serverApi->streamsSubscribeToRemote(subscribeModel);
+    auto subscribeResult = _serverApi->streamsSubscribeToRemote(model);
 
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId(), std::string("subscriber"));
@@ -416,7 +421,7 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
 }
 
 
-void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options) {
+void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const Settings& options) {
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsModifySubscriptionsModel>();
@@ -427,7 +432,9 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& strea
     for(size_t i = 0; i < subscriptionsToAdd.size(); i++) {
         auto item = utils::TypedObjectFactory::createNewObject<server::StreamSubscription>();
         item.streamId(subscriptionsToAdd[i].streamId);
-        item.streamTrackId(subscriptionsToAdd[i].streamTrackId);
+        if (subscriptionsToAdd[i].streamTrackId) {
+            item.streamTrackId(subscriptionsToAdd[i].streamTrackId.value());
+        }
         itemsToAdd.add(item);
     }
     model.subscriptionsToAdd(itemsToAdd);
@@ -437,7 +444,9 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& strea
     for(size_t i = 0; i < subscriptionsToRemove.size(); i++) {
         auto item = utils::TypedObjectFactory::createNewObject<server::StreamSubscription>();
         item.streamId(subscriptionsToRemove[i].streamId);
-        item.streamTrackId(subscriptionsToRemove[i].streamTrackId);
+        if (subscriptionsToRemove[i].streamTrackId) {
+            item.streamTrackId(subscriptionsToRemove[i].streamTrackId.value());
+        }
         itemsToRemove.add(item);
     }
     model.subscriptionsToRemove(itemsToRemove);
@@ -480,7 +489,9 @@ void StreamApiLowImpl::unsubscribeFromRemoteStreams(const std::string& streamRoo
     for(size_t i = 0; i < subscriptionsToRemove.size(); i++) {
         auto item = utils::TypedObjectFactory::createNewObject<server::StreamSubscription>();
         item.streamId(subscriptionsToRemove[i].streamId);
-        item.streamTrackId(subscriptionsToRemove[i].streamTrackId);
+        if (subscriptionsToRemove[i].streamTrackId) {
+            item.streamTrackId(subscriptionsToRemove[i].streamTrackId.value());
+        }
         itemsToRemove.add(item);
     }
 
