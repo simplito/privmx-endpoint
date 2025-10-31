@@ -19,6 +19,7 @@ if(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(kvdb)
     add_subdirectory(inbox)
     add_subdirectory(event)
+    add_subdirectory(search)
 endif(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
 
 if(PRIVMX_ENABLE_TESTS_E2E)
