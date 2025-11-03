@@ -382,6 +382,8 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const st
         obj->set("__type", "stream$StreamSubscription");
     }
     obj->set("streamId", serialize(val.streamId));
-    obj->set("streamTrackId", serialize(val.streamTrackId));
+    if (val.streamTrackId.has_value()) {
+        obj->set("streamTrackId", serialize(val.streamTrackId));
+    }
     return obj;
 }

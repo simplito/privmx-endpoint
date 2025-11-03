@@ -9,19 +9,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
+
+#include <iostream>
+#include <ostream>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
 #include <privmx/endpoint/event/EventApiImpl.hpp>
 
-#include "privmx/endpoint/stream/StreamApiLow.hpp"
-#include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
-
+#include "privmx/endpoint/stream/StreamException.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -213,6 +215,7 @@ RemoteStreamId StreamApiLow::publishStream(const StreamHandle& streamHandle) {
     try {
         return _impl->publishStream(streamHandle);
     } catch (const privmx::utils::PrivmxException& e) {
+        std::cerr << e.what() << std::endl;
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

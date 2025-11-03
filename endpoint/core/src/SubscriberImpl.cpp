@@ -30,9 +30,11 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
     switch (eventType) {
         case EventType::USER_ADD:
         case EventType::USER_REMOVE:
-        case EventType::USER_STATUS:
+        case EventType::USER_STATUS: {
             return std::string(_moduleName) + "/" + _eventTypeNames.at(eventType);
+        }
     }
+
     throw NotImplementedException(_readableEventType.at(eventType));
 }
 

@@ -183,8 +183,9 @@ template<>
 stream::StreamSubscription VarDeserializer::deserialize<stream::StreamSubscription>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    std::optional<std::string> trackId {obj->has("streamTrackId") ? std::make_optional(deserialize<std::string>(obj->get("streamTrackId"), name + ".streamTrackId")) : std::nullopt};
     return {
         .streamId = deserialize<int64_t>(obj->get("streamId"), name + ".streamId"),
-        .streamTrackId = deserialize<std::string>(obj->get("streamTrackId"), name + ".streamTrackId")
+        .streamTrackId = trackId
     };
 }

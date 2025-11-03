@@ -162,7 +162,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::createStream(const Poco::Dynamic::V
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::publishStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(1), "streamHandle");
+    auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "streamHandle");
     _streamApi.publishStream(streamHandle);
     return {};
 }
