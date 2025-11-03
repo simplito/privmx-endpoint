@@ -20,7 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
-
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "webrtc/Types.hpp"
 

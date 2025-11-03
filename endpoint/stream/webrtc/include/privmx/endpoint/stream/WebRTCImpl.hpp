@@ -40,7 +40,7 @@ public:
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
         libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
         libwebrtc::RTCConfiguration configuration,
-        std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> onTrickle,
+        std::function<void(const int64_t, const std::string&)> onTrickle,
         privmx::webrtc::FrameCryptorOptions _frameCryptorOptions
     );
     ~WebRTCImpl();

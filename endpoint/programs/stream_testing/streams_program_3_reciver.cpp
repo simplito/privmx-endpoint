@@ -28,7 +28,7 @@ public:
             windowEventsLoop();
         }
         uint32_t* pixels = new uint32_t[768 * 432];
-        PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h))
+        // PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h))
         frame->ConvertToRGBA((uint8_t*)pixels, 4, 768, 432);
         SDL_UpdateTexture(texture, NULL, pixels, 768 * sizeof(uint32_t));
         SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
@@ -91,10 +91,10 @@ int main(int argc, char** argv) {
             }
         };
         auto streamlist = streamApi.listStreams(streamRoomId);
-        std::vector<int64_t> streamsId;
+        std::vector<stream::StreamSubscription> streamsId;
         for(int i = 0; i < streamlist.size(); i++) {
             std::cout << "streamlist[" << i << "]:" <<  streamlist[i].streamId << std::endl;
-            streamsId.push_back(streamlist[i].streamId);
+            streamsId.push_back(stream::StreamSubscription{streamlist[i].streamId, std::nullopt});
         }
         streamApi.joinStreamRoom(streamRoomId);
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);

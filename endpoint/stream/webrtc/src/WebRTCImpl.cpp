@@ -1,8 +1,8 @@
-#include <future>
-
 #include "privmx/endpoint/stream/WebRTCImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include <privmx/utils/Debug.hpp>
+#include <future>
 
 using namespace privmx::endpoint::stream;
 
@@ -10,7 +10,7 @@ WebRTCImpl::WebRTCImpl(
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
     libwebrtc::RTCConfiguration configuration,
-    std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> onTrickle,
+    std::function<void(const int64_t, const std::string&)> onTrickle,
     privmx::webrtc::FrameCryptorOptions frameCryptorOptions
 ) :
     _peerConnectionFactory(peerConnectionFactory),
