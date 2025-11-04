@@ -94,19 +94,14 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<std
 
 void SubscriberImpl::assertQuery(const std::vector<std::string>& subscriptionQueries) {
     for(auto& subscriptionQuery : subscriptionQueries) {
-        if (subscriptionQuery == "streamroom/internal") {
-            continue;
-        }
-        auto tmp = privmx::utils::Utils::split(subscriptionQuery, "|");
-        if(tmp.size() != 2) {
+        if(subscriptionQuery.selectors().size() != 1) {
             throw InvalidSubscriptionQueryException();
         }
-        auto selectorData = privmx::utils::Utils::split(tmp[1], "=");
-        if(selectorData.size() != 2) {
-            throw InvalidSubscriptionQueryException();
-        }
-        auto channelData = privmx::utils::Utils::split(tmp[0], "/");
-        if(channelData.size() < 2 || channelData.size() > 3 || channelData[0] != std::string(_moduleName)) {
+        if(
+            subscriptionQuery.channelPath().size() < 2 || 
+            subscriptionQuery.channelPath().size() > 3 || 
+            subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName)
+        ) {
             throw InvalidSubscriptionQueryException();
         }
     }

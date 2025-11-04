@@ -171,10 +171,6 @@ private:
     privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
-
-    std::thread _events_consumer_thread;
-    privmx::utils::CancellationToken::Ptr _ect_notifier_cancellation_token;
-    std::shared_ptr<ThreadSafeQueue<core::NotificationEvent>> _events_consumer_queue;
 };
 
 }  // namespace stream

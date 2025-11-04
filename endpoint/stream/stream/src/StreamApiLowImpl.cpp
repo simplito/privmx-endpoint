@@ -69,39 +69,13 @@ StreamApiLowImpl::StreamApiLowImpl(
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
 
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
-    auto result = _subscriber.subscribeFor({internalSubscriptionQuery});
-
-    _events_consumer_queue = std::make_shared<ThreadSafeQueue<core::NotificationEvent>>();
-    _ect_notifier_cancellation_token = privmx::utils::CancellationToken::create();
-    _events_consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token) {
-        try {
-            while (!token->isCancelled()) {
-                token->sleep( std::chrono::milliseconds(10));
-                if (!_events_consumer_queue->empty()) {
-                    processNotificationEvent(_events_consumer_queue->pop());
-                }
-            }
-        } catch (const core::Exception& e) {
-            PRIVMX_DEBUG("STREAMS", "STREAM-APA-LOW_IMPL", "_events_consumer_thread core::Exception: " + e.getFull());
-            e.rethrow();
-        } catch (const privmx::utils::OperationCancelledException& e) {
-            PRIVMX_DEBUG("STREAMS", "STREAM-APA-LOW_IMPL", "_events_consumer_thread stop");
-        } catch (const std::exception& e) {
-            PRIVMX_DEBUG("STREAMS", "STREAM-APA-LOW_IMPL", "_events_consumer_thread std::exception: " + std::string(e.what()));
-            throw e;
-        }
-    }, _ect_notifier_cancellation_token);
-
-
+    auto result = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
 
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {
-    if(_ect_notifier_cancellation_token) {
-        _ect_notifier_cancellation_token->cancel();
-        _events_consumer_thread.join();
-    }
+    _guardedExecutor.reset();
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
         if(roomValue->publisherStream) {
             roomValue->publisherStream.reset();
@@ -131,7 +105,9 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
 }
 
 void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core::NotificationEvent& _notification) {
-    _events_consumer_queue->push(_notification);
+    _guardedExecutor->exec([&, _notification]() {
+        return processNotificationEvent(_notification);
+    });
 }
 
 void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& notification) {
@@ -266,8 +242,6 @@ void StreamApiLowImpl::processDisconnectedEvent() {
 }
 
 std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
-
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
@@ -284,7 +258,6 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
 }
 
 std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
     model.streamRoomId(streamRoomId);
     auto streamList = _serverApi->streamList(model).list();
@@ -296,15 +269,12 @@ std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomI
 }
 
 void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
-
     createEmptyStreamRoomData(streamRoomId, webRtc);
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomJoinModel>();
     model.streamRoomId(streamRoomId);
     _serverApi->streamRoomJoin(model);
 }
 void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomLeaveModel>();
     model.streamRoomId(streamRoomId);
     _serverApi->streamRoomLeave(model);
@@ -333,7 +303,6 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
 }
 
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto streamHandle {nextId()};
     auto room = getStreamRoomData(streamRoomId);
     if(room->publisherStream) {
@@ -377,7 +346,6 @@ RemoteStreamId StreamApiLowImpl::publishStream(const StreamHandle& streamHandle)
 }
 
 void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto room = getStreamRoomData(streamHandle);
     if(!room->publisherStream) {
         throw StreamHandleNotInitialized();
@@ -394,8 +362,6 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
 }
 
 void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
-
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsSubscribeModel>();
@@ -443,7 +409,6 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
 
 
 void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const Settings& options) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsModifySubscriptionsModel>();
@@ -504,7 +469,6 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& strea
 }
 
 void StreamApiLowImpl::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamsUnsubscribeModel>();
     model.streamRoomId(streamRoomId);
 
@@ -694,7 +658,6 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string
 }
 
 StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     PRIVMX_DEBUG_TIME_START(PlatformStream, getStreamRoom)
     auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     params.id(streamRoomId);
@@ -725,7 +688,6 @@ StreamRoom StreamApiLowImpl::convertServerStreamRoomToLibStreamRoom(
     const int64_t& statusCode,
     const int64_t& schemaVersion
 ) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     std::vector<std::string> users;
     std::vector<std::string> managers;
     if(!streamRoomInfo.usersEmpty()) {
@@ -757,7 +719,6 @@ StreamRoom StreamApiLowImpl::convertServerStreamRoomToLibStreamRoom(
 }
 
 StreamRoom StreamApiLowImpl::convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData) {  
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     return convertServerStreamRoomToLibStreamRoom(
         streamRoomInfo, 
         streamRoomData.publicMeta, 
@@ -768,7 +729,6 @@ StreamRoom StreamApiLowImpl::convertDecryptedStreamRoomDataV5ToStreamRoom(server
 }
 
 StreamRoomDataSchema::Version StreamApiLowImpl::getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     if (streamRoomEntry.data().type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(streamRoomEntry.data());
         auto version = versioned.versionOpt(core::ModuleDataSchema::Version::UNKNOWN);
@@ -783,7 +743,6 @@ StreamRoomDataSchema::Version StreamApiLowImpl::getStreamRoomEntryDataStructureV
 }
 
 std::tuple<StreamRoom, core::DataIntegrityObject> StreamApiLowImpl::decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom, server::StreamRoomDataEntry streamRoomEntry, const core::DecryptedEncKey& encKey) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     switch (getStreamRoomEntryDataStructureVersion(streamRoomEntry)) {
         case StreamRoomDataSchema::Version::UNKNOWN: {
             auto e = UnknowStreamRoomFormatException();
@@ -799,7 +758,6 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamApiLowImpl::decryptAndCo
 }
 
 std::vector<StreamRoom> StreamApiLowImpl::decryptAndConvertStreamRoomsDataToStreamRooms(privmx::utils::List<server::StreamRoomInfo> streamRooms) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     std::vector<StreamRoom> result;
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     //create request to KeyProvider for keys
@@ -865,7 +823,6 @@ std::vector<StreamRoom> StreamApiLowImpl::decryptAndConvertStreamRoomsDataToStre
 }
 
 StreamRoom StreamApiLowImpl::decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto streamRoom_data_entry = streamRoom.data().get(streamRoom.data().size()-1);
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
@@ -898,7 +855,6 @@ int64_t StreamApiLowImpl::generateNumericId() {
 }
 
 privmx::utils::List<std::string> StreamApiLowImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for (auto user : users) {
         result.add(user.userId);
@@ -907,7 +863,6 @@ privmx::utils::List<std::string> StreamApiLowImpl::mapUsers(const std::vector<co
 }
 
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const std::string& streamRoomId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto room = _streamRoomMap.get(streamRoomId);
     if(!room.has_value()) {
         throw StreamRoomConnectionNotInitialized();
@@ -916,7 +871,6 @@ std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoo
 }
 
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const StreamHandle& streamHandle) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto streamRoomId = _streamHandleToRoomId.get(streamHandle);
     if(!streamRoomId.has_value()) {
         throw IncorrectStreamHandleException();
@@ -925,32 +879,27 @@ std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoo
 }
 
 void StreamApiLowImpl::keyManagement(const std::string& streamRoomId, bool disable) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto streamRoom = _streamRoomMap.get(streamRoomId);
     if(streamRoom.has_value()) {
         streamRoom.value()->streamKeyManager->keyManagement(disable);
     }
 }
 std::vector<std::string> StreamApiLowImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto result = _subscriber.subscribeFor(subscriptionQueries);
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
     return result;
 }
 
 void StreamApiLowImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     _subscriber.unsubscribeFrom(subscriptionIds);
     _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
 std::string StreamApiLowImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }
 
 std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto params = privmx::utils::TypedObjectFactory::createNewObject<stream::server::StreamRoomGetModel>();
     params.id(moduleId);
     auto stream = _serverApi->streamRoomGet(params).streamRoom();
@@ -960,7 +909,6 @@ std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFr
 }
 
 core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo stream) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     return core::ModuleKeys{
         .keys=stream.keys(),
         .currentKeyId=stream.keyId(),
@@ -971,7 +919,6 @@ core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo
 }
 
 void StreamApiLowImpl::assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto streamRoom_data_entry = streamRoom.data().get(streamRoom.data().size()-1);
         switch (getStreamRoomEntryDataStructureVersion(streamRoom_data_entry)) {
             case StreamRoomDataSchema::Version::UNKNOWN:
@@ -994,7 +941,6 @@ void StreamApiLowImpl::assertStreamRoomDataIntegrity(server::StreamRoomInfo stre
 }
 
 uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     try {
         assertStreamRoomDataIntegrity(streamRoom);
     } catch (const core::Exception& e) {
@@ -1008,7 +954,6 @@ uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInf
 }
 
 void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     try {
         Poco::URI tmp(uri);
         if(tmp.getScheme() != "turn") {
@@ -1019,7 +964,6 @@ void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
     }
 }
 void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamTrickleModel>();
     model.sessionId(sessionId);
     model.candidate(utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(candidateAsJson)));
@@ -1027,7 +971,6 @@ void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candi
 }
 
 void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp.sdp);
     sessionDescription.type("answer");
@@ -1038,7 +981,6 @@ void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const S
 }
 
 void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room, const std::set<RemoteStreamId>& streamIds) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     // get Room for contextId
     auto modelGetRoom = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     modelGetRoom.id(room->streamRoomId);

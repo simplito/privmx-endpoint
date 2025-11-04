@@ -39,6 +39,7 @@ private:
     static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;
     static const std::map<EventSelectorType, std::string> _readableSelectorType;
     static const std::map<EventType, std::string> _readableEventType;
+    constexpr static size_t MODULE_NAME_IN_QUERY_PATH = 0;
 };
 
 } // stream
