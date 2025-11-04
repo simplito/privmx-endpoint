@@ -27,8 +27,8 @@ public:
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
     static std::string getInternalEventsSubscriptionQuery();
 private:
-    virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
-    virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);
+    virtual privmx::utils::List<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
+    virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
 
     static std::string getChannel(EventType eventType);
     static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
