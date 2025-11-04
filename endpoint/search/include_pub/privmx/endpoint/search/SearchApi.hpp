@@ -41,7 +41,7 @@ public:
      *
      * @return SearchApi object
      */
-    static SearchApi create(core::Connection& connetion, store::StoreApi& storeApi, kvdb::KvdbApi& kvdbApi);
+    static SearchApi create(core::Connection& connection, store::StoreApi& storeApi, kvdb::KvdbApi& kvdbApi);
 
     /**
      * //doc-gen:ignore

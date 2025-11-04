@@ -51,6 +51,8 @@ struct PrivmxSession
     privmx::endpoint::core::Connection connection;
     privmx::endpoint::store::StoreApi storeApi;
     privmx::endpoint::kvdb::KvdbApi kvdbApi;
+    std::string kvdbId;
+    std::string storeId;
 };
 
 class SessionManager
@@ -62,20 +64,28 @@ public:
         }
         return _singleton;
     }
-    std::shared_ptr<PrivmxSession> addSession(const privmx::endpoint::core::Connection& connection, const privmx::endpoint::store::StoreApi& storeApi, const privmx::endpoint::kvdb::KvdbApi& kvdbApi) {
+    std::shared_ptr<PrivmxSession> addSession(
+        const privmx::endpoint::core::Connection& connection,
+        const privmx::endpoint::store::StoreApi& storeApi,
+        const privmx::endpoint::kvdb::KvdbApi& kvdbApi,
+        const std::string& kvdbId,
+        const std::string& storeId
+    ) {
         std::shared_ptr<PrivmxSession> session = std::make_shared<PrivmxSession>(PrivmxSession {
             .id = generateId(),
             .connection = connection,
             .storeApi = storeApi,
-            .kvdbApi = kvdbApi
+            .kvdbApi = kvdbApi,
+            .kvdbId = kvdbId,
+            .storeId = storeId
         });
         _sessions[session->id] = session;
         return session;
     }
-    std::shared_ptr<PrivmxSession> createSession(const std::string& userPrivKey, const std::string& solutionId, const std::string& bridgeUrl) {
-        privmx::endpoint::core::Connection connection = privmx::endpoint::core::Connection::connect(userPrivKey, solutionId, bridgeUrl);
-        return addSession(connection, privmx::endpoint::store::StoreApi::create(connection), privmx::endpoint::kvdb::KvdbApi::create(connection));
-    }
+    // std::shared_ptr<PrivmxSession> createSession(const std::string& userPrivKey, const std::string& solutionId, const std::string& bridgeUrl) {
+    //     privmx::endpoint::core::Connection connection = privmx::endpoint::core::Connection::connect(userPrivKey, solutionId, bridgeUrl);
+    //     return addSession(connection, privmx::endpoint::store::StoreApi::create(connection), privmx::endpoint::kvdb::KvdbApi::create(connection));
+    // }
     std::shared_ptr<PrivmxSession> getSession(const std::string& id) {
         return _sessions[id];
     }
@@ -243,10 +253,9 @@ class PrivmxFS
 {
 public:
     static std::shared_ptr<PrivmxFS> create(
-        std::shared_ptr<PrivmxSession> session,
-        const std::string& kvdbId
+        std::shared_ptr<PrivmxSession> session
 ) {
-        std::shared_ptr<PrivmxFS> res = std::make_shared<PrivmxFS>(session, kvdbId);
+        std::shared_ptr<PrivmxFS> res = std::make_shared<PrivmxFS>(session);
         return res;
     }
 
@@ -258,38 +267,36 @@ public:
     }
 
     bool access(const std::string& path) {
-        return _session->kvdbApi.hasEntry(_kvdbId, path);
+        return _session->kvdbApi.hasEntry(_session->kvdbId, path);
     }
 
     void deleteFile(const std::string& path) {
-        std::string fileId = _session->kvdbApi.getEntry(_kvdbId, path).data.stdString();
-        _session->kvdbApi.deleteEntry(_kvdbId, path);
+        std::string fileId = _session->kvdbApi.getEntry(_session->kvdbId, path).data.stdString();
+        _session->kvdbApi.deleteEntry(_session->kvdbId, path);
         _session->storeApi.deleteFile(fileId);
     }
     PrivmxFS(
-        const std::shared_ptr<PrivmxSession>& session,
-        const std::string& kvdbId
-    ) : _session(session), _kvdbId(kvdbId) {}
+        const std::shared_ptr<PrivmxSession>& session
+    ) : _session(session) {}
 
 private:
 
     std::string getFileId(const std::string& name) {
         // l("File name:", name);
-        if (_session->kvdbApi.hasEntry(_kvdbId, name)) {
-            std::string fileId = _session->kvdbApi.getEntry(_kvdbId, name).data.stdString();
+        if (_session->kvdbApi.hasEntry(_session->kvdbId, name)) {
+            std::string fileId = _session->kvdbApi.getEntry(_session->kvdbId, name).data.stdString();
             return fileId;
         } else {
-            int64_t fh = _session->storeApi.createFile(STORE_ID, META, META, 0, true);
+            int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
             std::string fileId = _session->storeApi.closeFile(fh);
-            std::cerr << _kvdbId << std::endl;
-            _session->kvdbApi.setEntry(_kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
+            std::cerr << _session->kvdbId << std::endl;
+            _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
             return fileId;
         }
     }
 
 
     std::shared_ptr<PrivmxSession> _session;
-    std::string _kvdbId;
 };
 
 class PrivmxExtFS
@@ -338,37 +345,37 @@ private:
     struct ParsedPath
     {
         std::string sessionId;
-        std::string module;
-        std::string moduleId;
+        // std::string module;
+        // std::string moduleId;
         std::string path;
-        std::string directory;
-        std::string filename;
+        // std::string directory;
+        // std::string filename;
     };
 
-    ParsedPath parsePath(const std::string& path2) { // "/pmx/1/kvdb/68dcf2bbed17034f64e18883/demo.db"
+    ParsedPath parsePath(const std::string& path2) { // "/pmx/1/kvdb/68dcf2bbed17034f64e18883/demo.db" | "/pmx/1/index.db"
         Poco::Path path;
         path.parse(path2);
         std::cerr << path.toString() << std::endl;
         if (path[0] == "pmx") {
             ParsedPath parsed = ParsedPath {
                 .sessionId = path[1],
-                .module = path[2],
-                .moduleId = path[3]
+                // .module = path[2],
+                // .moduleId = path[3]
             };
             path.popFrontDirectory();
             path.popFrontDirectory();
-            path.popFrontDirectory();
-            path.popFrontDirectory();
+            // path.popFrontDirectory();
+            // path.popFrontDirectory();
             parsed.path = path.toString();
-            parsed.filename = path.getFileName();
-            std::cerr << parsed.moduleId << std::endl;
+            // parsed.filename = path.getFileName();
+            // std::cerr << parsed.moduleId << std::endl;
             return parsed;
         }
         throw 0;
     }
 
     std::shared_ptr<PrivmxFS> getPrivmxFS(const ParsedPath& parsed) {
-        return PrivmxFS::create(SessionManager::get()->getSession(parsed.sessionId), parsed.moduleId);
+        return PrivmxFS::create(SessionManager::get()->getSession(parsed.sessionId));
     }
 };
 

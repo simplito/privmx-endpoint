@@ -24,17 +24,47 @@ limitations under the License.
 
 #include "privmx/endpoint/search/FullTextSearch.hpp"
 
+#include "privmx/utils/ThreadSaveMap.hpp"
+#include "privmx/endpoint/search/SearchException.hpp"
+#include "privmx/endpoint/search/DynamicTypes.hpp"
+
 namespace privmx {
 namespace endpoint {
 namespace search {
+
+class FtsContainer
+{
+    public:
+    int64_t add(std::shared_ptr<FullTextSearch> fts) {
+        int64_t handle = index++;
+        _ftsMap.set(handle, fts);
+        return handle;
+    }
+
+    void remove(int64_t handle) {
+        _ftsMap.erase(handle);
+    }
+
+    std::shared_ptr<FullTextSearch> get(int64_t handle) {
+        auto val = _ftsMap.get(handle);
+        if (val.has_value()) {
+            return val.value();
+        }
+        throw InvalidIndexHandleException();
+    }
+
+private:
+    std::atomic<int64_t> index = 1;
+    privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<FullTextSearch>> _ftsMap;
+};
 
 class SearchApiImpl
 {
 public:
     SearchApiImpl(
-        // const core::Connection& connection,
-        // const store::StoreApi& storeApi,
-        // const kvdb::KvdbApi& kvdbApi
+        const core::Connection& connection,
+        const store::StoreApi& storeApi,
+        const kvdb::KvdbApi& kvdbApi
     );
 
     std::string createSearchIndex(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
@@ -60,7 +90,15 @@ public:
     core::PagingList<Document> searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery);
 
 private:
-    std::shared_ptr<FullTextSearch> _fts;
+    dynamic::IndexData getIndexData(const std::string& indexId);
+    void setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode);
+
+    // std::shared_ptr<FullTextSearch> _fts;
+    std::shared_ptr<PrivmxSession> _session;
+    core::Connection _connection;
+    store::StoreApi _storeApi;
+    kvdb::KvdbApi _kvdbApi;
+    FtsContainer _fts;
     
 };
 

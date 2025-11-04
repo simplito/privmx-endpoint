@@ -37,6 +37,7 @@ namespace search {
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointSearchException, "Unknown endpoint search exception", "Search", 0x0003)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, NotInitializedException, "Endpoint not initialized", 0x0001)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InvalidIndexHandleException, "Invalid Index handle", 0x0001)
 
 } // search
 } // endpoint

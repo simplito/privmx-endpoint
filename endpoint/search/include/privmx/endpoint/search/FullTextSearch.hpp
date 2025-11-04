@@ -54,7 +54,7 @@ public:
             return {};
         }
 
-        rc = sqlite3_exec(db, (std::string("ATTACH 'file:") + filename + "?vfs=memdb' AS pmx;").c_str(), 0, 0, 0);
+        rc = sqlite3_exec(db, (std::string("ATTACH 'file:") + filename + "?vfs=privmxvfs' AS pmx;").c_str(), 0, 0, 0);
         if(rc != SQLITE_OK){
             fprintf(stderr, "ATTACH failed: %s\n", sqlite3_errmsg(db));
             return {};

@@ -19,12 +19,12 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
 
-SearchApi SearchApi::create(core::Connection& connetion, store::StoreApi& storeApi, kvdb::KvdbApi& kvdbApi) {
+SearchApi SearchApi::create(core::Connection& connection, store::StoreApi& storeApi, kvdb::KvdbApi& kvdbApi) {
     try {
         std::shared_ptr<SearchApiImpl> impl = std::make_shared<SearchApiImpl>(
-            // connection.getImpl(),
-            // storeApi.getImpl(),
-            // kvdbApi.getImpl()
+            connection,
+            storeApi,
+            kvdbApi
         );
         return SearchApi(impl);
     }  catch (const privmx::utils::PrivmxException& e) {
