@@ -69,8 +69,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
 
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
-    std::vector<std::string> tmp = {internalSubscriptionQuery};
-    auto result = _subscriber.subscribeFor(tmp);
+    auto result = _subscriber.subscribeFor({internalSubscriptionQuery});
 
     _events_consumer_queue = std::make_shared<ThreadSafeQueue<core::NotificationEvent>>();
     _ect_notifier_cancellation_token = privmx::utils::CancellationToken::create();
