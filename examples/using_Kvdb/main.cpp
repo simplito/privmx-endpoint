@@ -11,14 +11,14 @@
 using namespace privmx::endpoint;
 int main() {
 	// the values below should be replaced by the ones corresponding to your Brigde Server instance.
-	auto solutionId {"8b4e21d9-076f-4f78-9a02-51e172f67cbd"};
-	auto contextId {"0cf913af-6c43-4743-be90-0e55a1dbca06"};
-	auto userPubKey {"6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM"};
-	auto userPrivKey {"Kx9ftJtfa4Af941f9jYR44dKxv9uWMxkJBk3XgdSYy6M5i6zcXxS"};
-	auto userId {"user_1"};
-	
-	auto platformUrl {"http://localhost:40000"};
-	
+        auto platformUrl {"<YOUR_BRIDGE_URL_HERE>"};
+        auto solutionId {"<YOUR_SOLUTION_ID_HERE>"};
+        auto contextId {"<YOUR_CONTEXT_ID_HERE>"};
+
+        auto userId {"<YOUR_USER_ID_HERE>"};
+        auto userPubKey {"<YOUR_USER_PUB_KEY_HERE>"};
+        auto userPrivKey {"<YOUR_USER_PRIV_KEY_HERE>"};
+
 	std::vector<core::UserWithPubKey> kvdbUsers;
 	kvdbUsers.push_back({.userId = userId, .pubKey = userPubKey});
 	

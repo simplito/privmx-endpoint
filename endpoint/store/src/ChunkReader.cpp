@@ -32,15 +32,15 @@ ChunkReader::ChunkReader(
     }
 }
 
-size_t ChunkReader::filePosToFileChunkIndex(size_t position) {
+uint64_t ChunkReader::filePosToFileChunkIndex(uint64_t position) {
     return position / _chunkEncryptor->getPlainChunkSize();
 }
 
-size_t ChunkReader::filePosToPosInFileChunk(size_t position) {
+uint64_t ChunkReader::filePosToPosInFileChunk(uint64_t position) {
     return position % _chunkEncryptor->getPlainChunkSize();
 }
 
-std::string ChunkReader::getDecryptedChunk(size_t index) {
+std::string ChunkReader::getDecryptedChunk(uint64_t index) {
     if(!_lastChunk.has_value() || _lastChunk->index != index) {
         std::string chunk = _chunkDataProvider->getChunk(index, _version);
         std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
@@ -54,7 +54,7 @@ void ChunkReader::sync(const store::FileDecryptionParams& newParms) {
     _lastChunk = std::nullopt;
 }
 
-void ChunkReader::update(int64_t newfileVersion, size_t index) {
+void ChunkReader::update(int64_t newfileVersion, uint64_t index) {
     _version = newfileVersion;
     if(_lastChunk.has_value() && _lastChunk->index == index) {
         _lastChunk = std::nullopt;

@@ -50,7 +50,7 @@ KvdbApiImpl::KvdbApiImpl(
     _eventMiddleware(eventMiddleware),
     _connection(connection),
     _serverApi(ServerApi(gateway)),
-    _subscriber(gateway)
+    _subscriber(gateway, KVDB_TYPE_FILTER_FLAG)
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
@@ -61,6 +61,7 @@ KvdbApiImpl::~KvdbApiImpl() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
+    _guardedExecutor.reset();
 }
 
 std::string KvdbApiImpl::createKvdb(
@@ -406,66 +407,68 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
     if(!subscriptionQuery.has_value()) {
         return;
     }
-    if (type == "kvdbCreated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
-        if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), kvdbToModuleKeys(raw), raw.version());
-            privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw); 
-            auto event = core::EventBuilder::buildEvent<KvdbCreatedEvent>("kvdb", data, notification);
-            _eventMiddleware->emitApiEvent(event);
+    _guardedExecutor->exec([&, type, notification]() {
+        if (type == "kvdbCreated") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
+            if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+                setNewModuleKeysInCache(raw.id(), kvdbToModuleKeys(raw), raw.version());
+                privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw); 
+                auto event = core::EventBuilder::buildEvent<KvdbCreatedEvent>("kvdb", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "kvdbUpdated") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
+            if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+                setNewModuleKeysInCache(raw.id(), kvdbToModuleKeys(raw), raw.version());
+                privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw);
+                auto event = core::EventBuilder::buildEvent<KvdbUpdatedEvent>("kvdb", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "kvdbDeleted") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEventData>(notification.data);
+            if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+                invalidateModuleKeysInCache(raw.kvdbId());
+                auto data = Mapper::mapToKvdbDeletedEventData(raw);
+                auto event = core::EventBuilder::buildEvent<KvdbDeletedEvent>("kvdb", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "kvdbStats") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbStatsEventData>(notification.data);
+            if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+                auto data = Mapper::mapToKvdbStatsEventData(raw);
+                auto event = core::EventBuilder::buildEvent<KvdbStatsChangedEvent>("kvdb", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "kvdbNewEntry") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryEventData>(notification.data);
+            if(raw.containerTypeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+                auto data = validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw));
+                auto event = core::EventBuilder::buildEvent<KvdbNewEntryEvent>("kvdb/" + raw.kvdbId() + "/entries", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "kvdbUpdatedEntry") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryEventData>(notification.data);
+            if(raw.containerTypeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+                auto data = validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw));
+                auto event = core::EventBuilder::buildEvent<KvdbEntryUpdatedEvent>("kvdb/" + raw.kvdbId() + "/entries", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "kvdbDeletedEntry") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEntryEventData>(notification.data);
+            if(raw.containerTypeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+                auto data = Mapper::mapToKvdbDeletedEntryEventData(raw);
+                auto event = core::EventBuilder::buildEvent<KvdbEntryDeletedEvent>("kvdb/" + raw.kvdbId() + "/entries", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
+        } else if (type == "kvdbCollectionChanged") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
+            if (raw.containerTypeOpt(KVDB_TYPE_FILTER_FLAG) == KVDB_TYPE_FILTER_FLAG) {
+                auto data = core::Mapper::mapToCollectionChangedEventData(KVDB_TYPE_FILTER_FLAG, raw);
+                auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("kvdb/collectionChanged", data, notification);
+                _eventMiddleware->emitApiEvent(event);
+            }
         }
-    } else if (type == "kvdbUpdated") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbInfo>(notification.data);
-        if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            setNewModuleKeysInCache(raw.id(), kvdbToModuleKeys(raw), raw.version());
-            privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw);
-            auto event = core::EventBuilder::buildEvent<KvdbUpdatedEvent>("kvdb", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "kvdbDeleted") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEventData>(notification.data);
-        if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            invalidateModuleKeysInCache(raw.kvdbId());
-            auto data = Mapper::mapToKvdbDeletedEventData(raw);
-            auto event = core::EventBuilder::buildEvent<KvdbDeletedEvent>("kvdb", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "kvdbStats") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbStatsEventData>(notification.data);
-        if(raw.typeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            auto data = Mapper::mapToKvdbStatsEventData(raw);
-            auto event = core::EventBuilder::buildEvent<KvdbStatsChangedEvent>("kvdb", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "kvdbNewEntry") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryEventData>(notification.data);
-        if(raw.containerTypeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            auto data = validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw));
-            auto event = core::EventBuilder::buildEvent<KvdbNewEntryEvent>("kvdb/" + raw.kvdbId() + "/entries", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "kvdbUpdatedEntry") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbEntryEventData>(notification.data);
-        if(raw.containerTypeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            auto data = validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw));
-            auto event = core::EventBuilder::buildEvent<KvdbEntryUpdatedEvent>("kvdb/" + raw.kvdbId() + "/entries", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "kvdbDeletedEntry") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<server::KvdbDeletedEntryEventData>(notification.data);
-        if(raw.containerTypeOpt(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-            auto data = Mapper::mapToKvdbDeletedEntryEventData(raw);
-            auto event = core::EventBuilder::buildEvent<KvdbEntryDeletedEvent>("kvdb/" + raw.kvdbId() + "/entries", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "kvdbCollectionChanged") {
-        auto raw = utils::TypedObjectFactory::createObjectFromVar<core::server::CollectionChangedEventData>(notification.data);
-        if (raw.containerTypeOpt(KVDB_TYPE_FILTER_FLAG) == KVDB_TYPE_FILTER_FLAG) {
-            auto data = core::Mapper::mapToCollectionChangedEventData(KVDB_TYPE_FILTER_FLAG, raw);
-            auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("kvdb/collectionChanged", data, notification);
-            _eventMiddleware->emitApiEvent(event);
-        }
-    }
+    });
 }
 
 void KvdbApiImpl::processConnectedEvent() {

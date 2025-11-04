@@ -146,7 +146,6 @@ public:
      * @param publicMeta public KVDB entry metadata
      * @param privateMeta private KVDB entry metadata
      * @param data content of the KVDB entry
-     * @return ID of the new KVDB entry
      */    
     void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version = 0);
     
@@ -191,7 +190,7 @@ public:
 
     /**
      * Generate subscription Query for the KVDB events for single KvdbEntry.
-     * @param eventType type of event which you listen for (Works ony For ENTRY_UPDATE, ENTRY_DELETE = 6,)
+     * @param eventType type of event which you listen for
      * @param kvdbId Id of Kvdb 
      * @param kvdbEntryId Key of Kvdb Entry
      */

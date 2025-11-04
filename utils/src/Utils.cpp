@@ -250,6 +250,17 @@ void Utils::rtrim(std::string &s) {
     }).base(), s.end());
 }
 
+std::vector<std::string> Utils::split(std::string data, char delimiter) {
+    std::stringstream data_stream(data);
+    std::string segment;
+    std::vector<std::string> tokens;
+    while(std::getline(data_stream, segment, delimiter)) {
+       tokens.push_back(segment);
+    }
+
+    return tokens;
+}
+
 std::vector<std::string> Utils::split(std::string data, const std::string& delimiter) {
     std::vector<std::string> tokens;
     size_t pos = 0;

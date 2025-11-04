@@ -57,8 +57,8 @@ void EventMiddleware::notificationEventListenerRemoveSubscriptionIds(int id, con
             for(size_t i = 0; i < listener.second.size(); i++) {
                 if(toRemove.size() > 0) {
                     auto it = std::find(toRemove.begin(), toRemove.end(), listener.second[i]);
-                    if(it == toRemove.end()) {
-                        toRemove.erase(it);
+                    if(it != toRemove.end()) {
+                        toRemove.erase(std::remove(toRemove.begin(), toRemove.end(), listener.second[i]));
                     } else {
                         newSubscriptionIds.push_back(listener.second[i]);
                     }

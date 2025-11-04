@@ -50,7 +50,7 @@ void HmacList::setAll(const std::string& hashes) {
 }
 
 
-void HmacList::set(const int64_t& chunkIndex, const std::string& hash, bool truncate ) {
+void HmacList::set(const uint64_t& chunkIndex, const std::string& hash, bool truncate ) {
     if (hash.size() != HMAC_SIZE) {
         throw InvalidHashSizeException();
     }
@@ -71,7 +71,7 @@ void HmacList::set(const int64_t& chunkIndex, const std::string& hash, bool trun
     }
 }
 
-const std::string HmacList::getHash(const int64_t& chunkIndex) {
+const std::string HmacList::getHash(const uint64_t& chunkIndex) {
     if (chunkIndex > _size) {
         throw HashIndexOutOfBoundsException();
     }
@@ -89,7 +89,7 @@ const std::string& HmacList::getTopHash() {
     return _topHash.value();
 }
 
-bool HmacList::verifyHash(const int64_t& chunkIndex, const std::string& hash) {
+bool HmacList::verifyHash(const uint64_t& chunkIndex, const std::string& hash) {
     return getHash(chunkIndex) == hash;
 }
 

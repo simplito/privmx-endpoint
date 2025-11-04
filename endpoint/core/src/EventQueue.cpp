@@ -16,6 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/core/JsonSerializer.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
+#include <privmx/endpoint/core/SingletonsHolder.hpp>
 
 using namespace privmx::endpoint::core;
 

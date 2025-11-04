@@ -32,11 +32,11 @@ public:
         const store::FileDecryptionParams& decryptionParams
     );
 
-    virtual std::string read(size_t pos, size_t length) override;
+    virtual std::string read(uint64_t pos, uint64_t length) override;
     virtual void sync(const store::FileDecryptionParams& newParms) override;
 private:
     std::shared_ptr<IChunkReader> _chunkReader;
-    size_t _plainfileSize;
+    uint64_t _plainfileSize;
     int64_t _version;
 };
 

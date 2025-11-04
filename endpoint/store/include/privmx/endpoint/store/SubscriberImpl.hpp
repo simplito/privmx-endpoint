@@ -23,14 +23,15 @@ class SubscriberImpl : public privmx::endpoint::core::Subscriber
 {
 public:
     
-    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
+    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway, std::string typeFilterFlag) : Subscriber(gateway), _typeFilterFlag(typeFilterFlag) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
-    virtual privmx::utils::List<std::string> transform(const std::vector<std::string>& subscriptionQueries);
-    virtual void assertQuery(const std::vector<std::string>& subscriptionQueries);
+    virtual privmx::utils::List<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
+    virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
 
-    static std::string getChannel(EventType eventType);
-    static std::string getSelector(EventSelectorType selectorType, const std::string& selectorId);
+    std::string _typeFilterFlag;
+    static std::vector<std::string> getChannelPath(EventType eventType);
+    static std::vector<core::SubscriptionQueryObj::QuerySelector> getSelectors(EventSelectorType selectorType, const std::string& selectorId);
     static constexpr std::string_view _moduleName = "store";
     static constexpr std::string_view _itemName = "files";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
@@ -38,6 +39,7 @@ private:
     static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;
     static const std::map<EventSelectorType, std::string> _readableSelectorType;
     static const std::map<EventType, std::string> _readableEventType;
+    constexpr static size_t MODULE_NAME_IN_QUERY_PATH = 0;
 };
 
 } // store

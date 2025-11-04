@@ -218,7 +218,7 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     /**
-     * Synchronize file handle data with newset data on serwer
+     * Synchronize file handle data with newest data on serwer
      * @param handle handle to read/write file data
      */ 
     void syncFile(const int64_t handle);

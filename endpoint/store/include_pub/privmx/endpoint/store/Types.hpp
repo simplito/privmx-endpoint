@@ -95,7 +95,7 @@ struct File {
     int64_t schemaVersion;
 
     /**
-     * have random write feature enabled 
+     * randomWrite is enabled 
      */
     bool randomWrite;
 };

@@ -35,6 +35,7 @@ limitations under the License.
 #include <mutex>
 #include <shared_mutex>
 #include "privmx/endpoint/core/SubscriberImpl.hpp"
+#include <privmx/utils/GuardedExecutor.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -43,6 +44,7 @@ namespace core {
 class ConnectionImpl {
 public:
     ConnectionImpl();
+    ~ConnectionImpl();
     void connect(
         const std::string& userPrivKey,
         const std::string& solutionId,
@@ -120,6 +122,7 @@ private:
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;
+    std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
     int _notificationListenerId;
 };
 
