@@ -47,12 +47,12 @@ std::string StreamLeftEvent::toJSON() const {
     return core::JsonSerializer<StreamLeftEvent>::serialize(*this);
 }
 
-std::string StreamAvailablePublishersEvent::toJSON() const {
-    return core::JsonSerializer<StreamAvailablePublishersEvent>::serialize(*this);
+std::string StreamNewStreamsEvent::toJSON() const {
+    return core::JsonSerializer<StreamNewStreamsEvent>::serialize(*this);
 }
 
-std::string PublishersStreamsUpdatedEvent::toJSON() const {
-    return core::JsonSerializer<PublishersStreamsUpdatedEvent>::serialize(*this);
+std::string StreamsUpdatedEvent::toJSON() const {
+    return core::JsonSerializer<StreamsUpdatedEvent>::serialize(*this);
 }
 
 std::shared_ptr<core::SerializedEvent> StreamRoomCreatedEvent::serialize() const {
@@ -83,11 +83,11 @@ std::shared_ptr<core::SerializedEvent> StreamLeftEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<core::SerializedEvent> StreamAvailablePublishersEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> StreamNewStreamsEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-std::shared_ptr<core::SerializedEvent> PublishersStreamsUpdatedEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> StreamsUpdatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
@@ -210,15 +210,15 @@ StreamLeftEvent Events::extractStreamLeftEvent(const core::EventHolder& handler)
     }
 }
 
-bool Events::isStreamAvailablePublishersEvent(const core::EventHolder& handler) {
-    return handler.type() == "publisherAvailablePublishers";
+bool Events::isStreamNewStreamsEvent(const core::EventHolder& handler) {
+    return handler.type() == "newStreams";
 }
 
-StreamAvailablePublishersEvent Events::extractStreamAvailablePublishersEvent(const core::EventHolder& handler) {
+StreamNewStreamsEvent Events::extractStreamNewStreamsEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<StreamAvailablePublishersEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<StreamNewStreamsEvent>(handler.get());
         if (!event) {
-            throw CannotExtractStreamAvailablePublishersEventException();
+            throw CannotExtractStreamNewStreamsEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
@@ -227,15 +227,15 @@ StreamAvailablePublishersEvent Events::extractStreamAvailablePublishersEvent(con
     }
 }
 
-bool Events::isPublishersStreamsUpdatedEvent(const core::EventHolder& handler) {
+bool Events::isStreamsUpdatedEvent(const core::EventHolder& handler) {
     return handler.type() == "streamsUpdated";
 }
 
-PublishersStreamsUpdatedEvent Events::extractPublishersStreamsUpdatedEvent(const core::EventHolder& handler) {
+StreamsUpdatedEvent Events::extractStreamsUpdatedEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<PublishersStreamsUpdatedEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<StreamsUpdatedEvent>(handler.get());
         if (!event) {
-            throw CannotExtractPublishersStreamsUpdatedEventException();
+            throw CannotExtractStreamsUpdatedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

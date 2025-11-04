@@ -129,24 +129,37 @@ enum EventSelectorType: int64_t {
     STREAM_ID = 2,
 };
 
-struct VideoRoomStreamTrack {
-    std::string type;
-    std::string codec;
-    std::string mid;
-    int64_t mindex;
+// struct VideoRoomStreamTrack {
+//     std::string type;
+//     std::string codec;
+//     std::string mid;
+//     int64_t mindex;
+// };
+
+struct StreamTrackInfo {
+    std::string type;                       // "audio" | "video" | "data"
+    int64_t mindex;                         // unikalny mindex strumienia
+    std::string mid;                        // unikalny mid
+    std::optional<bool> disabled;           // czy strumień jest nieaktywny
+    std::optional<std::string> codec;       // np. "opus", "vp8"
+    std::optional<std::string> description; // opis strumienia
+    std::optional<bool> moderated;          // czy zmoderowany
+    std::optional<bool> simulcast;          // czy używa simulcast
+    std::optional<bool> talking;            // czy aktywność audio
 };
 
-
-struct NewPublisherEvent {
-    int64_t id;
-    std::string video_codec;
-    std::string userId;
-    std::vector<VideoRoomStreamTrack> streams;
+struct StreamInfo {
+    int64_t id;                             // unikalny ID wydawcy
+    std::string userId;                     // nazwa użytkownika
+    std::optional<std::string> metadata;    // metadane jako tekst JSON
+    std::optional<bool> dummy;              // czy to publisher-dummy
+    std::vector<StreamTrackInfo> tracks;    // lista trackow
+    std::optional<bool> talking;            // deprecated
 };
 
-struct CurrentPublishersData {
+struct NewStreams {
     std::string room;
-    std::vector<NewPublisherEvent> publishers;
+    std::vector<StreamInfo> streams;
 };
 
 struct UpdatedStreamData {

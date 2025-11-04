@@ -87,36 +87,43 @@ stream::UpdateSessionIdModel VarDeserializer::deserialize<stream::UpdateSessionI
 }
 
 template<>
-stream::VideoRoomStreamTrack VarDeserializer::deserialize<stream::VideoRoomStreamTrack>(const Poco::Dynamic::Var& val, const std::string& name) {
+stream::StreamTrackInfo VarDeserializer::deserialize<stream::StreamTrackInfo>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {
         .type = deserialize<std::string>(obj->get("type"), name + ".type"),
-        .codec = deserialize<std::string>(obj->get("codec"), name + ".codec"),
+        .mindex = deserialize<int64_t>(obj->get("mindex"), name + ".mindex"),
         .mid = deserialize<std::string>(obj->get("mid"), name + ".mid"),
-        .mindex = deserialize<int64_t>(obj->get("mindex"), name + ".mindex")
+        .disabled = {obj->has("disabled") ? std::make_optional(deserialize<bool>(obj->get("disabled"), name + ".disabled")) : std::nullopt},
+        .codec = deserialize<std::string>(obj->get("codec"), name + ".codec"),
+        .description = {obj->has("description") ? std::make_optional(deserialize<std::string>(obj->get("description"), name + ".description")) : std::nullopt},
+        .moderated = {obj->has("moderated") ? std::make_optional(deserialize<bool>(obj->get("moderated"), name + ".moderated")) : std::nullopt},
+        .simulcast = {obj->has("simulcast") ? std::make_optional(deserialize<bool>(obj->get("simulcast"), name + ".simulcast")) : std::nullopt},
+        .talking = {obj->has("talking") ? std::make_optional(deserialize<bool>(obj->get("talking"), name + ".talking")) : std::nullopt},
     };
 }
 
 template<>
-stream::NewPublisherEvent VarDeserializer::deserialize<stream::NewPublisherEvent>(const Poco::Dynamic::Var& val, const std::string& name) {
+stream::StreamInfo VarDeserializer::deserialize<stream::StreamInfo>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {
         .id = deserialize<int64_t>(obj->get("id"), name + ".id"),
-        .video_codec = deserialize<std::string>(obj->get("video_codec"), name + ".video_codec"),
         .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
-        .streams = deserializeVector<stream::VideoRoomStreamTrack>(obj->get("streams"), name + ".streams")
+        .metadata = {obj->has("metadata") ? std::make_optional(deserialize<std::string>(obj->get("metadata"), name + ".metadata")) : std::nullopt},
+        .dummy = {obj->has("dummy") ? std::make_optional(deserialize<bool>(obj->get("dummy"), name + ".dummy")) : std::nullopt},             // czy to publisher-dummy
+        .tracks = deserializeVector<stream::StreamTrackInfo>(obj->get("tracks"), name + ".tracks"),
+        .talking = {obj->has("talking") ? std::make_optional(deserialize<bool>(obj->get("talking"), name + ".talking")) : std::nullopt},
     };
 }
 
 template<>
-stream::CurrentPublishersData VarDeserializer::deserialize<stream::CurrentPublishersData>(const Poco::Dynamic::Var& val, const std::string& name) {
+stream::NewStreams VarDeserializer::deserialize<stream::NewStreams>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {
         .room = deserialize<std::string>(obj->get("room"), name + ".room"),
-        .publishers = deserializeVector<stream::NewPublisherEvent>(obj->get("publishers"), name + ".publishers")
+        .streams = deserializeVector<stream::StreamInfo>(obj->get("streams"), name + ".streams")
     };
 }
 

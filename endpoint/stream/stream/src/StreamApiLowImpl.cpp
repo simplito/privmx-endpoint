@@ -207,15 +207,15 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             event->data = eventData;
             _eventMiddleware->emitApiEvent(event);
         }
-        else if (type == "publisherAvailablePublishers") {
+        else if (type == "streamNewStreams") {
             std::cerr << __LINE__ << std::endl;
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::CurrentPublishersData>(data);
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::NewStreams>(data);
             std::cerr << __LINE__ << std::endl;
             auto deserializer = std::make_shared<core::VarDeserializer>();
-            auto parsed = deserializer->deserialize<CurrentPublishersData>(Poco::Dynamic::Var(data), "CurrentPublishersData");
+            auto parsed = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "NewStreams");
             std::cerr << __LINE__ << std::endl;
 
-            std::shared_ptr<StreamAvailablePublishersEvent> event(new StreamAvailablePublishersEvent());
+            std::shared_ptr<StreamNewStreamsEvent> event(new StreamNewStreamsEvent());
                         std::cerr << __LINE__ << std::endl;event->channel = "stream";
             event->data = parsed;
             _eventMiddleware->emitApiEvent(event);
@@ -247,7 +247,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             // pass event to client
             auto deserializer = std::make_shared<core::VarDeserializer>();
             auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
-            std::shared_ptr<PublishersStreamsUpdatedEvent> event(new PublishersStreamsUpdatedEvent());
+            std::shared_ptr<StreamsUpdatedEvent> event(new StreamsUpdatedEvent());
             event->channel = "stream";
             event->data = parsed;
             _eventMiddleware->emitApiEvent(event);
@@ -283,14 +283,18 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     return streamRoomData;
 }
 
-std::vector<Stream> StreamApiLowImpl::listStreams(const std::string& streamRoomId) {
+std::vector<StreamInfo> StreamApiLowImpl::listStreams(const std::string& streamRoomId) {
     std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
     model.streamRoomId(streamRoomId);
     auto streamList = _serverApi->streamList(model).list();
-    std::vector<Stream> result;
+
+    auto deserializer = std::make_shared<core::VarDeserializer>();
+    // auto parsed = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "NewStreams");
+
+    std::vector<StreamInfo> result;
     for(auto stream: streamList) {
-        result.push_back(Stream{.streamId=stream.streamId(),.userId=stream.userId()});
+        result.push_back(deserializer->deserialize<stream::StreamInfo>(stream, "StreamInfo"));
     }
     return result;
 }
@@ -1055,7 +1059,7 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
     Poco::JSON::Array::Ptr usersIds = new Poco::JSON::Array;
 
     for(auto s: streamsList) {
-        if ( std::find(streamIds.begin(), streamIds.end(), s.streamId()) != streamIds.end() ) {
+        if ( std::find(streamIds.begin(), streamIds.end(), s.id()) != streamIds.end() ) {
             usersIds->add(s.userId());
         }
     }

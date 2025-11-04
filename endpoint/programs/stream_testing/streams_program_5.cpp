@@ -375,9 +375,9 @@ MyFrame::MyFrame()
             } else if (privmx::endpoint::stream::Events::isStreamUnpublishedEvent(eventHolder)) {
                 PRIVMX_DEBUG("StreamProgram wx", "isStreamUnpublishedEvent")
                 auto eventData = privmx::endpoint::stream::Events::extractStreamUnpublishedEvent(eventHolder);
-            } else if (privmx::endpoint::stream::Events::isPublishersStreamsUpdatedEvent(eventHolder)) {
-                PRIVMX_DEBUG("StreamProgram wx", "isPublishersStreamsUpdatedEvent")
-                auto eventData = privmx::endpoint::stream::Events::extractPublishersStreamsUpdatedEvent(eventHolder);
+            } else if (privmx::endpoint::stream::Events::isStreamsUpdatedEvent(eventHolder)) {
+                PRIVMX_DEBUG("StreamProgram wx", "isStreamsUpdatedEvent")
+                auto eventData = privmx::endpoint::stream::Events::extractStreamsUpdatedEvent(eventHolder);
             }
         }
     });

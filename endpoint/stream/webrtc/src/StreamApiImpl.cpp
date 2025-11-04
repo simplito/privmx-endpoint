@@ -64,7 +64,7 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
     std:: cout << (_webRTC == nullptr) << std::endl;
 }
 
-std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {
+std::vector<StreamInfo> StreamApiImpl::listStreams(const std::string& streamRoomId) {
     return _api->listStreams(streamRoomId);
 }
 
