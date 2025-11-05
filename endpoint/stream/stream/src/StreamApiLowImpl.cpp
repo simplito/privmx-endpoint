@@ -75,7 +75,9 @@ StreamApiLowImpl::StreamApiLowImpl(
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {
-    _guardedExecutor.reset();
+    if(_gateway->isConnected()) {
+        _eventApi->unsubscribeFrom(_internalSubscriptionIds);
+    }
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
         if(roomValue->publisherStream) {
             roomValue->publisherStream.reset();
@@ -89,7 +91,7 @@ StreamApiLowImpl::~StreamApiLowImpl() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
-    _eventApi->unsubscribeFrom(_internalSubscriptionIds);
+    _guardedExecutor.reset();
     PRIVMX_DEBUG("StreamApiLowImpl", "~StreamApiLowImpl", "Done");
 }
 

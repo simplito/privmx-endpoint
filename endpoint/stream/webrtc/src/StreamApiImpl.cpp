@@ -61,7 +61,6 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi event
         },
         _frameCryptorOptions
     );
-    std:: cout << (_webRTC == nullptr) << std::endl;
 }
 
 std::vector<Stream> StreamApiImpl::listStreams(const std::string& streamRoomId) {
