@@ -9,15 +9,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <memory>
 #include "privmx/endpoint/stream/StreamVarDeserializer.hpp"
-#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 
-#include "privmx/endpoint/core/TypeValidator.hpp"
+#include <memory>
+
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/TypeValidator.hpp"
+#include "privmx/endpoint/stream/Events.hpp"
+#include "privmx/endpoint/stream/ServerTypes.hpp"
+#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
@@ -194,5 +197,24 @@ stream::StreamSubscription VarDeserializer::deserialize<stream::StreamSubscripti
     return {
         .streamId = deserialize<int64_t>(obj->get("streamId"), name + ".streamId"),
         .streamTrackId = trackId
+    };
+}
+
+template<>
+stream::StreamPublishedEventData VarDeserializer::deserialize<stream::StreamPublishedEventData>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+
+    std::cerr << __LINE__ << std::endl;
+    auto streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId");
+    std::cerr << __LINE__ << std::endl;
+    auto stream = deserialize<stream::StreamInfo>(obj->get("stream"), name + ".stream");
+    std::cerr << __LINE__ << std::endl;
+    auto userId = deserialize<std::string>(obj->get("userId"), name + ".userId");
+    std::cerr << __LINE__ << std::endl;
+    return {
+        .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
+        .stream = deserialize<stream::StreamInfo>(obj->get("stream"), name + ".stream"),
+        .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
     };
 }

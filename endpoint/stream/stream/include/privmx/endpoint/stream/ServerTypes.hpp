@@ -132,6 +132,7 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(StreamPublishResult)
     OBJECT_FIELD(answer, SessionDescription)
     INT64_FIELD(sessionId)
+    INT64_FIELD(publishedStreamId)
 TYPE_END
 
 // ENDPOINT_SERVER_TYPE(StreamJoinModel)
@@ -232,6 +233,7 @@ ENDPOINT_SERVER_TYPE(StreamEventData)
     LIST_FIELD(streamIds, int64_t)
     STRING_FIELD(userId)
 TYPE_END
+
 
 ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
     STRING_FIELD(streamRoomId)
@@ -334,6 +336,12 @@ ENDPOINT_SERVER_TYPE(StreamInfo)
     LIST_FIELD(tracks, StreamTrackInfo)
     /** whether the stream is talking or not (deprecated field) */
     BOOL_FIELD(talking)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamPublishedEventData)
+    STRING_FIELD(streamRoomId)
+    OBJECT_FIELD(stream, StreamInfo)
+    STRING_FIELD(userId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(NewStreams)

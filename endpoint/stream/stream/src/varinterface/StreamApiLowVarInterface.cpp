@@ -163,8 +163,8 @@ Poco::Dynamic::Var StreamApiLowVarInterface::createStream(const Poco::Dynamic::V
 Poco::Dynamic::Var StreamApiLowVarInterface::publishStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "streamHandle");
-    _streamApi.publishStream(streamHandle);
-    return {};
+    auto result = _streamApi.publishStream(streamHandle);
+    return _serializer.serialize(result);
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);

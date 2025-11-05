@@ -211,7 +211,7 @@ StreamLeftEvent Events::extractStreamLeftEvent(const core::EventHolder& handler)
 }
 
 bool Events::isStreamNewStreamsEvent(const core::EventHolder& handler) {
-    return handler.type() == "newStreams";
+    return handler.type() == "streamNewStreams";
 }
 
 StreamNewStreamsEvent Events::extractStreamNewStreamsEvent(const core::EventHolder& handler) {

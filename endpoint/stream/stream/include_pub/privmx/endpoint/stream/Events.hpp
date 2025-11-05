@@ -57,6 +57,20 @@ struct StreamUnpublishedEventData {
     int64_t streamId;
 };
 
+struct StreamPublishedEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID's
+     */
+    StreamInfo stream;
+
+    std::string userId;
+};
+
 /**
  * Holds data of event that arrives when StreamRoom is created.
  */
@@ -166,7 +180,7 @@ struct StreamPublishedEvent : public core::Event {
     /**
      * event data
      */
-    StreamEventData data;
+    StreamPublishedEventData data;
 };
 
 /**

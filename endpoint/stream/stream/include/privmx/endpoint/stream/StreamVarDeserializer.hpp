@@ -18,6 +18,7 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/Events.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -55,6 +56,9 @@ stream::StreamsUpdatedData VarDeserializer::deserialize<stream::StreamsUpdatedDa
 
 template<>
 stream::StreamSubscription VarDeserializer::deserialize<stream::StreamSubscription>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+stream::StreamPublishedEventData VarDeserializer::deserialize<stream::StreamPublishedEventData>(const Poco::Dynamic::Var& val, const std::string& name);
 
 
 }  // namespace core
