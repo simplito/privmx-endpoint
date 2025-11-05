@@ -943,6 +943,7 @@ void StreamApiLowImpl::assertStreamRoomDataIntegrity(server::StreamRoomInfo stre
 uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom) {
     try {
         assertStreamRoomDataIntegrity(streamRoom);
+        return 0;
     } catch (const core::Exception& e) {
         return e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
@@ -1009,7 +1010,7 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
         streamRoom.contextId(), 
         core::PagingQuery{
             .skip = 0,
-            .limit = usersIds->size(),
+            .limit = static_cast<int64_t>(usersIds->size()),
             .sortOrder = "desc",
             .lastId = std::nullopt,
             .sortBy = std::nullopt,
