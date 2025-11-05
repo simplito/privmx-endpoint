@@ -1071,7 +1071,7 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
         streamRoom.contextId(), 
         core::PagingQuery{
             .skip = 0,
-            .limit = usersIds->size(),
+            .limit = int64_t(usersIds->size()),
             .sortOrder = "desc",
             .lastId = std::nullopt,
             .sortBy = std::nullopt,
