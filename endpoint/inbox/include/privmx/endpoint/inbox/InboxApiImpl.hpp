@@ -196,7 +196,6 @@ private:
     InboxDataProcessorV4 _inboxDataProcessorV4;
     InboxDataProcessorV5 _inboxDataProcessorV5;
     core::DataEncryptorV4 _eventDataEncryptorV4;
-    std::vector<std::string> _forbiddenChannelsNames;
     inline static const std::string INBOX_TYPE_FILTER_FLAG = "inbox";
 };
 

@@ -205,7 +205,6 @@ private:
     FileMetaEncryptorV5 _fileMetaEncryptorV5;
     core::ModuleDataEncryptorV5 _storeDataEncryptorV5;
     core::DataEncryptorV4 _eventDataEncryptorV4;
-    std::vector<std::string> _forbiddenChannelsNames;
     
     inline static const std::string STORE_TYPE_FILTER_FLAG = "store";
 };

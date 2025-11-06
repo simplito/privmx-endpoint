@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <Poco/Dynamic/Var.h>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
