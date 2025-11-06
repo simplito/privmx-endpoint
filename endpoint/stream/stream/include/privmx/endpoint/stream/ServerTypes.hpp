@@ -12,10 +12,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_SERVERTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_SERVERTYPES_HPP_
 
+#include <Poco/Dynamic/Var.h>
+
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/TypesMacros.hpp>
 #include <string>
 
+#include "privmx/utils/TypedObject.hpp"
 #include "privmx/utils/TypesMacros.hpp"
 
 namespace privmx {
@@ -129,6 +132,7 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(StreamPublishResult)
     OBJECT_FIELD(answer, SessionDescription)
     INT64_FIELD(sessionId)
+    INT64_FIELD(publishedStreamId)
 TYPE_END
 
 // ENDPOINT_SERVER_TYPE(StreamJoinModel)
@@ -182,10 +186,6 @@ ENDPOINT_SERVER_TYPE(Stream)
     VAR_FIELD(remoteStreamInfo)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamListResult)
-    LIST_FIELD(list, Stream)
-TYPE_END
-
 ENDPOINT_SERVER_TYPE(StreamAcceptOfferModel)
     OBJECT_FIELD(answer, SessionDescription)
     INT64_FIELD(sessionId)
@@ -234,6 +234,7 @@ ENDPOINT_SERVER_TYPE(StreamEventData)
     STRING_FIELD(userId)
 TYPE_END
 
+
 ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
     STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
@@ -279,23 +280,77 @@ ENDPOINT_SERVER_TYPE_INHERIT(JanusPluginEvent, JanusEventData)
     OBJECT_FIELD(plugindata, JanusPluginDataEvent)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(VideoRoomStreamTrack)
+// // deprecated
+// ENDPOINT_SERVER_TYPE(VideoRoomStreamTrack)
+//     STRING_FIELD(type)
+//     STRING_FIELD(codec)
+//     STRING_FIELD(mid)
+//     INT64_FIELD(mindex)
+// TYPE_END
+
+// // Deprecated (use StreamInfo)
+// ENDPOINT_SERVER_TYPE(NewPublisherEvent)
+//     INT64_FIELD(id)
+//     STRING_FIELD(userId)
+//     STRING_FIELD(video_codec)
+//     LIST_FIELD(streams, VideoRoomStreamTrack)
+// TYPE_END
+//
+// //deprecated (use NewStreams)
+// ENDPOINT_SERVER_TYPE(CurrentPublishersData)
+//     STRING_FIELD(room)
+//     LIST_FIELD(publishers, NewPublisherEvent)
+// TYPE_END
+
+
+ENDPOINT_SERVER_TYPE(StreamTrackInfo)
     STRING_FIELD(type)
-    STRING_FIELD(codec)
-    STRING_FIELD(mid)
+    /** unique mindex of published track */
     INT64_FIELD(mindex)
+    /** unique mid of published stream */
+    STRING_FIELD(mid)
+    /** true if track is currently inactive/disabled */
+    BOOL_FIELD(disabled)
+    /** codec used for this track */
+    STRING_FIELD(codec)
+    /** optional description of this track */
+    STRING_FIELD(description)
+    /** true if track has been moderated for this participant */
+    BOOL_FIELD(moderated)
+    /** true if this track uses simulcast */
+    BOOL_FIELD(simulcast)
+    /** whether the publisher track has audio activity or not */
+    BOOL_FIELD(talking)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(NewPublisherEvent)
+ENDPOINT_SERVER_TYPE(StreamInfo)
+    /** unique ID of active stream */
     INT64_FIELD(id)
+    /** display name of active stream, if any */
     STRING_FIELD(userId)
-    STRING_FIELD(video_codec)
-    LIST_FIELD(streams, VideoRoomStreamTrack)
+    /** valid JSON object of metadata, if any */
+    VAR_FIELD(metadata)
+    /** true if this participant is a dummy stream */
+    BOOL_FIELD(dummy)
+    /** list of published tracks */
+    LIST_FIELD(tracks, StreamTrackInfo)
+    /** whether the stream is talking or not (deprecated field) */
+    BOOL_FIELD(talking)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(CurrentPublishersData)
+ENDPOINT_SERVER_TYPE(StreamPublishedEventData)
+    STRING_FIELD(streamRoomId)
+    OBJECT_FIELD(stream, StreamInfo)
+    STRING_FIELD(userId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(NewStreams)
     STRING_FIELD(room)
-    LIST_FIELD(publishers, NewPublisherEvent)
+    LIST_FIELD(streams, StreamInfo)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamListResult)
+    LIST_FIELD(list, StreamInfo)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(UpdatedStreamData)

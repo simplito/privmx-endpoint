@@ -116,7 +116,7 @@ void StreamApi::deleteStreamRoom(const std::string& streamRoomId) {
     }
 }
 
-std::vector<Stream> StreamApi::listStreams(const std::string& streamRoomId) {
+std::vector<StreamInfo> StreamApi::listStreams(const std::string& streamRoomId) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {

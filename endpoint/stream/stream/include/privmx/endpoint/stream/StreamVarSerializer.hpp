@@ -82,13 +82,19 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::RoomModel>(const stream::RoomModel& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamAvailablePublishersEvent>(const stream::StreamAvailablePublishersEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamNewStreamsEvent>(const stream::StreamNewStreamsEvent& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::NewPublisherEvent>(const stream::NewPublisherEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<stream::NewStreams>(const stream::NewStreams& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::VideoRoomStreamTrack>(const stream::VideoRoomStreamTrack& val);
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamInfo>(const stream::StreamInfo& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackInfo>(const stream::StreamTrackInfo& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamPublishedEventData>(const stream::StreamPublishedEventData& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::UpdatedStreamData>(const stream::UpdatedStreamData& val);
@@ -97,7 +103,7 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamsUpdatedData>(const stream::StreamsUpdatedData& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::PublishersStreamsUpdatedEvent>(const stream::PublishersStreamsUpdatedEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamsUpdatedEvent>(const stream::StreamsUpdatedEvent& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::Key>(const stream::Key& val);

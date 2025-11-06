@@ -57,6 +57,20 @@ struct StreamUnpublishedEventData {
     int64_t streamId;
 };
 
+struct StreamPublishedEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID's
+     */
+    StreamInfo stream;
+
+    std::string userId;
+};
+
 /**
  * Holds data of event that arrives when StreamRoom is created.
  */
@@ -166,7 +180,7 @@ struct StreamPublishedEvent : public core::Event {
     /**
      * event data
      */
-    StreamEventData data;
+    StreamPublishedEventData data;
 };
 
 /**
@@ -257,12 +271,12 @@ struct StreamLeftEvent : public core::Event {
 /**
  * Holds data of event that arrives on StreamPublish - contains information about available publishers/streams one can subscribe to.
  */
-struct StreamAvailablePublishersEvent : public core::Event {
+struct StreamNewStreamsEvent : public core::Event {
 
     /**
      * Event constructor
      */
-    StreamAvailablePublishersEvent() : core::Event("publisherAvailablePublishers") {}
+    StreamNewStreamsEvent() : core::Event("StreamNewStreams") {}
 
     /**
      * Get Event as JSON string
@@ -279,19 +293,19 @@ struct StreamAvailablePublishersEvent : public core::Event {
     /**
      * event data
      */
-    CurrentPublishersData data;
+    NewStreams data;
 };
 
 
 /**
  * Holds data of event that arrives after StreamJoin - contains information about updates on publishers streams one can subscribe to.
  */
-struct PublishersStreamsUpdatedEvent : public core::Event {
+struct StreamsUpdatedEvent : public core::Event {
 
     /**
      * Event constructor
      */
-    PublishersStreamsUpdatedEvent() : core::Event("streamsUpdated") {}
+    StreamsUpdatedEvent() : core::Event("streamsUpdated") {}
 
     /**
      * Get Event as JSON string
@@ -431,37 +445,37 @@ public:
     static StreamLeftEvent extractStreamLeftEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'StreamAvailablePublishersEvent'
+     * Checks whether event held in the 'EventHolder' is an 'StreamNewStreamsEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StreamAvailablePublishersEvent', else otherwise
+     * @return true for 'StreamNewStreamsEvent', else otherwise
      */
-    static bool isStreamAvailablePublishersEvent(const core::EventHolder& eventHolder);
+    static bool isStreamNewStreamsEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'PublishersStreamsUpdatedEvent'
+     * Gets Event held in the 'EventHolder' as an 'StreamNewStreamsEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StreamAvailablePublishersEvent' object
+     * @return 'StreamNewStreamsEvent' object
      */
-    static StreamAvailablePublishersEvent extractStreamAvailablePublishersEvent(const core::EventHolder& eventHolder);
+    static StreamNewStreamsEvent extractStreamNewStreamsEvent(const core::EventHolder& eventHolder);
 
 
     /**
      * Checks whether event held in the 'EventHolder' is an 'PublishersStreamsUpdatedEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StreamAvailablePublishersEvent', else otherwise
+     * @return true for 'StreamsUpdatedEvent', else otherwise
      */
-    static bool isPublishersStreamsUpdatedEvent(const core::EventHolder& eventHolder);
+    static bool isStreamsUpdatedEvent(const core::EventHolder& eventHolder);
 
     /**
      * Gets Event held in the 'EventHolder' as an 'PublishersStreamsUpdatedEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StreamAvailablePublishersEvent' object
+     * @return 'StreamsUpdatedEvent' object
      */
-    static PublishersStreamsUpdatedEvent extractPublishersStreamsUpdatedEvent(const core::EventHolder& eventHolder);
+    static StreamsUpdatedEvent extractStreamsUpdatedEvent(const core::EventHolder& eventHolder);
 };
 
 }  // namespace stream

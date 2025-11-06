@@ -170,7 +170,7 @@ std::string StreamApiLow::buildSubscriptionQuery(EventType eventType, EventSelec
     }
 }
 
-std::vector<Stream> StreamApiLow::listStreams(const std::string& streamRoomId) {
+std::vector<StreamInfo> StreamApiLow::listStreams(const std::string& streamRoomId) {
     validateEndpoint();
     try {
         return _impl->listStreams(streamRoomId);

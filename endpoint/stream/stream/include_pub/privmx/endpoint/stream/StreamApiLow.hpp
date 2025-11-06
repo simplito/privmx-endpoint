@@ -66,7 +66,7 @@ public:
 
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
-    std::vector<Stream> listStreams(const std::string& streamRoomId);
+    std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
 

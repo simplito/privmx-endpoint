@@ -77,7 +77,7 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     // Stream
-    std::vector<Stream> listStreams(const std::string& streamRoomId);
+    std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
