@@ -55,9 +55,9 @@ int main(int argc, char** argv) {
         streamApi.publishStream(streamId_1);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto streamlist = streamApi.listStreams(streamRoomId);
-        std::vector<int64_t> streamsId;
+        std::vector<stream::StreamSubscription> streamsId;
         for(int i = 0; i < streamlist.size(); i++) {
-            streamsId.push_back(streamlist[i].streamId);
+            streamsId.push_back(stream::StreamSubscription{streamlist[i].streamId, std::nullopt});
         }
         stream::StreamSettings ssettings;
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);

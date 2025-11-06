@@ -184,11 +184,9 @@ private:
     std::thread _event_handler;
     std::thread _renderer_handler;
     std::optional<std::string> joinedStreamRoomId;
-    std::vector<int64_t> joinedStreams;
-    std::optional<std::string> publishedStreamRoomId;
+    std::vector<stream::StreamSubscription> joinedStreams;
     std::optional<int64_t> publishedStream;
-    stream::StreamJoinSettings _ssettings;
-
+    stream::StreamSettings _ssettings;
 };
 
 
@@ -222,15 +220,25 @@ void MyFrame::OnResize(wxSizeEvent& event) {
 void MyFrame::OnExit(wxCloseEvent& event) {
     cancellationToken.cancel();
     if(streamApi) {
-        if(publishedStreamRoomId.has_value() && publishedStream.has_value()) {
-            PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Unpublishing Stream")
-            streamApi->unpublishStream(publishedStreamRoomId.value(), publishedStream.value());
-        }
         if(joinedStreamRoomId.has_value()) {
-            PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Leaving Stream")
-            streamApi->leaveStream(joinedStreamRoomId.value(), joinedStreams);
+            if(publishedStream.has_value()) {
+                PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Unpublishing Stream")
+                streamApi->unpublishStream(publishedStream.value());
+            }
+            if(joinedStreams.size() != 0) {
+                PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Leaving Stream")
+                streamApi->unsubscribeFromRemoteStreams(joinedStreamRoomId.value(), joinedStreams);
+            }
+            streamApi->leaveStreamRoom(joinedStreamRoomId.value());
         }
         streamApi.reset();
+        PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Join threads")
+        if(_event_handler.joinable()) {
+            _event_handler.join();
+        }
+        if(_renderer_handler.joinable()) {
+            _renderer_handler.join();
+        }
     }
     if(eventApi) eventApi.reset();
     if(connection) {
@@ -239,14 +247,7 @@ void MyFrame::OnExit(wxCloseEvent& event) {
         connection.reset();
     }
     privmx::endpoint::core::EventQueue::getInstance().emitBreakEvent();
-
-    PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Join threads")
-    if(_event_handler.joinable()) {
-        _event_handler.join();
-    }
-    if(_renderer_handler.joinable()) {
-        _renderer_handler.join();
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     PRIVMX_DEBUG("StreamProgram wx", "OnExit", "Closed")
     Destroy();
 }
@@ -275,7 +276,6 @@ MyFrame::MyFrame()
 
     checkbox_board = new wxPanel(this, wxID_ANY);
     checkBoxSizer = new wxBoxSizer(wxVERTICAL);
-    brickKeyManager = new wxCheckBox(this->checkbox_board, wxID_ANY, "brick Key Manager");
     hideBrokenFrames = new wxCheckBox(this->checkbox_board, wxID_ANY, "hide broken frames");
     hideBrokenFrames->SetValue(true);
     checkBoxSizer->Add(hideBrokenFrames, 1, wxALIGN_CENTER);
@@ -341,7 +341,6 @@ MyFrame::MyFrame()
                 cancellationToken.sleep(std::chrono::milliseconds(50));
                 {
                     std::shared_lock<std::shared_mutex> lock(_videoPanels);
-                    std::cerr << "Refresh" << std::endl;
                     // this->Refresh();
                     std::for_each(mapOfVideoPanels.begin(), mapOfVideoPanels.end(), [&](const auto& p) {
                         if(p.second!=nullptr && p.second->haveNewFrame) {
@@ -366,10 +365,15 @@ MyFrame::MyFrame()
             if(privmx::endpoint::stream::Events::isStreamPublishedEvent(eventHolder)) {
                 PRIVMX_DEBUG("StreamProgram wx", "isStreamPublishedEvent")
                 auto eventData = privmx::endpoint::stream::Events::extractStreamPublishedEvent(eventHolder);
+
                 if(streamApi && joinedStreamRoomId.has_value() && joinedStreamRoomId.value() == eventData.data.streamRoomId) {
-                    streamApi->joinStream(eventData.data.streamRoomId, eventData.data.streamIds, _ssettings);
+                    std::vector<stream::StreamSubscription> streamSubscription;
                     for(const auto& streamId : eventData.data.streamIds) {
-                        joinedStreams.push_back(streamId);
+                        streamSubscription.push_back(stream::StreamSubscription{streamId, std::nullopt});
+                    }
+                    streamApi->subscribeToRemoteStreams(eventData.data.streamRoomId, streamSubscription, _ssettings);
+                    for(const auto& stream : streamSubscription) {
+                        joinedStreams.push_back(stream);
                     }
                 }
             } else if (privmx::endpoint::stream::Events::isStreamUnpublishedEvent(eventHolder)) {
@@ -508,33 +512,51 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
 }
 
 void MyFrame::PublishToStreamRoom(std::string streamRoomId) {
-    if(publishedStreamRoomId.has_value() && publishedStream.has_value()) {
+    if(publishedStream.has_value()) {
         PRIVMX_DEBUG("StreamProgram wx", "PublishToStreamRoom", "Unpublishing Stream")
-        streamApi->unpublishStream(publishedStreamRoomId.value(), publishedStream.value());
+        streamApi->unpublishStream(publishedStream.value());
     }
-    auto streamId = streamApi->createStream(streamRoomId);
-    publishedStream = streamId;
-    publishedStreamRoomId = streamRoomId;
-    auto listAudioRecordingDevices = streamApi->listAudioRecordingDevices();
-    streamApi->trackAdd(streamId,  stream::TrackParam{{.id=0, .type=stream::DeviceType::Audio}, .params_JSON="{}"});
-    auto listVideoRecordingDevices = streamApi->listVideoRecordingDevices();
-    streamApi->trackAdd(streamId,  stream::TrackParam{{.id=0, .type=stream::DeviceType::Video}, .params_JSON="{}"});
-    streamApi->publishStream(streamId);
+    if(!joinedStreamRoomId.has_value()) {
+        streamApi->joinStreamRoom(streamRoomId);
+        joinedStreamRoomId = streamRoomId;
+    }
+    auto streamHandle = streamApi->createStream(streamRoomId);
+    publishedStream = streamHandle;
+    auto mediaDevices = streamApi->getMediaDevices();
+    for(const auto& mediaDevice: mediaDevices) {
+        if(mediaDevice.type == stream::DeviceType::Audio) {
+            streamApi->addTrack(streamHandle, mediaDevice);
+            break;
+        }
+    }
+    for(const auto& mediaDevice: mediaDevices) {
+        if(mediaDevice.type == stream::DeviceType::Video) {
+            streamApi->addTrack(streamHandle, mediaDevice);
+            break;
+        }
+    }
+    streamApi->publishStream(streamHandle);
 }
 
 void MyFrame::JoinToStreamRoom(std::string streamRoomId) {
-    
+    if(!joinedStreamRoomId.has_value()) {
+        streamApi->joinStreamRoom(streamRoomId);
+        joinedStreamRoomId = streamRoomId;
+    }
     PRIVMX_DEBUG("StreamProgram wx", "JoinToStreamRoom", "streamApi->listStreams StreamRoomId: " + streamRoomId);
     auto streamlist = streamApi->listStreams(streamRoomId);
     PRIVMX_DEBUG("StreamProgram wx", "JoinToStreamRoom", "streamApi->listStreams.size(): " + std::to_string(streamlist.size()));
-    std::vector<int64_t> streamsId;
+    
+    std::vector<stream::StreamSubscription> streamSubscription;
     if(streamlist.size() == 0) return;
     for(int i = 0; i < streamlist.size(); i++) {
         PRIVMX_DEBUG("StreamProgram wx", "JoinToStreamRoom", "Stream Id: " + std::to_string(streamlist[i].streamId));
-        streamsId.push_back(streamlist[i].streamId);
+        streamSubscription.push_back(stream::StreamSubscription{streamlist[i].streamId, std::nullopt});
     }
-    streamApi->joinStream(streamRoomId, streamsId, _ssettings);
-    joinedStreams = streamsId;
+    streamApi->subscribeToRemoteStreams(streamRoomId, streamSubscription, _ssettings);
+    for(const auto& stream: streamSubscription) {
+        joinedStreams.push_back(stream);
+    }
     joinedStreamRoomId = streamRoomId;
 }
 

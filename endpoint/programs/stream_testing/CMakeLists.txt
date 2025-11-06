@@ -13,7 +13,7 @@ target_include_directories(privmxendpointstream PRIVATE ${INCLUDE_DIRS})
 
 # privmxendpointstream
 add_executable(streamsProgram2 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_2.cpp)
-target_link_libraries(streamsProgram2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+target_link_libraries(streamsProgram2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointstream libwebrtc)
 
 # privmxendpointstream + SDL2
 find_package(SDL2 REQUIRED)
@@ -29,8 +29,8 @@ find_package(wxWidgets COMPONENTS core base xrc aui REQUIRED)
 if(wxWidgets_USE_FILE) # not defined in CONFIG mode
     include(${wxWidgets_USE_FILE})
 endif()
-add_executable(streamsProgram4 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_4.cpp)
-target_link_libraries(streamsProgram4 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
-# uses app serwer
+# add_executable(streamsProgram4 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_4.cpp)
+# target_link_libraries(streamsProgram4 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+# # uses app serwer
 add_executable(streamsProgram5 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_5.cpp)
 target_link_libraries(streamsProgram5 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
