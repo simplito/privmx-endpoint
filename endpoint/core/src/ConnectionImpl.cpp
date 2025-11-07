@@ -27,7 +27,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
+ConnectionImpl::ConnectionImpl(const std::function<void()>& onConnectionLost) : _connectionId(generateConnectionId()), _onConnectionLost(onConnectionLost) {
     _userVerifier = std::make_shared<core::UserVerifier>(std::make_shared<core::DefaultUserVerifierInterface>());
     _guardedExecutor = std::make_shared<privmx::utils::GuardedExecutor>();
 }
@@ -35,8 +35,12 @@ ConnectionImpl::~ConnectionImpl() {
     _guardedExecutor.reset();
 }
 
-void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& solutionId,
-                             const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
+void ConnectionImpl::connect(
+    const std::string& userPrivKey, 
+    const std::string& solutionId,
+    const std::string& platformUrl, 
+    const PKIVerificationOptions& verificationOptions
+) {
     LOG_TIME_DEBUG_START(Platform platformConnect, "")
     rpc::ConnectionOptions options;
     auto port = Poco::URI(platformUrl).getPort();
@@ -84,9 +88,17 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
     _gateway->addDisconnectedEventListener(
-        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { 
+            _eventMiddleware->emitDisconnectedEvent();
+            cleanup();
+        }
+    );
     _gateway->addSessionLostEventListener(
-        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { 
+            _eventMiddleware->emitDisconnectedEvent(); 
+            cleanup();
+        }
+    );
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _subscriber = std::make_shared<SubscriberImpl>(_gateway);
@@ -94,7 +106,11 @@ void ConnectionImpl::connect(const std::string& userPrivKey, const std::string& 
     LOG_TIME_DEBUG_STOP(Platform platformConnect, "")
 }
 
-void ConnectionImpl::connectPublic(const std::string& solutionId, const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
+void ConnectionImpl::connectPublic(
+    const std::string& solutionId, 
+    const std::string& platformUrl, 
+    const PKIVerificationOptions& verificationOptions
+) {
     // TODO: solutionId is reserved for future use
     LOG_TIME_DEBUG_START(Platform platformConnectPublic, "")
     rpc::ConnectionOptions options;
@@ -139,9 +155,17 @@ void ConnectionImpl::connectPublic(const std::string& solutionId, const std::str
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
     _gateway->addDisconnectedEventListener(
-        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { 
+            _eventMiddleware->emitDisconnectedEvent();
+            cleanup();
+        }
+    );
     _gateway->addSessionLostEventListener(
-        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); });
+        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { 
+            _eventMiddleware->emitDisconnectedEvent(); 
+            cleanup();
+        }
+    );
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _subscriber = std::make_shared<SubscriberImpl>(_gateway);
@@ -223,6 +247,7 @@ void ConnectionImpl::disconnect() {
     _gateway.reset();
     auto event = EventBuilder::buildLibEvent<LibPlatformDisconnectedEvent>();
     _eventMiddleware->emitApiEvent(event);
+    cleanup();
 }
 
 int64_t ConnectionImpl::generateConnectionId() {
@@ -324,4 +349,8 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
             _eventMiddleware->emitApiEvent(event);
         }
     });
+}
+
+void ConnectionImpl::cleanup() {
+    _onConnectionLost();
 }

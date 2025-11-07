@@ -2,6 +2,8 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_CONNECTION_HPP_
 
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 
 #include "privmx/endpoint/core/Types.hpp"
@@ -113,12 +115,15 @@ public:
      */
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
 
-    std::shared_ptr<ConnectionImpl> getImpl() const { return _impl; }
+    std::shared_ptr<ConnectionImpl> getImpl() const;
 
 private:
-    void validateEndpoint();
-    Connection(const std::shared_ptr<ConnectionImpl>& impl);
-    std::shared_ptr<ConnectionImpl> _impl;
+    void assertConnection(const std::shared_ptr<ConnectionImpl>& impl);
+    void onConnectionLost();
+    Connection(const std::string& userPrivKey, const std::string& solutionId, const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
+    Connection(const std::string& solutionId, const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
+    std::shared_ptr<std::shared_mutex> _connectionImplMutex;
+    std::shared_ptr<ConnectionImpl> _connectionImpl;
 };
 
 }  // namespace core
