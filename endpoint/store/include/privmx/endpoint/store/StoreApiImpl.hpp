@@ -53,6 +53,7 @@ class StoreApiImpl : protected core::ModuleBaseApi
 {
 public:
     StoreApiImpl(
+        const std::function<void()>& onConnectionLost,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::shared_ptr<ServerApi>& serverApi,
         const std::string& host,

@@ -46,6 +46,7 @@ using namespace privmx::endpoint::store;
 const size_t StoreApiImpl::_CHUNK_SIZE = 128 * 1024;
 
 StoreApiImpl::StoreApiImpl(
+    const std::function<void()>& onConnectionLost,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::shared_ptr<ServerApi>& serverApi,
     const std::string& host,
@@ -56,7 +57,7 @@ StoreApiImpl::StoreApiImpl(
     const std::shared_ptr<core::HandleManager>& handleManager,
     const core::Connection& connection,
     size_t serverRequestChunkSize
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection, onConnectionLost),
     _keyProvider(keyProvider),
     _serverApi(serverApi),
     _host(host),
@@ -747,6 +748,7 @@ void StoreApiImpl::processConnectedEvent() {
 
 void StoreApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
+    cleanup();
 }
 
 dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {

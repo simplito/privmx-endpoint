@@ -21,6 +21,7 @@ namespace event {
 class EventApiImpl {
 public:
     EventApiImpl(
+        const std::function<void()>& onConnectionLost,
         const core::Connection& connection, 
         const privmx::crypto::PrivateKey& userPrivKey, 
         privfs::RpcGateway::Ptr gateway, 
@@ -44,6 +45,8 @@ private:
     void emitEventEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::string &encryptionKey);
     void validateChannelName(const std::string& channelName);
     bool verifyDecryptedEventDataV5(const DecryptedEventDataV5& data);
+    void cleanup();
+    std::function<void()> _onConnectionLost;
     core::Connection _connection;
     privmx::crypto::PrivateKey _userPrivKey;
     ServerApi _serverApi;
@@ -55,6 +58,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     EventDataEncryptorV5 _eventDataEncryptorV5;
     OldEventDataDecryptor _oldEventDataDecryptor;
+    std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
 };
 
 }  // namespace event

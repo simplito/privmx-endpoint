@@ -57,6 +57,7 @@ class InboxApiImpl : protected core::ModuleBaseApi
 {
 public:
     InboxApiImpl(
+        const std::function<void()>& onConnectionLost,
         const core::Connection& connection,
         const thread::ThreadApi& threadApi,
         const store::StoreApi& storeApi,

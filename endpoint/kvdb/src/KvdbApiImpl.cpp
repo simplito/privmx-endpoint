@@ -36,13 +36,14 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
 KvdbApiImpl::KvdbApiImpl(
+    const std::function<void()>& onConnectionLost,
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection, onConnectionLost),
     _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
@@ -477,6 +478,7 @@ void KvdbApiImpl::processConnectedEvent() {
 
 void KvdbApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
+    cleanup();
 }
 
 privmx::utils::List<std::string> KvdbApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {

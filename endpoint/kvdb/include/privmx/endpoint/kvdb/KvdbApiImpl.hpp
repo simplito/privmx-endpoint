@@ -42,6 +42,7 @@ class KvdbApiImpl : protected core::ModuleBaseApi
 {
 public:
     KvdbApiImpl(
+        const std::function<void()>& onConnectionLost,
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
