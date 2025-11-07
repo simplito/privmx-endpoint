@@ -162,12 +162,13 @@ public:
      */
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    std::shared_ptr<ThreadApiImpl> getImpl() const { return _impl; }
-    
+    std::shared_ptr<ThreadApiImpl> getImpl() const;
+
 private:
-    void validateEndpoint();
-    ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl);
-    std::shared_ptr<ThreadApiImpl> _impl;
+    void onConnectionLost();
+    ThreadApi(core::Connection& connection);
+    std::shared_ptr<std::shared_mutex> _threadApiImplMutex;
+    std::shared_ptr<ThreadApiImpl> _threadApiImpl;
 };
 
 }  // namespace thread

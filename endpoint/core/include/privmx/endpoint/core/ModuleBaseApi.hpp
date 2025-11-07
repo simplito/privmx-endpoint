@@ -48,7 +48,8 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const core::Connection& connection
+        const core::Connection& connection,
+        const std::function<void()>& onConnectionLost
     );
     
 
@@ -100,7 +101,7 @@ protected:
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);
-
+    void cleanup();
     
 
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
@@ -113,6 +114,7 @@ private:
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
+    std::function<void()> _onConnectionLost;
     core::ModuleDataEncryptorV4 _moduleDataEncryptorV4;
     core::ModuleDataEncryptorV5 _moduleDataEncryptorV5;
     core::ContainerKeyCache _keyCache;

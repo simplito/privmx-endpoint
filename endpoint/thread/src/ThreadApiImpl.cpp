@@ -37,13 +37,14 @@ using namespace privmx::endpoint;
 using namespace thread;
 
 ThreadApiImpl::ThreadApiImpl(
+    const std::function<void()>& onConnectionLost,
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), 
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection, onConnectionLost), 
     _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
@@ -498,6 +499,7 @@ void ThreadApiImpl::processConnectedEvent() {
 
 void ThreadApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
+    cleanup();
 }
 
 privmx::utils::List<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
