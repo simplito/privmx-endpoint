@@ -190,10 +190,20 @@ void StreamApi::removeTrack(const StreamHandle& streamHandle, const MediaDevice&
     }
 }
 
-RemoteStreamId StreamApi::publishStream(const StreamHandle& streamHandle) {
+StreamPublishResult StreamApi::publishStream(const StreamHandle& streamHandle) {
     validateEndpoint();
     try {
         return _impl->publishStream(streamHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+StreamPublishResult StreamApi::updateStream(const StreamHandle& streamHandle) {
+    validateEndpoint();
+    try {
+        return _impl->updateStream(streamHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

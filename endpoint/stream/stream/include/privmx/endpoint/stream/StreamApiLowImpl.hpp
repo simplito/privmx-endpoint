@@ -80,7 +80,9 @@ public:
     void leaveStreamRoom(const std::string& streamRoomId);
 
     StreamHandle createStream(const std::string& streamRoomId);
-    RemoteStreamId publishStream(const StreamHandle& streamHandle);
+    StreamPublishResult publishStream(const StreamHandle& streamHandle);
+    StreamPublishResult updateStream(const StreamHandle& streamHandle);
+
     void unpublishStream(const StreamHandle& streamHandle);
 
     void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options);

@@ -343,7 +343,7 @@ StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
 
 
 // Publishing stream
-RemoteStreamId StreamApiLowImpl::publishStream(const StreamHandle& streamHandle) {
+StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHandle) {
     auto room = getStreamRoomData(streamHandle);
     if(!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
         throw StreamHandleNotInitialized();
@@ -363,8 +363,61 @@ RemoteStreamId StreamApiLowImpl::publishStream(const StreamHandle& streamHandle)
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(room->streamRoomId, result.sessionId(), std::string("publisher"));
     // Set remote description
-    room->webRtc->setAnswerAndSetRemoteDescription(room->streamRoomId, result.answer().sdp(), result.answer().type());
-    return result.publishedStreamId();
+    if (!result.answerEmpty()) {
+        room->webRtc->setAnswerAndSetRemoteDescription(room->streamRoomId, result.answer().sdp(), result.answer().type());
+    }
+    if (!result.publishedDataEmpty()) {
+        auto deserializer = std::make_shared<core::VarDeserializer>();
+        PublishedStreamData data = deserializer->deserialize<PublishedStreamData>(result.publishedData(), "PublishedStreamData");
+        return StreamPublishResult{
+            .published = true,
+            .data = data
+        };
+    } else {
+        return StreamPublishResult{
+            .published = false,
+            .data = std::nullopt
+        };
+    }
+}
+
+// Updating published stream
+StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHandle) {
+    auto room = getStreamRoomData(streamHandle);
+    if(!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
+        throw StreamHandleNotInitialized();
+    }
+    auto streamData = room->publisherStream;
+    room->webRtc->updateKeys(room->streamRoomId, room->streamKeyManager->getCurrentWebRtcKeys());
+    std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
+    // Update data on bridge
+    auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+    sessionDescription.sdp(sdp);
+    sessionDescription.type("offer");
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamUpdateModel>();
+    model.streamRoomId(room->streamRoomId);
+    model.offer(sessionDescription);
+    auto result = _serverApi->streamUpdate(model);
+    streamData->sessionId = result.sessionId();
+    // update/set sessionId in webrtc (for Janus - trickle)
+    room->webRtc->updateSessionId(room->streamRoomId, result.sessionId(), std::string("publisher"));
+    // Set remote description
+    if (!result.answerEmpty()) {
+        room->webRtc->setAnswerAndSetRemoteDescription(room->streamRoomId, result.answer().sdp(), result.answer().type());
+    }
+    if (!result.publishedDataEmpty()) {
+        auto deserializer = std::make_shared<core::VarDeserializer>();
+        PublishedStreamData data = deserializer->deserialize<PublishedStreamData>(result.publishedData(), "PublishedStreamData");
+        return StreamPublishResult{
+            .published = true,
+            .data = data
+        };
+    } else {
+        return StreamPublishResult{
+            .published = false,
+            .data = std::nullopt
+        };
+    }
 }
 
 void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
@@ -487,7 +540,9 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& strea
     for(const auto& subscription : subscriptionsToAdd) {
         streamIds.insert(subscription.streamId);
     }
-    sendStreamKeyRequest(room, streamIds);
+    if (!streamIds.empty()) {
+        sendStreamKeyRequest(room, streamIds);
+    }
 }
 
 void StreamApiLowImpl::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove) {

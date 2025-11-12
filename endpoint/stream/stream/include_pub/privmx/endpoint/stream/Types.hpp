@@ -163,6 +163,25 @@ struct NewStreams {
     std::vector<StreamInfo> streams;
 };
 
+struct PublishedStreamData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID's
+     */
+    StreamInfo stream;
+
+    std::string userId;
+};
+
+struct StreamPublishResult {
+    bool published;
+    std::optional<PublishedStreamData> data;
+};
+
 struct UpdatedStreamData {
     bool active;
     std::string type;

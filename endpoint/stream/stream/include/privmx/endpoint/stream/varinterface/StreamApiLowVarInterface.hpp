@@ -53,6 +53,7 @@ public:
         Trickle = 19,
         AcceptOfferOnReconfigure = 20,
         KeyManagement = 21,
+        UpdateStream = 22,
     };
 
     StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
@@ -76,6 +77,7 @@ public:
 
     Poco::Dynamic::Var createStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var publishStream(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unpublishStream(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var subscribeToRemoteStreams(const Poco::Dynamic::Var& args);

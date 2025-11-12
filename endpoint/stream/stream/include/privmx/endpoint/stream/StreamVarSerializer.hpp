@@ -94,6 +94,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackInfo>(const stream::StreamTrackInfo& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamPublishResult>(const stream::StreamPublishResult& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamPublishedEventData>(const stream::StreamPublishedEventData& val);
 
 template<>

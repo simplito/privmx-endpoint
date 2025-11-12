@@ -166,6 +166,19 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamPublishedEventData>(co
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamPublishResult>(const stream::StreamPublishResult& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamPublishResult");
+    }
+    if (val.data.has_value()) {
+        obj->set("data", serialize(val.data.value()));
+    }
+    obj->set("published", serialize(val.published));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamJoinedEvent>(const stream::StreamJoinedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

@@ -129,10 +129,9 @@ ENDPOINT_SERVER_TYPE(StreamPublishModel)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(StreamPublishResult)
-    OBJECT_FIELD(answer, SessionDescription)
-    INT64_FIELD(sessionId)
-    INT64_FIELD(publishedStreamId)
+ENDPOINT_SERVER_TYPE(StreamUpdateModel)
+    OBJECT_FIELD(offer, SessionDescription)
+    STRING_FIELD(streamRoomId)
 TYPE_END
 
 // ENDPOINT_SERVER_TYPE(StreamJoinModel)
@@ -179,12 +178,58 @@ ENDPOINT_SERVER_TYPE(StreamListModel)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
-ENDPOINT_SERVER_TYPE(Stream)
-    INT64_FIELD(streamId)
-    STRING_FIELD(userId)
-    VAR_FIELD(createStreamMeta)
-    VAR_FIELD(remoteStreamInfo)
+// ENDPOINT_SERVER_TYPE(Stream)
+//     INT64_FIELD(streamId)
+//     STRING_FIELD(userId)
+//     VAR_FIELD(createStreamMeta)
+//     VAR_FIELD(remoteStreamInfo)
+// TYPE_END
+ENDPOINT_SERVER_TYPE(StreamTrackInfo)
+    STRING_FIELD(type)
+    /** unique mindex of published track */
+    INT64_FIELD(mindex)
+    /** unique mid of published stream */
+    STRING_FIELD(mid)
+    /** true if track is currently inactive/disabled */
+    BOOL_FIELD(disabled)
+    /** codec used for this track */
+    STRING_FIELD(codec)
+    /** optional description of this track */
+    STRING_FIELD(description)
+    /** true if track has been moderated for this participant */
+    BOOL_FIELD(moderated)
+    /** true if this track uses simulcast */
+    BOOL_FIELD(simulcast)
+    /** whether the publisher track has audio activity or not */
+    BOOL_FIELD(talking)
 TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamInfo)
+    /** unique ID of active stream */
+    INT64_FIELD(id)
+    /** display name of active stream, if any */
+    STRING_FIELD(userId)
+    /** valid JSON object of metadata, if any */
+    VAR_FIELD(metadata)
+    /** true if this participant is a dummy stream */
+    BOOL_FIELD(dummy)
+    /** list of published tracks */
+    LIST_FIELD(tracks, StreamTrackInfo)
+    /** whether the stream is talking or not (deprecated field) */
+    BOOL_FIELD(talking)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamPublishedEventData)
+    STRING_FIELD(streamRoomId)
+    OBJECT_FIELD(stream, StreamInfo)
+    STRING_FIELD(userId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(NewStreams)
+    STRING_FIELD(room)
+    LIST_FIELD(streams, StreamInfo)
+TYPE_END
+
 
 ENDPOINT_SERVER_TYPE(StreamAcceptOfferModel)
     OBJECT_FIELD(answer, SessionDescription)
@@ -221,6 +266,20 @@ ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
     LIST_FIELD(users, core::server::UserIdentity)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(PublishedStreamData)
+    STRING_FIELD(streamRoomId)
+    OBJECT_FIELD(stream, StreamInfo)
+    STRING_FIELD(userId)
+TYPE_END
+
+
+ENDPOINT_SERVER_TYPE(StreamPublishResult)
+    OBJECT_FIELD(answer, SessionDescription)
+    INT64_FIELD(sessionId)
+    OBJECT_FIELD(publishedData, PublishedStreamData)
+TYPE_END
+
+
 // Events
 
 ENDPOINT_SERVER_TYPE(StreamRoomDeletedEventData)
@@ -234,12 +293,10 @@ ENDPOINT_SERVER_TYPE(StreamEventData)
     STRING_FIELD(userId)
 TYPE_END
 
-
 ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
     STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
 TYPE_END
-// JANUS events data
 
 ENDPOINT_SERVER_TYPE(JanusEventData)
     STRING_FIELD(janus)
@@ -303,51 +360,6 @@ TYPE_END
 // TYPE_END
 
 
-ENDPOINT_SERVER_TYPE(StreamTrackInfo)
-    STRING_FIELD(type)
-    /** unique mindex of published track */
-    INT64_FIELD(mindex)
-    /** unique mid of published stream */
-    STRING_FIELD(mid)
-    /** true if track is currently inactive/disabled */
-    BOOL_FIELD(disabled)
-    /** codec used for this track */
-    STRING_FIELD(codec)
-    /** optional description of this track */
-    STRING_FIELD(description)
-    /** true if track has been moderated for this participant */
-    BOOL_FIELD(moderated)
-    /** true if this track uses simulcast */
-    BOOL_FIELD(simulcast)
-    /** whether the publisher track has audio activity or not */
-    BOOL_FIELD(talking)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamInfo)
-    /** unique ID of active stream */
-    INT64_FIELD(id)
-    /** display name of active stream, if any */
-    STRING_FIELD(userId)
-    /** valid JSON object of metadata, if any */
-    VAR_FIELD(metadata)
-    /** true if this participant is a dummy stream */
-    BOOL_FIELD(dummy)
-    /** list of published tracks */
-    LIST_FIELD(tracks, StreamTrackInfo)
-    /** whether the stream is talking or not (deprecated field) */
-    BOOL_FIELD(talking)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StreamPublishedEventData)
-    STRING_FIELD(streamRoomId)
-    OBJECT_FIELD(stream, StreamInfo)
-    STRING_FIELD(userId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(NewStreams)
-    STRING_FIELD(room)
-    LIST_FIELD(streams, StreamInfo)
-TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamListResult)
     LIST_FIELD(list, StreamInfo)

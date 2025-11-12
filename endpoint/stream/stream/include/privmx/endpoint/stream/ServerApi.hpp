@@ -36,6 +36,7 @@ public:
     server::StreamGetTurnCredentialsResult streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model);
     server::StreamListResult streamList(server::StreamListModel model);
     server::StreamPublishResult streamPublish(server::StreamPublishModel model);
+    server::StreamPublishResult streamUpdate(server::StreamUpdateModel model);
 
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);

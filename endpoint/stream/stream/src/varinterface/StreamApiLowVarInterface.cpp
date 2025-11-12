@@ -41,6 +41,7 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
 
     {CreateStream, &StreamApiLowVarInterface::createStream},
     {PublishStream, &StreamApiLowVarInterface::publishStream},
+    {UpdateStream, &StreamApiLowVarInterface::updateStream},
     {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
 
     {SubscribeToRemoteStreams, &StreamApiLowVarInterface::subscribeToRemoteStreams},
@@ -164,6 +165,12 @@ Poco::Dynamic::Var StreamApiLowVarInterface::publishStream(const Poco::Dynamic::
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "streamHandle");
     auto result = _streamApi.publishStream(streamHandle);
+    return _serializer.serialize(result);
+}
+Poco::Dynamic::Var StreamApiLowVarInterface::updateStream(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto streamHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "streamHandle");
+    auto result = _streamApi.updateStream(streamHandle);
     return _serializer.serialize(result);
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic::Var& args) {

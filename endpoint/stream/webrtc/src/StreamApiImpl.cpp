@@ -187,9 +187,14 @@ void StreamApiImpl::addTrack(const StreamHandle& streamHandle, const MediaDevice
 void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
 
 }
-RemoteStreamId StreamApiImpl::publishStream(const StreamHandle& streamHandle) {
+StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandle) {
     return _api->publishStream(streamHandle);
 }
+
+StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle) {
+    return _api->updateStream(streamHandle);
+}
+
 void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
     _api->unpublishStream(streamHandle);
 }

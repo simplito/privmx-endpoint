@@ -50,6 +50,10 @@ server::StreamPublishResult ServerApi::streamPublish(server::StreamPublishModel 
     return requestWS<server::StreamPublishResult>("streamPublish", model);
 }
 
+server::StreamPublishResult ServerApi::streamUpdate(server::StreamUpdateModel model)  {
+    return requestWS<server::StreamPublishResult>("streamUpdate", model);
+}
+
 void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
     PRIVMX_DEBUG("ServerApi", "requestWS", "model:\n" + privmx::utils::Utils::stringifyVar(model));
     requestWS("streamAcceptOffer", model);

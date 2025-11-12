@@ -210,10 +210,21 @@ StreamHandle StreamApiLow::createStream(const std::string& streamRoomId) {
     }
 }
 
-RemoteStreamId StreamApiLow::publishStream(const StreamHandle& streamHandle) {
+StreamPublishResult StreamApiLow::publishStream(const StreamHandle& streamHandle) {
     validateEndpoint();
     try {
         return _impl->publishStream(streamHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        std::cerr << e.what() << std::endl;
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+StreamPublishResult StreamApiLow::updateStream(const StreamHandle& streamHandle) {
+    validateEndpoint();
+    try {
+        return _impl->updateStream(streamHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         std::cerr << e.what() << std::endl;
         core::ExceptionConverter::rethrowAsCoreException(e);

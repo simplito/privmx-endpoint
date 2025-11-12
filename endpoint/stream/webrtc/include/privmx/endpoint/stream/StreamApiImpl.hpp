@@ -84,7 +84,8 @@ public:
     std::vector<MediaDevice> getMediaDevices();
     void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
-    RemoteStreamId publishStream(const StreamHandle& streamHandle);
+    StreamPublishResult publishStream(const StreamHandle& streamHandle);
+    StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void unpublishStream(const StreamHandle& streamHandle);
     void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options);
     void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
