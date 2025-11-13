@@ -29,6 +29,7 @@ using namespace privmx::endpoint::core;
 
 ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
     _userVerifier = std::make_shared<core::UserVerifier>(std::make_shared<core::DefaultUserVerifierInterface>());
+    _guardedExecutor = std::make_shared<privmx::utils::GuardedExecutor>();
 }
 ConnectionImpl::~ConnectionImpl() {
     _guardedExecutor.reset();
@@ -215,6 +216,7 @@ std::string ConnectionImpl::buildSubscriptionQuery(EventType eventType, EventSel
 }
 
 void ConnectionImpl::disconnect() {
+    _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     if (!_gateway.isNull()) {
         _gateway->destroy();
     }

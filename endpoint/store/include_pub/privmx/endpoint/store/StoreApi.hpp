@@ -218,10 +218,10 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     /**
-     * Synchronize file handle data with newest data on serwer
-     * @param handle handle to read/write file data
+     * Synchronize file handle data with newest data on server
+     * @param fileHandle handle to read/write file data
      */ 
-    void syncFile(const int64_t handle);
+    void syncFile(const int64_t fileHandle);
 
     std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }
 private:
