@@ -48,7 +48,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    Connection() = default;
+    Connection();
+    Connection(const Connection& obj);
+    Connection& operator=(const Connection& obj);
+    Connection(Connection&& obj);
+    ~Connection();
 
     /**
      * Gets the ID of the current connection.
@@ -118,12 +122,11 @@ public:
     std::shared_ptr<ConnectionImpl> getImpl() const;
 
 private:
+    void attachToImplIfPossible();
+    void detachFromImplIfPossible();
     void assertConnection(const std::shared_ptr<ConnectionImpl>& impl);
-    void onConnectionLost();
-    Connection(const std::string& userPrivKey, const std::string& solutionId, const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
-    Connection(const std::string& solutionId, const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
-    std::shared_ptr<std::shared_mutex> _connectionImplMutex;
-    std::shared_ptr<ConnectionImpl> _connectionImpl;
+    Connection(const std::shared_ptr<ConnectionImpl>& impl);
+    std::weak_ptr<ConnectionImpl> _impl;
 };
 
 }  // namespace core

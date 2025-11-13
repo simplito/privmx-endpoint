@@ -33,7 +33,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    StoreApi() = default;
+    StoreApi();
+    StoreApi(const StoreApi& obj);
+    StoreApi& operator=(const StoreApi& obj);
+    StoreApi(StoreApi&& obj);
+    ~StoreApi();
 
     /**
      * Creates a new Store in given Context.
@@ -223,11 +227,12 @@ public:
      */ 
     void syncFile(const int64_t fileHandle);
 
-    std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }
+    std::shared_ptr<StoreApiImpl> getImpl() const;
 private:
-    void validateEndpoint();
+    void attachToImplIfPossible();
+    void detachFromImplIfPossible();
     StoreApi(const std::shared_ptr<StoreApiImpl>& impl);
-    std::shared_ptr<StoreApiImpl> _impl;
+    std::weak_ptr<StoreApiImpl> _impl;
 };
 
 }  // namespace store

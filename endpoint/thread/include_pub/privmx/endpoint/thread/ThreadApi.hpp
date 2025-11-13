@@ -33,7 +33,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    ThreadApi() = default;
+    ThreadApi();
+    ThreadApi(const ThreadApi& obj);
+    ThreadApi& operator=(const ThreadApi& obj);
+    ThreadApi(ThreadApi&& obj);
+    ~ThreadApi();
 
     /**
      * Creates a new Thread in given Context.
@@ -165,10 +169,10 @@ public:
     std::shared_ptr<ThreadApiImpl> getImpl() const;
 
 private:
-    void onConnectionLost();
-    ThreadApi(core::Connection& connection);
-    std::shared_ptr<std::shared_mutex> _threadApiImplMutex;
-    std::shared_ptr<ThreadApiImpl> _threadApiImpl;
+    void attachToImplIfPossible();
+    void detachFromImplIfPossible();
+    ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl);
+    std::weak_ptr<ThreadApiImpl> _impl;
 };
 
 }  // namespace thread

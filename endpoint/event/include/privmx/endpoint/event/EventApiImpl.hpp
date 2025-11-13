@@ -13,15 +13,15 @@
 #include "privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp"
 #include "privmx/endpoint/event/encryptors/event/OldEventDataDecryptor.hpp"
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
+#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace event {
 
-class EventApiImpl {
+class EventApiImpl : public privmx::utils::ManualManagedClass<EventApiImpl>{
 public:
     EventApiImpl(
-        const std::function<void()>& onConnectionLost,
         const core::Connection& connection, 
         const privmx::crypto::PrivateKey& userPrivKey, 
         privfs::RpcGateway::Ptr gateway, 
@@ -45,8 +45,6 @@ private:
     void emitEventEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::string &encryptionKey);
     void validateChannelName(const std::string& channelName);
     bool verifyDecryptedEventDataV5(const DecryptedEventDataV5& data);
-    void cleanup();
-    std::function<void()> _onConnectionLost;
     core::Connection _connection;
     privmx::crypto::PrivateKey _userPrivKey;
     ServerApi _serverApi;

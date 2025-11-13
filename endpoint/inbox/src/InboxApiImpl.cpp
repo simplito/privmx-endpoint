@@ -44,7 +44,6 @@ using namespace privmx;
 const Poco::Int64 InboxApiImpl::_CHUNK_SIZE = 128 * 1024;
 
 InboxApiImpl::InboxApiImpl(
-    const std::function<void()>& onConnectionLost,
     const core::Connection& connection,
     const thread::ThreadApi& threadApi,
     const store::StoreApi& storeApi,
@@ -56,7 +55,7 @@ InboxApiImpl::InboxApiImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::HandleManager>& handleManager,
     size_t serverRequestChunkSize
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection, onConnectionLost),
+) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
     _connection(connection),
     _threadApi(threadApi),
     _storeApi(storeApi),
@@ -1067,7 +1066,7 @@ void InboxApiImpl::processConnectedEvent() {
 
 void InboxApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
-    cleanup();
+    privmx::utils::ManualManagedClass<InboxApiImpl>::cleanup();
 }
 
 InboxDeletedEventData InboxApiImpl::convertInboxDeletedEventData(server::InboxDeletedEventData data) {

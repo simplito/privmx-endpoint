@@ -29,12 +29,16 @@ public:
      * 
      * @return KvdbApi object
      */
-    static KvdbApi create(core::Connection& connetion);
+    static KvdbApi create(core::Connection& connection);
 
     /**
      * //doc-gen:ignore
      */
-    KvdbApi() = default;
+    KvdbApi();
+    KvdbApi(const KvdbApi& obj);
+    KvdbApi& operator=(const KvdbApi& obj);
+    KvdbApi(KvdbApi&& obj);
+    ~KvdbApi();
 
     /**
      * Creates a new KVDB in given Context.
@@ -196,11 +200,12 @@ public:
      */
     std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
 
-    std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
+    std::shared_ptr<KvdbApiImpl> getImpl() const;
 private:
-    void validateEndpoint();
+    void attachToImplIfPossible();
+    void detachFromImplIfPossible();
     KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl);
-    std::shared_ptr<KvdbApiImpl> _impl;
+    std::weak_ptr<KvdbApiImpl> _impl;
 };
 
 }  // namespace kvdb

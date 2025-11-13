@@ -31,15 +31,13 @@ ModuleBaseApi::ModuleBaseApi(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const core::Connection& connection,
-    const std::function<void()>& onConnectionLost
+    const core::Connection& connection
 ) : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
     _eventMiddleware(eventMiddleware),
-    _connection(connection),
-    _onConnectionLost(onConnectionLost) {}
+    _connection(connection) {}
 
 DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(std::unordered_map<std::string, DecryptedEncKeyV2> keys, const std::string& keyId) {
     for (auto key : keys) {
@@ -107,8 +105,4 @@ ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(co
         .moduleResourceId=moduleKeys.moduleResourceId,
         .contextId = moduleKeys.contextId
     };
-}
-
-void ModuleBaseApi::cleanup() {
-    _onConnectionLost();
 }

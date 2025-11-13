@@ -48,16 +48,16 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Constants.hpp"
 #include "privmx/endpoint/inbox/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxApiImpl : protected core::ModuleBaseApi
+class InboxApiImpl : public privmx::utils::ManualManagedClass<InboxApiImpl>, protected core::ModuleBaseApi
 {
 public:
     InboxApiImpl(
-        const std::function<void()>& onConnectionLost,
         const core::Connection& connection,
         const thread::ThreadApi& threadApi,
         const store::StoreApi& storeApi,

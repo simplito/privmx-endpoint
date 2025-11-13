@@ -36,24 +36,25 @@ limitations under the License.
 #include "privmx/endpoint/core/ContextProvider.hpp"
 #include "privmx/endpoint/core/SubscriberImpl.hpp"
 #include <privmx/utils/GuardedExecutor.hpp>
+#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
-class ConnectionImpl {
+class ConnectionImpl : public privmx::utils::ManualManagedClass<ConnectionImpl> {
 public:
-    ConnectionImpl(
-        const std::function<void()>& onConnectionLost
-    );
+    ConnectionImpl();
     ~ConnectionImpl();
     void connect(
+        const std::shared_ptr<ConnectionImpl>& selfRef,
         const std::string& userPrivKey,
         const std::string& solutionId,
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
     );
     void connectPublic(
+        const std::shared_ptr<ConnectionImpl>& selfRef,
         const std::string& solutionId,
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
@@ -108,10 +109,8 @@ private:
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
-    void cleanup();
-
+private:
     const int64_t _connectionId;
-    std::function<void()> _onConnectionLost;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::string _host;

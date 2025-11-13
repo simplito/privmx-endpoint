@@ -27,7 +27,6 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
 EventApiImpl::EventApiImpl(
-    const std::function<void()>& onConnectionLost,
     const core::Connection& connection, 
     const privmx::crypto::PrivateKey& userPrivKey,
     privfs::RpcGateway::Ptr gateway, 
@@ -177,7 +176,7 @@ void EventApiImpl::processConnectedEvent() {
 }
 
 void EventApiImpl::processDisconnectedEvent() {
-    cleanup();
+    privmx::utils::ManualManagedClass<EventApiImpl>::cleanup();
 }
 
 void EventApiImpl::emitEventEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::string &encryptionKey) {
@@ -226,8 +225,4 @@ std::string EventApiImpl::buildSubscriptionQuery(const std::string& channelName,
 
 std::string EventApiImpl::buildSubscriptionQueryInternal(EventSelectorType selectorType, const std::string& selectorId) {
     return SubscriberImpl::buildQuery(INTERNAL_EVENT_CHANNEL_NAME, selectorType, selectorId, true);
-}
-
-void EventApiImpl::cleanup() {
-    _onConnectionLost();
 }

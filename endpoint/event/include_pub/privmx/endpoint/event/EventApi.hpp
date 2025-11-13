@@ -25,7 +25,15 @@ public:
      * @return EventApi object
      */
     static EventApi create(core::Connection& connection);
-    EventApi() = default;
+
+    /**
+     * //doc-gen:ignore
+     */
+    EventApi();
+    EventApi(const EventApi& obj);
+    EventApi& operator=(const EventApi& obj);
+    EventApi(EventApi&& obj);
+    ~EventApi();
 
     /**
      * Emits the custom event on the given Context and channel.
@@ -59,11 +67,12 @@ public:
      */
     std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
 
-    std::shared_ptr<EventApiImpl> getImpl() const { return _impl; }
+    std::shared_ptr<EventApiImpl> getImpl() const;
 private:
-    void validateEndpoint();
+    void attachToImplIfPossible();
+    void detachFromImplIfPossible();
     EventApi(const std::shared_ptr<EventApiImpl>& impl);
-    std::shared_ptr<EventApiImpl> _impl;
+    std::weak_ptr<EventApiImpl> _impl;
 };
 
 }  // namespace event

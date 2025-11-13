@@ -40,7 +40,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    InboxApi() = default;
+    InboxApi();
+    InboxApi(const InboxApi& obj);
+    InboxApi& operator=(const InboxApi& obj);
+    InboxApi(InboxApi&& obj);
+    ~InboxApi();
 
     /**
      * Creates a new Inbox.
@@ -243,10 +247,12 @@ public:
      */
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
+    std::shared_ptr<InboxApiImpl> getImpl() const;
 private:
-    void validateEndpoint();
+    void attachToImplIfPossible();
+    void detachFromImplIfPossible();
     InboxApi(const std::shared_ptr<InboxApiImpl>& impl);
-    std::shared_ptr<InboxApiImpl> _impl;
+    std::weak_ptr<InboxApiImpl> _impl;
 };
 
 }  // namespace inbox

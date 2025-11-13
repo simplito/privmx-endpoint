@@ -22,52 +22,80 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
+Connection::Connection() {
+};
+Connection::Connection(const Connection& obj): _impl(obj._impl) {
+    attachToImplIfPossible();
+};
+Connection& Connection::operator=(const Connection& obj) {
+    this->_impl = obj._impl;
+    this->attachToImplIfPossible();
+    return *this;
+};
+Connection::Connection(Connection&& obj): _impl(obj._impl) {
+    attachToImplIfPossible();
+};
+Connection::~Connection() {
+    detachFromImplIfPossible();
+}
+
 Connection Connection::connect(const std::string& userPrivKey, const std::string& solutionId,
                                 const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
     Validator::validatePrivKeyWIF(userPrivKey, "field:userPrivKey ");
     Validator::validateId(solutionId, "field:solutionId ");
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
-        return Connection(userPrivKey, solutionId, platformUrl, verificationOptions);
+        std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
+        impl->connect(impl, userPrivKey, solutionId, platformUrl, verificationOptions);
+        return Connection(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
-}
-Connection::Connection(const std::string& userPrivKey, const std::string& solutionId, const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions) {
-    _connectionImpl = std::make_shared<ConnectionImpl>(std::bind(&Connection::onConnectionLost, this));
-    _connectionImpl->connect(userPrivKey, solutionId, bridgeUrl, verificationOptions);
 }
 
 Connection Connection::connectPublic(const std::string& solutionId, const std::string& platformUrl, 
                                         const PKIVerificationOptions& verificationOptions) {
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
-        return Connection(solutionId, platformUrl, verificationOptions);
+        std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
+        impl->connectPublic(impl, solutionId, platformUrl, verificationOptions);
+        return Connection(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-Connection::Connection(const std::string& solutionId, const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions) {
-        _connectionImpl = std::make_shared<ConnectionImpl>(std::bind(&Connection::onConnectionLost, this));
-        _connectionImpl->connectPublic(solutionId, bridgeUrl, verificationOptions);
-    
-}
 
-void Connection::onConnectionLost() {
-    std::unique_lock<std::shared_mutex> lock(*_connectionImplMutex);
-    _connectionImpl.reset();
-}
+Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl) : _impl(impl) {}
+
 std::shared_ptr<ConnectionImpl> Connection::getImpl() const { 
-    std::shared_lock lock(*_connectionImplMutex);
-    if(_connectionImpl == nullptr) throw NotInitializedException();
-    return _connectionImpl; 
+    auto impl = _impl.lock();
+    if(!impl) throw NotInitializedException();
+    return impl; 
 }
 
 void Connection::assertConnection(const std::shared_ptr<ConnectionImpl>& impl) {
     if(impl->getGateway().isNull()) throw core::NotInitializedException();
 }
+
+void Connection::attachToImplIfPossible() {
+    if(!_impl.expired()) {
+        auto impl = _impl.lock();
+        if(impl) {
+            impl->attach();
+        }
+    }
+};
+
+void Connection::detachFromImplIfPossible() {
+    if(!_impl.expired()) {
+        auto impl = _impl.lock();
+        if(impl) {
+            impl->detach();
+        }
+    }
+};
 
 int64_t Connection::getConnectionId() {
     auto impl = getImpl();
@@ -146,7 +174,9 @@ void Connection::disconnect() {
     auto impl = getImpl();
     assertConnection(impl);
     try {
+        std::cout << "impl.use_count(): " << impl.use_count() << std::endl;
         impl->disconnect();
+        std::cout << "after disconnect impl.use_count(): " << impl.use_count() << std::endl;
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

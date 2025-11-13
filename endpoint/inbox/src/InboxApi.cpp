@@ -24,25 +24,41 @@ limitations under the License.
 using namespace privmx::endpoint::inbox;
 using namespace privmx::endpoint;
 
-InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threadApi, store::StoreApi& storeApi) {
+InboxApi::InboxApi() {};
+InboxApi::InboxApi(const InboxApi& obj): _impl(obj._impl) {
+    attachToImplIfPossible();
+};
+InboxApi& InboxApi::operator=(const InboxApi& obj) {
+    _impl = obj._impl;
+    attachToImplIfPossible();
+    return *this;
+};
+InboxApi::InboxApi(InboxApi&& obj): _impl(obj._impl) {
+    attachToImplIfPossible();
+};
+InboxApi::~InboxApi() {
+    detachFromImplIfPossible();
+}
 
-    std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-    std::shared_ptr<store::RequestApi> requestApi {new store::RequestApi(connectionImpl->getGateway())};
-    std::shared_ptr<ServerApi> serverApi {new ServerApi(connectionImpl->getGateway())};;
-    std::shared_ptr<InboxApiImpl> impl(new InboxApiImpl(
-        connection,
-        threadApi,
-        storeApi,
-        connectionImpl->getKeyProvider(),
-        serverApi,
-        requestApi,
-        connectionImpl->getHost(),
-        connectionImpl->getUserPrivKey(),
-        connectionImpl->getEventMiddleware(),
-        connectionImpl->getHandleManager(),
-        connectionImpl->getServerConfig().requestChunkSize
-    ));
+InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threadApi, store::StoreApi& storeApi) {
     try {
+        std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+        std::shared_ptr<store::RequestApi> requestApi {new store::RequestApi(connectionImpl->getGateway())};
+        std::shared_ptr<ServerApi> serverApi {new ServerApi(connectionImpl->getGateway())};;
+        std::shared_ptr<InboxApiImpl> impl(new InboxApiImpl(
+            connection,
+            threadApi,
+            storeApi,
+            connectionImpl->getKeyProvider(),
+            serverApi,
+            requestApi,
+            connectionImpl->getHost(),
+            connectionImpl->getUserPrivKey(),
+            connectionImpl->getEventMiddleware(),
+            connectionImpl->getHandleManager(),
+            connectionImpl->getServerConfig().requestChunkSize
+        ));
+        impl->attach(impl);
         return InboxApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -52,8 +68,28 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
 
 InboxApi::InboxApi(const std::shared_ptr<InboxApiImpl>& impl) : _impl(impl) {}
 
-void InboxApi::validateEndpoint() {
-    if(!_impl) throw NotInitializedException();
+std::shared_ptr<InboxApiImpl> InboxApi::getImpl() const { 
+    auto impl = _impl.lock();
+    if(!impl) throw NotInitializedException();
+    return impl; 
+}
+
+void InboxApi::attachToImplIfPossible() {
+    if(!_impl.expired()) {
+        auto impl = _impl.lock();
+        if(impl) {
+            impl->attach();
+        }
+    }
+};
+
+void InboxApi::detachFromImplIfPossible() {
+    if(!_impl.expired()) {
+        auto impl = _impl.lock();
+        if(impl) {
+            impl->detach();
+        }
+    }
 }
 
 std::string InboxApi::createInbox(
@@ -61,12 +97,12 @@ const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
                             const std::optional<inbox::FilesConfig>& filesConfig,
                             const std::optional<core::ContainerPolicyWithoutItem>& policies) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return _impl->createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
+        return impl->createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -81,12 +117,12 @@ void InboxApi::updateInbox(
                      const bool forceGenerateNewKey,
                      const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxId, "field:inboxId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return _impl->updateInbox(inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force, forceGenerateNewKey, policies);
+        return impl->updateInbox(inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -94,10 +130,10 @@ void InboxApi::updateInbox(
 }
 
 Inbox InboxApi::getInbox(const std::string& inboxId) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxId, "field:inboxId ");
     try {
-        return _impl->getInbox(inboxId);
+        return impl->getInbox(inboxId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -105,11 +141,11 @@ Inbox InboxApi::getInbox(const std::string& inboxId) {
 }
 
 core::PagingList<inbox::Inbox> InboxApi::listInboxes(const std::string& contextId, const core::PagingQuery& query) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(query, {"createDate", "lastModificationDate"}, "field:query ");
     try {
-        return _impl->listInboxes(contextId, query);
+        return impl->listInboxes(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -117,10 +153,10 @@ core::PagingList<inbox::Inbox> InboxApi::listInboxes(const std::string& contextI
 }
 
 InboxPublicView InboxApi::getInboxPublicView(const std::string& inboxId) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxId, "field:inboxId ");
     try {
-        return _impl->getInboxPublicView(inboxId);
+        return impl->getInboxPublicView(inboxId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -128,10 +164,10 @@ InboxPublicView InboxApi::getInboxPublicView(const std::string& inboxId) {
 }
 
 void InboxApi::deleteInbox(const std::string& inboxId) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxId, "field:inboxId ");
     try {
-        return _impl->deleteInbox(inboxId);
+        return impl->deleteInbox(inboxId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -144,13 +180,13 @@ int64_t/*inboxHandle*/ InboxApi::prepareEntry(
         const std::vector<int64_t>& inboxFileHandles,
         const std::optional<std::string>& userPrivKey
     ) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxId, "field:inboxId ");
     if(userPrivKey.has_value()) {
         core::Validator::validatePrivKeyWIF(userPrivKey.value());
     }
     try {
-        return _impl->prepareEntry(inboxId, data, inboxFileHandles, userPrivKey);
+        return impl->prepareEntry(inboxId, data, inboxFileHandles, userPrivKey);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -158,9 +194,9 @@ int64_t/*inboxHandle*/ InboxApi::prepareEntry(
 }
 
 void InboxApi::sendEntry(const int64_t inboxHandle) {
-    validateEndpoint();
+    auto impl = getImpl();
     try {
-        return _impl->sendEntry(inboxHandle);
+        return impl->sendEntry(inboxHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -168,10 +204,10 @@ void InboxApi::sendEntry(const int64_t inboxHandle) {
 }
 
 inbox::InboxEntry InboxApi::readEntry(const std::string& inboxEntryId) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxEntryId, "field:inboxEntryId ");
     try {
-        return _impl->readEntry(inboxEntryId);
+        return impl->readEntry(inboxEntryId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -179,10 +215,10 @@ inbox::InboxEntry InboxApi::readEntry(const std::string& inboxEntryId) {
 }
 
 void InboxApi::deleteEntry(const std::string& inboxEntryId) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxEntryId, "field:inboxEntryId ");
     try {
-        return _impl->deleteEntry(inboxEntryId);
+        return impl->deleteEntry(inboxEntryId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -190,11 +226,11 @@ void InboxApi::deleteEntry(const std::string& inboxEntryId) {
 }
 
 core::PagingList<inbox::InboxEntry> InboxApi::listEntries(const std::string& inboxId, const core::PagingQuery& query) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(inboxId, "field:inboxId ");
     core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
     try {
-        return _impl->listEntries(inboxId, query);
+        return impl->listEntries(inboxId, query);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -202,10 +238,10 @@ core::PagingList<inbox::InboxEntry> InboxApi::listEntries(const std::string& inb
 }
 
 int64_t/*inboxFileHandle*/ InboxApi::createFileHandle(const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t& fileSize) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateNumberNonNegative(fileSize, "field:fileSize ");
     try {
-        return _impl->createFileHandle(publicMeta, privateMeta, fileSize);
+        return impl->createFileHandle(publicMeta, privateMeta, fileSize);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -213,9 +249,9 @@ int64_t/*inboxFileHandle*/ InboxApi::createFileHandle(const core::Buffer& public
 } 
 
 void InboxApi::writeToFile(const int64_t inboxHandle, const int64_t inboxFileHandle, const core::Buffer& dataChunk) {
-    validateEndpoint();
+    auto impl = getImpl();
     try {
-        return _impl->writeToFile(inboxHandle, inboxFileHandle, dataChunk);
+        return impl->writeToFile(inboxHandle, inboxFileHandle, dataChunk);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -223,10 +259,10 @@ void InboxApi::writeToFile(const int64_t inboxHandle, const int64_t inboxFileHan
 }
 
 int64_t InboxApi::openFile(const std::string& fileId) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateId(fileId, "field:fileId ");
     try {
-        return _impl->openFile(fileId);
+        return impl->openFile(fileId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -234,10 +270,10 @@ int64_t InboxApi::openFile(const std::string& fileId) {
 }
 
 core::Buffer InboxApi::readFromFile(const int64_t handle, const int64_t length) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateNumberNonNegative(length, "field:length ");
     try {
-        return _impl->readFromFile(handle, length);
+        return impl->readFromFile(handle, length);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -245,10 +281,10 @@ core::Buffer InboxApi::readFromFile(const int64_t handle, const int64_t length) 
 }
 
 void InboxApi::seekInFile(const int64_t handle, const int64_t pos) {
-    validateEndpoint();
+    auto impl = getImpl();
     core::Validator::validateNumberNonNegative(pos, "field:pos ");
     try {
-        return _impl->seekInFile(handle, pos);
+        return impl->seekInFile(handle, pos);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -256,9 +292,9 @@ void InboxApi::seekInFile(const int64_t handle, const int64_t pos) {
 }
 
 std::string InboxApi::closeFile(const int64_t handle) {
-    validateEndpoint();
+    auto impl = getImpl();
     try {
-        return _impl->closeFile(handle);
+        return impl->closeFile(handle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -266,9 +302,9 @@ std::string InboxApi::closeFile(const int64_t handle) {
 }
 
 std::vector<std::string> InboxApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    validateEndpoint();
+    auto impl = getImpl();
     try {
-        return _impl->subscribeFor(subscriptionQueries);
+        return impl->subscribeFor(subscriptionQueries);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -276,9 +312,9 @@ std::vector<std::string> InboxApi::subscribeFor(const std::vector<std::string>& 
 }
 
 void InboxApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    validateEndpoint();
+    auto impl = getImpl();
     try {
-        return _impl->unsubscribeFrom(subscriptionIds);
+        return impl->unsubscribeFrom(subscriptionIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -286,9 +322,9 @@ void InboxApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) 
 }
 
 std::string InboxApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
-    validateEndpoint();
+    auto impl = getImpl();
     try {
-        return _impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
+        return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

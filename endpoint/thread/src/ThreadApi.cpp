@@ -22,36 +22,65 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
+ThreadApi::ThreadApi() {};
+ThreadApi::ThreadApi(const ThreadApi& obj): _impl(obj._impl) {
+    attachToImplIfPossible();
+};
+ThreadApi& ThreadApi::operator=(const ThreadApi& obj) {
+    _impl = obj._impl;
+    attachToImplIfPossible();
+    return *this;
+};
+ThreadApi::ThreadApi(ThreadApi&& obj): _impl(obj._impl) {
+    attachToImplIfPossible();
+};
+ThreadApi::~ThreadApi() {
+    detachFromImplIfPossible();
+}
+
 ThreadApi ThreadApi::create(core::Connection& connection) {
     try {
-        return ThreadApi(connection);
+        std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+        std::shared_ptr<ThreadApiImpl> impl(new ThreadApiImpl(
+            connectionImpl->getGateway(),
+            connectionImpl->getUserPrivKey(),
+            connectionImpl->getKeyProvider(),
+            connectionImpl->getHost(),
+            connectionImpl->getEventMiddleware(),
+            connection
+        ));
+        impl->attach(impl);
+        return ThreadApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-ThreadApi::ThreadApi(core::Connection& connection) {
-    std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-    _threadApiImpl = std::make_shared<ThreadApiImpl>(
-        std::bind(&ThreadApi::onConnectionLost, this),
-        connectionImpl->getGateway(),
-        connectionImpl->getUserPrivKey(),
-        connectionImpl->getKeyProvider(),
-        connectionImpl->getHost(),
-        connectionImpl->getEventMiddleware(),
-        connection
-    );
+ThreadApi::ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl) : _impl(impl) {}
+
+std::shared_ptr<ThreadApiImpl> ThreadApi::getImpl() const { 
+    auto impl = _impl.lock();
+    if(!impl) throw NotInitializedException();
+    return impl; 
 }
 
-void ThreadApi::onConnectionLost() {
-    std::unique_lock<std::shared_mutex> lock(*_threadApiImplMutex);
-    _threadApiImpl.reset();
-}
-std::shared_ptr<ThreadApiImpl> ThreadApi::getImpl() const { 
-    std::shared_lock lock(*_threadApiImplMutex);
-    if(_threadApiImpl == nullptr) throw NotInitializedException();
-    return _threadApiImpl; 
+void ThreadApi::attachToImplIfPossible() {
+    if(!_impl.expired()) {
+        auto impl = _impl.lock();
+        if(impl) {
+            impl->attach();
+        }
+    }
+};
+
+void ThreadApi::detachFromImplIfPossible() {
+    if(!_impl.expired()) {
+        auto impl = _impl.lock();
+        if(impl) {
+            impl->detach();
+        }
+    }
 }
 
 std::string ThreadApi::createThread(
