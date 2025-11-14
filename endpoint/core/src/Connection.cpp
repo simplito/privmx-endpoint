@@ -174,9 +174,7 @@ void Connection::disconnect() {
     auto impl = getImpl();
     assertConnection(impl);
     try {
-        std::cout << "impl.use_count(): " << impl.use_count() << std::endl;
         impl->disconnect();
-        std::cout << "after disconnect impl.use_count(): " << impl.use_count() << std::endl;
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
