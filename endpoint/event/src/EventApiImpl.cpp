@@ -38,7 +38,8 @@ EventApiImpl::EventApiImpl(
     _eventMiddleware(eventMiddleware),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}), 
     _eventKeyProvider(EventKeyProvider(userPrivKey)),
-    _subscriber(SubscriberImpl(gateway))
+    _subscriber(SubscriberImpl(gateway)),
+    _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>())
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&EventApiImpl::processConnectedEvent, this));
@@ -121,7 +122,6 @@ DecryptedInternalContextEventDataV1 EventApiImpl::extractInternalEventData(const
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
-    Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
     if(type != "custom") return;
     std::optional<std::string> subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
     if(!subscriptionQuery.has_value()) {
@@ -129,6 +129,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
     }
     std::string channel = subscriptionQuery.value();
     _guardedExecutor->exec([&, type, notification, channel]() {
+        Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         auto rawEvent = utils::TypedObjectFactory::createObjectFromVar<server::ContextCustomEventData>(data);
         // fix if not internal check
         if(channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id()) return;
