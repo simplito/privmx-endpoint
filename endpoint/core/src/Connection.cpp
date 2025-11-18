@@ -24,15 +24,16 @@ using namespace privmx::endpoint::core;
 
 Connection::Connection() {
 };
-Connection::Connection(const Connection& obj): _impl(obj._impl) {
+Connection::Connection(const Connection& obj): _impl(obj._impl), _connectionId(obj._connectionId) {
     attachToImplIfPossible();
 };
 Connection& Connection::operator=(const Connection& obj) {
     this->_impl = obj._impl;
+    this->_connectionId = obj._connectionId;
     this->attachToImplIfPossible();
     return *this;
 };
-Connection::Connection(Connection&& obj): _impl(obj._impl) {
+Connection::Connection(Connection&& obj): _impl(obj._impl), _connectionId(obj._connectionId) {
     attachToImplIfPossible();
 };
 Connection::~Connection() {
@@ -67,7 +68,7 @@ Connection Connection::connectPublic(const std::string& solutionId, const std::s
     }
 }
 
-Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl) : _impl(impl) {}
+Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl) : _impl(impl), _connectionId(impl->getConnectionId()) {}
 
 std::shared_ptr<ConnectionImpl> Connection::getImpl() const { 
     auto impl = _impl.lock();
@@ -98,12 +99,17 @@ void Connection::detachFromImplIfPossible() {
 };
 
 int64_t Connection::getConnectionId() {
-    auto impl = getImpl();
-    try {
-        return impl->getConnectionId();
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    if(_connectionId.has_value()) {
+        return _connectionId.value();
+    } else {
+        auto impl = getImpl();
+        try {
+            _connectionId = impl->getConnectionId();
+            return _connectionId.value();
+        } catch (const privmx::utils::PrivmxException& e) {
+            core::ExceptionConverter::rethrowAsCoreException(e);
+            throw core::Exception("ExceptionConverter rethrow error");
+        }
     }
 }
 

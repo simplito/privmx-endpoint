@@ -109,7 +109,7 @@ private:
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
-private:
+    
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;

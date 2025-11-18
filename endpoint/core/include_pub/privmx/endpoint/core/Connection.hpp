@@ -2,9 +2,8 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_CONNECTION_HPP_
 
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <string>
+#include <optional>
 
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
@@ -127,6 +126,7 @@ private:
     void assertConnection(const std::shared_ptr<ConnectionImpl>& impl);
     Connection(const std::shared_ptr<ConnectionImpl>& impl);
     std::weak_ptr<ConnectionImpl> _impl;
+    std::optional<int64_t> _connectionId;
 };
 
 }  // namespace core
