@@ -44,7 +44,6 @@ public:
         privmx::webrtc::FrameCryptorOptions _frameCryptorOptions
     );
     ~WebRTCImpl();
-
     std::string createOfferAndSetLocalDescription(const std::string& streamRoomId) override;
     std::string createAnswerAndSetDescriptions(const std::string& streamRoomId, const std::string& sdp, const std::string& type) override;
     void setAnswerAndSetRemoteDescription(const std::string& streamRoomId, const std::string& sdp, const std::string& type) override;
@@ -61,6 +60,20 @@ public:
     void setOnFrame(const std::string& streamRoomId, std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> OnFrame);
     void setOnVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnVideoTrack);
     void setOnRemoveVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnRemoveVideoTrack);
+
+    void createPeerConnectionWithLocalStream(
+        const std::string& streamRoomId, 
+        const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracks,
+        const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracks
+    );
+
+    void updatePeerConnectionWithLocalStream(
+        const std::string& streamRoomId, 
+        const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToAdd,
+        const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& videoTracksToAdd,
+        const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToRemove,
+        const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& videoTracksToRemove
+    );
 
 
 private:

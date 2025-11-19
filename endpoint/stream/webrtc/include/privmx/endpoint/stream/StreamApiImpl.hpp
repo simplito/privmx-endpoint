@@ -100,13 +100,18 @@ private:
     };
     struct StreamData {
         StreamData(
-            privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> _streamCapturers,
+            utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>> _audioTracks,
+            utils::ThreadSaveMap<int64_t, std::pair<libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>> _videoTracks,
             StreamStatus _status, std::string _streamRoomId
-        ) :streamCapturers(_streamCapturers), status(_status), streamRoomId(_streamRoomId) {}
-        privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> streamCapturers;
+        ) : audioTracks(_audioTracks), videoTracks(_videoTracks), status(_status), streamRoomId(_streamRoomId) {}
+        //RTCAudioTrack
+        utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>> audioTracks;
+        //RTCVideoTrack + RTCVideoCapturer
+        utils::ThreadSaveMap<int64_t, std::pair<libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>> videoTracks;
+
         StreamStatus status;
-        std::mutex streamMutex;
         std::string streamRoomId;
+        std::mutex streamMutex;
     };
 
 

@@ -291,3 +291,34 @@ void WebRTCImpl::setOnRemoveVideoTrack(const std::string& streamRoomId, std::fun
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
     connection->peerConnection->observer->setOnRemoveVideoTrack(OnRemoveVideoTrack);
 }
+
+void WebRTCImpl::createPeerConnectionWithLocalStream(
+    const std::string& streamRoomId, 
+    const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracks,
+    const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracks
+) {
+    _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
+    for(auto audioTrack: audioTracks) {
+        AddAudioTrack(streamRoomId, audioTrack.second, std::to_string(audioTrack.first));
+    }
+    for(auto videoTrack: videoTracks) {
+        AddVideoTrack(streamRoomId, videoTrack.second, std::to_string(videoTrack.first));
+    }
+}
+
+void WebRTCImpl::updatePeerConnectionWithLocalStream(
+    const std::string& streamRoomId, 
+    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>& audioTracksToAdd,
+    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>& videoTracksToAdd,
+    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>& audioTracksToRemove,
+    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>& videoTracksToRemove
+
+) {
+    _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
+    for(auto audioTrack: audioTracksToAdd) {
+        AddAudioTrack(streamRoomId, audioTrack.second, std::to_string(audioTrack.first));
+    }
+    for(auto videoTrack: videoTracks) {
+        AddVideoTrack(streamRoomId, videoTrack.second, std::to_string(videoTrack.first));
+    }
+}

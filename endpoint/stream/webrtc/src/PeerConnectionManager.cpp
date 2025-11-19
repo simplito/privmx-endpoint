@@ -23,6 +23,7 @@ void PeerConnectionManager::initialize(const std::string& streamRoomId, Connecti
     if(_connections.has(streamRoomId)) {
         auto roomConnections = _connections.get(streamRoomId).value();
         if(roomConnections[connectionType]) {
+            return;
             throw PeerConnectionAlreadyInitializedException();
         }
     }
