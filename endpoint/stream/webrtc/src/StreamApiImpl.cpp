@@ -254,14 +254,16 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
     }
     auto streamData = streamDataOpt.value();
     // Add tracks to the peer connection
+    std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToAdd;
+    std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> videoTracksToAdd;
     streamData->audioTracks.forAll([&](const int64_t& id,const libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>& audioTrack) {
-        _webRTC->AddAudioTrack(streamData->streamRoomId, audioTrack, std::to_string(id));
+        audioTracksToAdd.push_back({id, audioTrack});
     });
     streamData->videoTracks.forAll([&](const int64_t& id,const std::pair<libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>>& video) {
-        _webRTC->AddVideoTrack(streamData->streamRoomId, video.first, std::to_string(id));
+        videoTracksToAdd.push_back({id, video.first});
         video.second->StartCapture();
     });
-    _webRTC->AddAudioTrack
+    _webRTC->createPeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd);
     return _api->publishStream(streamHandle);
 }
 

@@ -170,85 +170,6 @@ void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<K
     }
 }
 
-void WebRTCImpl::AddAudioTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id) {
-    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
-    auto sender = connection->peerConnection->pc->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{id}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
-    {
-        std::shared_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
-        frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-            _peerConnectionFactory,
-            sender, 
-            connection->peerConnection->keys,
-            _frameCryptorOptions
-        );
-    }
-    {
-        std::unique_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
-        connection->peerConnection->audioTracks.insert(std::make_pair(
-            id, 
-            AudioTrackInfo{
-                .track=audioTrack, 
-                .sender=sender, 
-                .frameCryptor=frameCryptor
-            }
-        ));
-    }
-}
-
-void WebRTCImpl::AddVideoTrack(const std::string& streamRoomId, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id) {
-    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
-    auto sender = connection->peerConnection->pc->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{id}});
-    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
-    {
-        std::shared_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
-        frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-            _peerConnectionFactory,
-            sender, 
-            connection->peerConnection->keys,
-            _frameCryptorOptions
-        );
-    }
-    {
-        std::unique_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
-        connection->peerConnection->videoTracks.insert(std::make_pair(
-            id, 
-            VideoTrackInfo{
-                .track=videoTrack, 
-                .sender=sender, 
-                .frameCryptor=frameCryptor
-            }
-        ));
-    }
-    
-}
-
-void WebRTCImpl::RemoveAudioTrack(const std::string& streamRoomId, std::string id) {
-    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
-    std::unique_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
-    auto it = connection->peerConnection->audioTracks.find(id);
-    if(it != connection->peerConnection->audioTracks.end()) {
-        // _mediaStream->RemoveTrack(it->second.track);
-        connection->peerConnection->pc->RemoveTrack(it->second.sender);
-        connection->peerConnection->audioTracks.erase(it);
-    } else {
-        throw IncorrectTrackIdException();
-    }
-}
-
-void WebRTCImpl::RemoveVideoTrack(const std::string& streamRoomId, std::string id) {
-    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
-    std::unique_lock<std::shared_mutex> lock(connection->peerConnection->trackMutex);
-    auto it = connection->peerConnection->audioTracks.find(id);
-    if(it != connection->peerConnection->audioTracks.end()) {
-        // _mediaStream->RemoveTrack(it->second.track);
-        connection->peerConnection->pc->RemoveTrack(it->second.sender);
-        connection->peerConnection->audioTracks.erase(it);
-    } else {
-        throw IncorrectTrackIdException();
-    }
-}
-
 std::shared_ptr<privmx::webrtc::KeyStore> WebRTCImpl::createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys) {
     std::vector<privmx::webrtc::Key> webRtcKeys;
     for(size_t i = 0; i < keys.size(); i++) {
@@ -284,12 +205,12 @@ void WebRTCImpl::setOnFrame(const std::string& streamRoomId, std::function<void(
 
 void WebRTCImpl::setOnVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnVideoTrack) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
-    connection->peerConnection->observer->setOnVideoTrack(OnVideoTrack);
+    connection->peerConnection->observer->setOnTrack(OnVideoTrack);
 }
 
 void WebRTCImpl::setOnRemoveVideoTrack(const std::string& streamRoomId, std::function<void(const std::string&)> OnRemoveVideoTrack) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
-    connection->peerConnection->observer->setOnRemoveVideoTrack(OnRemoveVideoTrack);
+    connection->peerConnection->observer->setOnRemoveTrack(OnRemoveVideoTrack);
 }
 
 void WebRTCImpl::createPeerConnectionWithLocalStream(
@@ -298,27 +219,112 @@ void WebRTCImpl::createPeerConnectionWithLocalStream(
     const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracks
 ) {
     _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
+    auto jc = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
     for(auto audioTrack: audioTracks) {
-        AddAudioTrack(streamRoomId, audioTrack.second, std::to_string(audioTrack.first));
+        AddAudioTrack(jc, audioTrack.second, std::to_string(audioTrack.first));
     }
     for(auto videoTrack: videoTracks) {
-        AddVideoTrack(streamRoomId, videoTrack.second, std::to_string(videoTrack.first));
+        AddVideoTrack(jc, videoTrack.second, std::to_string(videoTrack.first));
     }
 }
 
 void WebRTCImpl::updatePeerConnectionWithLocalStream(
     const std::string& streamRoomId, 
-    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>& audioTracksToAdd,
-    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>& videoTracksToAdd,
-    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>& audioTracksToRemove,
-    const std::vector<libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>& videoTracksToRemove
+    const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToAdd,
+    const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToAdd,
+    const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToRemove,
+    const std::vector<std::pair<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToRemove
 
 ) {
     _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
-    for(auto audioTrack: audioTracksToAdd) {
-        AddAudioTrack(streamRoomId, audioTrack.second, std::to_string(audioTrack.first));
+    auto jc = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
+    for(auto audioTrack: audioTracksToRemove) {
+        RemoveAudioTrack(jc, std::to_string(audioTrack.first));
     }
-    for(auto videoTrack: videoTracks) {
-        AddVideoTrack(streamRoomId, videoTrack.second, std::to_string(videoTrack.first));
+    for(auto videoTrack: videoTracksToRemove) {
+        RemoveVideoTrack(jc, std::to_string(videoTrack.first));
+    }
+    for(auto audioTrack: audioTracksToAdd) {
+        AddAudioTrack(jc, audioTrack.second, std::to_string(audioTrack.first));
+    }
+    for(auto videoTrack: videoTracksToAdd) {
+        AddVideoTrack(jc, videoTrack.second, std::to_string(videoTrack.first));
     }
 }
+
+
+void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id) {
+    auto sender = jc->peerConnection->pc->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{id}});
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
+    {
+        std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+        frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
+            _peerConnectionFactory,
+            sender, 
+            jc->peerConnection->keys,
+            _frameCryptorOptions
+        );
+    }
+    {
+        std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+        jc->peerConnection->audioTracks.insert(std::make_pair(
+            id, 
+            AudioTrackInfo{
+                .track=audioTrack, 
+                .sender=sender, 
+                .frameCryptor=frameCryptor
+            }
+        ));
+    }
+}
+
+void WebRTCImpl::AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id) {
+    auto sender = jc->peerConnection->pc->AddTrack(videoTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{id}});
+    std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
+    {
+        std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+        frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
+            _peerConnectionFactory,
+            sender, 
+            jc->peerConnection->keys,
+            _frameCryptorOptions
+        );
+    }
+    {
+        std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+        jc->peerConnection->videoTracks.insert(std::make_pair(
+            id, 
+            VideoTrackInfo{
+                .track=videoTrack, 
+                .sender=sender, 
+                .frameCryptor=frameCryptor
+            }
+        ));
+    }
+    
+}
+
+void WebRTCImpl::RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id) {
+    std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+    auto it = jc->peerConnection->audioTracks.find(id);
+    if(it != jc->peerConnection->audioTracks.end()) {
+        // _mediaStream->RemoveTrack(it->second.track);
+        jc->peerConnection->pc->RemoveTrack(it->second.sender);
+        jc->peerConnection->audioTracks.erase(it);
+    } else {
+        throw IncorrectTrackIdException();
+    }
+}
+
+void WebRTCImpl::RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id) {
+    std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+    auto it = jc->peerConnection->audioTracks.find(id);
+    if(it != jc->peerConnection->audioTracks.end()) {
+        // _mediaStream->RemoveTrack(it->second.track);
+        jc->peerConnection->pc->RemoveTrack(it->second.sender);
+        jc->peerConnection->audioTracks.erase(it);
+    } else {
+        throw IncorrectTrackIdException();
+    }
+}
+
