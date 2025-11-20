@@ -22,20 +22,13 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
 KvdbApi::KvdbApi() {};
-KvdbApi::KvdbApi(const KvdbApi& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
+KvdbApi::KvdbApi(const KvdbApi& obj): ExtendedPointer(obj) {};
 KvdbApi& KvdbApi::operator=(const KvdbApi& obj) {
-    _impl = obj._impl;
-    attachToImplIfPossible();
+    this->ExtendedPointer::operator=(obj);
     return *this;
 };
-KvdbApi::KvdbApi(KvdbApi&& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
-KvdbApi::~KvdbApi() {
-    detachFromImplIfPossible();
-}
+KvdbApi::KvdbApi(KvdbApi&& obj): ExtendedPointer(std::move(obj)) {};
+KvdbApi::~KvdbApi() {}
 
 KvdbApi KvdbApi::create(core::Connection& connection) {
     try {
@@ -56,31 +49,7 @@ KvdbApi KvdbApi::create(core::Connection& connection) {
     }
 }
 
-KvdbApi::KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl) : _impl(impl) {}
-
-std::shared_ptr<KvdbApiImpl> KvdbApi::getImpl() const { 
-    auto impl = _impl.lock();
-    if(!impl) throw NotInitializedException();
-    return impl; 
-}
-
-void KvdbApi::attachToImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->attach();
-        }
-    }
-};
-
-void KvdbApi::detachFromImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->detach();
-        }
-    }
-}
+KvdbApi::KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl) : ExtendedPointer(impl) {}
 
 std::string KvdbApi::createKvdb(
     const std::string& contextId, 

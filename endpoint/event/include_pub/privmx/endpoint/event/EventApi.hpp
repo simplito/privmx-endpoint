@@ -4,6 +4,7 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/event/Types.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -14,7 +15,7 @@ class EventApiImpl;
 /**
  * 'EventApi' is a class representing Endpoint's API for context custom events.
  */
-class EventApi {
+class EventApi : public privmx::endpoint::core::ExtendedPointer<EventApiImpl> {
 public:
 
     /**
@@ -67,12 +68,8 @@ public:
      */
     std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
 
-    std::shared_ptr<EventApiImpl> getImpl() const;
 private:
-    void attachToImplIfPossible();
-    void detachFromImplIfPossible();
     EventApi(const std::shared_ptr<EventApiImpl>& impl);
-    std::weak_ptr<EventApiImpl> _impl;
 };
 
 }  // namespace event

@@ -172,15 +172,6 @@ private:
 
     void assertThreadExist(const std::string& threadId);
 
-public:
-    inline void attach() {std::unique_lock lock(_selfRefMutex); _attachObjectCounter++;}
-    inline void attach(const std::shared_ptr<ThreadApiImpl>& newSelfRef) {std::unique_lock lock(_selfRefMutex); _attachObjectCounter++; _selfRef = newSelfRef;}
-    inline void detach() {std::unique_lock lock(_selfRefMutex); _attachObjectCounter--; if(_attachObjectCounter.load() == 0) _selfRef.reset();}
-private:
-    inline void cleanup() {std::unique_lock lock(_selfRefMutex); _selfRef.reset(); _attachObjectCounter.store(0);}
-    std::atomic_int64_t _attachObjectCounter;
-    std::mutex _selfRefMutex;
-    std::shared_ptr<ThreadApiImpl> _selfRef;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;

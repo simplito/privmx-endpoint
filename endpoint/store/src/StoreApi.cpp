@@ -22,20 +22,13 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
 StoreApi::StoreApi() {};
-StoreApi::StoreApi(const StoreApi& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
+StoreApi::StoreApi(const StoreApi& obj): ExtendedPointer(obj) {};
 StoreApi& StoreApi::operator=(const StoreApi& obj) {
-    _impl = obj._impl;
-    attachToImplIfPossible();
+    this->ExtendedPointer::operator=(obj);
     return *this;
 };
-StoreApi::StoreApi(StoreApi&& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
-StoreApi::~StoreApi() {
-    detachFromImplIfPossible();
-}
+StoreApi::StoreApi(StoreApi&& obj): ExtendedPointer(std::move(obj)) {};
+StoreApi::~StoreApi() {}
 
 StoreApi StoreApi::create(core::Connection& connection) {
     try {
@@ -62,31 +55,7 @@ StoreApi StoreApi::create(core::Connection& connection) {
     }
 }
 
-StoreApi::StoreApi(const std::shared_ptr<StoreApiImpl>& impl) : _impl(impl) {}
-
-std::shared_ptr<StoreApiImpl> StoreApi::getImpl() const { 
-    auto impl = _impl.lock();
-    if(!impl) throw NotInitializedException();
-    return impl; 
-}
-
-void StoreApi::attachToImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->attach();
-        }
-    }
-};
-
-void StoreApi::detachFromImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->detach();
-        }
-    }
-}
+StoreApi::StoreApi(const std::shared_ptr<StoreApiImpl>& impl) : ExtendedPointer(impl) {}
 
 std::string StoreApi::createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta, const core::Buffer& privateMeta,

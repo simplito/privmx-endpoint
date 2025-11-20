@@ -23,20 +23,13 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
 EventApi::EventApi() {};
-EventApi::EventApi(const EventApi& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
+EventApi::EventApi(const EventApi& obj): ExtendedPointer(obj) {};
 EventApi& EventApi::operator=(const EventApi& obj) {
-    _impl = obj._impl;
-    attachToImplIfPossible();
+    this->ExtendedPointer::operator=(obj);
     return *this;
 };
-EventApi::EventApi(EventApi&& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
-EventApi::~EventApi() {
-    detachFromImplIfPossible();
-}
+EventApi::EventApi(EventApi&& obj): ExtendedPointer(std::move(obj)) {};
+EventApi::~EventApi() {}
 
 EventApi EventApi::create(core::Connection& connection) {
     try {
@@ -55,31 +48,7 @@ EventApi EventApi::create(core::Connection& connection) {
     }
 }
 
-EventApi::EventApi(const std::shared_ptr<EventApiImpl>& impl) : _impl(impl) {}
-
-std::shared_ptr<EventApiImpl> EventApi::getImpl() const { 
-    auto impl = _impl.lock();
-    if(!impl) throw NotInitializedException();
-    return impl; 
-}
-
-void EventApi::attachToImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->attach();
-        }
-    }
-};
-
-void EventApi::detachFromImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->detach();
-        }
-    }
-}
+EventApi::EventApi(const std::shared_ptr<EventApiImpl>& impl) : ExtendedPointer(impl) {}
 
 void EventApi::emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData) {
     auto impl = getImpl();

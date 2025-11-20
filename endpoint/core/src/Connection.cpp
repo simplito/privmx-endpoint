@@ -22,23 +22,15 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-Connection::Connection() {
-};
-Connection::Connection(const Connection& obj): _impl(obj._impl), _connectionId(obj._connectionId) {
-    attachToImplIfPossible();
-};
+Connection::Connection() {};
+Connection::Connection(const Connection& obj): ExtendedPointer(obj), _connectionId(obj._connectionId) {};
 Connection& Connection::operator=(const Connection& obj) {
-    this->_impl = obj._impl;
+    this->ExtendedPointer::operator=(obj);
     this->_connectionId = obj._connectionId;
-    this->attachToImplIfPossible();
     return *this;
 };
-Connection::Connection(Connection&& obj): _impl(obj._impl), _connectionId(obj._connectionId) {
-    attachToImplIfPossible();
-};
-Connection::~Connection() {
-    detachFromImplIfPossible();
-}
+Connection::Connection(Connection&& obj): ExtendedPointer(std::move(obj)), _connectionId(obj._connectionId) {};
+Connection::~Connection() {}
 
 Connection Connection::connect(const std::string& userPrivKey, const std::string& solutionId,
                                 const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
@@ -68,35 +60,11 @@ Connection Connection::connectPublic(const std::string& solutionId, const std::s
     }
 }
 
-Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl) : _impl(impl), _connectionId(impl->getConnectionId()) {}
-
-std::shared_ptr<ConnectionImpl> Connection::getImpl() const { 
-    auto impl = _impl.lock();
-    if(!impl) throw NotInitializedException();
-    return impl; 
-}
+Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl) : ExtendedPointer(impl), _connectionId(std::move(impl->getConnectionId())) {}
 
 void Connection::assertConnection(const std::shared_ptr<ConnectionImpl>& impl) {
     if(impl->getGateway().isNull()) throw core::NotInitializedException();
 }
-
-void Connection::attachToImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->attach();
-        }
-    }
-};
-
-void Connection::detachFromImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->detach();
-        }
-    }
-};
 
 int64_t Connection::getConnectionId() {
     if(_connectionId.has_value()) {

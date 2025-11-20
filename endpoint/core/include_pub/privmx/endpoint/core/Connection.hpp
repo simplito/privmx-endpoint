@@ -7,6 +7,8 @@
 
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
+#include "privmx/endpoint/core/ExtendedPointer.hpp"
+
 
 namespace privmx {
 namespace endpoint {
@@ -17,7 +19,7 @@ class ConnectionImpl;
 /**
  * 'Connection' represents and manages the current connection between the Endpoint and the Bridge server.
  */
-class Connection {
+class Connection : public ExtendedPointer<ConnectionImpl> {
 public:
     /**
      * Connects to the PrivMX Bridge server.
@@ -118,14 +120,9 @@ public:
      */
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
 
-    std::shared_ptr<ConnectionImpl> getImpl() const;
-
 private:
-    void attachToImplIfPossible();
-    void detachFromImplIfPossible();
     void assertConnection(const std::shared_ptr<ConnectionImpl>& impl);
     Connection(const std::shared_ptr<ConnectionImpl>& impl);
-    std::weak_ptr<ConnectionImpl> _impl;
     std::optional<int64_t> _connectionId;
 };
 

@@ -9,6 +9,7 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/thread/Types.hpp"
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -19,7 +20,7 @@ class ThreadApiImpl;
 /**
  * 'ThreadApi' is a class representing Endpoint's API for Threads and their messages.
  */
-class ThreadApi {
+class ThreadApi : public privmx::endpoint::core::ExtendedPointer<ThreadApiImpl>  {
 public:
     /**
      * Creates an instance of 'ThreadApi'.
@@ -166,13 +167,8 @@ public:
      */
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    std::shared_ptr<ThreadApiImpl> getImpl() const;
-
 private:
-    void attachToImplIfPossible();
-    void detachFromImplIfPossible();
     ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl);
-    std::weak_ptr<ThreadApiImpl> _impl;
 };
 
 }  // namespace thread

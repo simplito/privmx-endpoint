@@ -25,20 +25,13 @@ using namespace privmx::endpoint::inbox;
 using namespace privmx::endpoint;
 
 InboxApi::InboxApi() {};
-InboxApi::InboxApi(const InboxApi& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
+InboxApi::InboxApi(const InboxApi& obj): ExtendedPointer(obj) {};
 InboxApi& InboxApi::operator=(const InboxApi& obj) {
-    _impl = obj._impl;
-    attachToImplIfPossible();
+    this->ExtendedPointer::operator=(obj);
     return *this;
 };
-InboxApi::InboxApi(InboxApi&& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
-InboxApi::~InboxApi() {
-    detachFromImplIfPossible();
-}
+InboxApi::InboxApi(InboxApi&& obj): ExtendedPointer(std::move(obj)) {};
+InboxApi::~InboxApi() {}
 
 InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threadApi, store::StoreApi& storeApi) {
     try {
@@ -66,31 +59,7 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
     }
 }
 
-InboxApi::InboxApi(const std::shared_ptr<InboxApiImpl>& impl) : _impl(impl) {}
-
-std::shared_ptr<InboxApiImpl> InboxApi::getImpl() const { 
-    auto impl = _impl.lock();
-    if(!impl) throw NotInitializedException();
-    return impl; 
-}
-
-void InboxApi::attachToImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->attach();
-        }
-    }
-};
-
-void InboxApi::detachFromImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->detach();
-        }
-    }
-}
+InboxApi::InboxApi(const std::shared_ptr<InboxApiImpl>& impl) : ExtendedPointer(impl) {}
 
 std::string InboxApi::createInbox(
 const std::string& contextId, const std::vector<core::UserWithPubKey>& users,

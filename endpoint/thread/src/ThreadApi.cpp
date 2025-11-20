@@ -22,21 +22,15 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
+
 ThreadApi::ThreadApi() {};
-ThreadApi::ThreadApi(const ThreadApi& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
+ThreadApi::ThreadApi(const ThreadApi& obj): ExtendedPointer(obj) {};
 ThreadApi& ThreadApi::operator=(const ThreadApi& obj) {
-    _impl = obj._impl;
-    attachToImplIfPossible();
+    this->ExtendedPointer::operator=(obj);
     return *this;
 };
-ThreadApi::ThreadApi(ThreadApi&& obj): _impl(obj._impl) {
-    attachToImplIfPossible();
-};
-ThreadApi::~ThreadApi() {
-    detachFromImplIfPossible();
-}
+ThreadApi::ThreadApi(ThreadApi&& obj): ExtendedPointer(std::move(obj)) {};
+ThreadApi::~ThreadApi() {}
 
 ThreadApi ThreadApi::create(core::Connection& connection) {
     try {
@@ -57,31 +51,7 @@ ThreadApi ThreadApi::create(core::Connection& connection) {
     }
 }
 
-ThreadApi::ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl) : _impl(impl) {}
-
-std::shared_ptr<ThreadApiImpl> ThreadApi::getImpl() const { 
-    auto impl = _impl.lock();
-    if(!impl) throw NotInitializedException();
-    return impl; 
-}
-
-void ThreadApi::attachToImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->attach();
-        }
-    }
-};
-
-void ThreadApi::detachFromImplIfPossible() {
-    if(!_impl.expired()) {
-        auto impl = _impl.lock();
-        if(impl) {
-            impl->detach();
-        }
-    }
-}
+ThreadApi::ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl) : ExtendedPointer(impl) {}
 
 std::string ThreadApi::createThread(
     const std::string& contextId, 
