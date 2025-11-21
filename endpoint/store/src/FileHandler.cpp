@@ -55,7 +55,7 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
     }
     // start writing to offset chunk
     auto startIndex = _chunkReader->filePosToFileChunkIndex(offset);
-    auto stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size()-1);
+    auto stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size() - (data.size() == 0 ? 0 : 1));
     uint64_t dataSend = 0;
     std::vector<FileHandler::UpdateChunkData> chunksToUpdate;
     auto newPlainfileSize = _plainfileSize;
