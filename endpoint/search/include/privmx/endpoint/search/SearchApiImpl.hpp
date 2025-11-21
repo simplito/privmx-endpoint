@@ -27,6 +27,7 @@ limitations under the License.
 #include "privmx/utils/ThreadSaveMap.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
+#include "privmx/endpoint/search/SearchTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -93,7 +94,6 @@ private:
     dynamic::IndexData getIndexData(const std::string& indexId);
     void setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode);
 
-    // std::shared_ptr<FullTextSearch> _fts;
     std::shared_ptr<PrivmxSession> _session;
     core::Connection _connection;
     store::StoreApi _storeApi;

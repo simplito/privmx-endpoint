@@ -8,6 +8,7 @@ privmxdrvecc/1.0.2
 privmxdrvnet/1.0.3
 gtest/[^1.15.0]
 readline/[^8.2.0]
+sqlite3/[^3.50.4]
 
 [options]
 *:shared = True
@@ -41,6 +42,7 @@ poco*:enable_apacheconnector=False
 poco*:enable_data_postgresql=False
 poco*:enable_activerecord_compiler=False
 poco*:enable_pagecompiler_file2page=False
+sqlite3*:enable_fts5=True
 
 [generators]
 CMakeDeps

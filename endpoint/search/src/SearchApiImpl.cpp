@@ -21,12 +21,6 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
 
-// struct IndexData
-// {
-//     IndexMode mode;
-//     std::string storeId;
-// };
-
 core::Buffer serializeIndexData(const dynamic::IndexData& indexData) {
     return core::Buffer::from(privmx::utils::Utils::stringifyVar(indexData));
 }
@@ -41,7 +35,6 @@ SearchApiImpl::SearchApiImpl(
         const store::StoreApi& storeApi,
         const kvdb::KvdbApi& kvdbApi
 ) {
-    // _session = SessionManager::get()->addSession(connection, storeApi, kvdbApi);
     _connection = connection;
     _storeApi = storeApi;
     _kvdbApi = kvdbApi;
@@ -59,7 +52,6 @@ std::string SearchApiImpl::createSearchIndex(
     std::string indexId = _kvdbApi.createKvdb(contextId, users, managers, publicMeta, privateMeta, policies);
     std::string storeId = _storeApi.createStore(contextId, users, managers, {}, {}, policies);
     setIndexData(indexId, storeId, mode);
-    l("Created KVDB", indexId);
     return indexId;
 }
 
@@ -89,14 +81,12 @@ int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
     auto data = getIndexData(indexId);
     auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, indexId, data.storeId());
     std::string filename = "/pmx/" + session->id + "/index.db";
-    std::cerr << filename << std::endl;
-    auto fts = FullTextSearch::openDb(filename);
+    auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode());
     fts->ensureTableCreated();
     return _fts.add(fts);
 }
 
 void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
-    l("open", indexHandle);
     auto fts = _fts.get(indexHandle);
     fts->close();
     _fts.remove(indexHandle);
@@ -104,28 +94,23 @@ void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
 
 int64_t SearchApiImpl::addDocument(const int64_t indexHandle, const std::string& name, const std::string& content) {
     auto fts = _fts.get(indexHandle);
-    fts->addDocument(name, content);
-    return 1;
+    return fts->addDocument(name, content);
 }
 
 void SearchApiImpl::updateDocument(const int64_t indexHandle, const Document& document) {
     auto fts = _fts.get(indexHandle);
-    // fts->updateDocument(document);
+    fts->updateDocument(document);
 }
 
 void SearchApiImpl::deleteDocument(const int64_t indexHandle, int64_t documentId) {
     auto fts = _fts.get(indexHandle);
-    // fts->deleteDocument(documentId);
+    fts->deleteDocument(documentId);
 }
 
 core::PagingList<Document> SearchApiImpl::searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery) {
     auto fts = _fts.get(indexHandle);
     core::PagingList<Document> result;
-    auto list = fts->search(searchQuery);
-    for (auto& id : list) {
-        result.readItems.push_back(id);
-    }
-    return result;
+    return fts->search(searchQuery, pagingQuery);
 }
 
 dynamic::IndexData SearchApiImpl::getIndexData(const std::string& indexId) {
