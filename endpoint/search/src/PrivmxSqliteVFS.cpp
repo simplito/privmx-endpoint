@@ -56,7 +56,11 @@ extern "C" {
 
 int privmxClose(sqlite3_file *pFile) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
-    file->close();
+    try {
+        file->close();
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
@@ -80,25 +84,41 @@ int privmxRead(sqlite3_file *pFile, void *zBuf, int iAmt, sqlite3_int64 iOfst) {
 
 int privmxWrite(sqlite3_file *pFile, const void *zBuf, int iAmt, sqlite3_int64 iOfst) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
-    file->write(privmx::endpoint::core::Buffer::from((char*)zBuf, iAmt), iOfst);
+    try {
+        file->write(privmx::endpoint::core::Buffer::from((char*)zBuf, iAmt), iOfst);
+    } catch (...) {
+        return SQLITE_IOERR_WRITE;
+    }
     return SQLITE_OK;
 }
 
 int privmxTruncate(sqlite3_file *pFile, sqlite3_int64 size) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
-    file->truncate(size);
+    try {
+        file->truncate(size);
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
 int privmxSync(sqlite3_file *pFile, int flags) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
-    file->sync();
+    try {
+        file->sync();
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
 int privmxFileSize(sqlite3_file *pFile, sqlite3_int64 *pSize) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
-    *pSize = file->getFileSize();
+    try {
+        *pSize = file->getFileSize();
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
@@ -155,26 +175,42 @@ int privmxOpen(sqlite3_vfs *pVfs, const char *zName, sqlite3_file *pFile, int fl
     file->base.pMethods = &PrivmxIoMethods;
     if (pOutFlags) *pOutFlags = flags;
     std::shared_ptr<PrivmxExtFS> fs = extractPrivmxExtFS(pVfs);
-    file->pmxFile = new std::shared_ptr<PrivmxFile>(fs->openFile(zName));
+    try {
+        file->pmxFile = new std::shared_ptr<PrivmxFile>(fs->openFile(zName));
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
 
 int privmxDelete(sqlite3_vfs *pVfs, const char *zName, int syncDir) {
     std::shared_ptr<PrivmxExtFS> fs = extractPrivmxExtFS(pVfs);
-    fs->deleteFile(zName);
+    try {
+        fs->deleteFile(zName);
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
 int privmxAccess(sqlite3_vfs *pVfs, const char *zName, int flags, int *pResOut) {
     std::shared_ptr<PrivmxExtFS> fs = extractPrivmxExtFS(pVfs);
-    *pResOut = fs->access(zName);
+    try {
+        *pResOut = fs->access(zName);
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
 int privmxFullPathname(sqlite3_vfs *pVfs, const char *zName, int nOut, char *zOut) {
     std::shared_ptr<PrivmxExtFS> fs = extractPrivmxExtFS(pVfs);
-    sqlite3_snprintf(nOut, zOut, "%s", fs->fullPathname(zName).c_str());
+    try {
+        sqlite3_snprintf(nOut, zOut, "%s", fs->fullPathname(zName).c_str());
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
     return SQLITE_OK;
 }
 
