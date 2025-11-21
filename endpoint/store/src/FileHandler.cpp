@@ -228,8 +228,8 @@ std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFr
         updatedChunk->chunk.hmac,
         updatedChunk->chunkIndex*_hashList->getHashSize()
     }};
-    auto& squashedChanges = result.back();
     for(updatedChunk++; updatedChunk != updatedChunks.end(); updatedChunk++) {
+        auto& squashedChanges = result.back();
         if (squashedChanges.dataPos + squashedChanges.data.size() == updatedChunk->chunkIndex*_encryptedChunkSize && 
             squashedChanges.data.size() + updatedChunk->chunk.data.size() < SERVER_OPERATION_SIZE_LIMIT
         ) {
@@ -242,7 +242,6 @@ std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFr
                 updatedChunk->chunk.hmac,
                 updatedChunk->chunkIndex*_hashList->getHashSize()
             });
-            squashedChanges = result.back();
         }
     }
     return result;
