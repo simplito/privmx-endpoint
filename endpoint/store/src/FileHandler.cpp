@@ -168,8 +168,8 @@ FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, size
     return FileHandler::UpdateChunkData{
         chunk,
         index,
-        truncate ? (int64_t)(index * _plainChunkSize + newChunk.size()) - (int64_t)_plainfileSize : (int64_t)newChunk.size() - (int64_t)prevChunk.size(),
-        truncate ? (int64_t)(index * _encryptedChunkSize + chunk.data.size()) - (int64_t)_encryptedFileSize : (int64_t)chunk.data.size() - (int64_t)prevEncryptedChunk.size()
+        truncate ? (int64_t)(index * _plainChunkSize + newChunk.size()) - std::max((int64_t)_plainfileSize, (int64_t)(index * _plainChunkSize)) : (int64_t)newChunk.size() - (int64_t)prevChunk.size(),
+        truncate ? (int64_t)(index * _encryptedChunkSize + chunk.data.size()) - std::max((int64_t)_encryptedFileSize, (int64_t)(index * _encryptedChunkSize)) : (int64_t)chunk.data.size() - (int64_t)prevEncryptedChunk.size()
     };
 }
 
