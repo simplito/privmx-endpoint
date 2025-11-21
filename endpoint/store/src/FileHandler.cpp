@@ -254,16 +254,10 @@ uint64_t FileHandlerImpl::size() {
 }
 
 void FileHandlerImpl::seekg(const uint64_t pos) {
-    if (pos > _file->getFileSize()) {
-        throw PosOutOfBoundsException("seekg out of bounds");
-    }
     _readPos = pos;
 }
 
 void FileHandlerImpl::seekp(const uint64_t pos) {
-    if (pos > _file->getFileSize()) {
-        throw PosOutOfBoundsException("seekg out of bounds");
-    }
     _writePos = pos;
 }
 
