@@ -143,7 +143,6 @@ std::string PrivmxFS::getFileId(const std::string& name) {
     } else {
         int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
         std::string fileId = _session->storeApi.closeFile(fh);
-        std::cerr << _session->kvdbId << std::endl;
         _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
         return fileId;
     }
