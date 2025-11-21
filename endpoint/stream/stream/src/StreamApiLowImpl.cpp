@@ -67,11 +67,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
-
-    auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
-    auto result = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
-
-    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {
@@ -262,10 +257,17 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
+
+    // setup event listener
+    auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(streamRoomId)};
+    std::vector<std::string> subscriptionsIds = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, subscriptionsIds);
+
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
         std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _notificationListenerId),
         streamRoomId,
-        webRtc
+        webRtc,
+        subscriptionsIds
     );
     _streamRoomMap.set(
         streamRoomId,
@@ -297,31 +299,34 @@ void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shar
     _serverApi->streamRoomJoin(model);
 }
 void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
-    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomLeaveModel>();
-    model.streamRoomId(streamRoomId);
-    _serverApi->streamRoomLeave(model);
-
     auto room = getStreamRoomData(streamRoomId);
+    // close event listener
+    auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(room->streamRoomId)};
+    _subscriber.unsubscribeFrom(room->subscriptionsIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, room->subscriptionsIds);
+
+    LOG_DEBUG("StreamApiLowImpl:leaveStreamRoom", "gently close of streams");
     if(room->publisherStream) {
-        //gently close publisherStream
         if(room->publisherStream->streamHandle.has_value()) {
             _streamHandleToRoomId.erase(room->publisherStream->streamHandle.value());
         }
     }
     if(room->subscriberStream) {
-        //gently close subscriberStream
         if(room->subscriberStream->streamHandle.has_value()) {
             _streamHandleToRoomId.erase(room->subscriberStream->streamHandle.value());
         }
     }
-    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
     //kill all webRTC pearConnections
     room->webRtc->close(room->streamRoomId);
     //stop StreamKeyManager
     room->streamKeyManager.reset();
     // Final clenup
     _streamRoomMap.erase(streamRoomId);
-
+    // send laveRequest
+    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomLeaveModel>();
+    model.streamRoomId(streamRoomId);
+    _serverApi->streamRoomLeave(model);
+    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
 }
 
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {

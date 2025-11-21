@@ -110,6 +110,9 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
 
 void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     LOG_TIME_DEBUG_START(Subscriber:unsubscribeFrom, "")
+    if(subscriptionIds.size() == 0) {
+        return;
+    }
     auto model = utils::TypedObjectFactory::createNewObject<server::UnsubscribeFromChannelsModel>();
     auto subscriptionsIds = utils::TypedObjectFactory::createNewList<std::string>();
     for(auto subscriptionId: subscriptionIds) {

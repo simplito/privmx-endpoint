@@ -59,7 +59,7 @@ StreamKeyManager::StreamKeyManager(
                     }
                 }
                 if(!key || (key->creation_time + key->TTL - std::chrono::milliseconds(MAX_UPDATE_TIMEOUT+UPDATE_INTERVAL) < std::chrono::system_clock::now())) {
-                    updateKey();
+                    if(!token->isCancelled()) updateKey();
                 }
             }
         } catch (const core::Exception& e) {

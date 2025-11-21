@@ -117,8 +117,8 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
             dynamic_cast<libwebrtc::RTCVideoTrack*>(track.get())->AddRenderer(r);
         }
     }
-
 }
+
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     PRIVMX_DEBUG("STREAMS", "API", _streamRoomId + ": ON REMOVE TRACK")
     _frameCryptors.erase(receiver->track()->id().std_string());
