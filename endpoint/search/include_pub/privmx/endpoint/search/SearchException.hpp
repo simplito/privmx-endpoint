@@ -39,6 +39,20 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointSearchException, "Unknown endpoint sear
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InvalidIndexHandleException, "Invalid Index handle", 0x0002)
 
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, DatabaseVFSRegisterException, "Can't register VFS", 0x0101)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, DatabaseOpenException, "Can't open database", 0x0102)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, DatabaseAttachException, "ATTACH failed", 0x0103)
+
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InsertPrepareException, "Error preparing INSERT", 0x0201)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InsertExecuteException, "Error executing INSERT", 0x0202)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, UpdatePrepareException, "Error preparing UPDATE", 0x0203)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, UpdateExecuteException, "Error executing UPDATE", 0x0204)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, DeletePrepareException, "Error preparing DELETE", 0x0205)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, DeleteExecuteException, "Error executing DELETE", 0x0206)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, SelectPrepareException, "Error preparing SELECT", 0x0207)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, QueryPrepareException, "Error preparing query", 0x0208)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TableCreationException, "Error creating table", 0x0209)
+
 } // search
 } // endpoint
 } // privmx
