@@ -196,18 +196,13 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
         }
         else if (type == "streamNewStreams") {
-            std::cerr << __LINE__ << std::endl;
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::NewStreams>(data);
-            std::cerr << __LINE__ << std::endl;
             auto deserializer = std::make_shared<core::VarDeserializer>();
             auto parsed = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "NewStreams");
-            std::cerr << __LINE__ << std::endl;
 
             std::shared_ptr<StreamNewStreamsEvent> event(new StreamNewStreamsEvent());
-                        std::cerr << __LINE__ << std::endl;event->channel = "stream";
             event->data = parsed;
             _eventMiddleware->emitApiEvent(event);
-            std::cerr << __LINE__ << std::endl;
         }
         else if (type == "streamsUpdated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamsUpdatedData>(data);
@@ -277,7 +272,6 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
 }
 
 std::vector<StreamInfo> StreamApiLowImpl::listStreams(const std::string& streamRoomId) {
-    std::cerr << __LINE__ << " [WebRTCImpl]" << std::endl;
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamListModel>();
     model.streamRoomId(streamRoomId);
     auto streamList = _serverApi->streamList(model).list();
@@ -855,8 +849,6 @@ std::vector<StreamRoom> StreamApiLowImpl::decryptAndConvertStreamRoomsDataToStre
     std::map<std::string, bool> duplication_check;
     for (auto streamRoom: streamRooms) {
         try {
-            std::cerr << __LINE__ << std::endl;
-
             auto tmp = decryptAndConvertStreamRoomDataToStreamRoom(
                 streamRoom, 
                 streamRoom.data().get(streamRoom.data().size()-1), 

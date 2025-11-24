@@ -52,9 +52,19 @@ struct PeerConnection {
 };
 
 struct JanusConnection {
-    JanusConnection(std::shared_ptr<PeerConnection> peerConnection_, int64_t sessionId_, bool hasSubscriptions_) :
-        peerConnection(peerConnection_), sessionId(sessionId_), hasSubscriptions(hasSubscriptions_) {}
+    JanusConnection(
+        std::shared_ptr<PeerConnection> _peerConnection,
+        libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> _mediaStream,
+        int64_t _sessionId, 
+        bool _hasSubscriptions
+    ) :
+        peerConnection(_peerConnection), 
+        mediaStream(_mediaStream),
+        sessionId(_sessionId), 
+        hasSubscriptions(_hasSubscriptions) 
+    {}
     std::shared_ptr<PeerConnection> peerConnection;
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> mediaStream;
     int64_t sessionId;
     bool hasSubscriptions;
 };

@@ -3,6 +3,7 @@
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include <privmx/utils/Debug.hpp>
 #include <future>
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::stream;
 
@@ -64,7 +65,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
             throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
-    if (!tmp.get_future().get()) {
+    if (tmp.get_future().wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
         throw stream::WebRTCException("SetRemoteDescriptionFailed");
     }
     // Create answer
@@ -238,18 +239,25 @@ void WebRTCImpl::updatePeerConnectionWithLocalStream(
 ) {
     _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
     auto jc = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
+    LOG_DEBUG("updatePeerConnectionWithLocalStream")
     for(auto audioTrack: audioTracksToRemove) {
+        LOG_DEBUG("updatePeerConnectionWithLocalStream:audioTracksToRemove - ", audioTrack.first)
         RemoveAudioTrack(jc, std::to_string(audioTrack.first));
     }
     for(auto videoTrack: videoTracksToRemove) {
+        LOG_DEBUG("updatePeerConnectionWithLocalStream:videoTracksToRemove - ", videoTrack.first)
         RemoveVideoTrack(jc, std::to_string(videoTrack.first));
     }
     for(auto audioTrack: audioTracksToAdd) {
+        LOG_DEBUG("updatePeerConnectionWithLocalStream:audioTracksToAdd - ", audioTrack.first)
         AddAudioTrack(jc, audioTrack.second, std::to_string(audioTrack.first));
     }
     for(auto videoTrack: videoTracksToAdd) {
+        LOG_DEBUG("updatePeerConnectionWithLocalStream:videoTracksToAdd - ", videoTrack.first)
         AddVideoTrack(jc, videoTrack.second, std::to_string(videoTrack.first));
     }
+    LOG_DEBUG("updatePeerConnectionWithLocalStream:pc->audioTracks -" , jc->peerConnection->audioTracks.size());
+    LOG_DEBUG("updatePeerConnectionWithLocalStream:pc->videoTracks -" , jc->peerConnection->videoTracks.size());
 }
 
 
@@ -318,11 +326,11 @@ void WebRTCImpl::RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::Janu
 
 void WebRTCImpl::RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id) {
     std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
-    auto it = jc->peerConnection->audioTracks.find(id);
-    if(it != jc->peerConnection->audioTracks.end()) {
+    auto it = jc->peerConnection->videoTracks.find(id);
+    if(it != jc->peerConnection->videoTracks.end()) {
         // _mediaStream->RemoveTrack(it->second.track);
         jc->peerConnection->pc->RemoveTrack(it->second.sender);
-        jc->peerConnection->audioTracks.erase(it);
+        jc->peerConnection->videoTracks.erase(it);
     } else {
         throw IncorrectTrackIdException();
     }

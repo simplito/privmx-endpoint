@@ -93,13 +93,15 @@ int main(int argc, char** argv) {
         auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<stream::StreamSubscription> streamsId;
         for(int i = 0; i < streamlist.size(); i++) {
-            std::cout << "streamlist[" << i << "]:" <<  streamlist[i].streamId << std::endl;
-            streamsId.push_back(stream::StreamSubscription{streamlist[i].streamId, std::nullopt});
+            std::cout << "streamlist[" << i << "]:" <<  streamlist[i].id << std::endl;
+            streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
         }
         streamApi.joinStreamRoom(streamRoomId);
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
         
-        while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
 
         streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(5));

@@ -79,6 +79,19 @@ void PmxPeerConnectionObserver::OnIceCandidate([[maybe_unused]] libwebrtc::scope
 }
 void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
     PRIVMX_DEBUG("STREAMS", "API", _streamRoomId + ": STREAM ADDED")
+    PRIVMX_DEBUG("STREAMS", "API", "stream->video_tracks().size() -> " + std::to_string(stream->video_tracks().size()))
+    PRIVMX_DEBUG("STREAMS", "API", "stream->audio_tracks().size() -> " + std::to_string(stream->audio_tracks().size()))
+    PRIVMX_DEBUG("STREAMS", "API", "_onFrameCallback.has_value() -> " + std::to_string(_onFrameCallback.has_value()))
+    for(size_t i = 0; i < stream->video_tracks().size(); i++) { 
+        auto track = stream->video_tracks()[i];
+        if(_onFrameCallback.has_value()) {
+        RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
+            new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string())
+        };
+        PRIVMX_DEBUG("STREAMS", "API", "stream->video_tracks()[i] -> AddRenderer(r)")
+        track->AddRenderer(r);
+        }
+    }
 }
 void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
     PRIVMX_DEBUG("STREAMS", "API", _streamRoomId + ": ON REMOVE STREAM")
@@ -92,11 +105,21 @@ void PmxPeerConnectionObserver::OnRenegotiationNeeded() {
 
 void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) {
     PRIVMX_DEBUG("STREAMS", "API", _streamRoomId + ": ON TRACK")
+    // auto track = transceiver->receiver()->track();
+    // if(transceiver->media_type() == libwebrtc::RTCMediaType::VIDEO && _onFrameCallback.has_value()) {
+    //     if(_onFrameCallback.has_value()) {
+    //         RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
+    //             new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string())
+    //         };
+    //         PRIVMX_DEBUG("STREAMS", "API", "stream->video_tracks()[i] -> AddRenderer(r)")
+    //         dynamic_cast<libwebrtc::RTCVideoTrack*>(track.get())->AddRenderer(r);
+    //     }
+    // }
 }
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     PRIVMX_DEBUG("STREAMS", "API", _streamRoomId + ": TRACK ADDED")
     auto trackId = receiver->track()->id().std_string();
-    auto track = receiver->track();
+    // auto track = receiver->track();
     
     // set frame crypto to decrypt track
     _frameCryptors.set(
@@ -107,16 +130,25 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
     if(_onTrack.has_value()) {
         _onTrack.value()(_streamRoomId + "-" + trackId);
     }
-    // set on frame renderer (videoTrack)
-    if(receiver->media_type() == libwebrtc::RTCMediaType::VIDEO && _onFrameCallback.has_value()) {
-        if(_onFrameCallback.has_value()) {
-            RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
-                new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string())
-            };
-            PRIVMX_DEBUG("STREAMS", "API", "stream->video_tracks()[i] -> AddRenderer(r)")
-            dynamic_cast<libwebrtc::RTCVideoTrack*>(track.get())->AddRenderer(r);
+    for(size_t j = 0; j < streams.size(); j++) {
+        auto stream = streams[j];
+        for(size_t i = 0; i < stream->video_tracks().size(); i++) { 
+            auto track = stream->video_tracks()[i];
+            std::cout << track->id().std_string() << " | " << trackId << std::endl; 
+            if(track->id().std_string() == trackId) {
+                if(_onFrameCallback.has_value()) {
+                RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
+                    new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string())
+                };
+                PRIVMX_DEBUG("STREAMS", "API", "stream->video_tracks()[i] -> AddRenderer(r)")
+                track->AddRenderer(r);
+                }
+            }
         }
     }
+
+    // set on frame renderer (videoTrack)
+    
 }
 
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {

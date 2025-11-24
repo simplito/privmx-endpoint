@@ -62,10 +62,7 @@ int main(int argc, char** argv) {
         stream::StreamSettings ssettings;
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
 
-        std::this_thread::sleep_for(std::chrono::seconds(120));
-        streamApi.unpublishStream(streamId_1);
-        streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
-        streamApi.leaveStreamRoom(streamRoomId);
+        std::this_thread::sleep_for(std::chrono::seconds(60));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
        

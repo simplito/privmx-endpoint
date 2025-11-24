@@ -100,7 +100,32 @@ int main(int argc, char** argv) {
             }
         }
         streamApi.publishStream(streamHandle);
-        while (true) {std::this_thread::sleep_for(std::chrono::seconds(5));}
+        while (true) {
+
+            std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
+            for(const auto& mediaDevice: mediaDevices) {
+                if(mediaDevice.type == stream::DeviceType::Video) {
+                    streamApi.removeTrack(streamHandle, mediaDevice);
+                    break;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(30));
+            std::cout << "----------------------------------------------remove track---------------------------------------------" << std::endl;
+            
+            streamApi.updateStream(streamHandle);
+            std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
+            auto mediaDevices = streamApi.getMediaDevices();
+            for(const auto& mediaDevice: mediaDevices) {
+                if(mediaDevice.type == stream::DeviceType::Video) {
+                    streamApi.addTrack(streamHandle, mediaDevice);
+                    break;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(30));
+            std::cout << "----------------------------------------------add track------------------------------------------------" << std::endl;
+            
+            streamApi.updateStream(streamHandle);
+        }
         
         streamApi.unpublishStream(streamHandle);
         connection.disconnect();
