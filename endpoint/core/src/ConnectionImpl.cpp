@@ -97,7 +97,7 @@ void ConnectionImpl::connect(
     );
     _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { 
-            _eventMiddleware->emitDisconnectedEvent(); 
+            _eventMiddleware->emitDisconnectedEvent();
             cleanup();
         }
     );
