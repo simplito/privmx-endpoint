@@ -12,6 +12,7 @@
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/inbox/Types.hpp"
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -24,7 +25,7 @@ class InboxApiImpl;
 /**
  * 'InboxApi' is a class representing Endpoint's API for Inboxes and their entries.
  */
-class InboxApi {
+class InboxApi : public privmx::endpoint::core::ExtendedPointer<InboxApiImpl> {
 public:
     /**
      * Creates an instance of 'InboxApi'.
@@ -40,7 +41,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    InboxApi() = default;
+    InboxApi();
+    InboxApi(const InboxApi& obj);
+    InboxApi& operator=(const InboxApi& obj);
+    InboxApi(InboxApi&& obj);
+    ~InboxApi();
 
     /**
      * Creates a new Inbox.
@@ -244,9 +249,7 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
 private:
-    void validateEndpoint();
     InboxApi(const std::shared_ptr<InboxApiImpl>& impl);
-    std::shared_ptr<InboxApiImpl> _impl;
 };
 
 }  // namespace inbox

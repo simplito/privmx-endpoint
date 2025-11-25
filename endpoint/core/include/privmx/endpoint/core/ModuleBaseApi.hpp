@@ -100,7 +100,6 @@ protected:
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);
-
     
 
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;

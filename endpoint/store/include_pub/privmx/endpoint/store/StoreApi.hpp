@@ -8,6 +8,7 @@
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/store/Types.hpp"
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -19,7 +20,7 @@ class StoreApiImpl;
 /**
  * 'StoreApi' is a class representing Endpoint's API for Stores and their files.
  */
-class StoreApi {
+class StoreApi : public privmx::endpoint::core::ExtendedPointer<StoreApiImpl> {
 public:
     /**
      * Creates an instance of 'StoreApi'.
@@ -33,7 +34,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    StoreApi() = default;
+    StoreApi();
+    StoreApi(const StoreApi& obj);
+    StoreApi& operator=(const StoreApi& obj);
+    StoreApi(StoreApi&& obj);
+    ~StoreApi();
 
     /**
      * Creates a new Store in given Context.
@@ -223,11 +228,8 @@ public:
      */ 
     void syncFile(const int64_t fileHandle);
 
-    std::shared_ptr<StoreApiImpl> getImpl() const { return _impl; }
 private:
-    void validateEndpoint();
     StoreApi(const std::shared_ptr<StoreApiImpl>& impl);
-    std::shared_ptr<StoreApiImpl> _impl;
 };
 
 }  // namespace store

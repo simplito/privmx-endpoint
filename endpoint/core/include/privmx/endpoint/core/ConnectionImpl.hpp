@@ -16,13 +16,15 @@ limitations under the License.
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
+#include <vector>
+#include <mutex>
+#include <shared_mutex>
+
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/NotificationQueue.hpp>
-#include <string>
-#include <vector>
-
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/EventMiddleware.hpp"
 #include "privmx/endpoint/core/HandleManager.hpp"
@@ -32,26 +34,27 @@ limitations under the License.
 #include "privmx/endpoint/core/UserVerifier.hpp"
 #include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
 #include "privmx/endpoint/core/ContextProvider.hpp"
-#include <mutex>
-#include <shared_mutex>
 #include "privmx/endpoint/core/SubscriberImpl.hpp"
 #include <privmx/utils/GuardedExecutor.hpp>
+#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
-class ConnectionImpl {
+class ConnectionImpl : public privmx::utils::ManualManagedClass<ConnectionImpl> {
 public:
     ConnectionImpl();
     ~ConnectionImpl();
     void connect(
+        const std::shared_ptr<ConnectionImpl>& selfRef,
         const std::string& userPrivKey,
         const std::string& solutionId,
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
     );
     void connectPublic(
+        const std::shared_ptr<ConnectionImpl>& selfRef,
         const std::string& solutionId,
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
@@ -91,8 +94,7 @@ public:
         const std::optional<std::string>& containerId = std::nullopt, 
         const std::optional<std::string>& containerResourceId = std::nullopt
     );
-
-
+    inline bool isConnected() {return _gateway->isConnected();};
 private:
     void assertServerVersion();
     std::string generateDIORandomId();
@@ -107,7 +109,7 @@ private:
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
-
+    
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;

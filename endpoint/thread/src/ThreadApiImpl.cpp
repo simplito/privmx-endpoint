@@ -498,6 +498,7 @@ void ThreadApiImpl::processConnectedEvent() {
 
 void ThreadApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
+    privmx::utils::ManualManagedClass<ThreadApiImpl>::cleanup();
 }
 
 privmx::utils::List<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
