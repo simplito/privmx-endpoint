@@ -48,7 +48,7 @@ private:
     std::multimap<Poco::Int64, SessionTicket> _tickets;
     std::mutex _tickets_mutex;
     Poco::Int64 _min_ticket_ttl = 5 * 1000;
-    Poco::Int64 _ttl_threshold = 25 * 1000;
+    Poco::Int64 _ttl_threshold = 15 * 1000;
     Poco::Int64 _tickets_ttl = NULL_TTL;
 };
 
