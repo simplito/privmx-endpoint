@@ -45,6 +45,7 @@ struct VideoTrackInfo {
 struct PeerConnection {
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> pc;
     std::shared_ptr<PmxPeerConnectionObserver> observer;
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> mediaStream;
     std::map<std::string, AudioTrackInfo> audioTracks;
     std::map<std::string, VideoTrackInfo> videoTracks;
     std::shared_mutex trackMutex;
@@ -54,12 +55,10 @@ struct PeerConnection {
 struct JanusConnection {
     JanusConnection(
         std::shared_ptr<PeerConnection> _peerConnection,
-        libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> _mediaStream,
         int64_t _sessionId, 
         bool _hasSubscriptions
     ) :
         peerConnection(_peerConnection), 
-        mediaStream(_mediaStream),
         sessionId(_sessionId), 
         hasSubscriptions(_hasSubscriptions) 
     {}

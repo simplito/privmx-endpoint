@@ -170,7 +170,7 @@ std::vector<MediaDevice> StreamApi::getMediaDevices() {
     }
 }
 
-void StreamApi::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
+MediaTrack StreamApi::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
     validateEndpoint();
     try {
         return _impl->addTrack(streamHandle, track);

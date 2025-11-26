@@ -82,8 +82,8 @@ public:
     void leaveStreamRoom(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<MediaDevice> getMediaDevices();
-    void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
-    void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
+    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
+    void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void unpublishStream(const StreamHandle& streamHandle);
@@ -158,8 +158,8 @@ private:
 
     struct StreamData {
         StreamData(
-            utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamAudioTrackInfo>> _audioTracks,
-            utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamVideoTrackInfo>> _videoTracks,
+            utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> _audioTracks,
+            utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> _videoTracks,
             StreamStatus _status, std::string _streamRoomId
         ) : 
             audioTracks(_audioTracks), 
@@ -167,22 +167,17 @@ private:
             status(_status), 
             streamRoomId(_streamRoomId) 
         {}
-        utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamAudioTrackInfo>> audioTracks;
-        utils::ThreadSaveMap<int64_t, std::shared_ptr<StreamVideoTrackInfo>> videoTracks;
+        utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> audioTracks;
+        utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> videoTracks;
         StreamStatus status;
         std::string streamRoomId;
         std::mutex streamMutex;
     };
-
-
     int64_t generateNumericId();
-
-    void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackAddVideo(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackAddDesktop(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackRemoveAudio(int64_t streamId, int64_t id = 0);
-    void trackRemoveVideo(int64_t streamId, int64_t id = 0);
-    void trackRemoveDesktop(int64_t streamId, int64_t id = 0);
+    inline std::string getTrimmedString(std::string s) {
+        s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
+        return s;
+    }
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;

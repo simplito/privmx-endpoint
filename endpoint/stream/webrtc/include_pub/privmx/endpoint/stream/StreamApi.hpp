@@ -72,7 +72,7 @@ public:
     void leaveStreamRoom(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<MediaDevice> getMediaDevices();
-    void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
+    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);

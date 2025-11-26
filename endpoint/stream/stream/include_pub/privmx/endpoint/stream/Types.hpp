@@ -108,10 +108,16 @@ enum DeviceType {
     Desktop = 2
 };
 
+
 struct MediaDevice {
     std::string name;
     std::string id;
     DeviceType type;
+    // bool enabled;
+};
+
+struct MediaTrack {
+    std::function<void(bool)> setEnabled;
 };
 
 enum EventType: int64_t {
