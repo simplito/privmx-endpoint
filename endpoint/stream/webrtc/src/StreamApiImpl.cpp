@@ -27,9 +27,6 @@ limitations under the License.
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
 #include <base/portable.h>
-#include <rtc_mediaconstraints.h>
-#include <rtc_desktop_media_list.h>
-#include <rtc_peerconnection.h>
 #include <pmx_frame_cryptor.h>
 
 using namespace privmx::endpoint;
@@ -146,7 +143,10 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             auto audioSource = _peerConnectionFactory->CreateAudioSource("audio_source");
             auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
-            streamData->audioTracks.set(mediaDevice.name + "-" + mediaDevice.id, std::make_shared<StreamAudioTrackInfo>(audioDevice, mediaDevice.name, mediaDevice.id, audioSource, audioTrack, TrackStatus::ToAdd));
+            streamData->audioTracks.set(
+                mediaDevice.name + "-" + mediaDevice.id, 
+                std::make_shared<StreamAudioTrackInfo>(audioDevice, mediaDevice.name, mediaDevice.id, audioSource, audioTrack, TrackStatus::ToAdd)
+            );
             return MediaTrack{[audioTrack](bool enabled) {
                 audioTrack->set_enabled(enabled);
             }};
@@ -171,7 +171,10 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateVideoSource(videoCapturer, "video_source", _constraints);
             libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
-            streamData->videoTracks.set(mediaDevice.name + "-" + mediaDevice.id, std::make_shared<StreamVideoTrackInfo>(videoDevice, mediaDevice.name, mediaDevice.id, videoCapturer, videoSource, videoTrack, TrackStatus::ToAdd));
+            streamData->videoTracks.set(
+                mediaDevice.name + "-" + mediaDevice.id, 
+                std::make_shared<StreamVideoTrackInfo>(videoDevice, mediaDevice.name, mediaDevice.id, videoCapturer, videoSource, videoTrack, TrackStatus::ToAdd)
+            );
             return MediaTrack{[videoTrack](bool enabled) {
                 videoTrack->set_enabled(enabled);
             }};
@@ -179,19 +182,25 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
         break;
     case DeviceType::Desktop:
         {
-            throw NotImplementedException();
-            // auto streamDataOpt = _streamDataMap.get(streamHandle);
-            // if(!streamDataOpt.has_value()) {
-            //     throw IncorrectStreamHandleException();
-            // }
-            // auto streamData = streamDataOpt.value();
-            // libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> desktopDevice = _peerConnectionFactory->GetDesktopDevice();
-            // auto desktopMediaList = desktopDevice->GetDesktopMediaList(libwebrtc::DesktopType::kScreen);
-            // libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> desktopCapturer = desktopDevice->CreateDesktopCapturer(desktopMediaList->GetSource(0));
-            // libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateDesktopSource(desktopCapturer, "desktop_source", _constraints);
-            // libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "desktop_track");
-            // std::lock_guard<std::mutex> lock(streamData->streamMutex);
-            // streamData->videoTracks.set(3000, {videoTrack, videoCapturer});
+            auto streamDataOpt = _streamDataMap.get(streamHandle);
+            if(!streamDataOpt.has_value()) {
+                throw IncorrectStreamHandleException();
+            }
+            auto streamData = streamDataOpt.value();
+            libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> desktopDevice = _peerConnectionFactory->GetDesktopDevice();
+            auto desktopMediaList = desktopDevice->GetDesktopMediaList(libwebrtc::DesktopType::kScreen);
+            desktopMediaList->UpdateSourceList(true, true);
+            libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> desktopCapturer = desktopDevice->CreateDesktopCapturer(desktopMediaList->GetSource(0));
+            libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateDesktopSource(desktopCapturer, "desktop_source", _constraints);
+            libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "desktop_track");
+            std::lock_guard<std::mutex> lock(streamData->streamMutex);
+            streamData->desktopTracks.set(
+                mediaDevice.name + "-" + mediaDevice.id, 
+                std::make_shared<StreamDesktopTrackInfo>(desktopDevice, mediaDevice.name, mediaDevice.id, desktopCapturer, videoSource, videoTrack, TrackStatus::ToAdd)
+            );
+            return MediaTrack{[videoTrack](bool enabled) {
+                videoTrack->set_enabled(enabled);
+            }};
         }
         break;
     default:
@@ -271,8 +280,17 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
     streamData->videoTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamVideoTrackInfo>& video) {
         if(video->status == TrackStatus::ToAdd) {
             video->status = TrackStatus::Published;
-            if(video->capturer->CaptureStarted()) {
+            if(!video->capturer->CaptureStarted()) {
                 video->capturer->StartCapture();
+            }
+            videoTracksToAdd.push_back({id, video->track});
+        }
+    });
+    streamData->desktopTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamDesktopTrackInfo>& video) {
+        if(video->status == TrackStatus::ToAdd) {
+            video->status = TrackStatus::Published;
+            if(!video->capturer->IsRunning()) {
+                video->capturer->Start(15);
             }
             videoTracksToAdd.push_back({id, video->track});
         }
@@ -319,8 +337,22 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
             videoTracksToRemove.push_back({id, video->track});
         }
     });
-    for(const auto& toRemove : videoTracksToRemove) {
-        streamData->videoTracks.erase(toRemove.first);
+    size_t toRemove = 0;
+    for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
+        streamData->videoTracks.erase(videoTracksToRemove[toRemove].first);
+    }
+    streamData->desktopTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamDesktopTrackInfo>& video) {
+        if(video->status == TrackStatus::ToAdd) {
+            if(!video->capturer->IsRunning()) video->capturer->Start(15);
+            video->status = TrackStatus::Published;
+            videoTracksToAdd.push_back({id, video->track});
+        } else if(video->status == TrackStatus::ToRemove) {
+            if(video->capturer->IsRunning()) video->capturer->Stop();
+            videoTracksToRemove.push_back({id, video->track});
+        }
+    });
+    for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
+        streamData->desktopTracks.erase(videoTracksToRemove[toRemove].first);
     }
     std::cout << "audioTracksToAdd:" << audioTracksToAdd.size() << std::endl;
     std::cout << "videoTracksToAdd:" << videoTracksToAdd.size() << std::endl;

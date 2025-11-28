@@ -34,6 +34,8 @@ limitations under the License.
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
 #include <rtc_peerconnection.h>
+#include <rtc_desktop_media_list.h>
+#include <rtc_desktop_capturer.h>
 #include <pmx_frame_cryptor.h>
 
 namespace privmx {
@@ -155,6 +157,32 @@ private:
         libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> track;
         TrackStatus status;
     };
+    struct StreamDesktopTrackInfo {
+        StreamDesktopTrackInfo( 
+            const libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice>& _device,
+            const std::string& _deviceName,
+            const std::string& _deviceId,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer>& _capturer,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource>& _source,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>& _track,
+            const TrackStatus& _status
+        ) : 
+            device(_device), 
+            deviceName(_deviceName),
+            deviceId(_deviceId),
+            capturer(_capturer),
+            source(_source),
+            track(_track),
+            status(_status)
+        {}
+        libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> device;
+        std::string deviceName;
+        std::string deviceId;
+        libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> capturer;
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> source;
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> track;
+        TrackStatus status;
+    };
 
     struct StreamData {
         StreamData(
@@ -169,6 +197,7 @@ private:
         {}
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> audioTracks;
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> videoTracks;
+        utils::ThreadSaveMap<std::string, std::shared_ptr<StreamDesktopTrackInfo>> desktopTracks;
         StreamStatus status;
         std::string streamRoomId;
         std::mutex streamMutex;
