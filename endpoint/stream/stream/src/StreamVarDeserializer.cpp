@@ -98,7 +98,7 @@ stream::StreamTrackInfo VarDeserializer::deserialize<stream::StreamTrackInfo>(co
         .mindex = deserialize<int64_t>(obj->get("mindex"), name + ".mindex"),
         .mid = deserialize<std::string>(obj->get("mid"), name + ".mid"),
         .disabled = {obj->has("disabled") ? std::make_optional(deserialize<bool>(obj->get("disabled"), name + ".disabled")) : std::nullopt},
-        .codec = deserialize<std::string>(obj->get("codec"), name + ".codec"),
+        .codec = {obj->has("codec") ? std::make_optional(deserialize<std::string>(obj->get("codec"), name + ".codec")): std::nullopt},
         .description = {obj->has("description") ? std::make_optional(deserialize<std::string>(obj->get("description"), name + ".description")) : std::nullopt},
         .moderated = {obj->has("moderated") ? std::make_optional(deserialize<bool>(obj->get("moderated"), name + ".moderated")) : std::nullopt},
         .simulcast = {obj->has("simulcast") ? std::make_optional(deserialize<bool>(obj->get("simulcast"), name + ".simulcast")) : std::nullopt},
