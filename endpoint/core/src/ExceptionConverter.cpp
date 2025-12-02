@@ -267,7 +267,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0x00A4:
             switch (code_second_two_bytes) {
                 case 0x0001:
-                    throw network::TicketsCountIsEqualZeroException(e.what());
+                    throw core::SessionExpiredException(e.what());
                 case 0x0002:
                     throw network::WsConnectException(e.what());
                 case 0x0003:
