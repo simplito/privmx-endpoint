@@ -205,13 +205,9 @@ stream::StreamPublishedEventData VarDeserializer::deserialize<stream::StreamPubl
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
 
-    std::cerr << __LINE__ << std::endl;
     auto streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId");
-    std::cerr << __LINE__ << std::endl;
     auto stream = deserialize<stream::StreamInfo>(obj->get("stream"), name + ".stream");
-    std::cerr << __LINE__ << std::endl;
     auto userId = deserialize<std::string>(obj->get("userId"), name + ".userId");
-    std::cerr << __LINE__ << std::endl;
     return {
         .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
         .stream = deserialize<stream::StreamInfo>(obj->get("stream"), name + ".stream"),
