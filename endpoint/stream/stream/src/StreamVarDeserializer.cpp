@@ -205,12 +205,21 @@ stream::StreamPublishedEventData VarDeserializer::deserialize<stream::StreamPubl
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
 
-    auto streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId");
-    auto stream = deserialize<stream::StreamInfo>(obj->get("stream"), name + ".stream");
-    auto userId = deserialize<std::string>(obj->get("userId"), name + ".userId");
     return {
         .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
         .stream = deserialize<stream::StreamInfo>(obj->get("stream"), name + ".stream"),
+        .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
+    };
+}
+
+template<>
+stream::StreamUpdatedEventData VarDeserializer::deserialize<stream::StreamUpdatedEventData>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+
+    return {
+        .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
+        .streamId = deserialize<int64_t>(obj->get("streamId"), name + ".streamId"),
         .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
     };
 }

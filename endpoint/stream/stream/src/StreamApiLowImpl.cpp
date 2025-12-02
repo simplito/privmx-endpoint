@@ -156,7 +156,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             event->channel = "stream";
             event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
             _eventMiddleware->emitApiEvent(event);
-        } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" ) {
+        } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" || type == "streamUpdated" ) {
             // auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
             // std::vector<int64_t> streamIds;
             // for(auto i : raw.streamIds()) streamIds.push_back(i);
@@ -170,7 +170,17 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
                 event->channel = "stream";
                 event->data = eventData;
                 _eventMiddleware->emitApiEvent(event);
-            } else if(type == "streamJoined") {
+            } else
+            if(type == "streamUpdated") {
+                auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUpdatedEventData>(data);
+                auto deserializer = std::make_shared<core::VarDeserializer>();
+                auto eventData = deserializer->deserialize<StreamUpdatedEventData>(data, "StreamUpdatedEventData");
+                std::shared_ptr<StreamUpdatedEvent> event(new StreamUpdatedEvent());
+                event->channel = "stream";
+                event->data = eventData;
+                _eventMiddleware->emitApiEvent(event);
+            }
+            else if(type == "streamJoined") {
                 auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
                 std::vector<int64_t> streamIds;
                 for(auto i : raw.streamIds()) streamIds.push_back(i);

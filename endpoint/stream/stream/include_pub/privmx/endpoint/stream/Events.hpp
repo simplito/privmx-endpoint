@@ -170,6 +170,36 @@ struct StreamPublishedEvent : public core::Event {
     StreamPublishedEventData data;
 };
 
+
+/**
+ * Holds data of event that arrives when Stream is updated.
+ */
+struct StreamUpdatedEvent : public core::Event {
+
+    /**
+     * Event constructor
+     */
+    StreamUpdatedEvent() : core::Event("streamUpdated") {}
+
+    /**
+     * Get Event as JSON string
+     *
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<core::SerializedEvent> serialize() const override;
+
+    /**
+     * event data
+     */
+    StreamUpdatedEventData data;
+};
+
+
 /**
  * Holds data of event that arrives when Stream is published.
  */
@@ -382,6 +412,22 @@ public:
      * @return 'StreamPublishedEvent' object
      */
     static StreamPublishedEvent extractStreamPublishedEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is an 'StreamUpdatedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'StreamUpdatedEvent', else otherwise
+     */
+    static bool isStreamUpdatedEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as an 'StreamUpdatedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'StreamUpdatedEvent' object
+     */
+    static StreamUpdatedEvent extractStreamUpdatedEvent(const core::EventHolder& eventHolder);
 
     /**
      * Checks whether event held in the 'EventHolder' is an 'StreamJoinedEvent' 

@@ -177,6 +177,20 @@ struct PublishedStreamData {
     std::string userId;
 };
 
+struct StreamUpdatedEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID
+     */
+    int64_t streamId;
+
+    std::string userId;
+};
+
 struct StreamPublishResult {
     bool published;
     std::optional<PublishedStreamData> data;
