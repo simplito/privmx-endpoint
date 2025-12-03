@@ -22,7 +22,7 @@ message(STATUS "Enable emscripten build - PRIVMX_EMSCRIPTEN=${PRIVMX_EMSCRIPTEN}
 option(PRIVMX_CONAN "Conan build" OFF)
 message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 
-option(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
+option(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
 add_compile_options(-Os)
@@ -34,10 +34,6 @@ if(PRIVMX_EMSCRIPTEN)
     add_compile_options(-pthread -fexceptions)
     add_link_options(-lembind -lpthread -lwebsocket.js)
     set(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
-endif()
-
-if(PRIVMX_CONAN)
-    set(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 endif()
 
 if(PRIVMX_CI_BUILD)
