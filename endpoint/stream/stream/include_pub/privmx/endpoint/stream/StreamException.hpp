@@ -81,8 +81,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionNotInitialized
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomConnectionNotInitialized, "StreamRoom connection not initialized", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotInitialized, "StreamHandle not initialized", 0x0021)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamIsPublished, "Stream is published", 0x0021)
-
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamIsPublished, "Stream is published", 0x0022)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUpdatedEventException, "Cannot extract StreamUpdatedEvent", 0x0023)
 } // stream
 } // endpoint
 } // privmx

@@ -225,6 +225,12 @@ ENDPOINT_SERVER_TYPE(StreamPublishedEventData)
     STRING_FIELD(userId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamUpdatedEventData)
+    STRING_FIELD(streamRoomId)
+    INT64_FIELD(streamId)
+    STRING_FIELD(userId)
+TYPE_END
+
 ENDPOINT_SERVER_TYPE(NewStreams)
     STRING_FIELD(room)
     LIST_FIELD(streams, StreamInfo)

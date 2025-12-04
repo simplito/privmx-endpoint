@@ -35,6 +35,10 @@ std::string StreamPublishedEvent::toJSON() const {
     return core::JsonSerializer<StreamPublishedEvent>::serialize(*this);
 }
 
+std::string StreamUpdatedEvent::toJSON() const {
+    return core::JsonSerializer<StreamUpdatedEvent>::serialize(*this);
+}
+
 std::string StreamJoinedEvent::toJSON() const {
     return core::JsonSerializer<StreamJoinedEvent>::serialize(*this);
 }
@@ -68,6 +72,10 @@ std::shared_ptr<core::SerializedEvent> StreamRoomDeletedEvent::serialize() const
 }
 
 std::shared_ptr<core::SerializedEvent> StreamPublishedEvent::serialize() const {
+    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+}
+
+std::shared_ptr<core::SerializedEvent> StreamUpdatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
 }
 
@@ -151,6 +159,23 @@ StreamPublishedEvent Events::extractStreamPublishedEvent(const core::EventHolder
         auto event = std::dynamic_pointer_cast<StreamPublishedEvent>(handler.get());
         if (!event) {
             throw CannotExtractStreamPublishedEventException();
+        }
+        return *event;
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+bool Events::isStreamUpdatedEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamUpdated";
+}
+
+StreamUpdatedEvent Events::extractStreamUpdatedEvent(const core::EventHolder& handler) {
+    try {
+        auto event = std::dynamic_pointer_cast<StreamUpdatedEvent>(handler.get());
+        if (!event) {
+            throw CannotExtractStreamUpdatedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

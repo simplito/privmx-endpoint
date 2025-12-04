@@ -60,6 +60,8 @@ stream::StreamSubscription VarDeserializer::deserialize<stream::StreamSubscripti
 template<>
 stream::StreamPublishedEventData VarDeserializer::deserialize<stream::StreamPublishedEventData>(const Poco::Dynamic::Var& val, const std::string& name);
 
+template<>
+stream::StreamUpdatedEventData VarDeserializer::deserialize<stream::StreamUpdatedEventData>(const Poco::Dynamic::Var& val, const std::string& name);
 
 }  // namespace core
 }  // namespace endpoint
