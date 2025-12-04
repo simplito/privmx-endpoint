@@ -68,11 +68,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
 
-    // setup event listener for all events - TMP remove later after debuging
-    auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
-    std::vector<std::string> subscriptionsIds = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
-    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, subscriptionsIds);
-
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {

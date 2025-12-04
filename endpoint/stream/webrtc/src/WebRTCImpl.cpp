@@ -41,7 +41,6 @@ std::string WebRTCImpl::createOfferAndSetLocalDescription(const std::string& str
     );
 
     std::string sdp = t_spd.get_future().get();
-    std::cout << sdp << std::endl;
     peerConnection->pc->SetLocalDescription(
         sdp, 
         "offer", 

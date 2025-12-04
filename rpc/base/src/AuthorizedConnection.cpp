@@ -306,8 +306,8 @@ void AuthorizedConnection::authorizeWebsocket() {
     params->set("addWsChannelId", true);
     auto wschannel_id = call("authorizeWebSocket", params, {.channel_type = ChannelType::WEBSOCKET})
         .extract<Poco::JSON::Object::Ptr>()->getValue<Poco::Int32>("wsChannelId");
-    _wschannel_id = wschannel_id;
-    _server_channels->notify->add(wschannel_id, [&, key](const std::string& data){
+        _wschannel_id = wschannel_id;
+        _server_channels->notify->add(wschannel_id, [&, key](const std::string& data){
         string decrypted = crypto::Crypto::aes256CbcHmac256Decrypt(data, key);
         Pson::Decoder decoder;
         auto decoded = decoder.decode(decrypted).extract<Poco::JSON::Object::Ptr>();
@@ -315,7 +315,6 @@ void AuthorizedConnection::authorizeWebsocket() {
         if (type == "disconnected") {
             return;
         }
-
         LOG_TRACE("AuthorizedConnection", "Recived event with type: " + type + " | data:\n" + privmx::utils::Utils::stringifyVar(decoded, true))
         _notification_event_dispatcher.dispatch({.type = type, .data = decoded});
     }, [&]{
