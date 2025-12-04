@@ -324,6 +324,7 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     //kill all webRTC pearConnections
     room->webRtc->close(room->streamRoomId);
     //stop StreamKeyManager
+    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
     room->streamKeyManager.reset();
     // Final clenup
     _streamRoomMap.erase(streamRoomId);
@@ -331,7 +332,6 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomLeaveModel>();
     model.streamRoomId(streamRoomId);
     _serverApi->streamRoomLeave(model);
-    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
 }
 
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
