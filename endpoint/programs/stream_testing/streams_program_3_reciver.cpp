@@ -7,8 +7,10 @@
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/EventQueue.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
+#include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Debug.hpp>
@@ -84,12 +86,35 @@ int main(int argc, char** argv) {
         );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+        core::EventQueue eventQueue = core::EventQueue::getInstance();
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
         stream::StreamSettings ssettings {
             .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
                 r.OnFrame(w, h, frame, id);
             }
         };
+        auto eventThread = std::thread([&](){
+            while (true) {
+                auto eventHolder = eventQueue.waitEvent();
+                if(core::Events::isLibBreakEvent(eventHolder)) return;
+                if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
+                    auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
+                    std::vector<stream::StreamSubscription> streamsId = {{streamUpdatedEvent.streamId, std::nullopt}};
+                    // if(streamsIdToUnsubscribe.size() > 0) streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
+                    streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
+                }
+            }
+        });
+
+
+        streamApi.subscribeFor({
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_UPDATE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_DELETE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH,    stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH,  stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+        });
         auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<stream::StreamSubscription> streamsId;
         for(int i = 0; i < streamlist.size(); i++) {
@@ -105,6 +130,8 @@ int main(int argc, char** argv) {
 
         streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(5));
+        eventQueue.emitBreakEvent();
+        if(eventThread.joinable()) eventThread.join();
         connection.disconnect();
        
     } catch (const core::Exception& e) {
