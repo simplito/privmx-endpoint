@@ -93,20 +93,6 @@ int main(int argc, char** argv) {
                 r.OnFrame(w, h, frame, id);
             }
         };
-        auto eventThread = std::thread([&](){
-            while (true) {
-                auto eventHolder = eventQueue.waitEvent();
-                if(core::Events::isLibBreakEvent(eventHolder)) return;
-                if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
-                    auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
-                    std::vector<stream::StreamSubscription> streamsId = {{streamUpdatedEvent.streamId, std::nullopt}};
-                    // if(streamsIdToUnsubscribe.size() > 0) streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
-                    streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
-                }
-            }
-        });
-
-
         streamApi.subscribeFor({
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_UPDATE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_DELETE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
@@ -115,14 +101,48 @@ int main(int argc, char** argv) {
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
         });
-        auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<stream::StreamSubscription> streamsId;
-        for(int i = 0; i < streamlist.size(); i++) {
-            std::cout << "streamlist[" << i << "]:" <<  streamlist[i].id << std::endl;
-            streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
+        {
+            auto streamlist = streamApi.listStreams(streamRoomId);
+            for(auto stream : streamlist) {
+                std::cout << "stream:" <<  stream.id << std::endl;
+                for(auto track : stream.tracks) {
+                    streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
+                }
+                break;
+            }
         }
         streamApi.joinStreamRoom(streamRoomId);
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
+
+        auto eventThread = std::thread([&](){
+            while (true) {
+                auto eventHolder = eventQueue.waitEvent();
+                if(core::Events::isLibBreakEvent(eventHolder)) return;
+                if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
+                    auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
+                    auto streamId = streamUpdatedEvent.streamId;
+                    auto streamlist = streamApi.listStreams(streamRoomId);
+
+                    std::vector<stream::StreamSubscription> toAddstreamsId;
+                    std::vector<stream::StreamSubscription> toRemovestreamsId;
+                    for(auto stream : streamlist) {
+                        if(streamId != stream.id) continue;
+                        for(auto track : stream.tracks) {
+                            auto t =  std::find_if(streamsId.begin(), streamsId.end(), [&] (const stream::StreamSubscription& s) { 
+                                return s.streamId == streamId && s.streamTrackId == track.mid ;
+                            });
+                            if(t == streamsId.end()) {
+                                streamsId.push_back(stream::StreamSubscription{streamId, track.mid});
+                                toAddstreamsId.push_back(stream::StreamSubscription{streamId, track.mid});
+                            }
+                            
+                        }
+                    }
+                    if(toAddstreamsId.size() > 0) streamApi.subscribeToRemoteStreams(streamRoomId, toAddstreamsId, ssettings);
+                }
+            }
+        });
         
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(5));

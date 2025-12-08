@@ -94,6 +94,8 @@ private:
     privmx::webrtc::FrameCryptorOptions _options;
 
     std::optional<std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)>> _onIceCandidate;
+    // tmp
+    std::optional<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> _tmp_stream;
 };
 
 } // stream

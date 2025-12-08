@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(std::chrono::seconds(30));
             std::cout << "----------------------------------------------remove track---------------------------------------------" << std::endl;
             core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{false, core::VarSerializer::Options::STD_STRING});
             streamApi.updateStream(streamHandle);
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(std::chrono::seconds(30));
             std::cout << "----------------------------------------------add track------------------------------------------------" << std::endl;
             
             streamApi.updateStream(streamHandle);
