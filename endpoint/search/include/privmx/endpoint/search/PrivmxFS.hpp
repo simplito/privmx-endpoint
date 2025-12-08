@@ -34,6 +34,7 @@ limitations under the License.
 #include "privmx/utils/Utils.hpp"
 
 #include "privmx/endpoint/search/SearchTypes.hpp"
+#include "privmx/endpoint/search/LockSession.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -74,7 +75,7 @@ public:
 class PrivmxFile
 {
 public:
-    PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId);
+    PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path);
     void open();
     void close();
     privmx::endpoint::core::Buffer read(int64_t size, int64_t offset);
@@ -82,11 +83,16 @@ public:
     void truncate(int64_t size);
     void sync();
     int64_t getFileSize();
+    bool lock(LockLevel level);
+    bool unlock(LockLevel level);
+    bool checkReservedLock();
 
     std::shared_ptr<PrivmxSession> session;
     std::string fileId = "";
+    std::string path;
     int64_t fh = -1;
     Writer writer;
+    LockSession lockSession;
 };
 
 class PrivmxFS

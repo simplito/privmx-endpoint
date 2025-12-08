@@ -1,6 +1,7 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
+#include "privmx/endpoint/search/DynamicTypes.hpp"
 
-static const privmx::endpoint::core::Buffer META = privmx::endpoint::core::Buffer::from("");
+static const privmx::endpoint::core::Buffer META = privmx::endpoint::core::Buffer::from("{}");
 
 using namespace privmx::endpoint::search;
 
@@ -60,7 +61,8 @@ int64_t Writer::size() {
     return _buf.str().length();
 }
 
-PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId) : session(session), fileId(fileId) {}
+PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
+        : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
 
 void PrivmxFile::open() {
     fh = session->storeApi.openFile(fileId);
@@ -109,6 +111,22 @@ int64_t PrivmxFile::getFileSize() {
     return session->storeApi.getFile(fileId).size;
 }
 
+bool PrivmxFile::lock(LockLevel level) {
+    bool val = lockSession.lock(level);
+    if (val) {
+        session->storeApi.syncFile(fh);
+    }
+    return val;
+}
+
+bool PrivmxFile::unlock(LockLevel level) {
+    return lockSession.unlock(level);
+}
+
+bool PrivmxFile::checkReservedLock() {
+    return lockSession.checkReservedLock();
+}
+
 std::shared_ptr<PrivmxFS> PrivmxFS::create(
     std::shared_ptr<PrivmxSession> session
 ) {
@@ -118,7 +136,7 @@ std::shared_ptr<PrivmxFS> PrivmxFS::create(
 
 std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
     std::string fileId = getFileId(path);
-    std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, fileId);
+    std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, fileId, path);
     result->open();
     return result;
 }

@@ -33,6 +33,8 @@ std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filena
     }
     std::shared_ptr<sqlite3> db2 = std::shared_ptr<sqlite3>(db, sqlite3_close);
 
+    sqlite3_busy_timeout(db, 10000);
+
     rc = sqlite3_exec(db, (std::string("ATTACH 'file:") + filename + "?vfs=privmxvfs' AS pmx;").c_str(), 0, 0, 0);
     if(rc != SQLITE_OK){
         throw DatabaseAttachException(sqlite3_errmsg(db));

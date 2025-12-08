@@ -32,6 +32,14 @@ struct PrivmxSession
     std::string storeId;
 };
 
+enum LockLevel {
+    NONE = 0,
+    SHARED = 1,
+    RESERVED = 2,
+    PENDING = 3,
+    EXCLUSIVE = 4
+};
+
 } // search
 } // endpoint
 } // privmx

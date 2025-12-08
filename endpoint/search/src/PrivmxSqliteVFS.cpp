@@ -124,18 +124,39 @@ int privmxFileSize(sqlite3_file *pFile, sqlite3_int64 *pSize) {
 
 int privmxLock(sqlite3_file *pFile, int eLock) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
-    return SQLITE_OK;
+    try {
+        if (file->lock((privmx::endpoint::search::LockLevel)eLock)) {
+            return SQLITE_OK;
+        } else {
+            return SQLITE_BUSY;
+        }
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
 }
 
 int privmxUnlock(sqlite3_file *pFile, int eLock) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
-    return SQLITE_OK;
+    try {
+        if (file->unlock((privmx::endpoint::search::LockLevel)eLock)) {
+            return SQLITE_OK;
+        } else {
+            return SQLITE_IOERR;
+        }
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
 }
 
 int privmxCheckReservedLock(sqlite3_file *pFile, int *pResOut) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
     *pResOut = 0;
-    return SQLITE_OK;
+    try {
+        *pResOut = file->checkReservedLock();
+        return SQLITE_OK;
+    } catch (...) {
+        return SQLITE_IOERR;
+    }
 }
 
 int privmxFileControl(sqlite3_file *pFile, int op, void *pArg) {

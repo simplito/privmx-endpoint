@@ -26,6 +26,16 @@ ENDPOINT_CLIENT_TYPE(IndexData)
     INT64_FIELD(mode)
 TYPE_END
 
+ENDPOINT_CLIENT_TYPE(Lock)
+    STRING_FIELD(lockId)
+    INT64_FIELD(level)
+    INT64_FIELD(timestamp)
+TYPE_END
+
+ENDPOINT_CLIENT_TYPE(LockSet)
+    OBJECT_FIELD(writerLock, Lock)
+    MAP_FIELD(readerLocks, Lock)
+TYPE_END
 
 } // dynamic
 } // search
