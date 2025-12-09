@@ -63,6 +63,12 @@ stream::StreamPublishedEventData VarDeserializer::deserialize<stream::StreamPubl
 template<>
 stream::StreamUpdatedEventData VarDeserializer::deserialize<stream::StreamUpdatedEventData>(const Poco::Dynamic::Var& val, const std::string& name);
 
+template<>
+stream::StreamTrackModificationPair VarDeserializer::deserialize<stream::StreamTrackModificationPair>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
+stream::StreamTrackModification VarDeserializer::deserialize<stream::StreamTrackModification>(const Poco::Dynamic::Var& val, const std::string& name);
+
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

@@ -106,6 +106,12 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUpdatedEventData>(const stream::StreamUpdatedEventData& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackModificationPair>(const stream::StreamTrackModificationPair& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackModification>(const stream::StreamTrackModification& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::UpdatedStreamData>(const stream::UpdatedStreamData& val);
 
 template<>

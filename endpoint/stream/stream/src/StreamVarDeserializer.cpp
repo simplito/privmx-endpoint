@@ -220,5 +220,30 @@ stream::StreamUpdatedEventData VarDeserializer::deserialize<stream::StreamUpdate
         .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
         .streamId = deserialize<int64_t>(obj->get("streamId"), name + ".streamId"),
         .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
+        .streamsAdded = deserializeVector<stream::StreamInfo>(obj->get("streamsAdded"), name + ".streamsAdded"),
+        .streamsRemoved = deserializeVector<stream::StreamInfo>(obj->get("streamsRemoved"), name + ".streamsRemoved"),
+        .streamsModified = deserializeVector<stream::StreamTrackModification>(obj->get("streamsModified"), name + ".streamsModified")
+    };
+}
+
+template<>
+stream::StreamTrackModificationPair VarDeserializer::deserialize<stream::StreamTrackModificationPair>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+
+    return {
+        .before = obj->has("before") ? std::make_optional(deserialize<stream::StreamTrackInfo>(obj->get("before"), name + ".before")) : std::nullopt,
+        .after = obj->has("after") ? std::make_optional(deserialize<stream::StreamTrackInfo>(obj->get("after"), name + ".after")) : std::nullopt,
+    };
+}
+
+template<>
+stream::StreamTrackModification VarDeserializer::deserialize<stream::StreamTrackModification>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+
+    return {
+        .streamId = deserialize<int64_t>(obj->get("streamId"), name + ".streamId"),
+        .tracks = deserializeVector<stream::StreamTrackModificationPair>(obj->get("tracks"), name + ".tracks")
     };
 }
