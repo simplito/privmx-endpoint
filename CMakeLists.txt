@@ -14,7 +14,6 @@ option(PRIVMX_CLI_IMPORTED_LIBRARIES "Using CLI imported libraries" OFF)
 option(PRIVMX_IMPORTED_LIBRARIES "Using imported libraries" OFF)
 option(PRIVMX_ENABLE_TESTS "Enable tests" OFF)
 option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" OFF)
-option(PRIVMX_ENABLE_TESTS_E2E "Enable End to End tests" OFF)
 option(PRIVMX_BUILD_DEBUG "Enable extra debug data for lib" OFF)
 
 option(PRIVMX_EMSCRIPTEN "Enable emscripten build" OFF)
@@ -23,7 +22,7 @@ message(STATUS "Enable emscripten build - PRIVMX_EMSCRIPTEN=${PRIVMX_EMSCRIPTEN}
 option(PRIVMX_CONAN "Conan build" OFF)
 message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 
-option(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
+option(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
 add_compile_options(-Os)
@@ -35,10 +34,6 @@ if(PRIVMX_EMSCRIPTEN)
     add_compile_options(-pthread -fexceptions)
     add_link_options(-lembind -lpthread -lwebsocket.js)
     set(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
-endif()
-
-if(PRIVMX_CONAN)
-    set(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 endif()
 
 if(PRIVMX_CI_BUILD)
@@ -62,11 +57,6 @@ endif()
 # For CLI programs pocket required
 if(PRIVMX_BUILD_CLI)
     set(PRIVMX_BUILD_POCKET ON)
-endif()
-
-# Fix for PRIVMX_ENABLE_TESTS_E2E
-if(PRIVMX_ENABLE_TESTS_E2E)
-    set(PRIVMX_BUILD_ENDPOINT ON)
 endif()
 
 message(STATUS "Using CLI imported libraries - PRIVMX_CLI_IMPORTED_LIBRARIES=${PRIVMX_CLI_IMPORTED_LIBRARIES}")
@@ -170,7 +160,6 @@ if(PRIVMX_CONAN)
 endif()
 
 message(STATUS "Enable tests - PRIVMX_ENABLE_TESTS=${PRIVMX_ENABLE_TESTS}")
-message(STATUS "Enable tests_e2e - PRIVMX_ENABLE_TESTS_E2E=${PRIVMX_ENABLE_TESTS_E2E}")
 
 if(PRIVMX_ENABLE_TESTS)
     include(FindGTest)

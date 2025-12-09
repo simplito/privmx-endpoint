@@ -32,7 +32,8 @@ ModuleBaseApi::ModuleBaseApi(
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection
-) : _userPrivKey(userPrivKey),
+) : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()),
+    _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
     _eventMiddleware(eventMiddleware),

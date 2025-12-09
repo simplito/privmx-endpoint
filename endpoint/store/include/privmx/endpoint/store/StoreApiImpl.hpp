@@ -44,12 +44,13 @@ limitations under the License.
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class StoreApiImpl : protected core::ModuleBaseApi
+class StoreApiImpl : public privmx::utils::ManualManagedClass<StoreApiImpl>, protected core::ModuleBaseApi
 {
 public:
     StoreApiImpl(

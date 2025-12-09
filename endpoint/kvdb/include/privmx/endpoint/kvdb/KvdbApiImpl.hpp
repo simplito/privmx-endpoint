@@ -32,13 +32,14 @@ limitations under the License.
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/kvdb/Constants.hpp"
 #include "privmx/endpoint/kvdb/SubscriberImpl.hpp"
+#include <privmx/utils/ManualManagedClass.hpp>
 
 
 namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbApiImpl : protected core::ModuleBaseApi
+class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected core::ModuleBaseApi
 {
 public:
     KvdbApiImpl(

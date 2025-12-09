@@ -61,7 +61,7 @@ public:
 private:
     struct UpdateChunkData {
         store::IChunkEncryptor::Chunk chunk;
-        size_t chunkIndex;
+        uint64_t chunkIndex;
         int64_t plainfileSizeChange;
         int64_t encryptedFileSizeChange;
     };
@@ -102,7 +102,7 @@ public:
     uint64_t size() override;
     void seekg(const uint64_t pos) override;
     void seekp(const uint64_t pos) override;
-    core::Buffer read(const size_t length) override;
+    core::Buffer read(const uint64_t length) override;
     void write(const core::Buffer& chunk, bool truncate = false) override;
 
     inline void close() override {}

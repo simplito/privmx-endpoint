@@ -66,6 +66,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, ModulePublicDataMismatchExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidEncryptedModuleDataVersionException, "Invalid version of encrypted module data", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleFormatException, "Unknown module format", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00024)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSingletonsHolderStateException, "Invalid Singletons Holder state", 0x00025)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
@@ -81,6 +82,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractCollectionC
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserAddedEventException, "Cannot extract ContextUserAddedEvent", 0x000B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserRemovedEventException, "Cannot extract ContextUserRemovedEvent", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUsersStatusChangedEventException, "Cannot extract ContextUsersStatusChangedEvent", 0x000D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotConnectedException, "Endpoint is not connected or not initialized", 0x000E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, SessionExpiredException, "Endpoint session is expired", 0x000F)
 
 } // core
 } // endpoint

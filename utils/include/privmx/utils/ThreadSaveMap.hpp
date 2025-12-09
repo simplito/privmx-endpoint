@@ -33,6 +33,7 @@ public:
     void erase(KEY key);
     void clear();
     void forAll(const std::function<void(const KEY&, const VALUE&)>& func);
+    void forAllLockSave(const std::function<void(const KEY&, const VALUE&)>& func);
     void updateValueIfExist(KEY key, const std::function<VALUE(const VALUE&)>& func);
     bool has(KEY key);
     size_t size();
@@ -75,6 +76,17 @@ inline void ThreadSaveMap<KEY, VALUE>::forAll(const std::function<void(const KEY
     std::shared_lock<std::shared_mutex> lock(_map_mutex);
     std::for_each(_map.begin(), _map.end(), [&](const auto& p) {func(p.first, p.second);});
 }
+
+template <typename KEY, typename VALUE>
+inline void ThreadSaveMap<KEY, VALUE>::forAllLockSave(const std::function<void(const KEY&, const VALUE&)>& func) {
+    std::map<KEY, VALUE> map_copy;
+    {
+        std::unique_lock<std::shared_mutex> lock(_map_mutex);
+        map_copy = _map;
+    }
+    std::for_each(map_copy.begin(), map_copy.end(), [&](const auto& p) {func(p.first, p.second);});
+}
+
 
 template <typename KEY, typename VALUE>
 inline void ThreadSaveMap<KEY, VALUE>::updateValueIfExist(KEY key, const std::function<VALUE(const VALUE&)>& func) {

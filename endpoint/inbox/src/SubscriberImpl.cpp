@@ -92,36 +92,15 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<cor
             transformedChannelPath[MODULE_NAME_IN_QUERY_PATH] = "thread";
             transformedChannelPath[ITEM_NAME_IN_QUERY_PATH] = "messages";
             subscriptionQuery.channelPath(transformedChannelPath);
-            auto selectors = subscriptionQuery.selectors();
-            size_t inboxSelectorPos;
-            for(inboxSelectorPos = 0; inboxSelectorPos < selectors.size(); inboxSelectorPos++) {
-                if(selectors[inboxSelectorPos].selectorKey == _selectorTypeNames.at(EventSelectorType::INBOX_ID)) {
-                    break;
-                }
-            }
-            if(inboxSelectorPos < selectors.size()) {
-                //getInbox to get threadId
-                auto inboxId = selectors[inboxSelectorPos].selectorValue;
-                if(inboxIdToThreadId[inboxId] == "") {
-                    auto model = Factory::createObject<server::InboxGetModel>();
-                    model.id(inboxId);
-                    auto inboxRaw = _serverApi.inboxGet(model).inbox();
-                    auto threadId = inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
-                    inboxIdToThreadId[inboxId] = threadId;
-                    _threadIdToInboxId[threadId] = inboxId;
-                }
-                std::string threadId = inboxIdToThreadId[inboxId];
-                selectors[inboxSelectorPos].selectorValue = threadId;
-                subscriptionQuery.selectors(selectors);
-            } else {
-                subscriptionQuery.selectorsPushBack(core::SubscriptionQueryObj::QuerySelector{.selectorKey="containerType", .selectorValue=_typeFilterFlag});
-            }
+            updateSubscriptionQuerySelectors(subscriptionQuery);
+            subscriptionQuery.selectorsPushBack(core::SubscriptionQueryObj::QuerySelector{.selectorKey="containerType", .selectorValue=_typeFilterFlag});
         } else if (
             subscriptionQuery.channelPath().size() == 2 && 
             subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] == std::string(_moduleName) && 
             subscriptionQuery.channelPath()[subscriptionQuery.channelPath().size()-1] == _eventTypeNames.at(EventType::COLLECTION_CHANGE)
         ) {
             subscriptionQuery.channelPath({"thread", _eventTypeNames.at(EventType::COLLECTION_CHANGE)});
+            updateSubscriptionQuerySelectors(subscriptionQuery);
             subscriptionQuery.selectorsPushBack(core::SubscriptionQueryObj::QuerySelector{.selectorKey="containerType", .selectorValue=_typeFilterFlag});
         }
         result.add(subscriptionQuery.toSubscriptionQueryString());
@@ -150,4 +129,30 @@ std::optional<std::string> SubscriberImpl::convertKnownThreadIdToInboxId(const s
         return it->second;
     }
     return std::nullopt;
+}
+
+void SubscriberImpl::updateSubscriptionQuerySelectors(core::SubscriptionQueryObj& query) {
+    std::map<std::string, std::string> inboxIdToThreadId;
+    auto selectors = query.selectors();
+    size_t inboxSelectorPos;
+    for(inboxSelectorPos = 0; inboxSelectorPos < selectors.size(); inboxSelectorPos++) {
+        if(selectors[inboxSelectorPos].selectorKey == _selectorTypeNames.at(EventSelectorType::INBOX_ID)) {
+            break;
+        }
+    }
+    if(inboxSelectorPos < selectors.size()) {
+        //getInbox to get threadId
+        auto inboxId = selectors[inboxSelectorPos].selectorValue;
+        if(inboxIdToThreadId[inboxId] == "") {
+            auto model = Factory::createObject<server::InboxGetModel>();
+            model.id(inboxId);
+            auto inboxRaw = _serverApi.inboxGet(model).inbox();
+            auto threadId = inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
+            inboxIdToThreadId[inboxId] = threadId;
+            _threadIdToInboxId[threadId] = inboxId;
+        }
+        std::string threadId = inboxIdToThreadId[inboxId];
+        selectors[inboxSelectorPos].selectorValue = threadId;
+        query.selectors(selectors);
+    }
 }

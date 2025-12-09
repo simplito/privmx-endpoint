@@ -10,13 +10,13 @@ using namespace privmx::endpoint;
 
 int main(int argc, char* argv[]) {
 	// the values below should be replaced by the ones corresponding to your Brigde Server instance.
-	auto BRIDGE_URL {"http://localhost:9111"};
-	auto SOLUTION_ID {"924d3b49-5206-43ab-a1cc-7539e0b9977d"};
-	auto CONTEXT_ID {"5319f785-9a45-4614-a638-e47b5152b610"};
-	
-	auto USER1_ID {"user1"};
-	auto USER1_PUBLIC_KEY {"51WPnnGwztNPWUDEbhncYDxZCZWAFS4M9Yqv94N2335nL92fEn"};
-	auto USER1_PRIVATE_KEY {"L3ycXibEzJm9t9swoJ4KtSmJsenHmmgRnYY79Q2TqfJMwTGaWfA7"};
+        auto BRIDGE_URL {"<YOUR_BRIDGE_URL_HERE>"};
+        auto SOLUTION_ID {"<YOUR_SOLUTION_ID_HERE>"};
+        auto CONTEXT_ID {"<YOUR_CONTEXT_ID_HERE>"};
+
+        auto USER1_ID {"<YOUR_USER_ID_HERE>"};
+        auto USER1_PUBLIC_KEY {"<YOUR_USER_PUB_KEY_HERE>"};
+        auto USER1_PRIVATE_KEY {"<YOUR_USER_PRIV_KEY_HERE>"};
 
 	// initialize Endpoint connection
 	auto connection {core::Connection::connect(USER1_PRIVATE_KEY, SOLUTION_ID, BRIDGE_URL)};

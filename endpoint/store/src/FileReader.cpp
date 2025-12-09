@@ -28,7 +28,7 @@ void FileReader::sync(const store::FileDecryptionParams& newParms) {
     _version = newParms.version;
 }
 
-std::string FileReader::read(uint64_t pos, size_t length) {
+std::string FileReader::read(uint64_t pos, uint64_t length) {
     if(pos >= _plainfileSize) return std::string();
     if(pos+length > _plainfileSize) length = _plainfileSize-pos;
     if(length == 0) return std::string();
