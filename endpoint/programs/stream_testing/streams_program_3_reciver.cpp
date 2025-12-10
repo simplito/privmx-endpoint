@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     std::string solutionId = {params[1].begin(),  params[1].end()};
     std::string bridgeUrl = {params[2].begin(),  params[2].end()};
     std::string contextId = {params[3].begin(),  params[3].end()};
-    std::string streamRoomId = {params[4].begin(),  params[4].end()};
+    // std::string streamRoomId = {params[4].begin(),  params[4].end()};
     try {
         core::Connection connection = core::Connection::connect(
             privKey, 
@@ -86,10 +86,28 @@ int main(int argc, char** argv) {
         );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+
+        auto listResult {streamApi.listStreamRooms(contextId, {.skip=0, .limit=1, .sortOrder="asc"})};
+        auto streamRoomId {listResult.readItems[0].streamRoomId};
+
         core::EventQueue eventQueue = core::EventQueue::getInstance();
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
         stream::StreamSettings ssettings {
             .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
+                std::cout << "received frame: (" << w << "x" << h << ") - id: " << id << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
+                std::cout << "*******" << std::endl;
                 r.OnFrame(w, h, frame, id);
             }
         };
@@ -120,26 +138,27 @@ int main(int argc, char** argv) {
                 auto eventHolder = eventQueue.waitEvent();
                 if(core::Events::isLibBreakEvent(eventHolder)) return;
                 if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
-                    auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
-                    auto streamId = streamUpdatedEvent.streamId;
-                    auto streamlist = streamApi.listStreams(streamRoomId);
-
-                    std::vector<stream::StreamSubscription> toAddstreamsId;
-                    std::vector<stream::StreamSubscription> toRemovestreamsId;
-                    for(auto stream : streamlist) {
-                        if(streamId != stream.id) continue;
-                        for(auto track : stream.tracks) {
-                            auto t =  std::find_if(streamsId.begin(), streamsId.end(), [&] (const stream::StreamSubscription& s) { 
-                                return s.streamId == streamId && s.streamTrackId == track.mid ;
-                            });
-                            if(t == streamsId.end()) {
-                                streamsId.push_back(stream::StreamSubscription{streamId, track.mid});
-                                toAddstreamsId.push_back(stream::StreamSubscription{streamId, track.mid});
-                            }
-                            
-                        }
-                    }
-                    if(toAddstreamsId.size() > 0) streamApi.subscribeToRemoteStreams(streamRoomId, toAddstreamsId, ssettings);
+                    std::cout << "on streamUpdatedEvent ... " << std::endl;
+                    // auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
+                    // auto streamId = streamUpdatedEvent.streamId;
+                    // auto streamlist = streamApi.listStreams(streamRoomId);
+                    //
+                    // std::vector<stream::StreamSubscription> toAddstreamsId;
+                    // std::vector<stream::StreamSubscription> toRemovestreamsId;
+                    // for(auto stream : streamlist) {
+                    //     if(streamId != stream.id) continue;
+                    //     for(auto track : stream.tracks) {
+                    //         auto t =  std::find_if(streamsId.begin(), streamsId.end(), [&] (const stream::StreamSubscription& s) {
+                    //             return s.streamId == streamId && s.streamTrackId == track.mid ;
+                    //         });
+                    //         if(t == streamsId.end()) {
+                    //             streamsId.push_back(stream::StreamSubscription{streamId, track.mid});
+                    //             toAddstreamsId.push_back(stream::StreamSubscription{streamId, track.mid});
+                    //         }
+                    //
+                    //     }
+                    // }
+                    // if(toAddstreamsId.size() > 0) streamApi.subscribeToRemoteStreams(streamRoomId, toAddstreamsId, ssettings);
                 }
             }
         });

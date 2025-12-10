@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     std::string solutionId = {params[1].begin(),  params[1].end()};
     std::string bridgeUrl = {params[2].begin(),  params[2].end()};
     std::string contextId = {params[3].begin(),  params[3].end()};
-    std::string streamRoomId = {params[4].begin(),  params[4].end()};
+    // std::string streamRoomId = {params[4].begin(),  params[4].end()};
     try {
         core::Connection connection = core::Connection::connect(
             privKey, 
@@ -85,6 +85,9 @@ int main(int argc, char** argv) {
         );        
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+
+        auto listResult {streamApi.listStreamRooms(contextId, {.skip=0, .limit=1, .sortOrder="asc"})};
+        auto streamRoomId {listResult.readItems[0].streamRoomId};
 
         streamApi.subscribeFor({
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_UPDATE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),

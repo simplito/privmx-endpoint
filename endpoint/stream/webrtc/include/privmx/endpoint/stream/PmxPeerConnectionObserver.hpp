@@ -12,17 +12,21 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_PMX_PEER_CONNECTIN_OBSERVER_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_PMX_PEER_CONNECTIN_OBSERVER_HPP_
 
-#include <string>
 #include <libwebrtc.h>
+#include <pmx_frame_cryptor.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
+
+#include <memory>
 #include <privmx/utils/ThreadSaveMap.hpp>
-#include <pmx_frame_cryptor.h>
+#include <string>
+
+#include "privmx/endpoint/stream/webrtc/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
+
 
 class FrameImpl : public Frame {
 public:
@@ -44,7 +48,20 @@ public:
         std::cout << "RTCVideoRendererImpl destroyed" << std::endl;
     }
     virtual void OnFrame(VideoFrameT frame) override {
-        // std::cout << "Recived frame " << frame->width() << "-" << frame->height() << std::endl;
+        std::cout << "Recived frame " << frame->width() << "-" << frame->height() << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
+        std::cout << "*******" << std::endl;
         std::unique_lock<std::mutex> lock(m);
         _onFrameCallback(frame->width(), frame->height(), std::make_shared<FrameImpl>(frame), _id);
     }
@@ -52,6 +69,11 @@ private:
     std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
     std::mutex m;
     std::string _id;
+};
+
+struct TrackRenderer {
+    RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* renderer;
+    std::string trackId;
 };
 
 class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
@@ -96,6 +118,8 @@ private:
     std::optional<std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)>> _onIceCandidate;
     // tmp
     std::optional<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> _tmp_stream;
+
+    std::vector<TrackRenderer> _trackRenderers;
 };
 
 } // stream
