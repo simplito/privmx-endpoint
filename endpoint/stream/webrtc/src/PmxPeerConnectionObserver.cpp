@@ -84,38 +84,37 @@ void PmxPeerConnectionObserver::OnIceCandidate([[maybe_unused]] libwebrtc::scope
 }
 void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": STREAM ADDED")
+    // // set frame crypto to decrypt track
     _tmp_stream = stream;
 
-    auto eventThread = std::thread([&](){
-        auto streamTracks = _tmp_stream.value()->tracks();
-        if (streamTracks.size() < 1) {
-            printf("NO stream tracks...");
-            exit(0);
-        }
-        for(size_t i = 0; i < streamTracks.size(); i++) {
-            auto track = streamTracks[i];
-            auto trackKind = track->kind().std_string();
-            if (trackKind.compare("video")) {
-                printf("\n\n\n\n\n\n\n\n!!!!!!!!!!!!!!!!!!!! Detected new VIDEO track\n\n\n\n\n\n\n\n\n");
-                auto video_track = static_cast<libwebrtc::RTCVideoTrack*>(track.get());
+    auto streamTracks = _tmp_stream.value()->tracks();
+    if (streamTracks.size() < 1) {
+        printf("NO stream tracks...");
+        exit(0);
+    }
+    for(size_t i = 0; i < streamTracks.size(); i++) {
+        auto track = streamTracks[i];
 
-                OurVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
-                    new OurVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + video_track->id().std_string())
-                };
-                // TrackRenderer trackRenderer = {
-                //     .renderer = new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string()),
-                //     .trackId = track->id().std_string()
-                // };
-                // _trackRenderers.push_back(trackRenderer);
-                std::cerr << "===> ADDING Renderer for track..." << std::endl;
-                video_track->AddRenderer(r);
-                printf("added renderer for track %s", &track->id().std_string()[0]);
-                std::cout << "track state: " << video_track->state() << "/ enabled: " << video_track->enabled() << std::endl;
-            }
-        }
 
-    });
-    eventThread.detach();
+        auto trackKind = track->kind().std_string();
+        if (trackKind.compare("video")) {
+            printf("\n\n\n\n\n\n\n\n!!!!!!!!!!!!!!!!!!!! Detected new VIDEO track\n\n\n\n\n\n\n\n\n");
+            auto video_track = static_cast<libwebrtc::RTCVideoTrack*>(track.get());
+
+            OurVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
+                new OurVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + video_track->id().std_string())
+            };
+            // TrackRenderer trackRenderer = {
+            //     .renderer = new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string()),
+            //     .trackId = track->id().std_string()
+            // };
+            // _trackRenderers.push_back(trackRenderer);
+            std::cerr << "===> ADDING Renderer for track..." << std::endl;
+            video_track->AddRenderer(r);
+            printf("added renderer for track %s", &track->id().std_string()[0]);
+            std::cout << "track state: " << video_track->state() << "/ enabled: " << video_track->enabled() << std::endl;
+        }
+    }
 
 
     // LOG_DEBUG("STREAMS ", "API ", "stream->video_tracks().size() -> " + std::to_string(stream->video_tracks().size()))
@@ -150,12 +149,12 @@ void PmxPeerConnectionObserver::OnRenegotiationNeeded() {
 
 void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON TRACK")
-    // auto receiver = transceiver->receiver();
-    // // set frame crypto to decrypt track
-    // _frameCryptors.set(
-    //     receiver->track()->id().std_string(),
-    //     privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(_peerConnectionFactory ,receiver, _currentKeys, _options)
-    // );
+    auto receiver = transceiver->receiver();
+    // set frame crypto to decrypt track
+    _frameCryptors.set(
+        receiver->track()->id().std_string(),
+        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(_peerConnectionFactory ,receiver, _currentKeys, _options)
+    );
     //
     // auto track = receiver->track();
     // if (!track) return;
@@ -183,10 +182,10 @@ void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refpt
 }
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON ADD TRACK")
-    _frameCryptors.set(
-        receiver->track()->id().std_string(),
-        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(_peerConnectionFactory ,receiver, _currentKeys, _options)
-    );
+    // _frameCryptors.set(
+    //     receiver->track()->id().std_string(),
+    //     privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(_peerConnectionFactory ,receiver, _currentKeys, _options)
+    // );
 
 
     // set frame crypto to decrypt track
