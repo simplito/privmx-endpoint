@@ -9,25 +9,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/EndpointUtils.hpp>
-#include <privmx/utils/Debug.hpp>
-
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
-#include "privmx/endpoint/stream/StreamApiLow.hpp"
-#include "privmx/endpoint/stream/StreamException.hpp"
 
-
+#include <base/portable.h>
 #include <libwebrtc.h>
+#include <pmx_frame_cryptor.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
-#include <base/portable.h>
-#include <pmx_frame_cryptor.h>
+
+#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/EndpointUtils.hpp>
+#include <privmx/endpoint/core/EventVarSerializer.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
+#include <privmx/utils/Debug.hpp>
+
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
+#include "privmx/endpoint/stream/StreamException.hpp"
+#include "privmx/utils/Logger.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -367,6 +368,8 @@ void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
 }
 
 void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
+    std::cerr << "===> CALL StreamApiImpl::subscribeToRemoteStreams" << std::endl;
+    LOG_DEBUG("===> CALL StreamApiImpl::subscribeToRemoteStreams");
     int64_t streamId = generateNumericId();
     _streamDataMap.set( 
         streamId, 

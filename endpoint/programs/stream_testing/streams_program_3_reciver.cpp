@@ -1,20 +1,23 @@
-#include <iostream>
-#include <sstream>
-#include <string>
+#include <SDL2/SDL.h>
+
 #include <fstream>
-#include <vector>
-#include <thread>
-#include <privmx/endpoint/core/Exception.hpp>
+#include <iostream>
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
+#include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
-#include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Debug.hpp>
-#include <SDL2/SDL.h>
+#include <privmx/utils/PrivmxException.hpp>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "privmx/utils/Logger.hpp"
 
 using namespace std;
 using namespace privmx::endpoint;
@@ -87,27 +90,19 @@ int main(int argc, char** argv) {
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
 
-        auto listResult {streamApi.listStreamRooms(contextId, {.skip=0, .limit=1, .sortOrder="asc"})};
+
+
+        auto listResult {streamApi.listStreamRooms(contextId, {.skip=0, .limit=100, .sortOrder="asc"})};
         auto streamRoomId {listResult.readItems[0].streamRoomId};
+        std::cerr << "===> streamRoomId to use: " << streamRoomId << std::endl;
+        streamApi.joinStreamRoom(streamRoomId);
+
 
         core::EventQueue eventQueue = core::EventQueue::getInstance();
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
         stream::StreamSettings ssettings {
             .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
                 std::cout << "received frame: (" << w << "x" << h << ") - id: " << id << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
-                std::cout << "*******" << std::endl;
                 r.OnFrame(w, h, frame, id);
             }
         };
@@ -120,57 +115,57 @@ int main(int argc, char** argv) {
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
         });
         std::vector<stream::StreamSubscription> streamsId;
-        {
-            auto streamlist = streamApi.listStreams(streamRoomId);
-            for(auto stream : streamlist) {
-                std::cout << "stream:" <<  stream.id << std::endl;
-                for(auto track : stream.tracks) {
-                    streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
-                }
-                break;
+
+        auto streamlist = streamApi.listStreams(streamRoomId);
+        for(auto stream : streamlist) {
+            std::cout << "===> Streams to subscribe to: " <<  stream.id << std::endl;
+            for(auto track : stream.tracks) {
+                streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
             }
+            // break;
         }
-        streamApi.joinStreamRoom(streamRoomId);
+        std::cerr << "===> subscribing to remote streams...." << std::endl;
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
 
-        auto eventThread = std::thread([&](){
-            while (true) {
-                auto eventHolder = eventQueue.waitEvent();
-                if(core::Events::isLibBreakEvent(eventHolder)) return;
-                if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
-                    std::cout << "on streamUpdatedEvent ... " << std::endl;
-                    // auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
-                    // auto streamId = streamUpdatedEvent.streamId;
-                    // auto streamlist = streamApi.listStreams(streamRoomId);
-                    //
-                    // std::vector<stream::StreamSubscription> toAddstreamsId;
-                    // std::vector<stream::StreamSubscription> toRemovestreamsId;
-                    // for(auto stream : streamlist) {
-                    //     if(streamId != stream.id) continue;
-                    //     for(auto track : stream.tracks) {
-                    //         auto t =  std::find_if(streamsId.begin(), streamsId.end(), [&] (const stream::StreamSubscription& s) {
-                    //             return s.streamId == streamId && s.streamTrackId == track.mid ;
-                    //         });
-                    //         if(t == streamsId.end()) {
-                    //             streamsId.push_back(stream::StreamSubscription{streamId, track.mid});
-                    //             toAddstreamsId.push_back(stream::StreamSubscription{streamId, track.mid});
-                    //         }
-                    //
-                    //     }
-                    // }
-                    // if(toAddstreamsId.size() > 0) streamApi.subscribeToRemoteStreams(streamRoomId, toAddstreamsId, ssettings);
-                }
-            }
-        });
+        // auto eventThread = std::thread([&](){
+        //     while (true) {
+        //         auto eventHolder = eventQueue.waitEvent();
+        //         if(core::Events::isLibBreakEvent(eventHolder)) return;
+        //         if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
+        //             std::cout << "on streamUpdatedEvent ... " << std::endl;
+        //             // auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
+        //             // // auto streamId = streamUpdatedEvent.streamId;
+        //             // auto streamlist = streamApi.listStreams(streamRoomId);
+        //             //
+        //             // std::vector<stream::StreamSubscription> toAddstreamsId;
+        //             // std::vector<stream::StreamSubscription> toRemovestreamsId;
+        //             // for(auto stream : streamlist) {
+        //             //     if(streamId != stream.id) continue;
+        //             //     for(auto track : stream.tracks) {
+        //             //         auto t =  std::find_if(streamsId.begin(), streamsId.end(), [&] (const stream::StreamSubscription& s) {
+        //             //             return s.streamId == streamId && s.streamTrackId == track.mid ;
+        //             //         });
+        //             //         if(t == streamsId.end()) {
+        //             //             streamsId.push_back(stream::StreamSubscription{streamId, track.mid});
+        //             //             toAddstreamsId.push_back(stream::StreamSubscription{streamId, track.mid});
+        //             //         }
+        //             //
+        //             //     }
+        //             // }
+        //             // if(toAddstreamsId.size() > 0) streamApi.subscribeToRemoteStreams(streamRoomId, toAddstreamsId, ssettings);
+        //         }
+        //     }
+        // });
         
         while (true) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
         }
 
+        std::cerr << "===> ENDING - unsubscribe and close " << std::endl;
         streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         eventQueue.emitBreakEvent();
-        if(eventThread.joinable()) eventThread.join();
+        // if(eventThread.joinable()) eventThread.join();
         connection.disconnect();
        
     } catch (const core::Exception& e) {

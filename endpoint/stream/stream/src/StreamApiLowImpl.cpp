@@ -233,7 +233,6 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
                     .sdp = sdp,
                     .type = "answer"
                 };
-
                 acceptOfferOnReconfigure(raw.sessionId(), sdpModel);
             }
 
@@ -446,6 +445,8 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
 }
 
 void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options) {
+    std::cerr << "===> CALL StreamApiLowImpl::subscribeToRemoteStreams()" << std::endl;
+    LOG_DEBUG("===> CALL StreamApiLowImpl::subscribeToRemoteStreams()");
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsSubscribeModel>();
@@ -461,7 +462,12 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
         itemsToAdd.add(item);
     }
     model.subscriptionsToAdd(itemsToAdd);
+    std::cerr << "===> CALL streamsSubscribeToRemote()" << std::endl;
+    LOG_DEBUG("===> CALL streamsSubscribeToRemote()")
     auto subscribeResult = _serverApi->streamsSubscribeToRemote(model);
+
+    std::cerr << "===> RECEIVED subscribeResult" << std::endl;
+    LOG_DEBUG("===> RECEIVED subscribeResult")
 
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId(), std::string("subscriber"));
@@ -475,6 +481,9 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (!subscribeResult.offerEmpty()) {
+        LOG_DEBUG("===> HAS OFFER IN subscribeResult");
+        std::cerr << "===> HAS OFFER IN subscribeResult" << std::endl;
+
         std::string sdp = room->webRtc->createAnswerAndSetDescriptions(streamRoomId, subscribeResult.offer().sdp(), subscribeResult.offer().type());
 
         SdpWithTypeModel sdpModel = {
@@ -482,6 +491,9 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
             .type = "answer"
         };
         acceptOfferOnReconfigure(subscribeResult.sessionId(), sdpModel);
+    } else {
+        LOG_DEBUG("===> !!NO OFFER in subscribeResult")
+        std::cerr << "===> !!NO OFFER in subscribeResult" << std::endl;
     }
     
     std::set<RemoteStreamId> streamIds;
@@ -1056,6 +1068,8 @@ void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candi
 }
 
 void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
+    LOG_DEBUG("StreamApiLowImpl::acceptOfferOnReconfigure()");
+    std::cerr << "StreamApiLowImpl::acceptOfferOnReconfigure()" << std::endl;
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp.sdp);
     sessionDescription.type("answer");
