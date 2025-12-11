@@ -185,8 +185,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUpdatedEventData>(cons
         obj->set("__type", "stream$StreamUpdatedEventData");
     }
     obj->set("streamRoomId", serialize(val.streamRoomId));
-    obj->set("streamId", serialize(val.streamId));
-    obj->set("userId", serialize(val.userId));
     Poco::JSON::Array::Ptr streamsAddedArr = new Poco::JSON::Array();
     for (auto stream: val.streamsAdded) {
         streamsAddedArr->add(serialize<stream::StreamInfo>(stream));

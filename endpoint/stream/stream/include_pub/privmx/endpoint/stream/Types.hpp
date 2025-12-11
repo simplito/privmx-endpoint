@@ -199,13 +199,6 @@ struct StreamUpdatedEventData {
      */
     std::string streamRoomId;
 
-    /**
-     * Stream ID
-     */
-    int64_t streamId;
-
-    std::string userId;
-
     std::vector<StreamInfo> streamsAdded;
 
     std::vector<StreamInfo> streamsRemoved;
