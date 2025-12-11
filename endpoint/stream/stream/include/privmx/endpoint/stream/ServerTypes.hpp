@@ -238,8 +238,6 @@ TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamUpdatedEventData)
     STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
-    STRING_FIELD(userId)
     LIST_FIELD(streamsAdded, StreamInfo)
     LIST_FIELD(streamsRemoved, StreamInfo)
     LIST_FIELD(streamsModified, StreamTrackModification)

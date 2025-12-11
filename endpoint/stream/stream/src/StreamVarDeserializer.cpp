@@ -219,8 +219,6 @@ stream::StreamUpdatedEventData VarDeserializer::deserialize<stream::StreamUpdate
 
     return {
         .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
-        .streamId = deserialize<int64_t>(obj->get("streamId"), name + ".streamId"),
-        .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
         .streamsAdded = deserializeVector<stream::StreamInfo>(obj->get("streamsAdded"), name + ".streamsAdded"),
         .streamsRemoved = deserializeVector<stream::StreamInfo>(obj->get("streamsRemoved"), name + ".streamsRemoved"),
         .streamsModified = deserializeVector<stream::StreamTrackModification>(obj->get("streamsModified"), name + ".streamsModified")
