@@ -116,8 +116,7 @@ public:
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
     bool access(const std::string& path);
     void deleteFile(const std::string& path);
-    std::string fullPathname(const std::string& path);
-    void init();
+    std::string fullPathname(const std::string& uri);
 
 private:
     struct ParsedPath
@@ -128,6 +127,8 @@ private:
 
     ParsedPath parsePath(const std::string& path2);
     std::shared_ptr<PrivmxFS> getPrivmxFS(const ParsedPath& parsed);
+    std::string extractPath(const std::string& uri);
+    std::string sanitizeFilepath(const std::string& filepath);
 };
 
 

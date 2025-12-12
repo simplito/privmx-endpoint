@@ -167,36 +167,27 @@ std::string PrivmxFS::getFileId(const std::string& name) {
 }
 
 std::shared_ptr<PrivmxFile> PrivmxExtFS::openFile(const std::string& path) {
-    init();
     auto parsed = parsePath(path);
     auto fs = getPrivmxFS(parsed);
     return fs->openFile(parsed.path);
 }
 
 bool PrivmxExtFS::access(const std::string& path) {
-    init();
     auto parsed = parsePath(path);
     auto fs = getPrivmxFS(parsed);
     return fs->access(parsed.path);
 }
 
 void PrivmxExtFS::deleteFile(const std::string& path) {
-    init();
     auto parsed = parsePath(path);
     auto fs = getPrivmxFS(parsed);
     return fs->deleteFile(parsed.path);
 }
 
-std::string PrivmxExtFS::fullPathname(const std::string& path) {
-    std::string path2 = path;
-    if (path.substr(0, 5) == "file:") {
-        path2 = path2.substr(5);
-    }
-    return path2.substr(0, path2.find('?'));
+std::string PrivmxExtFS::fullPathname(const std::string& uri) {
+    auto path = extractPath(uri);
+    return sanitizeFilepath(path);
 }
-
-void PrivmxExtFS::init() {}
-
 
 PrivmxExtFS::ParsedPath PrivmxExtFS::parsePath(const std::string& path2) {
     Poco::Path path;
@@ -215,4 +206,22 @@ PrivmxExtFS::ParsedPath PrivmxExtFS::parsePath(const std::string& path2) {
 
 std::shared_ptr<PrivmxFS> PrivmxExtFS::getPrivmxFS(const ParsedPath& parsed) {
     return PrivmxFS::create(SessionManager::get()->getSession(parsed.sessionId));
+}
+
+std::string PrivmxExtFS::extractPath(const std::string& uri) {
+    std::string path2 = uri;
+    if (path2.substr(0, 5) == "file:") {
+        path2 = path2.substr(5);
+    }
+    return path2.substr(0, path2.find('?'));
+}
+
+std::string PrivmxExtFS::sanitizeFilepath(const std::string& filepath) {
+    std::string result = filepath;
+    for (char& c : result) {
+        if (!(std::isalnum(c) || c == '/' || c == '_' || c == ':' || c == '-')) {
+            c = '_';
+        }
+    }
+    return result;
 }
