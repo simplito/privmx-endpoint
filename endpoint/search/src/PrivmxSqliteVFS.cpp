@@ -45,11 +45,22 @@ typedef privmx_file privmx_file;
 }
 
 inline std::shared_ptr<PrivmxFile> extractPrivmxFile(sqlite3_file *pFile) {
-    return *((std::shared_ptr<PrivmxFile>*)((privmx_file*)pFile)->pmxFile);
+    privmx_file* file = (privmx_file*)pFile;
+    if (file->pmxFile != nullptr) {
+        return *((std::shared_ptr<PrivmxFile>*)((privmx_file*)pFile)->pmxFile);
+    }
+    return std::shared_ptr<PrivmxFile>();
 }
 
 inline std::shared_ptr<PrivmxExtFS> extractPrivmxExtFS(sqlite3_vfs *pVfs) {
     return *((std::shared_ptr<PrivmxExtFS>*)(pVfs->pAppData));
+}
+
+inline void freePrivmxFile(sqlite3_file *pFile) {
+    privmx_file* file = (privmx_file*)pFile;
+    if (file->pmxFile != nullptr) {
+        delete (std::shared_ptr<PrivmxFile>*)((privmx_file*)pFile)->pmxFile;
+    }
 }
 
 extern "C" {
@@ -57,7 +68,10 @@ extern "C" {
 int privmxClose(sqlite3_file *pFile) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
     try {
-        file->close();
+        if (file) {
+            file->close();
+            freePrivmxFile(pFile);
+        }
     } catch (...) {
         return SQLITE_IOERR;
     }
@@ -192,7 +206,6 @@ const sqlite3_io_methods PrivmxIoMethods = {
 int privmxOpen(sqlite3_vfs *pVfs, const char *zName, sqlite3_file *pFile, int flags, int *pOutFlags) {
     privmx_file *file = (privmx_file*)pFile;
     std::memset(file, 0, sizeof(privmx_file));
-    file->pmxFile = new std::shared_ptr<PrivmxFile>();
     file->base.pMethods = &PrivmxIoMethods;
     if (pOutFlags) *pOutFlags = flags;
     std::shared_ptr<PrivmxExtFS> fs = extractPrivmxExtFS(pVfs);
