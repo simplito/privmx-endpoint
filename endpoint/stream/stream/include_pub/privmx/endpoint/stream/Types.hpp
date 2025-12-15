@@ -164,6 +164,16 @@ struct StreamInfo {
     std::optional<bool> talking;            // deprecated
 };
 
+struct StreamTrackModificationPair {
+    std::optional<StreamTrackInfo> before;
+    std::optional<StreamTrackInfo> after;
+};
+
+struct StreamTrackModification {
+    int64_t streamId;
+    std::vector<StreamTrackModificationPair> tracks;
+};
+
 struct NewStreams {
     std::string room;
     std::vector<StreamInfo> streams;
@@ -189,12 +199,11 @@ struct StreamUpdatedEventData {
      */
     std::string streamRoomId;
 
-    /**
-     * Stream ID
-     */
-    int64_t streamId;
+    std::vector<StreamInfo> streamsAdded;
 
-    std::string userId;
+    std::vector<StreamInfo> streamsRemoved;
+
+    std::vector<StreamTrackModification> streamsModified;
 };
 
 struct StreamPublishResult {

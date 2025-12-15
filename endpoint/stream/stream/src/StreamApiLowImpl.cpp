@@ -157,11 +157,6 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" || type == "streamUpdated" ) {
-            // auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
-            // std::vector<int64_t> streamIds;
-            // for(auto i : raw.streamIds()) streamIds.push_back(i);
-
-            // auto eventData = StreamInfo{.streamRoomId=raw.streamRoomId(), .streamIds=streamIds, .userId=raw.userId()};
             if(type == "streamPublished") {
                 auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamPublishedEventData>(data);
                 auto deserializer = std::make_shared<core::VarDeserializer>();

@@ -185,8 +185,50 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUpdatedEventData>(cons
         obj->set("__type", "stream$StreamUpdatedEventData");
     }
     obj->set("streamRoomId", serialize(val.streamRoomId));
+    Poco::JSON::Array::Ptr streamsAddedArr = new Poco::JSON::Array();
+    for (auto stream: val.streamsAdded) {
+        streamsAddedArr->add(serialize<stream::StreamInfo>(stream));
+    }
+    obj->set("streamsAdded", streamsAddedArr);
+
+    Poco::JSON::Array::Ptr streamsRemovedArr = new Poco::JSON::Array();
+    for (auto stream: val.streamsRemoved) {
+        streamsRemovedArr->add(serialize<stream::StreamInfo>(stream));
+    }
+    obj->set("streamsRemoved", streamsRemovedArr);
+
+    Poco::JSON::Array::Ptr streamsModifiedArr = new Poco::JSON::Array();
+    for (auto stream: val.streamsModified) {
+        streamsModifiedArr->add(serialize<stream::StreamTrackModification>(stream));
+    }
+    obj->set("streamsModified", streamsModifiedArr);
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackModification>(const stream::StreamTrackModification& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamTrackModification");
+    }
     obj->set("streamId", serialize(val.streamId));
-    obj->set("userId", serialize(val.userId));
+    Poco::JSON::Array::Ptr tracksArr = new Poco::JSON::Array();
+    for (auto track: val.tracks) {
+        tracksArr->add(serialize<stream::StreamTrackModificationPair>(track));
+    }
+    obj->set("tracks", tracksArr);
+    return obj;
+}
+
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackModificationPair>(const stream::StreamTrackModificationPair& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamTrackModificationPair");
+    }
+    obj->set("before", serialize(val.before));
+    obj->set("after", serialize(val.after));
     return obj;
 }
 
