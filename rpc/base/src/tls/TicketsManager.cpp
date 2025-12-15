@@ -60,7 +60,7 @@ void TicketsManager::clear() {
 }
 
 unsigned int TicketsManager::ticketsCount() {
-    LOG_INFO("ticketsCount ", _tickets.size())
+    LOG_DEBUG("ticketsCount ", _tickets.size())
     lock_guard<mutex> lock(_tickets_mutex);
     return _tickets.size();
 }
