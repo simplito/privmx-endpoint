@@ -375,7 +375,7 @@ void AuthorizedConnection::performTicketTest(bool websocket) {
 }
 
 void AuthorizedConnection::clearWebSocket() {
-    LOG_INFO("AuthorizedConnection", "clearWebSocket");
+    LOG_DEBUG("AuthorizedConnection:", "clearWebSocket");
     auto id = _wschannel_id.exchange(-1);
     if (id != -1) {
         if(_tickets_manager.ticketsCount() != 0) {
@@ -392,7 +392,7 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
         _ticket_updater_cancellation_token = utils::CancellationToken::create();
     }
     auto t = std::thread([&](privmx::utils::CancellationToken::Ptr token){
-        LOG_INFO("AuthorizedConnection:TicketLoop Created")
+        LOG_DEBUG("AuthorizedConnection:", "TicketLoop Created")
         while(!token->isCancelled()) {
             try {
                 if(_tickets_manager.shouldAskForNewTickets(ClientEndpoint::TICKETS_MIN_COUNT)) {
@@ -401,12 +401,12 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
                     endpoint.connection.ticketHandshake();
                     endpoint.connection.ticketRequest(ClientEndpoint::TICKETS_MAX_COUNT);
                     sendRequest(endpoint);
-                    LOG_INFO("AuthorizedConnection:TicketLoop AskForNewTickets:success")
+                    LOG_DEBUG("AuthorizedConnection", "TicketLoop AskForNewTickets:success")
                 } else {
                     token->sleep(std::chrono::seconds(10));
                 }
             } catch (const privmx::utils::OperationCancelledException &e) {
-                LOG_INFO("AuthorizedConnection:TicketLoop Cancel:Closing")
+                LOG_DEBUG("AuthorizedConnection", "TicketLoop Cancel:Closing")
                 return;
             } catch (...) {
                 LOG_ERROR("AuthorizedConnection:TicketLoop catch(...)")
