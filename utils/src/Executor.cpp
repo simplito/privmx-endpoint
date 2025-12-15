@@ -47,6 +47,7 @@ void Executor::createThread() {
                 LOG_TRACE("Executor waiting for task")
                 auto task = tasks->pop();
                 if(task.type == TaskType::STOP || token->isCancelled()) {
+                    LOG_TRACE("Executor recived StopTask")
                     break;
                 }
                 task.callback();

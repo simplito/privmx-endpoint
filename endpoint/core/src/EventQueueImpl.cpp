@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include <privmx/utils/Logger.hpp>
-#include "privmx/utils/Types.hpp"
 
 using namespace privmx::endpoint::core;
 

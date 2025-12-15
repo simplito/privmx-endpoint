@@ -3,9 +3,12 @@
 
 #include <memory>
 #include <string>
+#include <optional>
 
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
+#include "privmx/endpoint/core/ExtendedPointer.hpp"
+
 
 namespace privmx {
 namespace endpoint {
@@ -16,7 +19,7 @@ class ConnectionImpl;
 /**
  * 'Connection' represents and manages the current connection between the Endpoint and the Bridge server.
  */
-class Connection {
+class Connection : public ExtendedPointer<ConnectionImpl> {
 public:
     /**
      * Connects to the PrivMX Bridge server.
@@ -46,7 +49,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    Connection() = default;
+    Connection();
+    Connection(const Connection& obj);
+    Connection& operator=(const Connection& obj);
+    Connection(Connection&& obj);
+    ~Connection();
 
     /**
      * Gets the ID of the current connection.
@@ -113,12 +120,10 @@ public:
      */
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
 
-    std::shared_ptr<ConnectionImpl> getImpl() const { return _impl; }
-
 private:
-    void validateEndpoint();
+    void assertConnection(const std::shared_ptr<ConnectionImpl>& impl);
     Connection(const std::shared_ptr<ConnectionImpl>& impl);
-    std::shared_ptr<ConnectionImpl> _impl;
+    std::optional<int64_t> _connectionId;
 };
 
 }  // namespace core

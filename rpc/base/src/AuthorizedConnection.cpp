@@ -85,6 +85,7 @@ Var AuthorizedConnection::call(const std::string& method, Poco::JSON::Object::Pt
         return result.get();
     } catch (const TicketsCountIsEqualZeroException& e) {
         _session_established = false;
+        _session_lost_event_dispatcher.dispatch({});
         e.rethrow();
     } catch (const utils::PrivmxException& e) {
         if (e.hasTypeAndMessage(utils::PrivmxException::ALERT, "Invalid ticket")) {

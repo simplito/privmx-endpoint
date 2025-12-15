@@ -13,12 +13,13 @@
 #include "privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp"
 #include "privmx/endpoint/event/encryptors/event/OldEventDataDecryptor.hpp"
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
+#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace event {
 
-class EventApiImpl {
+class EventApiImpl : public privmx::utils::ManualManagedClass<EventApiImpl>{
 public:
     EventApiImpl(
         const core::Connection& connection, 
@@ -57,6 +58,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     EventDataEncryptorV5 _eventDataEncryptorV5;
     OldEventDataDecryptor _oldEventDataDecryptor;
+    std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
 };
 
 }  // namespace event

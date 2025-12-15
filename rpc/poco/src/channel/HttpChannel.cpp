@@ -55,7 +55,11 @@ future<string> HttpChannel::send(const string& data, const string& path, const s
             throw InvalidHttpStatusException();
         }
         updateKeepAlive(response);
-        result = string{istreambuf_iterator<char>(stream), istreambuf_iterator<char>()};
+        std::streamsize len = response.getContentLength();
+        if (len != Poco::Net::HTTPMessage::UNKNOWN_CONTENT_LENGTH) {
+            result.reserve(response.getContentLength());
+        }
+        Poco::StreamCopier::copyToString(stream, result);
         promise.set_value(result);
     } catch (const Poco::Net::NoMessageException& e) {
         promise.set_exception(make_exception_ptr(NoMessageReceivedException()));

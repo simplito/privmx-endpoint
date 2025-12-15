@@ -1066,6 +1066,7 @@ void InboxApiImpl::processConnectedEvent() {
 
 void InboxApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
+    privmx::utils::ManualManagedClass<InboxApiImpl>::cleanup();
 }
 
 InboxDeletedEventData InboxApiImpl::convertInboxDeletedEventData(server::InboxDeletedEventData data) {
