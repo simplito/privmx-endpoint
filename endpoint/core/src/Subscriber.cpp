@@ -62,7 +62,7 @@ std::string SubscriptionQueryObj::toSubscriptionQueryString() const {
 
 Subscriber::Subscriber(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
-std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
+std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries, bool force) {
     LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
     auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelsModel>();
     std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
@@ -70,7 +70,16 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
         parsedSubscriptionQueries.push_back(SubscriptionQueryObj(subscriptionQueryString));
     }
     assertQuery(parsedSubscriptionQueries);
-    auto modelChannels = transform(parsedSubscriptionQueries);
+    privmx::utils::List<std::string> modelChannels = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    if(!force) {
+        assertQuery(parsedSubscriptionQueries);
+        modelChannels = transform(parsedSubscriptionQueries);
+    } else {
+        for(const auto& subscriptionQueryString : subscriptionQueries) {
+            modelChannels.add(subscriptionQueryString);
+        }
+    }
+    // auto modelChannels = transform(parsedSubscriptionQueries);
     LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
     model.channels(modelChannels);
     auto value = privmx::utils::TypedObjectFactory::createObjectFromVar<server::SubscribeToChannelsResult>(

@@ -14,6 +14,7 @@
 #include "privmx/endpoint/event/encryptors/event/OldEventDataDecryptor.hpp"
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
+#include <privmx/utils/GuardedExecutor.hpp>
 
 namespace privmx {
 namespace endpoint {
