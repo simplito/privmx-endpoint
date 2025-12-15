@@ -104,23 +104,23 @@ int main(int argc, char** argv) {
                 break;
             }
         }
-        for(const auto& mediaDevice: mediaDevices) {
-            if(mediaDevice.type == stream::DeviceType::Video) {
-                streamApi.addTrack(streamHandle, mediaDevice);
-                break;
-            }
-        }
         // for(const auto& mediaDevice: mediaDevices) {
-        //     if(mediaDevice.type == stream::DeviceType::Desktop) {
+        //     if(mediaDevice.type == stream::DeviceType::Video) {
         //         streamApi.addTrack(streamHandle, mediaDevice);
         //         break;
         //     }
         // }
+        for(const auto& mediaDevice: mediaDevices) {
+            if(mediaDevice.type == stream::DeviceType::Desktop) {
+                streamApi.addTrack(streamHandle, mediaDevice);
+                break;
+            }
+        }
         streamApi.publishStream(streamHandle);
         while (true) {
             std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
             for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Video) {
+                if(mediaDevice.type == stream::DeviceType::Desktop) {
                     streamApi.removeTrack(streamHandle, mediaDevice);
                     break;
                 }
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
             std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
             auto mediaDevices = streamApi.getMediaDevices();
             for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Video) {
+                if(mediaDevice.type == stream::DeviceType::Desktop) {
                     streamApi.addTrack(streamHandle, mediaDevice);
                     break;
                 }

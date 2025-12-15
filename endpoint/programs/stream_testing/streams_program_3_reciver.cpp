@@ -29,13 +29,29 @@ public:
             texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 768, 432);
             windowEventsLoop();
         }
-        uint32_t* pixels = new uint32_t[768 * 432];
-        // PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h))
-        frame->ConvertToRGBA((uint8_t*)pixels, 4, 768, 432);
-        SDL_UpdateTexture(texture, NULL, pixels, 768 * sizeof(uint32_t));
-        SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
-        delete pixels;
-        
+        PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h) + " | id:", id)
+        // Lock texture to get buffer pointer
+        void* pixels = nullptr;
+        int pitch  = 0; // bytes per row
+        if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) != 0) {
+            std::cerr << "SDL_LockTexture failed: " << SDL_GetError() << "\n";
+            return;
+        }
+
+        // Ask Frame to convert into our texture buffer
+        uint8_t* dst  = static_cast<uint8_t*>(pixels);
+        auto ret  = frame->ConvertToRGBA(dst, pitch, 768, 432);
+        SDL_UnlockTexture(texture);
+        PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame ConvertToRGBA: "+std::to_string(ret) +"- "+std::to_string(((uint64_t*)pixels)[0]));
+        // if (ret != 0) {
+        //     std::cerr << "ConvertToRGBA failed\n";
+        //     return;
+        // }
+
+        // Render this frame
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+        SDL_RenderPresent(renderer);
     }
 private:
     void windowEventsLoop() {
@@ -121,25 +137,25 @@ int main(int argc, char** argv) {
                 if(core::Events::isLibBreakEvent(eventHolder)) return;
                 if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
                     auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
-                    auto streamId = streamUpdatedEvent.streamId;
-                    auto streamlist = streamApi.listStreams(streamRoomId);
+                    auto streamsModified = streamUpdatedEvent.streamsModified;
 
                     std::vector<stream::StreamSubscription> toAddstreamsId;
                     std::vector<stream::StreamSubscription> toRemovestreamsId;
-                    for(auto stream : streamlist) {
-                        if(streamId != stream.id) continue;
+                    for(auto stream : streamsModified) {
                         for(auto track : stream.tracks) {
-                            auto t =  std::find_if(streamsId.begin(), streamsId.end(), [&] (const stream::StreamSubscription& s) { 
-                                return s.streamId == streamId && s.streamTrackId == track.mid ;
-                            });
-                            if(t == streamsId.end()) {
-                                streamsId.push_back(stream::StreamSubscription{streamId, track.mid});
-                                toAddstreamsId.push_back(stream::StreamSubscription{streamId, track.mid});
+                            if(track.after.has_value()) {
+                                if(track.after.value().disabled.has_value()) {
+                                    toRemovestreamsId.push_back({stream.streamId, track.after.value().mid});
+                                } else {
+                                    toAddstreamsId.push_back({stream.streamId, track.after.value().mid});
+                                } 
                             }
                             
                         }
                     }
-                    if(toAddstreamsId.size() > 0) streamApi.subscribeToRemoteStreams(streamRoomId, toAddstreamsId, ssettings);
+                    if(toAddstreamsId.size() > 0 || toRemovestreamsId.size() > 0) {
+                        streamApi.modifyRemoteStreamsSubscriptions(streamRoomId, toAddstreamsId, toRemovestreamsId, ssettings);
+                    }
                 }
             }
         });
