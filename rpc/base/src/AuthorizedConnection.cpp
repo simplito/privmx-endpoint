@@ -410,11 +410,11 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
                 LOG_DEBUG("AuthorizedConnection:TicketLoop Cancel:Closing")
                 return;
             } catch (const TicketsCountIsEqualZeroException &e) {
-                LOG_DEBUG("AuthorizedConnection:TicketLoop SessionLost:TicketsCountIsEqualZero")
+                LOG_ERROR("AuthorizedConnection:TicketLoop SessionLost:TicketsCountIsEqualZero")
                 destroy();
             } catch (...) {
                 if(failedAttemptsOfSessionReconnection >= MAX_ATTEMPTS_OF_SESSION_RECONNECTION) {
-                    LOG_DEBUG("AuthorizedConnection:TicketLoop SessionLost:reached MAX_ATTEMPTS_OF_SESSION_RECONNECTION = ", MAX_ATTEMPTS_OF_SESSION_RECONNECTION)
+                    LOG_ERROR("AuthorizedConnection:TicketLoop SessionLost:reached MAX_ATTEMPTS_OF_SESSION_RECONNECTION = ", MAX_ATTEMPTS_OF_SESSION_RECONNECTION)
                     destroy();
                 } else {
                     LOG_ERROR("AuthorizedConnection:TicketLoop recived unknow Exception")
