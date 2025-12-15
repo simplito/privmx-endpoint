@@ -391,7 +391,7 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
         _ticket_updater_cancellation_token = utils::CancellationToken::create();
     }
     auto t = std::thread([&](privmx::utils::CancellationToken::Ptr token){
-        LOG_INFO("AuthorizedConnection:TicketLoop Created")
+        LOG_DEBUG("AuthorizedConnection:TicketLoop Created")
         size_t failedAttemptsOfSessionReconnection = 0;
         while(!token->isCancelled()) {
             try {
@@ -407,14 +407,14 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
                     token->sleep(std::chrono::seconds(10));
                 }
             } catch (const privmx::utils::OperationCancelledException &e) {
-                LOG_INFO("AuthorizedConnection:TicketLoop Cancel:Closing")
+                LOG_DEBUG("AuthorizedConnection:TicketLoop Cancel:Closing")
                 return;
             } catch (const TicketsCountIsEqualZeroException &e) {
-                LOG_INFO("AuthorizedConnection:TicketLoop SessionLost:TicketsCountIsEqualZero")
+                LOG_DEBUG("AuthorizedConnection:TicketLoop SessionLost:TicketsCountIsEqualZero")
                 destroy();
             } catch (...) {
                 if(failedAttemptsOfSessionReconnection >= MAX_ATTEMPTS_OF_SESSION_RECONNECTION) {
-                    LOG_INFO("AuthorizedConnection:TicketLoop SessionLost:reached MAX_ATTEMPTS_OF_SESSION_RECONNECTION = ", MAX_ATTEMPTS_OF_SESSION_RECONNECTION)
+                    LOG_DEBUG("AuthorizedConnection:TicketLoop SessionLost:reached MAX_ATTEMPTS_OF_SESSION_RECONNECTION = ", MAX_ATTEMPTS_OF_SESSION_RECONNECTION)
                     destroy();
                 } else {
                     LOG_ERROR("AuthorizedConnection:TicketLoop recived unknow Exception")
