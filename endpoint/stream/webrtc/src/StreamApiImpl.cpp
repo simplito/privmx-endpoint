@@ -254,7 +254,19 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
         break;
     case DeviceType::Desktop:
         {
-            throw NotImplementedException();
+            LOG_INFO("StreamApiImpl::removeTrack Desktop - ", mediaDevice.name + "-" + mediaDevice.id)
+            std::lock_guard<std::mutex> lock(streamData->streamMutex);
+            auto trackOpt = streamData->desktopTracks.get(mediaDevice.name + "-" + mediaDevice.id);
+            if(!trackOpt.has_value()) {
+                throw IncorrectTrackIdException();
+            }
+            auto track = trackOpt.value();
+            if(track->status == TrackStatus::ToAdd) {
+                streamData->videoTracks.erase(mediaDevice.name + "-" + mediaDevice.id);
+            } else if(track->status == TrackStatus::Published) {
+                track->status = TrackStatus::ToRemove;
+                streamData->desktopTracks.set(mediaDevice.name + "-" + mediaDevice.id, track);
+            }
         }
         break;
     default:

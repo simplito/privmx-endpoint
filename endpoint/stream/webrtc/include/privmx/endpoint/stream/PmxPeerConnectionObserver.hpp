@@ -44,7 +44,7 @@ public:
         std::cout << "RTCVideoRendererImpl destroyed" << std::endl;
     }
     virtual void OnFrame(VideoFrameT frame) override {
-        // std::cout << "Recived frame " << frame->width() << "-" << frame->height() << std::endl;
+        std::cout << "Recived frame " << frame->width() << "-" << frame->height() << std::endl;
         std::unique_lock<std::mutex> lock(m);
         _onFrameCallback(frame->width(), frame->height(), std::make_shared<FrameImpl>(frame), _id);
     }
