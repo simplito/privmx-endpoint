@@ -477,6 +477,7 @@ void KvdbApiImpl::processConnectedEvent() {
 
 void KvdbApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
+    privmx::utils::ManualManagedClass<KvdbApiImpl>::cleanup();
 }
 
 privmx::utils::List<std::string> KvdbApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {

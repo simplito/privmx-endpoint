@@ -28,7 +28,7 @@ ChunkReader::ChunkReader(
     _lastChunk(std::nullopt)
 {
     if(decryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(decryptionParams.originalSize)) {
-        throw FileCorruptedException();
+        if (decryptionParams.originalSize != 0) throw FileCorruptedException();
     }
 }
 

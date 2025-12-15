@@ -55,7 +55,7 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
     }
     // start writing to offset chunk
     auto startIndex = _chunkReader->filePosToFileChunkIndex(offset);
-    auto stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size()-1);
+    auto stopIndex = _chunkReader->filePosToFileChunkIndex(offset+toSend.size() - (data.size() == 0 ? 0 : 1));
     uint64_t dataSend = 0;
     std::vector<FileHandler::UpdateChunkData> chunksToUpdate;
     auto newPlainfileSize = _plainfileSize;
@@ -168,8 +168,8 @@ FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, uint
     return FileHandler::UpdateChunkData{
         chunk,
         index,
-        truncate ? (int64_t)(index * _plainChunkSize + newChunk.size()) - (int64_t)_plainfileSize : (int64_t)newChunk.size() - (int64_t)prevChunk.size(),
-        truncate ? (int64_t)(index * _encryptedChunkSize + chunk.data.size()) - (int64_t)_encryptedFileSize : (int64_t)chunk.data.size() - (int64_t)prevEncryptedChunk.size()
+        truncate ? (int64_t)(index * _plainChunkSize + newChunk.size()) - std::max((int64_t)_plainfileSize, (int64_t)(index * _plainChunkSize)) : (int64_t)newChunk.size() - (int64_t)prevChunk.size(),
+        truncate ? (int64_t)(index * _encryptedChunkSize + chunk.data.size()) - std::max((int64_t)_encryptedFileSize, (int64_t)(index * _encryptedChunkSize)) : (int64_t)chunk.data.size() - (int64_t)prevEncryptedChunk.size()
     };
 }
 
@@ -228,8 +228,8 @@ std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFr
         updatedChunk->chunk.hmac,
         updatedChunk->chunkIndex*_hashList->getHashSize()
     }};
-    auto& squashedChanges = result.back();
     for(updatedChunk++; updatedChunk != updatedChunks.end(); updatedChunk++) {
+        auto& squashedChanges = result.back();
         if (squashedChanges.dataPos + squashedChanges.data.size() == updatedChunk->chunkIndex*_encryptedChunkSize && 
             squashedChanges.data.size() + updatedChunk->chunk.data.size() < SERVER_OPERATION_SIZE_LIMIT
         ) {
@@ -242,7 +242,6 @@ std::vector<FileHandler::UpdateChanges> FileHandler::createListOfUpdateChangesFr
                 updatedChunk->chunk.hmac,
                 updatedChunk->chunkIndex*_hashList->getHashSize()
             });
-            squashedChanges = result.back();
         }
     }
     return result;

@@ -38,12 +38,13 @@ limitations under the License.
 #include "privmx/endpoint/thread/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
+#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-class ThreadApiImpl : protected core::ModuleBaseApi
+class ThreadApiImpl : public privmx::utils::ManualManagedClass<ThreadApiImpl>, protected core::ModuleBaseApi
 {
 public:
     ThreadApiImpl(
@@ -170,6 +171,7 @@ private:
     );
 
     void assertThreadExist(const std::string& threadId);
+
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
