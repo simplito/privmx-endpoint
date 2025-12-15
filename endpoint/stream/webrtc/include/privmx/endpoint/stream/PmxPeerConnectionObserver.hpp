@@ -38,13 +38,13 @@ private:
 
 
 template <typename VideoFrameT>
-class OurVideoRendererImpl : public libwebrtc::RTCVideoRenderer<VideoFrameT> {
+class RTCVideoRendererImpl : public libwebrtc::RTCVideoRenderer<VideoFrameT> {
 public:
-    inline OurVideoRendererImpl(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback, const std::string& id)
+    inline RTCVideoRendererImpl(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback, const std::string& id)
     : _onFrameCallback(onFrameCallback), _id(id) {
         std::cout << "RTCVideoRendererImpl created" << std::endl;
     }
-    inline ~OurVideoRendererImpl() {
+    inline ~RTCVideoRendererImpl() {
         std::cout << "RTCVideoRendererImpl destroyed" << std::endl;
     }
     virtual void OnFrame(VideoFrameT frame) override {
@@ -60,7 +60,7 @@ private:
 };
 
 struct TrackRenderer {
-    OurVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* renderer;
+    RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* renderer;
     std::string trackId;
 };
 

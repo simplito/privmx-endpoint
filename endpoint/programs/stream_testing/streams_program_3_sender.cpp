@@ -77,6 +77,8 @@ int main(int argc, char** argv) {
     std::string bridgeUrl = {params[2].begin(),  params[2].end()};
     std::string contextId = {params[3].begin(),  params[3].end()};
     // std::string streamRoomId = {params[4].begin(),  params[4].end()};
+
+    int testDelay {10};
     try {
         core::Connection connection = core::Connection::connect(
             privKey, 
@@ -120,35 +122,59 @@ int main(int argc, char** argv) {
         //     }
         // }
         streamApi.publishStream(streamHandle);
-        while (true) {
-            // std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
-            // for(const auto& mediaDevice: mediaDevices) {
-            //     if(mediaDevice.type == stream::DeviceType::Video) {
-            //         streamApi.removeTrack(streamHandle, mediaDevice);
-            //         break;
-            //     }
-            // }
-            std::this_thread::sleep_for(std::chrono::seconds(30));
-            // std::cout << "----------------------------------------------remove track---------------------------------------------" << std::endl;
-            // core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{false, core::VarSerializer::Options::STD_STRING});
-            // streamApi.updateStream(streamHandle);
-            // std::cout << "----------------------------------------------streams list---------------------------------------------" << std::endl;
-            // auto streamsList = streamApi.listStreams(streamRoomId);
-            // std::cout << privmx::utils::Utils::stringifyVar(serializer.serialize(streamsList), true) << std::endl;
-            // std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
-            // auto mediaDevices = streamApi.getMediaDevices();
-            // for(const auto& mediaDevice: mediaDevices) {
-            //     if(mediaDevice.type == stream::DeviceType::Video) {
-            //         streamApi.addTrack(streamHandle, mediaDevice);
-            //         break;
-            //     }
-            // }
-            // std::this_thread::sleep_for(std::chrono::seconds(30));
-            // std::cout << "----------------------------------------------add track------------------------------------------------" << std::endl;
-            //
-            // streamApi.updateStream(streamHandle);
+        std::this_thread::sleep_for(std::chrono::seconds(testDelay));
+        // while (true) {
+        //     std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
+        //     for(const auto& mediaDevice: mediaDevices) {
+        //         if(mediaDevice.type == stream::DeviceType::Video) {
+        //             streamApi.removeTrack(streamHandle, mediaDevice);
+        //             break;
+        //         }
+        //     }
+        //     streamApi.updateStream(streamHandle);
+        //     std::this_thread::sleep_for(std::chrono::seconds(30));
+        //     std::cout << "----------------------------------------------remove track---------------------------------------------" << std::endl;
+        //     core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{false, core::VarSerializer::Options::STD_STRING});
+        //     streamApi.updateStream(streamHandle);
+        //     std::cout << "----------------------------------------------streams list---------------------------------------------" << std::endl;
+        //     auto streamsList = streamApi.listStreams(streamRoomId);
+        //     std::cout << privmx::utils::Utils::stringifyVar(serializer.serialize(streamsList), true) << std::endl;
+        //     std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
+        //     auto mediaDevices = streamApi.getMediaDevices();
+        //     for(const auto& mediaDevice: mediaDevices) {
+        //         if(mediaDevice.type == stream::DeviceType::Video) {
+        //             streamApi.addTrack(streamHandle, mediaDevice);
+        //             break;
+        //         }
+        //     }
+        //     std::this_thread::sleep_for(std::chrono::seconds(30));
+        //     std::cout << "----------------------------------------------add track------------------------------------------------" << std::endl;
+        //
+        //     streamApi.updateStream(streamHandle);
+        // }
+        std::cout << "Removing media for 30 sek" << std::endl;
+        for(const auto& mediaDevice: mediaDevices) {
+            if(mediaDevice.type == stream::DeviceType::Video) {
+                streamApi.removeTrack(streamHandle, mediaDevice);
+                break;
+            }
         }
-        
+
+        streamApi.updateStream(streamHandle);
+        std::this_thread::sleep_for(std::chrono::seconds(testDelay));
+
+        std::cout << "Adding back video" << std::endl;
+
+        for(const auto& mediaDevice: mediaDevices) {
+            if(mediaDevice.type == stream::DeviceType::Video) {
+                streamApi.addTrack(streamHandle, mediaDevice);
+                break;
+            }
+        }
+        streamApi.updateStream(streamHandle);
+        std::this_thread::sleep_for(std::chrono::seconds(testDelay));
+        std::cout << "Exiting..." << std::endl;
+
         // streamApi.unpublishStream(streamHandle);
         streamApi.leaveStreamRoom(streamRoomId);
         connection.disconnect();
