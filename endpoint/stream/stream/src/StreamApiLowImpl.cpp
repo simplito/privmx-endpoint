@@ -70,7 +70,6 @@ StreamApiLowImpl::StreamApiLowImpl(
 
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
     auto result = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
-
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
 }
 
