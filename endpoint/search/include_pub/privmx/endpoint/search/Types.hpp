@@ -14,15 +14,110 @@ limitations under the License.
 #include <cstdint>
 #include <string>
 
+#include "privmx/endpoint/core/Buffer.hpp"
+
 
 namespace privmx {
 namespace endpoint {
 namespace search {
 
+/**
+ * Defines the mode in which the Search Index operates, specifically regarding 
+ * the storage and retrieval of document content.
+ */
 enum IndexMode
 {
+    /**
+     * The Index stores the full document content internally. 
+     * When searching, the full content field of the Document struct will be returned.
+     * This mode requires more storage but simplifies content retrieval.
+     */
     WITH_CONTENT,
+
+    /**
+     * The Index only stores metadata and terms necessary for search, 
+     * but discards the original document content.
+     * When searching, the content field of the returned Document struct will be empty.
+     * This mode saves storage space, assuming content is retrieved from an external source (e.g., store::StoreApi)
+     * using the Document ID and name.
+     */
     WITHOUT_CONTENT
+};
+
+/**
+ * Holds all available information about a Search Index.
+ */
+struct SearchIndex
+{
+    /**
+     * ID of the Context
+     */
+    std::string contextId;
+
+    /**
+     * ID of the Search Index
+     */
+    std::string indexId;
+
+    /**
+     * Index creation timestamp
+     */
+    int64_t createDate;
+
+    /**
+     * ID of user who created the Index
+     */
+    std::string creator;
+
+    /**
+     * Index last modification timestamp
+     */
+    int64_t lastModificationDate;
+
+    /**
+     * ID of the user who last modified the Index
+     */
+    std::string lastModifier;
+
+    /**
+     * list of users (their IDs) with access to the Thread
+     */
+    std::vector<std::string> users;
+
+    /**
+     * list of users (their IDs) with management rights
+     */
+    std::vector<std::string> managers;
+
+    /**
+     * Version number (changes on updates)
+     */
+    int64_t version;
+
+    /**
+     * Thread's public metadata
+     */
+    core::Buffer publicMeta;
+
+    /**
+     * Thread's private metadata
+     */
+    core::Buffer privateMeta;
+
+    /**
+     * Thread's policies
+     */
+    core::ContainerPolicy policy;
+
+    /**
+     * The operating mode of the Index, defining how document content is handled.
+     */
+    IndexMode mode;
+
+    /**
+     * status code of retrieval and decryption of the Thread
+     */
+    int64_t statusCode;
 };
 
 /**

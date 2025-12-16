@@ -78,6 +78,10 @@ public:
 
     void deleteSearchIndex(const std::string& indexId);
 
+    SearchIndex getSearchIndex(const std::string& indexId);
+
+    core::PagingList<SearchIndex> listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery);
+
     int64_t openSearchIndex(const std::string& indexId);
 
     void closeSearchIndex(const int64_t indexHandle);
@@ -87,6 +91,10 @@ public:
     void updateDocument(const int64_t indexHandle, const Document& document);
 
     void deleteDocument(const int64_t indexHandle, int64_t documentId);
+
+    Document getDocument(const int64_t indexHandle, const int64_t documentId);
+
+    core::PagingList<Document> listDocuments(const std::string& indexId, const core::PagingQuery& pagingQuery);
 
     core::PagingList<Document> searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery);
 

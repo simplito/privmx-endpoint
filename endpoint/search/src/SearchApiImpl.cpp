@@ -77,6 +77,14 @@ void SearchApiImpl::deleteSearchIndex(const std::string& indexId) {
     _storeApi.deleteStore(data.storeId());
 }
 
+SearchIndex SearchApiImpl::getSearchIndex(const std::string& indexId) {
+    throw core::NotImplementedException();
+}
+
+core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+    throw core::NotImplementedException();
+}
+
 int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
     auto data = getIndexData(indexId);
     auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, indexId, data.storeId());
@@ -105,6 +113,14 @@ void SearchApiImpl::updateDocument(const int64_t indexHandle, const Document& do
 void SearchApiImpl::deleteDocument(const int64_t indexHandle, int64_t documentId) {
     auto fts = _fts.get(indexHandle);
     fts->deleteDocument(documentId);
+}
+
+Document SearchApiImpl::getDocument(const int64_t indexHandle, const int64_t documentId) {
+    throw core::NotImplementedException();
+}
+
+core::PagingList<Document> SearchApiImpl::listDocuments(const std::string& indexId, const core::PagingQuery& pagingQuery) {
+    throw core::NotImplementedException();
 }
 
 core::PagingList<Document> SearchApiImpl::searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery) {

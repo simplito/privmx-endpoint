@@ -90,6 +90,26 @@ void SearchApi::deleteSearchIndex(const std::string& indexId) {
     }
 }
 
+SearchIndex SearchApi::getSearchIndex(const std::string& indexId) {
+    validateEndpoint();
+    try {
+        return _impl->getSearchIndex(indexId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::PagingList<SearchIndex> SearchApi::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+    validateEndpoint();
+    try {
+        return _impl->listSearchIndexes(contextId, pagingQuery);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 int64_t SearchApi::openSearchIndex(const std::string& indexId) {
     validateEndpoint();
     // core::Validator::validateId(threadId, "field:threadId ");
@@ -139,6 +159,26 @@ void SearchApi::deleteDocument(const int64_t indexHandle, int64_t documentId) {
     // core::Validator::validateId(threadId, "field:threadId ");
     try {
         return _impl->deleteDocument(indexHandle, documentId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+Document SearchApi::getDocument(const int64_t indexHandle, const int64_t documentId) {
+    validateEndpoint();
+    try {
+        return _impl->getDocument(indexHandle, documentId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::PagingList<Document> SearchApi::listDocuments(const std::string& indexId, const core::PagingQuery& pagingQuery) {
+    validateEndpoint();
+    try {
+        return _impl->listDocuments(indexId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

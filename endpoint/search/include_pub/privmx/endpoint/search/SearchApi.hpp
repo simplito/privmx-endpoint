@@ -90,6 +90,23 @@ public:
     void deleteSearchIndex(const std::string& indexId);
 
     /**
+     * Gets a Search Index by given Index ID.
+     *
+     * @param indexId ID of the Index to get
+     * @return SearchIndex struct containing info about the Index
+     */
+    SearchIndex getSearchIndex(const std::string& indexId);
+
+    /**
+     * Gets a list of Search Indexes in given Context.
+     *
+     * @param contextId ID of the Context to get the Indexes from
+     * @param pagingQuery struct with list query parameters
+     * @return struct containing a list of Search Indexes
+     */
+    core::PagingList<SearchIndex> listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery);
+
+    /**
      * Opens a Search Index for use and returns a handle.
      *
      * @param indexId ID of the Index to open
@@ -129,6 +146,24 @@ public:
      * @param documentId ID of the document to delete
      */
     void deleteDocument(const int64_t indexHandle, int64_t documentId);
+
+    /**
+     * Gets a document by given document ID from the Search Index.
+     *
+     * @param indexHandle Handle of the Index containing the document
+     * @param documentId ID of the document to get
+     * @return Document struct containing the document data
+     */
+    Document getDocument(const int64_t indexHandle, const int64_t documentId);
+
+    /**
+     * Gets a list of documents (e.g., messages, threads, or custom documents) from a Search Index.
+     *
+     * @param indexId ID of the Search Index to list documents from
+     * @param pagingQuery struct with list query parameters (can include search terms)
+     * @return struct containing a list of documents
+     */
+    core::PagingList<Document> listDocuments(const std::string& indexId, const core::PagingQuery& pagingQuery);
 
     /**
      * Searches for documents in the Index.
