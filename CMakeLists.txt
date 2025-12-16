@@ -14,7 +14,7 @@ option(PRIVMX_BUILD_BENCHMARK "Building privmxBenchmark client" OFF)
 option(PRIVMX_CLI_IMPORTED_LIBRARIES "Using CLI imported libraries" OFF)
 option(PRIVMX_IMPORTED_LIBRARIES "Using imported libraries" OFF)
 option(PRIVMX_ENABLE_TESTS "Enable tests" OFF)
-option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" OFF)
+option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" ON)
 option(PRIVMX_BUILD_DEBUG "Enable extra debug data for lib" OFF)
 
 option(PRIVMX_EMSCRIPTEN "Enable emscripten build" OFF)
@@ -23,7 +23,7 @@ message(STATUS "Enable emscripten build - PRIVMX_EMSCRIPTEN=${PRIVMX_EMSCRIPTEN}
 option(PRIVMX_CONAN "Conan build" OFF)
 message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 
-option(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
+option(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
 
@@ -35,6 +35,10 @@ if(PRIVMX_EMSCRIPTEN)
     add_compile_options(-pthread -fexceptions)
     add_link_options(-lembind -lpthread -lwebsocket.js)
     set(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
+endif()
+
+if(PRIVMX_CONAN)
+    set(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 endif()
 
 if(PRIVMX_CI_BUILD)
@@ -49,15 +53,6 @@ endif()
 if(PRIVMX_BUILD_ALL)
     set(PRIVMX_BUILD_CLI ON)
     set(PRIVMX_BUILD_ENDPOINT ON)
-endif()
-
-if(PRIVMX_BUILD_ENDPOINT)
-    #set(PRIVMX_BUILD_STORE ON)
-endif()
-
-# For CLI programs pocket required
-if(PRIVMX_BUILD_CLI)
-    set(PRIVMX_BUILD_POCKET ON)
 endif()
 
 message(STATUS "Using CLI imported libraries - PRIVMX_CLI_IMPORTED_LIBRARIES=${PRIVMX_CLI_IMPORTED_LIBRARIES}")

@@ -94,7 +94,7 @@ int main() {
 	// get kvdb's entries Keys
 	auto entriesKeys {kvdbApi.listEntriesKeys(
     	kvdbId,
-		kvdb::KvdbKeysPagingQuery{
+		core::PagingQuery{
 			.skip=0, 
 			.limit=100, 
 			.sortOrder="desc"
