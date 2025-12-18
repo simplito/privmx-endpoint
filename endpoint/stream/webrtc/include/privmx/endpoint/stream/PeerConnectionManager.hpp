@@ -77,6 +77,8 @@ public:
     void updateSessionForConnection(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId);
     bool hasConnection(const std::string& streamRoomId, ConnectionType connectionType);
     std::shared_ptr<JanusConnection> getConnectionWithSession(const std::string& streamRoomId, ConnectionType connectionType);
+    void closeConnection(const std::string& streamRoomId, ConnectionType connectionType);
+    void closeSession(const std::string& streamRoomId);
 private:
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> _createPeerConnection;
     std::function<void(const int64_t, const std::string&)> _onTrickle;

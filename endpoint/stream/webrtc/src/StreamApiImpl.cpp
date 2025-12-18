@@ -262,7 +262,7 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
             }
             auto track = trackOpt.value();
             if(track->status == TrackStatus::ToAdd) {
-                streamData->videoTracks.erase(mediaDevice.name + "-" + mediaDevice.id);
+                streamData->desktopTracks.erase(mediaDevice.name + "-" + mediaDevice.id);
             } else if(track->status == TrackStatus::Published) {
                 track->status = TrackStatus::ToRemove;
                 streamData->desktopTracks.set(mediaDevice.name + "-" + mediaDevice.id, track);
@@ -298,13 +298,13 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
             videoTracksToAdd.push_back({id, video->track});
         }
     });
-    streamData->desktopTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamDesktopTrackInfo>& video) {
-        if(video->status == TrackStatus::ToAdd) {
-            video->status = TrackStatus::Published;
-            if(!video->capturer->IsRunning()) {
-                video->capturer->Start(15);
+    streamData->desktopTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamDesktopTrackInfo>& desktop) {
+        if(desktop->status == TrackStatus::ToAdd) {
+            desktop->status = TrackStatus::Published;
+            if(!desktop->capturer->IsRunning()) {
+                desktop->capturer->Start(15);
             }
-            videoTracksToAdd.push_back({id, video->track});
+            videoTracksToAdd.push_back({id, desktop->track});
         }
     });
     streamData->status = Online;
@@ -353,18 +353,20 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
     for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
         streamData->videoTracks.erase(videoTracksToRemove[toRemove].first);
     }
-    streamData->desktopTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamDesktopTrackInfo>& video) {
-        if(video->status == TrackStatus::ToAdd) {
-            if(!video->capturer->IsRunning()) video->capturer->Start(15);
-            video->status = TrackStatus::Published;
-            videoTracksToAdd.push_back({id, video->track});
-        } else if(video->status == TrackStatus::ToRemove) {
-            if(video->capturer->IsRunning()) video->capturer->Stop();
-            videoTracksToRemove.push_back({id, video->track});
+    streamData->desktopTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamDesktopTrackInfo>& desktop) {
+        if(desktop->status == TrackStatus::ToAdd) {
+            if(!desktop->capturer->IsRunning()) desktop->capturer->Start(15);
+            desktop->status = TrackStatus::Published;
+            videoTracksToAdd.push_back({id, desktop->track});
+        } else if(desktop->status == TrackStatus::ToRemove) {
+            if(desktop->capturer->IsRunning()) desktop->capturer->Stop();
+            videoTracksToRemove.push_back({id, desktop->track});
+            LOG_FATAL("desktop track", id);
         }
     });
     for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
         streamData->desktopTracks.erase(videoTracksToRemove[toRemove].first);
+        LOG_FATAL("desktopTracks.size()", streamData->desktopTracks.size());
     }
     std::cout << "audioTracksToAdd:" << audioTracksToAdd.size() << std::endl;
     std::cout << "videoTracksToAdd:" << videoTracksToAdd.size() << std::endl;

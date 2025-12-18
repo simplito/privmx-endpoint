@@ -1,7 +1,6 @@
 #include "privmx/endpoint/stream/WebRTCImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
-#include <privmx/utils/Debug.hpp>
 #include <future>
 #include <privmx/utils/Logger.hpp>
 
@@ -112,15 +111,10 @@ void WebRTCImpl::setAnswerAndSetRemoteDescription(const std::string& streamRoomI
 }
 
 void WebRTCImpl::close(const std::string& streamRoomId) {
-    PRIVMX_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTCImpl::close()");
-    auto peerConnection_1 = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher)->peerConnection;
-    peerConnection_1->audioTracks.clear();
-    peerConnection_1->videoTracks.clear();
-    peerConnection_1->pc->Close();
-    auto peerConnection_2 = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber)->peerConnection;
-    peerConnection_2->audioTracks.clear();
-    peerConnection_2->videoTracks.clear();
-    peerConnection_2->pc->Close();
+    LOG_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTCImpl::close()");
+    _peerConnectionManager->closeConnection(streamRoomId, ConnectionType::Publisher);
+    _peerConnectionManager->closeConnection(streamRoomId, ConnectionType::Subscriber);
+    _peerConnectionManager->closeSession(streamRoomId);
 }
 
 void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) {
@@ -130,18 +124,18 @@ void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<K
     std::string keysIds;
     for(auto k: keys) keysIds += (k.keyId + ", ");
     std::cout << "RecivedKyesIds: " << keysIds << std::endl;
-    PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys createWebRtcKeyStore");
+    LOG_DEBUG("STREAMS:WebRTC ", "updateKeys createWebRtcKeyStore");
     {
         std::unique_lock<std::shared_mutex> lock1(peerConnection_p->trackMutex);
         std::unique_lock<std::shared_mutex> lock2(peerConnection_s->trackMutex);
         peerConnection_s->keys = createWebRtcKeyStore(keys);
         peerConnection_p->keys = createWebRtcKeyStore(keys);
-        PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys _peerConnectionObserver->UpdateCurrentKeys");
+        LOG_DEBUG("STREAMS:WebRTC ", "updateKeys _peerConnectionObserver->UpdateCurrentKeys");
         // update input data keys 
-        peerConnection_p->observer->UpdateCurrentKeys(peerConnection_p->keys);
-        peerConnection_s->observer->UpdateCurrentKeys(peerConnection_s->keys);
+        if(peerConnection_p->observer.get() == nullptr) peerConnection_p->observer->UpdateCurrentKeys(peerConnection_p->keys);
+        if(peerConnection_s->observer.get() == nullptr) peerConnection_s->observer->UpdateCurrentKeys(peerConnection_s->keys);
     }
-    PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys for_each->_audioTracks");
+    LOG_DEBUG("STREAMS:WebRTC ", "updateKeys for_each->_audioTracks");
     {
         std::unique_lock<std::shared_mutex> lock1(peerConnection_p->trackMutex);
         std::unique_lock<std::shared_mutex> lock2(peerConnection_s->trackMutex);
@@ -156,7 +150,7 @@ void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<K
             peerConnection_s->audioTracks.end(), 
             [&](const auto& p) {p.second.frameCryptor->setKeyStore(peerConnection_s->keys);}
         );
-        PRIVMX_DEBUG("STREAMS", "WebRTC", "updateKeys for_each->_videoTracks");
+        LOG_DEBUG("STREAMS:WebRTC ", "updateKeys for_each->_videoTracks");
         std::for_each(
             peerConnection_p->videoTracks.begin(),
             peerConnection_p->videoTracks.end(), 
