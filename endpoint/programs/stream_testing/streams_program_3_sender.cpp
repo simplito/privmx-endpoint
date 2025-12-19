@@ -7,6 +7,7 @@
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/EventQueue.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
@@ -83,6 +84,13 @@ int main(int argc, char** argv) {
             solutionId, 
             bridgeUrl
         );        
+        core::EventQueue eventQueue = core::EventQueue::getInstance();
+        atomic_bool stop = false;
+        auto eventThread = std::thread([&](){
+            while (!stop) {
+                auto eventHolder = eventQueue.waitEvent();
+            }
+        });
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
 
@@ -96,6 +104,9 @@ int main(int argc, char** argv) {
         });
 
         streamApi.joinStreamRoom(streamRoomId);
+        for(int j = 0; j < 5; j++) {
+        // streamApi.joinStreamRoom(streamRoomId);
+
         auto streamHandle = streamApi.createStream(streamRoomId);
         auto mediaDevices = streamApi.getMediaDevices();
         for(const auto& mediaDevice: mediaDevices) {
@@ -110,22 +121,24 @@ int main(int argc, char** argv) {
         //         break;
         //     }
         // }
-        for(const auto& mediaDevice: mediaDevices) {
-            if(mediaDevice.type == stream::DeviceType::Desktop) {
-                streamApi.addTrack(streamHandle, mediaDevice);
-                break;
-            }
-        }
+        // for(const auto& mediaDevice: mediaDevices) {
+        //     if(mediaDevice.type == stream::DeviceType::Desktop) {
+        //         streamApi.addTrack(streamHandle, mediaDevice);
+        //         break;
+        //     }
+        // }
         streamApi.publishStream(streamHandle);
-        while (true) {
+        
+        int i = 5;
+        while (--i) {
             std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
             for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Desktop) {
+                if(mediaDevice.type == stream::DeviceType::Audio) {
                     streamApi.removeTrack(streamHandle, mediaDevice);
                     break;
                 }
             }
-            std::this_thread::sleep_for(std::chrono::seconds(30));
+            std::this_thread::sleep_for(std::chrono::seconds(5));
             std::cout << "----------------------------------------------remove track---------------------------------------------" << std::endl;
             core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{false, core::VarSerializer::Options::STD_STRING});
             streamApi.updateStream(streamHandle);
@@ -135,20 +148,29 @@ int main(int argc, char** argv) {
             std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
             auto mediaDevices = streamApi.getMediaDevices();
             for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Desktop) {
+                if(mediaDevice.type == stream::DeviceType::Audio) {
                     streamApi.addTrack(streamHandle, mediaDevice);
                     break;
                 }
             }
-            std::this_thread::sleep_for(std::chrono::seconds(30));
+            std::this_thread::sleep_for(std::chrono::seconds(5));
             std::cout << "----------------------------------------------add track------------------------------------------------" << std::endl;
             
             streamApi.updateStream(streamHandle);
+        };
+        streamApi.unpublishStream(streamHandle);
+        // streamApi.leaveStreamRoom(streamRoomId);
+
+        std::this_thread::sleep_for(std::chrono::seconds(10));
         }
-        
-        // streamApi.unpublishStream(streamHandle);
+
+
+
         streamApi.leaveStreamRoom(streamRoomId);
         connection.disconnect();
+        stop = true;
+        eventQueue.emitBreakEvent();
+        eventThread.join();
         std::this_thread::sleep_for(std::chrono::seconds(5));
 
        

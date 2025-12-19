@@ -83,21 +83,6 @@ void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::
     LOG_DEBUG("STREAMS ", "API ", "stream->audio_tracks().size() -> " + std::to_string(stream->audio_tracks().size()))
     LOG_DEBUG("STREAMS ", "API ", "_onFrameCallback.has_value() -> " + std::to_string(_onFrameCallback.has_value()))
     _tmp_stream = stream;
-    // for(size_t i = 0; i < _tmp_stream.value()->video_tracks().size(); i++) { 
-    //     auto track = _tmp_stream.value()->video_tracks()[i];
-    //     LOG_TRACE("STREAMS ", "API ", "OnAddStream->video_tracks()[" + std::to_string(i) +"]");
-    //     LOG_TRACE("track: ", track.get());
-    //     LOG_TRACE("track->state(): ", track->state());
-    //     LOG_TRACE("track->id(): ", track->id().std_string());
-    //     LOG_TRACE("track->enabled(): ", track->enabled());
-    //     if(_onFrameCallback.has_value()) {
-    //     RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
-    //         new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string())
-    //     };
-    //     LOG_DEBUG("STREAMS ", "API ", "stream->video_tracks()[i] -> AddRenderer(r)")
-    //     track->AddRenderer(r);
-    //     }
-    // }
 }
 void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON REMOVE STREAM")
@@ -140,47 +125,10 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
                     new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string())
                 };
                 track->AddRenderer(r1);
-            // RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r2 {
-            //     new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>([](int64_t, int64_t, std::shared_ptr<Frame>, const std::string&){std::cout << "h1" << std::endl;}, _streamRoomId + "-" + track->id().std_string())
-            // };
-            // track->AddRenderer(r2);
+
             }
         }
-    }
-    // auto track = receiver->track();
-    // if(track->kind().std_string() == "video" && _onFrameCallback.has_value()) {
-    //     auto cast_track = static_cast<libwebrtc::RTCVideoTrack*>(track.get());
-    //     LOG_TRACE("track: ", track.get());
-    //     LOG_TRACE("cast_track: ", cast_track);
-    //     LOG_TRACE("track->state(): ", cast_track->state());
-    //     LOG_TRACE("track->id(): ", cast_track->id().std_string());
-    //     LOG_TRACE("track->enabled(): ", cast_track->enabled());
-    //     RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
-    //         new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>([](int64_t, int64_t, std::shared_ptr<Frame>, const std::string&){std::cout << "h1" << std::endl;}, _streamRoomId + "-" + track->id().std_string())
-    //     };
-    //    cast_track->AddRenderer(r);
-    // }
-
-    // set on frame renderer (videoTrack)
-    // for(size_t j = 0; j < streams.size(); j++) {
-    //     auto stream = streams[j];
-    //     std::cout << "streamId: " << stream->id().std_string() << std::endl; 
-    //     std::cout << "receiver->track(): " << receiver->track()->id().std_string() << std::endl; 
-    //     std::cout << "receiver->kind(): " << receiver->track()->kind().std_string() << std::endl; 
-    //     auto track = stream->FindVideoTrack(receiver->track()->id());
-    //     if(track != nullptr && _onFrameCallback.has_value() ) {
-    //         RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r {
-    //             new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>([](int64_t, int64_t, std::shared_ptr<Frame>, const std::string&){std::cout << "h1" << std::endl;}, _streamRoomId + "-" + track->id().std_string())
-    //         };
-    //         LOG_DEBUG("STREAMS ", "API ", "stream->FindVideoTrack(" + receiver->track()->id().std_string() +") -> AddRenderer(r)")
-    //         std::cout << "track: " << track.get() << std::endl;
-    //         std::cout << "track->state(): " << track->state() << std::endl;
-    //         std::cout << "track->id(): " << track->id().std_string() << std::endl;
-    //         std::cout << "track->enabled(): " << track->enabled() << std::endl;
-    //         track->AddRenderer(r);
-    //     }
-    // }
-    
+    }   
 }
 
 void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {

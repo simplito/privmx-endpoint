@@ -319,8 +319,6 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
     }
     auto streamData = streamDataOpt.value();
 
-    std::cout << "streamData->audioTracks:" << streamData->audioTracks.size() << std::endl;
-    std::cout << "streamData->videoTracks:" << streamData->videoTracks.size() << std::endl;
     // Add tracks to the peer connection
     // UPDATE audio tracks
     std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToAdd;
@@ -361,17 +359,11 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
         } else if(desktop->status == TrackStatus::ToRemove) {
             if(desktop->capturer->IsRunning()) desktop->capturer->Stop();
             videoTracksToRemove.push_back({id, desktop->track});
-            LOG_FATAL("desktop track", id);
         }
     });
     for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
         streamData->desktopTracks.erase(videoTracksToRemove[toRemove].first);
-        LOG_FATAL("desktopTracks.size()", streamData->desktopTracks.size());
     }
-    std::cout << "audioTracksToAdd:" << audioTracksToAdd.size() << std::endl;
-    std::cout << "videoTracksToAdd:" << videoTracksToAdd.size() << std::endl;
-    std::cout << "audioTracksToRemove:" << audioTracksToRemove.size() << std::endl;
-    std::cout << "videoTracksToRemove:" << videoTracksToRemove.size() << std::endl;
     _webRTC->updatePeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, audioTracksToRemove, videoTracksToRemove);
     return _api->updateStream(streamHandle);
 }

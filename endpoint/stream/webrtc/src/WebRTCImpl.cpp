@@ -118,12 +118,12 @@ void WebRTCImpl::close(const std::string& streamRoomId) {
 }
 
 void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) {
+
     {
     auto peerConnection_p = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher)->peerConnection;
     auto peerConnection_s = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber)->peerConnection;
     std::string keysIds;
     for(auto k: keys) keysIds += (k.keyId + ", ");
-    std::cout << "RecivedKyesIds: " << keysIds << std::endl;
     LOG_DEBUG("STREAMS:WebRTC ", "updateKeys createWebRtcKeyStore");
     {
         std::unique_lock<std::shared_mutex> lock1(peerConnection_p->trackMutex);
@@ -217,6 +217,7 @@ void WebRTCImpl::createPeerConnectionWithLocalStream(
 ) {
     _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
     auto jc = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
+
     
     for(auto audioTrack: audioTracks) {
         AddAudioTrack(jc, audioTrack.second, privmx::utils::Hex::from(audioTrack.first));
@@ -264,6 +265,8 @@ void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
     {
         std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+        LOG_FATAL("EMOVE_BEFORE_PUSH | ", "jc->peerConnection->keys.get() == nullptr : ", jc->peerConnection->keys.get() == nullptr)
+
         frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
             _peerConnectionFactory,
             sender, 

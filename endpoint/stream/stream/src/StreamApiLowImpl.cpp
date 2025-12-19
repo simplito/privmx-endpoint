@@ -367,6 +367,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
     model.streamRoomId(room->streamRoomId);
     model.offer(sessionDescription);
+    std::cout << privmx::utils::Utils::stringifyVar(model) << std::endl;
     auto result = _serverApi->streamPublish(model);
     streamData->sessionId = result.sessionId();
     // update/set sessionId in webrtc (for Janus - trickle)
@@ -440,7 +441,7 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
         model.sessionId(streamData->sessionId.value());
         _serverApi->streamUnpublish(model);
     }
-    room->webRtc->close(room->streamRoomId);
+    // room->webRtc->close(room->streamRoomId);
     _streamHandleToRoomId.erase(streamHandle);
     room->publisherStream.reset();
 }
