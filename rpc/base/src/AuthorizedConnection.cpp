@@ -29,10 +29,12 @@ using Poco::Dynamic::Var;
 
 AuthorizedConnection::AuthorizedConnection(const ConnectionOptionsFull& options)
         : _options(options), _ticket_updater_cancellation_token(utils::CancellationToken::create()) {
+    LOG_DEBUG("AuthorizedConnection::AuthorizedConnection(constructor)");
     initChannel();
 }
 
 void AuthorizedConnection::init() {
+    LOG_DEBUG("AuthorizedConnection::init()");
     if (_options.websocket) {
         if (_options.notifications) {
             authorizeWebsocket();
@@ -102,16 +104,23 @@ void AuthorizedConnection::verifyConnection() {
 }
 
 void AuthorizedConnection::destroy() {
+    LOG_DEBUG("rpc 1")
+
     if (_destroyed) return;
+    LOG_DEBUG("rpc 2")
     _ticket_updater_cancellation_token->cancel();
+    LOG_DEBUG("rpc 3")
     clearWebSocket();
+    LOG_DEBUG("rpc 4")
     _destroyed = true;
     _channels_connected = false;
     _session_checked = false;
     _session_established = false;
     
     _tickets_manager.clear();
+    LOG_DEBUG("rpc 5")
     _disconnected_event_dispatcher.dispatch({});
+    LOG_DEBUG("rpc 6")
 }
 
 int AuthorizedConnection::addNotificationEventListener(const utils::Callback<NotificationEvent>& event_listener) {
@@ -301,6 +310,7 @@ Poco::URI AuthorizedConnection::url2schemeAndHost() {
 }
 
 void AuthorizedConnection::authorizeWebsocket() {
+    LOG_DEBUG("AuthorizedConnection::authorizeWebsocket");
     auto key = crypto::Crypto::randomBytes(32);
     Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
     params->set("key", utils::Base64::from(key));
@@ -308,6 +318,7 @@ void AuthorizedConnection::authorizeWebsocket() {
     auto wschannel_id = call("authorizeWebSocket", params, {.channel_type = ChannelType::WEBSOCKET})
         .extract<Poco::JSON::Object::Ptr>()->getValue<Poco::Int32>("wsChannelId");
     _wschannel_id = wschannel_id;
+    LOG_DEBUG("AuthorizedConnection::authorizeWebSocket => notify->add(wschannel_id): ", wschannel_id);
     _server_channels->notify->add(wschannel_id, [&, key](const std::string& data){
         string decrypted = crypto::Crypto::aes256CbcHmac256Decrypt(data, key);
         Pson::Decoder decoder;
@@ -377,14 +388,19 @@ void AuthorizedConnection::performTicketTest(bool websocket) {
 }
 
 void AuthorizedConnection::clearWebSocket() {
-    LOG_DEBUG("AuthorizedConnection:", "clearWebSocket");
+    LOG_DEBUG("AuthorizedConnection:", "clearWebSocket !!!");
     auto id = _wschannel_id.exchange(-1);
     if (id != -1) {
         if(_tickets_manager.ticketsCount() != 0) {
             try {
+                LOG_DEBUG("websock: on unauthorizeWebSocket")
                 call("unauthorizeWebSocket", Poco::JSON::Object::Ptr(new Poco::JSON::Object), {.channel_type = ChannelType::WEBSOCKET});
-            } catch (...) {}
+                LOG_DEBUG("websock: after unauthorizeWebSocket")
+            } catch (...) {
+                LOG_DEBUG("websock: unauthorizeWebSocket -> error")
+            }
         }
+        LOG_DEBUG("websock: on _server_channels->notify->remove()")
         _server_channels->notify->remove(id);
     }
 }

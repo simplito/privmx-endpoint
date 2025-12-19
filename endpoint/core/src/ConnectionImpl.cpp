@@ -250,12 +250,19 @@ std::string ConnectionImpl::buildSubscriptionQuery(EventType eventType, EventSel
 
 void ConnectionImpl::disconnect() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
+    LOG_DEBUG("1")
     if (!_gateway.isNull()) {
+        LOG_DEBUG("2")
         _gateway->destroy();
     }
+    LOG_DEBUG("3")
     _gateway.reset();
+    LOG_DEBUG("4")
     auto event = EventBuilder::buildLibEvent<LibPlatformDisconnectedEvent>();
+    LOG_DEBUG("5")
     _eventMiddleware->emitApiEvent(event);
+    LOG_DEBUG("6")
+
 }
 
 int64_t ConnectionImpl::generateConnectionId() {
