@@ -13,7 +13,7 @@
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
 #include <privmx/utils/PrivmxException.hpp>
-#include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 #include <SDL2/SDL.h>
 
 using namespace std;
@@ -115,12 +115,12 @@ int main(int argc, char** argv) {
                 break;
             }
         }
-        // for(const auto& mediaDevice: mediaDevices) {
-        //     if(mediaDevice.type == stream::DeviceType::Video) {
-        //         streamApi.addTrack(streamHandle, mediaDevice);
-        //         break;
-        //     }
-        // }
+        for(const auto& mediaDevice: mediaDevices) {
+            if(mediaDevice.type == stream::DeviceType::Video) {
+                streamApi.addTrack(streamHandle, mediaDevice);
+                break;
+            }
+        }
         // for(const auto& mediaDevice: mediaDevices) {
         //     if(mediaDevice.type == stream::DeviceType::Desktop) {
         //         streamApi.addTrack(streamHandle, mediaDevice);
@@ -129,11 +129,11 @@ int main(int argc, char** argv) {
         // }
         streamApi.publishStream(streamHandle);
         
-        int i = 5;
+        int i = 1;
         while (--i) {
             std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
             for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Audio) {
+                if(mediaDevice.type == stream::DeviceType::Video) {
                     streamApi.removeTrack(streamHandle, mediaDevice);
                     break;
                 }
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
             std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
             auto mediaDevices = streamApi.getMediaDevices();
             for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Audio) {
+                if(mediaDevice.type == stream::DeviceType::Video) {
                     streamApi.addTrack(streamHandle, mediaDevice);
                     break;
                 }

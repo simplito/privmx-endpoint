@@ -21,7 +21,15 @@ using namespace privmx::endpoint;
 
 class RTCVideoRendererImpl {
 public:
-    RTCVideoRendererImpl(const std::string& title) : title("PrivMX Stream - " + title) {}
+    ~RTCVideoRendererImpl() {
+        SDL_Quit();
+    }
+    RTCVideoRendererImpl(const std::string& title) : title("PrivMX Stream - " + title) {
+        if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+            std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
+            throw;
+        }
+    }
     void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
         if (renderer == NULL) {
             window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 768, 432, 0);
