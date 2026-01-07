@@ -1090,24 +1090,25 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
     PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
     queryId->set("$in", usersIds);
     query->set("#userId", queryId);
+    if(usersIds->size() != 0) {
+        core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
+            streamRoom.contextId(), 
+            core::PagingQuery{
+                .skip = 0,
+                .limit = static_cast<int64_t>(usersIds->size()),
+                .sortOrder = "desc",
+                .lastId = std::nullopt,
+                .sortBy = std::nullopt,
+                .queryAsJson = privmx::utils::Utils::stringify(query)
+            }
+        ); 
 
-    core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
-        streamRoom.contextId(), 
-        core::PagingQuery{
-            .skip = 0,
-            .limit = static_cast<int64_t>(usersIds->size()),
-            .sortOrder = "desc",
-            .lastId = std::nullopt,
-            .sortBy = std::nullopt,
-            .queryAsJson = privmx::utils::Utils::stringify(query)
+        
+        std::vector<core::UserWithPubKey> toSend;
+        for(auto userInfo: userInfoList.readItems) {
+            PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
+            toSend.push_back(userInfo.user);
         }
-    ); 
-
-    
-    std::vector<core::UserWithPubKey> toSend;
-    for(auto userInfo: userInfoList.readItems) {
-        PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
-        toSend.push_back(userInfo.user);
+        room->streamKeyManager->requestKey(toSend);
     }
-    room->streamKeyManager->requestKey(toSend);
 }
