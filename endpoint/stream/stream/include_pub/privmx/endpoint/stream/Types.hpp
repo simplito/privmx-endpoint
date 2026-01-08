@@ -100,8 +100,6 @@ struct StreamSettings {
     bool dropCorruptedFrames = true;
 };
 
-
-
 enum DeviceType {
     Audio = 0,
     Video = 1,

@@ -119,14 +119,17 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
             LOG_TRACE("track->state(): ", track->state());
             LOG_TRACE("track->id(): ", track->id().std_string());
             LOG_TRACE("track->enabled(): ", track->enabled());
-            if(_onFrameCallback.has_value()) {
+            // if(_onFrameCallback.has_value()) {
             LOG_DEBUG("STREAMS ", "API ", "stream->video_tracks()[i] -> AddRenderer(r)")
                 RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>* r1 {
-                    new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(_onFrameCallback.value(), _streamRoomId + "-" + track->id().std_string())
+                    new RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>(
+                        [&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
+                        LOG_ERROR("_onFrameCallback using default value frame size: ", w , "-", h, "  id: ", id);
+                    }, _streamRoomId + "-" + track->id().std_string())
                 };
                 track->AddRenderer(r1);
 
-            }
+            // }
         }
     }   
 }

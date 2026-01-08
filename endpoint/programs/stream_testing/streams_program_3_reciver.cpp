@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 #include <thread>
+#include <memory>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -31,35 +32,37 @@ public:
         }
     }
     void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-        if (renderer == NULL) {
-            window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 768, 432, 0);
-            renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-            texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 768, 432);
-            windowEventsLoop();
-        }
-        PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h) + " | id:", id)
-        // Lock texture to get buffer pointer
-        void* pixels = nullptr;
-        int pitch  = 0; // bytes per row
-        if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) != 0) {
-            std::cerr << "SDL_LockTexture failed: " << SDL_GetError() << "\n";
-            return;
-        }
+        if(renderingMutex.try_lock()) {
+            if (renderer == NULL) {
+                window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 768, 432, 0);
+                renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+                texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 768, 432);
+                windowEventsLoop();
+            }
+            PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h) + " | id:", id)
+            // Lock texture to get buffer pointer
+            void* pixels = nullptr;
+            int pitch  = 0; // bytes per row
+            if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) != 0) {
+                std::cerr << "SDL_LockTexture failed: " << SDL_GetError() << "\n";
+                return;
+            }
 
-        // Ask Frame to convert into our texture buffer
-        uint8_t* dst  = static_cast<uint8_t*>(pixels);
-        auto ret  = frame->ConvertToRGBA(dst, pitch, 768, 432);
-        SDL_UnlockTexture(texture);
-        PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame ConvertToRGBA: "+std::to_string(ret) +"- "+std::to_string(((uint64_t*)pixels)[0]));
-        // if (ret != 0) {
-        //     std::cerr << "ConvertToRGBA failed\n";
-        //     return;
-        // }
+            // Ask Frame to convert into our texture buffer
+            uint8_t* dst  = static_cast<uint8_t*>(pixels);
+            auto ret  = frame->ConvertToRGBA(dst, pitch, 768, 432);
+            SDL_UnlockTexture(texture);
+            PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame ConvertToRGBA: "+std::to_string(ret) +"- "+std::to_string(((uint64_t*)pixels)[0]));
+            if (ret != 0) {
+                std::cerr << "ConvertToRGBA failed\n";
+                return;
+            }
 
-        // Render this frame
-        SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-        SDL_RenderPresent(renderer);
+            // Render this frame
+            SDL_RenderClear(renderer);
+            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+            SDL_RenderPresent(renderer);
+        }
     }
 private:
     void windowEventsLoop() {
@@ -84,6 +87,8 @@ private:
     SDL_Renderer* renderer = NULL;
     std::string title;
     std::shared_ptr<std::thread> eventThreadLoop;
+
+    std::mutex renderingMutex;
 };
 
 static vector<string_view> getParamsList(int argc, char* argv[]) {
@@ -114,6 +119,7 @@ int main(int argc, char** argv) {
         RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
         stream::StreamSettings ssettings {
             .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
+                std::cout << "------------------" << std::endl;
                 r.OnFrame(w, h, frame, id);
             }
         };

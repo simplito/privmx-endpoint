@@ -78,15 +78,16 @@ int main(int argc, char** argv) {
     std::string bridgeUrl = {params[2].begin(),  params[2].end()};
     std::string contextId = {params[3].begin(),  params[3].end()};
     std::string streamRoomId = {params[4].begin(),  params[4].end()};
+    atomic_bool stop = false;
+    core::EventQueue eventQueue = core::EventQueue::getInstance();
+    std::thread eventThread;
     try {
         core::Connection connection = core::Connection::connect(
             privKey, 
             solutionId, 
             bridgeUrl
         );        
-        core::EventQueue eventQueue = core::EventQueue::getInstance();
-        atomic_bool stop = false;
-        auto eventThread = std::thread([&](){
+        eventThread = std::thread([&](){
             while (!stop) {
                 auto eventHolder = eventQueue.waitEvent();
             }
@@ -104,7 +105,7 @@ int main(int argc, char** argv) {
         });
 
         streamApi.joinStreamRoom(streamRoomId);
-        for(int j = 0; j < 5; j++) {
+        // for(int j = 0; j < 5; j++) {
         // streamApi.joinStreamRoom(streamRoomId);
 
         auto streamHandle = streamApi.createStream(streamRoomId);
@@ -129,8 +130,9 @@ int main(int argc, char** argv) {
         // }
         streamApi.publishStream(streamHandle);
         
-        int i = 1;
-        while (--i) {
+        int i = 5;
+        while (i--) {
+            std::this_thread::sleep_for(std::chrono::seconds(20));
             std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
             for(const auto& mediaDevice: mediaDevices) {
                 if(mediaDevice.type == stream::DeviceType::Video) {
@@ -158,11 +160,12 @@ int main(int argc, char** argv) {
             
             streamApi.updateStream(streamHandle);
         };
+        std::this_thread::sleep_for(std::chrono::seconds(5));
         streamApi.unpublishStream(streamHandle);
         // streamApi.leaveStreamRoom(streamRoomId);
 
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-        }
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        // }
 
 
 
@@ -176,14 +179,22 @@ int main(int argc, char** argv) {
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
+        stop = true;
+        if(eventThread.joinable()) {eventQueue.emitBreakEvent(); eventThread.join();}
     } catch (const privmx::utils::PrivmxException& e) {
         cerr << e.what() << endl;
         cerr << e.getData() << endl;
         cerr << e.getCode() << endl;
+        stop = true;
+        if(eventThread.joinable()) {eventQueue.emitBreakEvent(); eventThread.join();}
     } catch (const exception& e) {
         cerr << e.what() << endl;
+        stop = true;
+        if(eventThread.joinable()) {eventQueue.emitBreakEvent(); eventThread.join();}
     } catch (...) {
         cerr << "Error" << endl;
+        stop = true;
+        if(eventThread.joinable()) {eventQueue.emitBreakEvent(); eventThread.join();}
     }
 
     return 0;

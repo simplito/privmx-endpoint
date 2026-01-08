@@ -18,6 +18,7 @@ limitations under the License.
 #include <rtc_peerconnection.h>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
+#include <privmx/utils/Logger.hpp>
 #include <pmx_frame_cryptor.h>
 
 namespace privmx {
@@ -87,7 +88,9 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     std::string _streamRoomId; 
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
-    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> _onFrameCallback;
+    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> _onFrameCallback = [&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
+        LOG_ERROR("_onFrameCallback using default value frame size: ", w , "-", h, "  id: ", id);
+    };
     std::optional<std::function<void(const std::string&)>> _onTrack;
     std::optional<std::function<void(const std::string&)>> _onRemoveTrack;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
