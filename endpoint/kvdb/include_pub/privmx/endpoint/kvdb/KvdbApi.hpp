@@ -10,6 +10,7 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/kvdb/Types.hpp"
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -20,7 +21,7 @@ class KvdbApiImpl;
 /**
  * 'KvdbApi' is a class representing Endpoint's API for Kvdbs and their messages.
  */
-class KvdbApi {
+class KvdbApi : public privmx::endpoint::core::ExtendedPointer<KvdbApiImpl> {
 public:
     /**
      * Creates an instance of 'KvdbApi'.
@@ -29,12 +30,16 @@ public:
      * 
      * @return KvdbApi object
      */
-    static KvdbApi create(core::Connection& connetion);
+    static KvdbApi create(core::Connection& connection);
 
     /**
      * //doc-gen:ignore
      */
-    KvdbApi() = default;
+    KvdbApi();
+    KvdbApi(const KvdbApi& obj);
+    KvdbApi& operator=(const KvdbApi& obj);
+    KvdbApi(KvdbApi&& obj);
+    ~KvdbApi();
 
     /**
      * Creates a new KVDB in given Context.
@@ -196,11 +201,8 @@ public:
      */
     std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
 
-    std::shared_ptr<KvdbApiImpl> getImpl() const { return _impl; }
 private:
-    void validateEndpoint();
     KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl);
-    std::shared_ptr<KvdbApiImpl> _impl;
 };
 
 }  // namespace kvdb

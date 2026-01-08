@@ -747,6 +747,7 @@ void StoreApiImpl::processConnectedEvent() {
 
 void StoreApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
+    privmx::utils::ManualManagedClass<StoreApiImpl>::cleanup();
 }
 
 dynamic::compat_v1::StoreData StoreApiImpl::decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey) {

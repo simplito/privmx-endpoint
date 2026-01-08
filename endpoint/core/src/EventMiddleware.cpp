@@ -111,7 +111,7 @@ void EventMiddleware::emitNotificationEvent(const std::string& type, const Notif
 }
 
 void EventMiddleware::emitConnectedEvent() {
-    _connectedListeners.forAll([&]([[maybe_unused]] const int& i, const std::function<void()>& listener) {
+    _connectedListeners.forAllLockSave([&]([[maybe_unused]] const int& i, const std::function<void()>& listener) {
         try {
             if (listener) {
                 listener();
@@ -121,7 +121,7 @@ void EventMiddleware::emitConnectedEvent() {
 }
 
 void EventMiddleware::emitDisconnectedEvent() {
-    _disconnectedListeners.forAll([&]([[maybe_unused]] const int& i, const std::function<void()>& listener) {
+    _disconnectedListeners.forAllLockSave([&]([[maybe_unused]] const int& i, const std::function<void()>& listener) {
         try {
             if (listener) {
                 listener();

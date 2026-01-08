@@ -82,6 +82,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractCollectionC
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserAddedEventException, "Cannot extract ContextUserAddedEvent", 0x000B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserRemovedEventException, "Cannot extract ContextUserRemovedEvent", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUsersStatusChangedEventException, "Cannot extract ContextUsersStatusChangedEvent", 0x000D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotConnectedException, "Endpoint is not connected or not initialized", 0x000E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, SessionExpiredException, "Endpoint session is expired", 0x000F)
 
 } // core
 } // endpoint
