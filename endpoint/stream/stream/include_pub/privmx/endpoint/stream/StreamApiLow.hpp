@@ -23,6 +23,7 @@ limitations under the License.
 #include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 
 namespace privmx {
@@ -31,11 +32,15 @@ namespace stream {
 
 class StreamApiLowImpl;
 
-class StreamApiLow {
+class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
 public:
 
     static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi);
-    StreamApiLow() = default;
+    StreamApiLow();
+    StreamApiLow(const StreamApiLow& obj);
+    StreamApiLow& operator=(const StreamApiLow& obj);
+    StreamApiLow(StreamApiLow&& obj);
+    ~StreamApiLow();
 
     std::vector<TurnCredentials> getTurnCredentials();
 
@@ -87,13 +92,8 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     void keyManagement(const std::string& streamRoomId, bool disable);
-    std::shared_ptr<StreamApiLowImpl> getImpl() const { return _impl; }
-
 private:
-    void validateEndpoint();
-
     StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl);
-    std::shared_ptr<StreamApiLowImpl> _impl;
 };
 
 }  // namespace stream

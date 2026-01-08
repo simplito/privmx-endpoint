@@ -254,7 +254,7 @@ void StreamApiLowImpl::processConnectedEvent() {
 }
 
 void StreamApiLowImpl::processDisconnectedEvent() {
-
+    privmx::utils::ManualManagedClass<StreamApiLowImpl>::cleanup();
 }
 
 std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
