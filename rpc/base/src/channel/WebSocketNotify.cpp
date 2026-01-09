@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <privmx/rpc/channel/WebSocketNotify.hpp>
 #include <privmx/rpc/RpcException.hpp>
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx;
 using namespace privmx::rpc;
@@ -32,6 +33,7 @@ void WebSocketNotify::add(Int32 wschannelid, function<void(const string&)> callb
 }
 
 void WebSocketNotify::remove(Int32 wschannelid) {
+    LOG_TRACE("WebSocketNotify::remove wschannelid: ", wschannelid);
     {
         Lock lock(_mutex);
         auto it = _ws_channel_funcs.find(wschannelid);
@@ -44,14 +46,7 @@ void WebSocketNotify::remove(Int32 wschannelid) {
         on_close_all_channels();
     }
     if (_notifier_active) {
-        if(!_notifier_cancellation_token.isNull()) {
-            _notifier_cancellation_token->cancel();
-        }
-        _notify_cv.notify_one();
-        if (_consumer_thread.joinable()) {
-            _consumer_thread.join();
-        }
-        _notifier_active = false;
+        cancelNotifier();
     }
 }
 
@@ -79,6 +74,7 @@ void WebSocketNotify::queueForNotify(const string data) {
             while(!token->isCancelled()) {
                 notifier();
             }
+            LOG_TRACE("WebSocketNotify::ConsumerThread exited");
         }, _notifier_cancellation_token);
     }
 
@@ -120,23 +116,30 @@ void WebSocketNotify::onWebSocketClose() {
 void WebSocketNotify::notifier() {
     unique_lock<std::mutex>lock(_notifyMutex);
     _notify_cv.wait(lock, [&] {
-        return _data_to_notify.load();
+        return _data_to_notify.load() || _notifier_cancellation_token->isCancelled();
     });
+    if(_notifier_cancellation_token->isCancelled()) {
+        LOG_TRACE("WebSocketNotify::notifier Canceled");
+        return;
+    } 
+
     while(_notificationsQueue.size() > 0) {
         auto ret {_notificationsQueue.pop()};
         ret.callback(ret.data.substr(4));
     };
-
     _data_to_notify.store(false);
 }
 
 void WebSocketNotify::cancelNotifier() {
+    LOG_TRACE("WebSocketNotify::cancelNotifier")
     if(!_notifier_cancellation_token.isNull()) {
         _notifier_cancellation_token->cancel();
     }
     _data_to_notify.store(true);
-    _notify_cv.notify_one();
+    _notify_cv.notify_all();
     if (_consumer_thread.joinable()) {
         _consumer_thread.join();
     }
+    _notifier_active = false;
+    LOG_TRACE("WebSocketNotify::cancelNotifier cancelled");
 }
