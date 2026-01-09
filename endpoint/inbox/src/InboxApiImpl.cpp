@@ -82,6 +82,7 @@ InboxApiImpl::~InboxApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
+    LOG_TRACE("~InboxApiImpl Done");
 }
 
 std::string InboxApiImpl::createInbox(

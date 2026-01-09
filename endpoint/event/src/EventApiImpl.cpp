@@ -52,6 +52,7 @@ EventApiImpl::~EventApiImpl() {
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _subscriber.unsubscribeFromCurrentlySubscribed();
     _guardedExecutor.reset();
+    LOG_TRACE("~EventApiImpl Done");
 }
 
 void EventApiImpl::emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData) {

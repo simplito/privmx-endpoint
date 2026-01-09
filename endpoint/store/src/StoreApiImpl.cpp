@@ -85,6 +85,7 @@ StoreApiImpl::~StoreApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
+    LOG_TRACE("~StoreApiImpl Done");
 }
 
 std::string StoreApiImpl::createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers, 

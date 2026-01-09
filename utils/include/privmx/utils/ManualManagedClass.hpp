@@ -25,13 +25,21 @@ template <typename T>
 class ManualManagedClass {
 public:
     inline void attach() {
-        std::unique_lock lock(_selfRefMutex); _attachObjectCounter++;
+        std::unique_lock lock(_selfRefMutex);
+        _attachObjectCounter++;
+        LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> _attachObjectCounter: ", _attachObjectCounter)
     }
     inline void attach(const std::shared_ptr<T>& newSelfRef) {
-        std::unique_lock lock(_selfRefMutex); _attachObjectCounter++; _selfRef = newSelfRef;
+        std::unique_lock lock(_selfRefMutex); 
+        _attachObjectCounter++; 
+        LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> _attachObjectCounter: ", _attachObjectCounter)
+        _selfRef = newSelfRef;
     }
     inline void detach() {
-        std::unique_lock lock(_selfRefMutex); _attachObjectCounter--; if(_attachObjectCounter.load() == 0) _selfRef.reset();
+        std::unique_lock lock(_selfRefMutex);
+        _attachObjectCounter--; 
+        LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> _attachObjectCounter: ", _attachObjectCounter)
+        if(_attachObjectCounter.load() == 0) _selfRef.reset();
     }
     inline void cleanup() {
         // make sure if multiple cleanups are stored in queue only last will destroy object

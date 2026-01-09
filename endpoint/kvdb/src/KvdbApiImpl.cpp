@@ -62,6 +62,7 @@ KvdbApiImpl::~KvdbApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
+    LOG_TRACE("~KvdbApiImpl Done");
 }
 
 std::string KvdbApiImpl::createKvdb(

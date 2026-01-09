@@ -68,6 +68,7 @@ ThreadApiImpl::~ThreadApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
+    LOG_TRACE("~ThreadApiImpl Done");
 }
 
 std::string ThreadApiImpl::createThread(
