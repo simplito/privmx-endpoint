@@ -182,6 +182,7 @@ void EventApiImpl::processConnectedEvent() {
 }
 
 void EventApiImpl::processDisconnectedEvent() {
+    LOG_TRACE("EventApiImpl recived DisconnectedEvent");
     privmx::utils::ManualManagedClass<EventApiImpl>::cleanup();
 }
 

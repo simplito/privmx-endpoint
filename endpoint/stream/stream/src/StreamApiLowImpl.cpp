@@ -255,6 +255,7 @@ void StreamApiLowImpl::processConnectedEvent() {
 }
 
 void StreamApiLowImpl::processDisconnectedEvent() {
+    LOG_TRACE("StreamApiLowImpl recived DisconnectedEvent");
     privmx::utils::ManualManagedClass<StreamApiLowImpl>::cleanup();
 }
 

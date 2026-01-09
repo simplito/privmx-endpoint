@@ -46,6 +46,7 @@ public:
         std::unique_lock lock(_selfRefMutex); 
         if(_selfRef) {
             //load cleanup 
+            LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> loading cleanup to Executor")
             privmx::utils::Executor::getInstance()->exec(
                 [&, sefRef = this->_selfRef]() {
                     std::unique_lock lock(_selfRefMutex); 
