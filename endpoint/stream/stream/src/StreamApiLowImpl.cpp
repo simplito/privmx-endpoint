@@ -61,9 +61,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     _serverApi(std::make_shared<ServerApi>(gateway)),
     _subscriber(stream::SubscriberImpl(gateway))
 {
-    // streamGetTurnCredentials
-    auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
-    auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
