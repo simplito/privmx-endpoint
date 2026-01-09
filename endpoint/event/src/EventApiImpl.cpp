@@ -34,6 +34,7 @@ EventApiImpl::EventApiImpl(
 ) :
     _connection(connection),
     _userPrivKey(userPrivKey),
+    _gateway(gateway),
     _serverApi(ServerApi(gateway)),
     _eventMiddleware(eventMiddleware),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}), 
@@ -50,7 +51,9 @@ EventApiImpl::~EventApiImpl() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
-    _subscriber.unsubscribeFromCurrentlySubscribed();
+    if(_gateway->isConnected()) {
+        _subscriber.unsubscribeFromCurrentlySubscribed();
+    }
     _guardedExecutor.reset();
     LOG_TRACE("~EventApiImpl Done");
 }

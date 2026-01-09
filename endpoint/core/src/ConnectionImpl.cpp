@@ -33,7 +33,7 @@ ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
 }
 ConnectionImpl::~ConnectionImpl() {
     _guardedExecutor.reset();
-    LOG_TRACE("~ConnectionImpl", "Done");
+    LOG_TRACE("~ConnectionImpl Done");
 }
 
 void ConnectionImpl::connect(

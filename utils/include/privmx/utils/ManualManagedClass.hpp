@@ -27,18 +27,15 @@ public:
     inline void attach() {
         std::unique_lock lock(_selfRefMutex);
         _attachObjectCounter++;
-        LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> _attachObjectCounter: ", _attachObjectCounter)
     }
     inline void attach(const std::shared_ptr<T>& newSelfRef) {
         std::unique_lock lock(_selfRefMutex); 
         _attachObjectCounter++; 
-        LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> _attachObjectCounter: ", _attachObjectCounter)
         _selfRef = newSelfRef;
     }
     inline void detach() {
         std::unique_lock lock(_selfRefMutex);
         _attachObjectCounter--; 
-        LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> _attachObjectCounter: ", _attachObjectCounter)
         if(_attachObjectCounter.load() == 0) _selfRef.reset();
     }
     inline void cleanup() {
@@ -46,7 +43,6 @@ public:
         std::unique_lock lock(_selfRefMutex); 
         if(_selfRef) {
             //load cleanup 
-            LOG_TRACE("ManualManagedClass<" , typeid(T).name(), "> loading cleanup to Executor")
             privmx::utils::Executor::getInstance()->exec(
                 [&, sefRef = this->_selfRef]() {
                     std::unique_lock lock(_selfRefMutex); 
