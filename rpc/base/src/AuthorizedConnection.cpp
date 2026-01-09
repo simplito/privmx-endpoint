@@ -386,10 +386,14 @@ void AuthorizedConnection::clearWebSocket() {
     if (id != -1) {
         if(_tickets_manager.ticketsCount() != 0) {
             try {
+                LOG_TRACE("AuthorizedConnection::clearWebSocket revocation of WebSocket authorization");
                 call("unauthorizeWebSocket", Poco::JSON::Object::Ptr(new Poco::JSON::Object), {.channel_type = ChannelType::WEBSOCKET});
+                LOG_TRACE("AuthorizedConnection::clearWebSocket WebSocket unauthorized");
             } catch (...) {}
         }
+        LOG_TRACE("AuthorizedConnection::clearWebSocket removing notifier");
         _server_channels->notify->remove(id);
+        LOG_TRACE("AuthorizedConnection::clearWebSocket notifier removed");
     }
     LOG_TRACE("AuthorizedConnection::clearWebSocket compliteted");
 }
