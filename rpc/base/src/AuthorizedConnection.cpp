@@ -104,23 +104,20 @@ void AuthorizedConnection::verifyConnection() {
 }
 
 void AuthorizedConnection::destroy() {
-    LOG_DEBUG("rpc 1")
-
+    LOG_DEBUG("AuthorizedConnection::destroy")
     if (_destroyed) return;
-    LOG_DEBUG("rpc 2")
+    LOG_TRACE("AuthorizedConnection stopping TicketLoop")
     _ticket_updater_cancellation_token->cancel();
-    LOG_DEBUG("rpc 3")
+    LOG_TRACE("AuthorizedConnection clearing Web Socket")
     clearWebSocket();
-    LOG_DEBUG("rpc 4")
     _destroyed = true;
     _channels_connected = false;
     _session_checked = false;
     _session_established = false;
-    
+    LOG_TRACE("AuthorizedConnection removing all tickets")
     _tickets_manager.clear();
-    LOG_DEBUG("rpc 5")
+    LOG_TRACE("AuthorizedConnection dispatching disconnected event")
     _disconnected_event_dispatcher.dispatch({});
-    LOG_DEBUG("rpc 6")
 }
 
 int AuthorizedConnection::addNotificationEventListener(const utils::Callback<NotificationEvent>& event_listener) {
@@ -328,7 +325,7 @@ void AuthorizedConnection::authorizeWebsocket() {
             return;
         }
 
-        LOG_TRACE("AuthorizedConnection", "Recived event with type: " + type + " | data:\n" + privmx::utils::Utils::stringifyVar(decoded, true))
+        LOG_TRACE("AuthorizedConnection Recived event with type: ", type, " | data:\n", privmx::utils::Utils::stringifyVar(decoded, true))
         _notification_event_dispatcher.dispatch({.type = type, .data = decoded});
     }, [&]{
         _channels_connected = false;
@@ -388,21 +385,21 @@ void AuthorizedConnection::performTicketTest(bool websocket) {
 }
 
 void AuthorizedConnection::clearWebSocket() {
-    LOG_DEBUG("AuthorizedConnection:", "clearWebSocket !!!");
+    LOG_DEBUG("AuthorizedConnection::clearWebSocket");
     auto id = _wschannel_id.exchange(-1);
     if (id != -1) {
         if(_tickets_manager.ticketsCount() != 0) {
             try {
-                LOG_DEBUG("websock: on unauthorizeWebSocket")
+                LOG_TRACE("AuthorizedConnection::clearWebSocket revocation of WebSocket authorization");
                 call("unauthorizeWebSocket", Poco::JSON::Object::Ptr(new Poco::JSON::Object), {.channel_type = ChannelType::WEBSOCKET});
-                LOG_DEBUG("websock: after unauthorizeWebSocket")
-            } catch (...) {
-                LOG_DEBUG("websock: unauthorizeWebSocket -> error")
-            }
+                LOG_TRACE("AuthorizedConnection::clearWebSocket WebSocket unauthorized");
+            } catch (...) {}
         }
-        LOG_DEBUG("websock: on _server_channels->notify->remove()")
+        LOG_TRACE("AuthorizedConnection::clearWebSocket removing notifier");
         _server_channels->notify->remove(id);
+        LOG_TRACE("AuthorizedConnection::clearWebSocket notifier removed");
     }
+    LOG_TRACE("AuthorizedConnection::clearWebSocket compliteted");
 }
 
 void AuthorizedConnection::activateUpdateTicketLoop() {
@@ -410,7 +407,7 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
         _ticket_updater_cancellation_token = utils::CancellationToken::create();
     }
     auto t = std::thread([&](privmx::utils::CancellationToken::Ptr token){
-        LOG_DEBUG("AuthorizedConnection:", "TicketLoop Created")
+        LOG_DEBUG("AuthorizedConnection: TicketLoop Created")
         while(!token->isCancelled()) {
             try {
                 if(_tickets_manager.shouldAskForNewTickets(ClientEndpoint::TICKETS_MIN_COUNT)) {
@@ -419,12 +416,12 @@ void AuthorizedConnection::activateUpdateTicketLoop() {
                     endpoint.connection.ticketHandshake();
                     endpoint.connection.ticketRequest(ClientEndpoint::TICKETS_MAX_COUNT);
                     sendRequest(endpoint);
-                    LOG_DEBUG("AuthorizedConnection", "TicketLoop AskForNewTickets:success")
+                    LOG_DEBUG("AuthorizedConnection TicketLoop AskForNewTickets:success")
                 } else {
                     token->sleep(std::chrono::seconds(10));
                 }
             } catch (const privmx::utils::OperationCancelledException &e) {
-                LOG_DEBUG("AuthorizedConnection", "TicketLoop Cancel:Closing")
+                LOG_DEBUG("AuthorizedConnection TicketLoop Cancel:Closing")
                 return;
             } catch (...) {
                 LOG_ERROR("AuthorizedConnection:TicketLoop catch(...)")

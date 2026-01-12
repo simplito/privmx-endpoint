@@ -12,13 +12,7 @@
 
 #include <Poco/ByteOrder.h>
 #include <privmx/rpc/RpcException.hpp>
-#include <privmx/rpc/channel/WebSocketNotify.hpp>
-#include "privmx/utils/Logger.hpp"
-
-#include <atomic>
-#include <thread>
-#include <mutex>
-#include <unordered_map>
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx;
 using namespace privmx::rpc;
@@ -45,8 +39,7 @@ void WebSocketNotify::add(Int32 wschannelid,
 }
 
 void WebSocketNotify::remove(Int32 wschannelid) {
-    bool shouldCloseAll = false;
-
+    LOG_TRACE("WebSocketNotify::remove wschannelid: ", wschannelid);
     {
         LOG_DEBUG("webSocketNotify 1");
         Lock lock(_mutex);
@@ -65,13 +58,8 @@ void WebSocketNotify::remove(Int32 wschannelid) {
         LOG_DEBUG("webSocketNotify 4");
         on_close_all_channels();
     }
-
-    // Od tego momentu nie ma już kanałów; jeśli wątek notyfikacji działa, zatrzymaj go.
-    // Zawsze używamy cancelNotifier() – ono samo zadba, czy joinować, czy nie.
-    if (_notifier_active.load(std::memory_order_acquire)) {
-        LOG_DEBUG("webSocketNotify 5");
+    if (_notifier_active) {
         cancelNotifier();
-        LOG_DEBUG("webSocketNotify 9");
     }
 }
 
@@ -105,22 +93,12 @@ void WebSocketNotify::queueForNotify(const string data) {
     if (!was_active) {
         LOG_DEBUG("queueForNotify: starting consumer thread");
         _notifier_cancellation_token = privmx::utils::CancellationToken::create();
-
-        _consumer_thread = std::thread(
-            [this](privmx::utils::CancellationToken::Ptr token) {
-                LOG_DEBUG("consumer_thread: started, id = ", std::this_thread::get_id());
-
-                while (!token->isCancelled()) {
-                    LOG_DEBUG("consumer_thread: before notifier(), cancelled=", token->isCancelled());
-                    notifier();
-                    LOG_DEBUG("consumer_thread: after notifier(), cancelled=", token->isCancelled());
-                }
-
-                LOG_DEBUG("consumer_thread: exiting loop, cancelled=", token->isCancelled());
-            },
-            _notifier_cancellation_token
-        );
-        LOG_DEBUG("queueForNotify: consumer thread created, joinable=",  _consumer_thread.joinable());
+        _consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
+            while(!token->isCancelled()) {
+                notifier();
+            }
+            LOG_TRACE("WebSocketNotify::ConsumerThread exited");
+        }, _notifier_cancellation_token);
     }
 
     Int32 wschannelid = ByteOrder::fromBigEndian(*((Int32*)data.data()));
@@ -165,52 +143,21 @@ void WebSocketNotify::onWebSocketClose() {
     }
 }
 
-// -----------------------------------
-// notifier (wątek konsumenta)
-// -----------------------------------
-
 void WebSocketNotify::notifier() {
-    LOG_DEBUG("notifier: enter");
-    unique_lock<std::mutex> lock(_notifyMutex);
-
-    LOG_DEBUG("notifier: before wait, data_to_notify="
-              , _data_to_notify.load(std::memory_order_acquire)
-              , " cancelled=" , (!_notifier_cancellation_token.isNull() && _notifier_cancellation_token->isCancelled()));
-
+    unique_lock<std::mutex>lock(_notifyMutex);
     _notify_cv.wait(lock, [&] {
-        auto data_flag = _data_to_notify.load(std::memory_order_acquire);
-        auto cancelled = (!_notifier_cancellation_token.isNull()
-                          && _notifier_cancellation_token->isCancelled());
-        LOG_DEBUG("notifier: wake predicate check, data_to_notify="
-                  ,data_flag , " cancelled=", cancelled);
-        return data_flag || cancelled;
+        return _data_to_notify.load() || _notifier_cancellation_token->isCancelled();
     });
-
-    LOG_DEBUG("notifier: after wait, data_to_notify="
-              , _data_to_notify.load(std::memory_order_acquire)
-              , " cancelled=" , (!_notifier_cancellation_token.isNull() && _notifier_cancellation_token->isCancelled()));
-
-    if (!_notifier_cancellation_token.isNull()
-        && _notifier_cancellation_token->isCancelled()) {
-        LOG_DEBUG("notifier: cancellation branch, clearing queue");
-        while (_notificationsQueue.size() > 0) {
-            _notificationsQueue.pop();
-        }
-        _data_to_notify.store(false, std::memory_order_release);
-        LOG_DEBUG("notifier: leaving (cancel)");
+    if(_notifier_cancellation_token->isCancelled()) {
+        LOG_TRACE("WebSocketNotify::notifier Canceled");
         return;
-        }
+    } 
 
-    LOG_DEBUG("notifier: processing queue");
-    while (_notificationsQueue.size() > 0) {
-        auto ret{_notificationsQueue.pop()};
-        LOG_DEBUG("notifier: invoking callback");
+    while(_notificationsQueue.size() > 0) {
+        auto ret {_notificationsQueue.pop()};
         ret.callback(ret.data.substr(4));
-        LOG_DEBUG("notifier: callback returned");
-    }
-
-    _data_to_notify.store(false, std::memory_order_release);
-    LOG_DEBUG("notifier: leaving (normal)");
+    };
+    _data_to_notify.store(false);
 }
 
 // -----------------------------------
@@ -218,37 +165,15 @@ void WebSocketNotify::notifier() {
 // -----------------------------------
 
 void WebSocketNotify::cancelNotifier() {
-    LOG_DEBUG("cancelNotifier 1 (thread id=", std::this_thread::get_id(), ")");
-
-    bool was_active = _notifier_active.exchange(false, std::memory_order_acq_rel);
-    LOG_DEBUG("cancelNotifier 2 was_active=", was_active);
-
-    if (!was_active) {
-        LOG_DEBUG("cancelNotifier 3: not active, skipping");
-        return;
-    }
-
-    if (!_notifier_cancellation_token.isNull()) {
-        LOG_DEBUG("cancelNotifier 4: cancelling token");
+    LOG_TRACE("WebSocketNotify::cancelNotifier")
+    if(!_notifier_cancellation_token.isNull()) {
         _notifier_cancellation_token->cancel();
     }
-
-    {
-        lock_guard<std::mutex> lock(_notifyMutex);
-        _data_to_notify.store(true, std::memory_order_release);
+    _data_to_notify.store(true);
+    _notify_cv.notify_all();
+    if (_consumer_thread.joinable()) {
+        _consumer_thread.join();
     }
-
-    LOG_DEBUG("cancelNotifier 5: notifying cv");
-    _notify_cv.notify_one();
-
-        if (_consumer_thread.joinable() && _consumer_thread.get_id() != std::this_thread::get_id()) {
-            LOG_DEBUG("cancelNotifier 6: joinable, joining");
-            _consumer_thread.join();
-            LOG_DEBUG("cancelNotifier 7: joined");
-        } else {
-                LOG_DEBUG("cancelNotifier 6: not joinable or same thread, skipping join");
-        }
-
-
-    LOG_DEBUG("cancelNotifier: end");
+    _notifier_active = false;
+    LOG_TRACE("WebSocketNotify::cancelNotifier cancelled");
 }

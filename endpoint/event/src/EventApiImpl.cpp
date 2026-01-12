@@ -34,6 +34,7 @@ EventApiImpl::EventApiImpl(
 ) :
     _connection(connection),
     _userPrivKey(userPrivKey),
+    _gateway(gateway),
     _serverApi(ServerApi(gateway)),
     _eventMiddleware(eventMiddleware),
     _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}), 
@@ -50,8 +51,11 @@ EventApiImpl::~EventApiImpl() {
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
-    _subscriber.unsubscribeFromCurrentlySubscribed();
+    if(_gateway->isConnected()) {
+        _subscriber.unsubscribeFromCurrentlySubscribed();
+    }
     _guardedExecutor.reset();
+    LOG_TRACE("~EventApiImpl Done");
 }
 
 void EventApiImpl::emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData) {
@@ -181,6 +185,7 @@ void EventApiImpl::processConnectedEvent() {
 }
 
 void EventApiImpl::processDisconnectedEvent() {
+    LOG_TRACE("EventApiImpl recived DisconnectedEvent");
     privmx::utils::ManualManagedClass<EventApiImpl>::cleanup();
 }
 

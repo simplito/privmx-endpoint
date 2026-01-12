@@ -68,6 +68,7 @@ ThreadApiImpl::~ThreadApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
+    LOG_TRACE("~ThreadApiImpl Done");
 }
 
 std::string ThreadApiImpl::createThread(
@@ -497,6 +498,7 @@ void ThreadApiImpl::processConnectedEvent() {
 }
 
 void ThreadApiImpl::processDisconnectedEvent() {
+    LOG_TRACE("ThreadApiImpl recived DisconnectedEvent");
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<ThreadApiImpl>::cleanup();
 }
