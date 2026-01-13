@@ -60,6 +60,8 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(PrivmxDriverCryptoException, CryptoException, "pr
 DECLARE_PRIVMX_EXCEPTION_CHILD(PrivmxDriverEccException, CryptoException, "privmxDrvEcc Exception", 0x0028)
 DECLARE_PRIVMX_EXCEPTION_CHILD(GivenPublicKeyDoesNotMatchWithSignatureException, CryptoException, "Given public key does not match with signature", 0x0029)
 DECLARE_PRIVMX_EXCEPTION_CHILD(ExtKeyDoesNotHoldPrivateKeyException, CryptoException, "Ext key does not hold private key", 0x002A)
+DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidExtendedKeySizeException, CryptoException, "BIP32 extended key must be exactly 78 bytes", 0x002B)
+
 
 } // crypto
 } // privmx
