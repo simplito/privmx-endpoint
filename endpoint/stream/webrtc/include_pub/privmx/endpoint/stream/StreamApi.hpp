@@ -21,7 +21,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
-#include "webrtc/Types.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -81,6 +81,8 @@ public:
     void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
+
+    void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }
 

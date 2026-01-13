@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/WebRTCImpl.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
@@ -93,6 +94,7 @@ public:
     void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
+    void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 
 
 private:
@@ -217,6 +219,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLow> _api;
     std::shared_ptr<WebRTCImpl> _webRTC;
+    std::shared_ptr<OnTrackInterface> _onTrackInterface;
 };
 
 }  // namespace stream

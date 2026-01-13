@@ -457,3 +457,7 @@ void StreamApiImpl::dropBrokenFrames(const std::string& streamRoomId, bool enabl
     _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed=enable};
     _webRTC->setFrameCryptorOptions(streamRoomId, _frameCryptorOptions);
 }
+
+void StreamApiImpl::setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
+    _onTrackInterface = onTrackInterface;
+}

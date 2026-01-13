@@ -17,6 +17,7 @@ limitations under the License.
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/utils/Logger.hpp>
 #include <pmx_frame_cryptor.h>
@@ -37,8 +38,8 @@ private:
 template <typename VideoFrameT>
 class RTCVideoRendererImpl : public libwebrtc::RTCVideoRenderer<VideoFrameT> {
 public:
-    inline RTCVideoRendererImpl(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> onFrameCallback, const std::string& id) 
-    : _onFrameCallback(onFrameCallback), _id(id) {
+    inline RTCVideoRendererImpl(std::shared_ptr<OnTrackInterface> _onTrackInterface, const std::string streamId, const std::string track) 
+    : _onTrackInterface(onTrackInterface), _streamId(streamId), _track(track) {
         std::cout << "RTCVideoRendererImpl created" << std::endl;
     }
     inline ~RTCVideoRendererImpl() {
@@ -48,11 +49,33 @@ public:
         std::cout << "Recived frame " << frame->width() << "-" << frame->height() << std::endl;
         std::unique_lock<std::mutex> lock(m);
         _onFrameCallback(frame->width(), frame->height(), std::make_shared<FrameImpl>(frame), _id);
+        _onTrackInterface->OnData(audioData);
     }
 private:
     std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> _onFrameCallback;
     std::mutex m;
     std::string _id;
+};
+
+class AudioTrackSinkImpl : public libwebrtc::AudioTrackSink {
+public:
+    inline AudioTrackSinkImpl(std::shared_ptr<OnTrackInterface> onTrackInterface, const std::string streamId, const std::string track) 
+    : _onTrackInterface(onTrackInterface), _streamId(streamId), _track(track) {
+        std::cout << "AudioTrackSinkImpl created" << std::endl;
+    }
+    inline ~AudioTrackSinkImpl() {
+        std::cout << "AudioTrackSinkImpl destroyed" << std::endl;
+    }
+    virtual void OnData(const void* audio_data, int bits_per_sample, int sample_rate, size_t number_of_channels, size_t number_of_frames) override {
+        std::unique_lock<std::mutex> lock(m);
+        std::shared_ptr<AudioData> audioData = std::make_unique<AudioData>(Data{DataType::AUDIO, _streamId, _track}, audio_data, bits_per_sample, sample_rate, number_of_channels, number_of_frames);
+        _onTrackInterface->OnData(audioData);
+    }
+private:
+    std::mutex m;
+    std::shared_ptr<OnTrackInterface> _onTrackInterface;
+    const std::string _streamId;
+    const std::string _track;
 };
 
 class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
@@ -80,19 +103,14 @@ public:
     void SetFrameCryptorOptions(privmx::webrtc::FrameCryptorOptions options);
 
     inline void setOnIceCandidate(std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)> callback) {_onIceCandidate = callback;}
-    
-    inline void setOnFrame(std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)> callback) {_onFrameCallback = callback;}
-    inline void setOnTrack(std::function<void(const std::string&)> callback) {_onTrack = callback;}
-    inline void setOnRemoveTrack(std::function<void(const std::string&)> callback) {_onRemoveTrack = callback;}
+    void SetOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
+   
 private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     std::string _streamRoomId; 
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
-    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> _onFrameCallback = [&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-        LOG_ERROR("_onFrameCallback using default value frame size: ", w , "-", h, "  id: ", id);
-    };
-    std::optional<std::function<void(const std::string&)>> _onTrack;
-    std::optional<std::function<void(const std::string&)>> _onRemoveTrack;
+    std::shared_ptr<OnTrackInterface> _onTrackInterface;
+
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
     privmx::webrtc::FrameCryptorOptions _options;
 
