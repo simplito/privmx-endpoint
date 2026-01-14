@@ -11,7 +11,6 @@ limitations under the License.
 
 #include <gmpxx.h>
 #include <Poco/ByteOrder.h>
-
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/CryptoException.hpp>
 #include <privmx/crypto/ecc/ExtKey.hpp>
@@ -34,26 +33,54 @@ ExtKey ExtKey::fromSeed(const string& seed) {
     return ExtKey(key, chain_code);
 }
 
-ExtKey ExtKey::fromBase58(const string& base58) {
-    string raw_key = Base58::decodeWithChecksum(base58);
-    UInt32 version = *reinterpret_cast<UInt32*>(raw_key.data());
-    version = ByteOrder::fromBigEndian(version);
-    if (version != Networks::BITCOIN.BIP39.PRIVATE && version != Networks::BITCOIN.BIP39.PUBLIC) {
-        throw InvalidVersionException();
+ExtKey ExtKey::fromBase58(const std::string& base58) {
+    std::string raw_key = Base58::decodeWithChecksum(base58);
+
+    // BIP32 extended key must be exactly 78 bytes
+    if (raw_key.size() != 78) {
+        throw InvalidExtendedKeySizeException();
     }
-    UInt8 depth = (UInt8)raw_key[4];
-    UInt32 parent_fingerprint = *reinterpret_cast<UInt32*>(raw_key.data() + 5);
-    parent_fingerprint = ByteOrder::fromBigEndian(parent_fingerprint);
+
+    // ===== version (4 bytes) =====
+    UInt32 version = read_u32_be(raw_key, 0);
+
+    if (version != Networks::BITCOIN.BIP39.PRIVATE &&
+        version != Networks::BITCOIN.BIP39.PUBLIC) {
+        throw InvalidVersionException();
+        }
+
+    // ===== depth (1 byte) =====
+    UInt8 depth = static_cast<UInt8>(raw_key[4]);
+
+    // ===== parent fingerprint (4 bytes) =====
+    UInt32 parent_fingerprint = read_u32_be(raw_key, 5);
+
     if (depth == 0 && parent_fingerprint != 0) {
         throw InvalidParentFingerprintException();
     }
-    string chain_code = raw_key.substr(13, 32);
+
+    // ===== chain code (32 bytes) =====
+    std::string chain_code = raw_key.substr(13, 32);
+
+    // ===== key data =====
     ExtKey key;
     if (version == Networks::BITCOIN.BIP39.PRIVATE) {
-        key = ExtKey(raw_key.substr(46, 32), chain_code);
+        // layout: [0x00][32-byte privkey]
+        // key data starts at offset 45, private key at 46
+        key = ExtKey(
+            raw_key.substr(46, 32),
+            chain_code
+        );
     } else {
-        key =  ExtKey(raw_key.substr(45, 33), chain_code, false);
+        // layout: [33-byte compressed pubkey]
+        // key data starts at offset 45
+        key = ExtKey(
+            raw_key.substr(45, 33),
+            chain_code,
+            false
+        );
     }
+
     return key;
 }
 
@@ -151,26 +178,40 @@ string ExtKey::toBase58(bool is_private) const {
     if (is_private && !_is_private) {
         throw ExtKeyDoesNotHoldPrivateKeyException();
     }
+
+    UInt32 version = is_private ? Networks::BITCOIN.BIP39.PRIVATE : Networks::BITCOIN.BIP39.PUBLIC;
+    UInt32 versionBE = ByteOrder::toBigEndian(version);
+    UInt32 fingerprintBE = ByteOrder::toBigEndian(_parent_fingerprint);
+    UInt32 indexBE = ByteOrder::toBigEndian(_index);
+    UInt8 depth = _depth;
+
     string result(13, '\0');
     char* result_data = result.data();
-    UInt32 version = is_private ? Networks::BITCOIN.BIP39.PRIVATE : Networks::BITCOIN.BIP39.PUBLIC;
-    *reinterpret_cast<UInt32*>(result_data) = ByteOrder::toBigEndian(version);
-    *reinterpret_cast<UInt8*>(result_data + 4) = _depth;
-    *reinterpret_cast<UInt32*>(result_data + 5) = ByteOrder::toBigEndian(_parent_fingerprint);
-    *reinterpret_cast<UInt32*>(result_data + 9) = ByteOrder::toBigEndian(_index);
+
+    std::memcpy(result_data,     &versionBE,     4); // Offset 0
+    std::memcpy(result_data + 4, &depth,         1); // Offset 4
+    std::memcpy(result_data + 5, &fingerprintBE, 4); // Offset 5 (Fixed!)
+    std::memcpy(result_data + 9, &indexBE,       4); // Offset 9 (Fixed!)
+
     result.append(_chain_code);
+
     if (is_private) {
         string key = _ec.getPrivateKey();
         if (key.size() < 32) {
             key = string(32 - key.size(), '\0').append(key);
         }
-        result.append("\0", 1)
-            .append(key);
+        result.append("\0", 1).append(key);
     } else {
         result.append(_ec.getPublicKey());
     }
+
     if (result.size() != 78) {
         throw InvalidResultSizeException();
     }
     return Base58::encodeWithChecksum(result);
+}
+UInt32 ExtKey::read_u32_be(const std::string& raw_key, size_t offset) {
+    UInt32 v;
+    std::memcpy(&v, raw_key.data() + offset, 4);
+    return ByteOrder::fromBigEndian(v);
 }
