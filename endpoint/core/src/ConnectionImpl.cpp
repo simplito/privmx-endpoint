@@ -33,6 +33,7 @@ ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
 }
 ConnectionImpl::~ConnectionImpl() {
     _guardedExecutor.reset();
+    LOG_TRACE("~ConnectionImpl Done");
 }
 
 void ConnectionImpl::connect(
@@ -256,6 +257,8 @@ void ConnectionImpl::disconnect() {
     _gateway.reset();
     auto event = EventBuilder::buildLibEvent<LibPlatformDisconnectedEvent>();
     _eventMiddleware->emitApiEvent(event);
+    LOG_DEBUG("disconnect: disconnected.");
+
 }
 
 int64_t ConnectionImpl::generateConnectionId() {

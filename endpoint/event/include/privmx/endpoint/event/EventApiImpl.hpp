@@ -50,6 +50,7 @@ private:
     bool verifyDecryptedEventDataV5(const DecryptedEventDataV5& data);
     core::Connection _connection;
     privmx::crypto::PrivateKey _userPrivKey;
+    privfs::RpcGateway::Ptr _gateway;
     ServerApi _serverApi;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::DataEncryptorV4 _dataEncryptor;

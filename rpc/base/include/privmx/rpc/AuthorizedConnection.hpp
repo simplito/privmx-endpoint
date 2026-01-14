@@ -118,6 +118,7 @@ private:
     std::atomic<Poco::Int32> _wschannel_id = -1;
     //
     privmx::utils::CancellationToken::Ptr _ticket_updater_cancellation_token;
+    constexpr static size_t MAX_ATTEMPTS_OF_SESSION_RECONNECTION = 16;
 };
 
 class SecondFactorServiceImpl : public SecondFactorService

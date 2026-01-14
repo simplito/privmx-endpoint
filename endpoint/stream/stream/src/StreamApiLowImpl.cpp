@@ -27,7 +27,7 @@ limitations under the License.
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/ListQueryMapper.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
-#include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
@@ -61,9 +61,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     _serverApi(std::make_shared<ServerApi>(gateway)),
     _subscriber(stream::SubscriberImpl(gateway))
 {
-    // streamGetTurnCredentials
-    auto model = utils::TypedObjectFactory::createNewObject<server::StreamGetTurnCredentialsModel>();
-    auto credentials = _serverApi->streamGetTurnCredentials(model).credentials();
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
@@ -74,6 +71,7 @@ StreamApiLowImpl::StreamApiLowImpl(
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {
+    LOG_TRACE("~StreamApiLowImpl() Start");
     if(_gateway->isConnected()) {
         _eventApi->unsubscribeFrom(_internalSubscriptionIds);
     }
@@ -91,7 +89,7 @@ StreamApiLowImpl::~StreamApiLowImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
-    PRIVMX_DEBUG("StreamApiLowImpl", "~StreamApiLowImpl", "Done");
+    LOG_TRACE("~StreamApiLowImpl Done");
 }
 
 std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
@@ -113,12 +111,12 @@ void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core:
 
 void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& notification) {
         auto type {notification.type};
-    // std::cerr << "onNotificationEvent: " << type << "/ with data: " << privmx::utils::Utils::stringifyVar(notification.data, true) << "\n";
-        PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "event type:"+ type);
+        // std::cerr << "onNotificationEvent: " << type << "/ with data: " << privmx::utils::Utils::stringifyVar(notification.data, true) << "\n";
+        LOG_DEBUG("StreamApiLowImpl::processNotificationEvent event type: "+ type);
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
 
         if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
-            PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "isInternalContextEvent");
+            LOG_DEBUG("StreamApiLowImpl::processNotificationEvent isInternalContextEvent");
             auto raw = utils::TypedObjectFactory::createObjectFromVar<event::server::ContextCustomEventData>(data);
             auto decryptedData = _eventApi->extractInternalEventData(data);
             auto streamKeyManagementEvent = utils::TypedObjectFactory::createObjectFromVar<dynamic::StreamKeyManagementEvent>(
@@ -134,7 +132,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if(!subscriptionQuery.has_value()) {
             return;
         }
-        PRIVMX_DEBUG("StreamApiLowImpl", "processNotificationEvent", "Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
+        LOG_DEBUG("StreamApiLowImpl::processNotificationEvent Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
         if (type == "streamRoomCreated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
             auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw);
@@ -254,7 +252,8 @@ void StreamApiLowImpl::processConnectedEvent() {
 }
 
 void StreamApiLowImpl::processDisconnectedEvent() {
-
+    LOG_TRACE("StreamApiLowImpl recived DisconnectedEvent");
+    privmx::utils::ManualManagedClass<StreamApiLowImpl>::cleanup();
 }
 
 std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
@@ -338,7 +337,6 @@ StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     if(room->publisherStream) {
         throw StreamIsPublished();
     }
-    PRIVMX_DEBUG("STREAMS", "API", std::to_string(streamHandle) + ": STREAM Sender")
     _streamHandleToRoomId.set(streamHandle, streamRoomId);
     room->publisherStream = std::make_shared<StreamData>(
         StreamData{
@@ -580,7 +578,6 @@ std::string StreamApiLowImpl::createStreamRoom(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformStreamRoom, _createStreamRoomEx)
     auto streamRoomKey = _keyProvider->generateKey();
     std::string resourceId = core::EndpointUtils::generateId();
     auto streamRoomDIO = _connection->createDIO(
@@ -616,9 +613,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     if (policies.has_value()) {
         createStreamRoomModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStreamRoom, _createStreamRoomEx, data encrypted)
     auto result = _serverApi->streamRoomCreate(createStreamRoomModel);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStreamRoom, _createStreamRoomEx, data send)
     return result.streamRoomId();
 }
 
@@ -633,7 +628,6 @@ void StreamApiLowImpl::updateStreamRoom(
     const bool forceGenerateNewKey, 
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformStream, updateStreamRoom)
 
     // get current streamRoom
 
@@ -705,20 +699,14 @@ void StreamApiLowImpl::updateStreamRoom(
         .dio = updateStreamRoomDio
     };
     model.data(_streamRoomDataEncryptorV5.encrypt(streamRoomDataToEncrypt, _userPrivKey, streamRoomKey.key).asVar());
-
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, updateStreamRoom, data encrypted)
     _serverApi->streamRoomUpdate(model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStream, updateStreamRoom, data send)
 }
 
 core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
-    PRIVMX_DEBUG_TIME_START(PlatformStream, listStreamRooms)
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomListModel>();
     model.contextId(contextId);
     core::ListQueryMapper::map(model, query);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, listStreamRooms, getting streamRoomList)
     auto streamRoomsList = _serverApi->streamRoomList(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, listStreamRooms, data send)
     std::vector<StreamRoom> streamRooms;
     for (size_t i = 0; i < streamRoomsList.list().size(); i++) {
         auto streamRoom = streamRoomsList.list().get(i);
@@ -736,7 +724,6 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string
             j++;
         }
     }
-    PRIVMX_DEBUG_TIME_STOP(PlatformStream, listStreamRooms, data decrypted)
     return core::PagingList<StreamRoom>({
         .totalAvailable = streamRoomsList.count(),
         .readItems = streamRooms
@@ -744,27 +731,21 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string
 }
 
 StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
-    PRIVMX_DEBUG_TIME_START(PlatformStream, getStreamRoom)
     auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     params.id(streamRoomId);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream,getStreamRoom, getting streamRoom)
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom();
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, getStreamRoom, data send)
     auto statusCode = validateStreamRoomDataIntegrity(streamRoom);
     if(statusCode != 0) {
         return convertServerStreamRoomToLibStreamRoom(streamRoom,{},{},statusCode);
     }
     auto result = decryptAndConvertStreamRoomDataToStreamRoom(streamRoom);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStream, getStreamRoom, data decrypted)
     return result;
 }
 
 void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
-    PRIVMX_DEBUG_TIME_START(PlatformStream, deleteStreamRoom)
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomDeleteModel>();
     model.id(streamRoomId);
     _serverApi->streamRoomDelete(model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStream, deleteStreamRoom)
 }
 
 StreamRoom StreamApiLowImpl::convertServerStreamRoomToLibStreamRoom(
@@ -1086,7 +1067,7 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
             usersIds->add(s.userId());
         }
     }
-    PRIVMX_DEBUG("STREAMS", "joinStream", "listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
+    LOG_DEBUG("StreamApiLowImpl::sendStreamKeyRequest listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
     queryId->set("$in", usersIds);
     query->set("#userId", queryId);
     if(usersIds->size() != 0) {
@@ -1105,7 +1086,7 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
         
         std::vector<core::UserWithPubKey> toSend;
         for(auto userInfo: userInfoList.readItems) {
-            PRIVMX_DEBUG("STREAMS", "joinStream", "Request Send: " + userInfo.user.userId)
+            LOG_DEBUG("StreamApiLowImpl::sendStreamKeyRequest Request Send: " + userInfo.user.userId)
             toSend.push_back(userInfo.user);
         }
         room->streamKeyManager->requestKey(toSend);

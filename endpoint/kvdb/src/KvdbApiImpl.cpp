@@ -62,6 +62,7 @@ KvdbApiImpl::~KvdbApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
+    LOG_TRACE("~KvdbApiImpl Done");
 }
 
 std::string KvdbApiImpl::createKvdb(
@@ -476,6 +477,7 @@ void KvdbApiImpl::processConnectedEvent() {
 }
 
 void KvdbApiImpl::processDisconnectedEvent() {
+    LOG_TRACE("KvdbApiImpl recived DisconnectedEvent");
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<KvdbApiImpl>::cleanup();
 }

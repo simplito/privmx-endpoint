@@ -32,11 +32,12 @@ limitations under the License.
 #include "privmx/endpoint/stream/SubscriberImpl.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
+#include <privmx/utils/ManualManagedClass.hpp>
 namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class StreamApiLowImpl : protected core::ModuleBaseApi {
+class StreamApiLowImpl : public privmx::utils::ManualManagedClass<StreamApiLowImpl>, protected core::ModuleBaseApi {
 public:
     StreamApiLowImpl(
         const std::shared_ptr<event::EventApiImpl>& eventApi,
