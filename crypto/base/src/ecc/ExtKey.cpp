@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 #include <gmpxx.h>
-
+#include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/CryptoException.hpp>
 #include <privmx/crypto/ecc/ExtKey.hpp>
