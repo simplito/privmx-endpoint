@@ -54,6 +54,7 @@ public:
 private:
     static const Poco::UInt32 HIGHEST_BIT = 0x80000000;
     static const std::string MASTER_SECRET;
+    static Poco::UInt32 read_u32_be(const std::string& raw_key, size_t offset);
 
     std::string toBase58(bool is_private = false) const;
     ExtKey derive(Poco::UInt32 index, bool old_privmx_version) const;
