@@ -383,12 +383,6 @@ void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, co
             streamRoomId
         )
     );
-    if(options.OnFrame.has_value()) {
-        _webRTC->setOnFrame(streamRoomId, options.OnFrame.value());
-    }
-    if(options.OnVideoRemove.has_value()) {
-        _webRTC->setOnRemoveVideoTrack(streamRoomId, options.OnVideoRemove.value());
-    }
     _api->subscribeToRemoteStreams(streamRoomId, subscriptions, options.settings);
 }
 
@@ -459,5 +453,5 @@ void StreamApiImpl::dropBrokenFrames(const std::string& streamRoomId, bool enabl
 }
 
 void StreamApiImpl::setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
-    _onTrackInterface = onTrackInterface;
+    _webRTC->setOnTrackInterface(onTrackInterface);
 }

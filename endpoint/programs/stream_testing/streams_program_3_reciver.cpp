@@ -13,8 +13,11 @@
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
+#include <privmx/endpoint/stream/webrtc/OnTrackInterface.hpp>
+#include <privmx/endpoint/stream/webrtc/Types.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 #include <SDL2/SDL.h>
 
 using namespace std;
@@ -96,6 +99,27 @@ static vector<string_view> getParamsList(int argc, char* argv[]) {
     return args;
 }
 
+class OnTrackImpl : public stream::OnTrackInterface {
+public:
+    OnTrackImpl() : _renderer(RTCVideoRendererImpl("Remote")) {}
+    virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
+        if(tack.kind == stream::DataType::AUDIO) {
+            LOG_DEBUG("OnRemoteTrack[stream::TrackAction] DataType::AUDIO : " + action);
+        }
+        if(tack.kind == stream::DataType::VIDEO) {
+            LOG_DEBUG("OnRemoteTrack[stream::TrackAction] DataType::VIDEO : " + action);
+        }
+    }
+    virtual void OnData(std::shared_ptr<stream::Data> data) override {
+        if(data->type == stream::DataType::VIDEO) {
+            auto videoData = std::dynamic_pointer_cast<stream::VideoData>(data);
+            LOG_DEBUG("VideoData[w-h]: ", videoData->w, "-", videoData->h);
+        }
+    }
+private:
+    RTCVideoRendererImpl _renderer;
+};
+
 int main(int argc, char** argv) {
     auto params = getParamsList(argc, argv);
     if(params.size() != 5) {
@@ -116,13 +140,9 @@ int main(int argc, char** argv) {
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         core::EventQueue eventQueue = core::EventQueue::getInstance();
-        RTCVideoRendererImpl r = RTCVideoRendererImpl("Remote");
-        stream::StreamSettings ssettings {
-            .OnFrame=[&](int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-                std::cout << "------------------" << std::endl;
-                r.OnFrame(w, h, frame, id);
-            }
-        };
+        auto onTrack = std::make_shared<OnTrackImpl>();
+        streamApi.setOnTrackInterface(onTrack);
+        stream::StreamSettings ssettings {};
         streamApi.subscribeFor({
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_UPDATE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_DELETE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),

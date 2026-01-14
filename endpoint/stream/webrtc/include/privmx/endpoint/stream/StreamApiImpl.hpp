@@ -219,7 +219,6 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLow> _api;
     std::shared_ptr<WebRTCImpl> _webRTC;
-    std::shared_ptr<OnTrackInterface> _onTrackInterface;
 };
 
 }  // namespace stream
