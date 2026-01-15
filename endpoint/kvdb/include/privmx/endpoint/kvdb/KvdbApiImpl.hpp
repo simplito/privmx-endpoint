@@ -86,7 +86,7 @@ public:
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
     std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
-private:
+
     std::string createKvdbEx(
         const std::string& contextId, 
         const std::vector<core::UserWithPubKey>& users, 
@@ -97,6 +97,7 @@ private:
         const std::optional<core::ContainerPolicy>& policies
     );
 
+private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();

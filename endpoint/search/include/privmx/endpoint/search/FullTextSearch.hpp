@@ -30,6 +30,8 @@ public:
     static std::shared_ptr<FullTextSearch> openDb(const std::string& filename, const IndexMode mode);
     FullTextSearch(std::shared_ptr<sqlite3> db, const IndexMode mode);
     int64_t addDocument(const std::string& name, const std::string& content);
+    Document getDocument(const int64_t documentId);
+    core::PagingList<Document> listDocuments(const core::PagingQuery& pagingQuery);
     void updateDocument(const Document& document);
     void deleteDocument(const int64_t documentId);
     core::PagingList<Document> search(const std::string& query, const core::PagingQuery& pagingQuery);
@@ -38,7 +40,8 @@ public:
     void close();
 
 private:
-    int64_t getCount(const std::string& query, const core::PagingQuery& pagingQuery);
+    int64_t getCount(const std::string& query);
+    int64_t getCountOfAll();
 
     std::shared_ptr<sqlite3> _db;
     IndexMode _mode;

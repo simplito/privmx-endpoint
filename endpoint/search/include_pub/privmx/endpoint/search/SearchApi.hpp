@@ -163,7 +163,7 @@ public:
      * @param pagingQuery struct with list query parameters (can include search terms)
      * @return struct containing a list of documents
      */
-    core::PagingList<Document> listDocuments(const std::string& indexId, const core::PagingQuery& pagingQuery);
+    core::PagingList<Document> listDocuments(const int64_t indexHandle, const core::PagingQuery& pagingQuery);
 
     /**
      * Searches for documents in the Index.

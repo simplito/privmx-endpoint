@@ -66,6 +66,71 @@ int64_t FullTextSearch::addDocument(const std::string& name, const std::string& 
     return sqlite3_last_insert_rowid(_db.get());
 }
 
+Document FullTextSearch::getDocument(const int64_t documentId) {
+    Document result;
+    const char* searchSql = "SELECT rowid, name, content FROM pmx.documents WHERE rowid=?;";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(_db.get(), searchSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw SelectPrepareException(sqlite3_errmsg(_db.get()));
+    }
+
+    sqlite3_bind_int64(stmt, 1, documentId);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Document document;
+        sqlite3_int64 rowid = sqlite3_column_int64(stmt, 0);
+        document.documentId = rowid;
+        const unsigned char* text = sqlite3_column_text(stmt, 1);
+        if (text) {
+            document.name = reinterpret_cast<const char*>(text);
+        }
+        const unsigned char* text2 = sqlite3_column_text(stmt, 2);
+        if (text2) {
+            document.content = reinterpret_cast<const char*>(text2);
+        }
+
+        result = document;
+    }
+
+    sqlite3_finalize(stmt);
+
+    return result;
+}
+
+core::PagingList<Document> FullTextSearch::listDocuments(const core::PagingQuery& pagingQuery) {
+    std::vector<Document> results;
+    const char* searchSql = "SELECT rowid, name, content FROM pmx.documents LIMIT ? OFFSET ?;";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(_db.get(), searchSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw SelectPrepareException(sqlite3_errmsg(_db.get()));
+    }
+
+    sqlite3_bind_int64(stmt, 1, pagingQuery.limit);
+    sqlite3_bind_int64(stmt, 2, pagingQuery.skip);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        Document document;
+        sqlite3_int64 rowid = sqlite3_column_int64(stmt, 0);
+        document.documentId = rowid;
+        const unsigned char* text = sqlite3_column_text(stmt, 1);
+        if (text) {
+            document.name = reinterpret_cast<const char*>(text);
+        }
+        const unsigned char* text2 = sqlite3_column_text(stmt, 2);
+        if (text2) {
+            document.content = reinterpret_cast<const char*>(text2);
+        }
+
+        results.push_back(document);
+    }
+
+    sqlite3_finalize(stmt);
+
+    return {getCountOfAll(), results};
+}
+
 void FullTextSearch::updateDocument(const Document& document) {
     const char* updateSql = "UPDATE pmx.documents SET name=?, content=? WHERE rowid=?;";
     sqlite3_stmt* stmt;
@@ -106,7 +171,7 @@ void FullTextSearch::deleteDocument(const int64_t documentId) {
 
 core::PagingList<Document> FullTextSearch::search(const std::string& query, const core::PagingQuery& pagingQuery) {
     std::vector<Document> results;
-    const char* searchSql = "SELECT rowid, name, content FROM pmx.documents WHERE documents MATCH ?;";
+    const char* searchSql = "SELECT rowid, name, content FROM pmx.documents WHERE documents MATCH ? LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(_db.get(), searchSql, -1, &stmt, nullptr) != SQLITE_OK) {
@@ -114,6 +179,8 @@ core::PagingList<Document> FullTextSearch::search(const std::string& query, cons
     }
 
     sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 2, pagingQuery.limit);
+    sqlite3_bind_int64(stmt, 3, pagingQuery.skip);
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         Document document;
@@ -133,7 +200,7 @@ core::PagingList<Document> FullTextSearch::search(const std::string& query, cons
 
     sqlite3_finalize(stmt);
 
-    return {getCount(query, pagingQuery), results};
+    return {getCount(query), results};
 }
 
 void FullTextSearch::ensureTableCreated() {
@@ -165,7 +232,7 @@ void FullTextSearch::close() {
     _db.reset();
 }
 
-int64_t FullTextSearch::getCount(const std::string& query, const core::PagingQuery& pagingQuery) {
+int64_t FullTextSearch::getCount(const std::string& query) {
     sqlite3_stmt* stmt;
 
     const char* sql =
@@ -178,6 +245,27 @@ int64_t FullTextSearch::getCount(const std::string& query, const core::PagingQue
     }
 
     sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
+
+    int64_t resultCount = 0;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        resultCount = sqlite3_column_int64(stmt, 0);
+    }
+
+    sqlite3_finalize(stmt);
+
+    return resultCount;
+}
+
+int64_t FullTextSearch::getCountOfAll() {
+    sqlite3_stmt* stmt;
+
+    const char* sql =
+        "SELECT count(*) "
+        "FROM pmx.documents;";
+
+    if (sqlite3_prepare_v2(_db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw SelectPrepareException(sqlite3_errmsg(_db.get()));
+    }
 
     int64_t resultCount = 0;
     if (sqlite3_step(stmt) == SQLITE_ROW) {

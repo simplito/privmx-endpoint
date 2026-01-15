@@ -175,10 +175,10 @@ Document SearchApi::getDocument(const int64_t indexHandle, const int64_t documen
     }
 }
 
-core::PagingList<Document> SearchApi::listDocuments(const std::string& indexId, const core::PagingQuery& pagingQuery) {
+core::PagingList<Document> SearchApi::listDocuments(const int64_t indexHandle, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     try {
-        return _impl->listDocuments(indexId, pagingQuery);
+        return _impl->listDocuments(indexHandle, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

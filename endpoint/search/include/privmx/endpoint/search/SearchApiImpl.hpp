@@ -94,13 +94,17 @@ public:
 
     Document getDocument(const int64_t indexHandle, const int64_t documentId);
 
-    core::PagingList<Document> listDocuments(const std::string& indexId, const core::PagingQuery& pagingQuery);
+    core::PagingList<Document> listDocuments(const int64_t indexHandle, const core::PagingQuery& pagingQuery);
 
     core::PagingList<Document> searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery);
 
 private:
+    static const std::string SEARCH_TYPE_FILTER_FLAG;
+
     dynamic::IndexData getIndexData(const std::string& indexId);
     void setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode);
+    SearchIndex mapSearchIndex(const kvdb::Kvdb& kvdb);
+    std::vector<SearchIndex> mapSearchIndexes(const std::vector<kvdb::Kvdb>& kvdbs);
 
     std::shared_ptr<PrivmxSession> _session;
     core::Connection _connection;
