@@ -72,9 +72,6 @@ StreamApiLowImpl::StreamApiLowImpl(
 
 StreamApiLowImpl::~StreamApiLowImpl() {
     LOG_TRACE("~StreamApiLowImpl() Start");
-    if(_gateway->isConnected()) {
-        _eventApi->unsubscribeFrom(_internalSubscriptionIds);
-    }
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
         if(roomValue->publisherStream) {
             roomValue->publisherStream.reset();
