@@ -49,7 +49,7 @@ public:
     void streamRoomLeave(server::StreamRoomLeaveModel model);
 
     void trickle(server::StreamTrickleModel model);
-
+    bool isConnected() {return _gateway ? _gateway->isConnected() : false;}
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object

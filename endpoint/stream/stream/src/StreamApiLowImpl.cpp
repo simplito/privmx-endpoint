@@ -53,7 +53,6 @@ StreamApiLowImpl::StreamApiLowImpl(
 ) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
      _eventApi(eventApi),
     _connection(connection.getImpl()),
-    _gateway(gateway),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
     _host(host),
@@ -72,6 +71,9 @@ StreamApiLowImpl::StreamApiLowImpl(
 
 StreamApiLowImpl::~StreamApiLowImpl() {
     LOG_TRACE("~StreamApiLowImpl() Start");
+    if(_serverApi->isConnected()) {
+        _eventApi->unsubscribeFrom(_internalSubscriptionIds);
+    }
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
         if(roomValue->publisherStream) {
             roomValue->publisherStream.reset();

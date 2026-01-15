@@ -63,52 +63,6 @@ std::string SubscriptionQueryObj::toSubscriptionQueryString() const {
 Subscriber::Subscriber(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
 std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries, bool force) {
-    // LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
-    // auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelsModel>();
-    // std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
-    // for(const auto& subscriptionQueryString : subscriptionQueries) {
-    //     parsedSubscriptionQueries.push_back(SubscriptionQueryObj(subscriptionQueryString));
-    // }
-    // assertQuery(parsedSubscriptionQueries);
-    // privmx::utils::List<std::string> modelChannels = privmx::utils::TypedObjectFactory::createNewList<std::string>();
-    // if(!force) {
-    //     assertQuery(parsedSubscriptionQueries);
-    //     modelChannels = transform(parsedSubscriptionQueries);
-    // } else {
-    //     for(const auto& subscriptionQueryString : subscriptionQueries) {
-    //         modelChannels.add(subscriptionQueryString);
-    //     }
-    // }
-    // // auto modelChannels = transform(parsedSubscriptionQueries);
-    // LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
-    // model.channels(modelChannels);
-    // auto value = privmx::utils::TypedObjectFactory::createObjectFromVar<server::SubscribeToChannelsResult>(
-    //     _gateway->request("subscribeToChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET})
-    // );
-    // LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")
-    // std::vector<std::string> result;
-    // {
-    //     std::unique_lock<std::shared_mutex> lock(_map_mutex);
-    //     for(auto channel : modelChannels) {
-    //         bool found = false;
-    //         for(size_t i = 0; i < value.subscriptions().size(); i++) {
-    //             auto subscription = value.subscriptions().get(i);
-    //             if(channel == subscription.channel()) {
-    //                 result.push_back(subscription.subscriptionId());
-    //                 _subscriptionIdToSubscriptionQuery.insert_or_assign(subscription.subscriptionId(), subscription.channel());
-    //                 found = true;
-    //                 value.subscriptions().remove(i);
-    //                 break;
-    //             }
-    //         }
-    //         if(!found) {
-    //             result.push_back("");
-    //         }
-    //     }
-    // }
-    // LOG_TIME_DEBUG_STOP(Subscriber:subscribeFor, "")
-    // return result;
-
     LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
     auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelsModel>();
     std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
