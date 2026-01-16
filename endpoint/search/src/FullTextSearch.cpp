@@ -166,7 +166,13 @@ void FullTextSearch::deleteDocument(const int64_t documentId) {
         throw DeleteExecuteException(sqlite3_errmsg(_db.get()));
     }
 
+    int64_t rowsDeleted = sqlite3_changes64(_db.get());
+
     sqlite3_finalize(stmt);
+
+    if (rowsDeleted == 0) {
+        throw InvalidDocumentIdHandleException();
+    }
 }
 
 core::PagingList<Document> FullTextSearch::search(const std::string& query, const core::PagingQuery& pagingQuery) {
