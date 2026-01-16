@@ -21,7 +21,8 @@ enum DataType {
 };
 struct Track {
     DataType kind;
-    std::string id;
+    std::vector<std::string> streamIds;
+    std::string trackId;
     bool muted;
 };
 // struct Stream {
@@ -35,23 +36,23 @@ struct TrackEvent {
     Stream stream;
 };
 struct Data {
-    Data(DataType _type, const std::string _streamId, const std::string _track) 
-        : type(_type), streamId(_streamId), track(_track) {}
+    Data(DataType _type, const std::vector<std::string> _streamIds, const std::string _track) 
+        : type(_type), streamIds(_streamIds), track(_track) {}
     virtual ~Data() = default;
     DataType type;
-    const std::string streamId;
+    const std::vector<std::string> streamIds;
     const std::string track;
 };
 struct VideoData : public Data {
-    VideoData(DataType _type, const std::string _streamId, const std::string _track, const int64_t _w,  const int64_t _h, std::shared_ptr<Frame> _frameData ) 
-        : Data(_type, _streamId, _track), w(_w), h(_h), frameData(_frameData) {}
+    VideoData(DataType _type, const std::vector<std::string>& _streamIds, const std::string _track, const int64_t _w,  const int64_t _h, std::shared_ptr<Frame> _frameData ) 
+        : Data(_type, _streamIds, _track), w(_w), h(_h), frameData(_frameData) {}
     const int64_t w; 
     const int64_t h; 
     std::shared_ptr<Frame> frameData;
 };
 struct AudioData : public Data {
-    AudioData(DataType _type, const std::string _streamId, const std::string _track, const void* _audio_data, int _bits_per_sample, int _sample_rate, size_t _number_of_channels, size_t _number_of_frames) 
-        : Data(_type, _streamId, _track), audio_data(_audio_data), bits_per_sample(_bits_per_sample), sample_rate(_sample_rate), number_of_channels(_number_of_channels), number_of_frames(_number_of_frames) {}
+    AudioData(DataType _type, const std::vector<std::string>& _streamIds, const std::string _track, const void* _audio_data, int _bits_per_sample, int _sample_rate, size_t _number_of_channels, size_t _number_of_frames) 
+        : Data(_type, _streamIds, _track), audio_data(_audio_data), bits_per_sample(_bits_per_sample), sample_rate(_sample_rate), number_of_channels(_number_of_channels), number_of_frames(_number_of_frames) {}
     const void* audio_data; 
     int bits_per_sample;
     int sample_rate;

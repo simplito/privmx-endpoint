@@ -25,47 +25,21 @@ using namespace privmx::endpoint;
 
 class RTCVideoRendererImpl {
 public:
-    ~RTCVideoRendererImpl() {
-        SDL_Quit();
-    }
-    RTCVideoRendererImpl(const std::string& title) : title("PrivMX Stream - " + title) {
-        if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-            std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
-            throw;
-        }
-    }
+    RTCVideoRendererImpl(const std::string& title) : title("PrivMX Stream - " + title) {}
     void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-        if(renderingMutex.try_lock()) {
-            if (renderer == NULL) {
-                window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 768, 432, 0);
-                renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-                texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 768, 432);
-                windowEventsLoop();
-            }
-            PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h) + " | id:", id)
-            // Lock texture to get buffer pointer
-            void* pixels = nullptr;
-            int pitch  = 0; // bytes per row
-            if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) != 0) {
-                std::cerr << "SDL_LockTexture failed: " << SDL_GetError() << "\n";
-                return;
-            }
-
-            // Ask Frame to convert into our texture buffer
-            uint8_t* dst  = static_cast<uint8_t*>(pixels);
-            auto ret  = frame->ConvertToRGBA(dst, pitch, 768, 432);
-            SDL_UnlockTexture(texture);
-            PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame ConvertToRGBA: "+std::to_string(ret) +"- "+std::to_string(((uint64_t*)pixels)[0]));
-            if (ret != 0) {
-                std::cerr << "ConvertToRGBA failed\n";
-                return;
-            }
-
-            // Render this frame
-            SDL_RenderClear(renderer);
-            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-            SDL_RenderPresent(renderer);
+        if (renderer == NULL) {
+            window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 768, 432, 0);
+            renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+            texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 768, 432);
+            windowEventsLoop();
         }
+        uint32_t* pixels = new uint32_t[768 * 432];
+        // PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h))
+        frame->ConvertToRGBA((uint8_t*)pixels, 4, 768, 432);
+        SDL_UpdateTexture(texture, NULL, pixels, 768 * sizeof(uint32_t));
+        SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
+        delete pixels;
+        
     }
 private:
     void windowEventsLoop() {
@@ -90,8 +64,6 @@ private:
     SDL_Renderer* renderer = NULL;
     std::string title;
     std::shared_ptr<std::thread> eventThreadLoop;
-
-    std::mutex renderingMutex;
 };
 
 static vector<string_view> getParamsList(int argc, char* argv[]) {
@@ -104,16 +76,21 @@ public:
     OnTrackImpl() : _renderer(RTCVideoRendererImpl("Remote")) {}
     virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
         if(tack.kind == stream::DataType::AUDIO) {
-            LOG_DEBUG("OnRemoteTrack[stream::TrackAction] DataType::AUDIO : " + action);
+            LOG_INFO("OnRemoteTrack[stream::TrackAction] DataType::AUDIO : ", (action == stream::TrackAction::ADDED ? "ADDED" : "REMOVED"));
         }
         if(tack.kind == stream::DataType::VIDEO) {
-            LOG_DEBUG("OnRemoteTrack[stream::TrackAction] DataType::VIDEO : " + action);
+            LOG_INFO("OnRemoteTrack[stream::TrackAction] DataType::VIDEO : ", (action == stream::TrackAction::ADDED ? "ADDED" : "REMOVED"));
         }
     }
     virtual void OnData(std::shared_ptr<stream::Data> data) override {
         if(data->type == stream::DataType::VIDEO) {
             auto videoData = std::dynamic_pointer_cast<stream::VideoData>(data);
-            LOG_DEBUG("VideoData[w-h]: ", videoData->w, "-", videoData->h);
+            // LOG_INFO("VideoData[w-h]: ", videoData->w, "-", videoData->h);
+            _renderer.OnFrame(videoData->w, videoData->h, videoData->frameData, "test");
+        }
+        if(data->type == stream::DataType::AUDIO) {
+            auto audioData = std::dynamic_pointer_cast<stream::AudioData>(data);
+            // LOG_INFO("AudioData[w-h]");
         }
     }
 private:

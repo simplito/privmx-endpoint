@@ -253,8 +253,6 @@ void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
     {
         std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
-        LOG_FATAL("EMOVE_BEFORE_PUSH | ", "jc->peerConnection->keys.get() == nullptr : ", jc->peerConnection->keys.get() == nullptr)
-
         frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
             _peerConnectionFactory,
             sender, 
