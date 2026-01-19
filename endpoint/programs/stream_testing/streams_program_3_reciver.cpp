@@ -5,6 +5,7 @@
 #include <vector>
 #include <thread>
 #include <memory>
+#include <atomic>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -16,7 +17,6 @@
 #include <privmx/endpoint/stream/webrtc/OnTrackInterface.hpp>
 #include <privmx/endpoint/stream/webrtc/Types.hpp>
 #include <privmx/utils/PrivmxException.hpp>
-#include <privmx/utils/Debug.hpp>
 #include <privmx/utils/Logger.hpp>
 #include <SDL2/SDL.h>
 
@@ -25,45 +25,111 @@ using namespace privmx::endpoint;
 
 class RTCVideoRendererImpl {
 public:
-    RTCVideoRendererImpl(const std::string& title) : title("PrivMX Stream - " + title) {}
-    void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string id) {
-        if (renderer == NULL) {
-            window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 768, 432, 0);
-            renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-            texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 768, 432);
-            windowEventsLoop();
-        }
-        uint32_t* pixels = new uint32_t[768 * 432];
-        // PRIVMX_DEBUG("RTCVideoRenderer", "OnFrame", "Frame size: "+std::to_string(w) +"-"+std::to_string(h))
-        frame->ConvertToRGBA((uint8_t*)pixels, 4, 768, 432);
-        SDL_UpdateTexture(texture, NULL, pixels, 768 * sizeof(uint32_t));
-        SDL_RenderClear(renderer); SDL_RenderCopy(renderer, texture, NULL, NULL); SDL_RenderPresent(renderer);
-        delete pixels;
-        
+    RTCVideoRendererImpl(
+        const std::string& title, int width, int height
+    ) : 
+        _title("PrivMX Stream - " + title), _width(width), _height(height), 
+        _window(nullptr), _texture(nullptr), _renderer(nullptr),
+        _framePixels(std::vector<uint32_t>(_width*_height)), _hasNewFrame(false),
+        _stop(false), _SDLMainThread(std::thread(&RTCVideoRendererImpl::main, this))
+    {}
+
+    ~RTCVideoRendererImpl() {
+        _stop = true;
+        if (_SDLMainThread.joinable()) _SDLMainThread.join();
     }
+    void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string& id)
+    {
+        std::lock_guard<std::mutex> lock(_frameMutex);
+        frame->ConvertToRGBA(
+            reinterpret_cast<uint8_t*>(_framePixels.data()),
+            4, _width, _height
+        );
+
+        _hasNewFrame = true;
+    }
+
 private:
-    void windowEventsLoop() {
-        eventThreadLoop = std::make_shared<std::thread>([&](){
-            while(true) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                SDL_Event event;
-                while (SDL_PollEvent(&event)) {
-                    if (event.type == SDL_QUIT) exit(0);
-                    if (event.type == SDL_WINDOWEVENT) {
-                        if (event.window.event == SDL_WINDOWEVENT_CLOSE)
-                        {
-                            exit(1);
-                        }
-                    }
+    void initializeSDL() {
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
+            LOG_FATAL("SDL_Init Error: " , SDL_GetError())
+            throw "SDL_Error";
+        }
+        _window = SDL_CreateWindow(_title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, _width, _height, 0);
+        if (!_window) {
+            LOG_FATAL("SDL_CreateWindow Error: " , SDL_GetError())
+            SDL_Quit();
+            throw "SDL_Error";
+        }
+        _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
+        if (!_renderer) {
+            LOG_FATAL("SDL_CreateRenderer Error: " , SDL_GetError())
+            SDL_DestroyWindow(_window);
+            SDL_Quit();
+            throw "SDL_Error";
+        }
+        _texture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, _width, _height);
+        if (!_texture) {
+            LOG_FATAL("SDL_CreateTexture Error: " , SDL_GetError())
+            SDL_DestroyRenderer(_renderer);
+            SDL_DestroyWindow(_window);
+            SDL_Quit();
+            throw "SDL_Error";
+        }
+    }
+    void main() {
+        initializeSDL();
+        const int frameDelayMs = 1000 / 24; // 24 Frames per second
+        while (!_stop) {
+            Uint32 startTicks = SDL_GetTicks64();
+            SDL_Event event;
+            while (SDL_PollEvent(&event)) {
+                if (event.type == SDL_QUIT ||
+                   (event.type == SDL_WINDOWEVENT &&
+                    event.window.event == SDL_WINDOWEVENT_CLOSE)) {
+                    _stop = true;
+                    exit(0);
                 }
             }
-        });
+            {
+                std::lock_guard<std::mutex> lock(_frameMutex);
+                if (_hasNewFrame) {
+                    SDL_UpdateTexture(
+                        _texture,
+                        nullptr,
+                        _framePixels.data(),
+                        _width * sizeof(uint32_t)
+                    );
+                    _hasNewFrame = false;
+                }
+            }
+            SDL_RenderClear(_renderer);
+            SDL_RenderCopy(_renderer, _texture, nullptr, nullptr);
+            SDL_RenderPresent(_renderer);
+
+            Uint32 elapsed = SDL_GetTicks64() - startTicks;
+            if (elapsed < (Uint32)frameDelayMs) SDL_Delay(frameDelayMs - elapsed);
+        }
+        if (_texture) SDL_DestroyTexture(_texture);
+        if (_renderer) SDL_DestroyRenderer(_renderer);
+        if (_window) SDL_DestroyWindow(_window);
+        SDL_Quit();
     }
-    SDL_Window* window;
-    SDL_Texture* texture;
-    SDL_Renderer* renderer = NULL;
-    std::string title;
-    std::shared_ptr<std::thread> eventThreadLoop;
+
+    SDL_Window* _window;
+    SDL_Texture* _texture;
+    SDL_Renderer* _renderer;
+
+    std::string _title;
+    int _width;
+    int _height;
+
+    std::mutex _frameMutex;
+    std::vector<uint32_t> _framePixels;
+    bool _hasNewFrame;
+
+    std::atomic_bool _stop;
+    std::thread _SDLMainThread;
 };
 
 static vector<string_view> getParamsList(int argc, char* argv[]) {
@@ -73,7 +139,7 @@ static vector<string_view> getParamsList(int argc, char* argv[]) {
 
 class OnTrackImpl : public stream::OnTrackInterface {
 public:
-    OnTrackImpl() : _renderer(RTCVideoRendererImpl("Remote")) {}
+    OnTrackImpl() : _renderer(RTCVideoRendererImpl("Remote", 768, 432)) {}
     virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
         if(tack.kind == stream::DataType::AUDIO) {
             LOG_INFO("OnRemoteTrack[stream::TrackAction] DataType::AUDIO : ", (action == stream::TrackAction::ADDED ? "ADDED" : "REMOVED"));
