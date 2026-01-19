@@ -148,7 +148,13 @@ void FullTextSearch::updateDocument(const Document& document) {
         throw UpdateExecuteException(sqlite3_errmsg(_db.get()));
     }
 
+    int64_t rowsUpdated = sqlite3_changes64(_db.get());
+
     sqlite3_finalize(stmt);
+
+    if (rowsUpdated == 0) {
+        throw InvalidDocumentIdException();
+    }
 }
 
 void FullTextSearch::deleteDocument(const int64_t documentId) {
@@ -171,7 +177,7 @@ void FullTextSearch::deleteDocument(const int64_t documentId) {
     sqlite3_finalize(stmt);
 
     if (rowsDeleted == 0) {
-        throw InvalidDocumentIdHandleException();
+        throw InvalidDocumentIdException();
     }
 }
 
