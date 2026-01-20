@@ -15,6 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/search/SearchApi.hpp"
 #include "privmx/endpoint/search/SearchApiImpl.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
+#include "privmx/endpoint/core/Validator.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
@@ -45,9 +46,9 @@ std::string SearchApi::createSearchIndex(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     validateEndpoint();
-    // core::Validator::validateId(contextId, "field:contextId ");
-    // core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    // core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
         return _impl->createSearchIndex(contextId, users, managers, publicMeta, privateMeta, mode, policies);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -68,9 +69,9 @@ void SearchApi::updateSearchIndex(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
-    // core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    // core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateId(indexId, "field:indexId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
         _impl->updateSearchIndex(indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -81,7 +82,7 @@ void SearchApi::updateSearchIndex(
 
 void SearchApi::deleteSearchIndex(const std::string& indexId) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
+    core::Validator::validateId(indexId, "field:indexId ");
     try {
         return _impl->deleteSearchIndex(indexId);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -92,6 +93,7 @@ void SearchApi::deleteSearchIndex(const std::string& indexId) {
 
 SearchIndex SearchApi::getSearchIndex(const std::string& indexId) {
     validateEndpoint();
+    core::Validator::validateId(indexId, "field:indexId ");
     try {
         return _impl->getSearchIndex(indexId);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -102,6 +104,8 @@ SearchIndex SearchApi::getSearchIndex(const std::string& indexId) {
 
 core::PagingList<SearchIndex> SearchApi::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:query ");
     try {
         return _impl->listSearchIndexes(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -112,7 +116,7 @@ core::PagingList<SearchIndex> SearchApi::listSearchIndexes(const std::string& co
 
 int64_t SearchApi::openSearchIndex(const std::string& indexId) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
+    core::Validator::validateId(indexId, "field:indexId ");
     try {
         return _impl->openSearchIndex(indexId);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -123,7 +127,6 @@ int64_t SearchApi::openSearchIndex(const std::string& indexId) {
 
 void SearchApi::closeSearchIndex(const int64_t indexHandle) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
     try {
         return _impl->closeSearchIndex(indexHandle);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -134,7 +137,6 @@ void SearchApi::closeSearchIndex(const int64_t indexHandle) {
 
 int64_t SearchApi::addDocument(const int64_t indexHandle, const std::string& name, const std::string& content) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
     try {
         return _impl->addDocument(indexHandle, name, content);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -145,7 +147,6 @@ int64_t SearchApi::addDocument(const int64_t indexHandle, const std::string& nam
 
 void SearchApi::updateDocument(const int64_t indexHandle, const Document& document) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
     try {
         return _impl->updateDocument(indexHandle, document);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -156,7 +157,6 @@ void SearchApi::updateDocument(const int64_t indexHandle, const Document& docume
 
 void SearchApi::deleteDocument(const int64_t indexHandle, int64_t documentId) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
     try {
         return _impl->deleteDocument(indexHandle, documentId);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -187,7 +187,6 @@ core::PagingList<Document> SearchApi::listDocuments(const int64_t indexHandle, c
 
 core::PagingList<Document> SearchApi::searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
-    // core::Validator::validateId(threadId, "field:threadId ");
     try {
         return _impl->searchDocuments(indexHandle, searchQuery, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
