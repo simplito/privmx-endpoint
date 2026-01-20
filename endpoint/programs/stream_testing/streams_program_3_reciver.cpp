@@ -143,6 +143,9 @@ public:
     virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
         if(tack.kind == stream::DataType::AUDIO) {
             LOG_INFO("OnRemoteTrack[stream::TrackAction] DataType::AUDIO : ", (action == stream::TrackAction::ADDED ? "ADDED" : "REMOVED"));
+            if(action == stream::TrackAction::ADDED && !tack.muted) {
+                tack.updateMute(true);
+            }
         }
         if(tack.kind == stream::DataType::VIDEO) {
             LOG_INFO("OnRemoteTrack[stream::TrackAction] DataType::VIDEO : ", (action == stream::TrackAction::ADDED ? "ADDED" : "REMOVED"));

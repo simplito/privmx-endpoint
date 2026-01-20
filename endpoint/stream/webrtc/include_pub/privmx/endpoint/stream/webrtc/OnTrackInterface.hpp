@@ -24,12 +24,8 @@ struct Track {
     std::vector<std::string> streamIds;
     std::string trackId;
     bool muted;
+    std::function<void(bool)> updateMute;
 };
-// struct Stream {
-//     std::vector<Track> tracks;
-//     std::string label;
-//     std::string id;
-// };
 struct TrackEvent {
     std::string id;
     std::optional<Track> track;

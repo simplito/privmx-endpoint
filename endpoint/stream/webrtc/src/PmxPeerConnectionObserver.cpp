@@ -120,8 +120,7 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
     }
     // callback on track
     if(_onTrackInterface) {
-
-        _onTrackInterface->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled()}, TrackAction::ADDED);
+        _onTrackInterface->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled(), [track](bool mute) {return track->set_enabled(!mute);}}, TrackAction::ADDED);
     }
     // callback on data
     if(_onTrackInterface) {
@@ -153,7 +152,8 @@ void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped
     if(_onTrackInterface) {
         std::vector<std::string> streamIds;
         for(const auto& streamId: receiver->stream_ids().std_vector()) streamIds.push_back(streamId.std_string());
-        _onTrackInterface->OnRemoteTrack(Track{dataType, streamIds, receiver->track()->id().std_string(), !receiver->track()->enabled()}, TrackAction::ADDED);
+        auto track = receiver->track();
+        _onTrackInterface->OnRemoteTrack(Track{dataType, streamIds, receiver->track()->id().std_string(), !receiver->track()->enabled(), [track](bool mute) {return track->set_enabled(mute);}}, TrackAction::ADDED);
         if(dataType == DataType::AUDIO) _audioTrackSinks.erase(receiver->track()->id().std_string());
         if(dataType == DataType::VIDEO) _RTCVideoRenderers.erase(receiver->track()->id().std_string());
     }

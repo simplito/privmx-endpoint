@@ -88,35 +88,35 @@ int main(int argc, char** argv) {
         
         int i = 20;
         while (i--) {
-            std::this_thread::sleep_for(std::chrono::seconds(10));
-            std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
-            for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Video) {
-                    streamApi.removeTrack(streamHandle, mediaDevice);
-                    break;
-                }
-            }
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            std::cout << "----------------------------------------------remove track---------------------------------------------" << std::endl;
-            core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{false, core::VarSerializer::Options::STD_STRING});
-            streamApi.updateStream(streamHandle);
-            std::cout << "----------------------------------------------streams list---------------------------------------------" << std::endl;
-            auto streamsList = streamApi.listStreams(streamRoomId);
-            std::cout << privmx::utils::Utils::stringifyVar(serializer.serialize(streamsList), true) << std::endl;
-            std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
-            auto mediaDevices = streamApi.getMediaDevices();
-            for(const auto& mediaDevice: mediaDevices) {
-                if(mediaDevice.type == stream::DeviceType::Video) {
-                    streamApi.addTrack(streamHandle, mediaDevice);
-                    break;
-                }
-            }
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            std::cout << "----------------------------------------------add track------------------------------------------------" << std::endl;
+            // std::this_thread::sleep_for(std::chrono::seconds(10));
+            // std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
+            // for(const auto& mediaDevice: mediaDevices) {
+            //     if(mediaDevice.type == stream::DeviceType::Video) {
+            //         streamApi.removeTrack(streamHandle, mediaDevice);
+            //         break;
+            //     }
+            // }
+            // std::this_thread::sleep_for(std::chrono::seconds(5));
+            // std::cout << "----------------------------------------------remove track---------------------------------------------" << std::endl;
+            // core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{false, core::VarSerializer::Options::STD_STRING});
+            // streamApi.updateStream(streamHandle);
+            // std::cout << "----------------------------------------------streams list---------------------------------------------" << std::endl;
+            // auto streamsList = streamApi.listStreams(streamRoomId);
+            // std::cout << privmx::utils::Utils::stringifyVar(serializer.serialize(streamsList), true) << std::endl;
+            // std::cout << "-------------------------------------------------------------------------------------------------------" << std::endl;
+            // auto mediaDevices = streamApi.getMediaDevices();
+            // for(const auto& mediaDevice: mediaDevices) {
+            //     if(mediaDevice.type == stream::DeviceType::Video) {
+            //         streamApi.addTrack(streamHandle, mediaDevice);
+            //         break;
+            //     }
+            // }
+            // std::this_thread::sleep_for(std::chrono::seconds(5));
+            // std::cout << "----------------------------------------------add track------------------------------------------------" << std::endl;
             
-            streamApi.updateStream(streamHandle);
+            // streamApi.updateStream(streamHandle);
         };
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(600));
         streamApi.unpublishStream(streamHandle);
         // streamApi.leaveStreamRoom(streamRoomId);
 
