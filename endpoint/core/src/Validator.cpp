@@ -196,6 +196,8 @@ void Validator::validateEventType(const Event& value, const std::string& type, c
 }
 
 void Validator::validatePagingQuery(const PagingQuery& value,const std::vector<std::string>& sort_by_field, const std::string& stack_trace) {
+    Validator::validateNumberPositive(value.limit, stack_trace);
+    Validator::validateNumberNonNegative(value.skip, stack_trace);
     Validator::validateSortOrder(value.sortOrder, stack_trace + "PagingQuery.sortOrder");
     if (value.lastId.has_value()) {
         Validator::validateLastId(value.lastId.value(), stack_trace + "PagingQuery.lastId");
