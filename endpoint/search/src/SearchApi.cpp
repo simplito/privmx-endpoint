@@ -105,7 +105,7 @@ SearchIndex SearchApi::getSearchIndex(const std::string& indexId) {
 core::PagingList<SearchIndex> SearchApi::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validatePagingQuery(pagingQuery, {}, "field:query ");
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
         return _impl->listSearchIndexes(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -177,6 +177,7 @@ Document SearchApi::getDocument(const int64_t indexHandle, const int64_t documen
 
 core::PagingList<Document> SearchApi::listDocuments(const int64_t indexHandle, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
         return _impl->listDocuments(indexHandle, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -187,6 +188,7 @@ core::PagingList<Document> SearchApi::listDocuments(const int64_t indexHandle, c
 
 core::PagingList<Document> SearchApi::searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery) {
     validateEndpoint();
+    core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
         return _impl->searchDocuments(indexHandle, searchQuery, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
