@@ -149,6 +149,17 @@ void StreamApi::leaveStreamRoom(const std::string& streamRoomId) {
     }
 }
 
+void StreamApi::enableStreamRoomRecording(const std::string& streamRoomId) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->enableStreamRoomRecording(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 StreamHandle StreamApi::createStream(const std::string& streamRoomId) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
