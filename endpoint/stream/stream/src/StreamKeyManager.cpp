@@ -16,9 +16,9 @@ limitations under the License.
 #include <privmx/utils/PrivmxExtExceptions.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 
-#define UPDATE_INTERVAL 1000*120
+#define UPDATE_INTERVAL 1000*5
 #define MAX_UPDATE_TIMEOUT 1000*5
-#define MAX_STD_KEY_TTL 1000*15+(MAX_UPDATE_TIMEOUT*2)+UPDATE_INTERVAL
+#define MAX_STD_KEY_TTL 1000*120+(MAX_UPDATE_TIMEOUT*2)+UPDATE_INTERVAL
 
 using namespace privmx::endpoint::stream; 
 
