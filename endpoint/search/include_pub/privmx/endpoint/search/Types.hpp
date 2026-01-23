@@ -15,6 +15,7 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 
 
 namespace privmx {
@@ -25,7 +26,7 @@ namespace search {
  * Defines the mode in which the Search Index operates, specifically regarding 
  * the storage and retrieval of document content.
  */
-enum IndexMode
+enum IndexMode : int64_t
 {
     /**
      * The Index stores the full document content internally. 
@@ -118,6 +119,11 @@ struct SearchIndex
      * status code of retrieval and decryption of the Thread
      */
     int64_t statusCode;
+
+    /**
+     * Version of the Thread data structure and how it is encoded/encrypted
+     */
+    int64_t schemaVersion;
 };
 
 /**

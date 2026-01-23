@@ -62,6 +62,7 @@ public:
      * the created Index
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
+     * @param mode mode the operational mode of the Serach Index
      * @param policies Index's policies
      * @return ID of the created Search Index
      */
