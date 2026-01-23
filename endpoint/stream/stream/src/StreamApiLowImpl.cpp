@@ -321,7 +321,7 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
 
 void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomRecordingModel>();
-    _serverApi->enableStreamRoomRecording(model);
+    _serverApi->streamRoomEnableRecording(model);
 }
 
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
