@@ -30,7 +30,7 @@ if(PRIVMX_BUILD_LOGGER)
     message(STATUS "Privmx logger include threadId - PRIVMX_LOGGER_OUTPUT_INCLUDE_THREADID=${PRIVMX_LOGGER_OUTPUT_INCLUDE_THREADID}")
 
 
-    option(PRIVMX_LOGGER_OUTPUT_INCLUDE_TIMESTAMP "Privmx logger output in to stdout" ON)
+    option(PRIVMX_LOGGER_OUTPUT_STDOUT "Privmx logger output in to stdout" ON)
     option(PRIVMX_LOGGER_OUTPUT_STDERR "Privmx logger output in to stderr" OFF)
     option(PRIVMX_LOGGER_OUTPUT_FILE "Privmx logger output in to file" OFF)
     

@@ -14,11 +14,12 @@ message(STATUS "Build endpoint ping - PRIVMX_BUILD_ENDPOINT_ENDPOINT=${PRIVMX_BU
 if(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(core)
     add_subdirectory(crypto)
+    add_subdirectory(event)
     add_subdirectory(thread)
     add_subdirectory(store)
     add_subdirectory(kvdb)
     add_subdirectory(inbox)
-    add_subdirectory(event)
+    add_subdirectory(stream)
     add_subdirectory(search)
 endif(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
 
@@ -28,4 +29,8 @@ endif()
 
 if(PRIVMX_BUILD_BENCHMARK AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(programs/benchmark)
+endif()
+
+if(PRIVMX_BUILD_STREAM_TESTING AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
+    add_subdirectory(programs/stream_testing)
 endif()

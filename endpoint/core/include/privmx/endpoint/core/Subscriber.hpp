@@ -66,7 +66,7 @@ class Subscriber
 {
 public:
     Subscriber(privmx::privfs::RpcGateway::Ptr gateway);
-    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries, bool force = false);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     void unsubscribeFromCurrentlySubscribed();
     std::optional<std::string> getSubscriptionQuery(const std::string& subscriptionId);

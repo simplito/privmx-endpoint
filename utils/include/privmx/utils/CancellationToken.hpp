@@ -18,6 +18,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 #include <Poco/SharedPtr.h>
+#include <iostream>
 
 #include <privmx/utils/PrivmxExtExceptions.hpp>
 #include <privmx/utils/Types.hpp>
@@ -46,6 +47,7 @@ public:
     static CancellationToken::Ptr create(CancellationToken::Ptr token);
     CancellationToken();
     CancellationToken(CancellationToken::Ptr token);
+    ~CancellationToken() = default;
     void cancel();
     bool isCancelled();
     void validate();
@@ -86,8 +88,8 @@ inline void CancellationToken::sleep(const std::chrono::duration<Rep, Period>& d
     if (_cancelled) {
         throwOperationCanceled();
     }
-    auto status = _cv.wait_for(lock, duration);
-    if (status == std::cv_status::no_timeout) {
+    auto status = _cv.wait_for(lock, duration, [&]{return _cancelled.load();});
+    if (status) {
         throwOperationCanceled();
     }
 }

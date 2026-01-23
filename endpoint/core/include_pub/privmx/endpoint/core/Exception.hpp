@@ -80,6 +80,7 @@ inline void Exception::rethrow() const {
 // 0x0004 - Store
 // 0x0005 - Interface
 // 0x0007 - Inbox
+// 0x0008 - Stream
 // 0x0009 - Event
 // 0x000A - Kvdb
 // 0x000B - Search

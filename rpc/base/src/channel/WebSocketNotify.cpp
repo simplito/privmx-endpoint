@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <privmx/rpc/channel/WebSocketNotify.hpp>
 #include <privmx/rpc/RpcException.hpp>
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx;
 using namespace privmx::rpc;
@@ -21,6 +22,10 @@ using namespace std;
 using namespace Poco;
 using namespace Poco::JSON;
 
+WebSocketNotify::~WebSocketNotify() {
+    cancelNotifier();
+}
+
 
 void WebSocketNotify::add(Int32 wschannelid, function<void(const string&)> callback, function<void(void)> on_websocket_close) {
     Lock lock(_mutex);
@@ -28,6 +33,7 @@ void WebSocketNotify::add(Int32 wschannelid, function<void(const string&)> callb
 }
 
 void WebSocketNotify::remove(Int32 wschannelid) {
+    LOG_TRACE("WebSocketNotify::remove wschannelid: ", wschannelid);
     {
         Lock lock(_mutex);
         auto it = _ws_channel_funcs.find(wschannelid);
@@ -39,9 +45,8 @@ void WebSocketNotify::remove(Int32 wschannelid) {
     if (_ws_channel_funcs.size() <= 0 && on_close_all_channels) {
         on_close_all_channels();
     }
-    if (notifier_active) {
-        consumer_thread.detach();
-        notifier_active = false;
+    if (_notifier_active) {
+        cancelNotifier();
     }
 }
 
@@ -62,14 +67,15 @@ void WebSocketNotify::notify(const string& data) {
 }
 
 void WebSocketNotify::queueForNotify(const string data) {
-    if (!notifier_active) {
-        notifier_active = true;
-        notifier_cancellation_token = privmx::utils::CancellationToken::create();
-        consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
+    if (!_notifier_active) {
+        _notifier_active = true;
+        _notifier_cancellation_token = privmx::utils::CancellationToken::create();
+        _consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
             while(!token->isCancelled()) {
                 notifier();
             }
-        }, notifier_cancellation_token);
+            LOG_TRACE("WebSocketNotify::ConsumerThread exited");
+        }, _notifier_cancellation_token);
     }
 
     Int32 wschannelid = ByteOrder::fromBigEndian(*((Int32*)data.data()));
@@ -87,11 +93,11 @@ void WebSocketNotify::queueForNotify(const string data) {
             .data = data,
             .callback = callback
         };
-        notificationsQueue.push(pair);
+        _notificationsQueue.push(pair);
 
         lock_guard<std::mutex>lock(_notifyMutex);
-        data_to_notify = true;
-        notify_cv.notify_one();
+        _data_to_notify = true;
+        _notify_cv.notify_one();
     }
 }
 
@@ -109,21 +115,31 @@ void WebSocketNotify::onWebSocketClose() {
 
 void WebSocketNotify::notifier() {
     unique_lock<std::mutex>lock(_notifyMutex);
-    notify_cv.wait(lock, [&] {
-        return data_to_notify;
+    _notify_cv.wait(lock, [&] {
+        return _data_to_notify.load() || _notifier_cancellation_token->isCancelled();
     });
-    while(notificationsQueue.size() > 0) {
-        auto ret {notificationsQueue.pop()};
+    if(_notifier_cancellation_token->isCancelled()) {
+        LOG_TRACE("WebSocketNotify::notifier Canceled");
+        return;
+    }
+
+    while(_notificationsQueue.size() > 0) {
+        auto ret {_notificationsQueue.pop()};
         ret.callback(ret.data.substr(4));
     };
-
-    data_to_notify = false;
-    notify_cv.notify_one();
+    _data_to_notify.store(false);
 }
 
 void WebSocketNotify::cancelNotifier() {
-    if(!notifier_cancellation_token.isNull()) {
-        notifier_cancellation_token->cancel();
+    LOG_TRACE("WebSocketNotify::cancelNotifier")
+    if(!_notifier_cancellation_token.isNull()) {
+        _notifier_cancellation_token->cancel();
     }
-    data_to_notify = true;
+    _data_to_notify.store(true);
+    _notify_cv.notify_all();
+    if (_consumer_thread.joinable()) {
+        _consumer_thread.join();
+    }
+    _notifier_active = false;
+    LOG_TRACE("WebSocketNotify::cancelNotifier cancelled");
 }

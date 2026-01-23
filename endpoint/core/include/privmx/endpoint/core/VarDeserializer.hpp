@@ -35,6 +35,8 @@ public:
     std::vector<T> deserializeVector(const Poco::Dynamic::Var& value, const std::string& name);
     template<typename T>
     std::optional<T> deserializeOptional(const Poco::Dynamic::Var& value, const std::string& name);
+    template<typename T>
+    std::optional<std::vector<T>> deserializeOptionalVector(const Poco::Dynamic::Var& val, const std::string& name);
 };
 
 template<typename T>
@@ -55,6 +57,14 @@ inline std::optional<T> VarDeserializer::deserializeOptional(const Poco::Dynamic
         return std::nullopt;
     }
     return deserialize<T>(val, name);
+}
+
+template<typename T>
+inline std::optional<std::vector<T>> VarDeserializer::deserializeOptionalVector(const Poco::Dynamic::Var& val, const std::string& name) {
+    if (val.isEmpty()) {
+        return std::nullopt;
+    }
+    return deserializeVector<T>(val, name);
 }
 
 template<>

@@ -108,6 +108,7 @@ private:
     );
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
+    NotificationEvent convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     
     const int64_t _connectionId;

@@ -1,0 +1,27 @@
+add_subdirectory(stream)
+
+option(PRIVMX_BUILD_WITH_WEBRTC "Build Stream module with additional layer of the native WebRTC library" OFF)
+message(STATUS "Build Stream module with additional layer of the native WebRTC library - PRIVMX_BUILD_WITH_WEBRTC=${PRIVMX_BUILD_WITH_WEBRTC}")
+
+set(LIBS "")
+
+if(PRIVMX_BUILD_WITH_WEBRTC)
+    add_subdirectory(webrtc)
+    list(APPEND LIBS privmxendpointstream_webrtc)
+endif()
+
+if(BUILD_SHARED_LIBS)
+    add_library(privmxendpointstream SHARED)
+else()
+    add_library(privmxendpointstream STATIC)
+endif()
+target_compile_options(privmxendpointstream PRIVATE -fPIC -Wall -Wextra)
+target_link_libraries(privmxendpointstream PRIVATE Poco::Foundation privmx privmxendpointcore privmxendpointevent PUBLIC privmxendpointstream_stream ${LIBS})
+if(BUILD_SHARED_LIBS)
+    set_target_properties(privmxendpointstream PROPERTIES POSITION_INDEPENDENT_CODE True)
+endif()
+install(TARGETS privmxendpointstream DESTINATION lib)
+if(PRIVMX_WERROR)
+    target_compile_options(privmxendpointstream PRIVATE -Werror)
+endif()
+set_target_properties(privmxendpointstream PROPERTIES COMPILE_DEFINITIONS "MINIMAL_BUILD")

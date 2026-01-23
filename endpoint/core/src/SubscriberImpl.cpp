@@ -33,6 +33,7 @@ std::vector<std::string> SubscriberImpl::getChannelPath(EventType eventType) {
         case EventType::USER_STATUS:
             return {std::string(_moduleName), _eventTypeNames.at(eventType)};
     }
+
     throw NotImplementedException(_readableEventType.at(eventType));
 }
 

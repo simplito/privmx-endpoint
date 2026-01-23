@@ -33,6 +33,7 @@ ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
 }
 ConnectionImpl::~ConnectionImpl() {
     _guardedExecutor.reset();
+    LOG_TRACE("~ConnectionImpl Done");
 }
 
 void ConnectionImpl::connect(
@@ -85,7 +86,12 @@ void ConnectionImpl::connect(
         _eventMiddleware->emitApiEvent(event);
     });
     _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
-        _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
+        if (event.type == "janus") {
+            // emit as raw
+            _eventMiddleware->emitNotificationEvent(event.type, convertJanusEventToCoreNotificationEvent(event));
+        } else {
+            _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
+        }
     });
     _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
@@ -251,6 +257,8 @@ void ConnectionImpl::disconnect() {
     _gateway.reset();
     auto event = EventBuilder::buildLibEvent<LibPlatformDisconnectedEvent>();
     _eventMiddleware->emitApiEvent(event);
+    LOG_DEBUG("disconnect: disconnected.");
+
 }
 
 int64_t ConnectionImpl::generateConnectionId() {
@@ -303,18 +311,35 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
 }
 
 NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
-    std::vector<std::string> subscriptions;
-    auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
-    for(auto subscription : tmp.subscriptions()) {
-        subscriptions.push_back(subscription);
+    try {
+        std::vector<std::string> subscriptions;
+        auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
+        for(auto subscription : tmp.subscriptions()) {
+            subscriptions.push_back(subscription);
+        }
+        return NotificationEvent{
+            .source = EventSource::SERVER,
+            .type = event.type,
+            .data = tmp.data(),
+            .version = tmp.version(),
+            .timestamp = tmp.timestamp(),
+            .subscriptions = subscriptions
+        };
     }
+    catch (std::exception& e) {
+        std::cerr << "Error on event: " << privmx::utils::Utils::stringifyVar(event.data, true) << std::endl;
+        std::cerr << "convertRpcNotificationEventToCoreNotificationEvent: " << e.what() << std::endl;
+    }
+}
+
+NotificationEvent ConnectionImpl::convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
     return NotificationEvent{
         .source = EventSource::SERVER,
         .type = event.type,
-        .data = tmp.data(),
-        .version = tmp.version(),
-        .timestamp = tmp.timestamp(),
-        .subscriptions = subscriptions
+        .data = event.data,
+        .version = 0,
+        .timestamp = 0,
+        .subscriptions = {}
     };
 }
 

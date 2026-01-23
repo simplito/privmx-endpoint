@@ -10,6 +10,8 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/EventMiddleware.hpp"
+#include "privmx/endpoint/core/Exception.hpp"
+#include <privmx/utils/Logger.hpp>
 #include <algorithm>
 
 using namespace privmx::endpoint::core;
@@ -74,19 +76,37 @@ void EventMiddleware::notificationEventListenerRemoveSubscriptionIds(int id, con
 void EventMiddleware::removeNotificationEventListener(int id) noexcept {
     try {
         _notificationsListeners.erase(id);
-    } catch (...) {}
+    } catch (const core::Exception& e) {
+        LOG_ERROR("Error on EventMiddleware::removeNotificationEventListener, recived privmx::core::Exception :\n", e.getFull() )
+    } catch (const std::exception& e) {
+        LOG_FATAL("Error on EventMiddleware::removeNotificationEventListener, recived std::exception :\n", e.what() )
+    } catch (...) {
+        LOG_FATAL("Error on EventMiddleware::removeNotificationEventListener, recived unknown exception")
+    }
 }
 
 void EventMiddleware::removeConnectedEventListener(int id) noexcept {
     try {
         _connectedListeners.erase(id);
-    } catch (...) {}
+    } catch (const core::Exception& e) {
+        LOG_ERROR("Error on EventMiddleware::removeConnectedEventListener, recived privmx::core::Exception :\n", e.getFull() )
+    } catch (const std::exception& e) {
+        LOG_FATAL("Error on EventMiddleware::removeConnectedEventListener, recived std::exception :\n", e.what() )
+    } catch (...) {
+        LOG_FATAL("Error on EventMiddleware::removeConnectedEventListener, recived unknown exception")
+    }
 }
 
 void EventMiddleware::removeDisconnectedEventListener(int id) noexcept {
     try {
         _disconnectedListeners.erase(id);
-    } catch (...) {}
+    } catch (const core::Exception& e) {
+        LOG_ERROR("Error on EventMiddleware::removeDisconnectedEventListener, recived privmx::core::Exception :\n", e.getFull() )
+    } catch (const std::exception& e) {
+        LOG_FATAL("Error on EventMiddleware::removeDisconnectedEventListener, recived std::exception :\n", e.what() )
+    } catch (...) {
+        LOG_FATAL("Error on EventMiddleware::removeDisconnectedEventListener, recived unknown exception")
+    }
 }
 
 void EventMiddleware::emitNotificationEvent(const std::string& type, const NotificationEvent& notification) {
@@ -104,7 +124,13 @@ void EventMiddleware::emitNotificationEvent(const std::string& type, const Notif
                         }
                    }
                 }
-            } catch (...) {}
+            } catch (const core::Exception& e) {
+                LOG_ERROR("Error on EventMiddleware::emitNotificationEvent, recived privmx::core::Exception :\n", e.getFull() , "\nNotification type: ", type,"\nPayload: ",privmx::utils::Utils::stringifyVar(notification.data, true))
+            } catch (const std::exception& e) {
+                LOG_FATAL("Error on EventMiddleware::emitNotificationEvent, recived std::exception :\n", e.what() , "\nNotification type: ", type,"\nPayload: ",privmx::utils::Utils::stringifyVar(notification.data, true))
+            } catch (...) {
+                LOG_FATAL("Error on EventMiddleware::emitNotificationEvent, recived unknown exception" , "\nNotification type: ", type,"\nPayload: ",privmx::utils::Utils::stringifyVar(notification.data, true))
+            }
         });
 }
 
@@ -114,7 +140,13 @@ void EventMiddleware::emitConnectedEvent() {
             if (listener) {
                 listener();
             }
-        } catch (...) {}
+        } catch (const core::Exception& e) {
+            LOG_ERROR("Error on EventMiddleware::emitConnectedEvent, recived privmx::core::Exception :\n", e.getFull() )
+        } catch (const std::exception& e) {
+            LOG_FATAL("Error on EventMiddleware::emitConnectedEvent, recived std::exception :\n", e.what() )
+        } catch (...) {
+            LOG_FATAL("Error on EventMiddleware::emitConnectedEvent, recived unknown exception")
+        }
     });
 }
 
@@ -124,6 +156,12 @@ void EventMiddleware::emitDisconnectedEvent() {
             if (listener) {
                 listener();
             }
-        } catch (...) {}
+        } catch (const core::Exception& e) {
+            LOG_ERROR("Error on EventMiddleware::emitDisconnectedEvent, recived privmx::core::Exception :\n", e.getFull() )
+        } catch (const std::exception& e) {
+            LOG_FATAL("Error on EventMiddleware::emitDisconnectedEvent, recived std::exception :\n", e.what() )
+        } catch (...) {
+            LOG_FATAL("Error on EventMiddleware::emitDisconnectedEvent, recived unknown exception")
+        }
     });
 }

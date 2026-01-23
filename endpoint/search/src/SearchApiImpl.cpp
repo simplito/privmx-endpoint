@@ -45,6 +45,8 @@ SearchApiImpl::SearchApiImpl(
     _kvdbApi = kvdbApi;
 }
 
+SearchApiImpl::~SearchApiImpl() { }
+
 std::string SearchApiImpl::createSearchIndex(
     const std::string& contextId,
     const std::vector<core::UserWithPubKey>& users,

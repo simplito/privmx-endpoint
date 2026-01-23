@@ -33,7 +33,8 @@ CancellationToken::Ptr CancellationToken::create(CancellationToken::Ptr token) {
     return new CancellationToken(token);
 }
 
-CancellationToken::CancellationToken() : _cancelled(false) {}
+CancellationToken::CancellationToken() : _cancelled(false) {
+}
 
 CancellationToken::CancellationToken(CancellationToken::Ptr token) : _cancelled(token->isCancelled()) {
     _parent = Task(token, [&]{ cancel(); });

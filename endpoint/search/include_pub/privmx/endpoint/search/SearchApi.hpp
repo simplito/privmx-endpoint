@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/search/Types.hpp"
+#include "privmx/endpoint/core/ExtendedPointer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -31,7 +32,7 @@ class SearchApiImpl;
 /**
  * 'SearchApi' is a class representing Endpoint's API for Search Indexes and their Documents.
  */
-class SearchApi
+class SearchApi : public privmx::endpoint::core::ExtendedPointer<SearchApiImpl>
 {
 public:
     /**
@@ -46,7 +47,11 @@ public:
     /**
      * //doc-gen:ignore
      */
-    SearchApi() = default;
+    SearchApi();
+    SearchApi(const SearchApi& obj);
+    SearchApi& operator=(const SearchApi& obj);
+    SearchApi(SearchApi&& obj);
+    ~SearchApi();
 
     /**
      * Creates a new Search Index in a given Context.
@@ -175,12 +180,8 @@ public:
      */
     core::PagingList<Document> searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery);
 
-    std::shared_ptr<SearchApiImpl> getImpl() const { return _impl; }
-
 private:
-    void validateEndpoint();
     SearchApi(const std::shared_ptr<SearchApiImpl>& impl);
-    std::shared_ptr<SearchApiImpl> _impl;
 };
 
 }  // namespace search
