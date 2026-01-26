@@ -317,7 +317,13 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     room->streamKeyManager.reset();
     // Final clenup
     _streamRoomMap.erase(streamRoomId);
+}
 
+void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
+    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomRecordingModel>();
+    LOG_DEBUG("CPP-layer: call  enableStreamRoomRecording() with streamRoomId", streamRoomId);
+    model.streamRoomId(streamRoomId);
+    _serverApi->streamRoomEnableRecording(model);
 }
 
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {

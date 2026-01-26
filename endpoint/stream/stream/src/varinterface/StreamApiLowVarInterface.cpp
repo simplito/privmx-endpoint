@@ -38,6 +38,7 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
     {ListStreams, &StreamApiLowVarInterface::listStreams},
     {JoinStreamRoom, &StreamApiLowVarInterface::joinStreamRoom},
     {LeaveStreamRoom, &StreamApiLowVarInterface::leaveStreamRoom},
+    {EnableStreamRoomRecording, &StreamApiLowVarInterface::enableStreamRoomRecording},
 
     {CreateStream, &StreamApiLowVarInterface::createStream},
     {PublishStream, &StreamApiLowVarInterface::publishStream},
@@ -152,6 +153,13 @@ Poco::Dynamic::Var StreamApiLowVarInterface::leaveStreamRoom(const Poco::Dynamic
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
     _streamApi.leaveStreamRoom(streamRoomId);
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::enableStreamRoomRecording(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    _streamApi.enableStreamRoomRecording(streamRoomId);
     return {};
 }
 
