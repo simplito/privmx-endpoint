@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 #include <string>
 
+#include "CoreTypes.hpp"
 #include "privmx/endpoint/core/BufferVarHolderImpl.hpp"
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
@@ -175,6 +176,7 @@ Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const VerificationRequest& val);
+
 
 }  // namespace core
 }  // namespace endpoint

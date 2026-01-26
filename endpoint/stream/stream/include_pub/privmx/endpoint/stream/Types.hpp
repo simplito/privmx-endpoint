@@ -228,6 +228,11 @@ struct StreamsUpdatedData {
     std::vector<UpdatedStreamData> streams;
 };
 
+struct RecordingEncKey {
+    std::string id;
+    std::string key;
+};
+
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx

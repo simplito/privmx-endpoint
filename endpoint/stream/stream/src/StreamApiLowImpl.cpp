@@ -326,6 +326,25 @@ void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId
     _serverApi->streamRoomEnableRecording(model);
 }
 
+std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
+    auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
+    params.id(streamRoomId);
+    params.type(STREAM_ROOM_TYPE_FILTER_FLAG);
+    auto streamRoom = _serverApi->streamRoomGet(params).streamRoom();
+    auto statusCode = validateStreamRoomDataIntegrity(streamRoom);
+    if(statusCode != 0) {
+        throw StreamRoomDataIntegrityException();
+    }
+
+    auto streamRoom_data_entry = streamRoom.data().get(streamRoom.data().size()-1);
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
+    keyProviderRequest.addOne(streamRoom.keys(), streamRoom_data_entry.keyId(), location);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoom_data_entry.keyId());
+    stream::RecordingEncKey streamEncKey {.id = key.id, .key = key.key};
+    return {streamEncKey};
+}
+
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle {nextId()};
     auto room = getStreamRoomData(streamRoomId);
@@ -724,9 +743,14 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string
     });
 }
 
-StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
+StreamRoom StreamApiLowImpl::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
+    return _getStreamRoomEx(streamRoomId, type);
+}
+
+StreamRoom StreamApiLowImpl::_getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
     auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     params.id(streamRoomId);
+    params.type(type);
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom();
     auto statusCode = validateStreamRoomDataIntegrity(streamRoom);
     if(statusCode != 0) {
@@ -734,6 +758,10 @@ StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
     }
     auto result = decryptAndConvertStreamRoomDataToStreamRoom(streamRoom);
     return result;
+}
+
+StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
+    return _getStreamRoomEx(streamRoomId, STREAM_ROOM_TYPE_FILTER_FLAG);
 }
 
 void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {

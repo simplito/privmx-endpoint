@@ -73,6 +73,7 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
+    StreamRoom getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
     StreamRoom getStreamRoom(const std::string& streamRoomId);
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
@@ -80,7 +81,7 @@ public:
     void joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
     void enableStreamRoomRecording(const std::string& streamRoomId);
-
+    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
@@ -132,6 +133,7 @@ private:
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = StreamRoomDataSchema::Version::UNKNOWN
     );
+    StreamRoom _getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
     StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData);
     StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
     std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom, server::StreamRoomDataEntry streamRoomEntry, const core::DecryptedEncKey& encKey);
@@ -174,6 +176,8 @@ private:
     privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
+
+    inline static const std::string STREAM_ROOM_TYPE_FILTER_FLAG = "StreamRoom";
 };
 
 }  // namespace stream

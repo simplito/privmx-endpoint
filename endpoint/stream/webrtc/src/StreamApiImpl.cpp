@@ -77,6 +77,9 @@ void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
 void StreamApiImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
     _api->enableStreamRoomRecording(streamRoomId);
 }
+std::vector<stream::RecordingEncKey> StreamApiImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
+    _api->getStreamRoomRecordingKeys(streamRoomId);
+}
 
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle = _api->createStream(streamRoomId);
@@ -257,7 +260,9 @@ core::PagingList<StreamRoom> StreamApiImpl::listStreamRooms(const std::string& c
     return _api->listStreamRooms(contextId, query);
 }
 
-StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
+StreamRoom StreamApiImpl::
+
+getStreamRoom(const std::string& streamRoomId) {
     return _api->getStreamRoom(streamRoomId);
 }
 

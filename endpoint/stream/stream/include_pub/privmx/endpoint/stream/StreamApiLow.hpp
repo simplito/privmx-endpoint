@@ -12,19 +12,21 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 
+#include <Poco/Dynamic/Var.h>
+
+#include <functional>
 #include <memory>
 #include <optional>
-#include <string>
-#include <vector>
-#include <functional>
-#include <Poco/Dynamic/Var.h>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
+#include <string>
+#include <vector>
+
+#include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
-
 
 namespace privmx {
 namespace endpoint {
@@ -75,6 +77,7 @@ public:
     void joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
     void enableStreamRoomRecording(const std::string& streamRoomId);
+    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);

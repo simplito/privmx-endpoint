@@ -220,6 +220,16 @@ void StreamApiLow::enableStreamRoomRecording(const std::string& streamRoomId) {
     }
 }
 
+std::vector<stream::RecordingEncKey> StreamApiLow::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
+    auto impl = getImpl();
+    try {
+        return impl->getStreamRoomRecordingKeys(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 StreamHandle StreamApiLow::createStream(const std::string& streamRoomId) {
     auto impl = getImpl();
     try {
