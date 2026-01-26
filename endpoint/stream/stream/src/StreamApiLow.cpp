@@ -31,7 +31,8 @@ using namespace privmx::endpoint::stream;
 
 StreamApiLow StreamApiLow::create(
     const core::Connection& connection, 
-    event::EventApi& eventApi
+    event::EventApi& eventApi,
+    StreamVideoEncryptionMode videoEncryptionMode
 ) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
@@ -43,7 +44,8 @@ StreamApiLow StreamApiLow::create(
             connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
-            connectionImpl->getEventMiddleware()
+            connectionImpl->getEventMiddleware(),
+            videoEncryptionMode
         ));
         impl->attach(impl);
         return StreamApiLow(impl);

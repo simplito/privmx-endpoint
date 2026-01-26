@@ -46,7 +46,8 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
-        const std::shared_ptr<core::EventMiddleware>& eventMiddleware
+        const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
+        StreamVideoEncryptionMode videoEncryptionMode = StreamVideoEncryptionMode::MULTIPLE_KEY
     );
     ~StreamApiLowImpl();
 
@@ -104,11 +105,13 @@ private:
         std::optional<StreamHandle> streamHandle;
     };
     struct StreamRoomData {
-        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc):
-            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc) 
+        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, StreamVideoEncryptionMode videoEncryptionMode):
+            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc)
         {
-            keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
-                _webRtc->updateKeys(_streamRoomId, keys);
+            keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _streamRoomId, videoEncryptionMode](const std::vector<privmx::endpoint::stream::Key> keys) {
+                if(videoEncryptionMode == StreamVideoEncryptionMode::MULTIPLE_KEY) {
+                    _webRtc->updateKeys(_streamRoomId, keys);
+                }
             });
         }
         std::shared_ptr<StreamData> publisherStream;
@@ -174,6 +177,7 @@ private:
     privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
+    StreamVideoEncryptionMode _videoEncryptionMode;
 };
 
 }  // namespace stream

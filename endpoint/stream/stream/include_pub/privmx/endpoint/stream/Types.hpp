@@ -223,9 +223,15 @@ struct StreamsUpdatedDataInternal {
     std::vector<UpdatedStreamData> streams;
     std::optional<SdpWithTypeModel> jsep;
 };
+
 struct StreamsUpdatedData {
     std::string room;
     std::vector<UpdatedStreamData> streams;
+};
+
+enum struct StreamVideoEncryptionMode {
+    SINGLE_KEY,
+    MULTIPLE_KEY,
 };
 
 }  // namespace stream
