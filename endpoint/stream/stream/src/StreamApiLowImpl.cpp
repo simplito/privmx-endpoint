@@ -274,6 +274,17 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
+    if(_videoEncryptionMode == StreamVideoEncryptionMode::SINGLE_KEY) {
+        core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+        core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
+        keyProviderRequest.addOne(streamRoom.keys(), streamRoom.data().get(streamRoom.data().size()-1).keyId(), location);
+        auto currentStreamRoomKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoom.data().get(streamRoom.data().size()-1).keyId());
+        std::vector<stream::Key> keys = {
+            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
+            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
+        };
+        webRtc->updateKeys(streamRoomId, keys);
+    }
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
         std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _notificationListenerId),
         streamRoomId,
