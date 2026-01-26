@@ -229,7 +229,7 @@ struct StreamsUpdatedData {
     std::vector<UpdatedStreamData> streams;
 };
 
-enum struct StreamVideoEncryptionMode {
+enum struct StreamEncryptionMode {
     SINGLE_KEY,
     MULTIPLE_KEY,
 };

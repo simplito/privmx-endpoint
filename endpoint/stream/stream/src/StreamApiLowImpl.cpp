@@ -50,7 +50,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    StreamVideoEncryptionMode videoEncryptionMode
+    StreamEncryptionMode streamEncryptionMode
 ) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
      _eventApi(eventApi),
     _connection(connection.getImpl()),
@@ -60,7 +60,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     _eventMiddleware(eventMiddleware),
     _serverApi(std::make_shared<ServerApi>(gateway)),
     _subscriber(stream::SubscriberImpl(gateway)),
-    _videoEncryptionMode(videoEncryptionMode)
+    _streamEncryptionMode(streamEncryptionMode)
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
@@ -124,7 +124,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
                 privmx::utils::Utils::parseJson(decryptedData.data.stdString())
             );
             auto roomOpt = _streamRoomMap.get(streamKeyManagementEvent.streamRoomId());
-            if(roomOpt.has_value() && _videoEncryptionMode == StreamVideoEncryptionMode::MULTIPLE_KEY) {
+            if(roomOpt.has_value() && _streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
                 roomOpt.value()->streamKeyManager->respondToEvent(streamKeyManagementEvent, raw.author().id(), raw.author().pub());
             }
             return;
@@ -274,7 +274,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
-    if(_videoEncryptionMode == StreamVideoEncryptionMode::SINGLE_KEY) {
+    if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
         core::KeyDecryptionAndVerificationRequest keyProviderRequest;
         core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
         keyProviderRequest.addOne(streamRoom.keys(), streamRoom.data().get(streamRoom.data().size()-1).keyId(), location);
@@ -289,7 +289,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
         std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _notificationListenerId),
         streamRoomId,
         webRtc,
-        _videoEncryptionMode
+        _streamEncryptionMode
     );
     _streamRoomMap.set(
         streamRoomId,
@@ -377,7 +377,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
         throw StreamHandleNotInitialized();
     }
     auto streamData = room->publisherStream;
-    if(_videoEncryptionMode == StreamVideoEncryptionMode::SINGLE_KEY) {
+    if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
         model.id(room->streamRoomId);
         auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
@@ -431,7 +431,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
         throw StreamHandleNotInitialized();
     }
     auto streamData = room->publisherStream;
-    if(_videoEncryptionMode == StreamVideoEncryptionMode::SINGLE_KEY) {
+    if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
         model.id(room->streamRoomId);
         auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
@@ -537,7 +537,7 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
     for(const auto& subscription : subscriptions) {
         streamIds.insert(subscription.streamId);
     }
-    if(_videoEncryptionMode == StreamVideoEncryptionMode::MULTIPLE_KEY) {
+    if(_streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
         sendStreamKeyRequest(room, streamIds);
     }
 }
@@ -600,7 +600,7 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& strea
     for(const auto& subscription : subscriptionsToAdd) {
         streamIds.insert(subscription.streamId);
     }
-    if (!streamIds.empty() && _videoEncryptionMode == StreamVideoEncryptionMode::MULTIPLE_KEY) {
+    if (!streamIds.empty() && _streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
         sendStreamKeyRequest(room, streamIds);
     }
 }
