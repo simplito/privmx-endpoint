@@ -77,6 +77,10 @@ void StreamApiImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
     _api->enableStreamRoomRecording(streamRoomId);
 }
 
+std::vector<stream::RecordingEncKey> StreamApiImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
+    _api->getStreamRoomRecordingKeys(streamRoomId);
+}
+
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle = _api->createStream(streamRoomId);
     _streamDataMap.set( 
@@ -148,7 +152,7 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             auto audioTrack = _peerConnectionFactory->CreateAudioTrack(audioSource, "audio_track");
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
             streamData->audioTracks.set(
-                mediaDevice.name + "-" + mediaDevice.id, 
+                mediaDevice.name + "-" + mediaDevice.id,
                 std::make_shared<StreamAudioTrackInfo>(audioDevice, mediaDevice.name, mediaDevice.id, audioSource, audioTrack, TrackStatus::ToAdd)
             );
             return MediaTrack{[audioTrack](bool enabled) {
@@ -176,7 +180,7 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "video_track");
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
             streamData->videoTracks.set(
-                mediaDevice.name + "-" + mediaDevice.id, 
+                mediaDevice.name + "-" + mediaDevice.id,
                 std::make_shared<StreamVideoTrackInfo>(videoDevice, mediaDevice.name, mediaDevice.id, videoCapturer, videoSource, videoTrack, TrackStatus::ToAdd)
             );
             return MediaTrack{[videoTrack](bool enabled) {
@@ -199,7 +203,7 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "desktop_track");
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
             streamData->desktopTracks.set(
-                mediaDevice.name + "-" + mediaDevice.id, 
+                mediaDevice.name + "-" + mediaDevice.id,
                 std::make_shared<StreamDesktopTrackInfo>(desktopDevice, mediaDevice.name, mediaDevice.id, desktopCapturer, videoSource, videoTrack, TrackStatus::ToAdd)
             );
             return MediaTrack{[videoTrack](bool enabled) {
@@ -213,7 +217,7 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
 }
 
 void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice) {
-    
+
     auto streamDataOpt = _streamDataMap.get(streamHandle);
     if(!streamDataOpt.has_value()) {
         throw IncorrectStreamHandleException();
@@ -222,7 +226,7 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
 
     switch (mediaDevice.type) {
     case DeviceType::Audio:
-        {            
+        {
             LOG_INFO("StreamApiImpl::removeTrack Audio - ", mediaDevice.name + "-" + mediaDevice.id)
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
             auto trackOpt = streamData->audioTracks.get(mediaDevice.name + "-" + mediaDevice.id);
@@ -240,7 +244,7 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
         break;
     case DeviceType::Video:
         {
-            
+
             LOG_INFO("StreamApiImpl::removeTrack Video - ", mediaDevice.name + "-" + mediaDevice.id)
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
             auto trackOpt = streamData->videoTracks.get(mediaDevice.name + "-" + mediaDevice.id);
