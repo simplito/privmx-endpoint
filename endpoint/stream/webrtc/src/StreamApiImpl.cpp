@@ -73,6 +73,10 @@ void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _api->leaveStreamRoom(streamRoomId);
 }
 
+void StreamApiImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
+    _api->enableStreamRoomRecording(streamRoomId);
+}
+
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle = _api->createStream(streamRoomId);
     _streamDataMap.set( 

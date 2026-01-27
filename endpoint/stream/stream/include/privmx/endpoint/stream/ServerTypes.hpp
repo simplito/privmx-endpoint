@@ -173,6 +173,9 @@ ENDPOINT_SERVER_TYPE(StreamRoomLeaveModel)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamRoomRecordingModel)
+    STRING_FIELD(streamRoomId)
+TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamListModel)
     STRING_FIELD(streamRoomId)

@@ -79,6 +79,7 @@ public:
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
+    void enableStreamRoomRecording(const std::string& streamRoomId);
 
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
@@ -160,7 +161,6 @@ private:
 
     std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::ConnectionImpl> _connection;
-    privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;

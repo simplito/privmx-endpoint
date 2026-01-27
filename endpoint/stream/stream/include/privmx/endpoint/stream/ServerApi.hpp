@@ -47,9 +47,10 @@ public:
     server::StreamsSubscribeResult streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model);
     void streamRoomJoin(server::StreamRoomJoinModel model);
     void streamRoomLeave(server::StreamRoomLeaveModel model);
+    void streamRoomEnableRecording(server::StreamRoomRecordingModel model);
 
     void trickle(server::StreamTrickleModel model);
-
+    bool isConnected() {return _gateway ? _gateway->isConnected() : false;}
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object

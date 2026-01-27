@@ -82,7 +82,9 @@ StreamKeyManager::StreamKeyManager(
 StreamKeyManager::~StreamKeyManager() {
     _cancellationToken->cancel();
     _updateKeyCV.notify_all();
-    _eventApi->unsubscribeFromInternal(_subscriptionIds, _notificationListenerId);
+    if(_serverApi->isConnected()) {
+        _eventApi->unsubscribeFromInternal(_subscriptionIds, _notificationListenerId);
+    }
     if(_keyUpdater.joinable()) _keyUpdater.join();
     LOG_TRACE("StreamKeyManager::Successfully Deconstructed : " + _streamRoomId);
 }

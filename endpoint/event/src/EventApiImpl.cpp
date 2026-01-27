@@ -52,7 +52,7 @@ EventApiImpl::~EventApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     if(_gateway->isConnected()) {
-        _subscriber.unsubscribeFromCurrentlySubscribed();
+       _subscriber.unsubscribeFromCurrentlySubscribed();
     }
     _guardedExecutor.reset();
     LOG_TRACE("~EventApiImpl Done");

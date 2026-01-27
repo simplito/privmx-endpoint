@@ -54,6 +54,7 @@ public:
         AcceptOfferOnReconfigure = 20,
         KeyManagement = 21,
         UpdateStream = 22,
+        EnableStreamRoomRecording = 23,
     };
 
     StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
@@ -74,6 +75,7 @@ public:
     Poco::Dynamic::Var listStreams(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var joinStreamRoom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var leaveStreamRoom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var enableStreamRoomRecording(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var createStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var publishStream(const Poco::Dynamic::Var& args);

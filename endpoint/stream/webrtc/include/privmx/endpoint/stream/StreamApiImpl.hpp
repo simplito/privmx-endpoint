@@ -83,6 +83,7 @@ public:
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
+    void enableStreamRoomRecording(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<MediaDevice> getMediaDevices();
     MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
