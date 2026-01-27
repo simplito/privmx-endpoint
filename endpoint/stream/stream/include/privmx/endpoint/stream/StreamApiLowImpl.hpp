@@ -47,7 +47,7 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        StreamEncryptionMode streamEncryptionMode = StreamEncryptionMode::MULTIPLE_KEY
+        StreamEncryptionMode streamEncryptionMode = StreamEncryptionMode::SINGLE_KEY
     );
     ~StreamApiLowImpl();
 
@@ -149,6 +149,7 @@ private:
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
     void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, const StreamHandle& streamHandle);
+    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);
 
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);

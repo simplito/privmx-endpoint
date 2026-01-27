@@ -151,14 +151,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             //update keys
             auto streamRoomData = _streamRoomMap.get(streamRoom.streamRoomId);
             if(streamRoomData.has_value()) {
-                core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-                core::EncKeyLocation location{.contextId=raw.contextId(), .resourceId=raw.resourceIdOpt("")};
-                keyProviderRequest.addOne(raw.keys(), raw.data().get(raw.data().size()-1).keyId(), location);
-                auto currentStreamRoomKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(raw.data().get(raw.data().size()-1).keyId());
-                std::vector<stream::Key> keys = {
-                    stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
-                    stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
-                };
+                std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw);
                 streamRoomData.value()->webRtc->updateKeys(streamRoom.streamRoomId, keys);
             }
         } else if (type == "streamRoomDeleted") {
@@ -275,14 +268,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
     if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
-        core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-        core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
-        keyProviderRequest.addOne(streamRoom.keys(), streamRoom.data().get(streamRoom.data().size()-1).keyId(), location);
-        auto currentStreamRoomKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoom.data().get(streamRoom.data().size()-1).keyId());
-        std::vector<stream::Key> keys = {
-            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
-            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
-        };
+        std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
         webRtc->updateKeys(streamRoomId, keys);
     }
 
@@ -392,14 +378,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
         model.id(room->streamRoomId);
         auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
-        core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-        core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
-        keyProviderRequest.addOne(streamRoom.keys(), streamRoom.data().get(streamRoom.data().size()-1).keyId(), location);
-        auto currentStreamRoomKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoom.data().get(streamRoom.data().size()-1).keyId());
-        std::vector<stream::Key> keys = {
-            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
-            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
-        };
+        std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
         room->webRtc->updateKeys(room->streamRoomId, keys);
     } else {
         room->webRtc->updateKeys(room->streamRoomId, room->streamKeyManager->getCurrentWebRtcKeys());
@@ -447,14 +426,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
         auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
         model.id(room->streamRoomId);
         auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
-        core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-        core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
-        keyProviderRequest.addOne(streamRoom.keys(), streamRoom.data().get(streamRoom.data().size()-1).keyId(), location);
-        auto currentStreamRoomKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoom.data().get(streamRoom.data().size()-1).keyId());
-        std::vector<stream::Key> keys = {
-            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
-            stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
-        };
+        std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
         room->webRtc->updateKeys(room->streamRoomId, keys);
     } else {
         room->webRtc->updateKeys(room->streamRoomId, room->streamKeyManager->getCurrentWebRtcKeys());
@@ -1158,3 +1130,13 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
     }
 }
 
+std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo) {
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=streamRoomInfo.contextId(), .resourceId=streamRoomInfo.resourceIdOpt("")};
+    keyProviderRequest.addOne(streamRoomInfo.keys(), streamRoomInfo.data().get(streamRoomInfo.data().size()-1).keyId(), location);
+    auto currentStreamRoomKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoomInfo.data().get(streamRoomInfo.data().size()-1).keyId());
+    std::vector<stream::Key> keys = {
+        stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
+        stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
+    };
+}
