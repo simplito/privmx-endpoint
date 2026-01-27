@@ -84,7 +84,6 @@ void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model)  {
 }
 
 void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model) {
-    std::cerr << "streamRoomEnableRecording" << std::endl;
     requestWS("streamRoomEnableRecording", model);
 }
 
