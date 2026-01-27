@@ -70,6 +70,7 @@ std::vector<StreamInfo> StreamApiImpl::listStreams(const std::string& streamRoom
 void StreamApiImpl::joinStreamRoom(const std::string& streamRoomId) {
     _api->joinStreamRoom(streamRoomId, _webRTC);
 }
+
 void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _api->leaveStreamRoom(streamRoomId);
 }
@@ -77,6 +78,7 @@ void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
 void StreamApiImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
     _api->enableStreamRoomRecording(streamRoomId);
 }
+
 std::vector<stream::RecordingEncKey> StreamApiImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
     _api->getStreamRoomRecordingKeys(streamRoomId);
 }
@@ -93,6 +95,7 @@ StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
     );
     return streamHandle;
 }
+
 std::vector<MediaDevice> StreamApiImpl::getMediaDevices() {
     std::vector<MediaDevice> result;
     std::string name, deviceId;
@@ -117,6 +120,7 @@ std::vector<MediaDevice> StreamApiImpl::getMediaDevices() {
     result.push_back(MediaDevice{"desktop", "desktop", DeviceType::Desktop});
     return result;
 }
+
 void StreamApiImpl::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
     std::string name, deviceId;
     name.resize(255);
@@ -192,9 +196,11 @@ void StreamApiImpl::addTrack(const StreamHandle& streamHandle, const MediaDevice
         throw NotImplementedException();
     }
 }
+
 void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
 
 }
+
 StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandle) {
     return _api->publishStream(streamHandle);
 }
@@ -206,6 +212,7 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
 void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
     _api->unpublishStream(streamHandle);
 }
+
 void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
     int64_t streamId = generateNumericId();
     _streamDataMap.set( 
@@ -224,9 +231,11 @@ void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, co
     }
     _api->subscribeToRemoteStreams(streamRoomId, subscriptions, options.settings);
 }
+
 void StreamApiImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options) {
     _api->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove, options.settings);
 }
+
 void StreamApiImpl::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove) {
     _api->unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
 }
@@ -260,9 +269,7 @@ core::PagingList<StreamRoom> StreamApiImpl::listStreamRooms(const std::string& c
     return _api->listStreamRooms(contextId, query);
 }
 
-StreamRoom StreamApiImpl::
-
-getStreamRoom(const std::string& streamRoomId) {
+StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
     return _api->getStreamRoom(streamRoomId);
 }
 
