@@ -105,14 +105,14 @@ private:
         std::optional<StreamHandle> streamHandle;
     };
     struct StreamRoomData {
-        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, StreamEncryptionMode streamEncryptionMode):
-            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc), subscriptionsIds(_subscriptionsIds)
+        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, StreamEncryptionMode streamEncryptionMode, const std::string& _encryptionKeyId = ""):
+            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc), subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId)
         {
-            keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _streamRoomId, streamEncryptionMode](const std::vector<privmx::endpoint::stream::Key> keys) {
-                if(streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
+            if(streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
+                keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
                     _webRtc->updateKeys(_streamRoomId, keys);
-                }
-            });
+                });
+            }
         }
         std::shared_ptr<StreamData> publisherStream;
         std::shared_ptr<StreamData> subscriberStream;
@@ -121,6 +121,7 @@ private:
         std::shared_ptr<WebRTCInterface> webRtc;
         int64_t keyUpdateCallbackId;
         std::vector<std::string> subscriptionsIds;
+        std::string encryptionKeyId;
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
     void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
@@ -149,7 +150,7 @@ private:
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
     void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, const StreamHandle& streamHandle);
-    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);
+    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, const std::string& encryptionKeyId);
 
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);

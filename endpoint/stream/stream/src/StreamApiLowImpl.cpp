@@ -150,8 +150,8 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
             //update keys
             auto streamRoomData = _streamRoomMap.get(streamRoom.streamRoomId);
-            if(streamRoomData.has_value()) {
-                std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw);
+            if(streamRoomData.has_value() && _streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
+                std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw, streamRoomData.value()->encryptionKeyId);
                 streamRoomData.value()->webRtc->updateKeys(streamRoom.streamRoomId, keys);
             }
         } else if (type == "streamRoomDeleted") {
@@ -268,22 +268,32 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
     if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
-        std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
+        std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom, streamRoom.data().get(streamRoom.data().size()-1).keyId());
         webRtc->updateKeys(streamRoomId, keys);
     }
-
     // setup event listener
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(streamRoomId)};
     std::vector<std::string> subscriptionsIds = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, subscriptionsIds);
-
-    std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
-        std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _notificationListenerId),
-        streamRoomId,
-        webRtc,
-        subscriptionsIds,
-        _streamEncryptionMode
-    );
+    std::shared_ptr<StreamRoomData> streamRoomData;
+    if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
+        streamRoomData = std::make_shared<StreamRoomData>(
+            nullptr,
+            streamRoomId,
+            webRtc,
+            subscriptionsIds,
+            _streamEncryptionMode,
+            streamRoom.data().get(streamRoom.data().size()-1).keyId()
+        );
+    } else {
+        streamRoomData = std::make_shared<StreamRoomData>(
+            std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _notificationListenerId),
+            streamRoomId,
+            webRtc,
+            subscriptionsIds,
+            _streamEncryptionMode
+        );
+    }
     _streamRoomMap.set(
         streamRoomId,
         streamRoomData
@@ -374,13 +384,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
         throw StreamHandleNotInitialized();
     }
     auto streamData = room->publisherStream;
-    if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
-        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
-        model.id(room->streamRoomId);
-        auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
-        std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
-        room->webRtc->updateKeys(room->streamRoomId, keys);
-    } else {
+    if(_streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
         room->webRtc->updateKeys(room->streamRoomId, room->streamKeyManager->getCurrentWebRtcKeys());
     }
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
@@ -422,13 +426,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
         throw StreamHandleNotInitialized();
     }
     auto streamData = room->publisherStream;
-    if(_streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
-        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
-        model.id(room->streamRoomId);
-        auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
-        std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
-        room->webRtc->updateKeys(room->streamRoomId, keys);
-    } else {
+    if(_streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
         room->webRtc->updateKeys(room->streamRoomId, room->streamKeyManager->getCurrentWebRtcKeys());
     }
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
@@ -1130,13 +1128,22 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
     }
 }
 
-std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo) {
+std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, const std::string& encryptionKeyId) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     core::EncKeyLocation location{.contextId=streamRoomInfo.contextId(), .resourceId=streamRoomInfo.resourceIdOpt("")};
-    keyProviderRequest.addOne(streamRoomInfo.keys(), streamRoomInfo.data().get(streamRoomInfo.data().size()-1).keyId(), location);
-    auto currentStreamRoomKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoomInfo.data().get(streamRoomInfo.data().size()-1).keyId());
-    std::vector<stream::Key> keys = {
-        stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
-        stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
-    };
+    keyProviderRequest.addAll(streamRoomInfo.keys(), location);
+    auto keys = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
+    auto currentStreamRoomKey = keys.at(encryptionKeyId);
+    
+    std::vector<stream::Key> webRTCKeys;
+    if(currentStreamRoomKey.statusCode != 0) {
+        throw core::MalformedEncryptionKeyException("Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode));
+    }
+    webRTCKeys.push_back(stream::Key{currentStreamRoomKey.id, core::Buffer::from(crypto::Crypto::sha256(currentStreamRoomKey.key)), KeyType::LOCAL});
+    for(const auto& key: keys) {
+        if(key.second.statusCode == 0) {
+            webRTCKeys.push_back(stream::Key{key.second.id, core::Buffer::from(crypto::Crypto::sha256(key.second.key)), KeyType::REMOTE});
+        }
+    }   
+    return webRTCKeys;
 }
