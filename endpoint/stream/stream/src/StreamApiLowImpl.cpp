@@ -1167,4 +1167,5 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
         stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::LOCAL},
         stream::Key{currentStreamRoomKey.id, core::Buffer::from(currentStreamRoomKey.key), KeyType::REMOTE}
     };
+    return keys;
 }
