@@ -35,7 +35,7 @@ class StreamApiLowImpl;
 class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
 public:
 
-    static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi);
+    static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi, StreamEncryptionMode streamEncryptionMode = StreamEncryptionMode::SINGLE_KEY);
     StreamApiLow();
     StreamApiLow(const StreamApiLow& obj);
     StreamApiLow& operator=(const StreamApiLow& obj);
