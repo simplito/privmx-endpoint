@@ -84,7 +84,7 @@ void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model)  {
 }
 
 void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model) {
-    request("streamRoomEnableRecording", model);
+    requestWS("streamRoomEnableRecording", model);
 }
 
 void ServerApi::trickle(server::StreamTrickleModel model) {
