@@ -62,8 +62,8 @@ std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const st
     return "|" + _selectorTypeNames.at(selectorType) + "=" + selectorId;
 }
 
-std::string SubscriberImpl::getInternalEventsSubscriptionQuery() {
-    return std::string(_moduleName) + "/internal";
+std::string SubscriberImpl::getInternalEventsSubscriptionQuery(const std::optional<std::string>& streamRoomId) {
+    return std::string(_moduleName) + "/internal" + (streamRoomId.has_value() ? getSelector(EventSelectorType::STREAMROOM_ID, streamRoomId.value()) : "");
 }
 
 std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {

@@ -21,7 +21,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
-#include "webrtc/Types.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -74,7 +74,7 @@ public:
     std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<MediaDevice> getMediaDevices();
-    void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
+    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
@@ -83,6 +83,8 @@ public:
     void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
+
+    void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }
 

@@ -98,7 +98,7 @@ stream::StreamTrackInfo VarDeserializer::deserialize<stream::StreamTrackInfo>(co
         .mindex = deserialize<int64_t>(obj->get("mindex"), name + ".mindex"),
         .mid = deserialize<std::string>(obj->get("mid"), name + ".mid"),
         .disabled = {obj->has("disabled") ? std::make_optional(deserialize<bool>(obj->get("disabled"), name + ".disabled")) : std::nullopt},
-        .codec = {obj->has("codec") ? std::make_optional(deserialize<std::string>(obj->get("codec"), name + ".codec")): std::nullopt},
+        .codec = {obj->has("codec") ? std::make_optional(deserialize<std::string>(obj->get("codec"), name + ".codec")) : std::nullopt},
         .description = {obj->has("description") ? std::make_optional(deserialize<std::string>(obj->get("description"), name + ".description")) : std::nullopt},
         .moderated = {obj->has("moderated") ? std::make_optional(deserialize<bool>(obj->get("moderated"), name + ".moderated")) : std::nullopt},
         .simulcast = {obj->has("simulcast") ? std::make_optional(deserialize<bool>(obj->get("simulcast"), name + ".simulcast")) : std::nullopt},
@@ -204,7 +204,6 @@ template<>
 stream::StreamPublishedEventData VarDeserializer::deserialize<stream::StreamPublishedEventData>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-
     return {
         .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
         .stream = deserialize<stream::StreamInfo>(obj->get("stream"), name + ".stream"),
