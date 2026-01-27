@@ -25,7 +25,7 @@ public:
     
     SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
-    static std::string getInternalEventsSubscriptionQuery();
+    static std::string getInternalEventsSubscriptionQuery(const std::optional<std::string>& streamRoomId = std::nullopt);
 private:
     virtual privmx::utils::List<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);

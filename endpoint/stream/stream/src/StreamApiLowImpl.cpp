@@ -65,7 +65,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&StreamApiLowImpl::processDisconnectedEvent, this));
-
+    // 
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery()};
     auto result = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
@@ -285,10 +285,17 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
         };
         webRtc->updateKeys(streamRoomId, keys);
     }
+
+    // setup event listener
+    auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(streamRoomId)};
+    std::vector<std::string> subscriptionsIds = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
+    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, subscriptionsIds);
+
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
         std::make_shared<StreamKeyManager>(_eventApi, _keyProvider, _serverApi, _userPrivKey, streamRoomId, streamRoom.contextId(), _notificationListenerId),
         streamRoomId,
         webRtc,
+        subscriptionsIds,
         _streamEncryptionMode
     );
     _streamRoomMap.set(
@@ -320,30 +327,34 @@ void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shar
     _serverApi->streamRoomJoin(model);
 }
 void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
-    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomLeaveModel>();
-    model.streamRoomId(streamRoomId);
-    _serverApi->streamRoomLeave(model);
-
     auto room = getStreamRoomData(streamRoomId);
+    // close event listener
+    auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(room->streamRoomId)};
+    _subscriber.unsubscribeFrom(room->subscriptionsIds);
+    _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, room->subscriptionsIds);
+
+    LOG_DEBUG("StreamApiLowImpl:leaveStreamRoom", "gently close of streams");
     if(room->publisherStream) {
-        //gently close publisherStream
         if(room->publisherStream->streamHandle.has_value()) {
             _streamHandleToRoomId.erase(room->publisherStream->streamHandle.value());
         }
     }
     if(room->subscriberStream) {
-        //gently close subscriberStream
         if(room->subscriberStream->streamHandle.has_value()) {
             _streamHandleToRoomId.erase(room->subscriberStream->streamHandle.value());
         }
     }
-    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
     //kill all webRTC pearConnections
     room->webRtc->close(room->streamRoomId);
     //stop StreamKeyManager
+    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
     room->streamKeyManager.reset();
     // Final clenup
     _streamRoomMap.erase(streamRoomId);
+    // send laveRequest
+    auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomLeaveModel>();
+    model.streamRoomId(streamRoomId);
+    _serverApi->streamRoomLeave(model);
 }
 
 void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
@@ -401,6 +412,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
     model.streamRoomId(room->streamRoomId);
     model.offer(sessionDescription);
+    std::cout << privmx::utils::Utils::stringifyVar(model) << std::endl;
     auto result = _serverApi->streamPublish(model);
     streamData->sessionId = result.sessionId();
     // update/set sessionId in webrtc (for Janus - trickle)
@@ -489,7 +501,7 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
         model.sessionId(streamData->sessionId.value());
         _serverApi->streamUnpublish(model);
     }
-    room->webRtc->close(room->streamRoomId);
+    // room->webRtc->close(room->streamRoomId);
     _streamHandleToRoomId.erase(streamHandle);
     room->publisherStream.reset();
 }
@@ -893,7 +905,6 @@ std::vector<StreamRoom> StreamApiLowImpl::decryptAndConvertStreamRoomsDataToStre
     std::map<std::string, bool> duplication_check;
     for (auto streamRoom: streamRooms) {
         try {
-
             auto tmp = decryptAndConvertStreamRoomDataToStreamRoom(
                 streamRoom, 
                 streamRoom.data().get(streamRoom.data().size()-1), 
@@ -1124,25 +1135,26 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
     LOG_DEBUG("StreamApiLowImpl::sendStreamKeyRequest listContextUsers users:  " + privmx::utils::Utils::stringify(usersIds))
     queryId->set("$in", usersIds);
     query->set("#userId", queryId);
+    if(usersIds->size() != 0) {
+        core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
+            streamRoom.contextId(), 
+            core::PagingQuery{
+                .skip = 0,
+                .limit = static_cast<int64_t>(usersIds->size()),
+                .sortOrder = "desc",
+                .lastId = std::nullopt,
+                .sortBy = std::nullopt,
+                .queryAsJson = privmx::utils::Utils::stringify(query)
+            }
+        ); 
 
-    core::PagingList<core::UserInfo> userInfoList = _connection->listContextUsers(
-        streamRoom.contextId(), 
-        core::PagingQuery{
-            .skip = 0,
-            .limit = static_cast<int64_t>(usersIds->size()),
-            .sortOrder = "desc",
-            .lastId = std::nullopt,
-            .sortBy = std::nullopt,
-            .queryAsJson = privmx::utils::Utils::stringify(query)
+        
+        std::vector<core::UserWithPubKey> toSend;
+        for(auto userInfo: userInfoList.readItems) {
+            LOG_DEBUG("StreamApiLowImpl::sendStreamKeyRequest Request Send: " + userInfo.user.userId)
+            toSend.push_back(userInfo.user);
         }
-    ); 
-
-    
-    std::vector<core::UserWithPubKey> toSend;
-    for(auto userInfo: userInfoList.readItems) {
-        LOG_DEBUG("StreamApiLowImpl::sendStreamKeyRequest Request Send: " + userInfo.user.userId)
-        toSend.push_back(userInfo.user);
+        room->streamKeyManager->requestKey(toSend);
     }
-    room->streamKeyManager->requestKey(toSend);
 }
 

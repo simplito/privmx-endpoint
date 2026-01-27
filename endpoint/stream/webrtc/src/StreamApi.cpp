@@ -181,7 +181,7 @@ std::vector<MediaDevice> StreamApi::getMediaDevices() {
     }
 }
 
-void StreamApi::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
+MediaTrack StreamApi::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
     validateEndpoint();
     try {
         return _impl->addTrack(streamHandle, track);
@@ -298,6 +298,16 @@ void StreamApi::dropBrokenFrames(const std::string& streamRoomId, bool enable) {
     validateEndpoint();
     try {
         return _impl->dropBrokenFrames(streamRoomId, enable);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
+    validateEndpoint();
+    try {
+        return _impl->setOnTrackInterface(onTrackInterface);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

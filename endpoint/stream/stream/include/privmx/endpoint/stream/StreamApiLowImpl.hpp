@@ -105,8 +105,8 @@ private:
         std::optional<StreamHandle> streamHandle;
     };
     struct StreamRoomData {
-        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, StreamEncryptionMode streamEncryptionMode):
-            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc)
+        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, StreamEncryptionMode streamEncryptionMode):
+            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc), subscriptionsIds(_subscriptionsIds)
         {
             keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _streamRoomId, streamEncryptionMode](const std::vector<privmx::endpoint::stream::Key> keys) {
                 if(streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
@@ -120,6 +120,7 @@ private:
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
         int64_t keyUpdateCallbackId;
+        std::vector<std::string> subscriptionsIds;
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
     void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
