@@ -307,8 +307,6 @@ std::vector<StreamInfo> StreamApiLowImpl::listStreams(const std::string& streamR
     auto streamList = _serverApi->streamList(model).list();
 
     auto deserializer = std::make_shared<core::VarDeserializer>();
-    // auto parsed = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "NewStreams");
-
     std::vector<StreamInfo> result;
     for(auto stream: streamList) {
         result.push_back(deserializer->deserialize<stream::StreamInfo>(stream, "StreamInfo"));
@@ -324,7 +322,6 @@ void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shar
 }
 void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     auto room = getStreamRoomData(streamRoomId);
-    // close event listener
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(room->streamRoomId)};
     _subscriber.unsubscribeFrom(room->subscriptionsIds);
     _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, room->subscriptionsIds);
@@ -340,16 +337,12 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
             _streamHandleToRoomId.erase(room->subscriberStream->streamHandle.value());
         }
     }
-    //kill all webRTC pearConnections
     room->webRtc->close(room->streamRoomId);
-    //stop StreamKeyManager
     if(_streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
         room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
         room->streamKeyManager.reset();
     }
-    // Final clenup
     _streamRoomMap.erase(streamRoomId);
-    // send laveRequest
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomLeaveModel>();
     model.streamRoomId(streamRoomId);
     _serverApi->streamRoomLeave(model);
@@ -409,7 +402,6 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
         room->webRtc->updateKeys(room->streamRoomId, room->streamKeyManager->getCurrentWebRtcKeys());
     }
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
-    // Publish data on bridge
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
     sessionDescription.type("offer");
@@ -440,7 +432,6 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     }
 }
 
-// Updating published stream
 StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHandle) {
     auto room = getStreamRoomData(streamHandle);
     if(!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
@@ -451,7 +442,6 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
         room->webRtc->updateKeys(room->streamRoomId, room->streamKeyManager->getCurrentWebRtcKeys());
     }
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
-    // Update data on bridge
     auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
     sessionDescription.sdp(sdp);
     sessionDescription.type("offer");
@@ -499,7 +489,6 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
 
 void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options) {
     auto room = getStreamRoomData(streamRoomId);
-    // Sending Request to Bridge
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsSubscribeModel>();
     model.streamRoomId(streamRoomId);
 
@@ -1166,10 +1155,10 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
     if(currentStreamRoomKey.statusCode != 0) {
         throw core::MalformedEncryptionKeyException("Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode));
     }
-    webRTCKeys.push_back(stream::Key{currentStreamRoomKey.id, core::Buffer::from(crypto::Crypto::sha256(currentStreamRoomKey.key)), KeyType::LOCAL});
+    webRTCKeys.push_back(stream::Key{currentStreamRoomKey.id, core::Buffer::from(deriveStreamEncryptionKey(currentStreamRoomKey)), KeyType::LOCAL});
     for(const auto& key: keys) {
         if(key.second.statusCode == 0) {
-            webRTCKeys.push_back(stream::Key{key.second.id, core::Buffer::from(crypto::Crypto::sha256(key.second.key)), KeyType::REMOTE});
+            webRTCKeys.push_back(stream::Key{key.second.id, core::Buffer::from(deriveStreamEncryptionKey(key.second)), KeyType::REMOTE});
         }
     }   
     return webRTCKeys;
