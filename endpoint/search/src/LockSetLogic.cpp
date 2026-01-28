@@ -102,7 +102,7 @@ bool LockSetLogic::checkReservedLock() {
 }
 
 std::string LockSetLogic::generateId() {
-    return Poco::UUIDGenerator::defaultGenerator().create().toString();
+    return Poco::UUIDGenerator::defaultGenerator().createRandom().toString();
 }
 
 void LockSetLogic::deleteTimeoutedLocks() {
