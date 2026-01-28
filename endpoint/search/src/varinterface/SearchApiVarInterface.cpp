@@ -142,8 +142,8 @@ Poco::Dynamic::Var SearchApiVarInterface::listDocuments(const Poco::Dynamic::Var
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto indexHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "indexHandle");
     auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
-    _searchApi.listDocuments(indexHandle, pagingQuery);
-    return {};
+    auto result = _searchApi.listDocuments(indexHandle, pagingQuery);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var SearchApiVarInterface::searchDocuments(const Poco::Dynamic::Var& args) {
