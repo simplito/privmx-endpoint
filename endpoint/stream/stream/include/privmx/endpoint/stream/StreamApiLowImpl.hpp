@@ -153,6 +153,8 @@ private:
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
     void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, const StreamHandle& streamHandle);
     std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, const std::string& encryptionKeyId);
+    std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(server::StreamRoomInfo streamRoomInfo);
+    std::string deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 EncKey);
 
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);

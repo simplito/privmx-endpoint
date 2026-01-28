@@ -343,8 +343,10 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     //kill all webRTC pearConnections
     room->webRtc->close(room->streamRoomId);
     //stop StreamKeyManager
-    room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
-    room->streamKeyManager.reset();
+    if(_streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
+        room->streamKeyManager->removeKeyUpdateCallback(room->keyUpdateCallbackId);
+        room->streamKeyManager.reset();
+    }
     // Final clenup
     _streamRoomMap.erase(streamRoomId);
     // send laveRequest
@@ -369,14 +371,14 @@ std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKey
     if(statusCode != 0) {
         throw StreamRoomDataIntegrityException();
     }
-
-    auto streamRoom_data_entry = streamRoom.data().get(streamRoom.data().size()-1);
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=streamRoom.contextId(), .resourceId=streamRoom.resourceIdOpt("")};
-    keyProviderRequest.addOne(streamRoom.keys(), streamRoom_data_entry.keyId(), location);
-    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(streamRoom_data_entry.keyId());
-    stream::RecordingEncKey streamEncKey {.id = key.id, .key = key.key};
-    return {streamEncKey};
+    auto keys = extractStreamRoomKeys(streamRoom);
+    std::vector<stream::RecordingEncKey> recordingEncKeys;
+    for(const auto& key: keys) {
+        if(key.second.statusCode == 0) {
+            recordingEncKeys.push_back(stream::RecordingEncKey{key.second.id, deriveStreamEncryptionKey(key.second)});
+        }
+    }   
+    return recordingEncKeys;
 }
 
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
@@ -1157,10 +1159,7 @@ void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::st
 }
 
 std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, const std::string& encryptionKeyId) {
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=streamRoomInfo.contextId(), .resourceId=streamRoomInfo.resourceIdOpt("")};
-    keyProviderRequest.addAll(streamRoomInfo.keys(), location);
-    auto keys = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
+    auto keys = extractStreamRoomKeys(streamRoomInfo);
     auto currentStreamRoomKey = keys.at(encryptionKeyId);
     
     std::vector<stream::Key> webRTCKeys;
@@ -1174,4 +1173,15 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
         }
     }   
     return webRTCKeys;
+}
+
+std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> StreamApiLowImpl::extractStreamRoomKeys(server::StreamRoomInfo streamRoomInfo) {
+    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
+    core::EncKeyLocation location{.contextId=streamRoomInfo.contextId(), .resourceId=streamRoomInfo.resourceIdOpt("")};
+    keyProviderRequest.addAll(streamRoomInfo.keys(), location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
+}
+
+std::string StreamApiLowImpl::deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 encKey) {
+    return crypto::Crypto::sha256(encKey.key);
 }
