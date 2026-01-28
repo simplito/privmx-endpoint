@@ -55,6 +55,7 @@ public:
         KeyManagement = 21,
         UpdateStream = 22,
         EnableStreamRoomRecording = 23,
+        GetStreamRoomRecordingKeys = 24,
     };
 
     StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
@@ -85,6 +86,7 @@ public:
     Poco::Dynamic::Var subscribeToRemoteStreams(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var modifyRemoteStreamsSubscriptions(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getStreamRoomRecordingKeys(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var acceptOfferOnReconfigure(const Poco::Dynamic::Var& args);
