@@ -57,7 +57,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/ExecutorConfig.hp
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp)
 add_library(privmxutils OBJECT ${SOURCES})
 target_include_directories(privmxutils PUBLIC ${INCLUDE_DIRS})
-target_compile_options(privmxutils PRIVATE -fPIC -Wall -Wextra -Wno-narrowing)
+target_compile_options(privmxutils PRIVATE -fPIC -Wall -Wextra -Wno-narrowing -Werror=return-type)
 target_link_libraries(privmxutils PUBLIC Poco::Foundation Poco::JSON Pson)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxutils PROPERTIES POSITION_INDEPENDENT_CODE True)

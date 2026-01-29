@@ -5,7 +5,7 @@ else()
     add_library(privmx STATIC ${SOURCES})
 endif()
 target_include_directories(privmx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_options(privmx PRIVATE -fPIC -Wall -Wextra -Wno-narrowing)
+target_compile_options(privmx PRIVATE -fPIC -Wall -Wextra -Wno-narrowing -Werror=return-type)
 target_link_libraries(privmx PUBLIC Poco::Foundation Poco::JSON Pson privmxutils privmxcrypto privmxrpc)
 
 install(TARGETS privmx DESTINATION lib)
