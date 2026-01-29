@@ -230,8 +230,8 @@ enum struct StreamEncryptionMode {
 };
 
 struct RecordingEncKey {
-    std::string id;
-    std::string key;
+    core::Buffer id;
+    core::Buffer key;
 };
 
 }  // namespace stream
