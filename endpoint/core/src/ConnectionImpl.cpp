@@ -327,6 +327,7 @@ NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationE
         };
     } catch (std::exception& e) {
         LOG_ERROR("Error on event: ", privmx::utils::Utils::stringifyVar(event.data))
+        // FIX ME
         return NotificationEvent{
             .source = EventSource::INTERNAL,
             .type = "Error",
