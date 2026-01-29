@@ -15,7 +15,6 @@ class ThreadSafeQueue {
 public:
     ThreadSafeQueue() = default;
 
-    // Dodaje element do kolejki i powiadamia oczekujące wątki
     void push(const T& value) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -32,7 +31,6 @@ public:
         cond_var_.notify_one();
     }
 
-    // Pobiera element z kolejki, czeka jeśli pusta
     T pop() {
         std::unique_lock<std::mutex> lock(mutex_);
         cond_var_.wait(lock, [this] { return !queue_.empty(); });
@@ -42,7 +40,6 @@ public:
         return value;
     }
 
-    // Próbuje pobrać element bez czekania
     std::optional<T> try_pop() {
         std::lock_guard<std::mutex> lock(mutex_);
         if (queue_.empty())
@@ -53,13 +50,11 @@ public:
         return value;
     }
 
-    // Sprawdza czy pusta
     bool empty() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return queue_.empty();
     }
 
-    // Zwraca rozmiar
     size_t size() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return queue_.size();
