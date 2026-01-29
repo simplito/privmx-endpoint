@@ -325,10 +325,8 @@ NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationE
             .timestamp = tmp.timestamp(),
             .subscriptions = subscriptions
         };
-    }
-    catch (std::exception& e) {
-        std::cerr << "Error on event: " << privmx::utils::Utils::stringifyVar(event.data, true) << std::endl;
-        std::cerr << "convertRpcNotificationEventToCoreNotificationEvent: " << e.what() << std::endl;
+    } catch (std::exception& e) {
+        LOG_ERROR("Error on event: ", privmx::utils::Utils::stringifyVar(event.data))
         throw e;
     }
 }
