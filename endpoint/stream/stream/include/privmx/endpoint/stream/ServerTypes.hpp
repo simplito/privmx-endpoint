@@ -60,6 +60,7 @@ ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
     LIST_FIELD(keys, core::server::KeyEntrySet)
     STRING_FIELD(privateMeta)
     STRING_FIELD(publicMeta)
+    STRING_FIELD(type)
     VAR_FIELD(policy)
 TYPE_END
 

@@ -54,11 +54,21 @@ public:
     std::vector<TurnCredentials> getTurnCredentials();
 
     std::string createStreamRoom(
-        const std::string& contextId, 
-        const std::vector<core::UserWithPubKey>& users, 
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta, 
+        const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies
+    );
+
+    std::string createStreamRoomEx(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>&managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::string& type,
         const std::optional<core::ContainerPolicy>& policies
     );
 
@@ -74,8 +84,10 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
+    core::PagingList<StreamRoom> listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
     StreamRoom getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
     StreamRoom getStreamRoom(const std::string& streamRoomId);
+
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
@@ -100,6 +112,8 @@ public:
     void keyManagement(const std::string& streamRoomId, bool disable);
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
+
+    inline static const std::string STREAM_TYPE_FILTER_FLAG = "stream";
 private:
     struct StreamData {
         std::optional<int64_t> sessionId;
@@ -125,6 +139,13 @@ private:
         std::string encryptionKeyId;
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
+
+    std::string _streamRoomCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>&managers, const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta, const std::string& type,
+        const std::optional<core::ContainerPolicy>& policies
+    );
+
     void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processNotificationEvent(const core::NotificationEvent& notification);
     void processConnectedEvent();
@@ -138,7 +159,9 @@ private:
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = StreamRoomDataSchema::Version::UNKNOWN
     );
-    StreamRoom _getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
+    StreamRoom _streamRoomGetEx(const std::string& streamRoomId, const std::string& type);
+    core::PagingList<StreamRoom> _streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
+
     StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData);
     StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
     std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom, server::StreamRoomDataEntry streamRoomEntry, const core::DecryptedEncKey& encKey);
@@ -185,8 +208,6 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
     StreamEncryptionMode _streamEncryptionMode;
-
-    inline static const std::string STREAM_ROOM_TYPE_FILTER_FLAG = "StreamRoom";
 };
 
 }  // namespace stream

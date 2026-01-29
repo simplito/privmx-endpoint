@@ -413,6 +413,18 @@ std::string StreamApiImpl::createStreamRoom(
     return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
 }
 
+std::string StreamApiImpl::createStreamRoomEx(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::string& type,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    return _api->createStreamRoomEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
+}
+
 void StreamApiImpl::updateStreamRoom(
     const std::string& streamRoomId, 
     const std::vector<core::UserWithPubKey>& users, 
@@ -431,8 +443,16 @@ core::PagingList<StreamRoom> StreamApiImpl::listStreamRooms(const std::string& c
     return _api->listStreamRooms(contextId, query);
 }
 
+core::PagingList<StreamRoom> StreamApiImpl::listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
+    return _api->listStreamRoomsEx(contextId, query, type);
+}
+
 StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
     return _api->getStreamRoom(streamRoomId);
+}
+
+StreamRoom StreamApiImpl::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
+    return _api->getStreamRoomEx(streamRoomId, type);
 }
 
 void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {

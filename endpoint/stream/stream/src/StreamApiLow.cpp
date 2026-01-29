@@ -83,12 +83,36 @@ std::string StreamApiLow::createStreamRoom(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
+    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, StreamApiLowImpl::STREAM_TYPE_FILTER_FLAG, policies);
+}
+
+std::string StreamApiLow::createStreamRoomEx(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::string& type,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
+}
+
+std::string StreamApiLow::_streamRoomCreateEx(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::string& type,
+    const std::optional<core::ContainerPolicy>& policies
+) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+        return impl->createStreamRoomEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -119,11 +143,19 @@ void StreamApiLow::updateStreamRoom(
 }
 
 core::PagingList<StreamRoom> StreamApiLow::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
+    return _streamRoomsListEx(contextId, query, StreamApiLowImpl::STREAM_TYPE_FILTER_FLAG);
+}
+
+core::PagingList<StreamRoom> StreamApiLow::listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
+    return _streamRoomsListEx(contextId, query, type);
+}
+
+core::PagingList<StreamRoom> StreamApiLow::_streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
     try {
-        return impl->listStreamRooms(contextId, query);
+        return impl->listStreamRoomsEx(contextId, query, type);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -131,10 +163,18 @@ core::PagingList<StreamRoom> StreamApiLow::listStreamRooms(const std::string& co
 }   
 
 StreamRoom StreamApiLow::getStreamRoom(const std::string& streamRoomId) {
+    return _streamRoomGetEx(streamRoomId, StreamApiLowImpl::STREAM_TYPE_FILTER_FLAG);
+}
+
+StreamRoom StreamApiLow::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
+    return _streamRoomGetEx(streamRoomId, type);
+}
+
+StreamRoom StreamApiLow::_streamRoomGetEx(const std::string& streamRoomId, const std::string& type) {
     auto impl = getImpl();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return impl->getStreamRoom(streamRoomId);
+        return impl->getStreamRoomEx(streamRoomId, type);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

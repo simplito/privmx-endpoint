@@ -59,7 +59,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     _host(host),
     _eventMiddleware(eventMiddleware),
     _serverApi(std::make_shared<ServerApi>(gateway)),
-    _subscriber(stream::SubscriberImpl(gateway)),
+    _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
     _streamEncryptionMode(streamEncryptionMode)
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
@@ -136,6 +136,9 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         LOG_DEBUG("StreamApiLowImpl::processNotificationEvent Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
         if (type == "streamRoomCreated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+            if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
+                return;
+            }
             auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw);
             std::shared_ptr<StreamRoomCreatedEvent> event(new StreamRoomCreatedEvent());
             event->channel = "stream";
@@ -143,6 +146,9 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "streamRoomUpdated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
+            if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
+                return;
+            }
             auto streamRoom = decryptAndConvertStreamRoomDataToStreamRoom(raw);
             std::shared_ptr<StreamRoomUpdatedEvent> event(new StreamRoomUpdatedEvent());
             event->channel = "stream";
@@ -156,6 +162,9 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             }
         } else if (type == "streamRoomDeleted") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
+            if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
+                return;
+            }
             std::shared_ptr<StreamRoomDeletedEvent> event(new StreamRoomDeletedEvent());
             event->channel = "stream";
             event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
@@ -358,7 +367,7 @@ void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId
 std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
     auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     params.id(streamRoomId);
-    params.type(STREAM_ROOM_TYPE_FILTER_FLAG);
+    params.type(STREAM_TYPE_FILTER_FLAG);
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom();
     auto statusCode = validateStreamRoomDataIntegrity(streamRoom);
     if(statusCode != 0) {
@@ -615,12 +624,37 @@ void StreamApiLowImpl::unsubscribeFromRemoteStreams(const std::string& streamRoo
     _serverApi->streamsUnsubscribeFromRemote(model);
 }
 
+
 std::string StreamApiLowImpl::createStreamRoom(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, STREAM_TYPE_FILTER_FLAG, policies);
+}
+
+std::string StreamApiLowImpl::createStreamRoomEx(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>&managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::string& type,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
+}
+
+std::string StreamApiLowImpl::_streamRoomCreateEx(
     const std::string& contextId, 
     const std::vector<core::UserWithPubKey>& users, 
     const std::vector<core::UserWithPubKey>&managers,
     const core::Buffer& publicMeta, 
     const core::Buffer& privateMeta,
+    const std::string& type,
     const std::optional<core::ContainerPolicy>& policies
 ) {
     auto streamRoomKey = _keyProvider->generateKey();
@@ -655,6 +689,7 @@ std::string StreamApiLowImpl::createStreamRoom(
 
     createStreamRoomModel.users(mapUsers(users));
     createStreamRoomModel.managers(mapUsers(managers));
+    createStreamRoomModel.type(type);
     if (policies.has_value()) {
         createStreamRoomModel.policy(privmx::endpoint::core::Factory::createPolicyServerObject(policies.value()));
     }
@@ -748,8 +783,17 @@ void StreamApiLowImpl::updateStreamRoom(
 }
 
 core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
+    return _streamRoomsListEx(contextId, query, STREAM_TYPE_FILTER_FLAG);
+}
+
+core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
+    return _streamRoomsListEx(contextId, query, type);
+}
+
+core::PagingList<StreamRoom> StreamApiLowImpl::_streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomListModel>();
     model.contextId(contextId);
+    model.type(type);
     core::ListQueryMapper::map(model, query);
     auto streamRoomsList = _serverApi->streamRoomList(model);
     std::vector<StreamRoom> streamRooms;
@@ -775,11 +819,15 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string
     });
 }
 
-StreamRoom StreamApiLowImpl::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
-    return _getStreamRoomEx(streamRoomId, type);
+StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
+    return _streamRoomGetEx(streamRoomId, STREAM_TYPE_FILTER_FLAG);
 }
 
-StreamRoom StreamApiLowImpl::_getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
+StreamRoom StreamApiLowImpl::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
+    return _streamRoomGetEx(streamRoomId, type);
+}
+
+StreamRoom StreamApiLowImpl::_streamRoomGetEx(const std::string& streamRoomId, const std::string& type) {
     auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     params.id(streamRoomId);
     params.type(type);
@@ -790,10 +838,6 @@ StreamRoom StreamApiLowImpl::_getStreamRoomEx(const std::string& streamRoomId, c
     }
     auto result = decryptAndConvertStreamRoomDataToStreamRoom(streamRoom);
     return result;
-}
-
-StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
-    return _getStreamRoomEx(streamRoomId, STREAM_ROOM_TYPE_FILTER_FLAG);
 }
 
 void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
