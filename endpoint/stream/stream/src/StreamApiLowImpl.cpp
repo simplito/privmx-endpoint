@@ -633,7 +633,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, STREAM_TYPE_FILTER_FLAG, policies);
+    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, STREAM_TYPE_FILTER_FLAG, policies);
 }
 
 std::string StreamApiLowImpl::createStreamRoomEx(
@@ -645,7 +645,7 @@ std::string StreamApiLowImpl::createStreamRoomEx(
     const std::string& type,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
+    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
 }
 
 std::string StreamApiLowImpl::_streamRoomCreateEx(
