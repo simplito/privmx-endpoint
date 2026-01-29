@@ -329,6 +329,7 @@ NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationE
     catch (std::exception& e) {
         std::cerr << "Error on event: " << privmx::utils::Utils::stringifyVar(event.data, true) << std::endl;
         std::cerr << "convertRpcNotificationEventToCoreNotificationEvent: " << e.what() << std::endl;
+        throw e;
     }
 }
 

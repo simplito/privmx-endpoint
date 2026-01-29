@@ -78,7 +78,7 @@ void StreamApiImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
 }
 
 std::vector<stream::RecordingEncKey> StreamApiImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    _api->getStreamRoomRecordingKeys(streamRoomId);
+    return _api->getStreamRoomRecordingKeys(streamRoomId);
 }
 
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
