@@ -64,7 +64,7 @@ endif()
 
 add_library(privmxcrypto OBJECT ${SOURCES})
 target_include_directories(privmxcrypto PUBLIC ${INCLUDE_DIRS})
-target_compile_options(privmxcrypto PRIVATE -fPIC -Wall -Wextra -Wno-narrowing -Werror=return-type)
+target_compile_options(privmxcrypto PRIVATE -Wall -Wextra -fPIC -Wno-narrowing)
 target_link_libraries(privmxcrypto PUBLIC Poco::Foundation privmxutils gmp ${LIBS})
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxcrypto PROPERTIES POSITION_INDEPENDENT_CODE True)

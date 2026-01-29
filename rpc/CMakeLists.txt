@@ -66,7 +66,7 @@ if(PRIVMX_EMSCRIPTEN)
 endif()
 
 target_include_directories(privmxrpc PUBLIC ${INCLUDE_DIRS})
-target_compile_options(privmxrpc PRIVATE -fPIC -Wall -Wextra -Wno-narrowing -Werror=return-type)
+target_compile_options(privmxrpc PRIVATE -fPIC -Wall -Wextra -Wno-narrowing)
 target_link_libraries(privmxrpc PUBLIC Poco::Foundation privmxutils privmxcrypto ${LIBS})
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxrpc PROPERTIES POSITION_INDEPENDENT_CODE True)

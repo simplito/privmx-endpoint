@@ -327,7 +327,14 @@ NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationE
         };
     } catch (std::exception& e) {
         LOG_ERROR("Error on event: ", privmx::utils::Utils::stringifyVar(event.data))
-        throw e;
+        return NotificationEvent{
+            .source = EventSource::INTERNAL,
+            .type = "Error",
+            .data = Poco::Dynamic::Var(),
+            .version = 0,
+            .timestamp = 0,
+            .subscriptions = {}
+        };
     }
 }
 
