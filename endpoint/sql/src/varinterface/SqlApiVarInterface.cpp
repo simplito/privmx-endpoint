@@ -48,7 +48,7 @@ std::map<SqlApiVarInterface::METHOD, Poco::Dynamic::Var (SqlApiVarInterface::*)(
                                         {RowGetColumn, &SqlApiVarInterface::rowGetColumn},
                                         {FreeRow, &SqlApiVarInterface::freeRow},
                                         {ColumnGetName, &SqlApiVarInterface::columnGetName},
-                                        {ColumnGeType, &SqlApiVarInterface::columnGeType},
+                                        {ColumnGetType, &SqlApiVarInterface::columnGetType},
                                         {ColumnGetInt64, &SqlApiVarInterface::columnGetInt64},
                                         {ColumnGetDouble, &SqlApiVarInterface::columnGetDouble},
                                         {ColumnGetText, &SqlApiVarInterface::columnGetText},
@@ -282,7 +282,7 @@ Poco::Dynamic::Var SqlApiVarInterface::columnGetName(const Poco::Dynamic::Var& a
     return _serializer.serialize(result);
 }
 
-Poco::Dynamic::Var SqlApiVarInterface::columnGeType(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var SqlApiVarInterface::columnGetType(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto column = _deserializer.deserializePointer<Column>(argsArr->get(0), "pointer");
     auto result = (*column)->getType();

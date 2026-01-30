@@ -53,7 +53,7 @@ public:
         RowGetColumn = 25,
         FreeRow = 26,
         ColumnGetName = 27,
-        ColumnGeType = 28,
+        ColumnGetType = 28,
         ColumnGetInt64 = 29,
         ColumnGetDouble = 30,
         ColumnGetText = 31,
@@ -97,7 +97,7 @@ public:
     Poco::Dynamic::Var freeRow(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var columnGetName(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var columnGeType(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var columnGetType(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var columnGetInt64(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var columnGetDouble(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var columnGetText(const Poco::Dynamic::Var& args);
