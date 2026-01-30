@@ -21,6 +21,7 @@ namespace core {
 class TypeValidator {
 public:
     static void validateInteger(const Poco::Dynamic::Var& val, const std::string& name);
+    static void validateDouble(const Poco::Dynamic::Var& val, const std::string& name);
     static void validateString(const Poco::Dynamic::Var& val, const std::string& name);
     static void validateBuffer(const Poco::Dynamic::Var& val, const std::string& name);
     static void validateBoolean(const Poco::Dynamic::Var& val, const std::string& name);

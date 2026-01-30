@@ -28,6 +28,12 @@ int64_t VarDeserializer::deserialize<int64_t>(const Poco::Dynamic::Var& val, con
 }
 
 template<>
+double VarDeserializer::deserialize<double>(const Poco::Dynamic::Var& val, const std::string& name) {
+    TypeValidator::validateDouble(val, name);
+    return val.convert<double>();
+}
+
+template<>
 std::string VarDeserializer::deserialize<std::string>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateString(val, name);
     return val.convert<std::string>();

@@ -27,6 +27,11 @@ Poco::Dynamic::Var VarSerializer::serialize<int64_t>(const int64_t& val) {
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<double>(const double& val) {
+    return val;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<std::string>(const std::string& val) {
     return val;
 }

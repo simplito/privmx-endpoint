@@ -28,6 +28,13 @@ void TypeValidator::validateInteger(const Poco::Dynamic::Var& val, const std::st
     }
 }
 
+void TypeValidator::validateDouble(const Poco::Dynamic::Var& val, const std::string& name) {
+    validateNotEmpty(val, name, "double");
+    if (!val.isNumeric()) {
+        throw InvalidArgumentTypeException(name + " | Expected double, value has type " + val.type().name());
+    }
+}
+
 void TypeValidator::validateString(const Poco::Dynamic::Var& val, const std::string& name) {
     validateNotEmpty(val, name, "string");
     if (!val.isString()) {

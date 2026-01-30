@@ -21,6 +21,7 @@ if(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(inbox)
     add_subdirectory(stream)
     add_subdirectory(search)
+    add_subdirectory(sql)
 endif(PRIVMX_BUILD_ENDPOINT_ENDPOINT)
 
 if(PRIVMX_BUILD_CLI AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
