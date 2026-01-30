@@ -15,18 +15,13 @@ std::shared_ptr<DatabaseHandle> DatabaseHandleImpl::open(const std::string& file
         throw DatabaseVFSRegisterException(sqlite3_errmsg(db));
     }
 
-    rc = sqlite3_open(":memory:", &db);
+    rc = sqlite3_open(filename.c_str(), &db);
     if(rc) {
         throw DatabaseOpenException(sqlite3_errmsg(db));
     }
     std::shared_ptr<sqlite3> db2 = std::shared_ptr<sqlite3>(db, sqlite3_close);
 
     sqlite3_busy_timeout(db, 10000);
-
-    rc = sqlite3_exec(db, (std::string("ATTACH 'file:") + filename + "?vfs=privmxvfs' AS pmx;").c_str(), 0, 0, 0);
-    if(rc != SQLITE_OK){
-        throw DatabaseAttachException(sqlite3_errmsg(db));
-    }
 
     return std::make_shared<DatabaseHandleImpl>(db2);
 }
@@ -100,6 +95,10 @@ std::shared_ptr<Row> QueryImpl::step() {
 
 void QueryImpl::reset() {
     sqlite3_reset(_stmt.get());
+}
+
+void QueryImpl::finalize() {
+    _stmt.reset();
 }
 
 RowImpl::RowImpl(std::shared_ptr<sqlite3_stmt> stmt, int status) : _stmt(std::move(stmt)), _status(status) { }

@@ -42,6 +42,7 @@ std::map<SqlApiVarInterface::METHOD, Poco::Dynamic::Var (SqlApiVarInterface::*)(
                                         {QueryBindNull, &SqlApiVarInterface::queryBindNull},
                                         {QueryStep, &SqlApiVarInterface::queryStep},
                                         {QueryReset, &SqlApiVarInterface::queryReset},
+                                        {QueryFinalize, &SqlApiVarInterface::queryFinalize},
                                         {FreeQuery, &SqlApiVarInterface::freeQuery},
                                         {RowGetStatus, &SqlApiVarInterface::rowGetStatus},
                                         {RowGetColumnCount, &SqlApiVarInterface::rowGetColumnCount},
@@ -235,6 +236,13 @@ Poco::Dynamic::Var SqlApiVarInterface::queryReset(const Poco::Dynamic::Var& args
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto query = _deserializer.deserializePointer<Query>(argsArr->get(0), "pointer");
     (*query)->reset();
+    return {};
+}
+
+Poco::Dynamic::Var SqlApiVarInterface::queryFinalize(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto query = _deserializer.deserializePointer<Query>(argsArr->get(0), "pointer");
+    (*query)->finalize();
     return {};
 }
 

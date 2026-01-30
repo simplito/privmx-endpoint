@@ -47,18 +47,19 @@ public:
         QueryBindNull = 19,
         QueryStep = 20,
         QueryReset = 21,
-        FreeQuery = 22,
-        RowGetStatus = 23,
-        RowGetColumnCount = 24,
-        RowGetColumn = 25,
-        FreeRow = 26,
-        ColumnGetName = 27,
-        ColumnGetType = 28,
-        ColumnGetInt64 = 29,
-        ColumnGetDouble = 30,
-        ColumnGetText = 31,
-        ColumnGetBlob = 32,
-        FreeColumn = 33,
+        QueryFinalize = 22,
+        FreeQuery = 23,
+        RowGetStatus = 24,
+        RowGetColumnCount = 25,
+        RowGetColumn = 26,
+        FreeRow = 27,
+        ColumnGetName = 28,
+        ColumnGetType = 29,
+        ColumnGetInt64 = 30,
+        ColumnGetDouble = 31,
+        ColumnGetText = 32,
+        ColumnGetBlob = 33,
+        FreeColumn = 34,
     };
 
     SqlApiVarInterface(core::Connection connection, store::StoreApi storeApi, kvdb::KvdbApi kvdbApi, const core::VarSerializer& serializer)
@@ -89,6 +90,7 @@ public:
     Poco::Dynamic::Var queryBindNull(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var queryStep(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var queryReset(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var queryFinalize(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var freeQuery(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var rowGetStatus(const Poco::Dynamic::Var& args);

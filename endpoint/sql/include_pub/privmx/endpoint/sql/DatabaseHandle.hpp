@@ -67,6 +67,7 @@ public:
     virtual void bindNull(int64_t index) = 0;
     virtual std::shared_ptr<Row> step() = 0;
     virtual void reset() = 0;
+    virtual void finalize() = 0;
 };
 
 class Transaction

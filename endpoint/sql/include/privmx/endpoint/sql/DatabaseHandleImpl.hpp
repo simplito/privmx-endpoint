@@ -62,6 +62,7 @@ public:
     void bindNull(int64_t index) override;
     std::shared_ptr<Row> step() override;
     void reset() override;
+    void finalize() override;
 
 private:
     std::shared_ptr<sqlite3> _db;
