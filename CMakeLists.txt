@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.10.2)
 add_definitions(
     -Wfatal-errors
-    )
+    -Werror=return-type
+)
 project(privmxlib)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -g -O1")
 # add_compile_options(-fsanitize=thread -O1)
