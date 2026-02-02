@@ -116,7 +116,14 @@ std::vector<MediaDevice> StreamApiImpl::getMediaDevices() {
     }
     // Desktop
     libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> desktopDevice = _peerConnectionFactory->GetDesktopDevice();
-    result.push_back(MediaDevice{"desktop", "desktop", DeviceType::Desktop});
+    auto desktopMediaList = desktopDevice->GetDesktopMediaList(libwebrtc::DesktopType::kScreen);
+    desktopMediaList->UpdateSourceList(true, true);
+    for (int i = 0; i < desktopMediaList->GetSourceCount(); ++i) {
+        result.push_back(MediaDevice{"Desktop"+std::to_string(i+1), std::to_string(i+1), DeviceType::Desktop});
+    }
+    // Data
+    result.push_back(MediaDevice{"DataChannel", "DataChannel", DeviceType::Raw});
+
     return result;
 }
 
@@ -198,7 +205,11 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> desktopDevice = _peerConnectionFactory->GetDesktopDevice();
             auto desktopMediaList = desktopDevice->GetDesktopMediaList(libwebrtc::DesktopType::kScreen);
             desktopMediaList->UpdateSourceList(true, true);
-            libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> desktopCapturer = desktopDevice->CreateDesktopCapturer(desktopMediaList->GetSource(0));
+            int id = std::stol(mediaDevice.id)-1;
+            if(id >= desktopMediaList->GetSourceCount()) {
+                throw IncorrectTrackIdException();
+            }
+            libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> desktopCapturer = desktopDevice->CreateDesktopCapturer(desktopMediaList->GetSource(id));
             libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> videoSource = _peerConnectionFactory->CreateDesktopSource(desktopCapturer, "desktop_source", _constraints);
             libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack = _peerConnectionFactory->CreateVideoTrack(videoSource, "desktop_track");
             std::lock_guard<std::mutex> lock(streamData->streamMutex);
@@ -208,6 +219,19 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             );
             return MediaTrack{[videoTrack](bool enabled) {
                 videoTrack->set_enabled(enabled);
+            }};
+        }
+        break;
+    case DeviceType::Raw:
+        {
+            auto streamDataOpt = _streamDataMap.get(streamHandle);
+            if(!streamDataOpt.has_value()) {
+                throw IncorrectStreamHandleException();
+            }
+            auto streamData = streamDataOpt.value();
+            
+            return MediaTrack{[](bool enabled) {
+                return;
             }};
         }
         break;

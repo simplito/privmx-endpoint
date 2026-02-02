@@ -55,6 +55,7 @@ public:
 
     void setFrameCryptorOptions(const std::string& streamRoomId, const privmx::webrtc::FrameCryptorOptions& frameCryptorOptions);
     void setOnTrackInterface(const std::string& streamRoomId, std::shared_ptr<OnTrackInterface> OnTrackInterface);
+    void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 
     void createPeerConnectionWithLocalStream(
         const std::string& streamRoomId, 
@@ -70,13 +71,13 @@ public:
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToRemove
     );
 
-    void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 
 private:
-    void AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = 0);
-    void AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id = 0);
-    void RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = 0);
-    void RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = 0);
+    void AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = "0");
+    void AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id = "0");
+    void AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
+    void RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
+    void RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
 
 
     int64_t addKeyUpdateCallback(std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)> keyUpdateCallback);

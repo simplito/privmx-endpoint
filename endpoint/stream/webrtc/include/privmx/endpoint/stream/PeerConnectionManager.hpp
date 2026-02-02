@@ -19,6 +19,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {

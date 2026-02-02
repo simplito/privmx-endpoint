@@ -93,6 +93,8 @@ void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scope
 }
 void PmxPeerConnectionObserver::OnDataChannel([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON DATA CHANNEL")
+    std::shared_ptr<DataChannelImpl> dataChannelImpl = std::make_shared<DataChannelImpl>(_onTrackInterface, data_channel);
+    _dataChannels.set(data_channel->label().std_string(), dataChannelImpl);
 }
 void PmxPeerConnectionObserver::OnRenegotiationNeeded() {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON RENEGOTIATION NEEDED")
@@ -123,25 +125,23 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
         _onTrackInterface->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled(), [track](bool mute) {return track->set_enabled(!mute);}}, TrackAction::ADDED);
     }
     // callback on data
-    if(_onTrackInterface) {
-        if(dataType == DataType::VIDEO) {
-            auto videoTrack = static_cast<libwebrtc::RTCVideoTrack*>(track.get());
-            std::shared_ptr<RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>> renderer = 
-                std::make_shared<RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>>(
-                    _onTrackInterface, streamIds, track
-                );
-            _RTCVideoRenderers.set(videoTrack->id().std_string(), renderer);
-            videoTrack->AddRenderer(renderer.get());
-        } else if(dataType == DataType::AUDIO) {
-            auto audioTrack = static_cast<libwebrtc::RTCAudioTrack*>(track.get());
-            std::shared_ptr<AudioTrackSinkImpl> sink = 
-                std::make_shared<AudioTrackSinkImpl>(
-                    _onTrackInterface, streamIds, track
-                );
-            _audioTrackSinks.set(audioTrack->id().std_string(), sink);
-            audioTrack->SetSink(sink);
-        };
-    }   
+    if(dataType == DataType::VIDEO) {
+        auto videoTrack = static_cast<libwebrtc::RTCVideoTrack*>(track.get());
+        std::shared_ptr<RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>> renderer = 
+            std::make_shared<RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>>(
+                _onTrackInterface, streamIds, track
+            );
+        _RTCVideoRenderers.set(videoTrack->id().std_string(), renderer);
+        videoTrack->AddRenderer(renderer.get());
+    } else if(dataType == DataType::AUDIO) {
+        auto audioTrack = static_cast<libwebrtc::RTCAudioTrack*>(track.get());
+        std::shared_ptr<AudioTrackSinkImpl> sink = 
+            std::make_shared<AudioTrackSinkImpl>(
+                _onTrackInterface, streamIds, track
+            );
+        _audioTrackSinks.set(audioTrack->id().std_string(), sink);
+        audioTrack->SetSink(sink);
+    };
     LOG_TRACE("STREAMS ", "API ", _streamRoomId + ": ON ADD TRACK done")
 }
 
@@ -182,6 +182,9 @@ void PmxPeerConnectionObserver::setOnTrackInterface(std::shared_ptr<OnTrackInter
         r->updateOnTrackInterface(onTrackInterface);
     });
     _audioTrackSinks.forAll([onTrackInterface]([[maybe_unused]] const std::string& trackId, const std::shared_ptr<AudioTrackSinkImpl>& s) {
+        s->updateOnTrackInterface(onTrackInterface);
+    });
+    _dataChannels.forAll([onTrackInterface]([[maybe_unused]] const std::string& trackId, const std::shared_ptr<DataChannelImpl>& s) {
         s->updateOnTrackInterface(onTrackInterface);
     });
 }

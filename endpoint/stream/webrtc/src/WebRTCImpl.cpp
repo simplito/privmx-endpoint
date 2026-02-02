@@ -1,6 +1,7 @@
 #include "privmx/endpoint/stream/WebRTCImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
+#include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
 #include <future>
 #include <privmx/utils/Logger.hpp>
 
@@ -193,10 +194,6 @@ void WebRTCImpl::setFrameCryptorOptions(const std::string& streamRoomId, const p
     connection->peerConnection->observer->SetFrameCryptorOptions(frameCryptorOptions);
 }
 
-void WebRTCImpl::setOnTrackInterface(const std::string& streamRoomId, std::shared_ptr<OnTrackInterface> OnTrackInterface) {
-    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
-    connection->peerConnection->observer->setOnTrackInterface(OnTrackInterface);
-}
 
 void WebRTCImpl::createPeerConnectionWithLocalStream(
     const std::string& streamRoomId, 
@@ -297,7 +294,12 @@ void WebRTCImpl::AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             }
         ));
     }
-    
+}
+
+void WebRTCImpl::AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id) {
+    std::shared_ptr<libwebrtc::RTCDataChannelInit> rtcDataChannelInit = std::make_shared<libwebrtc::RTCDataChannelInit>();
+    auto dataChannel = jc->peerConnection->pc->CreateDataChannel(id, rtcDataChannelInit.get());
+    // dataChannel->RegisterObserver();
 }
 
 void WebRTCImpl::RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id) {
@@ -322,6 +324,11 @@ void WebRTCImpl::RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::Janu
     } else {
         throw IncorrectTrackIdException();
     }
+}
+
+void WebRTCImpl::setOnTrackInterface(const std::string& streamRoomId, std::shared_ptr<OnTrackInterface> OnTrackInterface) {
+    auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
+    connection->peerConnection->observer->setOnTrackInterface(OnTrackInterface);
 }
 
 void WebRTCImpl::setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {

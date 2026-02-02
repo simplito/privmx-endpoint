@@ -95,7 +95,8 @@ public:
 enum DeviceType {
     Audio = 0,
     Video = 1,
-    Desktop = 2
+    Desktop = 2,
+    Raw = 3
 };
 
 struct MediaDevice {
