@@ -10,6 +10,8 @@ limitations under the License.
 */
 #include <dlfcn.h>
 
+#include "privmx/endpoint/android/cinterface/android.h"
+
 int privmx_endpoint_android_init() {
     return 1;
 }
