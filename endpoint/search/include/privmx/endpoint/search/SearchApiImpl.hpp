@@ -108,7 +108,6 @@ private:
     SearchIndex mapSearchIndex(const kvdb::Kvdb& kvdb);
     std::vector<SearchIndex> mapSearchIndexes(const std::vector<kvdb::Kvdb>& kvdbs);
 
-    std::shared_ptr<PrivmxSession> _session;
     core::Connection _connection;
     store::StoreApi _storeApi;
     kvdb::KvdbApi _kvdbApi;
