@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-typedef struct ThreadApi ThreadApi;
-
 int privmx_endpoint_android_init();
 void* privmx_endpoint_android_dlopen(const char *path, int flags);
 int privmx_endpoint_android_dlclose(void* handle);
