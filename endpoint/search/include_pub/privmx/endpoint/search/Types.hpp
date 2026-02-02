@@ -81,7 +81,7 @@ struct SearchIndex
     std::string lastModifier;
 
     /**
-     * list of users (their IDs) with access to the Thread
+     * list of users (their IDs) with access to the Search Index
      */
     std::vector<std::string> users;
 
@@ -96,17 +96,17 @@ struct SearchIndex
     int64_t version;
 
     /**
-     * Thread's public metadata
+     * Search Index public metadata
      */
     core::Buffer publicMeta;
 
     /**
-     * Thread's private metadata
+     * Search Index private metadata
      */
     core::Buffer privateMeta;
 
     /**
-     * Thread's policies
+     * Search Index policies
      */
     core::ContainerPolicy policy;
 
@@ -116,12 +116,12 @@ struct SearchIndex
     IndexMode mode;
 
     /**
-     * status code of retrieval and decryption of the Thread
+     * status code of retrieval and decryption of the Search Index
      */
     int64_t statusCode;
 
     /**
-     * Version of the Thread data structure and how it is encoded/encrypted
+     * Version of the Search Index data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
 };
