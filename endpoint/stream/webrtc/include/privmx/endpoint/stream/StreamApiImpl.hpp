@@ -227,7 +227,7 @@ private:
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> audioTracks;
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> videoTracks;
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamDesktopTrackInfo>> desktopTracks;
-        std::shared_ptr<StreamDataTrackInfo> _dataTrack;
+        std::shared_ptr<StreamDataTrackInfo> dataTrack;
         StreamStatus status;
         std::string streamRoomId;
         std::mutex streamMutex;

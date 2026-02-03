@@ -83,6 +83,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomConnectionNotIniti
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotInitialized, "StreamHandle not initialized", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamIsPublished, "Stream is published", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUpdatedEventException, "Cannot extract StreamUpdatedEvent", 0x0023)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, ThereCanBeOnlyOneDataTrackException, "There can be only one dataTrack per user in StreamRoom", 0x0024)
 } // stream
 } // endpoint
 } // privmx

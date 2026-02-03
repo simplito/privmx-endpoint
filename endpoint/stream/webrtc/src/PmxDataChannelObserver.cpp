@@ -19,7 +19,10 @@ PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface>
 
 }
 void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state) {
-    if(state == libwebrtc::RTCDataChannelState::RTCDataChannelOpen) {
+    if(state == libwebrtc::RTCDataChannelState::RTCDataChannelConnecting) {
+        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelConnecting")
+    } else if(state == libwebrtc::RTCDataChannelState::RTCDataChannelOpen) {
+        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelOpen")
         if(_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
                 Track{
@@ -32,6 +35,7 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
             );
         }
     } else if(state == libwebrtc::RTCDataChannelState::RTCDataChannelClosing) {
+        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelClosing")
         if(_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
                 Track{
@@ -43,7 +47,9 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
                 TrackAction::REMOVED
             );
         }
-    } 
+    } else if(state == libwebrtc::RTCDataChannelState::RTCDataChannelClosed) {
+        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelClosed")
+    }
 }
 void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool binary) {
     std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, std::string(buffer, length), binary);

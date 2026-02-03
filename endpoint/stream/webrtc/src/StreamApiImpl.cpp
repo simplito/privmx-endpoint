@@ -229,7 +229,11 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
                 throw IncorrectStreamHandleException();
             }
             auto streamData = streamDataOpt.value();
-            
+            std::lock_guard<std::mutex> lock(streamData->streamMutex);
+            if(streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
+                throw ThereCanBeOnlyOneDataTrackException();
+            }
+            streamData->dataTrack = std::make_shared<StreamDataTrackInfo>("data_track", TrackStatus::ToAdd);
             return MediaTrack{[](bool enabled) {
                 return;
             }};
@@ -262,7 +266,6 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
                 streamData->audioTracks.erase(mediaDevice.name + "-" + mediaDevice.id);
             } else if(track->status == TrackStatus::Published) {
                 track->status = TrackStatus::ToRemove;
-                streamData->audioTracks.set(mediaDevice.name + "-" + mediaDevice.id, track);
             }
         }
         break;
@@ -280,7 +283,6 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
                 streamData->videoTracks.erase(mediaDevice.name + "-" + mediaDevice.id);
             } else if(track->status == TrackStatus::Published) {
                 track->status = TrackStatus::ToRemove;
-                streamData->videoTracks.set(mediaDevice.name + "-" + mediaDevice.id, track);
             }
         }
         break;
@@ -297,7 +299,22 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
                 streamData->desktopTracks.erase(mediaDevice.name + "-" + mediaDevice.id);
             } else if(track->status == TrackStatus::Published) {
                 track->status = TrackStatus::ToRemove;
-                streamData->desktopTracks.set(mediaDevice.name + "-" + mediaDevice.id, track);
+            }
+        }
+        break;
+    case DeviceType::Raw:
+        {
+            LOG_INFO("StreamApiImpl::removeTrack Raw - ", mediaDevice.name + "-" + mediaDevice.id)
+            std::lock_guard<std::mutex> lock(streamData->streamMutex);
+
+            auto track= streamData->dataTrack;
+            if(!track) {
+                throw IncorrectTrackIdException();
+            }
+            if(track->status == TrackStatus::ToAdd) {
+                streamData->dataTrack = nullptr;
+            } else if(track->status == TrackStatus::Published) {
+                track->status = TrackStatus::ToRemove;
             }
         }
         break;
@@ -312,9 +329,11 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
         throw IncorrectStreamHandleException();
     }
     auto streamData = streamDataOpt.value();
+    std::lock_guard<std::mutex> lock(streamData->streamMutex);
     // Add tracks to the peer connection
     std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToAdd;
     std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> videoTracksToAdd;
+    std::optional<std::string> dataChannel = std::nullopt;
     streamData->audioTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamAudioTrackInfo>& audio) {
         if(audio->status == TrackStatus::ToAdd) {
             audio->status = TrackStatus::Published;
@@ -339,8 +358,16 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
             videoTracksToAdd.push_back({id, desktop->track});
         }
     });
+    if(streamData->dataTrack) {
+        auto track = streamData->dataTrack;
+        if(track->status == TrackStatus::ToAdd) {
+            track->status = TrackStatus::Published;
+            dataChannel = track->label;
+        }
+    }
+
     streamData->status = Online;
-    _webRTC->createPeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd);
+    _webRTC->createPeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, dataChannel);
     return _api->publishStream(streamHandle);
 }
 
@@ -396,7 +423,7 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
     for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
         streamData->desktopTracks.erase(videoTracksToRemove[toRemove].first);
     }
-    _webRTC->updatePeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, audioTracksToRemove, videoTracksToRemove);
+    _webRTC->updatePeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, audioTracksToRemove, videoTracksToRemove, streamData->dataTrack->label);
     return _api->updateStream(streamHandle);
 }
 

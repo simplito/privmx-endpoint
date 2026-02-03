@@ -43,12 +43,19 @@ struct VideoTrackInfo {
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
 };
 
+struct DataChannelInfo {
+    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> channel;
+    std::shared_ptr<PmxDataChannelObserver> observer;
+};
+
 struct PeerConnection {
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> pc;
     std::shared_ptr<PmxPeerConnectionObserver> observer;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> mediaStream;
     std::map<std::string, AudioTrackInfo> audioTracks;
     std::map<std::string, VideoTrackInfo> videoTracks;
+    std::optional<DataChannelInfo> dataChannel;
+
     std::shared_mutex trackMutex;
     std::shared_ptr<privmx::webrtc::KeyStore> keys;
 };
