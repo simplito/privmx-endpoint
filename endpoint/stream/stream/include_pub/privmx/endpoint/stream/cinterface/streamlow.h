@@ -30,23 +30,22 @@ struct privmx_endpoint_stream_Key
 };
 typedef struct privmx_endpoint_stream_Key privmx_endpoint_stream_Key;
 
-typedef const char* (*CreateOfferAndSetLocalDescriptionCallback)(void* ctx, const char* streamRoomId);
-typedef const char* (*CreateAnswerAndSetDescriptionsCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type);
-typedef void (*SetAnswerAndSetRemoteDescriptionCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type);
-typedef void (*UpdateSessionIdCallback)(void* ctx, const char* streamRoomId, const int64_t sessionId, const char* connectionType);
-typedef void (*CloseCallback)(void* ctx, const char* streamRoomId);
-typedef void (*UpdateKeysCallback)(void* ctx, const char* streamRoomId, const privmx_endpoint_stream_Key keys[], const size_t keysSize);
+struct privmx_endpoint_stream_WebRTCInterface
+{
+    void* ctx;
+    const char* (*createOfferAndSetLocalDescriptionCallback)(void* ctx, const char* streamRoomId);
+    const char* (*createAnswerAndSetDescriptionsCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type);
+    void (*setAnswerAndSetRemoteDescriptionCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type);
+    void (*updateSessionIdCallback)(void* ctx, const char* streamRoomId, const int64_t sessionId, const char* connectionType);
+    void (*closeCallback)(void* ctx, const char* streamRoomId);
+    void (*updateKeysCallback)(void* ctx, const char* streamRoomId, const privmx_endpoint_stream_Key keys[], const size_t keysSize);
+};
+typedef struct privmx_endpoint_stream_WebRTCInterface privmx_endpoint_stream_WebRTCInterface;
 
 typedef struct privmx_endpoint_stream_ProxyWebRTC privmx_endpoint_stream_ProxyWebRTC;
 
 int privmx_endpoint_stream_newProxyWebRTC(
-    void* ctx,
-    CreateOfferAndSetLocalDescriptionCallback callback1,
-    CreateAnswerAndSetDescriptionsCallback  callback2,
-    SetAnswerAndSetRemoteDescriptionCallback callback3,
-    UpdateSessionIdCallback callback4,
-    CloseCallback callback5,
-    UpdateKeysCallback callback6,
+    privmx_endpoint_stream_WebRTCInterface webRTCInterface,
     privmx_endpoint_stream_ProxyWebRTC** outPtr
 );
 

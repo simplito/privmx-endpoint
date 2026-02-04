@@ -51,24 +51,11 @@ int privmx_endpoint_execStreamApiLow(StreamApiLow* ptr, int method, const pson_v
 }
 
 int privmx_endpoint_stream_newProxyWebRTC(
-    void* ctx,
-    CreateOfferAndSetLocalDescriptionCallback callback1,
-    CreateAnswerAndSetDescriptionsCallback  callback2,
-    SetAnswerAndSetRemoteDescriptionCallback callback3,
-    UpdateSessionIdCallback callback4,
-    CloseCallback callback5,
-    UpdateKeysCallback callback6,
+    privmx_endpoint_stream_WebRTCInterface webRTCInterface,
     privmx_endpoint_stream_ProxyWebRTC** outPtr
 ) {
     *outPtr = (privmx_endpoint_stream_ProxyWebRTC*)new std::shared_ptr<stream::ProxyWebRTC>(
-        std::make_shared<stream::ProxyWebRTC>(
-            ctx,
-            callback1,
-            callback2,
-            callback3,
-            callback4,
-            callback5,
-            callback6));
+        std::make_shared<stream::ProxyWebRTC>(webRTCInterface));
     return 1;
 }
 

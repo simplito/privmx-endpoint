@@ -28,13 +28,7 @@ class ProxyWebRTC : public WebRTCInterface
 {
 public:
     ProxyWebRTC(
-        void* ctx,
-        CreateOfferAndSetLocalDescriptionCallback createOfferAndSetLocalDescriptionCallback,
-        CreateAnswerAndSetDescriptionsCallback createAnswerAndSetDescriptionsCallback,
-        SetAnswerAndSetRemoteDescriptionCallback setAnswerAndSetRemoteDescriptionCallback,
-        UpdateSessionIdCallback updateSessionIdCallback,
-        CloseCallback closeCallback,
-        UpdateKeysCallback updateKeysCallback
+        privmx_endpoint_stream_WebRTCInterface webRTCInterface
     );
     ~ProxyWebRTC() override = default;
     std::string createOfferAndSetLocalDescription(const std::string& streamRoomId) override;
@@ -48,13 +42,7 @@ private:
     std::shared_ptr<privmx_endpoint_stream_Key> mapKeys(const std::vector<Key>& keys);
     privmx_endpoint_stream_KeyType mapKeyType(KeyType type);
 
-    void* _ctx;
-    CreateOfferAndSetLocalDescriptionCallback _createOfferAndSetLocalDescriptionCallback;
-    CreateAnswerAndSetDescriptionsCallback _createAnswerAndSetDescriptionsCallback;
-    SetAnswerAndSetRemoteDescriptionCallback _setAnswerAndSetRemoteDescriptionCallback;
-    UpdateSessionIdCallback _updateSessionIdCallback;
-    CloseCallback _closeCallback;
-    UpdateKeysCallback _updateKeysCallback;
+    privmx_endpoint_stream_WebRTCInterface _webRTCInterface;
 };
 
 } // namespace stream
