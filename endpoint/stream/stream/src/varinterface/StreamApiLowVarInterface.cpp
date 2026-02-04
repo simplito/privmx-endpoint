@@ -155,7 +155,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::joinStreamRoom(const Poco::Dynamic:
 Poco::Dynamic::Var StreamApiLowVarInterface::joinStreamRoomEx(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto webRtc2 = _deserializer.deserializePointer<WebRTCInterface>(argsArr->get(1), "webRtc");
+    auto webRtc = _deserializer.deserializePointer<WebRTCInterface>(argsArr->get(1), "webRtc");
     _streamApi.joinStreamRoom(streamRoomId, *webRtc);
     return {};
 }
