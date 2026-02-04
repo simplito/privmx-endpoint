@@ -377,7 +377,7 @@ std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKey
     std::vector<stream::RecordingEncKey> recordingEncKeys;
     for(const auto& key: keys) {
         if(key.second.statusCode == 0) {
-            recordingEncKeys.push_back(stream::RecordingEncKey{key.second.id, deriveStreamEncryptionKey(key.second)});
+            recordingEncKeys.push_back(stream::RecordingEncKey{core::Buffer::from(key.second.id), core::Buffer::from(deriveStreamEncryptionKey(key.second))});
         }
     }   
     return recordingEncKeys;
