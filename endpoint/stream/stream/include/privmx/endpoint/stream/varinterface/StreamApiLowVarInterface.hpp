@@ -56,6 +56,8 @@ public:
         UpdateStream = 22,
         EnableStreamRoomRecording = 23,
         GetStreamRoomRecordingKeys = 24,
+
+        JoinStreamRoomEx = 25,
     };
 
     StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
@@ -75,6 +77,7 @@ public:
 
     Poco::Dynamic::Var listStreams(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var joinStreamRoom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var joinStreamRoomEx(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var leaveStreamRoom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var enableStreamRoomRecording(const Poco::Dynamic::Var& args);
 
@@ -91,6 +94,7 @@ public:
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var acceptOfferOnReconfigure(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var keyManagement(const Poco::Dynamic::Var& args);
+
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
     std::shared_ptr<WebRTCInterface> getWebRtcInterface();

@@ -37,6 +37,7 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
 
     {ListStreams, &StreamApiLowVarInterface::listStreams},
     {JoinStreamRoom, &StreamApiLowVarInterface::joinStreamRoom},
+    {JoinStreamRoomEx, &StreamApiLowVarInterface::joinStreamRoomEx},
     {LeaveStreamRoom, &StreamApiLowVarInterface::leaveStreamRoom},
     {EnableStreamRoomRecording, &StreamApiLowVarInterface::enableStreamRoomRecording},
     {GetStreamRoomRecordingKeys, &StreamApiLowVarInterface::getStreamRoomRecordingKeys},
@@ -148,6 +149,14 @@ Poco::Dynamic::Var StreamApiLowVarInterface::joinStreamRoom(const Poco::Dynamic:
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
     _streamApi.joinStreamRoom(streamRoomId, getWebRtcInterface());
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::joinStreamRoomEx(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto webRtc = _deserializer.deserializePointer<WebRTCInterface>(argsArr->get(1), "webRtc");
+    _streamApi.joinStreamRoom(streamRoomId, *webRtc);
     return {};
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::leaveStreamRoom(const Poco::Dynamic::Var& args) {

@@ -24,6 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp>
 #include "privmx/endpoint/stream/varinterface/StreamApiLowVarInterface.hpp"
 #include "privmx/endpoint/event/varinterface/EventApiVarInterface.hpp"
+#include "privmx/endpoint/stream/ProxyWebRTC.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::cinterface;
@@ -47,4 +48,18 @@ int privmx_endpoint_execStreamApiLow(StreamApiLow* ptr, int method, const pson_v
         const Poco::Dynamic::Var argsVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(args));
         return _ptr->exec((stream::StreamApiLowVarInterface::METHOD)method, argsVal);
     });
+}
+
+int privmx_endpoint_stream_newProxyWebRTC(
+    privmx_endpoint_stream_WebRTCInterface webRTCInterface,
+    privmx_endpoint_stream_ProxyWebRTC** outPtr
+) {
+    *outPtr = (privmx_endpoint_stream_ProxyWebRTC*)new std::shared_ptr<stream::ProxyWebRTC>(
+        std::make_shared<stream::ProxyWebRTC>(webRTCInterface));
+    return 1;
+}
+
+int privmx_endpoint_stream_freeProxyWebRTC(privmx_endpoint_stream_ProxyWebRTC* ptr) {
+    delete (std::shared_ptr<stream::ProxyWebRTC>*)ptr;
+    return 1;
 }
