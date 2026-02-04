@@ -51,6 +51,18 @@ Poco::Dynamic::Var VarSerializer::serialize<bool>(const bool& val) {
     return val;
 }
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize(const std::map<std::string, bool>& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "map<string,bool>");
+    }
+    for (const auto& item : val) {
+        obj->set(item.first, serialize(item.second));
+    }
+    return obj;
+}
+
 // core
 
 template<>
