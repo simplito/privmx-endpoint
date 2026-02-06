@@ -24,7 +24,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "privmx/endpoint/core/CoreTypes.hpp"
+// #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
