@@ -50,6 +50,15 @@ int privmx_endpoint_execStreamApiLow(StreamApiLow* ptr, int method, const pson_v
     });
 }
 
+int privmx_endpoint_stream_extractKey(const privmx_endpoint_stream_Key keys[], size_t index, const char** keyId, const unsigned char** keyBuf, size_t* keySize, privmx_endpoint_stream_KeyType* type) {
+    const auto& key = keys[index];
+    *keyId = key.keyId;
+    *keyBuf = key.key;
+    *keySize = key.keySize;
+    *type = key.type;
+    return 1;
+}
+
 int privmx_endpoint_stream_newProxyWebRTC(
     privmx_endpoint_stream_WebRTCInterface webRTCInterface,
     privmx_endpoint_stream_ProxyWebRTC** outPtr
