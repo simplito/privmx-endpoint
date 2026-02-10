@@ -51,23 +51,6 @@ class WorkerOptions:
     def __init__(self, docker_image: str):
         self.docker_image = docker_image
 
-# Configuration
-
-class TestData:
-    userInnerId = "662115304034ea5684acac8b-janek"
-    userId = "janek"
-    contextId = "662115304034ea5684acac8b"
-    contextId2 = "662115304034ea5684acac8c"
-    userPubKey = "64dGCs7myoFrZDnP5pgvmBNKF1za22b5iBQaEpeBcGWiTUCA3c"
-    userPrivKey = "L3ZcrvuPSYaWUnb4sfhxz3bDfvTEQ6Zmntt2BjaWDnfc1mBAhKMV"
-    solutionId = "G7J8Pm4op76xCcv9gNVqsQkmFcJ"
-    instanceId = "Jf61tr8Crn72WXpcG7eXWK"
-    apiKeyId = "34ed9fd355a81d81cc5f984dfab7595a"
-    apiKeySecret = "e4c21122523e8d8a6643c35b41440e61"
-    secondSolutionId = "66ffb29789fd0a444e6f676d"
-
-testData = TestData()
-
 GTEST_BINARY = "./build/privmxplatform_test_e2e_CoreTest"
 
 LOG_DIR = Path("logs")
@@ -151,7 +134,6 @@ def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int =
     deadline = time.time() + timeout_seconds
 
     while time.time() < deadline:
-        # Check if container is running
         try:
             cmd = f"docker inspect -f '{{{{.State.Running}}}}' {container_name}"
             code, stdout, stderr = run_command(cmd)
@@ -164,7 +146,6 @@ def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int =
                 print_container_logs(container_name)
                 raise RuntimeError(f"Container {container_name} stopped unexpectedly.")
         except Exception as e:
-            # Matching TS: fail immediately if container query itself fails
             raise RuntimeError(f"Container check failed: {e}")
 
         # Check if server responds
@@ -193,22 +174,17 @@ def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
         f"PRIVMX_MONGO_URL={internal_mongo_url}",
         "PRIVMX_WORKERS=1",
         "PMX_MIGRATION=Migration_069_Indexes_for_session",
-        f"API_KEY_ID={testData.apiKeyId}",
-        f"API_KEY_SECRET={testData.apiKeySecret}",
         "PRIVMX_HOSTNAME=0.0.0.0",
     ]
     env_vars = " ".join(f"-e {e}" for e in env_list)
 
     client = MongoClient(local_mongo_url)
     try:
-        # Remove old container if exists
         run_command(f"docker rm -f {container_name}")
     except subprocess.CalledProcessError:
         pass
-    # Remove old database if exists
     client.drop_database(db_name)
     db = client[db_name]
-    # Run new container
     cmd = (
         f"docker run -d --name {container_name} -p {host_port}:3000 "
         f"--network testing_network "
@@ -231,13 +207,11 @@ def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
     )
 
 def destroy_bridge_docker(bridge_info: BridgeInfo) -> None:
-    # Close Mongo client
     try:
         bridge_info.mongo_client.drop_database(bridge_info.db.name)
         bridge_info.mongo_client.close()
     except Exception:
         pass
-    # Remove container
     try:
         run_command(f"docker rm -f {bridge_info.container_name}")
     except subprocess.CalledProcessError:
@@ -346,7 +320,6 @@ def print_result(test, success, rc, out, err):
         print(err)
         print("------------------")
 
-# MAIN
 def main(test_dir_path: str, init_file_path: str, dataset_dir_path):
     if not os.path.exists(test_dir_path):
         return
