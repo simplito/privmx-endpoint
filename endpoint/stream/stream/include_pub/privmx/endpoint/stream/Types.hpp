@@ -107,7 +107,9 @@ struct MediaDevice {
 };
 
 struct MediaTrack {
+    DeviceType type;
     std::function<void(bool)> setEnabled;
+    std::function<void(std::string)> sendData;
 };
 
 enum EventType: int64_t {

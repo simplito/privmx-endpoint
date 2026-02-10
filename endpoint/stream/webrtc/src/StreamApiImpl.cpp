@@ -162,9 +162,13 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
                 mediaDevice.name + "-" + mediaDevice.id,
                 std::make_shared<StreamAudioTrackInfo>(audioDevice, mediaDevice.name, mediaDevice.id, audioSource, audioTrack, TrackStatus::ToAdd)
             );
-            return MediaTrack{[audioTrack](bool enabled) {
-                audioTrack->set_enabled(enabled);
-            }};
+            return MediaTrack{
+                DeviceType::Audio,
+                [audioTrack](bool enabled) {
+                    audioTrack->set_enabled(enabled);
+                },
+                [](std::string data) {}
+            };
         }
         break;
     case DeviceType::Video:
@@ -190,9 +194,13 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
                 mediaDevice.name + "-" + mediaDevice.id,
                 std::make_shared<StreamVideoTrackInfo>(videoDevice, mediaDevice.name, mediaDevice.id, videoCapturer, videoSource, videoTrack, TrackStatus::ToAdd)
             );
-            return MediaTrack{[videoTrack](bool enabled) {
-                videoTrack->set_enabled(enabled);
-            }};
+            return MediaTrack{
+                DeviceType::Video,
+                [videoTrack](bool enabled) {
+                    videoTrack->set_enabled(enabled);
+                },
+                [](std::string data) {}
+            };
         }
         break;
     case DeviceType::Desktop:
@@ -217,9 +225,13 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
                 mediaDevice.name + "-" + mediaDevice.id,
                 std::make_shared<StreamDesktopTrackInfo>(desktopDevice, mediaDevice.name, mediaDevice.id, desktopCapturer, videoSource, videoTrack, TrackStatus::ToAdd)
             );
-            return MediaTrack{[videoTrack](bool enabled) {
-                videoTrack->set_enabled(enabled);
-            }};
+            return MediaTrack{
+                DeviceType::Desktop,
+                [videoTrack](bool enabled) {
+                    videoTrack->set_enabled(enabled);
+                },
+                [](std::string data) {}
+            };
         }
         break;
     case DeviceType::Raw:
@@ -233,10 +245,20 @@ MediaTrack StreamApiImpl::addTrack(const StreamHandle& streamHandle, const Media
             if(streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
                 throw ThereCanBeOnlyOneDataTrackException();
             }
-            streamData->dataTrack = std::make_shared<StreamDataTrackInfo>("data_track", TrackStatus::ToAdd);
-            return MediaTrack{[](bool enabled) {
-                return;
-            }};
+            auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>("data_track", TrackStatus::ToAdd, [](std::string data){return;});
+            streamData->dataTrack = streamDataTrackInfo;
+            return MediaTrack{
+                DeviceType::Raw,
+                [](bool enabled) {
+                    return;
+                },
+                [streamDataTrackInfo](std::string data) {
+                    if(streamDataTrackInfo->status == TrackStatus::Published) {
+                        streamDataTrackInfo->sendData(data);
+                    }
+                    return;
+                }
+            };
         }
         break;
     default:
@@ -367,7 +389,14 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
     }
 
     streamData->status = Online;
-    _webRTC->createPeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, dataChannel);
+    auto webRTCDataTrackOpt = _webRTC->createPeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, dataChannel);
+    if(streamData->dataTrack && webRTCDataTrackOpt.has_value()) {
+        auto webRTCDataTrack = webRTCDataTrackOpt.value();
+        streamData->dataTrack->sendData = [webRTCDataTrack](std::string data){
+            LOG_TRACE("webRTCDataTrack->Send ", data);
+            webRTCDataTrack->Send(reinterpret_cast<const uint8_t*>(data.c_str()), data.size(), false);
+        };
+    }
     return _api->publishStream(streamHandle);
 }
 

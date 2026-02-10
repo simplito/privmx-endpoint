@@ -204,13 +204,16 @@ private:
     struct StreamDataTrackInfo {
         StreamDataTrackInfo( 
             const std::string& _label,
-            const TrackStatus& _status
+            const TrackStatus& _status,
+            std::function<void(std::string)> _sendData
         ) : 
             label(_label), 
-            status(_status)
+            status(_status),
+            sendData(_sendData)
         {}
         std::string label;
         TrackStatus status;
+        std::function<void(std::string)> sendData;
     };
 
     struct StreamData {

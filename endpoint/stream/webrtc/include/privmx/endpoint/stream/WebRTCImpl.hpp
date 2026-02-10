@@ -57,7 +57,7 @@ public:
     void setOnTrackInterface(const std::string& streamRoomId, std::shared_ptr<OnTrackInterface> OnTrackInterface);
     void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 
-    void createPeerConnectionWithLocalStream(
+    std::optional<libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel>> createPeerConnectionWithLocalStream(
         const std::string& streamRoomId, 
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracks,
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracks,
@@ -73,11 +73,10 @@ public:
         const std::optional<std::string>& dataChannel
     );
 
-
 private:
     void AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = "0");
     void AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id = "0");
-    void AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string label);
+    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string label);
     void RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
     void RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
     void RemoveDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc);

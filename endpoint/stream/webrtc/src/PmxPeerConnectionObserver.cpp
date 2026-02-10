@@ -81,6 +81,7 @@ void PmxPeerConnectionObserver::OnIceConnectionState([[maybe_unused]] libwebrtc:
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON ICE CONNECTION STATE " + map[state])
 }
 void PmxPeerConnectionObserver::OnIceCandidate([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate> candidate) {
+    LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON ICE CANDIDATE")
     if(_onIceCandidate.has_value()) _onIceCandidate.value()(candidate);
 }
 void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
@@ -91,7 +92,7 @@ void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::
 void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON REMOVE STREAM")
 }
-void PmxPeerConnectionObserver::OnDataChannel([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) {
+void PmxPeerConnectionObserver::OnDataChannel(libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON DATA CHANNEL")
     std::shared_ptr<DataChannelImpl> dataChannelImpl = std::make_shared<DataChannelImpl>(_onTrackInterface, data_channel);
     _dataChannels.set(data_channel->label().std_string(), dataChannelImpl);

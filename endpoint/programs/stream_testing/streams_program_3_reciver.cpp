@@ -169,15 +169,18 @@ private:
 
 int main(int argc, char** argv) {
     auto params = getParamsList(argc, argv);
-    if(params.size() != 5) {
-        std::cout << "Invalid params required params are 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId', 'StreamRoomId'" << std::endl;
+    if(params.size() < 4 || params.size() > 5) {
+        std::cout << "Invalid params required params are 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId', '?StreamRoomId'" << std::endl;
         return -1;
     }
     std::string privKey = {params[0].begin(),  params[0].end()};
     std::string solutionId = {params[1].begin(),  params[1].end()};
     std::string bridgeUrl = {params[2].begin(),  params[2].end()};
     std::string contextId = {params[3].begin(),  params[3].end()};
-    std::string streamRoomId = {params[4].begin(),  params[4].end()};
+    std::optional<std::string> streamRoomIdOpt = {nullopt};
+    if(params.size() >= 5) {
+        streamRoomIdOpt = std::string(params[4].begin(),  params[4].end());
+    }
     try {
         core::Connection connection = core::Connection::connect(
             privKey, 
@@ -186,6 +189,22 @@ int main(int argc, char** argv) {
         );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+        std::string streamRoomId;
+        if(streamRoomIdOpt.has_value()) {
+            streamRoomId = streamRoomIdOpt.has_value();
+        } else {
+            auto lastStreamRoom = streamApi.listStreamRooms(contextId, {0, 1, "desc"});
+            if(lastStreamRoom.readItems.size() == 0) {
+                std::cerr << "No streamRoom on bridge" << std::endl;
+                return -1;
+            }
+            streamRoomId = lastStreamRoom.readItems[0].streamRoomId;
+            std::cout << "===============================================================================================" << endl;
+            std::cout << "joined streamRoomId: " << streamRoomId << endl;
+            std::cout << "===============================================================================================" << endl;
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+        }
+
         core::EventQueue eventQueue = core::EventQueue::getInstance();
         auto onTrack = std::make_shared<OnTrackImpl>();
         streamApi.setOnTrackInterface(onTrack);
@@ -201,9 +220,12 @@ int main(int argc, char** argv) {
         std::vector<stream::StreamSubscription> streamsId;
         {
             auto streamlist = streamApi.listStreams(streamRoomId);
+            std::cout << "streamlist:" <<  streamlist.size() << std::endl;
             for(auto stream : streamlist) {
-                std::cout << "stream:" <<  stream.id << std::endl;
+                std::cout << "stream.id:" <<  stream.id << std::endl;
+                std::cout << "stream.metadata:" << (stream.metadata.has_value() ? stream.metadata.value() : "") << std::endl;
                 for(auto track : stream.tracks) {
+                    std::cout << "stream.track[].mid:" << track.mid << std::endl;
                     streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
                 }
                 break;
