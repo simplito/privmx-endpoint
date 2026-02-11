@@ -879,7 +879,8 @@ StreamRoom StreamApiLowImpl::convertServerStreamRoomToLibStreamRoom(
         .privateMeta = privateMeta,
         .policy = core::Factory::parsePolicyServerObject(streamRoomInfo.policyOpt(Poco::JSON::Object::Ptr(new Poco::JSON::Object))), 
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .closed = streamRoomInfo.closedOpt(true),
     };
 }
 
