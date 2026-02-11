@@ -47,6 +47,7 @@ ENDPOINT_SERVER_TYPE(StreamRoomInfo)
     INT64_FIELD(version)
     STRING_FIELD(type)
     VAR_FIELD(policy)
+    BOOL_FIELD(closed)
 TYPE_END
 
 
