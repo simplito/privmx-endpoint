@@ -76,6 +76,9 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoom>(const stream::St
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("policy", serialize(val.policy));
+    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("schemaVersion", serialize(val.schemaVersion));
+    obj->set("closed", serialize(val.closed));
     return obj;
 }
 

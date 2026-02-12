@@ -54,6 +54,7 @@ struct StreamRoom {
     core::ContainerPolicy policy;
     int64_t statusCode;
     int64_t schemaVersion;
+    bool closed;
 };
 
 struct Stream {
