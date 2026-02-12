@@ -112,7 +112,7 @@ void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core:
 
 void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& notification) {
         auto type {notification.type};
-        LOG_INFO("StreamApiLowImpl::processNotificationEvent event type: "+ type);
+        LOG_DEBUG("StreamApiLowImpl::processNotificationEvent event type: "+ type);
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
 
         if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
