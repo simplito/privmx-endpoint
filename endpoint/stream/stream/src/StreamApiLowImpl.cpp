@@ -112,8 +112,7 @@ void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core:
 
 void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& notification) {
         auto type {notification.type};
-        // std::cerr << "onNotificationEvent: " << type << "/ with data: " << privmx::utils::Utils::stringifyVar(notification.data, true) << "\n";
-        LOG_DEBUG("StreamApiLowImpl::processNotificationEvent event type: "+ type);
+        LOG_INFO("StreamApiLowImpl::processNotificationEvent event type: "+ type);
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
 
         if(_eventApi->isInternalContextEvent(type, notification.subscriptions, data, "StreamKeyManagementEvent")) {
@@ -137,6 +136,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (type == "streamRoomCreated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
+                std::cout << "!!! HERE  !!! - " << __LINE__  << std::endl;
                 return;
             }
             auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw);
@@ -147,6 +147,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         } else if (type == "streamRoomUpdated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
+                std::cout << "!!! HERE  !!! - " << __LINE__  << std::endl;
                 return;
             }
             auto streamRoom = decryptAndConvertStreamRoomDataToStreamRoom(raw);
@@ -163,6 +164,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         } else if (type == "streamRoomDeleted") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
+                std::cout << "!!! HERE  !!! - " << __LINE__  << std::endl;
                 return;
             }
             std::shared_ptr<StreamRoomDeletedEvent> event(new StreamRoomDeletedEvent());
@@ -171,12 +173,16 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" || type == "streamUpdated" ) {
             if(type == "streamPublished") {
+                std::cout << "!!! HERE  !!! - " << __LINE__  << std::endl;
+
                 auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamPublishedEventData>(data);
                 auto deserializer = std::make_shared<core::VarDeserializer>();
                 auto eventData = deserializer->deserialize<StreamPublishedEventData>(data, "StreamPublishedEventData");
                 std::shared_ptr<StreamPublishedEvent> event(new StreamPublishedEvent());
                 event->channel = "stream";
                 event->data = eventData;
+                std::cout << "!!! EMIT streamPublished  !!! - " << __LINE__  << std::endl;
+
                 _eventMiddleware->emitApiEvent(event);
             } else
             if(type == "streamUpdated") {
