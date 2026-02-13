@@ -19,7 +19,6 @@ namespace endpoint {
 namespace stream {
 
 struct StreamSettings {
-    Settings settings;
     bool dropCorruptedFrames = true;
 };
 

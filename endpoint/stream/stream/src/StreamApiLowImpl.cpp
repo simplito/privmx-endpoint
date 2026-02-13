@@ -496,7 +496,7 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const Settings& options) {
+void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions) {
     auto room = getStreamRoomData(streamRoomId);
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsSubscribeModel>();
     model.streamRoomId(streamRoomId);
@@ -544,7 +544,7 @@ void StreamApiLowImpl::subscribeToRemoteStreams(const std::string& streamRoomId,
 }
 
 
-void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const Settings& options) {
+void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamsModifySubscriptionsModel>();

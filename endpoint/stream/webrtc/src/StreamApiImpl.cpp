@@ -433,11 +433,11 @@ void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, co
             streamRoomId
         )
     );
-    _api->subscribeToRemoteStreams(streamRoomId, subscriptions, options.settings);
+    _api->subscribeToRemoteStreams(streamRoomId, subscriptions);
 }
 
 void StreamApiImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options) {
-    _api->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove, options.settings);
+    _api->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
 }
 
 void StreamApiImpl::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove) {
