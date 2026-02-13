@@ -100,8 +100,10 @@ public:
     void enableStreamRoomRecording(const std::string& streamRoomId);
     std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
-    std::vector<MediaDevice> getMediaDevices();
-    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
+    std::vector<AudioDevice> getAudioDevices();
+    std::vector<VideoDevice> getVideoDevices();
+    std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
+    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
@@ -183,7 +185,8 @@ private:
             const libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer>& _capturer,
             const libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource>& _source,
             const libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>& _track,
-            const TrackStatus& _status
+            const TrackStatus& _status,
+            const size_t& _fps
         ) : 
             device(_device), 
             deviceName(_deviceName),
@@ -191,7 +194,8 @@ private:
             capturer(_capturer),
             source(_source),
             track(_track),
-            status(_status)
+            status(_status),
+            fps(_fps)
         {}
         libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> device;
         std::string deviceName;
@@ -200,6 +204,7 @@ private:
         libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> source;
         libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> track;
         TrackStatus status;
+        size_t fps;
     };
 
     struct StreamData {

@@ -182,20 +182,40 @@ StreamHandle StreamApi::createStream(const std::string& streamRoomId) {
     }
 }
 
-std::vector<MediaDevice> StreamApi::getMediaDevices() {
+std::vector<AudioDevice> StreamApi::getAudioDevices() {
     validateEndpoint();
     try {
-        return _impl->getMediaDevices();
+        return _impl->getAudioDevices();
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-MediaTrack StreamApi::addTrack(const StreamHandle& streamHandle, const MediaDevice& track) {
+std::vector<VideoDevice> StreamApi::getVideoDevices() {
     validateEndpoint();
     try {
-        return _impl->addTrack(streamHandle, track);
+        return _impl->getVideoDevices();
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::vector<DesktopDevice> StreamApi::getDesktopDevices(DesktopType desktopType) {
+    validateEndpoint();
+    try {
+        return _impl->getDesktopDevices(desktopType);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+MediaTrack StreamApi::addTrack(const StreamHandle& streamHandle, const MediaDevice& track, const MediaTrackConstrains& mediaTrackConstrains) {
+    validateEndpoint();
+    try {
+        return _impl->addTrack(streamHandle, track, mediaTrackConstrains);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

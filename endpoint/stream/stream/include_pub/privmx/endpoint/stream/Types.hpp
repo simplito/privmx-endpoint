@@ -88,28 +88,6 @@ struct StreamSubscription {
     std::optional<std::string> streamTrackId;
 };
 
-class Frame {
-public:
-    virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
-};
-
-enum DeviceType {
-    Audio = 0,
-    Video = 1,
-    Desktop = 2
-};
-
-struct MediaDevice {
-    std::string name;
-    std::string id;
-    DeviceType type;
-    // bool enabled;
-};
-
-struct MediaTrack {
-    std::function<void(bool)> setEnabled;
-};
-
 enum EventType: int64_t {
     STREAMROOM_CREATE = 0,
     STREAMROOM_UPDATE = 1,
