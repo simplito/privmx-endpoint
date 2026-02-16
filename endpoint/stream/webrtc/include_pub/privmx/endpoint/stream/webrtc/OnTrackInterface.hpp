@@ -39,6 +39,12 @@ struct Data {
     const std::vector<std::string> streamIds;
     const std::string track;
 };
+
+class Frame {
+public:
+    virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
+};
+
 struct VideoData : public Data {
     VideoData(DataType _type, const std::vector<std::string>& _streamIds, const std::string _track, const int64_t _w,  const int64_t _h, std::shared_ptr<Frame> _frameData ) 
         : Data(_type, _streamIds, _track), w(_w), h(_h), frameData(_frameData) {}

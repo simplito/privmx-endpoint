@@ -160,7 +160,7 @@ public:
         }
         if(data->type == stream::DataType::AUDIO) {
             auto audioData = std::dynamic_pointer_cast<stream::AudioData>(data);
-            // LOG_INFO("AudioData[w-h]");
+            LOG_INFO("AudioData");
         }
     }
 private:
@@ -207,7 +207,6 @@ int main(int argc, char** argv) {
 
         core::EventQueue eventQueue = core::EventQueue::getInstance();
         auto onTrack = std::make_shared<OnTrackImpl>();
-        streamApi.setOnTrackInterface(onTrack);
         stream::StreamSettings ssettings {};
         streamApi.subscribeFor({
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_UPDATE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
@@ -217,7 +216,7 @@ int main(int argc, char** argv) {
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
         });
-        std::vector<stream::StreamSubscription> streamsId;
+        std::vector<stream::StreamSubscriptionExt> streamsId;
         {
             auto streamlist = streamApi.listStreams(streamRoomId);
             std::cout << "streamlist:" <<  streamlist.size() << std::endl;
@@ -226,13 +225,13 @@ int main(int argc, char** argv) {
                 std::cout << "stream.metadata:" << (stream.metadata.has_value() ? stream.metadata.value() : "") << std::endl;
                 for(auto track : stream.tracks) {
                     std::cout << "stream.track[].mid:" << track.mid << std::endl;
-                    streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
+                    streamsId.push_back(stream::StreamSubscriptionExt{stream.id, track.mid, onTrack});
                 }
                 break;
             }
         }
         streamApi.joinStreamRoom(streamRoomId);
-        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
+        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId);
 
         auto eventThread = std::thread([&](){
             while (true) {
@@ -242,7 +241,7 @@ int main(int argc, char** argv) {
                     auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
                     auto streamsModified = streamUpdatedEvent.streamsModified;
 
-                    std::vector<stream::StreamSubscription> toAddstreamsId;
+                    std::vector<stream::StreamSubscriptionExt> toAddstreamsId;
                     std::vector<stream::StreamSubscription> toRemovestreamsId;
                     for(auto stream : streamsModified) {
                         for(auto track : stream.tracks) {
@@ -250,14 +249,14 @@ int main(int argc, char** argv) {
                                 if(track.after.value().disabled.has_value()) {
                                     toRemovestreamsId.push_back({stream.streamId, track.after.value().mid});
                                 } else {
-                                    toAddstreamsId.push_back({stream.streamId, track.after.value().mid});
+                                    toAddstreamsId.push_back({stream.streamId, track.after.value().mid, onTrack});
                                 } 
                             }
                             
                         }
                     }
                     if(toAddstreamsId.size() > 0 || toRemovestreamsId.size() > 0) {
-                        streamApi.modifyRemoteStreamsSubscriptions(streamRoomId, toAddstreamsId, toRemovestreamsId, ssettings);
+                        streamApi.modifyRemoteStreamsSubscriptions(streamRoomId, toAddstreamsId, toRemovestreamsId);
                     }
                 }
             }
@@ -267,7 +266,7 @@ int main(int argc, char** argv) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
         }
 
-        streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
+        // streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(5));
         eventQueue.emitBreakEvent();
         if(eventThread.joinable()) eventThread.join();

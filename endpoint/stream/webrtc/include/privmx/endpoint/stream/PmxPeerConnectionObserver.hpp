@@ -38,62 +38,80 @@ private:
 template <typename VideoFrameT>
 class RTCVideoRendererImpl : public libwebrtc::RTCVideoRenderer<VideoFrameT> {
 public:
-    inline RTCVideoRendererImpl(std::shared_ptr<OnTrackInterface> onTrackInterface, const std::vector<std::string>& streamIds, libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track) 
-    : _onTrackInterface(onTrackInterface), _streamIds(streamIds), _track(track) {
+    inline RTCVideoRendererImpl(
+        std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> onTrackInterfacesMap,  
+        const std::vector<std::string>& streamIds, 
+        libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track
+    ) : 
+        _onTrackInterfacesMap(onTrackInterfacesMap), _streamIds(streamIds), _track(track) {
         LOG_TRACE("RTCVideoRendererImpl created")
     }
     inline RTCVideoRendererImpl(const std::vector<std::string>& streamIds, libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track) 
-    : _onTrackInterface(nullptr), _streamIds(streamIds), _track(track) {
+    : _onTrackInterfacesMap(nullptr), _streamIds(streamIds), _track(track) {
         LOG_TRACE("RTCVideoRendererImpl created")
     }
     inline ~RTCVideoRendererImpl() {
         LOG_TRACE("RTCVideoRendererImpl destroyed")
     }
-    void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
+    void updateOnTrackInterface(std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> onTrackInterfacesMap) {
         std::unique_lock<std::mutex> lock(m);
-        _onTrackInterface = onTrackInterface;
+        _onTrackInterfacesMap = onTrackInterfacesMap;
     }
     virtual void OnFrame(VideoFrameT frame) override {
-        if(_onTrackInterface) {
-            std::unique_lock<std::mutex> lock(m);
+        std::unique_lock<std::mutex> lock(m);
+        if(_onTrackInterfacesMap) {
             std::shared_ptr<VideoData> videoData = std::make_unique<VideoData>(DataType::VIDEO, _streamIds, _track->id().std_string(), frame->width(), frame->height(), std::make_shared<FrameImpl>(frame));
-            _onTrackInterface->OnData(videoData);
+            for(const auto& streamId: _streamIds) {
+                auto OnTrackInterface = _onTrackInterfacesMap->get(streamId);
+                if(OnTrackInterface) {
+                    OnTrackInterface.value()->OnData(videoData);
+                }
+            }
         }
     }
 private:
     std::mutex m;
-    std::shared_ptr<OnTrackInterface> _onTrackInterface;
+    std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> _onTrackInterfacesMap;
     std::vector<std::string> _streamIds;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> _track;
 };
 
 class AudioTrackSinkImpl : public libwebrtc::AudioTrackSink {
 public:
-    inline AudioTrackSinkImpl(std::shared_ptr<OnTrackInterface> onTrackInterface, const std::vector<std::string>& streamIds, libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track) 
-    : _onTrackInterface(onTrackInterface), _streamIds(streamIds), _track(track) {
+    inline AudioTrackSinkImpl(
+        std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> onTrackInterfacesMap, 
+        const std::vector<std::string>& streamIds, 
+        libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track
+    ) : 
+        _onTrackInterfacesMap(onTrackInterfacesMap), _streamIds(streamIds), _track(track) {
         LOG_TRACE("AudioTrackSinkImpl created")
     }
     inline AudioTrackSinkImpl(const std::vector<std::string>& streamIds, libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track) 
-    : _onTrackInterface(nullptr), _streamIds(streamIds), _track(track) {
+    : _onTrackInterfacesMap(nullptr), _streamIds(streamIds), _track(track) {
         LOG_TRACE("AudioTrackSinkImpl created")
     }
     inline ~AudioTrackSinkImpl() {
         LOG_TRACE("AudioTrackSinkImpl destroyed")
     }
-    void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
+    void updateOnTrackInterface(std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> _onTrackInterfacesMap) {
         std::unique_lock<std::mutex> lock(m);
-        _onTrackInterface = onTrackInterface;
+        _onTrackInterfacesMap = _onTrackInterfacesMap;
     }
     virtual void OnData(const void* audio_data, int bits_per_sample, int sample_rate, size_t number_of_channels, size_t number_of_frames) override {
-        if(_onTrackInterface) {
+        if(_onTrackInterfacesMap) {
             std::unique_lock<std::mutex> lock(m);
             std::shared_ptr<AudioData> audioData = std::make_unique<AudioData>(DataType::AUDIO, _streamIds, _track->id().std_string(), audio_data, bits_per_sample, sample_rate, number_of_channels, number_of_frames);
-            _onTrackInterface->OnData(audioData);
+            for(const auto& streamId: _streamIds) {
+                auto OnTrackInterface = _onTrackInterfacesMap->get(streamId);
+                if(OnTrackInterface) {
+                    OnTrackInterface.value()->OnData(audioData);
+                }
+            }
         }
     }
 private:
     std::mutex m;
-    std::shared_ptr<OnTrackInterface> _onTrackInterface;
+    std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> _onTrackInterfacesMap;
     std::vector<std::string> _streamIds;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> _track;
 };
@@ -104,8 +122,7 @@ public:
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
         const std::string& streamRoomId, 
         std::shared_ptr<privmx::webrtc::KeyStore> keys, 
-        const privmx::webrtc::FrameCryptorOptions& options,
-        std::shared_ptr<OnTrackInterface> onTrackInterface = nullptr
+        const privmx::webrtc::FrameCryptorOptions& options
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
@@ -124,7 +141,8 @@ public:
     void SetFrameCryptorOptions(privmx::webrtc::FrameCryptorOptions options);
 
     inline void setOnIceCandidate(std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)> callback) {_onIceCandidate = callback;}
-    void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
+    void addOnTrackInterface(const std::string& streamId, std::shared_ptr<OnTrackInterface> onTrackInterface);
+    void removeOnTrackInterface(const std::string& streamId);
    
 private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
@@ -132,15 +150,12 @@ private:
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
     privmx::webrtc::FrameCryptorOptions _options;
 
-    std::shared_ptr<OnTrackInterface> _onTrackInterface;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl<libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame>>>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;
-
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
 
     std::optional<std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)>> _onIceCandidate;
-    // tmp
-    libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> tmpTrack;
+    std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> _onTrackInterfacesMap;
 };
 
 } // stream
