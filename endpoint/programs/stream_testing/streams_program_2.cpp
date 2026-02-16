@@ -26,7 +26,7 @@ static vector<string_view> getParamsList(int argc, char* argv[]) {
 int main(int argc, char** argv) {
     auto params = getParamsList(argc, argv);
     if(params.size() != 4) {
-        std::cout << "Invalid params required params are 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId'" << std::endl;
+        std::cout << "Invalid params. Required params are: 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId'" << std::endl;
         return -1;
     }
     std::string privKey = {params[0].begin(),  params[0].end()};
@@ -48,9 +48,6 @@ int main(int argc, char** argv) {
             usersWithPubKey.push_back(userInfo.user);
         }
         streamRoomId = streamApi.createStreamRoom(contextId, usersWithPubKey, usersWithPubKey, core::Buffer::from(""), core::Buffer::from(""), std::nullopt);
-        std::cout << "===============================================================================================" << endl;
-        std::cout << "new streamRoomId: " << streamRoomId << endl;
-        std::cout << "===============================================================================================" << endl;
         std::this_thread::sleep_for(std::chrono::seconds(2));
         streamApi.joinStreamRoom(streamRoomId);
         auto streamId_1 = streamApi.createStream(streamRoomId);
@@ -64,19 +61,15 @@ int main(int argc, char** argv) {
         
         streamApi.publishStream(streamId_1);
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        connection.disconnect();
-        // auto streamlist = streamApi.listStreams(streamRoomId);
-        // std::vector<stream::StreamSubscription> streamsId;
-        // for(int i = 0; i < streamlist.size(); i++) {
-        //     streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
-        // }
-        // stream::StreamSettings ssettings;
-        // streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
+        auto streamlist = streamApi.listStreams(streamRoomId);
+        std::vector<stream::StreamSubscription> streamsId;
+        for(int i = 0; i < streamlist.size(); i++) {
+            streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
+        }
+        stream::StreamSettings ssettings;
+        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
+        std::this_thread::sleep_for(std::chrono::seconds(60));
 
-        // std::this_thread::sleep_for(std::chrono::seconds(60));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-       
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
     } catch (const privmx::utils::PrivmxException& e) {
