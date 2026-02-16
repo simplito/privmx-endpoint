@@ -1,0 +1,26 @@
+services:
+  test_mongodb:
+    image: mongo:7.0
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    container_name: privmx_test_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    tmpfs:
+      - /data/db
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'test_mongodb:27017'}]}) }" | mongosh --port 27017 --quiet
+      start_period: 10s
+      start_interval: 1s
+    networks:
+      - testing_network
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+networks:
+  testing_network:
+    name: testing_network
+
+    
+
