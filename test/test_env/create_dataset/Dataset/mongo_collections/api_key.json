@@ -1,0 +1,22 @@
+[{
+	"_id": "d04eb8afc10caf14fbc9ee1d3885aa79",
+	"created": 1.769766803409E+12,
+	"user": "697c7f9318aea6b39e395d42",
+	"name": "MainKey",
+	"scopes": [
+		"context",
+		"apiKey",
+		"solution",
+		"solution:*",
+		"inbox",
+		"store",
+		"thread",
+		"stream",
+		"kvdb"
+	],
+	"enabled": true,
+	"secret": "1d970749f8209cf0c9b28afdee1ab10f",
+	"publicKey": null,
+	"masterKey": true
+}]
+
