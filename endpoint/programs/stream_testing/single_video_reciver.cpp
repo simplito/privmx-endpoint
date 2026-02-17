@@ -39,7 +39,7 @@ public:
         _stop = true;
         if (_SDLMainThread.joinable()) _SDLMainThread.join();
     }
-    void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame, const std::string& id)
+    void OnFrame(int64_t w, int64_t h, std::shared_ptr<privmx::endpoint::stream::Frame> frame)
     {
         std::lock_guard<std::mutex> lock(_frameMutex);
         frame->ConvertToRGBA(
@@ -144,9 +144,6 @@ public:
     virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
         if(tack.kind == stream::DataType::AUDIO) {
             LOG_INFO("OnRemoteTrack[stream::TrackAction] DataType::AUDIO : ", (action == stream::TrackAction::ADDED ? "ADDED" : "REMOVED"));
-            if(action == stream::TrackAction::ADDED && !tack.muted) {
-                tack.updateMute(true);
-            }
         }
         if(tack.kind == stream::DataType::VIDEO) {
             LOG_INFO("OnRemoteTrack[stream::TrackAction] DataType::VIDEO : ", (action == stream::TrackAction::ADDED ? "ADDED" : "REMOVED"));
@@ -155,15 +152,25 @@ public:
     virtual void OnData(std::shared_ptr<stream::Data> data) override {
         if(data->type == stream::DataType::VIDEO) {
             auto videoData = std::dynamic_pointer_cast<stream::VideoData>(data);
-            LOG_INFO("VideoData[w-h]: ", videoData->w, "-", videoData->h);
-            _renderer.OnFrame(videoData->w, videoData->h, videoData->frameData, "test");
+            // selecting most active video track to render
+            std::lock_guard<std::mutex> lock(mutex);
+            if(_videoTrackC == 0) {
+                _videoTrack = videoData->track;
+            }
+            if(_videoTrack == videoData->track) {
+                _videoTrackC = 30;
+                _renderer.OnFrame(videoData->w, videoData->h, videoData->frameData);
+            }
+            --_videoTrackC;
         }
         if(data->type == stream::DataType::AUDIO) {
             auto audioData = std::dynamic_pointer_cast<stream::AudioData>(data);
-            LOG_INFO("AudioData");
         }
     }
 private:
+    std::mutex _mutex;
+    std::string _videoTrack = "";
+    size_t _videoTrackC = 0;
     RTCVideoRendererImpl _renderer;
 };
 
@@ -261,12 +268,7 @@ int main(int argc, char** argv) {
             }
         });
         
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-        }
-
-        // streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(600));
         eventQueue.emitBreakEvent();
         if(eventThread.joinable()) eventThread.join();
         connection.disconnect();

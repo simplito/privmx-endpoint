@@ -99,11 +99,11 @@ int main(int argc, char** argv) {
             break;
         }
 
-        // auto desktopDevices = streamApi.getDesktopDevices(stream::DesktopType::Screen);
-        // for(const auto& desktopDevice: desktopDevices) {
-        //     streamApi.addTrack(streamHandle, desktopDevice, stream::MediaTrackConstrains{.idealFps=1});
-        //     break;
-        // }
+        auto desktopDevices = streamApi.getDesktopDevices(stream::DesktopType::Screen);
+        for(const auto& desktopDevice: desktopDevices) {
+            streamApi.addTrack(streamHandle, desktopDevice, stream::MediaTrackConstrains{.idealFps=30});
+            break;
+        }
 
         streamApi.publishStream(streamHandle);
         std::this_thread::sleep_for(std::chrono::seconds(600));

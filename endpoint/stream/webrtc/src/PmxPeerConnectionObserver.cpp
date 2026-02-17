@@ -135,7 +135,6 @@ void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<li
         videoTrack->AddRenderer(renderer.get());
     } else if(dataType == DataType::AUDIO) {
         auto audioTrack = static_cast<libwebrtc::RTCAudioTrack*>(track.get());
-        audioTrack->set_enabled(true);
         std::shared_ptr<AudioTrackSinkImpl> sink = 
             std::make_shared<AudioTrackSinkImpl>(
                 _onTrackInterfacesMap, streamIds, track
