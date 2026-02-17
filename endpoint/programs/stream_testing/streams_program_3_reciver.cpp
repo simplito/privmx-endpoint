@@ -207,7 +207,6 @@ int main(int argc, char** argv) {
 
         core::EventQueue eventQueue = core::EventQueue::getInstance();
         auto onTrack = std::make_shared<OnTrackImpl>();
-        stream::StreamSettings ssettings {};
         streamApi.subscribeFor({
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_UPDATE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_DELETE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
