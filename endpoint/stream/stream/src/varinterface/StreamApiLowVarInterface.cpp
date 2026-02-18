@@ -223,7 +223,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions(co
 Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(2), "subscriptionsToRemove");
+    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptionsToRemove");
     _streamApi.unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
     return {};
 }
