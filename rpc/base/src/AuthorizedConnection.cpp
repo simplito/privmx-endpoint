@@ -325,7 +325,7 @@ void AuthorizedConnection::authorizeWebsocket() {
             return;
         }
 
-        LOG_TRACE("AuthorizedConnection Recived event with type: ", type, " | data:\n", privmx::utils::Utils::stringifyVar(decoded, true))
+        LOG_INFO("AuthorizedConnection Recived event with type: ", type, " | data:\n", privmx::utils::Utils::stringifyVar(decoded, true))
         _notification_event_dispatcher.dispatch({.type = type, .data = decoded});
     }, [&]{
         _channels_connected = false;

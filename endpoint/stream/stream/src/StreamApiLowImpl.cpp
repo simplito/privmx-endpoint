@@ -112,7 +112,6 @@ void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core:
 
 void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& notification) {
         auto type {notification.type};
-        // std::cerr << "onNotificationEvent: " << type << "/ with data: " << privmx::utils::Utils::stringifyVar(notification.data, true) << "\n";
         LOG_DEBUG("StreamApiLowImpl::processNotificationEvent event type: "+ type);
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
 
