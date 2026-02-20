@@ -107,7 +107,6 @@ TEST_F(CoreEventTest, waitEvent_getEvent_ContextUsersStatusChangedEvent_enabled)
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     std::shared_ptr<core::Connection> connection_2;
     EXPECT_NO_THROW({
         connection_2 = std::make_shared<core::Connection>(
@@ -121,6 +120,7 @@ TEST_F(CoreEventTest, waitEvent_getEvent_ContextUsersStatusChangedEvent_enabled)
     EXPECT_NO_THROW({
         eventQueue.waitEvent(); // pop libConnected form queue
     });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     EXPECT_NO_THROW({
         connection->subscribeFor(
             {

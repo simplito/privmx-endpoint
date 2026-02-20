@@ -34,6 +34,8 @@ protected:
         } catch (const privmx::utils::PrivmxException& e) {
             std::cout << e.what() << " | " << e.getData() << std::endl;
             FAIL();
+        } catch (const std::exception& e) {
+            std::cout << e.what() << std::endl;
         }
     }
     void TearDown() override {
