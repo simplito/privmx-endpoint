@@ -67,10 +67,10 @@ int main(int argc, char** argv) {
         streamApi.publishStream(streamId_1);
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto streamlist = streamApi.listStreams(streamRoomId);
-        std::vector<stream::StreamSubscriptionExt> streamsId;
+        std::vector<stream::StreamSubscription> streamsId;
         auto onTrack = std::make_shared<OnTrackImpl>();
         for(int i = 0; i < streamlist.size(); i++) {
-            streamsId.push_back(stream::StreamSubscriptionExt{streamlist[i].id, std::nullopt, onTrack});
+            streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
         }
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(60));

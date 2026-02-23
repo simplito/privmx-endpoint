@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
         });
-        std::vector<stream::StreamSubscriptionExt> streamsId;
+        std::vector<stream::StreamSubscription> streamsId;
         {
             auto streamlist = streamApi.listStreams(streamRoomId);
             std::cout << "streamlist:" <<  streamlist.size() << std::endl;
@@ -231,12 +231,13 @@ int main(int argc, char** argv) {
                 std::cout << "stream.metadata:" << (stream.metadata.has_value() ? stream.metadata.value() : "") << std::endl;
                 for(auto track : stream.tracks) {
                     std::cout << "stream.track[].mid:" << track.mid << std::endl;
-                    streamsId.push_back(stream::StreamSubscriptionExt{stream.id, track.mid, onTrack});
+                    streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
                 }
                 break;
             }
         }
         streamApi.joinStreamRoom(streamRoomId);
+        streamApi.addRemoteStreamListener(streamRoomId, std::nullopt, onTrack);
         streamApi.subscribeToRemoteStreams(streamRoomId, streamsId);
 
         auto eventThread = std::thread([&](){
@@ -247,7 +248,7 @@ int main(int argc, char** argv) {
                     auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
                     auto streamsModified = streamUpdatedEvent.streamsModified;
 
-                    std::vector<stream::StreamSubscriptionExt> toAddstreamsId;
+                    std::vector<stream::StreamSubscription> toAddstreamsId;
                     std::vector<stream::StreamSubscription> toRemovestreamsId;
                     for(auto stream : streamsModified) {
                         for(auto track : stream.tracks) {
@@ -255,7 +256,7 @@ int main(int argc, char** argv) {
                                 if(track.after.value().disabled.has_value()) {
                                     toRemovestreamsId.push_back({stream.streamId, track.after.value().mid});
                                 } else {
-                                    toAddstreamsId.push_back({stream.streamId, track.after.value().mid, onTrack});
+                                    toAddstreamsId.push_back({stream.streamId, track.after.value().mid});
                                 } 
                             }
                             

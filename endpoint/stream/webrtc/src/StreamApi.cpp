@@ -262,7 +262,7 @@ void StreamApi::unpublishStream(const StreamHandle& streamHandle) {
     }
 }
 
-void StreamApi::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscriptionExt>& subscriptions) {
+void StreamApi::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
@@ -273,7 +273,7 @@ void StreamApi::subscribeToRemoteStreams(const std::string& streamRoomId, const 
     }
 }
 
-void StreamApi::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscriptionExt>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
+void StreamApi::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
@@ -329,6 +329,16 @@ void StreamApi::dropBrokenFrames(const std::string& streamRoomId, bool enable) {
     validateEndpoint();
     try {
         return _impl->dropBrokenFrames(streamRoomId, enable);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack) {
+    validateEndpoint();
+    try {
+        return _impl->addRemoteStreamListener(streamRoomId, streamId, onTrack);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

@@ -57,9 +57,6 @@ struct MediaTrack {
     std::function<void(bool)> setEnabled;
 };
 
-struct StreamSubscriptionExt : public StreamSubscription {
-    std::shared_ptr<OnTrackInterface> onTrack;
-};
 
 
 }  // namespace stream

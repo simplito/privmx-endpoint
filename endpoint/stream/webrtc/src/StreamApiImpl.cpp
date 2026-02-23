@@ -422,7 +422,7 @@ void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
     _api->unpublishStream(streamHandle);
 }
 
-void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscriptionExt>& subscriptions) {
+void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions) {
     int64_t streamId = generateNumericId();
     _streamDataMap.set( 
         streamId, 
@@ -433,21 +433,11 @@ void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, co
             streamRoomId
         )
     );
-    std::vector<StreamSubscription> tmp;
-    for(const auto& s: subscriptions) {
-        _webRTC->addOnTrackInterface(streamRoomId, std::to_string(s.streamId), s.onTrack);
-        tmp.push_back(s);
-    }
-    _api->subscribeToRemoteStreams(streamRoomId, tmp);
+    _api->subscribeToRemoteStreams(streamRoomId, subscriptions);
 }
 
-void StreamApiImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscriptionExt>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
-    std::vector<StreamSubscription> tmp;
-    for(const auto& s: subscriptionsToAdd) {
-        _webRTC->addOnTrackInterface(streamRoomId, std::to_string(s.streamId), s.onTrack);
-        tmp.push_back(s);
-    }
-    _api->modifyRemoteStreamsSubscriptions(streamRoomId, tmp, subscriptionsToRemove);
+void StreamApiImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
+    _api->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
 }
 
 void StreamApiImpl::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove) {
@@ -530,4 +520,10 @@ std::string StreamApiImpl::buildSubscriptionQuery(EventType eventType, EventSele
 void StreamApiImpl::dropBrokenFrames(const std::string& streamRoomId, bool enable) {
     _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed=enable};
     _webRTC->setFrameCryptorOptions(streamRoomId, _frameCryptorOptions);
+}
+
+void StreamApiImpl::addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack) {
+    std::optional<std::string> stringStreamId = std::nullopt;
+    if(streamId) stringStreamId = std::to_string(streamId.value());
+    _webRTC->setOnTrackInterface(streamRoomId, stringStreamId , onTrack);
 }

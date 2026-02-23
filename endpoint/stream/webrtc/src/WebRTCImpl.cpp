@@ -191,10 +191,13 @@ void WebRTCImpl::setFrameCryptorOptions(const std::string& streamRoomId, const p
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
     connection->peerConnection->observer->SetFrameCryptorOptions(frameCryptorOptions);
 }
-
-void WebRTCImpl::addOnTrackInterface(const std::string& streamRoomId, const std::string& streamId, std::shared_ptr<OnTrackInterface> onTrackInterface) {
+void WebRTCImpl::setOnTrackInterface(const std::string& streamRoomId, const std::optional<std::string>& streamId, std::shared_ptr<OnTrackInterface> onTrackInterface) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
-    connection->peerConnection->observer->addOnTrackInterface(streamId, onTrackInterface);
+    if(streamId.has_value()) {
+        connection->peerConnection->observer->addOnTrackInterfaceForSingleStream(streamId.value(), onTrackInterface);
+    } else {
+        connection->peerConnection->observer->setOnTrackInterface(onTrackInterface);
+    }
 }
 
 void WebRTCImpl::createPeerConnectionWithLocalStream(
