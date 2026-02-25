@@ -12,15 +12,15 @@ set_target_properties(libwebrtc PROPERTIES
 target_include_directories(privmxendpointstream PRIVATE ${INCLUDE_DIRS})
 
 # privmxendpointstream
-add_executable(streamsProgram2 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_2.cpp)
-target_link_libraries(streamsProgram2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointstream libwebrtc)
+add_executable(echo_test ${CMAKE_CURRENT_SOURCE_DIR}/echo_test.cpp)
+target_link_libraries(echo_test privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointstream libwebrtc)
 
 # privmxendpointstream + SDL2
 find_package(SDL2 REQUIRED)
-add_executable(streams_program_3_reciver ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_3_reciver.cpp)
-target_link_libraries(streams_program_3_reciver SDL2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
-add_executable(streams_program_3_sender ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_3_sender.cpp)
-target_link_libraries(streams_program_3_sender SDL2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+add_executable(single_video_receiver ${CMAKE_CURRENT_SOURCE_DIR}/single_video_receiver.cpp)
+target_link_libraries(single_video_receiver SDL2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+add_executable(single_video_sender ${CMAKE_CURRENT_SOURCE_DIR}/single_video_sender.cpp)
+target_link_libraries(single_video_sender SDL2 privmx privmxendpointcore privmxendpointcrypto privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
 
 
 
@@ -32,5 +32,5 @@ endif()
 # add_executable(streamsProgram4 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_4.cpp)
 # target_link_libraries(streamsProgram4 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
 # # uses app serwer
-add_executable(streamsProgram5 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_5.cpp)
-target_link_libraries(streamsProgram5 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+# add_executable(streamsProgram5 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_5.cpp)
+# target_link_libraries(streamsProgram5 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)

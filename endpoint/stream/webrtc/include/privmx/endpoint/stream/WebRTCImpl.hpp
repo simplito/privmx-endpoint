@@ -54,7 +54,7 @@ public:
     void updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) override;
 
     void setFrameCryptorOptions(const std::string& streamRoomId, const privmx::webrtc::FrameCryptorOptions& frameCryptorOptions);
-    void setOnTrackInterface(const std::string& streamRoomId, std::shared_ptr<OnTrackInterface> OnTrackInterface);
+    void setOnTrackInterface(const std::string& streamRoomId, const std::optional<std::string>& streamId, std::shared_ptr<OnTrackInterface> onTrackInterface);
 
     void createPeerConnectionWithLocalStream(
         const std::string& streamRoomId, 
@@ -69,8 +69,7 @@ public:
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToRemove,
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToRemove
     );
-
-    void setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
+    void addRemoteStreamListener(const std::string& streamRoomId, int64_t streamId, std::shared_ptr<OnTrackInterface> onTrack);
 
 private:
     void AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = 0);
@@ -91,7 +90,6 @@ private:
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::KeyStore>> _roomKeys;
-    std::shared_ptr<OnTrackInterface> _onTrackInterface;
 };
 
 } // namespace stream

@@ -422,7 +422,7 @@ void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
     _api->unpublishStream(streamHandle);
 }
 
-void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
+void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions) {
     int64_t streamId = generateNumericId();
     _streamDataMap.set( 
         streamId, 
@@ -436,7 +436,7 @@ void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, co
     _api->subscribeToRemoteStreams(streamRoomId, subscriptions);
 }
 
-void StreamApiImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options) {
+void StreamApiImpl::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
     _api->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
 }
 
@@ -522,6 +522,10 @@ void StreamApiImpl::dropBrokenFrames(const std::string& streamRoomId, bool enabl
     _webRTC->setFrameCryptorOptions(streamRoomId, _frameCryptorOptions);
 }
 
-void StreamApiImpl::setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
-    _webRTC->setOnTrackInterface(onTrackInterface);
+void StreamApiImpl::addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack) {
+    std::optional<std::string> stringStreamId = std::nullopt;
+    if(streamId) {
+        stringStreamId = std::to_string(streamId.value());
+    }
+    _webRTC->setOnTrackInterface(streamRoomId, stringStreamId , onTrack);
 }
