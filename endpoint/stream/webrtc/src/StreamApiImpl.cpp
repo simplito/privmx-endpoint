@@ -524,6 +524,8 @@ void StreamApiImpl::dropBrokenFrames(const std::string& streamRoomId, bool enabl
 
 void StreamApiImpl::addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack) {
     std::optional<std::string> stringStreamId = std::nullopt;
-    if(streamId) stringStreamId = std::to_string(streamId.value());
+    if(streamId) {
+        stringStreamId = std::to_string(streamId.value());
+    }
     _webRTC->setOnTrackInterface(streamRoomId, stringStreamId , onTrack);
 }
