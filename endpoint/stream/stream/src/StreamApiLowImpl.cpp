@@ -168,7 +168,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             event->channel = "stream";
             event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
             _eventMiddleware->emitApiEvent(event);
-        } else if (type == "streamPublished" || type == "streamJoined" || type == "streamLeft" || type == "streamUpdated" ) {
+        } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUpdated" ) {
             if(type == "streamPublished") {
                 auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamPublishedEventData>(data);
                 auto deserializer = std::make_shared<core::VarDeserializer>();
@@ -197,17 +197,15 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
                 event->channel = "stream";
                 event->data = eventData;
                 _eventMiddleware->emitApiEvent(event);
-            } else if(type == "streamLeft") {
-                auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamEventData>(data);
-                std::vector<int64_t> streamIds;
-                for(auto i : raw.streamIds()) streamIds.push_back(i);
-                auto eventData = StreamEventData{.streamRoomId=raw.streamRoomId(), .streamIds=streamIds, .userId=raw.userId()};
-
-                std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
-                event->channel = "stream";
-                event->data = eventData;
-                _eventMiddleware->emitApiEvent(event);
             }
+        }
+        else if(type == "streamLeft") {
+            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamLeftEventData>(data);
+            auto eventData = StreamLeftEventData{.streamRoomId=raw.streamRoomId(), .streamId=raw.streamId(), .userId = raw.userId()};
+            std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
+            event->channel = "stream";
+            event->data = eventData;
+            _eventMiddleware->emitApiEvent(event);
         }
         else if (type == "streamUnpublished") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUnpublishedEventData>(data);
@@ -1143,6 +1141,17 @@ void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const S
     model.answer(sessionDescription);
     _serverApi->streamAcceptOffer(model);
 }
+
+void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
+    auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
+    sessionDescription.sdp(sdp.sdp);
+    sessionDescription.type("offer");
+    auto model = utils::TypedObjectFactory::createNewObject<server::StreamSetNewOfferModel>();
+    model.sessionId(sessionId);
+    model.offer(sessionDescription);
+    _serverApi->streamSetNewOffer(model);
+}
+
 
 void StreamApiLowImpl::sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room, const std::set<RemoteStreamId>& streamIds) {
     // get Room for contextId

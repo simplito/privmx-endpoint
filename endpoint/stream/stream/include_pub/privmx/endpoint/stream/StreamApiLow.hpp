@@ -101,6 +101,7 @@ public:
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
+    void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
