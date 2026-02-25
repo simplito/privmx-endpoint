@@ -253,6 +253,10 @@ ENDPOINT_SERVER_TYPE(NewStreams)
     LIST_FIELD(streams, StreamInfo)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamSetNewOfferModel)
+    OBJECT_FIELD(offer, SessionDescription)
+    INT64_FIELD(sessionId)
+TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamAcceptOfferModel)
     OBJECT_FIELD(answer, SessionDescription)
@@ -319,6 +323,12 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
     STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamLeftEventData)
+    STRING_FIELD(streamRoomId)
+    INT64_FIELD(streamId)
+    STRING_FIELD(userId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(JanusEventData)
