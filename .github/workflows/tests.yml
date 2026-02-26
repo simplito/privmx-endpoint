@@ -25,19 +25,28 @@ jobs:
     - name: Setup conan
       run: |
         conan profile detect --force
-        conan remote add privmx https://libs.simplito.com/artifactory/api/conan/privmx
+        conan remote add privmx ${{ vars.CONAN_ARTIFACTORY }}
+
+    - name: Conan Remote Auth
+      run: conan remote auth privmx
+      env:
+        CONAN_LOGIN_USERNAME_PRIVMX: ${{ vars.CONAN_USER }}
+        CONAN_PASSWORD_PRIVMX: ${{ secrets.CONAN_PASSWORD }}
 
     - name: Build library
       run: ./build.sh
+
+    - name: Upload binaries
+      run: conan upload "*" --remote=privmx --confirm
 
     - name: Start Backend Services
       run: |
         cd test
         docker compose up -d
         sleep 15
+
     - name: Run tests
       run: |
         source build/build/Debug/generators/conanrun.sh
         cd test
         python3 e2e_runner.py ../build/test "test_env/create_dataset/Dataset/ServerData.ini" "test_env/create_dataset/Dataset"
-
