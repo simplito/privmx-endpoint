@@ -3,6 +3,8 @@ name: Build Doxygen Docs
 on:
   workflow_dispatch:
   push:
+    branches:
+      - '**'
     tags:
       - '*'
 
