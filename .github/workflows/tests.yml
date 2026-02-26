@@ -28,7 +28,10 @@ jobs:
         conan remote add privmx ${{ vars.CONAN_ARTIFACTORY }}
 
     - name: Conan Remote Auth
-      run: conan remote login -p "${{ secrets.CONAN_PASSWORD }}" privmx "${{ vars.CONAN_USER }}"
+      run: conan remote auth privmx
+      env:
+        CONAN_LOGIN_USERNAME_PRIVMX: ${{ vars.CONAN_USER }}
+        CONAN_PASSWORD_PRIVMX: ${{ secrets.CONAN_PASSWORD }}
 
     - name: Build library
       run: ./build.sh
