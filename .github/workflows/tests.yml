@@ -30,8 +30,8 @@ jobs:
     - name: Conan Remote Auth
       run: conan remote auth privmx
       env:
-        CONAN_LOGIN_USERNAME_PRIVMX: ${{ vars.CONAN_USER }}
-        CONAN_PASSWORD_PRIVMX: ${{ secrets.CONAN_PASSWORD }}
+        CONAN_LOGIN_USERNAME: ${{ vars.CONAN_USER }}
+        CONAN_PASSWORD: ${{ secrets.CONAN_PASSWORD }}
 
     - name: Build library
       run: ./build.sh
