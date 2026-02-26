@@ -15,8 +15,8 @@ jobs:
     container:
       image: ghcr.io/simplito/doxygen-docker:v1.16.1
       credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.github_token }}
 
     steps:
       - name: Checkout repo
