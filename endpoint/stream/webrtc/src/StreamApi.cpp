@@ -262,22 +262,22 @@ void StreamApi::unpublishStream(const StreamHandle& streamHandle) {
     }
 }
 
-void StreamApi::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options) {
+void StreamApi::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->subscribeToRemoteStreams(streamRoomId, subscriptions, options);
+        return _impl->subscribeToRemoteStreams(streamRoomId, subscriptions);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options) {
+void StreamApi::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove, options);
+        return _impl->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -335,10 +335,10 @@ void StreamApi::dropBrokenFrames(const std::string& streamRoomId, bool enable) {
     }
 }
 
-void StreamApi::setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
+void StreamApi::addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack) {
     validateEndpoint();
     try {
-        return _impl->setOnTrackInterface(onTrackInterface);
+        return _impl->addRemoteStreamListener(streamRoomId, streamId, onTrack);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

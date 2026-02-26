@@ -39,6 +39,8 @@ public:
     server::StreamPublishResult streamUpdate(server::StreamUpdateModel model);
 
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
+    void streamSetNewOffer(server::StreamSetNewOfferModel model);
+
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
 

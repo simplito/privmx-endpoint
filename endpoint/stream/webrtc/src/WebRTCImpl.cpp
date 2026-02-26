@@ -184,7 +184,6 @@ std::shared_ptr<PeerConnection> WebRTCImpl::createPeerConnection(const std::stri
     peerConnection->pc->CreateLocalMediaStream(streamId);
     peerConnection->observer = std::make_shared<PmxPeerConnectionObserver>(_peerConnectionFactory, streamRoomId, privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()), _frameCryptorOptions);
     peerConnection->pc->RegisterRTCPeerConnectionObserver(peerConnection->observer.get());
-    peerConnection->observer->setOnTrackInterface(_onTrackInterface);
     return peerConnection;
 }
 
@@ -192,10 +191,13 @@ void WebRTCImpl::setFrameCryptorOptions(const std::string& streamRoomId, const p
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
     connection->peerConnection->observer->SetFrameCryptorOptions(frameCryptorOptions);
 }
-
-void WebRTCImpl::setOnTrackInterface(const std::string& streamRoomId, std::shared_ptr<OnTrackInterface> OnTrackInterface) {
+void WebRTCImpl::setOnTrackInterface(const std::string& streamRoomId, const std::optional<std::string>& streamId, std::shared_ptr<OnTrackInterface> onTrackInterface) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
-    connection->peerConnection->observer->setOnTrackInterface(OnTrackInterface);
+    if(streamId.has_value()) {
+        connection->peerConnection->observer->addOnTrackInterfaceForSingleStream(streamId.value(), onTrackInterface);
+    } else {
+        connection->peerConnection->observer->setOnTrackInterface(onTrackInterface);
+    }
 }
 
 void WebRTCImpl::createPeerConnectionWithLocalStream(
@@ -322,9 +324,5 @@ void WebRTCImpl::RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::Janu
     } else {
         throw IncorrectTrackIdException();
     }
-}
-
-void WebRTCImpl::setOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
-    _onTrackInterface = onTrackInterface;
 }
 

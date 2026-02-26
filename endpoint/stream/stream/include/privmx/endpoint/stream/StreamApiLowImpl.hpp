@@ -112,6 +112,7 @@ public:
     void keyManagement(const std::string& streamRoomId, bool disable);
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
+    void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     inline static const std::string STREAM_TYPE_FILTER_FLAG = "stream";
 private:

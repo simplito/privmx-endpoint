@@ -16,7 +16,12 @@
 using namespace std;
 using namespace privmx::endpoint;
 
-
+class OnTrackImpl : public stream::OnTrackInterface {
+public:
+    OnTrackImpl() = default;
+    virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {}
+    virtual void OnData(std::shared_ptr<stream::Data> data) override {}
+};
 
 static vector<string_view> getParamsList(int argc, char* argv[]) {
     vector<string_view> args(argv + 1, argv + argc);
@@ -63,11 +68,11 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<stream::StreamSubscription> streamsId;
+        auto onTrack = std::make_shared<OnTrackImpl>();
         for(int i = 0; i < streamlist.size(); i++) {
             streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
         }
-        stream::StreamSettings ssettings;
-        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
+        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(60));
 
     } catch (const core::Exception& e) {

@@ -13,19 +13,11 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_WEBRTC_TYPES_HPP_
 
 #include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
-
-struct StreamSettings {
-    bool dropCorruptedFrames = true;
-};
-
-class Frame {
-public:
-    virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
-};
 
 enum DeviceType {
     Audio = 0,
