@@ -34,6 +34,10 @@ This library implements models, exception catching, and the following modules:
 - @ref privmx::endpoint::thread::ThreadApi - Methods for managing Threads and sending/reading messages.
 - @ref privmx::endpoint::store::StoreApi - Methods for managing Stores and sending/reading files.
 - @ref privmx::endpoint::inbox::InboxApi - Methods for managing Inboxes and entries.
+- @ref privmx::endpoint::kvdb::KvdbApi - Methods for managing key-value databeses.
+- @ref privmx::endpoint::event::EventApi - Methods for managing custom events.
+- @ref privmx::endpoint::stream::StreamApi - Methods for managing Stream Rooms and theirs live Video, Audio and Data Streams.
+
 
 ## License Information
 
