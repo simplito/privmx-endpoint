@@ -282,7 +282,7 @@ def list_tests(test_file_path: str) -> List[str]:
 
 def pre_test(index: int, dataset_dir_path: str, test_name: str) -> BridgeInfo:
     log(f"[PRE-TEST] {test_name}")
-    bridge_info  = create_bridge_docker(index, "gitlab2.simplito.com:5050/teamserverdev/privmx-server-ee/privmx-bridge:6ed877ea")
+    bridge_info  = create_bridge_docker(index, "simplito/privmx-bridge:latest")
     bridge_context = create_bridge_context(bridge_info, dataset_dir_path)
     return bridge_info
 
