@@ -1117,14 +1117,19 @@ uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInf
 
 void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
     try {
-        Poco::URI tmp(uri);
-        if(tmp.getScheme() != "turn") {
-            throw InvalidTurnServerURIException();
+        const Poco::URI parsed(uri);
+        auto scheme = parsed.getScheme();
+        if (scheme != "turn" && scheme != "turns") {
+            throw InvalidTurnServerURIException{"Invalid TURN scheme"};
         }
-    }catch (Poco::SyntaxException &e){
-        throw InvalidTurnServerURIException();
+    }
+    catch (const Poco::SyntaxException& e) {
+        std::throw_with_nested(
+            InvalidTurnServerURIException{"Malformed TURN URI"}
+        );
     }
 }
+
 void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamTrickleModel>();
     model.sessionId(sessionId);
