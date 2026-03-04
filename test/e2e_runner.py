@@ -58,7 +58,7 @@ LOG_DIR.mkdir(exist_ok=True)
 
 MAX_WORKERS = 4  
 TIMEOUT_PER_TEST = 300    
-RETRY_COUNT = 2                
+RETRY_COUNT = 2
 RETRY_DELAY = 5                
 global DOCKER_INDEX
 
@@ -174,7 +174,11 @@ def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
         f"PRIVMX_MONGO_URL={internal_mongo_url}",
         "PRIVMX_WORKERS=1",
         "PMX_MIGRATION=Migration_069_Indexes_for_session",
+        "PMX_STREAM_ENABLED=true",
         "PRIVMX_HOSTNAME=0.0.0.0",
+        "PMX_STREAMS_MEDIA_SERVER=janus",
+        "PMX_STREAMS_TURN_SERVER=turn:127.0.0.1:3478",
+        "PMX_STREAMS_TURN_SERVER_SECRET=my-secret-key",
     ]
     env_vars = " ".join(f"-e {e}" for e in env_list)
 
@@ -187,7 +191,10 @@ def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
     db = client[db_name]
     cmd = (
         f"docker run -d --name {container_name} -p {host_port}:3000 "
-        f"--network testing_network "
+        f"--network endpoint_e2e_testing_network "
+        f"--label com.docker.compose.project=endpoint_e2e_testing "
+        f"--label com.docker.compose.service=e2e_worker "
+        f"--label com.docker.compose.oneoff=False "
         f"{env_vars} "
         f"--add-host=host.docker.internal:host-gateway "
         f"{docker_image}"
@@ -284,26 +291,28 @@ def post_test(test_name: str, bridge_info: str):
     destroy_bridge_docker(bridge_info)
 
 def execute_test(test_file_path: str, test_name: str, init_file_path: str, bridge_info: BridgeInfo):
-    for attempt in range(1, RETRY_COUNT + 2):
-        rc, out, err = run_command(f"{test_file_path} -i {init_file_path} -b localhost:{bridge_info.host_port} --gtest_filter={test_name}", timeout=TIMEOUT_PER_TEST)
-        log("=" * 80)
-        log(f"[TEST] {test_name} (attempt {attempt})")
-        log(out.decode("utf-8"))
-        log(err.decode("utf-8"))
-        if rc == 0:
-            return True, rc, out, err
-        log(f"[RETRY] {test_name} failed attempt {attempt}")
-        if attempt <= RETRY_COUNT:
-            time.sleep(RETRY_DELAY)
+    
+    rc, out, err = run_command(f"{test_file_path} -i {init_file_path} -b localhost:{bridge_info.host_port} --gtest_filter={test_name}", timeout=TIMEOUT_PER_TEST)
+    log("=" * 80)
+    
+    log(out.decode("utf-8"))
+    log(err.decode("utf-8"))
+    if rc == 0:
+        return True, rc, out, err
     return False, rc, out, err
 
 def run_single_test(index: int, test_file_path: str, test_name: str, init_file_path: str, dataset_dir_path: str):
     try:
-        bridge_info = pre_test(index, dataset_dir_path, test_name)
-        print(f"Running: {test_name}")
-        success, rc, out, err = execute_test(test_file_path, test_name, init_file_path, bridge_info)
-        post_test(test_name, bridge_info)
-        
+        for attempt in range(1, RETRY_COUNT + 2):
+            bridge_info = pre_test(index, dataset_dir_path, test_name)
+            print(f"Running: {test_name}")
+            success, rc, out, err = execute_test(test_file_path, test_name, init_file_path, bridge_info)
+            log(f"[TEST] {test_name} (attempt {attempt})")
+            post_test(test_name, bridge_info)
+            if success == True:
+                return test_name, success, rc, out, err
+            if attempt <= RETRY_COUNT:
+                time.sleep(RETRY_DELAY)
         return test_name, success, rc, out, err
     except Exception as e:
         log(f"[ERROR] {test_name}: {e}")
@@ -341,7 +350,7 @@ def main(test_dir_path: str, init_file_path: str, dataset_dir_path):
                 test, success, rc, out, err = future.result()
                 print_result(test, success, rc, out, err)
                 if not success:
-                    failed += 1
+                    failed.append(test)
 
     print("\n=========================")
     print(f"log file    : {LOG_FILE}")
@@ -357,10 +366,14 @@ if __name__ == "__main__":
         print("required args: <tests_dir> <path_to_ini_file> <path_to_dataset_directory>")
         print("test files must starts with 'test_e2e_'")
         print("example usage: python3 e2e_runner.py build test_env/create_dataset/ServerData.ini test_env/create_dataset/Dataset")
-        sys.exit(1)
+        sys.exit(-1)
     else:
         test_dir_path = os.path.abspath(os.path.join(os.path.dirname(__file__), args[0]))
         init_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), args[1]))
         dataset_dir_path = os.path.abspath(os.path.join(os.path.dirname(__file__), args[2]))
-        sys.exit(main(test_dir_path, init_file_path, dataset_dir_path))
+        result = main(test_dir_path, init_file_path, dataset_dir_path)
+        if result == 0:
+            sys.exit(0)
+        else:
+            sys.exit(-1)
 

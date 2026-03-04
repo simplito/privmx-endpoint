@@ -37,6 +37,7 @@ limitations under the License.
 #include <rtc_peerconnection.h>
 #include <rtc_desktop_media_list.h>
 #include <rtc_desktop_capturer.h>
+#include <rtc_desktop_device.h>
 #include <pmx_frame_cryptor.h>
 
 namespace privmx {
@@ -104,6 +105,7 @@ public:
     std::vector<VideoDevice> getVideoDevices();
     std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
     MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains);
+    MediaTrack addTrackEx(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains, bool testing = false);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);

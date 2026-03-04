@@ -18,4 +18,5 @@ test/test_env/create_dataset/Dataset_*
 test/test_env/utils/volumes/bridge/*
 test/test_env/utils/volumes/mongo/*
 test/logs
+test/volumes
 *.log
