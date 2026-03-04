@@ -21,7 +21,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
-#include "webrtc/Types.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -70,17 +70,22 @@ public:
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
+    void enableStreamRoomRecording(const std::string& streamRoomId);
+    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
-    std::vector<MediaDevice> getMediaDevices();
-    void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
+    std::vector<AudioDevice> getAudioDevices();
+    std::vector<VideoDevice> getVideoDevices();
+    std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
+    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& track, const MediaTrackConstrains& mediaTrackConstrains);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void unpublishStream(const StreamHandle& streamHandle);
-    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options);
-    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
+    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions);
+    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
+    void addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack);
 
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }
 

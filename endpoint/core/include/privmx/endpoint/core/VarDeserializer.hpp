@@ -22,6 +22,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/TypeValidator.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/CoreException.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -37,6 +38,8 @@ public:
     std::optional<T> deserializeOptional(const Poco::Dynamic::Var& value, const std::string& name);
     template<typename T>
     std::optional<std::vector<T>> deserializeOptionalVector(const Poco::Dynamic::Var& val, const std::string& name);
+    template<typename T>
+    std::shared_ptr<T>* deserializePointer(const Poco::Dynamic::Var& value, const std::string& name);
 };
 
 template<typename T>
@@ -65,6 +68,17 @@ inline std::optional<std::vector<T>> VarDeserializer::deserializeOptionalVector(
         return std::nullopt;
     }
     return deserializeVector<T>(val, name);
+}
+
+template<typename T>
+std::shared_ptr<T>* VarDeserializer::deserializePointer(const Poco::Dynamic::Var& value, const std::string& name) {
+    if (value.isEmpty()) {
+        throw InvalidArgumentTypeException(name + " | Expected pointer, value is empty");
+    }
+    if (!value.isInteger()) {
+        throw InvalidArgumentTypeException(name + " | Expected pointer, value has type " + value.type().name());
+    }
+    return reinterpret_cast<std::shared_ptr<T>*>(static_cast<uintptr_t>(value.convert<Poco::Int64>()));
 }
 
 template<>

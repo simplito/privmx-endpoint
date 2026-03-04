@@ -59,6 +59,11 @@ void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
     requestWS("streamAcceptOffer", model);
 }
 
+void ServerApi::streamSetNewOffer(server::StreamSetNewOfferModel model) {
+    PRIVMX_DEBUG("ServerApi", "requestWS", "model:\n" + privmx::utils::Utils::stringifyVar(model));
+    requestWS("streamSetNewOffer", model);
+}
+
 void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
     requestWS("streamUnpublish", model);
 }
@@ -81,6 +86,10 @@ void ServerApi::streamRoomJoin(server::StreamRoomJoinModel model) {
 
 void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model)  {
     requestWS("streamRoomLeave", model);
+}
+
+void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model) {
+    requestWS("streamRoomEnableRecording", model);
 }
 
 void ServerApi::trickle(server::StreamTrickleModel model) {

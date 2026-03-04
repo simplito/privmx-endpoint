@@ -28,12 +28,15 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/WebRTCImpl.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
 #include <rtc_peerconnection.h>
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
 #include <rtc_peerconnection.h>
+#include <rtc_desktop_media_list.h>
+#include <rtc_desktop_capturer.h>
 #include <pmx_frame_cryptor.h>
 
 namespace privmx {
@@ -53,6 +56,16 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
+    std::string createStreamRoomEx(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>&managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::string& type,
+        const std::optional<core::ContainerPolicy>& policies
+    );
+
     void updateStreamRoom(
         const std::string& streamRoomId, 
         const std::vector<core::UserWithPubKey>& users, 
@@ -67,7 +80,11 @@ public:
 
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
 
+    core::PagingList<StreamRoom> listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
+
     StreamRoom getStreamRoom(const std::string& streamRoomId);
+
+    StreamRoom getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
 
     void deleteStreamRoom(const std::string& streamRoomId);
 
@@ -80,44 +97,138 @@ public:
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
+    void enableStreamRoomRecording(const std::string& streamRoomId);
+    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
-    std::vector<MediaDevice> getMediaDevices();
-    void addTrack(const StreamHandle& streamHandle, const MediaDevice& track);
-    void removeTrack(const StreamHandle& streamHandle, const MediaDevice& track);
+    std::vector<AudioDevice> getAudioDevices();
+    std::vector<VideoDevice> getVideoDevices();
+    std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
+    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains);
+    void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void unpublishStream(const StreamHandle& streamHandle);
-    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions, const StreamSettings& options);
-    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove, const StreamSettings& options);
+    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions);
+    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
-
+    void addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack);
 
 private:
     enum StreamStatus {
         Offline = 0,
         Online = 1
     };
-    struct StreamData {
-        StreamData(
-            privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> _streamCapturers,
-            StreamStatus _status, std::string _streamRoomId
-        ) :streamCapturers(_streamCapturers), status(_status), streamRoomId(_streamRoomId) {}
-        privmx::utils::ThreadSaveMap<int64_t, libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>> streamCapturers;
-        StreamStatus status;
-        std::mutex streamMutex;
-        std::string streamRoomId;
+
+    enum TrackStatus {
+        ToAdd = 0,
+        ToRemove = 1,
+        Published = 2,
     };
 
+    struct StreamAudioTrackInfo {
+        StreamAudioTrackInfo( 
+            const libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice>& _device,
+            const std::string& _deviceName,
+            const std::string& _deviceId,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource>& _source,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>& _track,
+            const TrackStatus& _status
+        ) : 
+            device(_device), 
+            deviceName(_deviceName),
+            deviceId(_deviceId),
+            source(_source),
+            track(_track),
+            status(_status)
+        {}
+        libwebrtc::scoped_refptr<libwebrtc::RTCAudioDevice> device;
+        std::string deviceName;
+        std::string deviceId;
+        libwebrtc::scoped_refptr<libwebrtc::RTCAudioSource> source;
+        libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> track;
+        TrackStatus status;
+    };
 
+    struct StreamVideoTrackInfo {
+        StreamVideoTrackInfo( 
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice>& _device,
+            const std::string& _deviceName,
+            const std::string& _deviceId,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer>& _capturer,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource>& _source,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>& _track,
+            const TrackStatus& _status
+        ) : 
+            device(_device), 
+            deviceName(_deviceName),
+            deviceId(_deviceId),
+            capturer(_capturer),
+            source(_source),
+            track(_track),
+            status(_status)
+        {}
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoDevice> device;
+        std::string deviceName;
+        std::string deviceId;
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoCapturer> capturer;
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> source;
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> track;
+        TrackStatus status;
+    };
+    struct StreamDesktopTrackInfo {
+        StreamDesktopTrackInfo( 
+            const libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice>& _device,
+            const std::string& _deviceName,
+            const std::string& _deviceId,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer>& _capturer,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource>& _source,
+            const libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>& _track,
+            const TrackStatus& _status,
+            const size_t& _fps
+        ) : 
+            device(_device), 
+            deviceName(_deviceName),
+            deviceId(_deviceId),
+            capturer(_capturer),
+            source(_source),
+            track(_track),
+            status(_status),
+            fps(_fps)
+        {}
+        libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> device;
+        std::string deviceName;
+        std::string deviceId;
+        libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> capturer;
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> source;
+        libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> track;
+        TrackStatus status;
+        size_t fps;
+    };
+
+    struct StreamData {
+        StreamData(
+            utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> _audioTracks,
+            utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> _videoTracks,
+            StreamStatus _status, std::string _streamRoomId
+        ) : 
+            audioTracks(_audioTracks), 
+            videoTracks(_videoTracks), 
+            status(_status), 
+            streamRoomId(_streamRoomId) 
+        {}
+        utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> audioTracks;
+        utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> videoTracks;
+        utils::ThreadSaveMap<std::string, std::shared_ptr<StreamDesktopTrackInfo>> desktopTracks;
+        StreamStatus status;
+        std::string streamRoomId;
+        std::mutex streamMutex;
+    };
     int64_t generateNumericId();
-
-    void trackAddAudio(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackAddVideo(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackAddDesktop(int64_t streamId, int64_t id = 0, const std::string& params_JSON = "{}");
-    void trackRemoveAudio(int64_t streamId, int64_t id = 0);
-    void trackRemoveVideo(int64_t streamId, int64_t id = 0);
-    void trackRemoveDesktop(int64_t streamId, int64_t id = 0);
+    inline std::string getTrimmedString(std::string s) {
+        s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
+        return s;
+    }
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;

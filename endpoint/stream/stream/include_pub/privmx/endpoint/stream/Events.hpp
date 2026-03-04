@@ -45,6 +45,23 @@ struct StreamEventData {
     std::string userId;
 };
 
+struct StreamLeftEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID's
+     */
+    int64_t streamId;
+
+    /**
+     * UserID
+     */
+    std::string userId;
+};
+
 struct StreamUnpublishedEventData {
     /**
      * StreamRoom ID
@@ -281,7 +298,7 @@ struct StreamLeftEvent : public core::Event {
     /**
      * event data
      */
-    StreamEventData data;
+    StreamLeftEventData data;
 };
 
 
