@@ -1,4 +1,4 @@
-name: endpoint_e2e_testing
+name: privmx_test
 
 services:
   # ==========================================

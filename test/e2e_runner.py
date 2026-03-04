@@ -366,10 +366,14 @@ if __name__ == "__main__":
         print("required args: <tests_dir> <path_to_ini_file> <path_to_dataset_directory>")
         print("test files must starts with 'test_e2e_'")
         print("example usage: python3 e2e_runner.py build test_env/create_dataset/ServerData.ini test_env/create_dataset/Dataset")
-        sys.exit(1)
+        sys.exit(-1)
     else:
         test_dir_path = os.path.abspath(os.path.join(os.path.dirname(__file__), args[0]))
         init_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), args[1]))
         dataset_dir_path = os.path.abspath(os.path.join(os.path.dirname(__file__), args[2]))
-        sys.exit(main(test_dir_path, init_file_path, dataset_dir_path))
+        result = main(test_dir_path, init_file_path, dataset_dir_path)
+        if result == 0:
+            sys.exit(0)
+        else:
+            sys.exit(-1)
 

@@ -14,8 +14,6 @@
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/endpoint/stream/WebRTCInterface.hpp>
-#include <libwebrtc.h>
-#include <pmx_frame_cryptor.h>
 
 using namespace privmx::endpoint;
 
