@@ -1203,7 +1203,7 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_after_unpublish) {
     EXPECT_NO_THROW({
         streamApi->unpublishStream(handle);
     });
-    EXPECT_NO_THROW({
+    EXPECT_THROW({
         streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, streamsId);
-    });
+    }, core::Exception);
 }
