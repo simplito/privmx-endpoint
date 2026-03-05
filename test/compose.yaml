@@ -1,4 +1,123 @@
+name: privmx_test
+
 services:
+  # ==========================================
+  # 1. JANUS GATEWAY
+  # ==========================================
+  janus:
+    image: simplito/janus-gateway-docker:v1.4.0
+    restart: unless-stopped
+    ports:
+      - "8088:8088"  # HTTP
+      - "8089:8089"  # HTTPS
+      - "8188:8188"  # WS
+      - "8989:8989"  # WSS
+      - "10000-10200:10000-10200/udp" # RTP Media Ports
+    volumes:
+      - ./volumes/janus-conf:/janus-custom
+      - ./volumes/certs:/usr/local/share/janus/certs
+      - ./volumes/recordings:/usr/local/share/janus/recordings
+   
+    networks:
+      - endpoint_e2e_testing_network
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        # --- PATHS & VARIABLES ---
+        IP="127.0.0.1"
+        # Shared secret must match the one in Coturn service below
+        TURN_SECRET="my-secret-key"
+        
+        ORIG_CONF="/usr/local/etc/janus"
+        CUSTOM_CONF="/janus-custom"
+        CERT_DIR="/usr/local/share/janus/certs"
+        CERT_PEM="$$CERT_DIR/mycert.pem"
+        CERT_KEY="$$CERT_DIR/mycert.key"
+
+        echo "Starting Janus Setup..."
+
+        # 1. INSTALL OPENSSL
+        if ! command -v openssl >/dev/null; then
+            echo "Installing OpenSSL..."
+            if command -v apk >/dev/null; then apk add --no-cache openssl; 
+            else apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*; fi
+        fi
+
+        # 2. RESTORE DEFAULTS
+        if [ ! -f "$$CUSTOM_CONF/janus.jcfg" ]; then
+            echo "Populating config files..."
+            cp -rn $$ORIG_CONF/* $$CUSTOM_CONF/ 2>/dev/null || true
+            for f in $$CUSTOM_CONF/*.jcfg.sample; do 
+                [ -f "$$f" ] && cp -n "$$f" "$${f%.sample}"
+            done
+        fi
+
+        # 3. GENERATE CERTIFICATES
+        mkdir -p "$$CERT_DIR"
+        if [ ! -f "$$CERT_PEM" ]; then
+            echo "Generating Self-Signed Certs..."
+            openssl req -x509 -newkey rsa:4096 -keyout "$$CERT_KEY" -out "$$CERT_PEM" -days 365 -nodes -subj "/CN=localhost" 2>/dev/null
+        fi
+
+        # 4. PATCH CONFIGURATION
+        echo "Patching Configs..."
+        do_sed() { sed -i "$$1" "$$2"; }
+
+        # --- IP & NAT ---
+        do_sed "s/;nat_1_1_mapping =.*/nat_1_1_mapping = \"$$IP\"/" "$$CUSTOM_CONF/janus.jcfg"
+        do_sed "s/string_ids = false/string_ids = true/" "$$CUSTOM_CONF/janus.plugin.videoroom.jcfg"
+
+        # --- TURN SERVER (SHARED SECRET CONFIG) ---
+        do_sed "s/;turn_server =.*/turn_server = \"$$IP\"/" "$$CUSTOM_CONF/janus.jcfg"
+        do_sed "s/;turn_port =.*/turn_port = 3478/" "$$CUSTOM_CONF/janus.jcfg"
+        do_sed "s/;turn_type =.*/turn_type = \"udp\"/" "$$CUSTOM_CONF/janus.jcfg"
+        
+        # --- HTTPS & WSS ---
+        do_sed "s/https = false/https = true/" "$$CUSTOM_CONF/janus.transport.http.jcfg"
+        do_sed "s/;secure_port = 8089/secure_port = 8089/" "$$CUSTOM_CONF/janus.transport.http.jcfg"
+        do_sed "s/wss = false/wss = true/" "$$CUSTOM_CONF/janus.transport.websockets.jcfg"
+        do_sed "s/;wss_port = 8989/wss_port = 8989/" "$$CUSTOM_CONF/janus.transport.websockets.jcfg"
+
+        # --- CERT PATHS ---
+        do_sed "s|.*cert_pem =.*|cert_pem = \"$$CERT_PEM\"|" "$$CUSTOM_CONF/janus.jcfg"
+        do_sed "s|.*cert_key =.*|cert_key = \"$$CERT_KEY\"|" "$$CUSTOM_CONF/janus.jcfg"
+        do_sed "s|.*cert_pem =.*|cert_pem = \"$$CERT_PEM\"|" "$$CUSTOM_CONF/janus.transport.http.jcfg"
+        do_sed "s|.*cert_key =.*|cert_key = \"$$CERT_KEY\"|" "$$CUSTOM_CONF/janus.transport.http.jcfg"
+        do_sed "s|.*cert_pem =.*|cert_pem = \"$$CERT_PEM\"|" "$$CUSTOM_CONF/janus.transport.websockets.jcfg"
+        do_sed "s|.*cert_key =.*|cert_key = \"$$CERT_KEY\"|" "$$CUSTOM_CONF/janus.transport.websockets.jcfg"
+
+        echo "Setup Complete. Launching Janus..."
+        exec janus -F $$CUSTOM_CONF
+
+  # ==========================================
+  # 2. COTURN (TURN SERVER)
+  # ==========================================
+  coturn:
+    image: coturn/coturn
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
+      - "49152-49200:49152-49200/udp"
+    command: 
+      - -n 
+      - --log-file=stdout 
+      - --min-port=49152 
+      - --max-port=49200 
+      - --realm=janus 
+      - --use-auth-secret
+      - --static-auth-secret=my-secret-key
+      - --external-ip=127.0.0.1
+      - --listening-port=3478
+    restart: unless-stopped
+    networks:
+      - endpoint_e2e_testing_network
+  # ==========================================
+  # 3. MONGODB (REPLICA SET)
+  # ==========================================
   test_mongodb:
     image: mongo:7.0
     command: ["--replSet", "rs0", "--bind_ip_all"]
@@ -13,14 +132,14 @@ services:
       start_period: 10s
       start_interval: 1s
     networks:
-      - testing_network
+      - endpoint_e2e_testing_network
     ulimits:
       nofile:
         soft: 65535
         hard: 65535
 networks:
-  testing_network:
-    name: testing_network
+  endpoint_e2e_testing_network:
+    name: endpoint_e2e_testing_network
 
     
 

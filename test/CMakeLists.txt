@@ -45,6 +45,21 @@ add_executable(test_e2e_KvdbTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/KvdbTest.cpp)
 target_link_libraries(test_e2e_KvdbTest privmx privmxendpointcore privmxendpointkvdb Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_KvdbModuleEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/KvdbModuleEventsTest.cpp)
 target_link_libraries(test_e2e_KvdbModuleEventsTest privmx privmxendpointcore privmxendpointkvdb Poco::Foundation Poco::Util GTest::GTest)
+# StreamLow
+add_executable(test_e2e_StreamLowTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamLowTest.cpp)
+target_link_libraries(test_e2e_StreamLowTest privmx privmxendpointcore privmxendpointevent privmxendpointstream Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+
+if(PRIVMX_BUILD_WITH_WEBRTC)
+    add_library(libwebrtc SHARED IMPORTED) # or STATIC instead of SHARED
+    set_target_properties(libwebrtc PROPERTIES
+        IMPORTED_LOCATION "<path_to_libwebrtc>"
+        INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
+    )
+    # Stream
+    add_executable(test_e2e_StreamTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamTest.cpp)
+    target_link_libraries(test_e2e_StreamTest privmx privmxendpointcore privmxendpointevent privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+    endif()
+
 ## Docker Setup
 add_executable(test_env_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/test_env/utils/DockerSetupData.cpp)
 target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb Poco::Foundation Poco::Util)
