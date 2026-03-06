@@ -73,7 +73,11 @@ RpcGateway::RpcGateway(rpc::AuthorizedConnection::Ptr rpc, std::optional<rpc::Ad
 
 Var RpcGateway::request(const string& method, Object::Ptr params, MessageSendOptionsEx settings, utils::CancellationToken::Ptr token) {
     if(isConnected()) {
-        return _rpc->call(method, params, settings, token);
+        try {
+            return _rpc->call(method, params, settings, token);
+        } catch (const privmx::rpc::HttpRequestException& e) {
+            return _rpc->call(method, params, settings, token);
+        }
     }
     throw NotConnectedException();
     return Var();

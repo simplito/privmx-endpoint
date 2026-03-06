@@ -108,6 +108,7 @@ private:
     );
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
+    NotificationEvent convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     
     const int64_t _connectionId;
@@ -124,6 +125,7 @@ private:
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
+    int _gatewayNotificationEventListener, _gatewayConnectedEventListener, _gatewayDisconnectedEventListener, _gatewaySessionLostEventListener;
     int _notificationListenerId;
 };
 

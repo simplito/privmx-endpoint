@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <map>
 #include <optional>
-#include <Poco/SharedPtr.h>
 #include <mutex>
 #include <shared_mutex>
 #include <functional>
@@ -27,7 +26,8 @@ namespace utils {
 template <typename KEY, typename VALUE>
 class ThreadSaveMap {
 public:
-    using Ptr = Poco::SharedPtr<ThreadSaveMap>;
+    ThreadSaveMap() {}
+    ThreadSaveMap(const ThreadSaveMap& threadSaveMap): _map(threadSaveMap._map) {}
     std::optional<VALUE> get(KEY key);
     void set(KEY key, VALUE value);
     void erase(KEY key);

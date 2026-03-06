@@ -55,6 +55,12 @@ inline string encodeInline(const string& data_to_encode, int line_length = 0) {
     return encoded_data_stream.str();
 }
 
+std::string Hex::from(const int64_t& data) {
+    std::stringstream stream;
+    stream << std::hex << data;
+    return "0x"+stream.str();
+}
+
 string Hex::from(const string& data) {
     return encodeInline<HexBinaryEncoder>(data);
 }

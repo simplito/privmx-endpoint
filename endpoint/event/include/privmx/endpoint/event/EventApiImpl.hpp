@@ -14,6 +14,7 @@
 #include "privmx/endpoint/event/encryptors/event/OldEventDataDecryptor.hpp"
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
+#include <privmx/utils/GuardedExecutor.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -31,11 +32,13 @@ public:
 
     void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
     void emitEventInternal(const std::string& contextId, InternalContextEventDataV1 event, const std::vector<core::UserWithPubKey>& users);
-    bool isInternalContextEvent(const std::string& type, const std::string& channel, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType);
+    bool isInternalContextEvent(const std::string& type, const std::vector<std::string>& subscriptions, Poco::JSON::Object::Ptr eventData, const std::optional<std::string>& internalContextEventType);
     DecryptedInternalContextEventDataV1 extractInternalEventData(const Poco::JSON::Object::Ptr& eventData);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+    std::vector<std::string> subscribeForInternal(const std::vector<std::string>& subscriptionQueries, int notificationListenerId);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+    void unsubscribeFromInternal(const std::vector<std::string>& subscriptionIds, int notificationListenerId);
     std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
     std::string buildSubscriptionQueryInternal(EventSelectorType selectorType, const std::string& selectorId);
 private:
@@ -47,6 +50,7 @@ private:
     bool verifyDecryptedEventDataV5(const DecryptedEventDataV5& data);
     core::Connection _connection;
     privmx::crypto::PrivateKey _userPrivKey;
+    privfs::RpcGateway::Ptr _gateway;
     ServerApi _serverApi;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::DataEncryptorV4 _dataEncryptor;

@@ -10,7 +10,6 @@ namespace endpoint {
 namespace core {
 
 template<typename T>
-
 /**
 * Contains results of listing methods.
 */

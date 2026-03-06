@@ -117,7 +117,7 @@ void WebSocketChannel::processIncomingDataLoop() {
             Payload payload = Payload::fromRaw(raw_payload);
             if (payload.id == 0) {
                 try {
-                    _notify->notify(payload.data);
+                    _notify->queueForNotify(payload.data);
                 } catch (...) {}
             } else {
                 Lock lock(_promises_mutex);

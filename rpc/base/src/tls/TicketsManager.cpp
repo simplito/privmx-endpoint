@@ -60,12 +60,13 @@ void TicketsManager::clear() {
 }
 
 unsigned int TicketsManager::ticketsCount() {
-    LOG_INFO("ticketsCount ", _tickets.size())
+    LOG_DEBUG("ticketsCount ", _tickets.size())
     lock_guard<mutex> lock(_tickets_mutex);
     return _tickets.size();
 }
 
 bool TicketsManager::shouldAskForNewTickets(Int32 min_count) {
+    dropExpiredTickets();
     Int64 now = Utils::getNowTimestamp();
     lock_guard<mutex> lock(_tickets_mutex);
     if ((Int32)_tickets.size() < min_count || (_tickets_ttl != NULL_TTL && _tickets_ttl-_ttl_threshold < now)) {

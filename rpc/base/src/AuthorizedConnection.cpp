@@ -29,10 +29,12 @@ using Poco::Dynamic::Var;
 
 AuthorizedConnection::AuthorizedConnection(const ConnectionOptionsFull& options)
         : _options(options), _ticket_updater_cancellation_token(utils::CancellationToken::create()) {
+    LOG_DEBUG("AuthorizedConnection::AuthorizedConnection(constructor)");
     initChannel();
 }
 
 void AuthorizedConnection::init() {
+    LOG_DEBUG("AuthorizedConnection::init()");
     if (_options.websocket) {
         if (_options.notifications) {
             authorizeWebsocket();
@@ -44,7 +46,11 @@ void AuthorizedConnection::init() {
 }
 
 AuthorizedConnection::~AuthorizedConnection() {
+    LOG_DEBUG("~AuthorizedConnection");
     _ticket_updater_cancellation_token->cancel();
+    if(_ticketLoop.joinable()) {
+        _ticketLoop.join();
+    }
     destroyChannel();
 }
 
@@ -102,15 +108,19 @@ void AuthorizedConnection::verifyConnection() {
 }
 
 void AuthorizedConnection::destroy() {
+    LOG_DEBUG("AuthorizedConnection::destroy")
     if (_destroyed) return;
+    LOG_TRACE("AuthorizedConnection stopping TicketLoop")
     _ticket_updater_cancellation_token->cancel();
+    LOG_TRACE("AuthorizedConnection clearing Web Socket")
     clearWebSocket();
     _destroyed = true;
     _channels_connected = false;
     _session_checked = false;
     _session_established = false;
-    
+    LOG_TRACE("AuthorizedConnection removing all tickets")
     _tickets_manager.clear();
+    LOG_TRACE("AuthorizedConnection dispatching disconnected event")
     _disconnected_event_dispatcher.dispatch({});
 }
 
@@ -301,14 +311,16 @@ Poco::URI AuthorizedConnection::url2schemeAndHost() {
 }
 
 void AuthorizedConnection::authorizeWebsocket() {
+    LOG_DEBUG("AuthorizedConnection::authorizeWebsocket");
     auto key = crypto::Crypto::randomBytes(32);
     Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
     params->set("key", utils::Base64::from(key));
     params->set("addWsChannelId", true);
     auto wschannel_id = call("authorizeWebSocket", params, {.channel_type = ChannelType::WEBSOCKET})
         .extract<Poco::JSON::Object::Ptr>()->getValue<Poco::Int32>("wsChannelId");
-    _wschannel_id = wschannel_id;
-    _server_channels->notify->add(wschannel_id, [&, key](const std::string& data){
+        _wschannel_id = wschannel_id;
+        LOG_DEBUG("AuthorizedConnection::authorizeWebSocket => notify->add(wschannel_id): ", wschannel_id);
+        _server_channels->notify->add(wschannel_id, [&, key](const std::string& data){
         string decrypted = crypto::Crypto::aes256CbcHmac256Decrypt(data, key);
         Pson::Decoder decoder;
         auto decoded = decoder.decode(decrypted).extract<Poco::JSON::Object::Ptr>();
@@ -316,6 +328,8 @@ void AuthorizedConnection::authorizeWebsocket() {
         if (type == "disconnected") {
             return;
         }
+
+        LOG_INFO("AuthorizedConnection Recived event with type: ", type, " | data:\n", privmx::utils::Utils::stringifyVar(decoded, true))
         _notification_event_dispatcher.dispatch({.type = type, .data = decoded});
     }, [&]{
         _channels_connected = false;
@@ -375,43 +389,66 @@ void AuthorizedConnection::performTicketTest(bool websocket) {
 }
 
 void AuthorizedConnection::clearWebSocket() {
+    LOG_DEBUG("AuthorizedConnection::clearWebSocket");
     auto id = _wschannel_id.exchange(-1);
     if (id != -1) {
         if(_tickets_manager.ticketsCount() != 0) {
             try {
+                LOG_TRACE("AuthorizedConnection::clearWebSocket revocation of WebSocket authorization");
                 call("unauthorizeWebSocket", Poco::JSON::Object::Ptr(new Poco::JSON::Object), {.channel_type = ChannelType::WEBSOCKET});
+                LOG_TRACE("AuthorizedConnection::clearWebSocket WebSocket unauthorized");
             } catch (...) {}
         }
+        LOG_TRACE("AuthorizedConnection::clearWebSocket removing notifier");
         _server_channels->notify->remove(id);
+        LOG_TRACE("AuthorizedConnection::clearWebSocket notifier removed");
     }
+    LOG_TRACE("AuthorizedConnection::clearWebSocket compliteted");
 }
 
 void AuthorizedConnection::activateUpdateTicketLoop() {
     if(_ticket_updater_cancellation_token->isCancelled()) {
         _ticket_updater_cancellation_token = utils::CancellationToken::create();
     }
-    auto t = std::thread([&](privmx::utils::CancellationToken::Ptr token){
-        LOG_INFO("AuthorizedConnection:TicketLoop Created")
+    _ticketLoop = std::thread([&](privmx::utils::CancellationToken::Ptr token){
+        LOG_DEBUG("AuthorizedConnection:TicketLoop Created")
+        size_t failedAttemptsOfSessionReconnection = 0;
         while(!token->isCancelled()) {
             try {
                 if(_tickets_manager.shouldAskForNewTickets(ClientEndpoint::TICKETS_MIN_COUNT)) {
-                    ClientEndpoint endpoint(_tickets_manager, _options);
-                    endpoint.connection.reset();
-                    endpoint.connection.ticketHandshake();
-                    endpoint.connection.ticketRequest(ClientEndpoint::TICKETS_MAX_COUNT);
-                    sendRequest(endpoint);
-                    LOG_INFO("AuthorizedConnection:TicketLoop AskForNewTickets:success")
+                    if(_tickets_manager.ticketsCount() != 0) {
+                        ClientEndpoint endpoint(_tickets_manager, _options);
+                        endpoint.connection.reset();
+                        endpoint.connection.ticketHandshake();
+                        endpoint.connection.ticketRequest(ClientEndpoint::TICKETS_MAX_COUNT);
+                        sendRequest(endpoint);
+                        failedAttemptsOfSessionReconnection = 0;
+                        LOG_DEBUG("AuthorizedConnection:TicketLoop AskForNewTickets:success")
+                    } else {
+                        LOG_DEBUG("AuthorizedConnection:TicketLoop SessionLost:ticketsCount == 0")
+                        return;
+                    }
                 } else {
                     token->sleep(std::chrono::seconds(10));
                 }
             } catch (const privmx::utils::OperationCancelledException &e) {
-                LOG_INFO("AuthorizedConnection:TicketLoop Cancel:Closing")
+                LOG_DEBUG("AuthorizedConnection:TicketLoop Cancel:Closing")
+                return;
+            } catch (const TicketsCountIsEqualZeroException &e) {
+                LOG_ERROR("AuthorizedConnection:TicketLoop SessionLost:TicketsCountIsEqualZero")
+                destroy();
                 return;
             } catch (...) {
-                LOG_ERROR("AuthorizedConnection:TicketLoop catch(...)")
-                token->sleep(std::chrono::seconds(1));
+                if(failedAttemptsOfSessionReconnection >= MAX_ATTEMPTS_OF_SESSION_RECONNECTION) {
+                    LOG_ERROR("AuthorizedConnection:TicketLoop SessionLost:reached MAX_ATTEMPTS_OF_SESSION_RECONNECTION = ", MAX_ATTEMPTS_OF_SESSION_RECONNECTION)
+                    destroy();
+                    return;
+                } else {
+                    LOG_ERROR("AuthorizedConnection:TicketLoop recived unknow Exception")
+                    failedAttemptsOfSessionReconnection++;
+                    token->sleep(std::chrono::seconds(1));
+                }
             }
         }
     }, _ticket_updater_cancellation_token);
-    t.detach();
 }

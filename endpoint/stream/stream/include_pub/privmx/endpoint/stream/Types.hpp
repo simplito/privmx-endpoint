@@ -1,0 +1,220 @@
+/*
+PrivMX Endpoint.
+Copyright © 2024 Simplito sp. z o.o.
+
+This file is part of the PrivMX Platform (https://privmx.dev).
+This software is Licensed under the PrivMX Free License.
+
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+#ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_TYPES_HPP_
+#define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_TYPES_HPP_
+
+#include <privmx/endpoint/core/Buffer.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <functional>
+#include <memory>
+
+namespace privmx {
+namespace endpoint {
+namespace stream {
+
+
+using StreamHandle = int64_t; // can be everything that is DTO
+using RemoteStreamId = int64_t;
+using RemoteTrackId = std::string;
+
+/**
+ * Additional stream settings.
+ * Reserved for future use.
+*/
+struct Settings {};
+
+struct TurnCredentials {
+    std::string url;
+    std::string username;
+    std::string password;
+    int64_t expirationTime;
+};
+
+struct StreamRoom {
+    std::string contextId;
+    std::string streamRoomId;
+    int64_t createDate;
+    std::string creator;
+    int64_t lastModificationDate;
+    std::string lastModifier;
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    int64_t version;
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    core::ContainerPolicy policy;
+    int64_t statusCode;
+    int64_t schemaVersion;
+    bool closed;
+};
+
+struct Stream {
+    int64_t streamId;
+    std::string userId;
+};
+
+struct SdpWithTypeModel {
+    std::string sdp;
+    std::string type;
+};
+
+struct SdpWithRoomModel {
+    std::string roomId;
+    std::string sdp;
+    std::string type;
+};
+
+struct UpdateSessionIdModel {
+    std::string streamRoomId;
+    std::string connectionType;
+    int64_t sessionId;
+};
+
+struct RoomModel {
+    std::string roomId;
+};
+
+struct StreamSubscription {
+    int64_t streamId;
+    std::optional<std::string> streamTrackId;
+};
+
+enum EventType: int64_t {
+    STREAMROOM_CREATE = 0,
+    STREAMROOM_UPDATE = 1,
+    STREAMROOM_DELETE = 2,
+    STREAM_JOIN = 4,
+    STREAM_LEAVE = 5,
+    STREAM_PUBLISH = 6,
+    STREAM_UNPUBLISH = 7,
+};
+
+enum EventSelectorType: int64_t {
+    CONTEXT_ID = 0,
+    STREAMROOM_ID = 1,
+    STREAM_ID = 2,
+};
+
+// struct VideoRoomStreamTrack {
+//     std::string type;
+//     std::string codec;
+//     std::string mid;
+//     int64_t mindex;
+// };
+
+struct StreamTrackInfo {
+    std::string type;                       // "audio" | "video" | "data"
+    int64_t mindex;                         // unikalny mindex strumienia
+    std::string mid;                        // unikalny mid
+    std::optional<bool> disabled;           // czy strumień jest nieaktywny
+    std::optional<std::string> codec;       // np. "opus", "vp8"
+    std::optional<std::string> description; // opis strumienia
+    std::optional<bool> moderated;          // czy zmoderowany
+    std::optional<bool> simulcast;          // czy używa simulcast
+    std::optional<bool> talking;            // czy aktywność audio
+};
+
+struct StreamInfo {
+    int64_t id;                             // unikalny ID wydawcy
+    std::string userId;                     // nazwa użytkownika
+    std::optional<std::string> metadata;    // metadane jako tekst JSON
+    std::optional<bool> dummy;              // czy to publisher-dummy
+    std::vector<StreamTrackInfo> tracks;    // lista trackow
+    std::optional<bool> talking;            // deprecated
+};
+
+struct StreamTrackModificationPair {
+    std::optional<StreamTrackInfo> before;
+    std::optional<StreamTrackInfo> after;
+};
+
+struct StreamTrackModification {
+    int64_t streamId;
+    std::vector<StreamTrackModificationPair> tracks;
+};
+
+struct NewStreams {
+    std::string room;
+    std::vector<StreamInfo> streams;
+};
+
+struct PublishedStreamData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID's
+     */
+    StreamInfo stream;
+
+    std::string userId;
+};
+
+struct StreamUpdatedEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    std::vector<StreamInfo> streamsAdded;
+
+    std::vector<StreamInfo> streamsRemoved;
+
+    std::vector<StreamTrackModification> streamsModified;
+};
+
+struct StreamPublishResult {
+    bool published;
+    std::optional<PublishedStreamData> data;
+};
+
+struct UpdatedStreamData {
+    bool active;
+    std::string type;
+    std::optional<std::string> codec;
+    std::optional<int64_t> streamId; // feed_id
+    std::optional<std::string> streamMid; // feed_mid
+    std::optional<std::string> stream_display; // feed_display
+    int64_t mindex;
+    std::string mid;
+    bool send;
+    bool ready;
+};
+
+struct StreamsUpdatedDataInternal {
+    std::string room;
+    std::vector<UpdatedStreamData> streams;
+    std::optional<SdpWithTypeModel> jsep;
+};
+
+struct StreamsUpdatedData {
+    std::string room;
+    std::vector<UpdatedStreamData> streams;
+};
+
+enum struct StreamEncryptionMode {
+    SINGLE_KEY,
+    MULTIPLE_KEY,
+};
+
+struct RecordingEncKey {
+    core::Buffer id;
+    core::Buffer key;
+};
+
+}  // namespace stream
+}  // namespace endpoint
+}  // namespace privmx
+
+#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_TYPES_HPP_

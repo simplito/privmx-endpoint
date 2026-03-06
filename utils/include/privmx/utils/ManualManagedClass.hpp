@@ -25,15 +25,33 @@ template <typename T>
 class ManualManagedClass {
 public:
     inline void attach() {
-        std::unique_lock lock(_selfRefMutex); _attachObjectCounter++;
+        std::unique_lock lock(_selfRefMutex);
+        _attachObjectCounter++;
     }
     inline void attach(const std::shared_ptr<T>& newSelfRef) {
-        std::unique_lock lock(_selfRefMutex); _attachObjectCounter++; _selfRef = newSelfRef;
+        std::unique_lock lock(_selfRefMutex); 
+        _attachObjectCounter++; 
+        _selfRef = newSelfRef;
     }
     inline void detach() {
-        std::unique_lock lock(_selfRefMutex); _attachObjectCounter--; if(_attachObjectCounter.load() == 0) _selfRef.reset();
+        std::unique_lock lock(_selfRefMutex);
+        _attachObjectCounter--; 
+        if(_attachObjectCounter.load() == 0) _selfRef.reset();
     }
-    inline void cleanup() {privmx::utils::Executor::getInstance()->exec([&](){std::unique_lock lock(_selfRefMutex); _attachObjectCounter.store(0);  _selfRef.reset();});}
+    inline void cleanup() {
+        // make sure if multiple cleanups are stored in queue only last will destroy object
+        std::unique_lock lock(_selfRefMutex); 
+        if(_selfRef) {
+            //load cleanup 
+            privmx::utils::Executor::getInstance()->exec(
+                [&, sefRef = this->_selfRef]() {
+                    std::unique_lock lock(_selfRefMutex); 
+                    _attachObjectCounter.store(0);  
+                    _selfRef.reset();
+                }
+            );
+        }
+    }
 private:
     std::atomic_int64_t _attachObjectCounter = 0;
     std::mutex _selfRefMutex;
