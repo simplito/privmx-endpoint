@@ -120,6 +120,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw internal::VarIsNotArrayException(e.what());
                 case 0x0005:
                     throw internal::InvalidVersionFormatException(e.what());
+                case 0x0006:
+                    throw internal::FailedToParseJSONString(e.what());
                 default:
                     throw internal::EndpointLibException(e.what());
             }
