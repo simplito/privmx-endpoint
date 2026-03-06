@@ -174,6 +174,7 @@ def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
         f"PRIVMX_MONGO_URL={internal_mongo_url}",
         "PRIVMX_WORKERS=1",
         "PMX_MIGRATION=Migration_069_Indexes_for_session",
+        "PMX_MEDIA_SERVER_ALLOW_SELF_SIGNED_CERTS=true",
         "PMX_STREAM_ENABLED=true",
         "PRIVMX_HOSTNAME=0.0.0.0",
         "PMX_STREAMS_MEDIA_SERVER=janus",
