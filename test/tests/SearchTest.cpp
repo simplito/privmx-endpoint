@@ -134,6 +134,24 @@ protected:
     core::VarSerializer _serializer = core::VarSerializer({});
 };
 
+TEST_F(SearchTest, otherCannotReadSearchIndex) {
+    EXPECT_THROW({
+        storeApi->getStore(
+            reader->getString("SearchIndex_1.indexId")
+        );
+    }, core::Exception);
+    EXPECT_THROW({
+        storeApi->getFile(
+            reader->getString("SearchIndex_1.indexId")
+        );
+    }, core::Exception);
+    EXPECT_THROW({
+        kvdbApi->getKvdb(
+            reader->getString("SearchIndex_1.indexId")
+        );
+    }, core::Exception);
+}
+
 TEST_F(SearchTest, getSearchIndex) {
     // incorrect id
     EXPECT_THROW({
@@ -375,6 +393,495 @@ TEST_F(SearchTest, listSearchIndexes_correct_input_data) {
             EXPECT_EQ(searchIndex.managers[0], reader->getString("Login.user_1_id"));
         }
     }
+}
+
+
+TEST_F(SearchTest, createSearchIndex) {
+    // incorrect contextId
+     
+    EXPECT_THROW({
+        searchApi->createSearchIndex(
+            reader->getString("Sql_1.indexId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            search::IndexMode::WITHOUT_CONTENT
+        );
+    }, core::Exception);
+    // incorrect users
+    EXPECT_THROW({
+        searchApi->createSearchIndex(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            search::IndexMode::WITHOUT_CONTENT
+        );
+    }, core::Exception);
+    // incorrect managers
+    EXPECT_THROW({
+        searchApi->createSearchIndex(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            search::IndexMode::WITHOUT_CONTENT
+        );
+    }, core::Exception);
+    // no managers
+    EXPECT_THROW({
+        searchApi->createSearchIndex(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            search::IndexMode::WITHOUT_CONTENT
+        );
+    }, core::Exception);
+    // different users and managers
+    std::string indexId;
+    search::SearchIndex index;
+    EXPECT_NO_THROW({
+        indexId = searchApi->createSearchIndex(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_2_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            search::IndexMode::WITHOUT_CONTENT
+        );
+    });
+    if(indexId.empty()) {
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        index = searchApi->getSearchIndex(
+            indexId
+        );
+    });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(index.publicMeta.stdString(), "public");
+    EXPECT_EQ(index.privateMeta.stdString(), "private");
+    EXPECT_EQ(index.users.size(), 1);
+    if(index.users.size() == 1) {
+        EXPECT_EQ(index.users[0], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(index.managers.size(), 1);
+    if(index.managers.size() == 1) {
+        EXPECT_EQ(index.managers[0], reader->getString("Login.user_1_id"));
+    }
+    // same users and managers
+    EXPECT_NO_THROW({
+        indexId = searchApi->createSearchIndex(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            search::IndexMode::WITHOUT_CONTENT
+        );
+    });
+    if(indexId.empty()) {
+        FAIL();
+    }
+    EXPECT_NO_THROW({
+        index = searchApi->getSearchIndex(
+            indexId
+        );
+    });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(index.publicMeta.stdString(), "public");
+    EXPECT_EQ(index.privateMeta.stdString(), "private");
+    EXPECT_EQ(index.users.size(), 1);
+    if(index.users.size() == 1) {
+        EXPECT_EQ(index.users[0], reader->getString("Login.user_1_id"));
+    }
+    EXPECT_EQ(index.managers.size(), 1);
+    if(index.managers.size() == 1) {
+        EXPECT_EQ(index.managers[0], reader->getString("Login.user_1_id"));
+    }
+}
+
+TEST_F(SearchTest, updateSearchIndex_incorrect_data) {
+    // incorrect indexId
+    EXPECT_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    }, core::Exception);
+    // incorrect users
+    EXPECT_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_1.indexId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    }, core::Exception);
+    // incorrect managers
+    EXPECT_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_1.indexId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_2_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    }, core::Exception);
+    // no managers
+    EXPECT_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_1.indexId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    }, core::Exception);
+    // incorrect version force false
+    EXPECT_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_2.indexId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            99,
+            false,
+            false
+        );
+    }, core::Exception);
+}
+
+TEST_F(SearchTest, updateSearchIndex_correct_data) {
+    search::SearchIndex index;
+    // new users
+    EXPECT_NO_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_1.indexId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    });
+    EXPECT_NO_THROW({
+        index = searchApi->getSearchIndex(
+            reader->getString("Sql_1.indexId")
+        );
+    });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(index.version, 2);
+    EXPECT_EQ(index.publicMeta.stdString(), "public");
+    EXPECT_EQ(index.privateMeta.stdString(), "private");
+    EXPECT_EQ(index.users.size(), 2);
+    if(index.users.size() == 2) {
+        EXPECT_EQ(index.users[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(index.users[1], reader->getString("Login.user_2_id"));
+    }
+    EXPECT_EQ(index.managers.size(), 1);
+    if(index.managers.size() == 1) {
+        EXPECT_EQ(index.managers[0], reader->getString("Login.user_1_id"));
+    }
+    // new managers
+    EXPECT_NO_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_1.indexId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            2,
+            false,
+            false
+        );
+    });
+    EXPECT_NO_THROW({
+        index = searchApi->getSearchIndex(
+            reader->getString("Sql_1.indexId")
+        );
+    });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(index.version, 3);
+    EXPECT_EQ(index.publicMeta.stdString(), "public");
+    EXPECT_EQ(index.privateMeta.stdString(), "private");
+    EXPECT_EQ(index.users.size(), 1);
+    if(index.users.size() == 1) {
+        EXPECT_EQ(index.users[0], reader->getString("Login.user_1_id"));
+    }
+    EXPECT_EQ(index.managers.size(), 2);
+    if(index.managers.size() == 2) {
+        EXPECT_EQ(index.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(index.managers[1], reader->getString("Login.user_2_id"));
+    }
+    // less users
+    EXPECT_NO_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_2.indexId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                },
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_2_id"),
+                    .pubKey=reader->getString("Login.user_2_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            1,
+            false,
+            false
+        );
+    });
+    EXPECT_NO_THROW({
+        index = searchApi->getSearchIndex(
+            reader->getString("Sql_2.indexId")
+        );
+    });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(index.version, 2);
+    EXPECT_EQ(index.publicMeta.stdString(), "public");
+    EXPECT_EQ(index.privateMeta.stdString(), "private");
+    EXPECT_EQ(index.users.size(), 1);
+    if(index.users.size() == 1) {
+        EXPECT_EQ(index.users[0], reader->getString("Login.user_1_id"));
+    }
+    EXPECT_EQ(index.managers.size(), 2);
+    if(index.managers.size() == 2) {
+        EXPECT_EQ(index.managers[0], reader->getString("Login.user_1_id"));
+        EXPECT_EQ(index.managers[1], reader->getString("Login.user_2_id"));
+    }
+    // less managers
+    EXPECT_NO_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_2.indexId"),
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            std::vector<core::UserWithPubKey>{
+                core::UserWithPubKey{
+                    .userId=reader->getString("Login.user_1_id"),
+                    .pubKey=reader->getString("Login.user_1_pubKey")
+                }
+            },
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            2,
+            false,
+            false
+        );
+    });
+    EXPECT_NO_THROW({
+        index = searchApi->getSearchIndex(
+            reader->getString("Sql_2.indexId")
+        );
+    });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(index.version, 3);
+    EXPECT_EQ(index.publicMeta.stdString(), "public");
+    EXPECT_EQ(index.privateMeta.stdString(), "private");
+    EXPECT_EQ(index.users.size(), 1);
+    if(index.users.size() == 1) {
+        EXPECT_EQ(index.users[0], reader->getString("Login.user_1_id"));
+    }
+    EXPECT_EQ(index.managers.size(), 1);
+    if(index.managers.size() == 1) {
+        EXPECT_EQ(index.managers[0], reader->getString("Login.user_1_id"));
+    }
+    // incorrect version force true
+    EXPECT_NO_THROW({
+        searchApi->updateSearchIndex(
+            reader->getString("Sql_3.indexId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            99,
+            true,
+            false
+        );
+    });
+    EXPECT_NO_THROW({
+        index = searchApi->getSearchIndex(
+            reader->getString("Sql_3.indexId")
+        );
+    });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(index.version, 2);
+    EXPECT_EQ(index.publicMeta.stdString(), "public");
+    EXPECT_EQ(index.privateMeta.stdString(), "private");
+    EXPECT_EQ(index.users.size(), 1);
+    if(index.users.size() == 1) {
+        EXPECT_EQ(index.users[0], reader->getString("Login.user_1_id"));
+    }
+    EXPECT_EQ(index.managers.size(), 1);
+    if(index.managers.size() == 1) {
+        EXPECT_EQ(index.managers[0], reader->getString("Login.user_1_id"));
+    }
+}
+
+TEST_F(SearchTest, deleteSearchIndex) {
+    // incorrect indexId
+    EXPECT_THROW({
+        searchApi->deleteSearchIndex(
+            reader->getString("Context_1.contextId")
+        );
+    }, core::Exception);
+    // as manager
+     EXPECT_NO_THROW({
+        searchApi->deleteSearchIndex(
+            reader->getString("Sql_1.indexId")
+        );
+    });
+    EXPECT_THROW({
+        searchApi->deleteSearchIndex(
+            reader->getString("Sql_1.indexId")
+        );
+    }, core::Exception);
+    // as user
+    disconnect();
+    connectAs(ConnectionType::User2);
+    EXPECT_THROW({
+        searchApi->deleteSearchIndex(
+            reader->getString("Sql_3.indexId")
+        );
+    }, core::Exception);
 }
 
 TEST_F(SearchTest, openSearchIndex) {
