@@ -11,7 +11,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/startTest.sh DESTINATION ${CMAKE_CUR
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/env.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/utils ${CMAKE_CURRENT_BINARY_DIR}/utils)
 
-## MODULES
+# MODULES
 # Core
 add_executable(test_e2e_CoreTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/CoreTest.cpp)
 target_link_libraries(test_e2e_CoreTest privmx privmxendpointcore Poco::Foundation Poco::Util GTest::GTest)
@@ -65,4 +65,4 @@ add_executable(test_e2e_SearchTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/SearchTest.
 target_link_libraries(test_e2e_SearchTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointsearch Poco::Foundation Poco::Util GTest::GTest GTest::Main)
 ## Docker Setup
 add_executable(test_env_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/test_env/utils/DockerSetupData.cpp)
-target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb privmxendpointsearch Poco::Foundation Poco::Util)
+target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb privmxendpointsearch privmxendpointsql Poco::Foundation Poco::Util)

@@ -25,6 +25,9 @@
 #include <privmx/endpoint/search/SearchApi.hpp>
 #include <privmx/endpoint/search/Types.hpp>
 #include <privmx/endpoint/search/VarSerializer.hpp>
+#include <privmx/endpoint/sql/SqlApi.hpp>
+#include <privmx/endpoint/sql/Types.hpp>
+#include <privmx/endpoint/sql/VarSerializer.hpp>
 
 using namespace std;
 using namespace privmx;
@@ -83,6 +86,7 @@ int main(int argc, char** argv) {
         endpoint::kvdb::KvdbApi kvdbApi = endpoint::kvdb::KvdbApi::create(connection);
         event::EventApi eventApi = event::EventApi::create(connection);
         endpoint::search::SearchApi searchApi = endpoint::search::SearchApi::create(connection, storeApi, kvdbApi);
+        endpoint::sql::SqlApi sqlApi = endpoint::sql::SqlApi::create(connection, storeApi, kvdbApi);
         const std::vector<endpoint::core::UserWithPubKey> users_1 = {
             endpoint::core::UserWithPubKey{.userId=user_1_Id, .pubKey=user_1_PubKey}
         };
@@ -259,6 +263,76 @@ int main(int argc, char** argv) {
             searchIndex_3_privateMeta,
             endpoint::search::IndexMode::WITH_CONTENT
         );
+
+        LOG_INFO("SqlDatabase 1 - create")
+        auto sqlDatabase_1_publicMeta = endpoint::core::Buffer::from("test_sql_database_1_publicMeta");
+        auto sqlDatabase_1_privateMeta = endpoint::core::Buffer::from("test_sql_database_1_privateMeta");
+        auto sqlDatabase_1_Id = sqlApi.createSqlDatabase(
+            context_1_Id,
+            users_1,
+            users_1,
+            sqlDatabase_1_publicMeta,
+            sqlDatabase_1_privateMeta
+        );
+        LOG_INFO("SqlDatabase 1 - Adding Data")
+        auto databaseHandle_1 = sqlApi.openSqlDatabase(sqlDatabase_1_Id);
+        auto sqlDatabase_1_table_1_name = "testing_table";
+        auto sqlDatabase_1_table_1_field_1 = "id";
+        auto sqlDatabase_1_table_1_field_1_type = sql::DataType::T_INTEGER;
+        auto sqlDatabase_1_table_1_field_2 = "text_no_null";
+        auto sqlDatabase_1_table_1_field_2_type = sql::DataType::T_TEXT;
+        auto sqlDatabase_1_table_1_field_3 = "int";
+        auto sqlDatabase_1_table_1_field_3_type = sql::DataType::T_INTEGER;
+        auto queryResult_1 = databaseHandle_1->query("CREATE TABLE testing_table (id INTEGER PRIMARY KEY AUTOINCREMENT, text_no_null TEXT NOT NULL UNIQUE, int INTEGER);");
+        auto queryResult_1_step = queryResult_1->step();
+        
+        if(queryResult_1_step->getStatus() != sql::EvaluationStatus::T_DONE) {
+            LOG_FATAL("queryResult_1_step->getStatus(): ", queryResult_1_step->getStatus())
+            return -1;
+        }
+        queryResult_1->finalize();
+        auto sqlDatabase_1_table_1_entry_1_field_1 = 1;
+        auto sqlDatabase_1_table_1_entry_1_field_2 = "text_value";
+        auto sqlDatabase_1_table_1_entry_1_field_3 = 65456;
+        auto queryResult_2 = databaseHandle_1->query("INSERT INTO testing_table(text_no_null, int) VALUES ('database_value', 65456);");
+        auto queryResult_2_step = queryResult_2->step();
+        if(queryResult_2_step->getStatus() != sql::EvaluationStatus::T_DONE) {
+            LOG_FATAL("queryResult_2_step->getStatus(): ", queryResult_2_step->getStatus())
+            return -1;
+        }
+        queryResult_2->finalize();
+        auto sqlDatabase_1_table_1_entry_2_field_1 = 2;
+        auto sqlDatabase_1_table_1_entry_2_field_2 = "random_text_value";
+        auto sqlDatabase_1_table_1_entry_2_field_3 = 0;
+        auto queryResult_3 = databaseHandle_1->query("INSERT INTO testing_table(text_no_null, int) VALUES ('random_text_value', 0);");
+        auto queryResult_3_step = queryResult_3->step();
+        if(queryResult_3_step->getStatus() != sql::EvaluationStatus::T_DONE) {
+            LOG_FATAL("queryResult_3_step->getStatus(): ", queryResult_3_step->getStatus())
+            return -1;
+        }
+        queryResult_3->finalize();
+
+
+        LOG_INFO("SqlDatabase 2 - create")
+        auto sqlDatabase_2_publicMeta = endpoint::core::Buffer::from("test_sql_database_2_publicMeta");
+        auto sqlDatabase_2_privateMeta = endpoint::core::Buffer::from("test_sql_database_2_privateMeta");
+        auto sqlDatabase_2_Id = sqlApi.createSqlDatabase(
+            context_1_Id,
+            users_1_2,
+            users_1_2,
+            sqlDatabase_2_publicMeta,
+            sqlDatabase_2_privateMeta
+        );
+        LOG_INFO("SqlDatabase 3 - create")
+        auto sqlDatabase_3_publicMeta = endpoint::core::Buffer::from("test_sql_database_3_publicMeta");
+        auto sqlDatabase_3_privateMeta = endpoint::core::Buffer::from("test_sql_database_3_privateMeta");
+        auto sqlDatabase_3_Id = sqlApi.createSqlDatabase(
+            context_1_Id,
+            users_1_2,
+            users_1,
+            sqlDatabase_3_publicMeta,
+            sqlDatabase_3_privateMeta
+        );
         
         LOG_INFO("Message 1 - create")
         auto message_1_publicMeta = endpoint::core::Buffer::from("test_message_1_publicMeta");
@@ -360,6 +434,10 @@ int main(int argc, char** argv) {
         auto searchIndex_1_server_data = searchApi.getSearchIndex(searchIndex_1_Id);
         auto searchIndex_2_server_data = searchApi.getSearchIndex(searchIndex_2_Id);
         auto searchIndex_3_server_data = searchApi.getSearchIndex(searchIndex_3_Id);
+        LOG_INFO("SqlIndexes - server download")
+        auto sqlDatabase_1_server_data = sqlApi.getSqlDatabase(sqlDatabase_1_Id);
+        auto sqlDatabase_2_server_data = sqlApi.getSqlDatabase(sqlDatabase_2_Id);
+        auto sqlDatabase_3_server_data = sqlApi.getSqlDatabase(sqlDatabase_3_Id);
         LOG_INFO("Messages - server download")
         auto message_1_server_data = threadApi.getMessage(message_1_id);
         auto message_2_server_data = threadApi.getMessage(message_2_id);
@@ -651,6 +729,68 @@ int main(int argc, char** argv) {
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_3_privateMeta.stdString()) << std::endl;
+            // SqlDatabase 1
+            iniFileWriter << "[SqlDatabase_1]" << std::endl;
+            iniFileWriter << "sqlDatabaseId = " << sqlDatabase_1_server_data.sqlDatabaseId << std::endl;
+            iniFileWriter << "contextId = " << sqlDatabase_1_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << sqlDatabase_1_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << sqlDatabase_1_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << sqlDatabase_1_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << sqlDatabase_1_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << sqlDatabase_1_server_data.version << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(sqlDatabase_1_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(sqlDatabase_1_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << sqlDatabase_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << sqlDatabase_1_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(sqlDatabase_1_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(sqlDatabase_1_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(sqlDatabase_1_privateMeta.stdString()) << std::endl;
+
+            iniFileWriter << "table_1_name = " << sqlDatabase_1_table_1_name << std::endl;
+            iniFileWriter << "table_1_field_1 = " << sqlDatabase_1_table_1_field_1 << std::endl;
+            iniFileWriter << "table_1_field_1_type = " << sqlDatabase_1_table_1_field_1_type << std::endl;
+            iniFileWriter << "table_1_field_2 = " << sqlDatabase_1_table_1_field_2 << std::endl;
+            iniFileWriter << "table_1_field_2_type = " << sqlDatabase_1_table_1_field_2_type << std::endl;
+            iniFileWriter << "table_1_field_3 = " << sqlDatabase_1_table_1_field_3 << std::endl;
+            iniFileWriter << "table_1_field_3_type = " << sqlDatabase_1_table_1_field_3_type << std::endl;
+            iniFileWriter << "table_1_entry_1_field_1 = " << sqlDatabase_1_table_1_entry_1_field_1 << std::endl;
+            iniFileWriter << "table_1_entry_1_field_2 = " << sqlDatabase_1_table_1_entry_1_field_2 << std::endl;
+            iniFileWriter << "table_1_entry_1_field_3 = " << sqlDatabase_1_table_1_entry_1_field_3 << std::endl;
+            iniFileWriter << "table_1_entry_2_field_1 = " << sqlDatabase_1_table_1_entry_2_field_1 << std::endl;
+            iniFileWriter << "table_1_entry_2_field_2 = " << sqlDatabase_1_table_1_entry_2_field_2 << std::endl;
+            iniFileWriter << "table_1_entry_2_field_3 = " << sqlDatabase_1_table_1_entry_2_field_3 << std::endl;
+            // SqlDatabase 2
+            iniFileWriter << "[SqlDatabase_2]" << std::endl;
+            iniFileWriter << "sqlDatabaseId = " << sqlDatabase_2_server_data.sqlDatabaseId << std::endl;
+            iniFileWriter << "contextId = " << sqlDatabase_2_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << sqlDatabase_2_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << sqlDatabase_2_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << sqlDatabase_2_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << sqlDatabase_2_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << sqlDatabase_2_server_data.version << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(sqlDatabase_2_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(sqlDatabase_2_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << sqlDatabase_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << sqlDatabase_2_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(sqlDatabase_2_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(sqlDatabase_2_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(sqlDatabase_2_privateMeta.stdString()) << std::endl;
+            // SqlDatabase 3
+            iniFileWriter << "[SqlDatabase_3]" << std::endl;
+            iniFileWriter << "sqlDatabaseId = " << sqlDatabase_3_server_data.sqlDatabaseId << std::endl;
+            iniFileWriter << "contextId = " << sqlDatabase_3_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << sqlDatabase_3_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << sqlDatabase_3_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << sqlDatabase_3_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << sqlDatabase_3_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << sqlDatabase_3_server_data.version << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(sqlDatabase_3_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(sqlDatabase_3_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << sqlDatabase_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << sqlDatabase_3_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(sqlDatabase_3_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(sqlDatabase_3_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(sqlDatabase_3_privateMeta.stdString()) << std::endl;
             
             //Message_1
             iniFileWriter << "[Message_1]" << std::endl;
@@ -912,6 +1052,34 @@ int main(int argc, char** argv) {
             search_index_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(searchIndex_3_publicMeta.stdString()));
             search_index_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(searchIndex_3_privateMeta.stdString()));
             data->set("SearchIndex_3", search_index_3);
+            Poco::JSON::Object::Ptr sql_database_1 = new Poco::JSON::Object();
+            sql_database_1->set("server_data", (_serializer.serialize(sqlDatabase_1_server_data)));
+            sql_database_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(sqlDatabase_1_publicMeta.stdString()));
+            sql_database_1->set("uploaded_privateMeta_inBase64", utils::Base64::from(sqlDatabase_1_privateMeta.stdString()));
+            sql_database_1->set("table_1_name", sqlDatabase_1_table_1_name);
+            sql_database_1->set("table_1_field_1", sqlDatabase_1_table_1_field_1);
+            sql_database_1->set("table_1_field_1_type", static_cast<int64_t>(sqlDatabase_1_table_1_field_1_type));
+            sql_database_1->set("table_1_field_2", sqlDatabase_1_table_1_field_2);
+            sql_database_1->set("table_1_field_2_type", static_cast<int64_t>(sqlDatabase_1_table_1_field_2_type));
+            sql_database_1->set("table_1_field_3", sqlDatabase_1_table_1_field_3);
+            sql_database_1->set("table_1_field_3_type", static_cast<int64_t>(sqlDatabase_1_table_1_field_3_type));
+            sql_database_1->set("table_1_entry_1_field_1", sqlDatabase_1_table_1_entry_1_field_1);
+            sql_database_1->set("table_1_entry_1_field_2", sqlDatabase_1_table_1_entry_1_field_2);
+            sql_database_1->set("table_1_entry_1_field_3", sqlDatabase_1_table_1_entry_1_field_3);
+            sql_database_1->set("table_1_entry_2_field_1", sqlDatabase_1_table_1_entry_2_field_1);
+            sql_database_1->set("table_1_entry_2_field_2", sqlDatabase_1_table_1_entry_2_field_2);
+            sql_database_1->set("table_1_entry_2_field_3", sqlDatabase_1_table_1_entry_2_field_3);
+            data->set("SqlDatabase_1", sql_database_1);
+            Poco::JSON::Object::Ptr sql_database_2 = new Poco::JSON::Object();
+            sql_database_2->set("server_data", (_serializer.serialize(sqlDatabase_2_server_data)));
+            sql_database_2->set("uploaded_publicMeta_inBase64", utils::Base64::from(sqlDatabase_2_publicMeta.stdString()));
+            sql_database_2->set("uploaded_privateMeta_inBase64", utils::Base64::from(sqlDatabase_2_privateMeta.stdString()));
+            data->set("SqlDatabase_2", sql_database_2);
+            Poco::JSON::Object::Ptr sql_database_3 = new Poco::JSON::Object();
+            sql_database_3->set("server_data", (_serializer.serialize(sqlDatabase_2_server_data)));
+            sql_database_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(sqlDatabase_2_publicMeta.stdString()));
+            sql_database_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(sqlDatabase_2_privateMeta.stdString()));
+            data->set("SqlDatabase_3", sql_database_3);
             
 
             Poco::JSON::Object::Ptr data_message_1 = new Poco::JSON::Object();
