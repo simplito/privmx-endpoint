@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
+#include "privmx/utils/Utils.hpp"
 
 using namespace std;
 using namespace privmx::endpoint;
@@ -90,7 +91,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0x0001:
             switch (code_second_two_bytes) {
                 case 0x0001:
-                    throw network::NotConnectedException(e.what());
+                    throw core::NotConnectedException("Reason: " + privmx::utils::Hex::from(code_first_two_bytes) + "::" + privmx::utils::Hex::from(code_second_two_bytes));
                 case 0x0002:
                     throw network::WebsocketDisconnectedException(e.what());
                 case 0x0003:
@@ -119,6 +120,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                     throw internal::VarIsNotArrayException(e.what());
                 case 0x0005:
                     throw internal::InvalidVersionFormatException(e.what());
+                case 0x0006:
+                    throw internal::FailedToParseJSONString(e.what());
                 default:
                     throw internal::EndpointLibException(e.what());
             }
@@ -267,7 +270,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0x00A4:
             switch (code_second_two_bytes) {
                 case 0x0001:
-                    throw core::SessionExpiredException(e.what());
+                    throw core::NotConnectedException("Reason: " + privmx::utils::Hex::from(code_first_two_bytes) + "::" + privmx::utils::Hex::from(code_second_two_bytes));
                 case 0x0002:
                     throw network::WsConnectException(e.what());
                 case 0x0003:

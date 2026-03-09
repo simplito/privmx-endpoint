@@ -24,6 +24,7 @@ namespace utils {
 class Hex
 {
 public:
+    static std::string from(const int64_t& data);
     static std::string from(const std::string& data);
     static std::string toString(const std::string& hex_data);
     static bool is(const std::string& data);

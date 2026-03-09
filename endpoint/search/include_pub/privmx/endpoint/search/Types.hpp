@@ -33,8 +33,7 @@ enum IndexMode : int64_t
      * When searching, the full content field of the Document struct will be returned.
      * This mode requires more storage but simplifies content retrieval.
      */
-    WITH_CONTENT,
-
+    WITH_CONTENT = 0,
     /**
      * The Index only stores metadata and terms necessary for search, 
      * but discards the original document content.
@@ -42,7 +41,11 @@ enum IndexMode : int64_t
      * This mode saves storage space, assuming content is retrieved from an external source (e.g., store::StoreApi)
      * using the Document ID and name.
      */
-    WITHOUT_CONTENT
+    WITHOUT_CONTENT = 1,
+    /**
+     * IndexMode is UKNOWN or data is unreadable (check statusCode)
+     */
+    UNKNOWN = 2,
 };
 
 /**

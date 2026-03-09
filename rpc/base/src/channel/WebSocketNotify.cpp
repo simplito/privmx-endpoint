@@ -44,8 +44,6 @@ void WebSocketNotify::remove(Int32 wschannelid) {
     }
     if (_ws_channel_funcs.size() <= 0 && on_close_all_channels) {
         on_close_all_channels();
-    }
-    if (_notifier_active) {
         cancelNotifier();
     }
 }
@@ -67,17 +65,19 @@ void WebSocketNotify::notify(const string& data) {
 }
 
 void WebSocketNotify::queueForNotify(const string data) {
-    if (!_notifier_active) {
-        _notifier_active = true;
-        _notifier_cancellation_token = privmx::utils::CancellationToken::create();
-        _consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
-            while(!token->isCancelled()) {
-                notifier();
-            }
-            LOG_TRACE("WebSocketNotify::ConsumerThread exited");
-        }, _notifier_cancellation_token);
+    {
+        unique_lock<std::mutex> lock(_notifierMutex);
+        if (!_notifier_active) {
+            _notifier_active = true;
+            _notifier_cancellation_token = privmx::utils::CancellationToken::create();
+            _consumer_thread = std::thread([&](privmx::utils::CancellationToken::Ptr token){
+                while(!token->isCancelled()) {
+                    notifier();
+                }
+                LOG_TRACE("WebSocketNotify::ConsumerThread exited");
+            }, _notifier_cancellation_token);
+        }
     }
-
     Int32 wschannelid = ByteOrder::fromBigEndian(*((Int32*)data.data()));
     function<void(const string&)> callback;
     {
@@ -131,6 +131,10 @@ void WebSocketNotify::notifier() {
 }
 
 void WebSocketNotify::cancelNotifier() {
+    unique_lock<std::mutex> lock(_notifierMutex);
+    if(!_notifier_active) {
+        return;
+    }
     LOG_TRACE("WebSocketNotify::cancelNotifier")
     if(!_notifier_cancellation_token.isNull()) {
         _notifier_cancellation_token->cancel();

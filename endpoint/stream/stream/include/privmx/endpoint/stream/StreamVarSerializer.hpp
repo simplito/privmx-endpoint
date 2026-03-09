@@ -128,6 +128,9 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const st
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::KeyType>(const stream::KeyType& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::RecordingEncKey>(const stream::RecordingEncKey& val);
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx

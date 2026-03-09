@@ -62,8 +62,8 @@ std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const st
     return "|" + _selectorTypeNames.at(selectorType) + "=" + selectorId;
 }
 
-std::string SubscriberImpl::getInternalEventsSubscriptionQuery() {
-    return std::string(_moduleName) + "/internal";
+std::string SubscriberImpl::getInternalEventsSubscriptionQuery(const std::optional<std::string>& streamRoomId) {
+    return std::string(_moduleName) + "/internal" + (streamRoomId.has_value() ? getSelector(EventSelectorType::STREAMROOM_ID, streamRoomId.value()) : "");
 }
 
 std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
@@ -86,7 +86,8 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
 
 privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
-    for(auto& s: subscriptionQueries) {
+    for(auto s: subscriptionQueries) {
+        s.selectorsPushBack(core::SubscriptionQueryObj::QuerySelector{.selectorKey="containerType", .selectorValue=_typeFilterFlag});
         result.add(s.toSubscriptionQueryString());
     }
     return result;

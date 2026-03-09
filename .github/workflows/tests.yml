@@ -1,0 +1,49 @@
+name: Tests E2E
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, devel ]
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - name: Install CMake and Build Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake python3-pymongo python3-requests pipx
+        sudo pipx install conan
+        echo "/root/.local/bin" >> $GITHUB_PATH
+
+    - name: Setup conan
+      run: |
+        conan profile detect --force
+        conan remote add privmx ${{ vars.CONAN_ARTIFACTORY }}
+
+    - name: Conan Remote Auth
+      run: conan remote login -p "${{ secrets.CONAN_PASSWORD }}" privmx "${{ vars.CONAN_USER }}"
+
+    - name: Build library
+      run: ./build.sh
+
+    - name: Upload binaries
+      run: conan upload "*" --remote=privmx --confirm
+
+    - name: Start Backend Services
+      run: |
+        cd test
+        docker compose up -d
+        sleep 15
+
+    - name: Run tests
+      run: |
+        source build/build/Debug/generators/conanrun.sh
+        cd test
+        python3 e2e_runner.py ../build/test "test_env/create_dataset/Dataset/ServerData.ini" "test_env/create_dataset/Dataset"

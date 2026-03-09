@@ -45,6 +45,7 @@ struct VideoTrackInfo {
 struct PeerConnection {
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> pc;
     std::shared_ptr<PmxPeerConnectionObserver> observer;
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> mediaStream;
     std::map<std::string, AudioTrackInfo> audioTracks;
     std::map<std::string, VideoTrackInfo> videoTracks;
     std::shared_mutex trackMutex;
@@ -52,9 +53,17 @@ struct PeerConnection {
 };
 
 struct JanusConnection {
-    JanusConnection(std::shared_ptr<PeerConnection> peerConnection_, int64_t sessionId_, bool hasSubscriptions_) :
-        peerConnection(peerConnection_), sessionId(sessionId_), hasSubscriptions(hasSubscriptions_) {}
+    JanusConnection(
+        std::shared_ptr<PeerConnection> _peerConnection,
+        int64_t _sessionId, 
+        bool _hasSubscriptions
+    ) :
+        peerConnection(_peerConnection), 
+        sessionId(_sessionId), 
+        hasSubscriptions(_hasSubscriptions) 
+    {}
     std::shared_ptr<PeerConnection> peerConnection;
+    libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> mediaStream;
     int64_t sessionId;
     bool hasSubscriptions;
 };
@@ -68,6 +77,8 @@ public:
     void updateSessionForConnection(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId);
     bool hasConnection(const std::string& streamRoomId, ConnectionType connectionType);
     std::shared_ptr<JanusConnection> getConnectionWithSession(const std::string& streamRoomId, ConnectionType connectionType);
+    void closeConnection(const std::string& streamRoomId, ConnectionType connectionType);
+    void closeSession(const std::string& streamRoomId);
 private:
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> _createPeerConnection;
     std::function<void(const int64_t, const std::string&)> _onTrickle;

@@ -1,0 +1,139 @@
+[{
+	"_id": "Migration_000_Scheme",
+	"startDate": 1.772701235334E+12,
+	"endDate": 1.77270123549E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_049_AddCloudCollections",
+	"startDate": 1.772701235492E+12,
+	"endDate": 1.77270123571E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_050_AddTypeToCloudResources",
+	"startDate": 1.772701235715E+12,
+	"endDate": 1.772701235897E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_051_AddAclToContextUser",
+	"startDate": 1.7727012359E+12,
+	"endDate": 1.772701235903E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_052_ThreadTypes",
+	"startDate": 1.772701235904E+12,
+	"endDate": 1.772701235908E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_053_AddIndexes",
+	"startDate": 1.77270123591E+12,
+	"endDate": 1.772701235995E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_053_StoreTypes",
+	"startDate": 1.772701235998E+12,
+	"endDate": 1.772701236E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_054_Auth",
+	"startDate": 1.772701236002E+12,
+	"endDate": 1.772701236206E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_055_Context",
+	"startDate": 1.77270123621E+12,
+	"endDate": 1.772701236262E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_056_Solution",
+	"startDate": 1.77270123627E+12,
+	"endDate": 1.772701236306E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_057_RenameThreadCollection",
+	"startDate": 1.772701236311E+12,
+	"endDate": 1.772701236322E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_058_FileUpdates",
+	"startDate": 1.772701236326E+12,
+	"endDate": 1.77270123633E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_059_ApiKeyScopes",
+	"startDate": 1.772701236333E+12,
+	"endDate": 1.77270123634E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_060_IndexesForSortableFields",
+	"startDate": 1.772701236343E+12,
+	"endDate": 1.77270123645E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_061_IndexesForAuthorField",
+	"startDate": 1.772701236453E+12,
+	"endDate": 1.772701236475E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_062_IndexesForCreateDate",
+	"startDate": 1.772701236477E+12,
+	"endDate": 1.772701236495E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_063_AddDataToContainers",
+	"startDate": 1.772701236497E+12,
+	"endDate": 1.772701236505E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_064_ResourceId",
+	"startDate": 1.772701236508E+12,
+	"endDate": 1.772701236572E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_065_AddKvdbCollections",
+	"startDate": 1.772701236575E+12,
+	"endDate": 1.772701236637E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_066_MongoStorage",
+	"startDate": 1.772701236639E+12,
+	"endDate": 1.772701236673E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_067_AddNotificationCollection",
+	"startDate": 1.772701236675E+12,
+	"endDate": 1.772701236697E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_068_KnownPublicKeysCollection",
+	"startDate": 1.772701236699E+12,
+	"endDate": 1.772701236718E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_069_Indexes_for_session",
+	"startDate": 1.772701236721E+12,
+	"endDate": 1.772701236792E+12,
+	"status": "SUCCESS"
+}]
+
