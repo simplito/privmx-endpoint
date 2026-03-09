@@ -401,7 +401,7 @@ TEST_F(SearchTest, createSearchIndex) {
      
     EXPECT_THROW({
         searchApi->createSearchIndex(
-            reader->getString("Sql_1.indexId"),
+            reader->getString("SearchIndex_1.indexId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId=reader->getString("Login.user_1_id"),
                 .pubKey=reader->getString("Login.user_1_pubKey")
@@ -564,7 +564,7 @@ TEST_F(SearchTest, updateSearchIndex_incorrect_data) {
     // incorrect users
     EXPECT_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_1.indexId"),
+            reader->getString("SearchIndex_1.indexId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId=reader->getString("Login.user_1_id"),
                 .pubKey=reader->getString("Login.user_1_pubKey")
@@ -583,7 +583,7 @@ TEST_F(SearchTest, updateSearchIndex_incorrect_data) {
     // incorrect managers
     EXPECT_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_1.indexId"),
+            reader->getString("SearchIndex_1.indexId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId=reader->getString("Login.user_1_id"),
                 .pubKey=reader->getString("Login.user_1_pubKey")
@@ -602,7 +602,7 @@ TEST_F(SearchTest, updateSearchIndex_incorrect_data) {
     // no managers
     EXPECT_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_1.indexId"),
+            reader->getString("SearchIndex_1.indexId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId=reader->getString("Login.user_1_id"),
                 .pubKey=reader->getString("Login.user_1_pubKey")
@@ -618,7 +618,7 @@ TEST_F(SearchTest, updateSearchIndex_incorrect_data) {
     // incorrect version force false
     EXPECT_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_2.indexId"),
+            reader->getString("SearchIndex_2.indexId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId=reader->getString("Login.user_1_id"),
                 .pubKey=reader->getString("Login.user_1_pubKey")
@@ -641,7 +641,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     // new users
     EXPECT_NO_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_1.indexId"),
+            reader->getString("SearchIndex_1.indexId"),
             std::vector<core::UserWithPubKey>{
                 core::UserWithPubKey{
                     .userId=reader->getString("Login.user_1_id"),
@@ -667,7 +667,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     });
     EXPECT_NO_THROW({
         index = searchApi->getSearchIndex(
-            reader->getString("Sql_1.indexId")
+            reader->getString("SearchIndex_1.indexId")
         );
     });
     EXPECT_EQ(index.statusCode, 0);
@@ -687,7 +687,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     // new managers
     EXPECT_NO_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_1.indexId"),
+            reader->getString("SearchIndex_1.indexId"),
             std::vector<core::UserWithPubKey>{
                 core::UserWithPubKey{
                     .userId=reader->getString("Login.user_1_id"),
@@ -713,7 +713,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     });
     EXPECT_NO_THROW({
         index = searchApi->getSearchIndex(
-            reader->getString("Sql_1.indexId")
+            reader->getString("SearchIndex_1.indexId")
         );
     });
     EXPECT_EQ(index.statusCode, 0);
@@ -733,7 +733,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     // less users
     EXPECT_NO_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_2.indexId"),
+            reader->getString("SearchIndex_2.indexId"),
             std::vector<core::UserWithPubKey>{
                 core::UserWithPubKey{
                     .userId=reader->getString("Login.user_1_id"),
@@ -759,7 +759,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     });
     EXPECT_NO_THROW({
         index = searchApi->getSearchIndex(
-            reader->getString("Sql_2.indexId")
+            reader->getString("SearchIndex_2.indexId")
         );
     });
     EXPECT_EQ(index.statusCode, 0);
@@ -779,7 +779,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     // less managers
     EXPECT_NO_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_2.indexId"),
+            reader->getString("SearchIndex_2.indexId"),
             std::vector<core::UserWithPubKey>{
                 core::UserWithPubKey{
                     .userId=reader->getString("Login.user_1_id"),
@@ -801,7 +801,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     });
     EXPECT_NO_THROW({
         index = searchApi->getSearchIndex(
-            reader->getString("Sql_2.indexId")
+            reader->getString("SearchIndex_2.indexId")
         );
     });
     EXPECT_EQ(index.statusCode, 0);
@@ -820,7 +820,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     // incorrect version force true
     EXPECT_NO_THROW({
         searchApi->updateSearchIndex(
-            reader->getString("Sql_3.indexId"),
+            reader->getString("SearchIndex_3.indexId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId=reader->getString("Login.user_1_id"),
                 .pubKey=reader->getString("Login.user_1_pubKey")
@@ -838,7 +838,7 @@ TEST_F(SearchTest, updateSearchIndex_correct_data) {
     });
     EXPECT_NO_THROW({
         index = searchApi->getSearchIndex(
-            reader->getString("Sql_3.indexId")
+            reader->getString("SearchIndex_3.indexId")
         );
     });
     EXPECT_EQ(index.statusCode, 0);
@@ -866,12 +866,12 @@ TEST_F(SearchTest, deleteSearchIndex) {
     // as manager
      EXPECT_NO_THROW({
         searchApi->deleteSearchIndex(
-            reader->getString("Sql_1.indexId")
+            reader->getString("SearchIndex_1.indexId")
         );
     });
     EXPECT_THROW({
         searchApi->deleteSearchIndex(
-            reader->getString("Sql_1.indexId")
+            reader->getString("SearchIndex_1.indexId")
         );
     }, core::Exception);
     // as user
@@ -879,7 +879,7 @@ TEST_F(SearchTest, deleteSearchIndex) {
     connectAs(ConnectionType::User2);
     EXPECT_THROW({
         searchApi->deleteSearchIndex(
-            reader->getString("Sql_3.indexId")
+            reader->getString("SearchIndex_3.indexId")
         );
     }, core::Exception);
 }
