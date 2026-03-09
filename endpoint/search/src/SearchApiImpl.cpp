@@ -20,7 +20,6 @@ limitations under the License.
 
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
-#include "privmx/endpoint/search/VarDeserializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
