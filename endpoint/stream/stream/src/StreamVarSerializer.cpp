@@ -248,10 +248,10 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamJoinedEvent>(const str
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamNewStreamsEvent>(const stream::StreamNewStreamsEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<stream::RemoteStreamsChangedEvent>(const stream::RemoteStreamsChangedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "stream$StreamNewStreamsEvent");
+        obj->set("__type", "stream$RemoteStreamsChangedEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
