@@ -215,10 +215,10 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             event->data = eventData;
             _eventMiddleware->emitApiEvent(event);
         }
-        else if (type == "RemoteStreamsChanged") {
+        else if (type == "remoteStreamsChanged") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::NewStreams>(data);
             auto deserializer = std::make_shared<core::VarDeserializer>();
-            auto parsed = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "RemoteStreamsChanged");
+            auto parsed = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "remoteStreamsChanged");
 
             std::shared_ptr<RemoteStreamsChangedEvent> event(new RemoteStreamsChangedEvent());
             event->data = parsed;

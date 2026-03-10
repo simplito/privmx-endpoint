@@ -236,7 +236,7 @@ StreamLeftEvent Events::extractStreamLeftEvent(const core::EventHolder& handler)
 }
 
 bool Events::isRemoteStreamsChangedEvent(const core::EventHolder& handler) {
-    return handler.type() == "RemoteStreamsChanged";
+    return handler.type() == "remoteStreamsChanged";
 }
 
 RemoteStreamsChangedEvent Events::extractRemoteStreamsChangedEvent(const core::EventHolder& handler) {

@@ -310,7 +310,7 @@ struct RemoteStreamsChangedEvent : public core::Event {
     /**
      * Event constructor
      */
-    RemoteStreamsChangedEvent() : core::Event("RemoteStreamsChanged") {}
+    RemoteStreamsChangedEvent() : core::Event("remoteStreamsChanged") {}
 
     /**
      * Get Event as JSON string
