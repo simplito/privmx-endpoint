@@ -85,7 +85,7 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::RoomModel>(const stream::RoomModel& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamNewStreamsEvent>(const stream::StreamNewStreamsEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<stream::RemoteStreamsChangedEvent>(const stream::RemoteStreamsChangedEvent& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::NewStreams>(const stream::NewStreams& val);
