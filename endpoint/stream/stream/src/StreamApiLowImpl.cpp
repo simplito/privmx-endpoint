@@ -29,6 +29,7 @@ limitations under the License.
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/utils/Logger.hpp>
 
+#include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/Events.hpp"
@@ -132,59 +133,52 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if(!subscriptionQuery.has_value()) {
             return;
         }
+
         LOG_DEBUG("StreamApiLowImpl::processNotificationEvent Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
         if (type == "streamRoomCreated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
                 return;
             }
-            auto data = decryptAndConvertStreamRoomDataToStreamRoom(raw);
-            std::shared_ptr<StreamRoomCreatedEvent> event(new StreamRoomCreatedEvent());
-            event->channel = "stream";
-            event->data = data;
+            auto eventData = decryptAndConvertStreamRoomDataToStreamRoom(raw);
+            auto event = core::EventBuilder::buildEvent<StreamRoomCreatedEvent, StreamRoom>("stream", eventData, notification);
+
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "streamRoomUpdated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
                 return;
             }
-            auto streamRoom = decryptAndConvertStreamRoomDataToStreamRoom(raw);
-            std::shared_ptr<StreamRoomUpdatedEvent> event(new StreamRoomUpdatedEvent());
-            event->channel = "stream";
-            event->data = streamRoom;
+            auto eventData = decryptAndConvertStreamRoomDataToStreamRoom(raw);
+            auto event = core::EventBuilder::buildEvent<StreamRoomUpdatedEvent, StreamRoom>("stream", eventData, notification);
             _eventMiddleware->emitApiEvent(event);
             //update keys
-            auto streamRoomData = _streamRoomMap.get(streamRoom.streamRoomId);
+            auto streamRoomData = _streamRoomMap.get(eventData.streamRoomId);
             if(streamRoomData.has_value() && _streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
                 std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw, streamRoomData.value()->encryptionKeyId);
-                streamRoomData.value()->webRtc->updateKeys(streamRoom.streamRoomId, keys);
+                streamRoomData.value()->webRtc->updateKeys(eventData.streamRoomId, keys);
             }
         } else if (type == "streamRoomDeleted") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
                 return;
             }
-            std::shared_ptr<StreamRoomDeletedEvent> event(new StreamRoomDeletedEvent());
-            event->channel = "stream";
-            event->data = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
+            auto eventData = StreamRoomDeletedEventData{.streamRoomId=raw.streamRoomId()};
+            auto event = core::EventBuilder::buildEvent<StreamRoomDeletedEvent, StreamRoomDeletedEventData>("stream", eventData, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUpdated" ) {
             if(type == "streamPublished") {
                 auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamPublishedEventData>(data);
                 auto deserializer = std::make_shared<core::VarDeserializer>();
                 auto eventData = deserializer->deserialize<StreamPublishedEventData>(data, "StreamPublishedEventData");
-                std::shared_ptr<StreamPublishedEvent> event(new StreamPublishedEvent());
-                event->channel = "stream";
-                event->data = eventData;
+                auto event = core::EventBuilder::buildEvent<StreamPublishedEvent, StreamPublishedEventData>("stream", eventData, notification);
                 _eventMiddleware->emitApiEvent(event);
             } else
             if(type == "streamUpdated") {
                 auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUpdatedEventData>(data);
                 auto deserializer = std::make_shared<core::VarDeserializer>();
                 auto eventData = deserializer->deserialize<StreamUpdatedEventData>(data, "StreamUpdatedEventData");
-                std::shared_ptr<StreamUpdatedEvent> event(new StreamUpdatedEvent());
-                event->channel = "stream";
-                event->data = eventData;
+                auto event = core::EventBuilder::buildEvent<StreamUpdatedEvent, StreamUpdatedEventData>("stream", eventData, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
             else if(type == "streamJoined") {
@@ -192,36 +186,27 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
                 std::vector<int64_t> streamIds;
                 for(auto i : raw.streamIds()) streamIds.push_back(i);
                 auto eventData = StreamEventData{.streamRoomId=raw.streamRoomId(), .streamIds=streamIds, .userId=raw.userId()};
-
-                std::shared_ptr<StreamJoinedEvent> event(new StreamJoinedEvent());
-                event->channel = "stream";
-                event->data = eventData;
+                auto event = core::EventBuilder::buildEvent<StreamJoinedEvent, StreamEventData>("stream", eventData, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
         }
         else if(type == "streamLeft") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamLeftEventData>(data);
             auto eventData = StreamLeftEventData{.streamRoomId=raw.streamRoomId(), .streamId=raw.streamId(), .userId = raw.userId()};
-            std::shared_ptr<StreamLeftEvent> event(new StreamLeftEvent());
-            event->channel = "stream";
-            event->data = eventData;
+            auto event = core::EventBuilder::buildEvent<StreamLeftEvent, StreamLeftEventData>("stream", eventData, notification);
             _eventMiddleware->emitApiEvent(event);
         }
         else if (type == "streamUnpublished") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUnpublishedEventData>(data);
             auto eventData = StreamUnpublishedEventData{.streamRoomId=raw.streamRoomId(), .streamId=raw.streamId()};
-            std::shared_ptr<StreamUnpublishedEvent> event(new StreamUnpublishedEvent());
-            event->channel = "stream";
-            event->data = eventData;
+            auto event = core::EventBuilder::buildEvent<StreamUnpublishedEvent, StreamUnpublishedEventData>("stream", eventData, notification);
             _eventMiddleware->emitApiEvent(event);
         }
         else if (type == "remoteStreamsChanged") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::NewStreams>(data);
             auto deserializer = std::make_shared<core::VarDeserializer>();
-            auto parsed = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "remoteStreamsChanged");
-
-            std::shared_ptr<RemoteStreamsChangedEvent> event(new RemoteStreamsChangedEvent());
-            event->data = parsed;
+            auto eventData = deserializer->deserialize<NewStreams>(Poco::Dynamic::Var(data), "remoteStreamsChanged");
+            auto event = core::EventBuilder::buildEvent<RemoteStreamsChangedEvent, NewStreams>("stream", eventData, notification);
             _eventMiddleware->emitApiEvent(event);
         }
         else if (type == "streamsUpdated") {
@@ -249,10 +234,8 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
 
             // pass event to client
             auto deserializer = std::make_shared<core::VarDeserializer>();
-            auto parsed = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
-            std::shared_ptr<StreamsUpdatedEvent> event(new StreamsUpdatedEvent());
-            event->channel = "stream";
-            event->data = parsed;
+            auto eventData = deserializer->deserialize<StreamsUpdatedData>(Poco::Dynamic::Var(data), "StreamsUpdatedData");
+            auto event = core::EventBuilder::buildEvent<StreamsUpdatedEvent, StreamsUpdatedData>("stream", eventData, notification);
             _eventMiddleware->emitApiEvent(event);
         }
         else {
