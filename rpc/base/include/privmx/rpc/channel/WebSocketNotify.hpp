@@ -95,6 +95,7 @@ private:
     TSQueue<CallbackWithData> _notificationsQueue;
     std::atomic_bool _data_to_notify = false;
     std::atomic_bool _notifier_active = false;
+    std::mutex _notifierMutex;
     std::mutex _notifyMutex;
     std::condition_variable _notify_cv;
     std::thread _consumer_thread;

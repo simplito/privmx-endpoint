@@ -47,6 +47,7 @@ ENDPOINT_SERVER_TYPE(StreamRoomInfo)
     INT64_FIELD(version)
     STRING_FIELD(type)
     VAR_FIELD(policy)
+    BOOL_FIELD(closed)
 TYPE_END
 
 
@@ -60,6 +61,7 @@ ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
     LIST_FIELD(keys, core::server::KeyEntrySet)
     STRING_FIELD(privateMeta)
     STRING_FIELD(publicMeta)
+    STRING_FIELD(type)
     VAR_FIELD(policy)
 TYPE_END
 
@@ -173,6 +175,9 @@ ENDPOINT_SERVER_TYPE(StreamRoomLeaveModel)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamRoomRecordingModel)
+    STRING_FIELD(streamRoomId)
+TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamListModel)
     STRING_FIELD(streamRoomId)
@@ -248,6 +253,10 @@ ENDPOINT_SERVER_TYPE(NewStreams)
     LIST_FIELD(streams, StreamInfo)
 TYPE_END
 
+ENDPOINT_SERVER_TYPE(StreamSetNewOfferModel)
+    OBJECT_FIELD(offer, SessionDescription)
+    INT64_FIELD(sessionId)
+TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamAcceptOfferModel)
     OBJECT_FIELD(answer, SessionDescription)
@@ -314,6 +323,12 @@ TYPE_END
 ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
     STRING_FIELD(streamRoomId)
     INT64_FIELD(streamId)
+TYPE_END
+
+ENDPOINT_SERVER_TYPE(StreamLeftEventData)
+    STRING_FIELD(streamRoomId)
+    INT64_FIELD(streamId)
+    STRING_FIELD(userId)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(JanusEventData)
