@@ -91,7 +91,7 @@ void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model
 }
 
 void ServerApi::trickle(server::StreamTrickleModel model) {
-    requestWS("trickle", model);
+    requestWS("streamTrickle", model);
 }
 
 
