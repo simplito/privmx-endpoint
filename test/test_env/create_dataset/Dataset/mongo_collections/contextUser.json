@@ -1,0 +1,33 @@
+[{
+	"_id": "954bc634-77af-4615-9adb-dd604538dc82-user_1",
+	"created": 1.769766805324E+12,
+	"acl": "ALLOW ALL",
+	"userId": "user_1",
+	"contextId": "954bc634-77af-4615-9adb-dd604538dc82",
+	"userPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM"
+},
+{
+	"_id": "954bc634-77af-4615-9adb-dd604538dc82-user_2",
+	"created": 1.769766805861E+12,
+	"acl": "ALLOW ALL",
+	"userId": "user_2",
+	"contextId": "954bc634-77af-4615-9adb-dd604538dc82",
+	"userPubKey": "86uPnTCSQ2WzEoM1EYGWt2dEc1jmR51HrVw5wTydxiDyuHDMty"
+},
+{
+	"_id": "11a42585-3383-4c1c-a641-53960aa2eff4-user_1",
+	"created": 1.769766806395E+12,
+	"acl": "ALLOW ALL",
+	"userId": "user_1",
+	"contextId": "11a42585-3383-4c1c-a641-53960aa2eff4",
+	"userPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM"
+},
+{
+	"_id": "11a42585-3383-4c1c-a641-53960aa2eff4-user_2",
+	"created": 1.769766806926E+12,
+	"acl": "ALLOW ALL",
+	"userId": "user_2",
+	"contextId": "11a42585-3383-4c1c-a641-53960aa2eff4",
+	"userPubKey": "86uPnTCSQ2WzEoM1EYGWt2dEc1jmR51HrVw5wTydxiDyuHDMty"
+}]
+

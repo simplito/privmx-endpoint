@@ -76,6 +76,9 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoom>(const stream::St
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("policy", serialize(val.policy));
+    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("schemaVersion", serialize(val.schemaVersion));
+    obj->set("closed", serialize(val.closed));
     return obj;
 }
 
@@ -245,10 +248,10 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamJoinedEvent>(const str
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamNewStreamsEvent>(const stream::StreamNewStreamsEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<stream::RemoteStreamsChangedEvent>(const stream::RemoteStreamsChangedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "stream$StreamNewStreamsEvent");
+        obj->set("__type", "stream$RemoteStreamsChangedEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
@@ -265,6 +268,18 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEventData>(
     }
     obj->set("streamRoomId", serialize(val.streamRoomId));
     obj->set("streamId", serialize(val.streamId));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamLeftEventData>(const stream::StreamLeftEventData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamLeftEventData");
+    }
+    obj->set("streamRoomId", serialize(val.streamRoomId));
+    obj->set("streamId", serialize(val.streamId));
+    obj->set("userId", serialize(val.userId));
     return obj;
 }
 
@@ -487,5 +502,16 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const st
     if (val.streamTrackId.has_value()) {
         obj->set("streamTrackId", serialize(val.streamTrackId));
     }
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::RecordingEncKey>(const stream::RecordingEncKey& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$RecordingEncKey");
+    }
+    obj->set("id", serialize(val.id));
+    obj->set("key", serialize(val.key));
     return obj;
 }

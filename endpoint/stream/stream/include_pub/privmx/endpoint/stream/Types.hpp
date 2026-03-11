@@ -54,6 +54,7 @@ struct StreamRoom {
     core::ContainerPolicy policy;
     int64_t statusCode;
     int64_t schemaVersion;
+    bool closed;
 };
 
 struct Stream {
@@ -85,33 +86,6 @@ struct RoomModel {
 struct StreamSubscription {
     int64_t streamId;
     std::optional<std::string> streamTrackId;
-};
-
-class Frame {
-public:
-    virtual int ConvertToRGBA(uint8_t* dst_argb, int dst_stride_argb, int dest_width, int dest_height) = 0;
-};
-
-struct StreamSettings {
-    Settings settings;
-    std::optional<std::function<void(const std::string&)>> OnVideo;
-    std::optional<std::function<void(int64_t, int64_t, std::shared_ptr<Frame>, const std::string&)>> OnFrame;
-    std::optional<std::function<void(const std::string&)>> OnVideoRemove;
-    bool dropCorruptedFrames = true;
-};
-
-
-
-enum DeviceType {
-    Audio = 0,
-    Video = 1,
-    Desktop = 2
-};
-
-struct MediaDevice {
-    std::string name;
-    std::string id;
-    DeviceType type;
 };
 
 enum EventType: int64_t {
@@ -223,9 +197,20 @@ struct StreamsUpdatedDataInternal {
     std::vector<UpdatedStreamData> streams;
     std::optional<SdpWithTypeModel> jsep;
 };
+
 struct StreamsUpdatedData {
     std::string room;
     std::vector<UpdatedStreamData> streams;
+};
+
+enum struct StreamEncryptionMode {
+    SINGLE_KEY,
+    MULTIPLE_KEY,
+};
+
+struct RecordingEncKey {
+    core::Buffer id;
+    core::Buffer key;
 };
 
 }  // namespace stream

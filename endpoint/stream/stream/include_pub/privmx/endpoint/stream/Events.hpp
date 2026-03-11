@@ -45,6 +45,23 @@ struct StreamEventData {
     std::string userId;
 };
 
+struct StreamLeftEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Stream ID's
+     */
+    int64_t streamId;
+
+    /**
+     * UserID
+     */
+    std::string userId;
+};
+
 struct StreamUnpublishedEventData {
     /**
      * StreamRoom ID
@@ -281,19 +298,19 @@ struct StreamLeftEvent : public core::Event {
     /**
      * event data
      */
-    StreamEventData data;
+    StreamLeftEventData data;
 };
 
 
 /**
  * Holds data of event that arrives on StreamPublish - contains information about available publishers/streams one can subscribe to.
  */
-struct StreamNewStreamsEvent : public core::Event {
+struct RemoteStreamsChangedEvent : public core::Event {
 
     /**
      * Event constructor
      */
-    StreamNewStreamsEvent() : core::Event("StreamNewStreams") {}
+    RemoteStreamsChangedEvent() : core::Event("remoteStreamsChanged") {}
 
     /**
      * Get Event as JSON string
@@ -478,20 +495,20 @@ public:
     static StreamLeftEvent extractStreamLeftEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'StreamNewStreamsEvent'
+     * Checks whether event held in the 'EventHolder' is an 'RemoteStreamsChangedEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StreamNewStreamsEvent', else otherwise
+     * @return true for 'RemoteStreamsChangedEvent', else otherwise
      */
-    static bool isStreamNewStreamsEvent(const core::EventHolder& eventHolder);
+    static bool isRemoteStreamsChangedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'StreamNewStreamsEvent'
+     * Gets Event held in the 'EventHolder' as an 'RemoteStreamsChangedEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StreamNewStreamsEvent' object
+     * @return 'RemoteStreamsChangedEvent' object
      */
-    static StreamNewStreamsEvent extractStreamNewStreamsEvent(const core::EventHolder& eventHolder);
+    static RemoteStreamsChangedEvent extractRemoteStreamsChangedEvent(const core::EventHolder& eventHolder);
 
 
     /**

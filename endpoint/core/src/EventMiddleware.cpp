@@ -117,6 +117,9 @@ void EventMiddleware::emitNotificationEvent(const std::string& type, const Notif
             const std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>& listener
         ) {
             try {
+                if(notification.subscriptions.size() == 0) {
+                    LOG_WARN("Recived event have no subscriptions eventType: ", type);
+                }
                 for(auto& s : notification.subscriptions) {
                    if(std::find(listener.second.begin(), listener.second.end(), s) != listener.second.end()) {
                         if(listener.first) {
