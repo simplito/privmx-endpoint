@@ -171,13 +171,21 @@ string Utils::stringify(const Object::Ptr& obj, bool pretty) {
 }
 
 Poco::Dynamic::Var Utils::parseJson(const string& json) {
-    Parser parser;
-    return parser.parse(json);
+    try {
+        Parser parser;
+        return parser.parse(json);
+    } catch (const std::exception& e) {
+        throw FailedToParseJSONString("Recived exception: " + (std::string)e.what());
+    }
 }
 
 Object::Ptr Utils::parseJsonObject(const string& json) {
-    Parser parser;
-    return parser.parse(json).extract<Object::Ptr>();
+    try {
+        Parser parser;
+        return parser.parse(json).extract<Object::Ptr>();
+    } catch (const std::exception& e) {
+        throw FailedToParseJSONString("Recived exception: " + (std::string)e.what());
+    }
 }
 
 Array::Ptr Utils::jsonArrayDeepCopy(const Array::Ptr& arr) {

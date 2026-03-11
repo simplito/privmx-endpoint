@@ -59,6 +59,7 @@ std::string SearchApi::createSearchIndex(
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateEnum<IndexMode>(mode, {IndexMode::WITH_CONTENT, IndexMode::WITHOUT_CONTENT}, "field:mode");
     try {
         return impl->createSearchIndex(contextId, users, managers, publicMeta, privateMeta, mode, policies);
     } catch (const privmx::utils::PrivmxException& e) {
