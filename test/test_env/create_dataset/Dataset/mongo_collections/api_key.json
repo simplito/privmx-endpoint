@@ -1,7 +1,7 @@
 [{
-	"_id": "1a416c931c614083e795bab8305301c2",
-	"created": 1.772701236086E+12,
-	"user": "69a94634afed3f184fb60b5b",
+	"_id": "a99e9cecef959f96218c0add0aae02f3",
+	"created": 1.773239220754E+12,
+	"user": "69b17bb43f87452d255760c3",
 	"name": "MainKey",
 	"scopes": [
 		"context",
@@ -11,10 +11,11 @@
 		"inbox",
 		"store",
 		"thread",
-		"stream"
+		"stream",
+		"kvdb"
 	],
 	"enabled": true,
-	"secret": "a29c38a494e6641744b3ca2acadf9548",
+	"secret": "28930d01df1d2a9af45ad58877eca6a7",
 	"publicKey": null,
 	"masterKey": true
 }]
