@@ -58,8 +58,11 @@ if(PRIVMX_BUILD_WITH_WEBRTC)
     # Stream
     add_executable(test_e2e_StreamTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamTest.cpp)
     target_link_libraries(test_e2e_StreamTest privmx privmxendpointcore privmxendpointevent privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
-    endif()
+endif()
 
+# Search
+add_executable(test_e2e_SearchTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/SearchTest.cpp)
+target_link_libraries(test_e2e_SearchTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointsearch Poco::Foundation Poco::Util GTest::GTest GTest::Main)
 ## Docker Setup
 add_executable(test_env_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/test_env/utils/DockerSetupData.cpp)
-target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb Poco::Foundation Poco::Util)
+target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb privmxendpointsearch Poco::Foundation Poco::Util)
