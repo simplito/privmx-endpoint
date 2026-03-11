@@ -250,4 +250,3 @@ void StructValidator<PKIVerificationOptions>::validate(const PKIVerificationOpti
         throw InvalidParamsException(stack_trace + " | " + ("Invalid PKIVerificationOptions, bridgePubKey cannot be Null, when bridgeInstanceId is not Null"));
     }
 }
-
