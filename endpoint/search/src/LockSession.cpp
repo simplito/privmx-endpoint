@@ -1,4 +1,7 @@
 #include "privmx/endpoint/search/LockSession.hpp"
+#include "privmx/endpoint/search/SearchException.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include "privmx/endpoint/core/ConvertedExceptions.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
@@ -15,7 +18,7 @@ bool LockSession::lock(LockLevel level) {
     auto status = _lockSet.lock(level);
     if (status.save) {
         try {
-        setLockSetInKvdb();
+            setLockSetInKvdb();
         } catch (...) {
             return false;
         }
@@ -43,10 +46,13 @@ bool LockSession::checkReservedLock() {
 
 void LockSession::getLockSetFromKvdb() {
     try {
-        auto entry = _kvdbApi.getEntry(_kvdbId, _KVDB_PREFIX + _filepath);
-        _version = entry.version;
-        _lockSet.deserializeAndSetLockSet(entry.data);
-    } catch (...) {
+        privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _kvdbApi.getEntry(_kvdbId, _KVDB_PREFIX + _filepath);
+        if(kvdbEntry.statusCode != 0) {
+           throw MalformedFileLockException(); 
+        }
+        _version = kvdbEntry.version;
+        _lockSet.deserializeAndSetLockSet(kvdbEntry.data);
+    } catch (const privmx::endpoint::server::KvdbEntryDoesNotExistException& e) {
         _version = 0;
         _lockSet.setEmptyLockSet();
     }
