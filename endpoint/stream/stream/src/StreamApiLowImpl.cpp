@@ -1116,7 +1116,7 @@ void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
 void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamTrickleModel>();
     model.sessionId(sessionId);
-    model.candidate(utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(candidateAsJson)));
+    model.rtcCandidate(utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(candidateAsJson)));
     _serverApi->trickle(model);
 }
 

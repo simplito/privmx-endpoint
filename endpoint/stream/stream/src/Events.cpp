@@ -219,7 +219,7 @@ StreamUnpublishedEvent Events::extractStreamUnpublishedEvent(const core::EventHo
 }
 
 bool Events::isStreamLeftEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamCustom";
+    return handler.type() == "streamLeft";
 }
 
 StreamLeftEvent Events::extractStreamLeftEvent(const core::EventHolder& handler) {
