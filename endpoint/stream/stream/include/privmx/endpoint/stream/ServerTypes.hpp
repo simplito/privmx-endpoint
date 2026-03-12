@@ -281,7 +281,7 @@ ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
 TYPE_END
 
 ENDPOINT_SERVER_TYPE(StreamTrickleModel)
-    OBJECT_PTR_FIELD(candidate)
+    OBJECT_PTR_FIELD(rtcCandidate)
     INT64_FIELD(sessionId)
 TYPE_END
 
