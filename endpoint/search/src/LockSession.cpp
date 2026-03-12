@@ -41,6 +41,12 @@ bool LockSession::checkReservedLock() {
     return _lockSet.checkReservedLock();
 }
 
+void LockSession::destroyLock(kvdb::KvdbApi kvdbApi, std::string kvdbId, std::string filepath) {
+    if(kvdbApi.hasEntry(kvdbId, _KVDB_PREFIX + filepath)) {
+        kvdbApi.deleteEntry(kvdbId, _KVDB_PREFIX + filepath);
+    }
+}
+
 void LockSession::getLockSetFromKvdb() {
     try {
         auto entry = _kvdbApi.getEntry(_kvdbId, _KVDB_PREFIX + _filepath);
