@@ -151,12 +151,12 @@ std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
 }
 
 bool PrivmxFS::access(const std::string& path) {
-    LOG_TRACE("PrivmxFS::access - ", path)
+    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
     return _session->kvdbApi.hasEntry(_session->kvdbId, path);
 }
 
 void PrivmxFS::deleteFile(const std::string& path) {
-    LOG_TRACE("PrivmxFS::deleteFile - ", path)
+    LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ",_session->kvdbId)
     privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, path);
     std::string fileId = "";
     if(kvdbEntry.statusCode == 0) {
@@ -170,7 +170,7 @@ PrivmxFS::PrivmxFS(
 ) : _session(session) {}
 
 std::string PrivmxFS::getFileId(const std::string& name) {
-    LOG_TRACE("PrivmxFS::getFileId - ", name)
+    LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
     try {
         privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
         if(kvdbEntry.statusCode != 0) {
