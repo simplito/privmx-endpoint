@@ -1,5 +1,9 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
+#include "privmx/endpoint/search/SearchException.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include "privmx/endpoint/core/ConvertedExceptions.hpp"
+#include <privmx/utils/Logger.hpp>
 
 static const privmx::endpoint::core::Buffer META = privmx::endpoint::core::Buffer::from("{}");
 
@@ -65,6 +69,7 @@ PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string
         : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
 
 void PrivmxFile::open() {
+    LOG_TRACE("PrivmxFile::open - ", fileId)
     fh = session->storeApi.openFile(fileId);
 }
 
@@ -108,7 +113,11 @@ void PrivmxFile::sync() {
 }
 
 int64_t PrivmxFile::getFileSize() {
-    return session->storeApi.getFile(fileId).size;
+    auto fileInfo = session->storeApi.getFile(fileId);
+    if(fileInfo.statusCode != 0) {
+        throw MalformedInternalFileException(); 
+    }
+    return fileInfo.size;
 }
 
 bool PrivmxFile::lock(LockLevel level) {
@@ -142,11 +151,17 @@ std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
 }
 
 bool PrivmxFS::access(const std::string& path) {
+    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
     return _session->kvdbApi.hasEntry(_session->kvdbId, path);
 }
 
 void PrivmxFS::deleteFile(const std::string& path) {
-    std::string fileId = _session->kvdbApi.getEntry(_session->kvdbId, path).data.stdString();
+    LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ",_session->kvdbId)
+    privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, path);
+    std::string fileId = "";
+    if(kvdbEntry.statusCode == 0) {
+        fileId = kvdbEntry.data.stdString();
+    }
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
 }
@@ -155,10 +170,16 @@ PrivmxFS::PrivmxFS(
 ) : _session(session) {}
 
 std::string PrivmxFS::getFileId(const std::string& name) {
-    if (_session->kvdbApi.hasEntry(_session->kvdbId, name)) {
-        std::string fileId = _session->kvdbApi.getEntry(_session->kvdbId, name).data.stdString();
+    LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
+    try {
+        privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
+        if(kvdbEntry.statusCode != 0) {
+           throw MalformedInternalFileIdException(); 
+        }
+        std::string fileId = kvdbEntry.data.stdString();
         return fileId;
-    } else {
+    } catch (const privmx::endpoint::server::KvdbEntryDoesNotExistException& e) {
+        LOG_DEBUG("PrivmxFS::getFileId file not found, creating new file - ", name)
         int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
         std::string fileId = _session->storeApi.closeFile(fh);
         _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
@@ -194,7 +215,8 @@ PrivmxExtFS::ParsedPath PrivmxExtFS::parsePath(const std::string& path2) {
     path.parse(path2);
     if (path[0] == "pmx") {
         ParsedPath parsed = ParsedPath {
-            .sessionId = path[1]
+            .sessionId = path[1],
+            .path=std::string()
         };
         path.popFrontDirectory();
         path.popFrontDirectory();
