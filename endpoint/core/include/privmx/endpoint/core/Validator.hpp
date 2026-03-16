@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/CoreException.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -81,6 +82,17 @@ public:
     static void validateSortOrder(const std::string& value, const std::string& stack_trace = "");
     static void validateLastId(const std::string& value, const std::string& stack_trace = "");
     static void validateEnumParamString(const std::string& value, const std::vector<std::string>& allowed_values, const std::string& param_string_name = "param string", const std::string& stack_trace = "");
+    template<typename T>
+    static void validateEnum(const T& value, const std::vector<T>& allowed_values, const std::string& stack_trace = "") {
+        if(std::find(allowed_values.begin(), allowed_values.end(), value) == allowed_values.end()) {
+            std::string error_message = "Invalid " + std::to_string((int64_t)value) + ", allowed values are:";
+            for(const T& a : allowed_values) {
+                error_message += " " + std::to_string((int64_t)a);
+                }
+            error_message += ". Received " + std::to_string(value) +"'";
+            throw InvalidParamsException(stack_trace + " | " + error_message);
+        }
+    }
 
     static void validateId(const std::string& value, const std::string& stack_trace = "");
     static void validatePrivKeyWIF(const std::string& value, const std::string& stack_trace = "");
