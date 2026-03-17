@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::stream; 
 
@@ -20,9 +21,11 @@ PeerConnectionManager::PeerConnectionManager(
 ) : _createPeerConnection(createPeerConnection), _onTrickle(onTrickle) {}
 
 void PeerConnectionManager::initialize(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId) {
+    LOG_DEBUG("PeerConnectionManager::initialize")
     if(_connections.has(streamRoomId)) {
         auto roomConnections = _connections.get(streamRoomId).value();
         if(roomConnections[connectionType]) {
+            return;
             throw PeerConnectionAlreadyInitializedException();
         }
     }
@@ -66,7 +69,25 @@ bool PeerConnectionManager::hasConnection(const std::string& streamRoomId, Conne
 
 std::shared_ptr<JanusConnection> PeerConnectionManager::getConnectionWithSession(const std::string& streamRoomId, ConnectionType connectionType) {
     if(!_connections.has(streamRoomId) || !_connections.get(streamRoomId).value()[connectionType]) {
+        LOG_TRACE("PeerConnectionManager::getConnectionWithSession ", "streamRoom - require initialize")
         initialize(streamRoomId, connectionType);
     }
+    LOG_TRACE("PeerConnectionManager::getConnectionWithSession ", "get form map")
     return _connections.get(streamRoomId).value()[connectionType];
+}
+
+void PeerConnectionManager::closeConnection(const std::string& streamRoomId, ConnectionType connectionType) {
+    if(!_connections.has(streamRoomId) || !_connections.get(streamRoomId).value()[connectionType]) {
+        return;
+    }
+    auto jc = _connections.get(streamRoomId).value()[connectionType];
+    jc->peerConnection->audioTracks.clear();
+    jc->peerConnection->videoTracks.clear();
+    jc->peerConnection->pc->Close();
+    jc->peerConnection->observer.reset();
+    _connections.get(streamRoomId).value().erase(connectionType);
+}
+
+void PeerConnectionManager::closeSession(const std::string& streamRoomId) {
+    _connections.erase(streamRoomId);
 }

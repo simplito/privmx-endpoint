@@ -8,7 +8,7 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include "privmx/utils/Debug.hpp"
+#include "privmx/utils/Logger.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 
@@ -55,8 +55,11 @@ server::StreamPublishResult ServerApi::streamUpdate(server::StreamUpdateModel mo
 }
 
 void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
-    PRIVMX_DEBUG("ServerApi", "requestWS", "model:\n" + privmx::utils::Utils::stringifyVar(model));
     requestWS("streamAcceptOffer", model);
+}
+
+void ServerApi::streamSetNewOffer(server::StreamSetNewOfferModel model) {
+    requestWS("streamSetNewOffer", model);
 }
 
 void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
@@ -83,27 +86,31 @@ void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model)  {
     requestWS("streamRoomLeave", model);
 }
 
+void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model) {
+    requestWS("streamRoomEnableRecording", model);
+}
+
 void ServerApi::trickle(server::StreamTrickleModel model) {
-    requestWS("trickle", model);
+    requestWS("streamTrickle", model);
 }
 
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
-    PRIVMX_DEBUG("ServerApi", "request", method+ ":class");
+    LOG_TRACE("ServerApi::request ", method+ ":class");
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params));
 }
 
 Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
-    PRIVMX_DEBUG("ServerApi", "request", method+ ":var");
+    LOG_TRACE("ServerApi::request ", method+ ":var");
     return _gateway->request("stream." + method, params);
 }
 
 template<class T> T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
-    PRIVMX_DEBUG("ServerApi", "requestWS", method+ ":class");
+    LOG_TRACE("ServerApi::requestWS ", method+ ":class");
     return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET}));
 }
 
 Poco::Dynamic::Var ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
-    PRIVMX_DEBUG("ServerApi", "requestWS", method+ ":var");
+    LOG_TRACE("ServerApi::requestWS ", method+ ":var");
     return _gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET});
 }

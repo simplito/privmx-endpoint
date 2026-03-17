@@ -55,6 +55,12 @@ inline string encodeInline(const string& data_to_encode, int line_length = 0) {
     return encoded_data_stream.str();
 }
 
+std::string Hex::from(const int64_t& data) {
+    std::stringstream stream;
+    stream << std::hex << data;
+    return "0x"+stream.str();
+}
+
 string Hex::from(const string& data) {
     return encodeInline<HexBinaryEncoder>(data);
 }
@@ -165,13 +171,21 @@ string Utils::stringify(const Object::Ptr& obj, bool pretty) {
 }
 
 Poco::Dynamic::Var Utils::parseJson(const string& json) {
-    Parser parser;
-    return parser.parse(json);
+    try {
+        Parser parser;
+        return parser.parse(json);
+    } catch (const std::exception& e) {
+        throw FailedToParseJSONString("Recived exception: " + (std::string)e.what());
+    }
 }
 
 Object::Ptr Utils::parseJsonObject(const string& json) {
-    Parser parser;
-    return parser.parse(json).extract<Object::Ptr>();
+    try {
+        Parser parser;
+        return parser.parse(json).extract<Object::Ptr>();
+    } catch (const std::exception& e) {
+        throw FailedToParseJSONString("Recived exception: " + (std::string)e.what());
+    }
 }
 
 Array::Ptr Utils::jsonArrayDeepCopy(const Array::Ptr& arr) {

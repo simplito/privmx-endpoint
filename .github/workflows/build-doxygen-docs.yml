@@ -1,0 +1,39 @@
+name: Build Doxygen Docs
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  doxygen:
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/simplito/doxygen-docker:v1.16.1
+      credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set environment variable
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          echo "PRIVMX_ENDPOINT_VERSION=$(git describe --tags --always --dirty)" >> $GITHUB_ENV
+
+      - name: Generate docs
+        run: |
+          cd docs
+          doxygen Doxyfile
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs/html/

@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.10.2)
 add_definitions(
     -Wfatal-errors
-    )
+    -Werror=return-type
+)
 project(privmxlib)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -g -O1")
 # add_compile_options(-fsanitize=thread -O1)
@@ -14,6 +15,7 @@ option(PRIVMX_BUILD_BENCHMARK "Building privmxBenchmark client" OFF)
 option(PRIVMX_CLI_IMPORTED_LIBRARIES "Using CLI imported libraries" OFF)
 option(PRIVMX_IMPORTED_LIBRARIES "Using imported libraries" OFF)
 option(PRIVMX_ENABLE_TESTS "Enable tests" OFF)
+option(PRIVMX_ENABLE_TESTS_E2E "Enable tests e2e" OFF)
 option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" ON)
 option(PRIVMX_BUILD_DEBUG "Enable extra debug data for lib" OFF)
 
@@ -173,4 +175,11 @@ endif()
 if(PRIVMX_BUILD_DEBUG_APPS)
     add_subdirectory(__DEBUG)
     set_target_properties(privmx PROPERTIES COMPILE_DEFINITIONS "MINIMAL_BUILD")
+endif()
+
+if(PRIVMX_ENABLE_TESTS)
+    message(STATUS "Build enpoint - PRIVMX_ENABLE_TESTS_E2E=${PRIVMX_ENABLE_TESTS_E2E}")
+    if(PRIVMX_ENABLE_TESTS_E2E)
+        add_subdirectory(test)
+    endif()
 endif()

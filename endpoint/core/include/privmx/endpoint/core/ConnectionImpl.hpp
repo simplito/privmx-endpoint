@@ -125,6 +125,7 @@ private:
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
+    int _gatewayNotificationEventListener, _gatewayConnectedEventListener, _gatewayDisconnectedEventListener, _gatewaySessionLostEventListener;
     int _notificationListenerId;
 };
 

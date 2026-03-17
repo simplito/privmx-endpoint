@@ -39,6 +39,8 @@ public:
     server::StreamPublishResult streamUpdate(server::StreamUpdateModel model);
 
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
+    void streamSetNewOffer(server::StreamSetNewOfferModel model);
+
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
 
@@ -47,6 +49,7 @@ public:
     server::StreamsSubscribeResult streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model);
     void streamRoomJoin(server::StreamRoomJoinModel model);
     void streamRoomLeave(server::StreamRoomLeaveModel model);
+    void streamRoomEnableRecording(server::StreamRoomRecordingModel model);
 
     void trickle(server::StreamTrickleModel model);
     bool isConnected() {return _gateway ? _gateway->isConnected() : false;}

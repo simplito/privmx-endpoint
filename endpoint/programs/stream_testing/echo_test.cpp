@@ -16,7 +16,12 @@
 using namespace std;
 using namespace privmx::endpoint;
 
-
+class OnTrackImpl : public stream::OnTrackInterface {
+public:
+    OnTrackImpl() = default;
+    virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {}
+    virtual void OnData(std::shared_ptr<stream::Data> data) override {}
+};
 
 static vector<string_view> getParamsList(int argc, char* argv[]) {
     vector<string_view> args(argv + 1, argv + argc);
@@ -25,15 +30,14 @@ static vector<string_view> getParamsList(int argc, char* argv[]) {
 
 int main(int argc, char** argv) {
     auto params = getParamsList(argc, argv);
-    if(params.size() != 5) {
-        std::cout << "Invalid params required params are 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId', 'StreamRoomId'" << std::endl;
+    if(params.size() != 4) {
+        std::cout << "Invalid params. Required params are: 'PrivKey', 'SolutionId', 'BridgeUrl', 'ContextId'" << std::endl;
         return -1;
     }
     std::string privKey = {params[0].begin(),  params[0].end()};
     std::string solutionId = {params[1].begin(),  params[1].end()};
     std::string bridgeUrl = {params[2].begin(),  params[2].end()};
     std::string contextId = {params[3].begin(),  params[3].end()};
-    std::string streamRoomId = {params[4].begin(),  params[4].end()};
     try {
         core::Connection connection = core::Connection::connect(
             privKey, 
@@ -42,12 +46,20 @@ int main(int argc, char** argv) {
         );    
         event::EventApi eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+        std::string streamRoomId;
+        auto contextUsersInfo = connection.listContextUsers(contextId, {0, 100, "asc"});
+        std::vector<core::UserWithPubKey> usersWithPubKey = {};
+        for(const auto& userInfo : contextUsersInfo.readItems) {
+            usersWithPubKey.push_back(userInfo.user);
+        }
+        streamRoomId = streamApi.createStreamRoom(contextId, usersWithPubKey, usersWithPubKey, core::Buffer::from(""), core::Buffer::from(""), std::nullopt);
+        std::this_thread::sleep_for(std::chrono::seconds(2));
         streamApi.joinStreamRoom(streamRoomId);
         auto streamId_1 = streamApi.createStream(streamRoomId);
-        auto mediaDevices = streamApi.getMediaDevices();
+        auto mediaDevices = streamApi.getAudioDevices();
         for(const auto& mediaDevice: mediaDevices) {
             if(mediaDevice.type == stream::DeviceType::Audio) {
-                streamApi.addTrack(streamId_1, mediaDevice);
+                streamApi.addTrack(streamId_1, mediaDevice, {});
                 break;
             }
         }
@@ -56,19 +68,13 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto streamlist = streamApi.listStreams(streamRoomId);
         std::vector<stream::StreamSubscription> streamsId;
+        auto onTrack = std::make_shared<OnTrackImpl>();
         for(int i = 0; i < streamlist.size(); i++) {
-            streamsId.push_back(stream::StreamSubscription{streamlist[i].streamId, std::nullopt});
+            streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
         }
-        stream::StreamSettings ssettings;
-        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId, ssettings);
+        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId);
+        std::this_thread::sleep_for(std::chrono::seconds(60));
 
-        std::this_thread::sleep_for(std::chrono::seconds(120));
-        streamApi.unpublishStream(streamId_1);
-        streamApi.unsubscribeFromRemoteStreams(streamRoomId, streamsId);
-        streamApi.leaveStreamRoom(streamRoomId);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-       
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
     } catch (const privmx::utils::PrivmxException& e) {

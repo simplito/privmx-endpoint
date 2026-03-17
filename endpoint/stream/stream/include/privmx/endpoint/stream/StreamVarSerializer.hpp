@@ -85,7 +85,7 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::RoomModel>(const stream::RoomModel& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamNewStreamsEvent>(const stream::StreamNewStreamsEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<stream::RemoteStreamsChangedEvent>(const stream::RemoteStreamsChangedEvent& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::NewStreams>(const stream::NewStreams& val);
@@ -128,6 +128,9 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const st
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::KeyType>(const stream::KeyType& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::RecordingEncKey>(const stream::RecordingEncKey& val);
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
