@@ -959,7 +959,6 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT) {
         queryResult = handle->query(
             sqlQuery
         );
-        std::cout << sqlQuery << std::endl;
         queryResult->bindText(1, "string_text_insert");
         EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
         queryResult->finalize();
@@ -994,7 +993,6 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT) {
 
 TEST_F(SqlTest, sql_transaction) {
     auto handle = sqlApi->openSqlDatabase(reader->getString("SqlDatabase_1.sqlDatabaseId"));
-    auto transactionHandle = handle->beginTransaction();
     std::shared_ptr<sql::Query> queryResult;
     std::shared_ptr<sql::Row> row;
     std::string sqlQuery;
@@ -1013,12 +1011,12 @@ TEST_F(SqlTest, sql_transaction) {
     EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
     queryResult->finalize();
 
+    auto transactionHandle = handle->beginTransaction();
     sqlQuery = "INSERT INTO "+reader->getString("SqlDatabase_1.table_1_name")+"("+reader->getString("SqlDatabase_1.table_1_field_2")+", "+reader->getString("SqlDatabase_1.table_1_field_3")+") VALUES (?, 30);";
     EXPECT_NO_THROW({
         queryResult = transactionHandle->query(
             sqlQuery
         );
-        std::cout << sqlQuery << std::endl;
         queryResult->bindText(1, "string_text_insert");
         EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
         queryResult->finalize();
@@ -1064,7 +1062,7 @@ TEST_F(SqlTest, sql_transaction) {
     });
     EXPECT_NO_THROW({
         row = queryResult->step();
-    }); 
+    });
     EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
     queryResult->finalize();
 }
@@ -1106,7 +1104,6 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT_multiple_users) {
             queryResult = handle->query(
                 sqlQuery
             );
-            std::cout << sqlQuery << std::endl;
             EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
             queryResult->finalize();
         });
