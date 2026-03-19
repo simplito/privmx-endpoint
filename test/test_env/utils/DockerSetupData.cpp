@@ -286,8 +286,9 @@ int main(int argc, char** argv) {
         auto queryResult_1 = databaseHandle_1->query("CREATE TABLE testing_table (id INTEGER PRIMARY KEY AUTOINCREMENT, text_no_null TEXT NOT NULL UNIQUE, int INTEGER);");
         auto queryResult_1_step = queryResult_1->step();
         
-        if(queryResult_1_step->getStatus() != sql::EvaluationStatus::T_DONE) {
-            LOG_FATAL("queryResult_1_step->getStatus(): ", queryResult_1_step->getStatus())
+        if(queryResult_1_step->getStatus().code != sql::EvaluationStatusCode::T_DONE) {
+            
+            LOG_FATAL("queryResult_1_step->getStatus() code: ", queryResult_1_step->getStatus().code, " | description: ", queryResult_1_step->getStatus().description)
             return -1;
         }
         queryResult_1->finalize();
@@ -296,8 +297,8 @@ int main(int argc, char** argv) {
         auto sqlDatabase_1_table_1_entry_1_field_3 = 65456;
         auto queryResult_2 = databaseHandle_1->query("INSERT INTO testing_table(text_no_null, int) VALUES ('database_value', 65456);");
         auto queryResult_2_step = queryResult_2->step();
-        if(queryResult_2_step->getStatus() != sql::EvaluationStatus::T_DONE) {
-            LOG_FATAL("queryResult_2_step->getStatus(): ", queryResult_2_step->getStatus())
+        if(queryResult_2_step->getStatus().code != sql::EvaluationStatusCode::T_DONE) {
+            LOG_FATAL("queryResult_2_step->getStatus() code: ", queryResult_2_step->getStatus().code, " | description: ", queryResult_2_step->getStatus().description)
             return -1;
         }
         queryResult_2->finalize();
@@ -306,8 +307,8 @@ int main(int argc, char** argv) {
         auto sqlDatabase_1_table_1_entry_2_field_3 = 0;
         auto queryResult_3 = databaseHandle_1->query("INSERT INTO testing_table(text_no_null, int) VALUES ('random_text_value', 0);");
         auto queryResult_3_step = queryResult_3->step();
-        if(queryResult_3_step->getStatus() != sql::EvaluationStatus::T_DONE) {
-            LOG_FATAL("queryResult_3_step->getStatus(): ", queryResult_3_step->getStatus())
+        if(queryResult_3_step->getStatus().code != sql::EvaluationStatusCode::T_DONE) {
+            LOG_FATAL("queryResult_3_step->getStatus() code: ", queryResult_3_step->getStatus().code, " | description: ", queryResult_3_step->getStatus().description)
             return -1;
         }
         queryResult_3->finalize();

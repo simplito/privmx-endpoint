@@ -902,14 +902,14 @@ TEST_F(SqlTest, sql_request_CREATE_TABLE) {
         queryResult = handle->query(
             "CREATE TABLE tt_table (id INTEGER PRIMARY KEY AUTOINCREMENT, text_no_null TEXT NOT NULL UNIQUE, int INTEGER, date TEXT DEFAULT (datetime('now')));"
         );
-        EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
+        EXPECT_EQ(queryResult->step()->getStatus().code, sql::EvaluationStatusCode::T_DONE);
         queryResult->finalize();
     });
     EXPECT_NO_THROW({
         queryResult = handle->query(
             "CREATE TABLE tt_table (id INTEGER PRIMARY KEY AUTOINCREMENT, text_no_null TEXT NOT NULL UNIQUE, int INTEGER, date TEXT DEFAULT (datetime('now')));"
         );
-        EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_ERROR);
+        EXPECT_EQ(queryResult->step()->getStatus().code, sql::EvaluationStatusCode::T_MISUSE);
         queryResult->finalize();
     });
     std::string sqlQuery = "SELECT * FROM tt_table";
@@ -917,7 +917,7 @@ TEST_F(SqlTest, sql_request_CREATE_TABLE) {
         queryResult = handle->query(
             sqlQuery
         );
-        EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
+        EXPECT_EQ(queryResult->step()->getStatus().code, sql::EvaluationStatusCode::T_DONE);
         queryResult->finalize();
     });
 }
@@ -939,8 +939,8 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_ROW);
-    if(row->getStatus() != sql::EvaluationStatus::T_ROW) return;
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_ROW);
+    if(row->getStatus().code != sql::EvaluationStatusCode::T_ROW) return;
     EXPECT_EQ(row->getColumnCount(), 3);
     if(row->getColumnCount() != 3) return;
     EXPECT_EQ(static_cast<int64_t>(row->getColumn(0)->getType()), reader->getInt64("SqlDatabase_1.table_1_field_1_type"));
@@ -952,7 +952,7 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_DONE);
     queryResult->finalize();
     sqlQuery = "INSERT INTO "+reader->getString("SqlDatabase_1.table_1_name")+"("+reader->getString("SqlDatabase_1.table_1_field_2")+", "+reader->getString("SqlDatabase_1.table_1_field_3")+") VALUES (?, 30);";
     EXPECT_NO_THROW({
@@ -960,7 +960,7 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT) {
             sqlQuery
         );
         queryResult->bindText(1, "string_text_insert");
-        EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
+        EXPECT_EQ(queryResult->step()->getStatus().code, sql::EvaluationStatusCode::T_DONE);
         queryResult->finalize();
     });
     sqlQuery = 
@@ -974,8 +974,8 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_ROW);
-    if(row->getStatus() != sql::EvaluationStatus::T_ROW) return;
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_ROW);
+    if(row->getStatus().code != sql::EvaluationStatusCode::T_ROW) return;
     EXPECT_EQ(row->getColumnCount(), 3);
     if(row->getColumnCount() != 3) return;
     EXPECT_EQ(static_cast<int64_t>(row->getColumn(0)->getType()), reader->getInt64("SqlDatabase_1.table_1_field_1_type"));
@@ -987,7 +987,7 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_DONE);
     queryResult->finalize();
 }
 
@@ -1008,7 +1008,7 @@ TEST_F(SqlTest, sql_transaction) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_DONE);
     queryResult->finalize();
 
     auto transactionHandle = handle->beginTransaction();
@@ -1018,7 +1018,7 @@ TEST_F(SqlTest, sql_transaction) {
             sqlQuery
         );
         queryResult->bindText(1, "string_text_insert");
-        EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
+        EXPECT_EQ(queryResult->step()->getStatus().code, sql::EvaluationStatusCode::T_DONE);
         queryResult->finalize();
     });
     sqlQuery = 
@@ -1032,8 +1032,8 @@ TEST_F(SqlTest, sql_transaction) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_ROW);
-    if(row->getStatus() != sql::EvaluationStatus::T_ROW) return;
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_ROW);
+    if(row->getStatus().code != sql::EvaluationStatusCode::T_ROW) return;
     EXPECT_EQ(row->getColumnCount(), 3);
     if(row->getColumnCount() != 3) return;
     EXPECT_EQ(static_cast<int64_t>(row->getColumn(0)->getType()), reader->getInt64("SqlDatabase_1.table_1_field_1_type"));
@@ -1045,7 +1045,7 @@ TEST_F(SqlTest, sql_transaction) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_DONE);
     queryResult->finalize();
 
     EXPECT_NO_THROW({
@@ -1063,7 +1063,7 @@ TEST_F(SqlTest, sql_transaction) {
     EXPECT_NO_THROW({
         row = queryResult->step();
     });
-    EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
+    EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_DONE);
     queryResult->finalize();
 }
 
@@ -1098,18 +1098,35 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT_multiple_users) {
     auto fun = [&](std::shared_ptr<sql::DatabaseHandle> handle, std::string insertSting) {
         std::shared_ptr<sql::Query> queryResult;
         std::shared_ptr<sql::Row> row;
+        sql::EvaluationStatus status;
         std::string sqlQuery;
         sqlQuery = "INSERT INTO "+reader->getString("SqlDatabase_1.table_1_name")+"("+reader->getString("SqlDatabase_1.table_1_field_2")+", "+reader->getString("SqlDatabase_1.table_1_field_3")+") VALUES ('"+insertSting+"', 30);";
+        status = sql::EvaluationStatus{sql::EvaluationStatusCode::T_BUSY, std::string()};
         EXPECT_NO_THROW({
-            queryResult = handle->query(
-                sqlQuery
-            );
-            EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
+            while (status.code == sql::EvaluationStatusCode::T_BUSY) {
+                queryResult = handle->query(
+                    sqlQuery
+                );
+                status = queryResult->step()->getStatus();
+                if(status.code == sql::EvaluationStatusCode::T_BUSY) queryResult->finalize();
+            }
+            EXPECT_EQ(status.code, sql::EvaluationStatusCode::T_DONE);
             queryResult->finalize();
         });
         sqlQuery = 
             "SELECT * FROM "+reader->getString("SqlDatabase_1.table_1_name")+" "+
             "WHERE "+reader->getString("SqlDatabase_1.table_1_field_3")+" = 30";
+        status = sql::EvaluationStatus{sql::EvaluationStatusCode::T_BUSY, std::string()};
+        EXPECT_NO_THROW({
+            while (status.code == sql::EvaluationStatusCode::T_BUSY) {
+                queryResult = handle->query(
+                    sqlQuery
+                );
+                row = queryResult->step();
+                status = row->getStatus();
+                if(status.code == sql::EvaluationStatusCode::T_BUSY) queryResult->finalize();
+            }
+        });
         EXPECT_NO_THROW({
             queryResult = handle->query(
                 sqlQuery
@@ -1119,9 +1136,9 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT_multiple_users) {
             row = queryResult->step();
         });
         bool insertedStringFound = false;
-        while(row->getStatus() == sql::EvaluationStatus::T_ROW) {
-            EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_ROW);
-            if(row->getStatus() != sql::EvaluationStatus::T_ROW) return;
+        while(row->getStatus().code == sql::EvaluationStatusCode::T_ROW) {
+            EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_ROW);
+            if(row->getStatus().code != sql::EvaluationStatusCode::T_ROW) return;
             EXPECT_EQ(row->getColumnCount(), 3);
             if(row->getColumnCount() != 3) return;
             EXPECT_EQ(static_cast<int64_t>(row->getColumn(0)->getType()), reader->getInt64("SqlDatabase_1.table_1_field_1_type"));
@@ -1135,7 +1152,7 @@ TEST_F(SqlTest, sql_request_SELECT_INSERT_multiple_users) {
         }
         
         EXPECT_TRUE(insertedStringFound);
-        EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
+        EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_DONE);
         queryResult->finalize();
         return;
     };
@@ -1210,7 +1227,7 @@ TEST_F(SqlTest, sql_transaction_multiple_users) {
             );
             queryResult->bindText(1, insertSting);
 
-            EXPECT_EQ(queryResult->step()->getStatus(), sql::EvaluationStatus::T_DONE);
+            EXPECT_EQ(queryResult->step()->getStatus().code, sql::EvaluationStatusCode::T_DONE);
             queryResult->finalize();
         });
         sqlQuery = 
@@ -1225,8 +1242,8 @@ TEST_F(SqlTest, sql_transaction_multiple_users) {
             row = queryResult->step();
         });
         bool insertedStringFound = false;
-        EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_ROW);
-        if(row->getStatus() != sql::EvaluationStatus::T_ROW) return;
+        EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_ROW);
+        if(row->getStatus().code != sql::EvaluationStatusCode::T_ROW) return;
         EXPECT_EQ(row->getColumnCount(), 3);
         if(row->getColumnCount() != 3) return;
         EXPECT_EQ(static_cast<int64_t>(row->getColumn(0)->getType()), reader->getInt64("SqlDatabase_1.table_1_field_1_type"));
@@ -1237,7 +1254,7 @@ TEST_F(SqlTest, sql_transaction_multiple_users) {
         EXPECT_NO_THROW({
             row = queryResult->step();
         });
-        EXPECT_EQ(row->getStatus(), sql::EvaluationStatus::T_DONE);
+        EXPECT_EQ(row->getStatus().code, sql::EvaluationStatusCode::T_DONE);
         queryResult->finalize();
         return;
     };
@@ -1273,6 +1290,8 @@ TEST_F(SqlTest, sql_transaction_multiple_users) {
     std::thread user_2 = std::thread(fun, user_2_transactionHandle, "user_2_random_string");
     user_1.join();
     user_2.join();
-    user_1_transactionHandle->commit();
-    user_2_transactionHandle->commit();
+    EXPECT_NO_THROW({
+        user_1_transactionHandle->commit();
+        user_2_transactionHandle->commit();
+    });
 }
