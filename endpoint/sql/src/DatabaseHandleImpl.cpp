@@ -57,6 +57,7 @@ void TransactionImpl::commit() {
 
 void TransactionImpl::rollback() {
     sqlite3_exec(_db.get(), "ROLLBACK;", NULL, NULL, NULL);
+    sqlite3_db_release_memory(_db.get()); //FIX ME
 }
 
 std::shared_ptr<QueryImpl> QueryImpl::create(std::shared_ptr<sqlite3> db, const std::string& sqlQuery) {
