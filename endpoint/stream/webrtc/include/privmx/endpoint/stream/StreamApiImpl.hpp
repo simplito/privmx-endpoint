@@ -207,6 +207,20 @@ private:
         TrackStatus status;
         size_t fps;
     };
+    struct StreamDataTrackInfo {
+        StreamDataTrackInfo( 
+            const std::string& _label,
+            const TrackStatus& _status,
+            std::function<void(std::string)> _sendData
+        ) : 
+            label(_label), 
+            status(_status),
+            sendData(_sendData)
+        {}
+        std::string label;
+        TrackStatus status;
+        std::function<void(std::string)> sendData;
+    };
 
     struct StreamData {
         StreamData(
@@ -222,6 +236,7 @@ private:
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> audioTracks;
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> videoTracks;
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamDesktopTrackInfo>> desktopTracks;
+        std::shared_ptr<StreamDataTrackInfo> dataTrack;
         StreamStatus status;
         std::string streamRoomId;
         std::mutex streamMutex;

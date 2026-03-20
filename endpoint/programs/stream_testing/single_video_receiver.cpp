@@ -166,6 +166,10 @@ public:
         if(data->type == stream::DataType::AUDIO) {
             auto audioData = std::dynamic_pointer_cast<stream::AudioData>(data);
         }
+        if(data->type == stream::DataType::PLAIN) {
+            auto plainData = std::dynamic_pointer_cast<stream::PlainData>(data);
+            std::cout << plainData->data << std::endl;
+        }
     }
 private:
     std::mutex _mutex;

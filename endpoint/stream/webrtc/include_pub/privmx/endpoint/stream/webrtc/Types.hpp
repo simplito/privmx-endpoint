@@ -55,6 +55,7 @@ struct MediaTrackConstrains {
 
 struct MediaTrack {
     std::function<void(bool)> setEnabled;
+    std::function<void(std::string)> sendData;
 };
 
 

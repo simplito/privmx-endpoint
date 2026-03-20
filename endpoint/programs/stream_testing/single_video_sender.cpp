@@ -93,19 +93,23 @@ int main(int argc, char** argv) {
             streamApi.addTrack(streamHandle, audioDevice, stream::MediaTrackConstrains{});
             break;
         }
-        auto videoDevices = streamApi.getVideoDevices();
-        for(const auto& videoDevice: videoDevices) {
-            streamApi.addTrack(streamHandle, videoDevice, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1});
-            break;
-        }
-        auto desktopDevices = streamApi.getDesktopDevices(stream::DesktopType::Screen);
-        for(const auto& desktopDevice: desktopDevices) {
-            streamApi.addTrack(streamHandle, desktopDevice, stream::MediaTrackConstrains{.idealFps=30});
-            break;
-        }
+        // auto videoDevices = streamApi.getVideoDevices();
+        // for(const auto& videoDevice: videoDevices) {
+        //     streamApi.addTrack(streamHandle, videoDevice, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1});
+        //     break;
+        // }
+        // auto desktopDevices = streamApi.getDesktopDevices(stream::DesktopType::Screen);
+        // for(const auto& desktopDevice: desktopDevices) {
+        //     streamApi.addTrack(streamHandle, desktopDevice, stream::MediaTrackConstrains{.idealFps=30});
+        //     break;
+        // }
+       auto dataTrack = streamApi.addTrack(streamHandle, stream::MediaDevice{.name="", .id="", .type=stream::DeviceType::Raw}, stream::MediaTrackConstrains{});
 
         streamApi.publishStream(streamHandle);
-        std::this_thread::sleep_for(std::chrono::seconds(600));
+        for(int i = 0; i < 300; i++) {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            dataTrack.sendData("h1");
+        }
         streamApi.unpublishStream(streamHandle);
         std::this_thread::sleep_for(std::chrono::seconds(2));
         streamApi.leaveStreamRoom(streamRoomId);

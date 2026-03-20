@@ -40,7 +40,7 @@ void AudioTrackSinkImpl::updateStreamOnTrackInterfacesMap(std::shared_ptr<privmx
 }
 void AudioTrackSinkImpl::OnData(const void* audio_data, int bits_per_sample, int sample_rate, size_t number_of_channels, size_t number_of_frames) {
     std::unique_lock<std::mutex> lock(m);
-    std::shared_ptr<AudioData> audioData = std::make_unique<AudioData>(DataType::AUDIO, _streamIds, _track->id().std_string(), audio_data, bits_per_sample, sample_rate, number_of_channels, number_of_frames);
+    std::shared_ptr<AudioData> audioData = std::make_unique<AudioData>(_streamIds, _track->id().std_string(), audio_data, bits_per_sample, sample_rate, number_of_channels, number_of_frames);
     if(_roomOnTrackInterface) {
         _roomOnTrackInterface->OnData(audioData);
     }
