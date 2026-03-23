@@ -305,6 +305,14 @@ public:
     void addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack);
 
     /**
+     * Send binary data by Track::Raw
+     *
+     * @param streamHandle handle returned by createStream
+     * @param data data to send
+     */
+    void sendData(const StreamHandle& streamHandle, core::Buffer data);
+
+    /**
      * //doc-gen:ignore
      */
     std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }

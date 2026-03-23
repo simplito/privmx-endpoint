@@ -94,6 +94,8 @@ private:
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::KeyStore>> _roomKeys;
+    // tmp
+    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _tmp;
 };
 
 } // namespace stream

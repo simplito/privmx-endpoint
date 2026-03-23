@@ -18,6 +18,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/DataChannelImpl.hpp"
 #include "privmx/endpoint/stream/RTCVideoRendererImpl.hpp"
 #include "privmx/endpoint/stream/AudioTrackSinkImpl.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
@@ -27,34 +28,6 @@ limitations under the License.
 namespace privmx {
 namespace endpoint {
 namespace stream {
-
-
-
-class DataChannelImpl {
-public:
-    inline DataChannelImpl(std::shared_ptr<OnTrackInterface> onTrackInterface, libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> dataChannel) :
-        _onTrackInterface(onTrackInterface), 
-        _dataChannel(dataChannel), 
-        _dataChannelObserver(std::make_shared<PmxDataChannelObserver>(
-            onTrackInterface, dataChannel->label().std_string()+":"+std::to_string(dataChannel->id())
-        )) 
-    {
-        LOG_TRACE("DataChannelImpl created")
-    }
-    inline ~DataChannelImpl() {
-        LOG_TRACE("DataChannelImpl destroyed")
-    }
-    void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
-        std::unique_lock<std::mutex> lock(m);
-        _onTrackInterface = onTrackInterface;
-    }
-private:
-    std::mutex m;
-    std::shared_ptr<OnTrackInterface> _onTrackInterface;
-    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _dataChannel;
-    std::shared_ptr<PmxDataChannelObserver> _dataChannelObserver;
-
-};
 
 class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
 public:

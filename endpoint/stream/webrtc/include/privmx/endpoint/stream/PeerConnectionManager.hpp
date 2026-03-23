@@ -44,6 +44,7 @@ struct VideoTrackInfo {
 };
 
 struct DataChannelInfo {
+    std::shared_ptr<libwebrtc::RTCDataChannelInit> channelInit;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> channel;
     std::shared_ptr<PmxDataChannelObserver> observer;
 };

@@ -24,7 +24,7 @@ enum DeviceType {
     Video = 1,
     Desktop_Screen = 2,
     Desktop_Window = 3,
-    Raw = 4
+    Plain = 4
 };
 
 enum DesktopType {
@@ -55,7 +55,6 @@ struct MediaTrackConstrains {
 
 struct MediaTrack {
     std::function<void(bool)> setEnabled;
-    std::function<void(std::string)> sendData;
 };
 
 

@@ -115,6 +115,7 @@ public:
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
     void addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack);
+    void sendData(const StreamHandle& streamHandle, core::Buffer data);
 
 private:
     enum StreamStatus {

@@ -62,9 +62,9 @@ struct AudioData : public Data {
     size_t number_of_frames;
 };
 struct PlainData : public Data {
-    PlainData(const std::vector<std::string>& _streamIds, const std::string& _track, const std::string& _data, bool _binary) 
+    PlainData(const std::vector<std::string>& _streamIds, const std::string& _track, const core::Buffer& _data, bool _binary) 
         : Data(DataType::PLAIN, _streamIds, _track), data(_data), binary(_binary) {}
-    std::string data;
+    core::Buffer data;
     bool binary;
 };
 

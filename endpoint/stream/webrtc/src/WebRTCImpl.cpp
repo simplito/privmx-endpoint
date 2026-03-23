@@ -1,7 +1,7 @@
 #include "privmx/endpoint/stream/WebRTCImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
-#include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/DataChannelImpl.hpp"
 #include <future>
 #include <privmx/utils/Logger.hpp>
 
@@ -70,7 +70,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
     }
     // Create answer
     std::promise<std::string> answer_spd = std::promise<std::string>();
-    peerConnection->pc->CreateDataChannel("JanusDataChannel", new libwebrtc::RTCDataChannelInit());
+    _tmp = peerConnection->pc->CreateDataChannel("JanusDataChannel", new libwebrtc::RTCDataChannelInit());
     peerConnection->pc->CreateAnswer(
         [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
             answer_spd.set_value(sdp.std_string());
@@ -315,12 +315,12 @@ void WebRTCImpl::AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
 }
 
 libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> WebRTCImpl::AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id) {
-    LOG_FATAL("AddDataChannel")
+
     std::shared_ptr<libwebrtc::RTCDataChannelInit> rtcDataChannelInit = std::make_shared<libwebrtc::RTCDataChannelInit>();
     auto dataChannel = jc->peerConnection->pc->CreateDataChannel(id, rtcDataChannelInit.get());
     auto observer = std::make_shared<PmxDataChannelObserver>(nullptr, id);
     dataChannel->RegisterObserver(observer.get());
-    jc->peerConnection->dataChannel = DataChannelInfo{.channel=dataChannel, .observer=observer};
+    jc->peerConnection->dataChannel = DataChannelInfo{rtcDataChannelInit, dataChannel, observer};
     return dataChannel;
 }
 

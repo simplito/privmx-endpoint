@@ -10,19 +10,19 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
-using namespace privmx::endpoint::stream;
 
+using namespace privmx::endpoint::stream;
 
 
 PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, const std::string& dataChannelId) 
     : _onTrackInterface(onTrackInterface), _dataChannelId(dataChannelId) {
-
+    LOG_TRACE("PmxDataChannelObserver created")
 }
 void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state) {
     if(state == libwebrtc::RTCDataChannelState::RTCDataChannelConnecting) {
-        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelConnecting")
+        LOG_INFO("PmxDataChannelObserver::OnStateChange::RTCDataChannelConnecting")
     } else if(state == libwebrtc::RTCDataChannelState::RTCDataChannelOpen) {
-        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelOpen")
+        LOG_INFO("PmxDataChannelObserver::OnStateChange::RTCDataChannelOpen")
         if(_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
                 Track{
@@ -35,7 +35,7 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
             );
         }
     } else if(state == libwebrtc::RTCDataChannelState::RTCDataChannelClosing) {
-        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelClosing")
+        LOG_INFO("PmxDataChannelObserver::OnStateChange::RTCDataChannelClosing")
         if(_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
                 Track{
@@ -48,15 +48,15 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
             );
         }
     } else if(state == libwebrtc::RTCDataChannelState::RTCDataChannelClosed) {
-        LOG_FATAL("PmxDataChannelObserver::OnStateChange::RTCDataChannelClosed")
+        LOG_INFO("PmxDataChannelObserver::OnStateChange::RTCDataChannelClosed")
     }
 }
 void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool binary) {
-    std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, std::string(buffer, length), binary);
+    std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, core::Buffer::from(std::string(buffer, length)), binary);
     std::lock_guard<std::mutex> lock(_onTrackInterfaceMutex);
     //To Add Decryption
     if(_onTrackInterface) {
-        LOG_INFO("_onTrackInterface->OnData(data): ", data)
+        LOG_DEBUG("_onTrackInterface->OnData(data): ", data)
         _onTrackInterface->OnData(data);
     }
 }
