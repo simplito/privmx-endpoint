@@ -105,7 +105,7 @@ public:
     std::vector<VideoDevice> getVideoDevices();
     std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
     MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains);
-    MediaTrack addTrackEx(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains, bool testing = false);
+    MediaTrack addTrackEx(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains, bool testing = false /*FIX ME*/);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
@@ -210,11 +210,9 @@ private:
     };
     struct StreamDataTrackInfo {
         StreamDataTrackInfo( 
-            const std::string& _label,
             const TrackStatus& _status,
             std::function<void(std::string)> _sendData
         ) : 
-            label(_label), 
             status(_status),
             sendData(_sendData)
         {}

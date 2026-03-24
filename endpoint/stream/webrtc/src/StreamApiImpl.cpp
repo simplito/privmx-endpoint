@@ -280,7 +280,7 @@ MediaTrack StreamApiImpl::addTrackEx(const StreamHandle& streamHandle, const Med
             if(streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
                 throw ThereCanBeOnlyOneDataTrackException();
             }
-            auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>("JanusDataChannel", TrackStatus::ToAdd, [](std::string data){return;});
+            auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(TrackStatus::ToAdd, [](std::string data){return;});
             streamData->dataTrack = streamDataTrackInfo;
             return MediaTrack{
                 [](bool enabled) {
@@ -485,6 +485,8 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
         auto track = streamData->dataTrack;
         if(track->status == TrackStatus::ToAdd) {
             track->status = TrackStatus::Published;
+            dataChannel = track->label;
+        } else if(track->status == TrackStatus::Published) {
             dataChannel = track->label;
         }
     }
