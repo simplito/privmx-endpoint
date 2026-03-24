@@ -61,7 +61,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
         [&]() {tmp.set_value(true);}, 
         [&](const char* error) {
             tmp.set_value(false);
-            std::cout << "OnSetSdpFailure: " << std::string(error) << std::endl;
+            LOG_ERROR("OnSetSdpFailure: ", std::string(error))
             throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
@@ -76,6 +76,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
             answer_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {
+            LOG_ERROR("SdpCreateFailure: ", std::string(error))
             throw stream::WebRTCException("SdpCreateFailure " + std::string(error));
         }, 
         _constraints
@@ -86,6 +87,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
         "answer",
         [&]() {}, 
         [&](const char* error) {
+            LOG_ERROR("OnSetSdpFailure: ", std::string(error))
             throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
