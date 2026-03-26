@@ -69,6 +69,9 @@ void TransactionImpl::commit() {
 void TransactionImpl::rollback() {
     char* error = NULL;
     auto result = sqlite3_exec(_db.get(), "ROLLBACK;", NULL, NULL, &error);
+    if(result == SQLITE_OK) {
+        result = sqlite3_db_release_memory(_db.get()); //FIX ME
+    }
     if(result != SQLITE_OK) {
         LOG_ERROR("TransactionImpl::rollback::error:", error);
         throw SQLEvaluationException("Recived SQLITE_ERROR with code: "+ std::to_string(result));
