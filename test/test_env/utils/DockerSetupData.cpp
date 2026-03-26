@@ -287,7 +287,6 @@ int main(int argc, char** argv) {
         auto queryResult_1_step = queryResult_1->step();
         
         if(queryResult_1_step->getStatus().code != sql::EvaluationStatusCode::T_DONE) {
-            
             LOG_FATAL("queryResult_1_step->getStatus() code: ", queryResult_1_step->getStatus().code, " | description: ", queryResult_1_step->getStatus().description)
             return -1;
         }
