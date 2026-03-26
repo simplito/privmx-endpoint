@@ -69,7 +69,6 @@ PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string
         : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
 
 void PrivmxFile::open() {
-    LOG_TRACE("PrivmxFile::open - ", fileId)
     fh = session->storeApi.openFile(fileId);
 }
 
@@ -144,6 +143,7 @@ std::shared_ptr<PrivmxFS> PrivmxFS::create(
 }
 
 std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
+    LOG_DEBUG("PrivmxExtFS::openFile path - ", path)
     std::string fileId = getFileId(path);
     std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, fileId, path);
     result->open();
@@ -151,7 +151,6 @@ std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
 }
 
 bool PrivmxFS::access(const std::string& path) {
-    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
     return _session->kvdbApi.hasEntry(_session->kvdbId, path);
 }
 
@@ -161,6 +160,8 @@ void PrivmxFS::deleteFile(const std::string& path) {
     std::string fileId = "";
     if(kvdbEntry.statusCode == 0) {
         fileId = kvdbEntry.data.stdString();
+    } else {
+        LOG_ERROR("Failed to read KvdbEntry | kvdbId: ",_session->kvdbId, " | statusCode: ", kvdbEntry.statusCode)
     }
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
@@ -182,6 +183,7 @@ std::string PrivmxFS::getFileId(const std::string& name) {
         LOG_DEBUG("PrivmxFS::getFileId file not found, creating new file - ", name)
         int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
         std::string fileId = _session->storeApi.closeFile(fh);
+        LOG_TRACE("PrivmxFS::getFileId kvdbId: ", _session->kvdbId, " | name: ", name, " | fileId: ",fileId, " | _session->kvdbApi.setEntry(fileId)")
         _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
         return fileId;
     }

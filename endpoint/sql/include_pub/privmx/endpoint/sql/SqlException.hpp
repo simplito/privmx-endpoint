@@ -40,6 +40,8 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointSsqlException, "Unknown endpoint SQL ex
 DECLARE_ENDPOINT_EXCEPTION(EndpointSsqlException, DatabaseVFSRegisterException, "Can't register VFS", 0x0101)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSsqlException, DatabaseOpenException, "Can't open database", 0x0102)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSsqlException, DatabaseAttachException, "ATTACH failed", 0x0103)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSsqlException, SQLEvaluationException, "SQLEvaluation failed", 0x0104)
+
 
 } // sql
 } // endpoint
