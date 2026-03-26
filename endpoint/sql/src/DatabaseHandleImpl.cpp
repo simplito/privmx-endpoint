@@ -2,6 +2,7 @@
 
 #include "privmx/endpoint/search/PrivmxSqliteVFS.hpp"
 #include "privmx/endpoint/sql/SqlException.hpp"
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::sql;
@@ -41,7 +42,12 @@ void DatabaseHandleImpl::close() {
 }
 
 std::shared_ptr<TransactionImpl> TransactionImpl::create(std::shared_ptr<sqlite3> db) {
-    sqlite3_exec(db.get(), "BEGIN;", NULL, NULL, NULL);
+    char* error = NULL;
+    auto result = sqlite3_exec(db.get(), "BEGIN TRANSACTION;", NULL, NULL, &error);
+    if(result != SQLITE_OK) {
+        LOG_ERROR("TransactionImpl::create::error:", error);
+        throw SQLEvaluationException("Recived SQLITE_ERROR with code: "+ std::to_string(result));
+    }
     return std::make_shared<TransactionImpl>(db);
 }
 
@@ -52,12 +58,24 @@ std::shared_ptr<Query> TransactionImpl::query(const std::string& sqlQuery) {
 }
 
 void TransactionImpl::commit() {
-    sqlite3_exec(_db.get(), "COMMIT;", NULL, NULL, NULL);
+    char* error = NULL;
+    auto result = sqlite3_exec(_db.get(), "COMMIT;", NULL, NULL, &error);
+    if(result != SQLITE_OK) {
+        LOG_ERROR("TransactionImpl::commit::error:", error);
+        throw SQLEvaluationException("Recived SQLITE_ERROR with code: "+ std::to_string(result));
+    }
 }
 
 void TransactionImpl::rollback() {
-    sqlite3_exec(_db.get(), "ROLLBACK;", NULL, NULL, NULL);
-    sqlite3_db_release_memory(_db.get()); //FIX ME
+    char* error = NULL;
+    auto result = sqlite3_exec(_db.get(), "ROLLBACK;", NULL, NULL, &error);
+    if(result == SQLITE_OK) {
+        result = sqlite3_db_release_memory(_db.get()); //FIX ME
+    }
+    if(result != SQLITE_OK) {
+        LOG_ERROR("TransactionImpl::rollback::error:", error);
+        throw SQLEvaluationException("Recived SQLITE_ERROR with code: "+ std::to_string(result));
+    }
 }
 
 std::shared_ptr<QueryImpl> QueryImpl::create(std::shared_ptr<sqlite3> db, const std::string& sqlQuery) {
@@ -91,7 +109,11 @@ void QueryImpl::bindNull(int64_t index) {
 
 std::shared_ptr<Row> QueryImpl::step() {
     auto status = sqlite3_step(_stmt.get());
-    return std::make_shared<RowImpl>(_stmt, status);
+    if(status == SQLITE_OK && status != SQLITE_ROW && status != SQLITE_DONE) {
+        LOG_ERROR(sqlite3_errmsg(_db.get()));
+    }
+    return std::make_shared<RowImpl>(_stmt, status, sqlite3_errmsg(_db.get()));
+    
 }
 
 void QueryImpl::reset() {
@@ -102,15 +124,20 @@ void QueryImpl::finalize() {
     _stmt.reset();
 }
 
-RowImpl::RowImpl(std::shared_ptr<sqlite3_stmt> stmt, int status) : _stmt(std::move(stmt)), _status(status) { }
+RowImpl::RowImpl(std::shared_ptr<sqlite3_stmt> stmt, int status, std::string statusDescription) : 
+    _stmt(std::move(stmt)), _status(status), _statusDescription(statusDescription) {}
 
 EvaluationStatus RowImpl::getStatus() {
     if (_status == SQLITE_ROW) {
-        return T_ROW;
+        return {T_ROW, _statusDescription};
     } else if (_status == SQLITE_DONE) {
-        return T_DONE;
+        return {T_DONE, _statusDescription};
+    } else if (_status == SQLITE_BUSY) {
+        return {T_BUSY, _statusDescription};
+    } else if (_status == SQLITE_MISUSE) {
+        return {T_MISUSE, _statusDescription};
     }
-    return T_ERROR;
+    return {T_ERROR, _statusDescription};
 }
 
 int64_t RowImpl::getColumnCount() {

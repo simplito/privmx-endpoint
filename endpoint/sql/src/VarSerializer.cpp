@@ -61,5 +61,11 @@ Poco::Dynamic::Var VarSerializer::serialize<sql::DataType>(const sql::DataType& 
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<sql::EvaluationStatus>(const sql::EvaluationStatus& val) {
-    return Poco::Dynamic::Var(static_cast<int64_t>(val));
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "sql$EvaluationStatus");
+    }
+    obj->set("code", serialize(static_cast<int64_t>(val.code)));
+    obj->set("description", serialize(val.description));
+    return obj;
 }
