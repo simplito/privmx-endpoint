@@ -72,7 +72,7 @@ private:
 class RowImpl : public Row
 {
 public:
-    RowImpl(std::shared_ptr<sqlite3_stmt> stmt, int status);
+    RowImpl(std::shared_ptr<sqlite3_stmt> stmt, int status, std::string statusDescription);
     ~RowImpl() override = default;
     EvaluationStatus getStatus() override;
     int64_t getColumnCount() override;
@@ -81,6 +81,7 @@ public:
 private:
     std::shared_ptr<sqlite3_stmt> _stmt;
     int _status;
+    std::string _statusDescription;
 };
 
 class ColumnImpl : public Column

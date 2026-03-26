@@ -28,11 +28,18 @@ enum DataType : int64_t
     T_NULL = 5,
 };
 
-enum EvaluationStatus : int64_t
+enum EvaluationStatusCode : int64_t
 {
     T_ERROR = 0,
     T_ROW = 1,
     T_DONE = 2,
+    T_BUSY = 3,
+    T_MISUSE = 4,
+};
+
+struct EvaluationStatus {
+    EvaluationStatusCode code;
+    std::string description;
 };
 
 class Column
