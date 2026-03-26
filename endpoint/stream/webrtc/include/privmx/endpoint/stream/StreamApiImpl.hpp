@@ -105,7 +105,7 @@ public:
     std::vector<VideoDevice> getVideoDevices();
     std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
     MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains);
-    MediaTrack addTrackEx(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains, bool testing = false);
+    MediaTrack addTrackEx(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains, bool testing = false /*FIX ME*/);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
@@ -115,6 +115,7 @@ public:
     void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
     void addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack);
+    void sendData(const StreamHandle& streamHandle, core::Buffer data);
 
 private:
     enum StreamStatus {
@@ -207,6 +208,18 @@ private:
         TrackStatus status;
         size_t fps;
     };
+    struct StreamDataTrackInfo {
+        StreamDataTrackInfo( 
+            const TrackStatus& _status,
+            std::function<void(std::string)> _sendData
+        ) : 
+            status(_status),
+            sendData(_sendData)
+        {}
+        std::string label;
+        TrackStatus status;
+        std::function<void(std::string)> sendData;
+    };
 
     struct StreamData {
         StreamData(
@@ -222,6 +235,7 @@ private:
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> audioTracks;
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamVideoTrackInfo>> videoTracks;
         utils::ThreadSaveMap<std::string, std::shared_ptr<StreamDesktopTrackInfo>> desktopTracks;
+        std::shared_ptr<StreamDataTrackInfo> dataTrack;
         StreamStatus status;
         std::string streamRoomId;
         std::mutex streamMutex;

@@ -287,7 +287,6 @@ StreamPublishResult StreamApiLow::publishStream(const StreamHandle& streamHandle
     try {
         return impl->publishStream(streamHandle);
     } catch (const privmx::utils::PrivmxException& e) {
-        std::cerr << e.what() << std::endl;
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -298,7 +297,6 @@ StreamPublishResult StreamApiLow::updateStream(const StreamHandle& streamHandle)
     try {
         return impl->updateStream(streamHandle);
     } catch (const privmx::utils::PrivmxException& e) {
-        std::cerr << e.what() << std::endl;
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

@@ -103,9 +103,13 @@ int main(int argc, char** argv) {
             streamApi.addTrack(streamHandle, desktopDevice, stream::MediaTrackConstrains{.idealFps=30});
             break;
         }
+       auto dataTrack = streamApi.addTrack(streamHandle, stream::MediaDevice{.name="", .id="", .type=stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
 
         streamApi.publishStream(streamHandle);
-        std::this_thread::sleep_for(std::chrono::seconds(600));
+        for(int i = 0; i < 300; i++) {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            streamApi.sendData(streamHandle, core::Buffer::from("ping"));
+        }
         streamApi.unpublishStream(streamHandle);
         std::this_thread::sleep_for(std::chrono::seconds(2));
         streamApi.leaveStreamRoom(streamRoomId);

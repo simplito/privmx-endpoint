@@ -150,6 +150,7 @@ public:
         }
     }
     virtual void OnData(std::shared_ptr<stream::Data> data) override {
+        
         if(data->type == stream::DataType::VIDEO) {
             auto videoData = std::dynamic_pointer_cast<stream::VideoData>(data);
             // selecting most active video track to render
@@ -162,9 +163,13 @@ public:
                 _renderer.OnFrame(videoData->w, videoData->h, videoData->frameData);
             }
             --_videoTrackC;
-        }
-        if(data->type == stream::DataType::AUDIO) {
+        } else if(data->type == stream::DataType::AUDIO) {
             auto audioData = std::dynamic_pointer_cast<stream::AudioData>(data);
+        } else if(data->type == stream::DataType::PLAIN) {
+            auto plainData = std::dynamic_pointer_cast<stream::PlainData>(data);
+            LOG_INFO("Recived plain data", plainData->data.stdString());
+        } else {
+            LOG_FATAL("DataType::UNKNOWN")
         }
     }
 private:
@@ -231,6 +236,7 @@ int main(int argc, char** argv) {
                 std::cout << "stream.metadata:" << (stream.metadata.has_value() ? stream.metadata.value() : "") << std::endl;
                 for(auto track : stream.tracks) {
                     std::cout << "stream.track[].mid:" << track.mid << std::endl;
+                    std::cout << "stream.track[].type:" << track.type << std::endl;
                     streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
                 }
                 break;

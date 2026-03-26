@@ -25,6 +25,23 @@ public:
     };
 };
 
+class OnTrackPlainTesting : public stream::OnTrackInterface {
+public:
+    OnTrackPlainTesting(const std::string& expectedData) : _expectedData(expectedData) {}
+    virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
+    }
+    virtual void OnData(std::shared_ptr<stream::Data> data) override {
+        if(data->type == stream::DataType::PLAIN) {
+            auto plainData = std::dynamic_pointer_cast<stream::PlainData>(data);
+            EXPECT_EQ(plainData->data.stdString(), _expectedData);
+        } else {
+            FAIL();
+        }
+    }
+private:
+    std::string _expectedData;
+};
+
 enum ConnectionType {
     User1,
     User2,
@@ -1206,4 +1223,52 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_after_unpublish) {
     EXPECT_THROW({
         streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, streamsId);
     }, core::Exception);
+}
+
+TEST_F(StreamTest, dataChannel_send_and_get) {
+    auto connection2 = std::make_shared<core::Connection>(
+        core::Connection::connect(
+            reader->getString("Login.user_2_privKey"),
+            reader->getString("Login.solutionId"),
+            getPlatformUrl(reader->getString("Login.instanceUrl"))
+        )
+    );
+    auto eventApi_2 = std::make_shared<event::EventApi>(
+        event::EventApi::create(*connection )
+    );
+    auto streamApi_2 = std::make_shared<stream::StreamApi>(
+        stream::StreamApi::create(*connection, *eventApi )
+    );
+    //Publish Data Track as user_1
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    stream::StreamHandle handle_USER_1;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+        stream::StreamHandle handle_USER_1 = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addTrack(handle_USER_1, {"","",stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
+        streamApi->publishStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+    //Subscribe for Data Track as user_1
+    std::vector<stream::StreamSubscription> streamsId;
+    EXPECT_NO_THROW({
+        auto streamlist = streamApi_2->listStreams(streamRoomId_1);
+        for(auto stream : streamlist) {
+            for(auto track : stream.tracks) {
+                streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
+            }
+        }
+    });
+    std::string dataToSend = "testing_data";
+    EXPECT_NO_THROW({
+        streamApi_2->joinStreamRoom(streamRoomId_1);
+        streamApi_2->addRemoteStreamListener(streamRoomId_1, std::nullopt, std::make_shared<OnTrackPlainTesting>(dataToSend));
+        streamApi_2->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+    //Send data
+    EXPECT_NO_THROW({
+        streamApi->sendData(handle_USER_1, core::Buffer::from(dataToSend));
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 }
