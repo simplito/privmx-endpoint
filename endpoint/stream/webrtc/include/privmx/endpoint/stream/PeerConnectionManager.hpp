@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
@@ -56,8 +57,11 @@ struct PeerConnection {
     std::map<std::string, AudioTrackInfo> audioTracks;
     std::map<std::string, VideoTrackInfo> videoTracks;
     std::optional<DataChannelInfo> dataChannel;
+    std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
+    uint64_t messagesSeq = 0; 
 
     std::shared_mutex trackMutex;
+    std::vector<privmx::endpoint::stream::Key> cpp_keys;
     std::shared_ptr<privmx::webrtc::KeyStore> keys;
 };
 

@@ -10,12 +10,14 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::stream;
 
 
-PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, const std::string& dataChannelId) 
-    : _onTrackInterface(onTrackInterface), _dataChannelId(dataChannelId) {
+PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor, const std::string& dataChannelId) 
+    : _onTrackInterface(onTrackInterface), _messageEncryptor(messageEncryptor), _dataChannelId(dataChannelId) {
     LOG_TRACE("PmxDataChannelObserver created")
 }
 void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state) {
@@ -52,12 +54,21 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
     }
 }
 void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool binary) {
-    std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, core::Buffer::from(std::string(buffer, length)), binary);
     std::lock_guard<std::mutex> lock(_onTrackInterfaceMutex);
     //To Add Decryption
-    if(_onTrackInterface) {
-        LOG_DEBUG("_onTrackInterface->OnData(data): ", data)
-        _onTrackInterface->OnData(data);
+    if(_onTrackInterface && _messageEncryptor) {
+        try {
+            auto decryptedData = _messageEncryptor->decryptMessage(core::Buffer::from(std::string(buffer, length)));
+            std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, decryptedData.first, decryptedData.second, binary);
+            LOG_DEBUG("_onTrackInterface->OnData(data): ", data)
+            _onTrackInterface->OnData(data);
+        }  catch (const privmx::endpoint::core::Exception& e) {
+            LOG_ERROR("PmxDataChannelObserver::OnMessage recived privmx::endpoint::core::Exception\n", e.getFull())
+        } catch (const privmx::utils::PrivmxException& e) {
+            LOG_ERROR("PmxDataChannelObserver::OnMessage recived privmx::utils::PrivmxException\n", e.what(), " ", e.getCode())
+        } catch (...) {
+            LOG_ERROR("PmxDataChannelObserver::OnMessage recived unknown exception")
+        }
     }
 }
    

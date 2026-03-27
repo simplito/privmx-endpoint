@@ -17,6 +17,7 @@ limitations under the License.
 #include <rtc_data_channel.h>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
+#include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <privmx/utils/Logger.hpp>
 
@@ -26,13 +27,14 @@ namespace stream {
 
 class PmxDataChannelObserver : public libwebrtc::RTCDataChannelObserver {
 public:
-    PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, const std::string& dataChannelId);
+    PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor, const std::string& dataChannelId);
     virtual void OnStateChange(libwebrtc::RTCDataChannelState state) override;
     virtual void OnMessage(const char* buffer, int length, bool binary) override;
     void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 private:
     std::mutex _onTrackInterfaceMutex;
     std::shared_ptr<OnTrackInterface> _onTrackInterface;
+    std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor;
     std::string _dataChannelId;
 };
 

@@ -216,7 +216,7 @@ private:
             status(_status),
             sendData(_sendData)
         {}
-        std::string label;
+        std::string label = "JanusDataChannel";
         TrackStatus status;
         std::function<void(std::string)> sendData;
     };

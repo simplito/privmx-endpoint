@@ -20,6 +20,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
+#include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <libwebrtc.h>
 #include <rtc_audio_device.h>
@@ -56,11 +57,11 @@ public:
     void setFrameCryptorOptions(const std::string& streamRoomId, const privmx::webrtc::FrameCryptorOptions& frameCryptorOptions);
     void setOnTrackInterface(const std::string& streamRoomId, const std::optional<std::string>& streamId, std::shared_ptr<OnTrackInterface> onTrackInterface);
 
-    std::optional<libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel>> createPeerConnectionWithLocalStream(
+    void createPeerConnectionWithLocalStream(
         const std::string& streamRoomId, 
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracks,
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracks,
-        const std::optional<std::string>& dataChannel
+        const std::optional<std::pair<std::string, std::function<void(std::string)>*>>& dataChannel
     );
 
     void updatePeerConnectionWithLocalStream(
@@ -69,14 +70,14 @@ public:
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToAdd,
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToRemove,
         const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToRemove,
-        const std::optional<std::string>& dataChannel
+        const std::optional<std::pair<std::string, std::function<void(std::string)>*>>& dataChannel
     );
     void addRemoteStreamListener(const std::string& streamRoomId, int64_t streamId, std::shared_ptr<OnTrackInterface> onTrack);
 
 private:
     void AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = "0");
     void AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id = "0");
-    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string label);
+    void AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, const std::pair<std::string, std::function<void(std::string)>*>& dataChannelInfo);
     void RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
     void RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
     void RemoveDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc);
@@ -93,9 +94,9 @@ private:
     std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> _onTrickle;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
-    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::KeyStore>> _roomKeys;
-    // tmp
-    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _tmp;
+    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;
+
+    
 };
 
 } // namespace stream

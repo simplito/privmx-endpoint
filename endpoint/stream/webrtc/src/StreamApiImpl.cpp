@@ -280,7 +280,11 @@ MediaTrack StreamApiImpl::addTrackEx(const StreamHandle& streamHandle, const Med
             if(streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
                 throw ThereCanBeOnlyOneDataTrackException();
             }
-            auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(TrackStatus::ToAdd, [](std::string data){return;});
+            auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(
+                TrackStatus::ToAdd, 
+                [](std::string data){return;}
+            );
+            
             streamData->dataTrack = streamDataTrackInfo;
             return MediaTrack{
                 [](bool enabled) {
@@ -382,7 +386,7 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
     // Add tracks to the peer connection
     std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToAdd;
     std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> videoTracksToAdd;
-    std::optional<std::string> dataChannel = std::nullopt;
+    std::optional<std::pair<std::string, std::function<void(std::string)>*>> dataChannel = std::nullopt;
     streamData->audioTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamAudioTrackInfo>& audio) {
         if(audio->status == TrackStatus::ToAdd) {
             audio->status = TrackStatus::Published;
@@ -411,19 +415,12 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
         auto track = streamData->dataTrack;
         if(track->status == TrackStatus::ToAdd) {
             track->status = TrackStatus::Published;
-            dataChannel = track->label;
+            dataChannel = std::make_pair(track->label, &track->sendData);
         }
     }
 
     streamData->status = Online;
-    auto webRTCDataTrackOpt = _webRTC->createPeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, dataChannel);
-    if(streamData->dataTrack && webRTCDataTrackOpt.has_value()) {
-        auto webRTCDataTrack = webRTCDataTrackOpt.value();
-        streamData->dataTrack->sendData = [webRTCDataTrack](std::string data){
-            LOG_TRACE("webRTCDataTrack->Send ", data);
-            webRTCDataTrack->Send(reinterpret_cast<const uint8_t*>(data.c_str()), data.size(), false);
-        };
-    }
+    _webRTC->createPeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, dataChannel);
     return _api->publishStream(streamHandle);
 }
 
@@ -480,21 +477,26 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
         streamData->desktopTracks.erase(videoTracksToRemove[toRemove].first);
     }
     // UPDATE dataChannel
-    std::optional<std::string> dataChannel = std::nullopt;
+    std::optional<std::pair<std::string, std::function<void(std::string)>*>> dataChannel = std::nullopt;
     if(streamData->dataTrack) {
         auto track = streamData->dataTrack;
         if(track->status == TrackStatus::ToAdd) {
             track->status = TrackStatus::Published;
-            dataChannel = track->label;
+            dataChannel = std::make_pair(track->label, &track->sendData);
         } else if(track->status == TrackStatus::Published) {
-            dataChannel = track->label;
+            dataChannel = std::make_pair(track->label, &track->sendData);
         }
     }
+    streamData->status = Online;
     _webRTC->updatePeerConnectionWithLocalStream(streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, audioTracksToRemove, videoTracksToRemove, dataChannel);
     return _api->updateStream(streamHandle);
 }
 
 void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
+    auto streamDataOpt = _streamDataMap.get(streamHandle);
+    if(!streamDataOpt.has_value()) {
+        throw IncorrectStreamHandleException();
+    }
     _api->unpublishStream(streamHandle);
 }
 
@@ -603,7 +605,7 @@ void StreamApiImpl::sendData(const StreamHandle& streamHandle, core::Buffer data
     }
     auto streamData = streamDataOpt.value();
     if(!streamData->dataTrack || streamData->dataTrack->status == TrackStatus::ToAdd) {
-        throw DataTrackNotInitialized();
+        throw DataTrackNotInitializedException();
     }
     streamData->dataTrack->sendData(data.stdString());
 }
