@@ -199,6 +199,38 @@ string driverimpl::CryptoService::aes256CbcNoPadDecrypt(const string& data, cons
     return res;
 }
 
+std::string driverimpl::CryptoService::aes256GcmEncrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) const {
+    char* out;
+    unsigned int outlen;
+    char* tag;
+    unsigned int taglen;
+    int status = privmxDrvCrypto_aes256gcm_encrypt(key.data(), iv.data(), aad.data(), aad.size(), data.data(), data.size(), &out, &outlen, &tag, &taglen);
+    if (status != 0) {
+        throw PrivmxDriverCryptoException("aes256GcmEncrypt: " + to_string(status));
+    }
+    string out_str(out, outlen);
+    string tag_str(tag, taglen);
+    privmxDrvCrypto_freeMem(out);
+    privmxDrvCrypto_freeMem(tag);
+    return out_str+tag_str;
+}
+
+std::string driverimpl::CryptoService::aes256GcmDecrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) const {
+    if(data.size() < 16) {
+        throw PrivmxDriverCryptoException("aes256GcmDecrypt: no tag");
+    }
+    std::string tag = data.substr(data.size()-16, 16); 
+    std::string dataWithoutTag = data.substr(0, data.size()-16);
+    char* out;
+    unsigned int outlen;
+    int status = privmxDrvCrypto_aes256gcm_decrypt(key.data(), iv.data(), aad.data(), aad.size(), dataWithoutTag.data(), dataWithoutTag.size(), tag.data(), tag.size(), &out, &outlen);
+    if (status != 0) {
+        throw PrivmxDriverCryptoException("aes256GcmDecrypt: " + to_string(status));
+    }
+    string res(out, outlen);
+    privmxDrvCrypto_freeMem(out);
+    return res;
+}
 
 string driverimpl::CryptoService::prf_tls12(const string& key, const string& seed, size_t length) const {
     string a = seed;
