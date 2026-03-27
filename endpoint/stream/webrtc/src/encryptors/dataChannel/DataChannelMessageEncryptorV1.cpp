@@ -36,7 +36,7 @@ std::pair<core::Buffer, uint32_t> DataChannelMessageEncryptorV1::decryptMessage(
     assertData(encryptedData);
     auto parsedEncryptedMessage = parseEncryptedMessage(encryptedData.stdString());
     auto decKey = getDencryptionKey(parsedEncryptedMessage.header.keyId);
-    std::string plaintext = privmx::crypto::Crypto::aes256GcmEncrypt(
+    std::string plaintext = privmx::crypto::Crypto::aes256GcmDecrypt(
         parsedEncryptedMessage.ciphertext, 
         decKey.key.stdString(),
         parsedEncryptedMessage.header.iv,
@@ -57,26 +57,36 @@ std::string DataChannelMessageEncryptorV1::serializeHeader(Header header) {
         << (uint8_t)(header.seq >> 8)
         << (uint8_t)(header.seq >> 0);
     serializedHeader << header.iv;
-    serializedHeader << (uint8_t)KEY_ID_LENGTH_BYTES;
+    serializedHeader << (uint8_t)header.keyId.size();
     serializedHeader << header.keyId;
     return serializedHeader.str();
 }
 DataChannelMessageEncryptorV1::Header DataChannelMessageEncryptorV1::deserializeHeader(std::string header) {
     Header deserializedHeader;
+    uint8_t keyId_length = 0;
     deserializedHeader.iv.resize(GCM_NONCE_LENGTH_BYTES);
-    deserializedHeader.keyId.resize(KEY_ID_LENGTH_BYTES);
+    size_t offset = 0;
+    deserializedHeader.version = header[offset];
+    offset += 1;
+    deserializedHeader.seq = 
+        (uint32_t(header[offset]) << 24) + 
+        (uint32_t(header[offset+1]) << 1) + 
+        (uint32_t(header[offset+2]) << 8) + 
+        (uint32_t(header[offset+3]));
+    offset += 4;
+    deserializedHeader.iv = header.substr(offset, GCM_NONCE_LENGTH_BYTES);
     
-    std::stringstream serializedHeader(header);
-    serializedHeader >> deserializedHeader.version >> deserializedHeader.iv;
-    serializedHeader.read( &deserializedHeader.iv[0], GCM_NONCE_LENGTH_BYTES);
-    serializedHeader.read( &deserializedHeader.keyId[0], KEY_ID_LENGTH_BYTES);
+    offset += GCM_NONCE_LENGTH_BYTES;
+    keyId_length = uint8_t(header[offset]);
+    offset += 1;
+    deserializedHeader.keyId = header.substr(offset, keyId_length);
     return deserializedHeader;
 }
 
 DataChannelMessageEncryptorV1::ParsedEncryptedMessage DataChannelMessageEncryptorV1::parseEncryptedMessage(const std::string& encryptedData) {
     ParsedEncryptedMessage parsedEncryptedMessage;
-    parsedEncryptedMessage.serializedHeader = encryptedData.substr(0, FIXED_HEADER_LENGTH);
-    parsedEncryptedMessage.ciphertext = encryptedData.substr(FIXED_HEADER_LENGTH);
+    parsedEncryptedMessage.serializedHeader = encryptedData.substr(0, FIXED_HEADER_LENGTH+AES_GCM_KEY_LENGTH_BYTES);
+    parsedEncryptedMessage.ciphertext = encryptedData.substr(FIXED_HEADER_LENGTH+AES_GCM_KEY_LENGTH_BYTES);
     parsedEncryptedMessage.header = deserializeHeader(parsedEncryptedMessage.serializedHeader);
     return parsedEncryptedMessage;
 }
@@ -103,10 +113,6 @@ Key DataChannelMessageEncryptorV1::getEncryptionKey() {
 
 Key DataChannelMessageEncryptorV1::getDencryptionKey(const std::string& keyId) {
     std::shared_lock<std::shared_mutex> lock(_keysMutex);
-    LOG_FATAL(keyId, " | ", _keys.size());
-    for(auto key: _keys) {
-        LOG_FATAL(key.keyId)
-    }
     auto decKey = std::find_if(_keys.begin(), _keys.end(), 
         [keyId](const Key& key) {return key.keyId == keyId;}
     );

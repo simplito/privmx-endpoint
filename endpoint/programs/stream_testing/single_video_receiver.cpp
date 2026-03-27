@@ -167,7 +167,7 @@ public:
             auto audioData = std::dynamic_pointer_cast<stream::AudioData>(data);
         } else if(data->type == stream::DataType::PLAIN) {
             auto plainData = std::dynamic_pointer_cast<stream::PlainData>(data);
-            LOG_INFO("Recived plain data", plainData->data.stdString());
+            LOG_INFO("Recived plain data: ", plainData->data.stdString());
         } else {
             LOG_FATAL("DataType::UNKNOWN")
         }
