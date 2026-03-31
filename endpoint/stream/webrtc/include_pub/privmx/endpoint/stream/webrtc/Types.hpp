@@ -24,7 +24,7 @@ enum DeviceType {
     Video = 1,
     Desktop_Screen = 2,
     Desktop_Window = 3,
-    Raw = 4
+    Plain = 4
 };
 
 enum DesktopType {

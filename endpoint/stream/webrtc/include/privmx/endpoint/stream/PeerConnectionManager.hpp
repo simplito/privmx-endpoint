@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 #define _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 
+#include <atomic>
 #include <string>
 #include <memory>
 #include <libwebrtc.h>
@@ -19,6 +20,8 @@ limitations under the License.
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
@@ -42,14 +45,27 @@ struct VideoTrackInfo {
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
 };
 
+struct DataChannelInfo {
+    std::shared_ptr<libwebrtc::RTCDataChannelInit> channelInit;
+    libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> channel;
+    std::shared_ptr<PmxDataChannelObserver> observer;
+};
+
 struct PeerConnection {
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnection> pc;
     std::shared_ptr<PmxPeerConnectionObserver> observer;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> mediaStream;
     std::map<std::string, AudioTrackInfo> audioTracks;
     std::map<std::string, VideoTrackInfo> videoTracks;
+    std::optional<DataChannelInfo> dataChannel;
+    std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
+    std::atomic<uint64_t> messagesSeq {0};
+
     std::shared_mutex trackMutex;
+    std::vector<privmx::endpoint::stream::Key> cpp_keys;
     std::shared_ptr<privmx::webrtc::KeyStore> keys;
+
+    void sendData(const std::string& data);
 };
 
 struct JanusConnection {

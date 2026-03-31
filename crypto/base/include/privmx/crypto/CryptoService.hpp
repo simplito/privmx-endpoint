@@ -41,6 +41,8 @@ public:
     virtual std::string aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv) const  = 0;
     virtual std::string aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv) const  = 0;
     virtual std::string aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv) const  = 0;
+    virtual std::string aes256GcmEncrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) const = 0;
+    virtual std::string aes256GcmDecrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) const = 0;
     virtual std::string prf_tls12(const std::string& key, const std::string& seed, size_t length) const  = 0;
     virtual std::string kdf(size_t length, const std::string& key, const std::string& label) const  = 0;
     virtual std::string generateIv(const std::string& key, Poco::Int32 idx) const  = 0;

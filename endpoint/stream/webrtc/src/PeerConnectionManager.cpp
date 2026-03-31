@@ -11,9 +11,22 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include "privmx/endpoint/core/Buffer.hpp"
 #include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::stream; 
+
+void PeerConnection::sendData(const std::string& data) {
+    if(!dataChannel) {
+        return;
+    }
+    const auto messageSeq = messagesSeq.fetch_add(1);
+    LOG_TRACE("DataChannel::Send seq: ", messageSeq, "| data:", data);
+    auto encryptedData = messageEncryptor->encryptMessage(privmx::endpoint::core::Buffer::from(data), messageSeq).stdString();
+    dataChannel->channel->Send(
+        reinterpret_cast<const uint8_t*>(encryptedData.c_str()), encryptedData.size()
+    );
+}
 
 PeerConnectionManager::PeerConnectionManager(
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> createPeerConnection,

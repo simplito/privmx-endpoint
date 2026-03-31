@@ -85,6 +85,14 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamIsPublished, "Stream i
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUpdatedEventException, "Cannot extract StreamUpdatedEvent", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NullCallbackException, "Callback must not be null", 0x0024)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownTypeException, "Unknown type encountered", 0x0025)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, ThereCanBeOnlyOneDataTrackException, "There can be only one dataTrack per user in StreamRoom", 0x0026)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, DataTrackNotInitializedException, "Data track not initialized", 0x0027);
+
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NoStreamEncryptionKeyException, "No stream encryption key", 0x0028);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NoStreamDecryptionKeyException, "No stream decryption key", 0x0029);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidEncryptionKeyIdLengthException, "Invalid encryption key id length", 0x002A);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidMessageHeaderLengthException, "Invalid message header length", 0x002B);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnsupportedMessageFormatVersionException, "Unsupported message format version length", 0x002C);
 } // stream
 } // endpoint
 } // privmx

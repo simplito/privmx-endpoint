@@ -239,7 +239,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
         }
         else {
-            std::cerr << "UNRESOLVED EVENT in CPP layer: '" << type << "'"<< std::endl;
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
 }
 
@@ -397,7 +397,6 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
     model.streamRoomId(room->streamRoomId);
     model.offer(sessionDescription);
-    std::cout << privmx::utils::Utils::stringifyVar(model) << std::endl;
     auto result = _serverApi->streamPublish(model);
     streamData->sessionId = result.sessionId();
     // update/set sessionId in webrtc (for Janus - trickle)
@@ -1116,7 +1115,7 @@ void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
 void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamTrickleModel>();
     model.sessionId(sessionId);
-    model.candidate(utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(candidateAsJson)));
+    model.rtcCandidate(utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(candidateAsJson)));
     _serverApi->trickle(model);
 }
 
