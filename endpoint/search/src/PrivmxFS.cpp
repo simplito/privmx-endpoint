@@ -164,6 +164,7 @@ void PrivmxFS::deleteFile(const std::string& path) {
     }
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
+    LockSession::destroyLock(_session->kvdbApi, _session->kvdbId, path);
 }
 PrivmxFS::PrivmxFS(
     const std::shared_ptr<PrivmxSession>& session

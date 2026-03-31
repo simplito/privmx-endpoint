@@ -32,6 +32,7 @@ public:
     bool lock(LockLevel level);
     bool unlock(LockLevel level);
     bool checkReservedLock();
+    static void destroyLock(kvdb::KvdbApi kvdbApi, std::string kvdbId, std::string filepath);
 
 private:
     static const std::string _KVDB_PREFIX;
