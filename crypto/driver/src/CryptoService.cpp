@@ -204,7 +204,7 @@ std::string driverimpl::CryptoService::aes256GcmEncrypt(const std::string& data,
     unsigned int outlen;
     char* tag;
     unsigned int taglen;
-    int status = privmxDrvCrypto_aes256gcm_encrypt(key.data(), iv.data(), aad.data(), aad.size(), data.data(), data.size(), &out, &outlen, &tag, &taglen);
+    int status = privmxDrvCrypto_aeadEncrypt(key.data(), iv.data(), aad.data(), aad.size(), data.data(), data.size(), "AES-256-GCM", &out, &outlen, &tag, &taglen);
     if (status != 0) {
         throw PrivmxDriverCryptoException("aes256GcmEncrypt: " + to_string(status));
     }
@@ -223,7 +223,7 @@ std::string driverimpl::CryptoService::aes256GcmDecrypt(const std::string& data,
     std::string dataWithoutTag = data.substr(0, data.size()-16);
     char* out;
     unsigned int outlen;
-    int status = privmxDrvCrypto_aes256gcm_decrypt(key.data(), iv.data(), aad.data(), aad.size(), dataWithoutTag.data(), dataWithoutTag.size(), tag.data(), tag.size(), &out, &outlen);
+    int status = privmxDrvCrypto_aeadDecrypt(key.data(), iv.data(), aad.data(), aad.size(), dataWithoutTag.data(), dataWithoutTag.size(), tag.data(), tag.size(), "AES-256-GCM", &out, &outlen);
     if (status != 0) {
         throw PrivmxDriverCryptoException("aes256GcmDecrypt: " + to_string(status));
     }
