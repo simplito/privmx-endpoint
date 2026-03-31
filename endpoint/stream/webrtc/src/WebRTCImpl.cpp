@@ -336,15 +336,7 @@ void WebRTCImpl::AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusC
     dataChannel->RegisterObserver(observer.get());
     jc->peerConnection->dataChannel = DataChannelInfo{rtcDataChannelInit, dataChannel, observer};
     dataChannelInfo.second->operator=( [jc](std::string data) {
-        if(jc->peerConnection->dataChannel) {
-            LOG_TRACE("DataChannel::Send seq: ",jc->peerConnection->messagesSeq, "| data:", data);
-            auto encryptedData = jc->peerConnection->messageEncryptor->encryptMessage(core::Buffer::from(data), jc->peerConnection->messagesSeq).stdString();
-            jc->peerConnection->messagesSeq++;
-            jc->peerConnection->dataChannel->channel->Send(
-                reinterpret_cast<const uint8_t*>(encryptedData.c_str()), encryptedData.size()
-            );
-            
-        }
+        jc->peerConnection->sendData(data);
     });
 }
 

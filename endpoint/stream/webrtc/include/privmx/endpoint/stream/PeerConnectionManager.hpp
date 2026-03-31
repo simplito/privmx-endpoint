@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 #define _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 
+#include <atomic>
 #include <string>
 #include <memory>
 #include <libwebrtc.h>
@@ -58,11 +59,13 @@ struct PeerConnection {
     std::map<std::string, VideoTrackInfo> videoTracks;
     std::optional<DataChannelInfo> dataChannel;
     std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
-    uint64_t messagesSeq = 0; 
+    std::atomic<uint64_t> messagesSeq {0};
 
     std::shared_mutex trackMutex;
     std::vector<privmx::endpoint::stream::Key> cpp_keys;
     std::shared_ptr<privmx::webrtc::KeyStore> keys;
+
+    void sendData(const std::string& data);
 };
 
 struct JanusConnection {

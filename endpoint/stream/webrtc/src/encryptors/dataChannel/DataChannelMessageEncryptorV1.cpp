@@ -13,6 +13,8 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include <cstring>
+#include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/utils/Logger.hpp>
 
@@ -51,11 +53,9 @@ void DataChannelMessageEncryptorV1::updateKey(const std::vector<Key>& keys) {
 
 std::string DataChannelMessageEncryptorV1::serializeHeader(Header header) {
     std::stringstream serializedHeader;
+    uint32_t seq_be = Poco::ByteOrder::toBigEndian(header.seq);
     serializedHeader << (uint8_t)header.version;
-    serializedHeader << (uint8_t)(header.seq >> 24) 
-        << (uint8_t)(header.seq >> 16) 
-        << (uint8_t)(header.seq >> 8)
-        << (uint8_t)(header.seq >> 0);
+    serializedHeader.write(reinterpret_cast<const char*>(&seq_be), sizeof(seq_be));
     serializedHeader << header.iv;
     serializedHeader << (uint8_t)header.keyId.size();
     serializedHeader << header.keyId;
@@ -68,11 +68,9 @@ DataChannelMessageEncryptorV1::Header DataChannelMessageEncryptorV1::deserialize
     size_t offset = 0;
     deserializedHeader.version = header[offset];
     offset += 1;
-    deserializedHeader.seq = 
-        (uint32_t(header[offset]) << 24) + 
-        (uint32_t(header[offset+1]) << 1) + 
-        (uint32_t(header[offset+2]) << 8) + 
-        (uint32_t(header[offset+3]));
+    uint32_t seq_be = 0;
+    std::memcpy(&seq_be, header.data() + offset, sizeof(seq_be));
+    deserializedHeader.seq = Poco::ByteOrder::fromBigEndian(seq_be);
     offset += 4;
     deserializedHeader.iv = header.substr(offset, GCM_NONCE_LENGTH_BYTES);
     
