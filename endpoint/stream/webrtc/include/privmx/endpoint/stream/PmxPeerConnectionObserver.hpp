@@ -35,7 +35,8 @@ public:
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
         const std::string& streamRoomId, 
         std::shared_ptr<privmx::webrtc::KeyStore> keys, 
-        const privmx::webrtc::FrameCryptorOptions& options
+        const privmx::webrtc::FrameCryptorOptions& options,
+        std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
@@ -64,6 +65,7 @@ private:
     std::string _streamRoomId; 
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
     privmx::webrtc::FrameCryptorOptions _options;
+    std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor;
 
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;

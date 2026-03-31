@@ -16,11 +16,11 @@ namespace stream {
 
 class DataChannelImpl {
 public:
-    inline DataChannelImpl(std::shared_ptr<OnTrackInterface> onTrackInterface, libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> dataChannel) :
+    inline DataChannelImpl(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor, libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> dataChannel) :
         _onTrackInterface(onTrackInterface), 
         _dataChannel(dataChannel), 
         _dataChannelObserver(std::make_shared<PmxDataChannelObserver>(
-            onTrackInterface, dataChannel->label().std_string()+":"+std::to_string(dataChannel->id())
+            onTrackInterface, messageEncryptor, dataChannel->label().std_string()+":"+std::to_string(dataChannel->id())
         )) 
     {
         _dataChannel->RegisterObserver(_dataChannelObserver.get());
