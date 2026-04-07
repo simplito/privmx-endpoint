@@ -497,7 +497,9 @@ void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
     if(!streamDataOpt.has_value()) {
         throw IncorrectStreamHandleException();
     }
+    _streamDataMap.erase(streamHandle);
     _api->unpublishStream(streamHandle);
+    _webRTC->closeSingleConnection(streamDataOpt.value()->streamRoomId, ConnectionType::Publisher);
 }
 
 void StreamApiImpl::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions) {
