@@ -78,7 +78,7 @@ void PmxPeerConnectionObserver::OnIceCandidate([[maybe_unused]] libwebrtc::scope
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON ICE CANDIDATE")
     if(_onIceCandidate.has_value()) _onIceCandidate.value()(candidate);
 }
-void PmxPeerConnectionObserver::OnAddStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
+void PmxPeerConnectionObserver::OnAddStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": STREAM ADDED")
     LOG_DEBUG("STREAMS ", "API ", "stream->video_tracks().size() -> " + std::to_string(stream->video_tracks().size()))
     LOG_DEBUG("STREAMS ", "API ", "stream->audio_tracks().size() -> " + std::to_string(stream->audio_tracks().size()))
@@ -107,9 +107,21 @@ void PmxPeerConnectionObserver::OnTrack([[maybe_unused]] libwebrtc::scoped_refpt
 void PmxPeerConnectionObserver::OnAddTrack([[maybe_unused]] libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON ADD TRACK")    
     // set frame crypto to decrypt track
+    auto audioLevelAnalyzer = receiver->track()->kind().std_string() == "audio"
+        ? privmx::webrtc::FrameCryptorFactory::audioLevelAnalyzer()
+        : nullptr;
+    if (audioLevelAnalyzer) {
+        _audioLevelAnalyzers.set(receiver->track()->id().std_string(), audioLevelAnalyzer);
+    }
     _frameCryptors.set(
         receiver->track()->id().std_string(), 
-        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(_peerConnectionFactory ,receiver, _currentKeys, _options)
+        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(
+            _peerConnectionFactory,
+            receiver,
+            _currentKeys,
+            audioLevelAnalyzer,
+            _options
+        )
     );
 
     DataType dataType = receiver->track()->kind().std_string() == "video" ? DataType::VIDEO : DataType::AUDIO;
@@ -171,6 +183,8 @@ void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped
             tmp.value()->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled(), [track](bool mute) {return track->set_enabled(!mute);}}, TrackAction::ADDED);
         }
     }
+    if (dataType == DataType::AUDIO) _audioLevelAnalyzers.erase(receiver->track()->id().std_string());
+    _frameCryptors.erase(receiver->track()->id().std_string());
     if(dataType == DataType::AUDIO) _audioTrackSinks.erase(receiver->track()->id().std_string());
     if(dataType == DataType::VIDEO) _RTCVideoRenderers.erase(receiver->track()->id().std_string());
 }
