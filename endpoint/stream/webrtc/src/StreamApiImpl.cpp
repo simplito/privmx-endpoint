@@ -382,6 +382,9 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
         throw IncorrectStreamHandleException();
     }
     auto streamData = streamDataOpt.value();
+    if(streamData->status == Online) {
+        throw StreamIsPublishedException();
+    }
     std::lock_guard<std::mutex> lock(streamData->streamMutex);
     // Add tracks to the peer connection
     std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToAdd;
