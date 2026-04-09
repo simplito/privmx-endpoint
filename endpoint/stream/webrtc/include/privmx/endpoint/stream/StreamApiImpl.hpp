@@ -57,16 +57,6 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
-    std::string createStreamRoomEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
     void updateStreamRoom(
         const std::string& streamRoomId, 
         const std::vector<core::UserWithPubKey>& users, 
@@ -81,11 +71,7 @@ public:
 
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
 
-    core::PagingList<StreamRoom> listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
-
     StreamRoom getStreamRoom(const std::string& streamRoomId);
-
-    StreamRoom getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
 
     void deleteStreamRoom(const std::string& streamRoomId);
 
