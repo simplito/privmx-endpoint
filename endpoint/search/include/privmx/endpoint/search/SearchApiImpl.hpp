@@ -89,6 +89,7 @@ public:
     void closeSearchIndex(const int64_t indexHandle);
 
     int64_t addDocument(const int64_t indexHandle, const std::string& name, const std::string& content);
+    std::vector<int64_t> addDocuments(const int64_t indexHandle, const std::vector<NewDocument>& documents);
 
     void updateDocument(const int64_t indexHandle, const Document& document);
 

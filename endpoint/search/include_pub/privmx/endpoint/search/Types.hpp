@@ -130,7 +130,23 @@ struct SearchIndex
 };
 
 /**
- * A structure representing a document for indexing.
+ * A structure representing a new document for indexing.
+ */
+struct NewDocument
+{
+    /**
+     * Document name
+     */
+    std::string name;
+
+    /**
+     * Document content
+     */
+    std::string content;
+};
+
+/**
+ * A structure representing a document stored in the index.
  */
 struct Document
 {

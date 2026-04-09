@@ -146,8 +146,8 @@ int main(int argc, char** argv) {
             usersWithPubKey.push_back(userInfo.user);
         }
 
-        auto index {search_api.createSearchIndex(contextId, usersWithPubKey, usersWithPubKey, {}, {}, search::IndexMode::WITH_CONTENT) };
-        auto indexHandle {search_api.openSearchIndex(index)};
+        // auto index {search_api.createSearchIndex(contextId, usersWithPubKey, usersWithPubKey, {}, {}, search::IndexMode::WITH_CONTENT) };
+        // auto indexHandle {search_api.openSearchIndex(index)};
 
         std::cout << "Adding docs from: " << docsDir << " to the index..." << std::endl;
         int id = 1;
@@ -159,50 +159,75 @@ int main(int argc, char** argv) {
         //     search_api.addDocument(indexHandle, name, content);
         // });
 
-        const int batchCount = 10;
+        const int batchCount = 1;
         const int messagesPerBatch = 100;
         long long totalBatchAddDurationMs = 0;
-        const auto searchStart100 = std::chrono::steady_clock::now();
-        for (int i = 0; i < batchCount; i++) {
-            auto randomMessages = generateMessages(words, messagesPerBatch);
-            const auto searchStart = std::chrono::steady_clock::now();
-            for (auto message : randomMessages) {
-                std::string name = "name_" + std::to_string(id++);
-                // std::cout << "Adding message: " << name << std::endl;
-                search_api.addDocument(indexHandle, name, message);
-            }
-            const auto searchEnd = std::chrono::steady_clock::now();
-            const auto searchDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart).count();
-            totalBatchAddDurationMs += searchDurationMs;
-            const auto totalElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart100).count();
-            std::cout << "Adding " << messagesPerBatch << " messages - took: " << searchDurationMs << " ms" << std::endl;
-            std::cout << "Average add time per "<< messagesPerBatch<<"-message batch after batch " << (i + 1) << ": "
-                      << (static_cast<double>(totalBatchAddDurationMs) / (i + 1)) << " ms" << std::endl;
-            std::cout << "Average total operation time per "<<messagesPerBatch<<"-message batch after batch " << (i + 1) << ": "
-                      << (static_cast<double>(totalElapsedMs) / (i + 1)) << " ms" << std::endl;
-
-        }
-        const auto searchEnd100 = std::chrono::steady_clock::now();
-        const auto searchDurationMs100 = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd100 - searchStart100).count();
-        std::cout << "Adding "<<(messagesPerBatch * batchCount) <<" messages - took: " << searchDurationMs100 << " ms" << std::endl;
-        std::cout << "Average add time per "<<messagesPerBatch<<"-message batch: " << (static_cast<double>(totalBatchAddDurationMs) / batchCount) << " ms" << std::endl;
-        std::cout << "Average total operation time per "<<messagesPerBatch<<"-message batch: " << (static_cast<double>(searchDurationMs100) / batchCount) << " ms" << std::endl;
-
-
-        // // get existing index
-        // auto existingIndexes = search_api.listSearchIndexes(contextId, {0, 1, "desc"});
-        // auto existingIndex = existingIndexes.readItems[0];
-        // auto indexHandle = search_api.openSearchIndex(existingIndex.indexId);
+        // const auto searchStart100 = std::chrono::steady_clock::now();
+        // for (int i = 0; i < batchCount; i++) {
+        //     auto randomMessages = generateMessages(words, messagesPerBatch);
+        //     const auto searchStart = std::chrono::steady_clock::now();
+        //     for (auto message : randomMessages) {
+        //         std::string name = "name_" + std::to_string(id++);
+        //         std::cout << "Adding message: " << name << std::endl;
+        //         search_api.addDocument(indexHandle, name, message);
+        //     }
+        //     const auto searchEnd = std::chrono::steady_clock::now();
+        //     const auto searchDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart).count();
+        //     totalBatchAddDurationMs += searchDurationMs;
+        //     const auto totalElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart100).count();
+        //     std::cout << "Adding " << messagesPerBatch << " messages - took: " << searchDurationMs << " ms" << std::endl;
+        //     std::cout << "Average add time per "<< messagesPerBatch<<"-message batch after batch " << (i + 1) << ": "
+        //               << (static_cast<double>(totalBatchAddDurationMs) / (i + 1)) << " ms" << std::endl;
+        //     std::cout << "Average total operation time per "<<messagesPerBatch<<"-message batch after batch " << (i + 1) << ": "
+        //               << (static_cast<double>(totalElapsedMs) / (i + 1)) << " ms" << std::endl;
         //
-        // const auto searchStart = std::chrono::steady_clock::now();
-        // auto result = search_api.searchDocuments(indexHandle, "is", {.skip = 0, .limit = 100, .sortOrder = "asc"});
-        // const auto searchEnd = std::chrono::steady_clock::now();
-        // const auto searchDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart).count();
-        // std::cout << "Search query took: " << searchDurationMs << " ms" << std::endl;
-        // for (const auto& doc : result.readItems) {
+        // }
+        // const auto searchEnd100 = std::chrono::steady_clock::now();
+        // const auto searchDurationMs100 = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd100 - searchStart100).count();
+        // std::cout << "Adding "<<(messagesPerBatch * batchCount) <<" messages - took: " << searchDurationMs100 << " ms" << std::endl;
+        // std::cout << "Average add time per "<<messagesPerBatch<<"-message batch: " << (static_cast<double>(totalBatchAddDurationMs) / batchCount) << " ms" << std::endl;
+        // std::cout << "Average total operation time per "<<messagesPerBatch<<"-message batch: " << (static_cast<double>(searchDurationMs100) / batchCount) << " ms" << std::endl;
+
+
+
+
+            // auto randomMessagesBatch = generateMessages(words, messagesPerBatch);
+            // std::vector<search::NewDocument> documentsToAdd {};
+            // int nameId = 1;
+            // for (auto doc : randomMessagesBatch) {
+            //     std::string name = "name_" + std::to_string(nameId++);
+            //     documentsToAdd.push_back({name, doc});
+            // }
+            // const auto batchAddStart = std::chrono::steady_clock::now();
+            // search_api.addDocuments(indexHandle, documentsToAdd);
+            //
+            // const auto batchAddEnd = std::chrono::steady_clock::now();
+            // const auto batchAddDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(batchAddEnd - batchAddStart).count();
+            //
+            // std::cout << "Adding " << messagesPerBatch << " messages (as batch) - took: " << batchAddDurationMs << " ms" << std::endl;
+
+            // auto added = search_api.listDocuments(indexHandle, {0, 100, "desc"});
+
+        // std::cout << "Added docs:" << std::endl;
+        // for (auto doc : added.readItems) {
         //     std::cout << doc.name << ": " << doc.content << std::endl;
         // }
-        search_api.closeSearchIndex(indexHandle);
+        // std::cout << "Added docs count: " << added.readItems.size() << std::endl;
+
+        // get existing index
+        auto existingIndexes = search_api.listSearchIndexes(contextId, {0, 1, "desc"});
+        auto existingIndex = existingIndexes.readItems[0];
+        auto indexHandle2 = search_api.openSearchIndex(existingIndex.indexId);
+
+        const auto searchStart = std::chrono::steady_clock::now();
+        auto result = search_api.searchDocuments(indexHandle2, "is", {.skip = 0, .limit = 100, .sortOrder = "asc"});
+        const auto searchEnd = std::chrono::steady_clock::now();
+        const auto searchDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart).count();
+        std::cout << "Search query took: " << searchDurationMs << " ms" << std::endl;
+        for (const auto& doc : result.readItems) {
+            std::cout << doc.name << ": " << doc.content << std::endl;
+        }
+        search_api.closeSearchIndex(indexHandle2);
         std::cout << "Done!" << std::endl;
 
     } catch (const core::Exception& e) {

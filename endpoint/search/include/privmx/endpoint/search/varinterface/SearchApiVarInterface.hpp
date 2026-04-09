@@ -34,11 +34,12 @@ public:
         OpenSearchIndex = 6,
         CloseSearchIndex = 7,
         AddDocument = 8,
-        UpdateDocument = 9,
-        DeleteDocument = 10,
-        GetDocument = 11,
-        ListDocuments = 12,
-        SearchDocuments = 13,
+        AddDocuments = 9,
+        UpdateDocument = 10,
+        DeleteDocument = 11,
+        GetDocument = 12,
+        ListDocuments = 13,
+        SearchDocuments = 14,
     };
 
     SearchApiVarInterface(core::Connection connection, store::StoreApi storeApi, kvdb::KvdbApi kvdbApi, const core::VarSerializer& serializer)
@@ -53,6 +54,7 @@ public:
     Poco::Dynamic::Var openSearchIndex(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var closeSearchIndex(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var addDocument(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var addDocuments(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateDocument(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteDocument(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getDocument(const Poco::Dynamic::Var& args);

@@ -82,3 +82,14 @@ Poco::Dynamic::Var VarSerializer::serialize<search::Document>(const search::Docu
     obj->set("content", serialize(val.content));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<search::NewDocument>(const search::NewDocument& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "search$NewDocument");
+    }
+    obj->set("name", serialize(val.name));
+    obj->set("content", serialize(val.content));
+    return obj;
+}

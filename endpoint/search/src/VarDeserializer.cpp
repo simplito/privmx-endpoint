@@ -36,3 +36,10 @@ search::Document VarDeserializer::deserialize<search::Document>(const Poco::Dyna
             .name = deserialize<std::string>(obj->get("name"), name + ".name"),
             .content = deserialize<std::string>(obj->get("content"), name + ".content")};
 }
+
+template<>
+search::NewDocument VarDeserializer::deserialize<search::NewDocument>(const Poco::Dynamic::Var& val, const std::string& name) {
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {.name = deserialize<std::string>(obj->get("name"), name + ".name"),
+            .content = deserialize<std::string>(obj->get("content"), name + ".content")};
+}

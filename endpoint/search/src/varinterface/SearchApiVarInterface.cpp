@@ -29,6 +29,7 @@ std::map<SearchApiVarInterface::METHOD, Poco::Dynamic::Var (SearchApiVarInterfac
                                         {OpenSearchIndex, &SearchApiVarInterface::openSearchIndex},
                                         {CloseSearchIndex, &SearchApiVarInterface::closeSearchIndex},
                                         {AddDocument, &SearchApiVarInterface::addDocument},
+                                        {AddDocuments, &SearchApiVarInterface::addDocuments},
                                         {UpdateDocument, &SearchApiVarInterface::updateDocument},
                                         {DeleteDocument, &SearchApiVarInterface::deleteDocument},
                                         {GetDocument, &SearchApiVarInterface::getDocument},
@@ -111,6 +112,14 @@ Poco::Dynamic::Var SearchApiVarInterface::addDocument(const Poco::Dynamic::Var& 
     auto name = _deserializer.deserialize<std::string>(argsArr->get(1), "name");
     auto content = _deserializer.deserialize<std::string>(argsArr->get(2), "content");
     auto result = _searchApi.addDocument(indexHandle, name, content);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var SearchApiVarInterface::addDocuments(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto indexHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "indexHandle");
+    auto documents = _deserializer.deserializeVector<search::NewDocument>(argsArr->get(1), "documents");
+    auto result = _searchApi.addDocuments(indexHandle, documents);
     return _serializer.serialize(result);
 }
 

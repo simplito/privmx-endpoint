@@ -116,6 +116,11 @@ int64_t SearchApiImpl::addDocument(const int64_t indexHandle, const std::string&
     return fts->addDocument(name, content);
 }
 
+std::vector<int64_t> SearchApiImpl::addDocuments(const int64_t indexHandle, const std::vector<NewDocument>& documents) {
+    auto fts = _fts.get(indexHandle);
+    return fts->addDocuments(documents);
+}
+
 void SearchApiImpl::updateDocument(const int64_t indexHandle, const Document& document) {
     auto fts = _fts.get(indexHandle);
     fts->updateDocument(document);

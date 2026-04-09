@@ -156,6 +156,16 @@ int64_t SearchApi::addDocument(const int64_t indexHandle, const std::string& nam
     }
 }
 
+std::vector<int64_t> SearchApi::addDocuments(const int64_t indexHandle, const std::vector<NewDocument>& documents) {
+    auto impl = getImpl();
+    try {
+        return impl->addDocuments(indexHandle, documents);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void SearchApi::updateDocument(const int64_t indexHandle, const Document& document) {
     auto impl = getImpl();
     try {

@@ -51,6 +51,7 @@ void recordMethodDebugStat(const std::string& methodName, long long durationMs) 
 
 template <typename Func>
 decltype(auto) measureMethodCall(const std::string& methodName, Func&& func) {
+    std::cout << "PrivmxFS::" << methodName << std::endl;
     const auto start = std::chrono::steady_clock::now();
     try {
         if constexpr (std::is_void_v<std::invoke_result_t<Func>>) {
