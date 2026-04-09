@@ -35,6 +35,10 @@ if(PRIVMX_BUILD_BENCHMARK AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(programs/benchmark)
 endif()
 
+if(PRIVMX_BUILD_SEARCH_BENCHMARK AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
+    add_subdirectory(programs/search_bench  )
+endif()
+
 if(PRIVMX_BUILD_STREAM_TESTING AND PRIVMX_BUILD_ENDPOINT_ENDPOINT)
     add_subdirectory(programs/stream_testing)
 endif()
