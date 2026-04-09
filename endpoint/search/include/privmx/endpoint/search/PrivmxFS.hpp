@@ -119,6 +119,8 @@ class PrivmxFS
 public:
     static std::shared_ptr<PrivmxFS> create(std::shared_ptr<PrivmxSession> session);
     static std::string getDebugStats();
+    static void beginDbOperation(const std::string& fullPath);
+    static void endDbOperation(const std::string& fullPath);
     PrivmxFS(const std::shared_ptr<PrivmxSession>& session);
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
     bool access(const std::string& path);
