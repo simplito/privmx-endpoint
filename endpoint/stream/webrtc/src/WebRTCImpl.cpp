@@ -280,6 +280,7 @@ void WebRTCImpl::updatePeerConnectionWithLocalStream(
 void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id) {
     jc->peerConnection->mediaStream->AddTrack(audioTrack);
     auto sender = jc->peerConnection->pc->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{jc->peerConnection->mediaStream->id()}});
+    auto audioLevelAnalyzer = privmx::webrtc::FrameCryptorFactory::audioLevelAnalyzer();
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
     {
         std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
@@ -287,6 +288,7 @@ void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             _peerConnectionFactory,
             sender, 
             jc->peerConnection->keys,
+            audioLevelAnalyzer,
             _frameCryptorOptions
         );
     }
@@ -297,6 +299,7 @@ void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             AudioTrackInfo{
                 .track=audioTrack, 
                 .sender=sender, 
+                .audioLevelAnalyzer=audioLevelAnalyzer,
                 .frameCryptor=frameCryptor
             }
         ));
@@ -313,6 +316,7 @@ void WebRTCImpl::AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             _peerConnectionFactory,
             sender, 
             jc->peerConnection->keys,
+            nullptr,
             _frameCryptorOptions
         );
     }
