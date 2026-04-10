@@ -767,9 +767,9 @@ TEST_F(StreamTest, joinStreamRoom) {
     EXPECT_NO_THROW({
         streamApi->joinStreamRoom(streamRoomId_1);
     });
-    EXPECT_NO_THROW({
+    EXPECT_THROW({
         streamApi->joinStreamRoom(streamRoomId_1);
-    });
+    }, core::Exception);
 }
 
 TEST_F(StreamTest, leaveStreamRoom) {
@@ -1083,9 +1083,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_invalid_data) {
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
     });
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
-    });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
         auto streamlist = streamApi->listStreams(streamRoomId_1);
@@ -1125,9 +1122,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_remove_all_tracks) {
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
     });
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
-    });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
         auto streamlist = streamApi->listStreams(streamRoomId_1);
@@ -1150,9 +1144,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_new_track) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
-    });
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
     });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
@@ -1177,9 +1168,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_and_remove_same_track) {
         publishStream(streamRoomId_1);
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
-    });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
         auto streamlist = streamApi->listStreams(streamRoomId_1);
