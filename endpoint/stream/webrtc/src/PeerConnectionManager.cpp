@@ -107,3 +107,24 @@ void PeerConnectionManager::closeSession(const std::string& streamRoomId) {
     _connections.erase(streamRoomId);
 }
 
+void PeerConnectionManager::RoomConnections::set(ConnectionType connectionType, std::shared_ptr<JanusConnection> connection) {
+    if(connectionType == ConnectionType::Publisher) {
+        _publisher = connection;
+        return;
+    }
+    _subscriber = connection;
+}
+
+std::shared_ptr<JanusConnection> PeerConnectionManager::RoomConnections::get(ConnectionType connectionType) {
+    if(connectionType == ConnectionType::Publisher) {
+        return _publisher;
+    }
+    return _subscriber;
+}
+
+bool PeerConnectionManager::RoomConnections::has(ConnectionType connectionType) {
+    if(connectionType == ConnectionType::Publisher) {
+        return _publisher.operator bool();
+    }
+    return _subscriber.operator bool();
+}

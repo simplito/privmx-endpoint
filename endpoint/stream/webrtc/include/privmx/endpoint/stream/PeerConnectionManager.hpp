@@ -98,25 +98,9 @@ public:
 private:
     class RoomConnections {
         public:
-            inline void set(ConnectionType connectionType, std::shared_ptr<JanusConnection> connection) {
-                if(connectionType == ConnectionType::Publisher) {
-                    _publisher = connection;
-                    return;
-                }
-                _subscriber = connection;
-            }
-            inline std::shared_ptr<JanusConnection> get(ConnectionType connectionType) {
-                if(connectionType == ConnectionType::Publisher) {
-                    return _publisher;
-                }
-                return _subscriber;
-            }
-            inline bool has(ConnectionType connectionType) {
-                if(connectionType == ConnectionType::Publisher) {
-                    return _publisher.operator bool();
-                }
-                return _subscriber.operator bool();
-            }
+            void set(ConnectionType connectionType, std::shared_ptr<JanusConnection> connection);
+            std::shared_ptr<JanusConnection> get(ConnectionType connectionType);
+            bool has(ConnectionType connectionType);
         private:
             std::shared_ptr<JanusConnection> _subscriber;
             std::shared_ptr<JanusConnection> _publisher;
@@ -125,6 +109,8 @@ private:
     std::function<void(const int64_t, const std::string&)> _onTrickle;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RoomConnections>> _connections;
 };
+
+
 
 } // stream
 } // endpoint
