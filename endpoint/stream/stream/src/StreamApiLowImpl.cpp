@@ -613,31 +613,8 @@ std::string StreamApiLowImpl::createStreamRoom(
     const std::vector<core::UserWithPubKey>&managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, STREAM_TYPE_FILTER_FLAG, policies);
-}
-
-std::string StreamApiLowImpl::createStreamRoomEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
-}
-
-std::string StreamApiLowImpl::_streamRoomCreateEx(
-    const std::string& contextId, 
-    const std::vector<core::UserWithPubKey>& users, 
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::string& type
 ) {
     auto streamRoomKey = _keyProvider->generateKey();
     std::string resourceId = core::EndpointUtils::generateId();
@@ -764,15 +741,7 @@ void StreamApiLowImpl::updateStreamRoom(
     _serverApi->streamRoomUpdate(model);
 }
 
-core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
-    return _streamRoomsListEx(contextId, query, STREAM_TYPE_FILTER_FLAG);
-}
-
-core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
-    return _streamRoomsListEx(contextId, query, type);
-}
-
-core::PagingList<StreamRoom> StreamApiLowImpl::_streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
+core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomListModel>();
     model.contextId(contextId);
     model.type(type);
@@ -801,15 +770,7 @@ core::PagingList<StreamRoom> StreamApiLowImpl::_streamRoomsListEx(const std::str
     });
 }
 
-StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
-    return _streamRoomGetEx(streamRoomId, STREAM_TYPE_FILTER_FLAG);
-}
-
-StreamRoom StreamApiLowImpl::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
-    return _streamRoomGetEx(streamRoomId, type);
-}
-
-StreamRoom StreamApiLowImpl::_streamRoomGetEx(const std::string& streamRoomId, const std::string& type) {
+StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId, const std::string& type) {
     auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     params.id(streamRoomId);
     params.type(type);
