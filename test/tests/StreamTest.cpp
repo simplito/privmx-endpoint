@@ -141,7 +141,7 @@ protected:
         streamApi->joinStreamRoom(streamRoomId);
         stream::StreamHandle handle = streamApi->createStream(streamRoomId);
         std::vector<stream::VideoDevice> mediaDevices = streamApi->getVideoDevices();
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
         streamApi->publishStream(handle);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         return handle;
@@ -816,7 +816,7 @@ TEST_F(StreamTest, adding_Track_no_publish) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
 }
 
@@ -845,7 +845,7 @@ TEST_F(StreamTest, publish_with_tracks) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_THROW({
         streamApi->publishStream(-1);
@@ -869,8 +869,8 @@ TEST_F(StreamTest, publish_with_multiple_instance_of_same_track) {
     });
     // Load Fake video tracks
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
@@ -970,13 +970,13 @@ TEST_F(StreamTest, updateStream_remove_all_tracks) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
     });
     EXPECT_NO_THROW({
-        streamApi->removeTrack(handle, {"","",stream::DeviceType::Video});
+        streamApi->removeTrack(handle, {"FAKE", "FAKE",stream::DeviceType::Video});
     });
     EXPECT_NO_THROW({
     streamApi->updateStream(handle);
@@ -994,14 +994,14 @@ TEST_F(StreamTest, updateStream_adding_track) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->updateStream(handle);
@@ -1019,7 +1019,7 @@ TEST_F(StreamTest, updateStream_no_changes) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
@@ -1040,7 +1040,7 @@ TEST_F(StreamTest, updateStream_after_failed_add_track) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
@@ -1064,7 +1064,7 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrack(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);

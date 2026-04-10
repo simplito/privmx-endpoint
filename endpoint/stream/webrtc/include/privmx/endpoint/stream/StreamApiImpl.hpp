@@ -90,7 +90,8 @@ public:
     std::vector<AudioDevice> getAudioDevices();
     std::vector<VideoDevice> getVideoDevices();
     std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
-    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains, bool testing = false /*FIX ME*/);
+    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains);
+    MediaTrack addFakeVideoTrack(const StreamHandle& streamHandle);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
