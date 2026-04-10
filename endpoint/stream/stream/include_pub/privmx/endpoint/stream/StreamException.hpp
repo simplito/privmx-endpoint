@@ -81,7 +81,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionNotInitialized
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomConnectionNotInitialized, "StreamRoom connection not initialized", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotInitialized, "StreamHandle not initialized", 0x0021)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamAlreadyPublishedException, "Stream is published", 0x0022)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamAlreadyPublishedException, "Stream is already published", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUpdatedEventException, "Cannot extract StreamUpdatedEvent", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NullCallbackException, "Callback must not be null", 0x0024)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownTypeException, "Unknown type encountered", 0x0025)
