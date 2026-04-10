@@ -97,10 +97,21 @@ public:
     void closeConnection(const std::string& streamRoomId, ConnectionType connectionType);
     void closeSession(const std::string& streamRoomId);
 private:
+    class RoomConnections {
+        public:
+            void set(ConnectionType connectionType, std::shared_ptr<JanusConnection> connection);
+            std::shared_ptr<JanusConnection> get(ConnectionType connectionType);
+            bool has(ConnectionType connectionType);
+        private:
+            std::shared_ptr<JanusConnection> _subscriber;
+            std::shared_ptr<JanusConnection> _publisher;
+    };
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> _createPeerConnection;
     std::function<void(const int64_t, const std::string&)> _onTrickle;
-    privmx::utils::ThreadSaveMap<std::string, std::map<ConnectionType,std::shared_ptr<JanusConnection>>> _connections;
+    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RoomConnections>> _connections;
 };
+
+
 
 } // stream
 } // endpoint
