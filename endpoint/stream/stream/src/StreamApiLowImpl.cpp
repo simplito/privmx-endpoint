@@ -254,7 +254,7 @@ void StreamApiLowImpl::processDisconnectedEvent() {
 
 std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
     if(_streamRoomMap.has(streamRoomId)) {
-        throw StreamRoomAlreadyJoinedException();
+        throw AlreadyJoinedStreamRoomException();
     }
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
@@ -370,7 +370,7 @@ StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle {nextId()};
     auto room = getStreamRoomData(streamRoomId);
     if(room->publisherStream) {
-        throw StreamIsPublishedException();
+        throw StreamAlreadyPublishedException();
     }
     _streamHandleToRoomId.set(streamHandle, streamRoomId);
     room->publisherStream = std::make_shared<StreamData>(

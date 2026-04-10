@@ -383,7 +383,7 @@ StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandl
     }
     auto streamData = streamDataOpt.value();
     if(streamData->status == Online) {
-        throw StreamIsPublishedException();
+        throw StreamAlreadyPublishedException();
     }
     std::lock_guard<std::mutex> lock(streamData->streamMutex);
     // Add tracks to the peer connection
