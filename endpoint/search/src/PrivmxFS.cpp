@@ -21,11 +21,6 @@ using namespace privmx::endpoint::search;
 
 namespace {
 
-struct MethodDebugStat {
-    std::uint64_t callCount = 0;
-    long long totalDurationMs = 0;
-};
-
 struct ScopedPathInfo {
     std::string sessionId;
     std::string path;
@@ -37,43 +32,8 @@ struct ScopedDbLockState {
     bool locked = false;
 };
 
-std::mutex g_methodDebugStatsMutex;
-std::unordered_map<std::string, MethodDebugStat> g_methodDebugStats;
 std::mutex g_scopedDbLockMutex;
 std::unordered_map<std::string, std::shared_ptr<ScopedDbLockState>> g_scopedDbLocks;
-
-void recordMethodDebugStat(const std::string& methodName, long long durationMs) {
-    std::lock_guard<std::mutex> lock(g_methodDebugStatsMutex);
-    auto& stat = g_methodDebugStats[methodName];
-    ++stat.callCount;
-    stat.totalDurationMs += durationMs;
-}
-
-template <typename Func>
-decltype(auto) measureMethodCall(const std::string& methodName, Func&& func) {
-    std::cout << "PrivmxFS::" << methodName << std::endl;
-    const auto start = std::chrono::steady_clock::now();
-    try {
-        if constexpr (std::is_void_v<std::invoke_result_t<Func>>) {
-            std::forward<Func>(func)();
-            const auto end = std::chrono::steady_clock::now();
-            const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            recordMethodDebugStat(methodName, durationMs);
-            return;
-        } else {
-            auto result = std::forward<Func>(func)();
-            const auto end = std::chrono::steady_clock::now();
-            const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            recordMethodDebugStat(methodName, durationMs);
-            return result;
-        }
-    } catch (...) {
-        const auto end = std::chrono::steady_clock::now();
-        const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        recordMethodDebugStat(methodName, durationMs);
-        throw;
-    }
-}
 
 std::string makeScopedDbLockKey(const std::string& sessionId, const std::string& path) {
     return sessionId + ":" + path;
@@ -181,137 +141,121 @@ void PrivmxFile::open() {
 }
 
 void PrivmxFile::close() {
-    return measureMethodCall("closeFile", [&]() {
-        if (memoryOnly) {
-            return;
-        }
-        if (fh != -1) {
-            session->storeApi.closeFile(fh);
-            fh = -1;
-        }
-    });
+    if (memoryOnly) {
+        return;
+    }
+    if (fh != -1) {
+        session->storeApi.closeFile(fh);
+        fh = -1;
+    }
 }
 
 privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
-    return measureMethodCall("read", [&]() {
-        if (memoryOnly) {
-            if (offset < 0) {
-                return privmx::endpoint::core::Buffer::from("", 0);
-            }
-            if (static_cast<std::size_t>(offset) >= memoryFileState->data.size()) {
-                return privmx::endpoint::core::Buffer::from("", 0);
-            }
-            const auto availableSize = memoryFileState->data.size() - static_cast<std::size_t>(offset);
-            const auto readSize = std::min<std::size_t>(static_cast<std::size_t>(size), availableSize);
-            return privmx::endpoint::core::Buffer::from(memoryFileState->data.data() + offset, readSize);
+    if (memoryOnly) {
+        if (offset < 0) {
+            return privmx::endpoint::core::Buffer::from("", 0);
         }
-        sync();
-        session->storeApi.seekInFile(fh, offset);
-        auto res = session->storeApi.readFromFile(fh, size);
-        return res;
-    });
+        if (static_cast<std::size_t>(offset) >= memoryFileState->data.size()) {
+            return privmx::endpoint::core::Buffer::from("", 0);
+        }
+        const auto availableSize = memoryFileState->data.size() - static_cast<std::size_t>(offset);
+        const auto readSize = std::min<std::size_t>(static_cast<std::size_t>(size), availableSize);
+        return privmx::endpoint::core::Buffer::from(memoryFileState->data.data() + offset, readSize);
+    }
+    sync();
+    session->storeApi.seekInFile(fh, offset);
+    auto res = session->storeApi.readFromFile(fh, size);
+    return res;
 }
 
 void PrivmxFile::write(const privmx::endpoint::core::Buffer& data, int64_t offset) {
-    measureMethodCall("write", [&]() {
-        if (memoryOnly) {
-            if (offset < 0) {
-                throw std::runtime_error("Invalid write offset");
-            }
-            const auto writeOffset = static_cast<std::size_t>(offset);
-            if (memoryFileState->data.size() < writeOffset) {
-                memoryFileState->data.resize(writeOffset, '\0');
-            }
-            const auto writeSize = data.size();
-            if (memoryFileState->data.size() < writeOffset + writeSize) {
-                memoryFileState->data.resize(writeOffset + writeSize, '\0');
-            }
-            std::memcpy(memoryFileState->data.data() + writeOffset, data.data(), writeSize);
-            return;
+    if (memoryOnly) {
+        if (offset < 0) {
+            throw std::runtime_error("Invalid write offset");
         }
-        int64_t of;
-        std::string res;
-        tie(of, res) = writer.write(offset, data.stdString());
-        if (of != -1) {
-            session->storeApi.seekInFile(fh, of);
-            session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
+        const auto writeOffset = static_cast<std::size_t>(offset);
+        if (memoryFileState->data.size() < writeOffset) {
+            memoryFileState->data.resize(writeOffset, '\0');
         }
-    });
+        const auto writeSize = data.size();
+        if (memoryFileState->data.size() < writeOffset + writeSize) {
+            memoryFileState->data.resize(writeOffset + writeSize, '\0');
+        }
+        std::memcpy(memoryFileState->data.data() + writeOffset, data.data(), writeSize);
+        return;
+    }
+    int64_t of;
+    std::string res;
+    tie(of, res) = writer.write(offset, data.stdString());
+    if (of != -1) {
+        session->storeApi.seekInFile(fh, of);
+        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
+    }
 }
 
 void PrivmxFile::truncate(int64_t size) {
-    measureMethodCall("truncate", [&]() {
-        if (memoryOnly) {
-            if (size < 0) {
-                throw std::runtime_error("Invalid truncate size");
-            }
-            memoryFileState->data.resize(static_cast<std::size_t>(size), '\0');
-            return;
+    if (memoryOnly) {
+        if (size < 0) {
+            throw std::runtime_error("Invalid truncate size");
         }
-        session->storeApi.seekInFile(fh, size);
-        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from("", 0), true);
-    });
+        memoryFileState->data.resize(static_cast<std::size_t>(size), '\0');
+        return;
+    }
+    session->storeApi.seekInFile(fh, size);
+    session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from("", 0), true);
 }
 
 void PrivmxFile::sync() {
-    measureMethodCall("sync", [&]() {
-        if (memoryOnly) {
-            return;
-        }
-        int64_t of;
-        std::string res;
-        tie(of, res) = writer.write(-1, "");
-        if (of != -1) {
-            session->storeApi.seekInFile(fh, of);
-            session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
-        }
-    });
+    if (memoryOnly) {
+        return;
+    }
+    int64_t of;
+    std::string res;
+    tie(of, res) = writer.write(-1, "");
+    if (of != -1) {
+        session->storeApi.seekInFile(fh, of);
+        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
+    }
 }
 
 int64_t PrivmxFile::getFileSize() {
-    return measureMethodCall("getFileSize", [&]() {
-        if (memoryOnly) {
-            return static_cast<int64_t>(memoryFileState->data.size());
-        }
-        auto fileInfo = session->storeApi.getFile(fileId);
-        if(fileInfo.statusCode != 0) {
-            throw MalformedInternalFileException(); 
-        }
-        return fileInfo.size;
-    });
+    if (memoryOnly) {
+        return static_cast<int64_t>(memoryFileState->data.size());
+    }
+    auto fileInfo = session->storeApi.getFile(fileId);
+    if(fileInfo.statusCode != 0) {
+        throw MalformedInternalFileException();
+    }
+    return fileInfo.size;
 }
 
 bool PrivmxFile::lock(LockLevel level) {
     const std::string lockStatName = memoryOnly ? "lock_journal" : "lock_db";
-    return measureMethodCall(lockStatName, [&]() {
-        if (memoryOnly) {
-            memoryFileState->lockLevel = level;
-            memoryFileState->reservedLock = level >= LockLevel::RESERVED;
-            return true;
-        }
-        if (isScopedDbLockActive(session, path)) {
-            return true;
-        }
-        bool val = lockSession.lock(level);
-        if (val) {
-            session->storeApi.syncFile(fh);
-        }
-        return val;
-    });
+    if (memoryOnly) {
+        memoryFileState->lockLevel = level;
+        memoryFileState->reservedLock = level >= LockLevel::RESERVED;
+        return true;
+    }
+    if (isScopedDbLockActive(session, path)) {
+        return true;
+    }
+    bool val = lockSession.lock(level);
+    if (val) {
+        session->storeApi.syncFile(fh);
+    }
+    return val;
 }
 
 bool PrivmxFile::unlock(LockLevel level) {
-    return measureMethodCall("unlock", [&]() {
-        if (memoryOnly) {
-            memoryFileState->lockLevel = level;
-            memoryFileState->reservedLock = level >= LockLevel::RESERVED;
-            return true;
-        }
-        if (isScopedDbLockActive(session, path)) {
-            return true;
-        }
-        return lockSession.unlock(level);
-    });
+    if (memoryOnly) {
+        memoryFileState->lockLevel = level;
+        memoryFileState->reservedLock = level >= LockLevel::RESERVED;
+        return true;
+    }
+    if (isScopedDbLockActive(session, path)) {
+        return true;
+    }
+    return lockSession.unlock(level);
 }
 
 bool PrivmxFile::checkReservedLock() {
@@ -329,20 +273,6 @@ std::shared_ptr<PrivmxFS> PrivmxFS::create(
 ) {
     std::shared_ptr<PrivmxFS> res = std::make_shared<PrivmxFS>(session);
     return res;
-}
-
-std::string PrivmxFS::getDebugStats() {
-    std::lock_guard<std::mutex> lock(g_methodDebugStatsMutex);
-    std::ostringstream result;
-    result << "PrivmxFS debug stats:";
-    for (const auto& [methodName, stat] : g_methodDebugStats) {
-        const double averageDurationMs = stat.callCount == 0 ? 0.0 : static_cast<double>(stat.totalDurationMs) / stat.callCount;
-        result << "\n" << methodName
-               << " calls=" << stat.callCount
-               << " totalMs=" << stat.totalDurationMs
-               << " avgMs=" << averageDurationMs;
-    }
-    return result.str();
 }
 
 void PrivmxFS::beginDbOperation(const std::string& fullPath) {
@@ -427,33 +357,29 @@ void PrivmxFS::endDbOperation(const std::string& fullPath) {
 }
 
 std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
-    return measureMethodCall("openFile", [&]() {
-        if (isJournalPath(path)) {
-            std::lock_guard<std::mutex> lock(_memoryFileMutex);
-            auto& memoryFileState = _memoryFiles[path];
-            if (!memoryFileState) {
-                memoryFileState = std::make_shared<PrivmxFile::MemoryFileState>();
-            }
-            std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, "", path, true, memoryFileState);
-            result->open();
-            return result;
+    if (isJournalPath(path)) {
+        std::lock_guard<std::mutex> lock(_memoryFileMutex);
+        auto& memoryFileState = _memoryFiles[path];
+        if (!memoryFileState) {
+            memoryFileState = std::make_shared<PrivmxFile::MemoryFileState>();
         }
-        std::string fileId = getCachedFileId(path);
-        std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, fileId, path);
+        std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, "", path, true, memoryFileState);
         result->open();
         return result;
-    });
+    }
+    std::string fileId = getCachedFileId(path);
+    std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, fileId, path);
+    result->open();
+    return result;
 }
 
 bool PrivmxFS::access(const std::string& path) {
-    return measureMethodCall("access", [&]() {
-        if (isJournalPath(path)) {
-            std::lock_guard<std::mutex> lock(_memoryFileMutex);
-            return _memoryFiles.find(path) != _memoryFiles.end();
-        }
-        LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
-        return _session->kvdbApi.hasEntry(_session->kvdbId, path);
-    });
+    if (isJournalPath(path)) {
+        std::lock_guard<std::mutex> lock(_memoryFileMutex);
+        return _memoryFiles.find(path) != _memoryFiles.end();
+    }
+    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
+    return _session->kvdbApi.hasEntry(_session->kvdbId, path);
 }
 
 void PrivmxFS::deleteFile(const std::string& path) {
@@ -499,23 +425,21 @@ std::string PrivmxFS::getCachedFileId(const std::string& name) {
 }
 
 std::string PrivmxFS::getFileId(const std::string& name) {
-    return measureMethodCall("getFileId", [&]() {
-        LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
-        try {
-            privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
-            if(kvdbEntry.statusCode != 0) {
-               throw MalformedInternalFileIdException(); 
-            }
-            std::string fileId = kvdbEntry.data.stdString();
-            return fileId;
-        } catch (const privmx::endpoint::server::KvdbEntryDoesNotExistException& e) {
-            LOG_DEBUG("PrivmxFS::getFileId file not found, creating new file - ", name)
-            int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
-            std::string fileId = _session->storeApi.closeFile(fh);
-            _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
-            return fileId;
+    LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
+    try {
+        privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
+        if(kvdbEntry.statusCode != 0) {
+           throw MalformedInternalFileIdException();
         }
-    });
+        std::string fileId = kvdbEntry.data.stdString();
+        return fileId;
+    } catch (const privmx::endpoint::server::KvdbEntryDoesNotExistException& e) {
+        LOG_DEBUG("PrivmxFS::getFileId file not found, creating new file - ", name)
+        int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
+        std::string fileId = _session->storeApi.closeFile(fh);
+        _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
+        return fileId;
+    }
 }
 
 std::shared_ptr<PrivmxFile> PrivmxExtFS::openFile(const std::string& path) {

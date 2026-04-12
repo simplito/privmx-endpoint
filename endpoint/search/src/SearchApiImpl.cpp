@@ -107,7 +107,6 @@ int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
 void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
     auto fts = _fts.get(indexHandle);
     fts->close();
-    std::cout << PrivmxFS::getDebugStats() << std::endl;
     _fts.remove(indexHandle);
 }
 
