@@ -22,6 +22,7 @@
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/search/SearchApi.hpp>
 #include <privmx/utils/PrivmxException.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace std;
 using namespace privmx::endpoint;
@@ -65,7 +66,7 @@ static void processAllTxtFiles(
     }
 
     for (const auto& entry : fs::directory_iterator(directoryPath)) {
-        if (!entry.is_regular_file() || entry.path().extension() != ".txt") {
+        if (!entry.is_regular_file()) {
             continue;
         }
 
@@ -113,6 +114,14 @@ static std::vector<std::string> generateMessages(const std::vector<std::string>&
     return messages;
 }
 
+static std::string extractMessageDataFromJson(const std::string& json) {
+    auto jsonObject = privmx::utils::Utils::parseJsonObject(json);
+    if (!jsonObject->has("data")) {
+        throw std::runtime_error("JSON does not contain 'data' field");
+    }
+    return jsonObject->getValue<std::string>("data");
+}
+
 int main(int argc, char** argv) {
     auto params = getParamsList(argc, argv);
     if(params.size() != 5) {
@@ -146,30 +155,30 @@ int main(int argc, char** argv) {
             usersWithPubKey.push_back(userInfo.user);
         }
 
-        // auto index {search_api.createSearchIndex(contextId, usersWithPubKey, usersWithPubKey, {}, {}, search::IndexMode::WITH_CONTENT) };
-        // auto indexHandle {search_api.openSearchIndex(index)};
+        auto index {search_api.createSearchIndex(contextId, usersWithPubKey, usersWithPubKey, {}, {}, search::IndexMode::WITH_CONTENT) };
+        auto indexHandle {search_api.openSearchIndex(index)};
 
         std::cout << "Adding docs from: " << docsDir << " to the index..." << std::endl;
         int id = 1;
 
-        // processAllTxtFiles(docsDir + "/rfc", [&](std::string content) {
-        //     if (id > 10) return;
-        //     std::string name = "name_" + std::to_string(id++);
-        //     std::cout << "Adding doc: " << name << std::endl;
-        //     search_api.addDocument(indexHandle, name, content);
-        // });
+        std::vector<search::NewDocument> documentsToAdd {};
+        processAllTxtFiles(docsDir + "/msgs", [&](std::string content) {
+            if (id > 100) return;
+            std::string name = "name_" + std::to_string(id++);
+            documentsToAdd.push_back({name, extractMessageDataFromJson(content)});
+        });
+        std::cout << "Adding " << documentsToAdd.size() << " documents..." << std::endl;
 
         const int batchCount = 1;
         const int messagesPerBatch = 100;
         long long totalBatchAddDurationMs = 0;
-        // const auto searchStart100 = std::chrono::steady_clock::now();
+        const auto searchStart100 = std::chrono::steady_clock::now();
         // for (int i = 0; i < batchCount; i++) {
-        //     auto randomMessages = generateMessages(words, messagesPerBatch);
+        //     // auto randomMessages = generateMessages(words, messagesPerBatch);
         //     const auto searchStart = std::chrono::steady_clock::now();
-        //     for (auto message : randomMessages) {
-        //         std::string name = "name_" + std::to_string(id++);
-        //         std::cout << "Adding message: " << name << std::endl;
-        //         search_api.addDocument(indexHandle, name, message);
+        //     for (auto message : documentsToAdd) {
+        //         id++;
+        //         search_api.addDocument(indexHandle, message.name, message.content);
         //     }
         //     const auto searchEnd = std::chrono::steady_clock::now();
         //     const auto searchDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart).count();
@@ -198,21 +207,22 @@ int main(int argc, char** argv) {
             //     std::string name = "name_" + std::to_string(nameId++);
             //     documentsToAdd.push_back({name, doc});
             // }
-            // const auto batchAddStart = std::chrono::steady_clock::now();
-            // search_api.addDocuments(indexHandle, documentsToAdd);
-            //
-            // const auto batchAddEnd = std::chrono::steady_clock::now();
-            // const auto batchAddDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(batchAddEnd - batchAddStart).count();
-            //
-            // std::cout << "Adding " << messagesPerBatch << " messages (as batch) - took: " << batchAddDurationMs << " ms" << std::endl;
+            const auto batchAddStart = std::chrono::steady_clock::now();
+            search_api.addDocuments(indexHandle, documentsToAdd);
 
-            // auto added = search_api.listDocuments(indexHandle, {0, 100, "desc"});
+            const auto batchAddEnd = std::chrono::steady_clock::now();
+            const auto batchAddDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(batchAddEnd - batchAddStart).count();
+
+            std::cout << "Adding " << messagesPerBatch << " messages (as batch) - took: " << batchAddDurationMs << " ms" << std::endl;
+
+            auto added = search_api.listDocuments(indexHandle, {0, 100, "desc"});
 
         // std::cout << "Added docs:" << std::endl;
         // for (auto doc : added.readItems) {
         //     std::cout << doc.name << ": " << doc.content << std::endl;
         // }
         // std::cout << "Added docs count: " << added.readItems.size() << std::endl;
+        search_api.closeSearchIndex(indexHandle);
 
         // get existing index
         auto existingIndexes = search_api.listSearchIndexes(contextId, {0, 1, "desc"});
@@ -241,7 +251,6 @@ int main(int argc, char** argv) {
     } catch (...) {
         cerr << "Error" << endl;
     }
-    
 
     return 0;
 }
