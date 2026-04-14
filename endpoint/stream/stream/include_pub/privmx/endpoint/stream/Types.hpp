@@ -213,6 +213,15 @@ struct RecordingEncKey {
     core::Buffer key;
 };
 
+struct DataChannelMessage {
+    core::Buffer data;
+    int64_t seq;
+};
+
+struct DecryptedDataChannelMessage : public DataChannelMessage {
+    int64_t statusCode; 
+};
+
 }  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx

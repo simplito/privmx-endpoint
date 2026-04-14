@@ -18,6 +18,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/DataChannelImpl.hpp"
 #include "privmx/endpoint/stream/RTCVideoRendererImpl.hpp"
 #include "privmx/endpoint/stream/AudioTrackSinkImpl.hpp"
@@ -36,7 +37,7 @@ public:
         const std::string& streamRoomId, 
         std::shared_ptr<privmx::webrtc::KeyStore> keys, 
         const privmx::webrtc::FrameCryptorOptions& options,
-        std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor
+        std::shared_ptr<StreamApiLow> apiLow
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
@@ -65,7 +66,7 @@ private:
     std::string _streamRoomId; 
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
     privmx::webrtc::FrameCryptorOptions _options;
-    std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor;
+    std::shared_ptr<StreamApiLow> _apiLow;
 
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;

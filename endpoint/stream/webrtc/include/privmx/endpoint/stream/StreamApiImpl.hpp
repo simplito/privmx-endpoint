@@ -219,6 +219,7 @@ private:
         std::string label = "JanusDataChannel";
         TrackStatus status;
         std::function<void(std::string)> sendData;
+        std::atomic<uint32_t> seq {0};
     };
 
     struct StreamData {
