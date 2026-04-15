@@ -45,8 +45,7 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
-        const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        StreamEncryptionMode streamEncryptionMode = StreamEncryptionMode::SINGLE_KEY
+        const std::shared_ptr<core::EventMiddleware>& eventMiddleware
     );
     ~StreamApiLowImpl();
 
@@ -177,7 +176,6 @@ private:
     privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::vector<std::string> _internalSubscriptionIds;
-    StreamEncryptionMode _streamEncryptionMode;
 };
 
 }  // namespace stream

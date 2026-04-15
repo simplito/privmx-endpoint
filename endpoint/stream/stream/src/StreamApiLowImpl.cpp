@@ -50,8 +50,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
-    const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    StreamEncryptionMode streamEncryptionMode
+    const std::shared_ptr<core::EventMiddleware>& eventMiddleware
 ) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
      _eventApi(eventApi),
     _connection(connection.getImpl()),
@@ -60,8 +59,7 @@ StreamApiLowImpl::StreamApiLowImpl(
     _host(host),
     _eventMiddleware(eventMiddleware),
     _serverApi(std::make_shared<ServerApi>(gateway)),
-    _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
-    _streamEncryptionMode(streamEncryptionMode)
+    _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG))
 {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
     _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&StreamApiLowImpl::processConnectedEvent, this));
@@ -141,7 +139,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
             //update keys
             auto streamRoomData = _streamRoomMap.get(eventData.streamRoomId);
-            if(streamRoomData.has_value() && _streamEncryptionMode == StreamEncryptionMode::SINGLE_KEY) {
+            if(streamRoomData.has_value()) {
                 std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw, streamRoomData.value()->encryptionKeyId);
                 streamRoomData.value()->webRtc->updateKeys(eventData.streamRoomId, keys);
             }
