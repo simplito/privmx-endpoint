@@ -79,17 +79,6 @@ stream::SdpWithTypeModel VarDeserializer::deserialize<stream::SdpWithTypeModel>(
 }
 
 template<>
-stream::UpdateSessionIdModel VarDeserializer::deserialize<stream::UpdateSessionIdModel>(const Poco::Dynamic::Var& val, const std::string& name) {
-    TypeValidator::validateObject(val, name);
-    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    return {
-        .streamRoomId = deserialize<std::string>(obj->get("streamRoomId"), name + ".streamRoomId"),
-        .connectionType = deserialize<std::string>(obj->get("connectionType"), name + ".connectionType"),
-        .sessionId = deserialize<int64_t>(obj->get("sessionId"), name + ".sessionId")
-    };
-}
-
-template<>
 stream::StreamTrackInfo VarDeserializer::deserialize<stream::StreamTrackInfo>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
