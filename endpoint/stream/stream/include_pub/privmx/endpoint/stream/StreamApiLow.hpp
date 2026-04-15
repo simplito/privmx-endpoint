@@ -20,7 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
 
@@ -37,7 +36,7 @@ class StreamApiLowImpl;
 class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
 public:
 
-    static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi);
+    static StreamApiLow create(const core::Connection& connection);
     StreamApiLow();
     StreamApiLow(const StreamApiLow& obj);
     StreamApiLow& operator=(const StreamApiLow& obj);

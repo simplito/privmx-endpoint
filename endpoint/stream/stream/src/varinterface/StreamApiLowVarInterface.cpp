@@ -54,7 +54,7 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
 };
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _streamApi = StreamApiLow::create(_connection, _eventApi);
+    _streamApi = StreamApiLow::create(_connection);
     return {};
 }
 

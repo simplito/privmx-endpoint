@@ -20,9 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
-#include <privmx/endpoint/event/EventApiImpl.hpp>
-
-
 #include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 
@@ -30,14 +27,11 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
 StreamApiLow StreamApiLow::create(
-    const core::Connection& connection,
-    event::EventApi& eventApi
+    const core::Connection& connection
 ) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<event::EventApiImpl> eventApiImpl = eventApi.getImpl();
         std::shared_ptr<StreamApiLowImpl> impl(new stream::StreamApiLowImpl(
-            eventApiImpl,
             connection,
             connectionImpl->getGateway(),
             connectionImpl->getUserPrivKey(),

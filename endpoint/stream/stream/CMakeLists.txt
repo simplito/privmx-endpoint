@@ -6,7 +6,7 @@ add_library(privmxendpointstream_stream OBJECT ${SOURCES})
 
 target_include_directories(privmxendpointstream_stream PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointstream_stream PRIVATE -Wall -Wextra -fPIC)
-target_link_libraries(privmxendpointstream_stream PRIVATE Poco::Foundation privmx privmxendpointcore privmxendpointevent)
+target_link_libraries(privmxendpointstream_stream PRIVATE Poco::Foundation privmx privmxendpointcore)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxendpointstream_stream PROPERTIES POSITION_INDEPENDENT_CODE True)
 endif()

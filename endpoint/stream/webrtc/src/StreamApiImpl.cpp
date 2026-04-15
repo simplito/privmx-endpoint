@@ -32,8 +32,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiImpl::StreamApiImpl(core::Connection& connection, event::EventApi eventApi) {
-    std::shared_ptr<StreamApiLow> apiLow = std::make_shared<StreamApiLow>(StreamApiLow::create(connection, eventApi));
+StreamApiImpl::StreamApiImpl(core::Connection& connection) {
+    std::shared_ptr<StreamApiLow> apiLow = std::make_shared<StreamApiLow>(StreamApiLow::create(connection));
     _api = apiLow;
     auto credentials = _api->getTurnCredentials();
     libwebrtc::LibWebRTC::Initialize();

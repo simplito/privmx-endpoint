@@ -44,7 +44,6 @@ using namespace privmx::endpoint::stream;
 int32_t StreamApiLowImpl::nextIdCounter = 0;
 
 StreamApiLowImpl::StreamApiLowImpl(
-    const std::shared_ptr<event::EventApiImpl>& eventApi,
     const core::Connection& connection,
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
@@ -52,7 +51,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware
 ) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
-     _eventApi(eventApi),
     _connection(connection.getImpl()),
     _userPrivKey(userPrivKey),
     _keyProvider(keyProvider),
@@ -72,9 +70,6 @@ StreamApiLowImpl::StreamApiLowImpl(
 
 StreamApiLowImpl::~StreamApiLowImpl() {
     LOG_TRACE("~StreamApiLowImpl() Start");
-    if(_serverApi->isConnected()) {
-        _eventApi->unsubscribeFrom(_internalSubscriptionIds);
-    }
     _streamRoomMap.forAll([&]([[maybe_unused]]std::string key,std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
         if(roomValue->publisherStream) {
             roomValue->publisherStream.reset();

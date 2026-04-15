@@ -23,8 +23,6 @@
 #include <privmx/endpoint/core/Events.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/event/Events.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/Events.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
@@ -168,7 +166,6 @@ private:
     wxBitmap bmp = wxBitmap(MAX_VIDEO_W, MAX_VIDEO_H, 32);
     int tmp = 0;
     std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApi> streamApi;
     std::thread _event_chandler;
 };
@@ -297,8 +294,7 @@ MyFrame::MyFrame()
 
 void MyFrame::Connect(std::string privKey, std::string solutionId, std::string url) {
     connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, url));
-    eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
-    streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
+    streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection));
     crypto::CryptoApi cryptoApi = crypto::CryptoApi::create();
     auto context = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0];
     auto streamRoomList = streamApi->listStreamRooms(context.contextId, {.skip=0, .limit=1, .sortOrder="asc"});

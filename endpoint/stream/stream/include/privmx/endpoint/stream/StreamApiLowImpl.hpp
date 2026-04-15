@@ -20,7 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
-#include <privmx/endpoint/event/EventApiImpl.hpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -39,7 +38,6 @@ namespace stream {
 class StreamApiLowImpl : public privmx::utils::ManualManagedClass<StreamApiLowImpl>, protected core::ModuleBaseApi {
 public:
     StreamApiLowImpl(
-        const std::shared_ptr<event::EventApiImpl>& eventApi,
         const core::Connection& connection,
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
@@ -160,7 +158,6 @@ private:
     }
 
 
-    std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::ConnectionImpl> _connection;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -175,7 +172,6 @@ private:
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
-    std::vector<std::string> _internalSubscriptionIds;
 };
 
 }  // namespace stream

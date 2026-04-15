@@ -18,7 +18,6 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamVarSerializer.hpp"
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/stream/StreamVarDeserializer.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <mutex>
 #include <shared_mutex>
 namespace privmx {
@@ -60,8 +59,8 @@ public:
         JoinStreamRoomEx = 25,
     };
 
-    StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _eventApi(std::move(eventApi)), _serializer(serializer) {}
+    StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
+        : _connection(std::move(connection)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getTurnCredentials(const Poco::Dynamic::Var& args);
@@ -103,7 +102,6 @@ private:
     static std::map<METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
-    event::EventApi _eventApi;
     StreamApiLow _streamApi;
     core::VarSerializer _serializer;
     core::VarDeserializer _deserializer;
