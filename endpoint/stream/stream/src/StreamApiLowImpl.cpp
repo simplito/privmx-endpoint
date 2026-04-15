@@ -13,18 +13,12 @@ limitations under the License.
 
 #include <Poco/URI.h>
 
-#include <chrono>
-#include <ctime>
-#include <iomanip>
-#include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/ListQueryMapper.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/utils/Logger.hpp>
@@ -168,14 +162,12 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUpdated" ) {
             if(type == "streamPublished") {
-                auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamPublishedEventData>(data);
                 auto deserializer = std::make_shared<core::VarDeserializer>();
                 auto eventData = deserializer->deserialize<StreamPublishedEventData>(data, "StreamPublishedEventData");
                 auto event = core::EventBuilder::buildEvent<StreamPublishedEvent, StreamPublishedEventData>("stream", eventData, notification);
                 _eventMiddleware->emitApiEvent(event);
             } else
             if(type == "streamUpdated") {
-                auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamUpdatedEventData>(data);
                 auto deserializer = std::make_shared<core::VarDeserializer>();
                 auto eventData = deserializer->deserialize<StreamUpdatedEventData>(data, "StreamUpdatedEventData");
                 auto event = core::EventBuilder::buildEvent<StreamUpdatedEvent, StreamUpdatedEventData>("stream", eventData, notification);
@@ -223,7 +215,6 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             }
             if (!raw.jsepEmpty()) {
                 std::string sdp = room->webRtc->createAnswerAndSetDescriptions(room->streamRoomId, raw.jsep().sdp(), raw.jsep().type());
-                auto sessionDescription = utils::TypedObjectFactory::createNewObject<server::SessionDescription>();
                 SdpWithTypeModel sdpModel = {
                     .sdp = sdp,
                     .type = "answer"
@@ -314,7 +305,6 @@ void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shar
 }
 void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     auto room = getStreamRoomData(streamRoomId);
-    auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(room->streamRoomId)};
     _subscriber.unsubscribeFrom(room->subscriptionsIds);
     _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, room->subscriptionsIds);
 
@@ -957,10 +947,6 @@ StreamRoom StreamApiLowImpl::decryptAndConvertStreamRoomDataToStreamRoom(server:
     return result;
 }
 
-int64_t StreamApiLowImpl::generateNumericId() {
-    return std::rand();
-}
-
 privmx::utils::List<std::string> StreamApiLowImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
     auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     for (auto user : users) {
@@ -1057,8 +1043,7 @@ uint32_t StreamApiLowImpl::validateStreamRoomDataIntegrity(server::StreamRoomInf
         return e.getCode();
     } catch (...) {
         return ENDPOINT_CORE_EXCEPTION_CODE;
-    } 
-    return UnknownStreamRoomFormatException().getCode();
+    }
 }
 
 void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
