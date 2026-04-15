@@ -302,16 +302,6 @@ void StreamApiLow::unsubscribeFromRemoteStreams(const std::string& streamRoomId,
     }
 }
 
-void StreamApiLow::keyManagement(const std::string& streamRoomId, bool disable) {
-    auto impl = getImpl();
-    try {
-        return impl->keyManagement(streamRoomId, disable);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 void StreamApiLow::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
     auto impl = getImpl();
     core::Validator::validateNumberPositive(sessionId, "field:sessionId ");

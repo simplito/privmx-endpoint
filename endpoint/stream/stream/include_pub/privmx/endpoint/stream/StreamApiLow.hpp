@@ -95,7 +95,6 @@ public:
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    void keyManagement(const std::string& streamRoomId, bool disable);
 private:
     StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl);
 };

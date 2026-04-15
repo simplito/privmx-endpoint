@@ -94,8 +94,6 @@ public:
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var acceptOfferOnReconfigure(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setNewOfferOnReconfigure(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var keyManagement(const Poco::Dynamic::Var& args);
-
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
     std::shared_ptr<WebRTCInterface> getWebRtcInterface();
