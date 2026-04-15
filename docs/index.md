@@ -46,7 +46,7 @@ This library implements models, exception catching, and the following modules:
 Copyright © 2026 Simplito sp. z o.o.
 
 This project is part of the PrivMX Platform (https://privmx.dev).
-This project is Licensed under the MIT License.
+This project is Licensed under the [PrivMX Free License](https://www.privmx.dev/licensing).
 
-PrivMX Endpoint and PrivMX Bridge are licensed under the PrivMX Free License.
+PrivMX Endpoint and PrivMX Bridge are licensed under the [PrivMX Free License](https://www.privmx.dev/licensing).
 See the License for the specific language governing permissions and limitations under the License.
