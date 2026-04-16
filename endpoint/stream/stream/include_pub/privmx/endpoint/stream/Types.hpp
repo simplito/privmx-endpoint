@@ -14,8 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <functional>
-#include <memory>
 
 namespace privmx {
 namespace endpoint {
