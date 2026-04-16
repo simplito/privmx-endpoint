@@ -158,8 +158,6 @@ stream::StreamsUpdatedDataInternal VarDeserializer::deserialize<stream::StreamsU
     if (obj->has("jsep")) {
         jsep.emplace(deserialize<stream::SdpWithTypeModel>(obj->get("jsep"), name + ".jsep"));
     }
-    auto room = deserialize<std::string>(obj->get("room"), name + ".room");
-    auto streams = deserializeVector<stream::UpdatedStreamData>(obj->get("streams"), name + ".streams");
     return {
         .room = deserialize<std::string>(obj->get("room"), name + ".room"),
         .streams = deserializeVector<stream::UpdatedStreamData>(obj->get("streams"), name + ".streams"),
