@@ -136,11 +136,6 @@ ENDPOINT_SERVER_TYPE(StreamUpdateModel)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
-// ENDPOINT_SERVER_TYPE(StreamJoinModel)
-//     LIST_FIELD(streamIds, int64_t)
-//     STRING_FIELD(streamRoomId)
-// TYPE_END
-
 ENDPOINT_SERVER_TYPE(StreamSubscription)
     INT64_FIELD(streamId)
     STRING_FIELD(streamTrackId)
@@ -183,12 +178,6 @@ ENDPOINT_SERVER_TYPE(StreamListModel)
     STRING_FIELD(streamRoomId)
 TYPE_END
 
-// ENDPOINT_SERVER_TYPE(Stream)
-//     INT64_FIELD(streamId)
-//     STRING_FIELD(userId)
-//     VAR_FIELD(createStreamMeta)
-//     VAR_FIELD(remoteStreamInfo)
-// TYPE_END
 ENDPOINT_SERVER_TYPE(StreamTrackInfo)
     STRING_FIELD(type)
     /** unique mindex of published track */
@@ -369,30 +358,6 @@ ENDPOINT_SERVER_TYPE_INHERIT(JanusPluginEvent, JanusEventData)
     OBJECT_FIELD(jsep, JanusJSEP)
     OBJECT_FIELD(plugindata, JanusPluginDataEvent)
 TYPE_END
-
-// // deprecated
-// ENDPOINT_SERVER_TYPE(VideoRoomStreamTrack)
-//     STRING_FIELD(type)
-//     STRING_FIELD(codec)
-//     STRING_FIELD(mid)
-//     INT64_FIELD(mindex)
-// TYPE_END
-
-// // Deprecated (use StreamInfo)
-// ENDPOINT_SERVER_TYPE(NewPublisherEvent)
-//     INT64_FIELD(id)
-//     STRING_FIELD(userId)
-//     STRING_FIELD(video_codec)
-//     LIST_FIELD(streams, VideoRoomStreamTrack)
-// TYPE_END
-//
-// //deprecated (use NewStreams)
-// ENDPOINT_SERVER_TYPE(CurrentPublishersData)
-//     STRING_FIELD(room)
-//     LIST_FIELD(publishers, NewPublisherEvent)
-// TYPE_END
-
-
 
 ENDPOINT_SERVER_TYPE(StreamListResult)
     LIST_FIELD(list, StreamInfo)

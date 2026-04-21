@@ -27,7 +27,6 @@ limitations under the License.
 #include <rtc_peerconnection.h>
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
-#include <rtc_peerconnection.h>
 #include <rtc_media_stream.h>
 #include <pmx_frame_cryptor.h>
 
@@ -83,20 +82,15 @@ private:
     void RemoveDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc);
 
 
-    int64_t addKeyUpdateCallback(std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)> keyUpdateCallback);
-    void removeKeyUpdateCallback(int64_t keyUpdateCallbackId);
     static std::shared_ptr<privmx::webrtc::KeyStore> createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys);
     std::shared_ptr<PeerConnection> createPeerConnection(const std::string& streamRoomId);
 
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
-    std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> _onTrickle;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;
-
-    
 };
 
 } // namespace stream

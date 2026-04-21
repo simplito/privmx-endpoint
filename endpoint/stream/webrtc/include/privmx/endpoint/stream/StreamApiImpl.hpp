@@ -33,7 +33,6 @@ limitations under the License.
 #include <rtc_peerconnection.h>
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
-#include <rtc_peerconnection.h>
 #include <rtc_desktop_media_list.h>
 #include <rtc_desktop_capturer.h>
 #include <rtc_desktop_device.h>
@@ -225,7 +224,6 @@ private:
         std::string streamRoomId;
         std::mutex streamMutex;
     };
-    int64_t generateNumericId();
     inline std::string getTrimmedString(std::string s) {
         s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
         return s;
@@ -237,7 +235,7 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
-    int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
+    int _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLow> _api;
     std::shared_ptr<WebRTCImpl> _webRTC;
 };

@@ -480,10 +480,10 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
             videoTracksToRemove.push_back({id, video->track});
         }
     });
-    size_t toRemove = 0;
-    for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
-        streamData->videoTracks.erase(videoTracksToRemove[toRemove].first);
+    for(const auto& toRemove : videoTracksToRemove) {
+        streamData->videoTracks.erase(toRemove.first);
     }
+    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> desktopTracksToRemove;
     streamData->desktopTracks.forAll([&](const std::string& id,const std::shared_ptr<StreamDesktopTrackInfo>& desktop) {
         if(desktop->status == TrackStatus::ToAdd) {
             if(!desktop->capturer->IsRunning()) desktop->capturer->Start(15);
@@ -491,11 +491,12 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
             videoTracksToAdd.push_back({id, desktop->track});
         } else if(desktop->status == TrackStatus::ToRemove) {
             if(desktop->capturer->IsRunning()) desktop->capturer->Stop();
-            videoTracksToRemove.push_back({id, desktop->track});
+            desktopTracksToRemove.push_back({id, desktop->track});
         }
     });
-    for(; toRemove < videoTracksToRemove.size(); toRemove++ ) {
-        streamData->desktopTracks.erase(videoTracksToRemove[toRemove].first);
+    for(const auto& toRemove : desktopTracksToRemove) {
+        streamData->desktopTracks.erase(toRemove.first);
+        videoTracksToRemove.push_back(toRemove);
     }
     // UPDATE dataChannel
     std::optional<std::pair<std::string, std::function<void(std::string)>*>> dataChannel = std::nullopt;
@@ -570,10 +571,6 @@ StreamRoom StreamApiImpl::getStreamRoom(const std::string& streamRoomId) {
 
 void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {
     _api->deleteStreamRoom(streamRoomId);
-}
-
-int64_t StreamApiImpl::generateNumericId() {
-    return std::rand();
 }
 
 std::vector<std::string> StreamApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

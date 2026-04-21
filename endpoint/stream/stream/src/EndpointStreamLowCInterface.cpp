@@ -9,12 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <functional>
 #include <string>
-#include <unordered_map>
 #include <Poco/Dynamic/Var.h>
-#include <Poco/JSON/Array.h>
-#include <Pson/BinaryString.hpp>
 
 #include <privmx/utils/Utils.hpp>
 

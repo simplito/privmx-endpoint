@@ -1,11 +1,17 @@
-add_subdirectory(stream)
 
 option(PRIVMX_BUILD_WITH_WEBRTC "Build Stream module with additional layer of the native WebRTC library" OFF)
-option(USE_PREBUILT_WEBRTC "Use libwebrtc provided by package manager" ON)
-message(STATUS "Build Stream module with additional layer of the native WebRTC library - PRIVMX_BUILD_WITH_WEBRTC=${PRIVMX_BUILD_WITH_WEBRTC}")
+if(PRIVMX_BUILD_WITH_WEBRTC)
+    option(PRIVMX_IMPORT_LIBWEBRTC "Manually IMPORT libwebrtc provided by package manager" OFF)
+    if(PRIVMX_IMPORT_LIBWEBRTC)
+        message(STATUS  "Using IMPORTED libwebrtc library")
+        message(STATUS  "path to libWEBRTC lib PRIVMX_LIBWEBRTC=${PRIVMX_LIBWEBRTC}")
+        message(STATUS  "path to libWEBRTC includes PRIVMX_LIBWEBRTC_INCLUDE=${PRIVMX_LIBWEBRTC_INCLUDE}")
+    else()
+        message(STATUS  "Using prebuild WelibwebrtcbRTC library")
+    endif()
+endif()
 
-set(LIBS "")
-
+add_subdirectory(stream)
 if(PRIVMX_BUILD_WITH_WEBRTC)
     add_subdirectory(webrtc)
     list(APPEND LIBS privmxendpointstream_webrtc)

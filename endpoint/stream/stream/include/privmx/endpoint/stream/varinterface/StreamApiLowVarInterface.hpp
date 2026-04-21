@@ -109,7 +109,7 @@ private:
     std::shared_mutex _mutex;
 };
 
-}  // namespace event
+}  // namespace stream
 }  // namespace endpoint
 }  // namespace privmx
 
