@@ -180,7 +180,7 @@ void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped
     for(const auto& stream: streams.std_vector()) {
         auto tmp = _streamOnTrackInterfacesMap->get(stream->id().std_string());
         if(tmp.has_value()) {
-            tmp.value()->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled(), [track](bool mute) {return track->set_enabled(!mute);}}, TrackAction::ADDED);
+            tmp.value()->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled(), [track](bool mute) {return track->set_enabled(!mute);}}, TrackAction::REMOVED);
         }
     }
     if (dataType == DataType::AUDIO) _audioLevelAnalyzers.erase(receiver->track()->id().std_string());

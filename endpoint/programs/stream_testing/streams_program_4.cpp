@@ -25,10 +25,6 @@
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/event/Events.hpp>
-#include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/endpoint/thread/Events.hpp>
-#include <privmx/endpoint/store/StoreApi.hpp>
-#include <privmx/endpoint/store/Events.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/Types.hpp>

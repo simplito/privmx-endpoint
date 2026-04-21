@@ -1,10 +1,7 @@
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <fstream>
 #include <vector>
 #include <thread>
-// #include <privmx/utils/IniFileReader.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 
 #include <privmx/endpoint/core/Config.hpp>

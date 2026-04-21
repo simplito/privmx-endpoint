@@ -25,7 +25,6 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
-#include "ThreadSafeQueue.hpp"
 #include "privmx/endpoint/stream/Constants.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
@@ -151,12 +150,10 @@ private:
     StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom);
     void assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
-    int64_t generateNumericId();
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
-    void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, const StreamHandle& streamHandle);
     std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, const std::string& encryptionKeyId);
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(server::StreamRoomInfo streamRoomInfo);
     std::string deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 EncKey);
@@ -182,7 +179,6 @@ private:
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
     core::ModuleDataEncryptorV5 _streamRoomDataEncryptorV5;
-    core::DataEncryptorV4 _dataEncryptor;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
