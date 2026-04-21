@@ -239,7 +239,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             _eventMiddleware->emitApiEvent(event);
         }
         else {
-            std::cerr << "UNRESOLVED EVENT in CPP layer: '" << type << "'"<< std::endl;
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
 }
 
@@ -253,6 +253,9 @@ void StreamApiLowImpl::processDisconnectedEvent() {
 }
 
 std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
+    if(_streamRoomMap.has(streamRoomId)) {
+        throw AlreadyJoinedStreamRoomException();
+    }
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
@@ -367,7 +370,7 @@ StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle {nextId()};
     auto room = getStreamRoomData(streamRoomId);
     if(room->publisherStream) {
-        throw StreamIsPublished();
+        throw StreamAlreadyPublishedException();
     }
     _streamHandleToRoomId.set(streamHandle, streamRoomId);
     room->publisherStream = std::make_shared<StreamData>(
@@ -397,7 +400,6 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamPublishModel>();
     model.streamRoomId(room->streamRoomId);
     model.offer(sessionDescription);
-    std::cout << privmx::utils::Utils::stringifyVar(model) << std::endl;
     auto result = _serverApi->streamPublish(model);
     streamData->sessionId = result.sessionId();
     // update/set sessionId in webrtc (for Janus - trickle)
@@ -611,31 +613,8 @@ std::string StreamApiLowImpl::createStreamRoom(
     const std::vector<core::UserWithPubKey>&managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, STREAM_TYPE_FILTER_FLAG, policies);
-}
-
-std::string StreamApiLowImpl::createStreamRoomEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
-}
-
-std::string StreamApiLowImpl::_streamRoomCreateEx(
-    const std::string& contextId, 
-    const std::vector<core::UserWithPubKey>& users, 
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::string& type
 ) {
     auto streamRoomKey = _keyProvider->generateKey();
     std::string resourceId = core::EndpointUtils::generateId();
@@ -762,15 +741,7 @@ void StreamApiLowImpl::updateStreamRoom(
     _serverApi->streamRoomUpdate(model);
 }
 
-core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
-    return _streamRoomsListEx(contextId, query, STREAM_TYPE_FILTER_FLAG);
-}
-
-core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
-    return _streamRoomsListEx(contextId, query, type);
-}
-
-core::PagingList<StreamRoom> StreamApiLowImpl::_streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
+core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamRoomListModel>();
     model.contextId(contextId);
     model.type(type);
@@ -799,15 +770,7 @@ core::PagingList<StreamRoom> StreamApiLowImpl::_streamRoomsListEx(const std::str
     });
 }
 
-StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId) {
-    return _streamRoomGetEx(streamRoomId, STREAM_TYPE_FILTER_FLAG);
-}
-
-StreamRoom StreamApiLowImpl::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
-    return _streamRoomGetEx(streamRoomId, type);
-}
-
-StreamRoom StreamApiLowImpl::_streamRoomGetEx(const std::string& streamRoomId, const std::string& type) {
+StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId, const std::string& type) {
     auto params = utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     params.id(streamRoomId);
     params.type(type);
@@ -1116,7 +1079,7 @@ void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {
 void StreamApiLowImpl::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
     auto model = utils::TypedObjectFactory::createNewObject<server::StreamTrickleModel>();
     model.sessionId(sessionId);
-    model.candidate(utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(candidateAsJson)));
+    model.rtcCandidate(utils::TypedObjectFactory::createObjectFromVar<dynamic::RTCIceCandidate>(privmx::utils::Utils::parseJson(candidateAsJson)));
     _serverApi->trickle(model);
 }
 

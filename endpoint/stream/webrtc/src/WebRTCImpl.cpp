@@ -1,6 +1,7 @@
 #include "privmx/endpoint/stream/WebRTCImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
+#include "privmx/endpoint/stream/DataChannelImpl.hpp"
 #include <future>
 #include <privmx/utils/Logger.hpp>
 
@@ -60,7 +61,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
         [&]() {tmp.set_value(true);}, 
         [&](const char* error) {
             tmp.set_value(false);
-            std::cout << "OnSetSdpFailure: " << std::string(error) << std::endl;
+            LOG_ERROR("OnSetSdpFailure: ", std::string(error))
             throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
@@ -69,11 +70,13 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
     }
     // Create answer
     std::promise<std::string> answer_spd = std::promise<std::string>();
+    _bootstrapDataChannel = peerConnection->pc->CreateDataChannel("JanusDataChannel", new libwebrtc::RTCDataChannelInit());
     peerConnection->pc->CreateAnswer(
         [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
             answer_spd.set_value(sdp.std_string());
         },
         [&](const char* error) {
+            LOG_ERROR("SdpCreateFailure: ", std::string(error))
             throw stream::WebRTCException("SdpCreateFailure " + std::string(error));
         }, 
         _constraints
@@ -84,6 +87,7 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(const std::string& stream
         "answer",
         [&]() {}, 
         [&](const char* error) {
+            LOG_ERROR("OnSetSdpFailure: ", std::string(error))
             throw stream::WebRTCException("OnSetSdpFailure " + std::string(error));
         }
     );
@@ -111,10 +115,15 @@ void WebRTCImpl::setAnswerAndSetRemoteDescription(const std::string& streamRoomI
 }
 
 void WebRTCImpl::close(const std::string& streamRoomId) {
-    LOG_DEBUG("STREAMS", "WebRTC_IMPL", "WebRTCImpl::close()");
+    LOG_DEBUG("WebRTCImpl::close()");
     _peerConnectionManager->closeConnection(streamRoomId, ConnectionType::Publisher);
     _peerConnectionManager->closeConnection(streamRoomId, ConnectionType::Subscriber);
     _peerConnectionManager->closeSession(streamRoomId);
+}
+
+void WebRTCImpl::closeSingleConnection(const std::string& streamRoomId, ConnectionType connectionType) {
+    LOG_DEBUG("WebRTCImpl::closeSingleConnection()");
+    _peerConnectionManager->closeConnection(streamRoomId, connectionType);
 }
 
 void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) {
@@ -126,8 +135,12 @@ void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<K
     {
         std::unique_lock<std::shared_mutex> lock1(peerConnection_p->trackMutex);
         std::unique_lock<std::shared_mutex> lock2(peerConnection_s->trackMutex);
-        peerConnection_s->keys = createWebRtcKeyStore(keys);
-        peerConnection_p->keys = createWebRtcKeyStore(keys);
+        std::shared_ptr<privmx::webrtc::KeyStore> keyStore = createWebRtcKeyStore(keys);
+        
+        peerConnection_s->cpp_keys = keys;
+        peerConnection_p->cpp_keys = keys;
+        peerConnection_s->keys = keyStore;
+        peerConnection_p->keys = keyStore;
         LOG_DEBUG("STREAMS:WebRTC ", "updateKeys _peerConnectionObserver->UpdateCurrentKeys");
         // update input data keys 
         if(peerConnection_p->observer) peerConnection_p->observer->UpdateCurrentKeys(peerConnection_p->keys);
@@ -159,6 +172,8 @@ void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<K
             peerConnection_s->videoTracks.end(), 
             [&](const auto& p) {p.second.frameCryptor->setKeyStore(peerConnection_s->keys);}
         );
+        peerConnection_p->messageEncryptor->updateKey(keys);
+        peerConnection_s->messageEncryptor->updateKey(keys);
     }
 }
 
@@ -181,8 +196,15 @@ std::shared_ptr<PeerConnection> WebRTCImpl::createPeerConnection(const std::stri
     peerConnection->pc = _peerConnectionFactory->Create(_configuration, _constraints);
     std::string streamId = streamRoomId + "-" + privmx::utils::Utils::getNowTimestampStr(); // TMP
     peerConnection->mediaStream = _peerConnectionFactory->CreateStream(streamId);
+    peerConnection->messageEncryptor = std::make_shared<DataChannelMessageEncryptorV1>(std::vector<Key>());
     peerConnection->pc->CreateLocalMediaStream(streamId);
-    peerConnection->observer = std::make_shared<PmxPeerConnectionObserver>(_peerConnectionFactory, streamRoomId, privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()), _frameCryptorOptions);
+    peerConnection->observer = std::make_shared<PmxPeerConnectionObserver>(
+        _peerConnectionFactory, 
+        streamRoomId, 
+        privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()),
+        _frameCryptorOptions,
+        peerConnection->messageEncryptor
+    );
     peerConnection->pc->RegisterRTCPeerConnectionObserver(peerConnection->observer.get());
     return peerConnection;
 }
@@ -191,6 +213,7 @@ void WebRTCImpl::setFrameCryptorOptions(const std::string& streamRoomId, const p
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
     connection->peerConnection->observer->SetFrameCryptorOptions(frameCryptorOptions);
 }
+
 void WebRTCImpl::setOnTrackInterface(const std::string& streamRoomId, const std::optional<std::string>& streamId, std::shared_ptr<OnTrackInterface> onTrackInterface) {
     auto connection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber);
     if(streamId.has_value()) {
@@ -203,17 +226,19 @@ void WebRTCImpl::setOnTrackInterface(const std::string& streamRoomId, const std:
 void WebRTCImpl::createPeerConnectionWithLocalStream(
     const std::string& streamRoomId, 
     const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracks,
-    const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracks
+    const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracks,
+    const std::optional<std::pair<std::string, std::function<void(std::string)>*>>& dataChannel
 ) {
-    _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
     auto jc = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
 
-    
     for(auto audioTrack: audioTracks) {
         AddAudioTrack(jc, audioTrack.second, privmx::utils::Hex::from(audioTrack.first));
     }
     for(auto videoTrack: videoTracks) {
         AddVideoTrack(jc, videoTrack.second, privmx::utils::Hex::from(videoTrack.first));
+    }
+    if(dataChannel.has_value()) {
+        AddDataChannel(jc, dataChannel.value());
     }
 }
 
@@ -222,8 +247,8 @@ void WebRTCImpl::updatePeerConnectionWithLocalStream(
     const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToAdd,
     const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToAdd,
     const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>& audioTracksToRemove,
-    const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToRemove
-
+    const std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>& videoTracksToRemove,
+    const std::optional<std::pair<std::string, std::function<void(std::string)>*>>& dataChannel
 ) {
     _peerConnectionManager->initialize(streamRoomId, ConnectionType::Publisher);
     auto jc = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
@@ -244,6 +269,13 @@ void WebRTCImpl::updatePeerConnectionWithLocalStream(
         LOG_DEBUG("updatePeerConnectionWithLocalStream:videoTracksToAdd - ", videoTrack.first)
         AddVideoTrack(jc, videoTrack.second, privmx::utils::Hex::from(videoTrack.first));
     }
+    if(jc->peerConnection->dataChannel.has_value() && !dataChannel.has_value()) {
+        LOG_DEBUG("updatePeerConnectionWithLocalStream:RemoveDataChannel")
+        RemoveDataChannel(jc);
+    } else if(!jc->peerConnection->dataChannel.has_value() && dataChannel.has_value()) {
+        LOG_DEBUG("updatePeerConnectionWithLocalStream:AddDataChannel")
+        AddDataChannel(jc, dataChannel.value());
+    }
     LOG_DEBUG("updatePeerConnectionWithLocalStream:pc->audioTracks -" , jc->peerConnection->audioTracks.size());
     LOG_DEBUG("updatePeerConnectionWithLocalStream:pc->videoTracks -" , jc->peerConnection->videoTracks.size());
 }
@@ -252,6 +284,7 @@ void WebRTCImpl::updatePeerConnectionWithLocalStream(
 void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id) {
     jc->peerConnection->mediaStream->AddTrack(audioTrack);
     auto sender = jc->peerConnection->pc->AddTrack(audioTrack, libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{jc->peerConnection->mediaStream->id()}});
+    auto audioLevelAnalyzer = privmx::webrtc::FrameCryptorFactory::audioLevelAnalyzer();
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
     {
         std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
@@ -259,6 +292,7 @@ void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             _peerConnectionFactory,
             sender, 
             jc->peerConnection->keys,
+            audioLevelAnalyzer,
             _frameCryptorOptions
         );
     }
@@ -269,6 +303,7 @@ void WebRTCImpl::AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             AudioTrackInfo{
                 .track=audioTrack, 
                 .sender=sender, 
+                .audioLevelAnalyzer=audioLevelAnalyzer,
                 .frameCryptor=frameCryptor
             }
         ));
@@ -285,6 +320,7 @@ void WebRTCImpl::AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             _peerConnectionFactory,
             sender, 
             jc->peerConnection->keys,
+            nullptr,
             _frameCryptorOptions
         );
     }
@@ -299,7 +335,17 @@ void WebRTCImpl::AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusCo
             }
         ));
     }
-    
+}
+
+void WebRTCImpl::AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, const std::pair<std::string, std::function<void(std::string)>*>& dataChannelInfo) {
+    std::shared_ptr<libwebrtc::RTCDataChannelInit> rtcDataChannelInit = std::make_shared<libwebrtc::RTCDataChannelInit>();
+    auto dataChannel = jc->peerConnection->pc->CreateDataChannel(dataChannelInfo.first, rtcDataChannelInit.get());
+    auto observer = std::make_shared<PmxDataChannelObserver>(nullptr, nullptr, dataChannelInfo.first);
+    dataChannel->RegisterObserver(observer.get());
+    jc->peerConnection->dataChannel = DataChannelInfo{rtcDataChannelInit, dataChannel, observer};
+    dataChannelInfo.second->operator=( [jc](std::string data) {
+        jc->peerConnection->sendData(data);
+    });
 }
 
 void WebRTCImpl::RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id) {
@@ -326,3 +372,9 @@ void WebRTCImpl::RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::Janu
     }
 }
 
+void WebRTCImpl::RemoveDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc) {
+    if(jc->peerConnection->dataChannel.has_value()) {
+        jc->peerConnection->dataChannel.value().channel->Close();
+        jc->peerConnection->dataChannel = std::nullopt;
+    }
+}

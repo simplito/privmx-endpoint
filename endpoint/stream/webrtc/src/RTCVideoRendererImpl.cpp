@@ -46,7 +46,7 @@ void RTCVideoRendererImpl::updateStreamOnTrackInterfacesMap(std::shared_ptr<priv
 }
 void RTCVideoRendererImpl::OnFrame(libwebrtc::scoped_refptr<libwebrtc::RTCVideoFrame> frame) {
     std::unique_lock<std::mutex> lock(m);
-    std::shared_ptr<VideoData> videoData = std::make_unique<VideoData>(DataType::VIDEO, _streamIds, _track->id().std_string(), frame->width(), frame->height(), std::make_shared<FrameImpl>(frame));
+    std::shared_ptr<VideoData> videoData = std::make_unique<VideoData>(_streamIds, _track->id().std_string(), frame->width(), frame->height(), std::make_shared<FrameImpl>(frame));
     if(_roomOnTrackInterface) {
         _roomOnTrackInterface->OnData(videoData);
     }
