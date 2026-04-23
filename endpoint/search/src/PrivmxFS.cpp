@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <mutex>
+#include <thread>
 #include <privmx/utils/Logger.hpp>
 #include <sstream>
 #include <type_traits>
@@ -34,6 +35,12 @@ struct ScopedDbLockState {
 
 std::mutex g_scopedDbLockMutex;
 std::unordered_map<std::string, std::shared_ptr<ScopedDbLockState>> g_scopedDbLocks;
+std::mutex g_sessionFilesystemMutex;
+std::unordered_map<std::string, std::shared_ptr<PrivmxFS>> g_sessionFilesystems;
+
+constexpr auto SCOPED_DB_LOCK_TIMEOUT = std::chrono::seconds(10);
+constexpr auto SCOPED_DB_LOCK_RETRY_DELAY = std::chrono::milliseconds(50);
+constexpr std::size_t STORE_RANDOM_WRITE_MAX_CHUNK_SIZE = 512 * 1024;
 
 std::string makeScopedDbLockKey(const std::string& sessionId, const std::string& path) {
     return sessionId + ":" + path;
@@ -56,6 +63,209 @@ bool isScopedDbLockActive(const std::shared_ptr<PrivmxSession>& session, const s
     std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
     auto it = g_scopedDbLocks.find(makeScopedDbLockKey(session->id, path));
     return it != g_scopedDbLocks.end() && it->second->locked;
+}
+
+void cleanupScopedDbLockAttempt(const std::shared_ptr<ScopedDbLockState>& state) {
+    try {
+        state->lockSession.unlock(LockLevel::NONE);
+    } catch (...) {
+    }
+}
+
+std::shared_ptr<PrivmxFS> getOrCreateSessionFilesystem(const std::shared_ptr<PrivmxSession>& session) {
+    std::lock_guard<std::mutex> lock(g_sessionFilesystemMutex);
+    auto& entry = g_sessionFilesystems[session->id];
+    if (!entry) {
+        entry = std::make_shared<PrivmxFS>(session);
+    }
+    return entry;
+}
+
+void releaseSessionFilesystem(const std::string& sessionId) {
+    std::lock_guard<std::mutex> lock(g_sessionFilesystemMutex);
+    g_sessionFilesystems.erase(sessionId);
+}
+
+int64_t getDirtyRangeEnd(const std::pair<const int64_t, std::string>& range) {
+    return range.first + static_cast<int64_t>(range.second.size());
+}
+
+void mergeDirtyRange(std::map<int64_t, std::string>& dirtyRanges, int64_t offset, const std::string& data) {
+    if (data.empty()) {
+        return;
+    }
+
+    int64_t mergedStart = offset;
+    int64_t mergedEnd = offset + static_cast<int64_t>(data.size());
+    std::vector<std::pair<int64_t, std::string>> overlappingRanges;
+
+    auto it = dirtyRanges.lower_bound(offset);
+    if (it != dirtyRanges.begin()) {
+        auto prev = std::prev(it);
+        if (getDirtyRangeEnd(*prev) >= offset) {
+            it = prev;
+        }
+    }
+
+    while (it != dirtyRanges.end()) {
+        const auto existingStart = it->first;
+        const auto existingEnd = getDirtyRangeEnd(*it);
+        if (existingStart > mergedEnd) {
+            break;
+        }
+        if (existingEnd >= mergedStart) {
+            mergedStart = std::min(mergedStart, existingStart);
+            mergedEnd = std::max(mergedEnd, existingEnd);
+            overlappingRanges.emplace_back(it->first, it->second);
+            it = dirtyRanges.erase(it);
+            continue;
+        }
+        ++it;
+    }
+
+    std::string merged(static_cast<std::size_t>(mergedEnd - mergedStart), '\0');
+    for (const auto& range : overlappingRanges) {
+        std::memcpy(
+            merged.data() + (range.first - mergedStart),
+            range.second.data(),
+            range.second.size()
+        );
+    }
+    std::memcpy(
+        merged.data() + (offset - mergedStart),
+        data.data(),
+        data.size()
+    );
+    dirtyRanges.emplace(mergedStart, std::move(merged));
+}
+
+void trimDirtyRanges(std::map<int64_t, std::string>& dirtyRanges, int64_t size) {
+    auto it = dirtyRanges.begin();
+    while (it != dirtyRanges.end()) {
+        const auto rangeStart = it->first;
+        const auto rangeEnd = getDirtyRangeEnd(*it);
+        if (rangeStart >= size) {
+            it = dirtyRanges.erase(it);
+            continue;
+        }
+        if (rangeEnd > size) {
+            it->second.resize(static_cast<std::size_t>(size - rangeStart));
+        }
+        ++it;
+    }
+}
+
+bool isRangeFullyCoveredByDirtyRanges(
+    const std::map<int64_t, std::string>& dirtyRanges,
+    int64_t offset,
+    int64_t size
+) {
+    if (size <= 0) {
+        return true;
+    }
+
+    int64_t coveredUntil = offset;
+    auto it = dirtyRanges.lower_bound(offset);
+    if (it != dirtyRanges.begin()) {
+        auto prev = std::prev(it);
+        if (getDirtyRangeEnd(*prev) > offset) {
+            it = prev;
+        }
+    }
+
+    const int64_t requestedEnd = offset + size;
+    while (it != dirtyRanges.end() && coveredUntil < requestedEnd) {
+        const auto rangeStart = it->first;
+        const auto rangeEnd = getDirtyRangeEnd(*it);
+        if (rangeEnd <= coveredUntil) {
+            ++it;
+            continue;
+        }
+        if (rangeStart > coveredUntil) {
+            return false;
+        }
+        coveredUntil = std::max(coveredUntil, rangeEnd);
+        ++it;
+    }
+
+    return coveredUntil >= requestedEnd;
+}
+
+void overlayDirtyRanges(
+    std::string& buffer,
+    int64_t offset,
+    const std::map<int64_t, std::string>& dirtyRanges
+) {
+    const int64_t readEnd = offset + static_cast<int64_t>(buffer.size());
+    auto it = dirtyRanges.lower_bound(offset);
+    if (it != dirtyRanges.begin()) {
+        auto prev = std::prev(it);
+        if (getDirtyRangeEnd(*prev) > offset) {
+            it = prev;
+        }
+    }
+
+    while (it != dirtyRanges.end()) {
+        const auto rangeStart = it->first;
+        const auto rangeEnd = getDirtyRangeEnd(*it);
+        if (rangeStart >= readEnd) {
+            break;
+        }
+        if (rangeEnd <= offset) {
+            ++it;
+            continue;
+        }
+        const auto copyStart = std::max(offset, rangeStart);
+        const auto copyEnd = std::min(readEnd, rangeEnd);
+        std::memcpy(
+            buffer.data() + (copyStart - offset),
+            it->second.data() + (copyStart - rangeStart),
+            static_cast<std::size_t>(copyEnd - copyStart)
+        );
+        ++it;
+    }
+}
+
+int64_t ensureRemoteSizeLoaded(
+    const std::shared_ptr<PrivmxSession>& session,
+    const std::string& fileId,
+    const std::shared_ptr<PrivmxFile::BufferedFileState>& bufferedFileState
+) {
+    if (bufferedFileState->remoteSize.has_value()) {
+        return *bufferedFileState->remoteSize;
+    }
+    auto fileInfo = session->storeApi.getFile(fileId);
+    if (fileInfo.statusCode != 0) {
+        throw MalformedInternalFileException();
+    }
+    bufferedFileState->remoteSize = fileInfo.size;
+    return fileInfo.size;
+}
+
+void writeToStoreInChunks(
+    const std::shared_ptr<PrivmxSession>& session,
+    int64_t fh,
+    int64_t offset,
+    const std::string& data,
+    bool truncateAtEnd = false
+) {
+    if (data.empty()) {
+        session->storeApi.seekInFile(fh, offset);
+        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from("", 0), truncateAtEnd);
+        return;
+    }
+
+    std::size_t written = 0;
+    while (written < data.size()) {
+        const auto chunkSize = std::min(STORE_RANDOM_WRITE_MAX_CHUNK_SIZE, data.size() - written);
+        session->storeApi.seekInFile(fh, offset + static_cast<int64_t>(written));
+        session->storeApi.writeToFile(
+            fh,
+            privmx::endpoint::core::Buffer::from(data.data() + written, chunkSize),
+            truncateAtEnd && written + chunkSize == data.size()
+        );
+        written += chunkSize;
+    }
 }
 
 } // namespace
@@ -90,6 +300,10 @@ std::shared_ptr<PrivmxSession> SessionManager::getSession(const std::string& id)
     return _sessions[id];
 }
 
+void SessionManager::removeSession(const std::string& id) {
+    _sessions.erase(id);
+}
+
 std::string SessionManager::generateId() {
     return std::to_string(_lastId++);
 }
@@ -117,23 +331,30 @@ int64_t Writer::size() {
 }
 
 PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
-        : PrivmxFile(session, fileId, path, false, nullptr) {}
+        : PrivmxFile(session, fileId, path, false, nullptr, nullptr) {}
 
 PrivmxFile::PrivmxFile(
     std::shared_ptr<PrivmxSession> session,
     const std::string& fileId,
     const std::string& path,
     bool memoryOnly,
-    std::shared_ptr<MemoryFileState> memoryFileState
+    std::shared_ptr<MemoryFileState> memoryFileState,
+    std::shared_ptr<BufferedFileState> bufferedFileState
 ) : session(session),
     fileId(fileId),
     path(path),
     lockSession(session->kvdbApi, session->kvdbId, path),
     memoryOnly(memoryOnly),
-    memoryFileState(memoryFileState) {}
+    memoryFileState(memoryFileState),
+    bufferedFileState(bufferedFileState) {}
 
 void PrivmxFile::open() {
     if (memoryOnly) {
+        std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+        ++memoryFileState->openHandleCount;
+        if (memoryFileState->remoteBacked && memoryFileState->remoteFh == -1) {
+            memoryFileState->remoteFh = session->storeApi.openFile(memoryFileState->remoteFileId);
+        }
         return;
     }
     LOG_TRACE("PrivmxFile::open - ", fileId)
@@ -142,6 +363,20 @@ void PrivmxFile::open() {
 
 void PrivmxFile::close() {
     if (memoryOnly) {
+        int64_t remoteFh = -1;
+        {
+            std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+            if (memoryFileState->openHandleCount > 0) {
+                --memoryFileState->openHandleCount;
+            }
+            if (memoryFileState->remoteBacked && memoryFileState->openHandleCount == 0 && memoryFileState->remoteFh != -1) {
+                remoteFh = memoryFileState->remoteFh;
+                memoryFileState->remoteFh = -1;
+            }
+        }
+        if (remoteFh != -1) {
+            session->storeApi.closeFile(remoteFh);
+        }
         return;
     }
     if (fh != -1) {
@@ -152,6 +387,7 @@ void PrivmxFile::close() {
 
 privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
     if (memoryOnly) {
+        std::lock_guard<std::mutex> lock(memoryFileState->mutex);
         if (offset < 0) {
             return privmx::endpoint::core::Buffer::from("", 0);
         }
@@ -162,76 +398,176 @@ privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
         const auto readSize = std::min<std::size_t>(static_cast<std::size_t>(size), availableSize);
         return privmx::endpoint::core::Buffer::from(memoryFileState->data.data() + offset, readSize);
     }
-    sync();
-    session->storeApi.seekInFile(fh, offset);
-    auto res = session->storeApi.readFromFile(fh, size);
-    return res;
+    if (offset < 0 || size <= 0 || !bufferedFileState) {
+        return privmx::endpoint::core::Buffer::from("", 0);
+    }
+
+    std::string result;
+    bool fullyCoveredByDirtyRanges = false;
+    {
+        std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+        if (bufferedFileState->logicalSize.has_value() && offset >= *bufferedFileState->logicalSize) {
+            return privmx::endpoint::core::Buffer::from("", 0);
+        }
+
+        int64_t readSize = size;
+        if (bufferedFileState->logicalSize.has_value()) {
+            readSize = std::min(readSize, *bufferedFileState->logicalSize - offset);
+        }
+        if (readSize <= 0) {
+            return privmx::endpoint::core::Buffer::from("", 0);
+        }
+
+        result.assign(static_cast<std::size_t>(readSize), '\0');
+        fullyCoveredByDirtyRanges = isRangeFullyCoveredByDirtyRanges(bufferedFileState->dirtyRanges, offset, readSize);
+    }
+
+    if (!fullyCoveredByDirtyRanges) {
+        session->storeApi.seekInFile(fh, offset);
+        auto remoteData = session->storeApi.readFromFile(fh, static_cast<int64_t>(result.size())).stdString();
+        std::memcpy(result.data(), remoteData.data(), std::min(result.size(), remoteData.size()));
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+        overlayDirtyRanges(result, offset, bufferedFileState->dirtyRanges);
+    }
+
+    return privmx::endpoint::core::Buffer::from(result);
 }
 
 void PrivmxFile::write(const privmx::endpoint::core::Buffer& data, int64_t offset) {
     if (memoryOnly) {
+        int64_t remoteFh = -1;
         if (offset < 0) {
             throw std::runtime_error("Invalid write offset");
         }
-        const auto writeOffset = static_cast<std::size_t>(offset);
-        if (memoryFileState->data.size() < writeOffset) {
-            memoryFileState->data.resize(writeOffset, '\0');
+        {
+            std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+            const auto writeOffset = static_cast<std::size_t>(offset);
+            if (memoryFileState->data.size() < writeOffset) {
+                memoryFileState->data.resize(writeOffset, '\0');
+            }
+            const auto writeSize = data.size();
+            if (memoryFileState->data.size() < writeOffset + writeSize) {
+                memoryFileState->data.resize(writeOffset + writeSize, '\0');
+            }
+            std::memcpy(memoryFileState->data.data() + writeOffset, data.data(), writeSize);
+            remoteFh = memoryFileState->remoteFh;
         }
-        const auto writeSize = data.size();
-        if (memoryFileState->data.size() < writeOffset + writeSize) {
-            memoryFileState->data.resize(writeOffset + writeSize, '\0');
+        if (remoteFh != -1) {
+            writeToStoreInChunks(session, remoteFh, offset, data.stdString());
         }
-        std::memcpy(memoryFileState->data.data() + writeOffset, data.data(), writeSize);
         return;
     }
-    int64_t of;
-    std::string res;
-    tie(of, res) = writer.write(offset, data.stdString());
-    if (of != -1) {
-        session->storeApi.seekInFile(fh, of);
-        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
+    if (!bufferedFileState) {
+        return;
     }
+
+    std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+    const auto currentSize = ensureRemoteSizeLoaded(session, fileId, bufferedFileState);
+    mergeDirtyRange(bufferedFileState->dirtyRanges, offset, data.stdString());
+    bufferedFileState->logicalSize = std::max(currentSize, offset + static_cast<int64_t>(data.size()));
 }
 
 void PrivmxFile::truncate(int64_t size) {
     if (memoryOnly) {
+        int64_t remoteFh = -1;
         if (size < 0) {
             throw std::runtime_error("Invalid truncate size");
         }
-        memoryFileState->data.resize(static_cast<std::size_t>(size), '\0');
+        {
+            std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+            memoryFileState->data.resize(static_cast<std::size_t>(size), '\0');
+            remoteFh = memoryFileState->remoteFh;
+        }
+        if (remoteFh != -1) {
+            session->storeApi.seekInFile(remoteFh, size);
+            session->storeApi.writeToFile(remoteFh, privmx::endpoint::core::Buffer::from("", 0), true);
+        }
         return;
     }
-    session->storeApi.seekInFile(fh, size);
-    session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from("", 0), true);
+    if (!bufferedFileState) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+    ensureRemoteSizeLoaded(session, fileId, bufferedFileState);
+    bufferedFileState->logicalSize = size;
+    trimDirtyRanges(bufferedFileState->dirtyRanges, size);
 }
 
 void PrivmxFile::sync() {
     if (memoryOnly) {
+        int64_t remoteFh = -1;
+        {
+            std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+            remoteFh = memoryFileState->remoteFh;
+        }
+        if (remoteFh != -1) {
+            session->storeApi.syncFile(remoteFh);
+        }
         return;
     }
-    int64_t of;
-    std::string res;
-    tie(of, res) = writer.write(-1, "");
-    if (of != -1) {
-        session->storeApi.seekInFile(fh, of);
-        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
+    if (!bufferedFileState) {
+        return;
     }
+
+    std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+    if (
+        bufferedFileState->dirtyRanges.empty() &&
+        (
+            !bufferedFileState->logicalSize.has_value() ||
+            (
+                bufferedFileState->remoteSize.has_value() &&
+                *bufferedFileState->logicalSize == *bufferedFileState->remoteSize
+            )
+        )
+    ) {
+        return;
+    }
+
+    auto fs = getOrCreateSessionFilesystem(session);
+    fs->materializeJournalForDb(path);
+
+    const auto remoteSize = ensureRemoteSizeLoaded(session, fileId, bufferedFileState);
+    auto newRemoteSize = remoteSize;
+
+    for (const auto& range : bufferedFileState->dirtyRanges) {
+        writeToStoreInChunks(session, fh, range.first, range.second);
+        newRemoteSize = std::max(newRemoteSize, range.first + static_cast<int64_t>(range.second.size()));
+    }
+    bufferedFileState->dirtyRanges.clear();
+
+    const auto targetSize = bufferedFileState->logicalSize.value_or(newRemoteSize);
+    if (targetSize != newRemoteSize) {
+        session->storeApi.seekInFile(fh, targetSize);
+        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from("", 0), true);
+        newRemoteSize = targetSize;
+    }
+
+    bufferedFileState->remoteSize = newRemoteSize;
+    bufferedFileState->logicalSize = newRemoteSize;
 }
 
 int64_t PrivmxFile::getFileSize() {
     if (memoryOnly) {
         return static_cast<int64_t>(memoryFileState->data.size());
     }
-    auto fileInfo = session->storeApi.getFile(fileId);
-    if(fileInfo.statusCode != 0) {
-        throw MalformedInternalFileException();
+    if (!bufferedFileState) {
+        return 0;
     }
-    return fileInfo.size;
+
+    std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+    if (bufferedFileState->logicalSize.has_value()) {
+        return *bufferedFileState->logicalSize;
+    }
+    return ensureRemoteSizeLoaded(session, fileId, bufferedFileState);
 }
 
 bool PrivmxFile::lock(LockLevel level) {
-    const std::string lockStatName = memoryOnly ? "lock_journal" : "lock_db";
     if (memoryOnly) {
+        std::lock_guard<std::mutex> lock(memoryFileState->mutex);
         memoryFileState->lockLevel = level;
         memoryFileState->reservedLock = level >= LockLevel::RESERVED;
         return true;
@@ -248,6 +584,7 @@ bool PrivmxFile::lock(LockLevel level) {
 
 bool PrivmxFile::unlock(LockLevel level) {
     if (memoryOnly) {
+        std::lock_guard<std::mutex> lock(memoryFileState->mutex);
         memoryFileState->lockLevel = level;
         memoryFileState->reservedLock = level >= LockLevel::RESERVED;
         return true;
@@ -260,6 +597,7 @@ bool PrivmxFile::unlock(LockLevel level) {
 
 bool PrivmxFile::checkReservedLock() {
     if (memoryOnly) {
+        std::lock_guard<std::mutex> lock(memoryFileState->mutex);
         return memoryFileState->reservedLock;
     }
     if (isScopedDbLockActive(session, path)) {
@@ -271,8 +609,13 @@ bool PrivmxFile::checkReservedLock() {
 std::shared_ptr<PrivmxFS> PrivmxFS::create(
     std::shared_ptr<PrivmxSession> session
 ) {
-    std::shared_ptr<PrivmxFS> res = std::make_shared<PrivmxFS>(session);
-    return res;
+    return getOrCreateSessionFilesystem(session);
+}
+
+void PrivmxFS::releaseSession(const std::string& fullPath) {
+    const auto parsed = parseScopedPath(fullPath);
+    releaseSessionFilesystem(parsed.sessionId);
+    SessionManager::get()->removeSession(parsed.sessionId);
 }
 
 void PrivmxFS::beginDbOperation(const std::string& fullPath) {
@@ -305,16 +648,25 @@ void PrivmxFS::beginDbOperation(const std::string& fullPath) {
         return;
     }
 
+    const auto deadline = std::chrono::steady_clock::now() + SCOPED_DB_LOCK_TIMEOUT;
     try {
-        if (!state->lockSession.lock(LockLevel::EXCLUSIVE)) {
-            throw std::runtime_error("Unable to acquire scoped db lock");
+        while (true) {
+            if (state->lockSession.lock(LockLevel::EXCLUSIVE)) {
+                break;
+            }
+            if (std::chrono::steady_clock::now() >= deadline) {
+                throw std::runtime_error("Unable to acquire scoped db lock");
+            }
+            std::this_thread::sleep_for(SCOPED_DB_LOCK_RETRY_DELAY);
         }
         std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
         state->locked = true;
     } catch (...) {
+        cleanupScopedDbLockAttempt(state);
         std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
         auto it = g_scopedDbLocks.find(key);
         if (it != g_scopedDbLocks.end()) {
+            it->second->locked = false;
             if (it->second->refCount > 0) {
                 --it->second->refCount;
             }
@@ -356,27 +708,164 @@ void PrivmxFS::endDbOperation(const std::string& fullPath) {
     }
 }
 
+std::shared_ptr<PrivmxFile::MemoryFileState> PrivmxFS::getOrCreateMemoryFileState(const std::string& path) {
+    std::lock_guard<std::mutex> lock(_memoryFileMutex);
+    auto& memoryFileState = _memoryFiles[path];
+    if (!memoryFileState) {
+        memoryFileState = std::make_shared<PrivmxFile::MemoryFileState>();
+    }
+    return memoryFileState;
+}
+
+std::optional<std::string> PrivmxFS::tryGetExistingFileId(const std::string& name) {
+    {
+        std::lock_guard<std::mutex> lock(_fileIdCacheMutex);
+        auto it = _fileIdCache.find(name);
+        if (it != _fileIdCache.end()) {
+            return it->second;
+        }
+    }
+
+    try {
+        privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
+        if (kvdbEntry.statusCode != 0) {
+            throw MalformedInternalFileIdException();
+        }
+        const auto fileId = kvdbEntry.data.stdString();
+        std::lock_guard<std::mutex> lock(_fileIdCacheMutex);
+        _fileIdCache[name] = fileId;
+        return fileId;
+    } catch (const privmx::endpoint::server::KvdbEntryDoesNotExistException& e) {
+        return std::nullopt;
+    }
+}
+
+void PrivmxFS::ensureJournalLoadedFromRemote(
+    const std::string& path,
+    const std::shared_ptr<PrivmxFile::MemoryFileState>& memoryFileState
+) {
+    {
+        std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+        if (memoryFileState->remoteBacked) {
+            return;
+        }
+    }
+
+    auto existingFileId = tryGetExistingFileId(path);
+    if (!existingFileId.has_value()) {
+        return;
+    }
+
+    const auto fileInfo = _session->storeApi.getFile(*existingFileId);
+    if (fileInfo.statusCode != 0) {
+        throw MalformedInternalFileException();
+    }
+
+    std::string data;
+    if (fileInfo.size > 0) {
+        const auto remoteFh = _session->storeApi.openFile(*existingFileId);
+        try {
+            _session->storeApi.seekInFile(remoteFh, 0);
+            data = _session->storeApi.readFromFile(remoteFh, fileInfo.size).stdString();
+            _session->storeApi.closeFile(remoteFh);
+        } catch (...) {
+            _session->storeApi.closeFile(remoteFh);
+            throw;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+    if (!memoryFileState->remoteBacked) {
+        memoryFileState->data = std::move(data);
+        memoryFileState->remoteBacked = true;
+        memoryFileState->remoteFileId = *existingFileId;
+    }
+}
+
+void PrivmxFS::materializeJournalForDb(const std::string& dbPath) {
+    const auto journalPath = dbPath + "-journal";
+    std::shared_ptr<PrivmxFile::MemoryFileState> memoryFileState;
+    {
+        std::lock_guard<std::mutex> lock(_memoryFileMutex);
+        auto it = _memoryFiles.find(journalPath);
+        if (it != _memoryFiles.end()) {
+            memoryFileState = it->second;
+        }
+    }
+    if (!memoryFileState) {
+        auto existingFileId = tryGetExistingFileId(journalPath);
+        if (!existingFileId.has_value()) {
+            return;
+        }
+        memoryFileState = getOrCreateMemoryFileState(journalPath);
+    }
+    ensureJournalLoadedFromRemote(journalPath, memoryFileState);
+
+    std::string dataSnapshot;
+    int64_t remoteFh = -1;
+    {
+        std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+        if (!memoryFileState->remoteBacked && memoryFileState->data.empty()) {
+            return;
+        }
+        if (!memoryFileState->remoteBacked) {
+            memoryFileState->remoteFileId = getCachedFileId(journalPath);
+            memoryFileState->remoteBacked = true;
+        }
+        if (memoryFileState->remoteFh == -1) {
+            memoryFileState->remoteFh = _session->storeApi.openFile(memoryFileState->remoteFileId);
+        }
+        dataSnapshot = memoryFileState->data;
+        remoteFh = memoryFileState->remoteFh;
+    }
+
+    writeToStoreInChunks(_session, remoteFh, 0, dataSnapshot, true);
+    _session->storeApi.syncFile(remoteFh);
+}
+
 std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
     if (isJournalPath(path)) {
-        std::lock_guard<std::mutex> lock(_memoryFileMutex);
-        auto& memoryFileState = _memoryFiles[path];
-        if (!memoryFileState) {
-            memoryFileState = std::make_shared<PrivmxFile::MemoryFileState>();
-        }
-        std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, "", path, true, memoryFileState);
+        auto memoryFileState = getOrCreateMemoryFileState(path);
+        ensureJournalLoadedFromRemote(path, memoryFileState);
+        std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, "", path, true, memoryFileState, nullptr);
         result->open();
         return result;
     }
+    std::shared_ptr<PrivmxFile::BufferedFileState> bufferedFileState;
+    {
+        std::lock_guard<std::mutex> lock(_bufferedFileMutex);
+        auto& entry = _bufferedFiles[path];
+        if (!entry) {
+            entry = std::make_shared<PrivmxFile::BufferedFileState>();
+        }
+        bufferedFileState = entry;
+    }
     std::string fileId = getCachedFileId(path);
-    std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, fileId, path);
+    std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(
+        _session,
+        fileId,
+        path,
+        false,
+        nullptr,
+        bufferedFileState
+    );
     result->open();
     return result;
 }
 
 bool PrivmxFS::access(const std::string& path) {
     if (isJournalPath(path)) {
-        std::lock_guard<std::mutex> lock(_memoryFileMutex);
-        return _memoryFiles.find(path) != _memoryFiles.end();
+        {
+            std::lock_guard<std::mutex> lock(_memoryFileMutex);
+            auto it = _memoryFiles.find(path);
+            if (it != _memoryFiles.end()) {
+                std::lock_guard<std::mutex> stateLock(it->second->mutex);
+                if (!it->second->data.empty() || it->second->remoteBacked) {
+                    return true;
+                }
+            }
+        }
+        return _session->kvdbApi.hasEntry(_session->kvdbId, path);
     }
     LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
     return _session->kvdbApi.hasEntry(_session->kvdbId, path);
@@ -384,6 +873,37 @@ bool PrivmxFS::access(const std::string& path) {
 
 void PrivmxFS::deleteFile(const std::string& path) {
     if (isJournalPath(path)) {
+        auto memoryFileState = getOrCreateMemoryFileState(path);
+        std::optional<std::string> remoteFileId;
+        int64_t remoteFh = -1;
+        {
+            std::lock_guard<std::mutex> lock(memoryFileState->mutex);
+            if (memoryFileState->remoteBacked) {
+                remoteFileId = memoryFileState->remoteFileId;
+                remoteFh = memoryFileState->remoteFh;
+                memoryFileState->remoteBacked = false;
+                memoryFileState->remoteFileId.clear();
+                memoryFileState->remoteFh = -1;
+            }
+            memoryFileState->data.clear();
+            memoryFileState->lockLevel = LockLevel::NONE;
+            memoryFileState->reservedLock = false;
+        }
+        if (!remoteFileId.has_value()) {
+            remoteFileId = tryGetExistingFileId(path);
+        }
+        if (remoteFh != -1) {
+            _session->storeApi.closeFile(remoteFh);
+        }
+        if (remoteFileId.has_value()) {
+            if (_session->kvdbApi.hasEntry(_session->kvdbId, path)) {
+                _session->kvdbApi.deleteEntry(_session->kvdbId, path);
+            }
+            _session->storeApi.deleteFile(*remoteFileId);
+            LockSession::destroyLock(_session->kvdbApi, _session->kvdbId, path);
+            std::lock_guard<std::mutex> lock(_fileIdCacheMutex);
+            _fileIdCache.erase(path);
+        }
         std::lock_guard<std::mutex> lock(_memoryFileMutex);
         _memoryFiles.erase(path);
         return;
@@ -397,6 +917,10 @@ void PrivmxFS::deleteFile(const std::string& path) {
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
     LockSession::destroyLock(_session->kvdbApi, _session->kvdbId, path);
+    {
+        std::lock_guard<std::mutex> lock(_bufferedFileMutex);
+        _bufferedFiles.erase(path);
+    }
     std::lock_guard<std::mutex> lock(_fileIdCacheMutex);
     _fileIdCache.erase(path);
 }

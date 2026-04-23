@@ -303,6 +303,7 @@ void FullTextSearch::createTable() {
 
 void FullTextSearch::close() {
     _db.reset();
+    PrivmxFS::releaseSession(_filename);
 }
 
 int64_t FullTextSearch::getCount(const std::string& query) {

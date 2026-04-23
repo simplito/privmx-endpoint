@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <memory>
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -55,6 +56,7 @@ public:
         const std::string& storeId
     );
     std::shared_ptr<PrivmxSession> getSession(const std::string& id);
+    void removeSession(const std::string& id);
 
 private:
     std::string generateId();
@@ -81,9 +83,21 @@ public:
     PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path);
     struct MemoryFileState
     {
+        std::mutex mutex;
         std::string data;
         LockLevel lockLevel = LockLevel::NONE;
         bool reservedLock = false;
+        bool remoteBacked = false;
+        std::string remoteFileId;
+        int64_t remoteFh = -1;
+        std::uint64_t openHandleCount = 0;
+    };
+    struct BufferedFileState
+    {
+        std::mutex mutex;
+        std::map<int64_t, std::string> dirtyRanges;
+        std::optional<int64_t> logicalSize;
+        std::optional<int64_t> remoteSize;
     };
 
     PrivmxFile(
@@ -91,7 +105,8 @@ public:
         const std::string& fileId,
         const std::string& path,
         bool memoryOnly,
-        std::shared_ptr<MemoryFileState> memoryFileState
+        std::shared_ptr<MemoryFileState> memoryFileState,
+        std::shared_ptr<BufferedFileState> bufferedFileState
     );
     void open();
     void close();
@@ -112,29 +127,40 @@ public:
     LockSession lockSession;
     bool memoryOnly = false;
     std::shared_ptr<MemoryFileState> memoryFileState;
+    std::shared_ptr<BufferedFileState> bufferedFileState;
 };
 
 class PrivmxFS
 {
 public:
     static std::shared_ptr<PrivmxFS> create(std::shared_ptr<PrivmxSession> session);
+    static void releaseSession(const std::string& fullPath);
     static void beginDbOperation(const std::string& fullPath);
     static void endDbOperation(const std::string& fullPath);
     PrivmxFS(const std::shared_ptr<PrivmxSession>& session);
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
     bool access(const std::string& path);
     void deleteFile(const std::string& path);
+    void materializeJournalForDb(const std::string& dbPath);
 
 private:
     bool isJournalPath(const std::string& path) const;
     std::string getCachedFileId(const std::string& name);
     std::string getFileId(const std::string& name);
+    std::optional<std::string> tryGetExistingFileId(const std::string& name);
+    std::shared_ptr<PrivmxFile::MemoryFileState> getOrCreateMemoryFileState(const std::string& path);
+    void ensureJournalLoadedFromRemote(
+        const std::string& path,
+        const std::shared_ptr<PrivmxFile::MemoryFileState>& memoryFileState
+    );
 
     std::shared_ptr<PrivmxSession> _session;
     mutable std::mutex _fileIdCacheMutex;
     std::unordered_map<std::string, std::string> _fileIdCache;
     mutable std::mutex _memoryFileMutex;
     std::unordered_map<std::string, std::shared_ptr<PrivmxFile::MemoryFileState>> _memoryFiles;
+    mutable std::mutex _bufferedFileMutex;
+    std::unordered_map<std::string, std::shared_ptr<PrivmxFile::BufferedFileState>> _bufferedFiles;
 };
 
 class PrivmxExtFS
