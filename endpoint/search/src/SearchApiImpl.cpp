@@ -20,6 +20,7 @@ limitations under the License.
 
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
@@ -97,7 +98,7 @@ core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(const std::string
 int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
     auto data = getIndexData(indexId);
     auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, indexId, data.storeId());
-    std::string filename = "/pmx/" + session->id + "/index.db";
+    std::string filename = "/pmx/" + session->id + "/index_db";
     auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode());
     fts->ensureTableCreated();
     return _fts.add(fts);
@@ -112,6 +113,11 @@ void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
 int64_t SearchApiImpl::addDocument(const int64_t indexHandle, const std::string& name, const std::string& content) {
     auto fts = _fts.get(indexHandle);
     return fts->addDocument(name, content);
+}
+
+std::vector<int64_t> SearchApiImpl::addDocuments(const int64_t indexHandle, const std::vector<NewDocument>& documents) {
+    auto fts = _fts.get(indexHandle);
+    return fts->addDocuments(documents);
 }
 
 void SearchApiImpl::updateDocument(const int64_t indexHandle, const Document& document) {

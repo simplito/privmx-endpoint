@@ -26,6 +26,9 @@ template<>
 search::IndexMode VarDeserializer::deserialize<search::IndexMode>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
+search::NewDocument VarDeserializer::deserialize<search::NewDocument>(const Poco::Dynamic::Var& val, const std::string& name);
+
+template<>
 search::Document VarDeserializer::deserialize<search::Document>(const Poco::Dynamic::Var& val, const std::string& name);
 
 }  // namespace core

@@ -56,6 +56,7 @@ server::StoreFileReadResult ServerApi::storeFileRead(const server::StoreFileRead
 }
 
 void ServerApi::storeFileWrite(const server::StoreFileWriteModel& model) {
+    std::cout << "storeFileWrite" << std::endl;
     request("storeFileWrite", model);
 }
 

@@ -12,6 +12,7 @@ limitations under the License.
 #include <stdexcept>
 
 #include "privmx/endpoint/search/FullTextSearch.hpp"
+#include "privmx/endpoint/search/PrivmxFS.hpp"
 #include "privmx/endpoint/search/PrivmxSqliteVFS.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
@@ -42,30 +43,81 @@ std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filena
         throw DatabaseAttachException(sqlite3_errmsg(db));
     }
 
-    return std::make_shared<FullTextSearch>(db2, mode);
+    return std::make_shared<FullTextSearch>(db2, filename, mode);
 }
 
-FullTextSearch::FullTextSearch(std::shared_ptr<sqlite3> db, const IndexMode mode) : _db(std::move(db)), _mode(mode) {}
+FullTextSearch::FullTextSearch(std::shared_ptr<sqlite3> db, std::string filename, const IndexMode mode)
+    : _db(std::move(db)), _filename(std::move(filename)), _mode(mode) {}
 
 int64_t FullTextSearch::addDocument(const std::string& name, const std::string& content) {
+    NewDocument document;
+    document.name = name;
+    document.content = content;
+    auto result = addDocuments({document});
+    return result.front();
+}
+
+std::vector<int64_t> FullTextSearch::addDocuments(const std::vector<NewDocument>& documents) {
+    if (documents.empty()) {
+        return {};
+    }
+
+    PrivmxFS::beginDbOperation(_filename);
+    const char* beginSql = "BEGIN IMMEDIATE;";
+    const char* commitSql = "COMMIT;";
+    const char* rollbackSql = "ROLLBACK;";
     const char* insertSql = "INSERT INTO pmx.documents (name, content) VALUES (?, ?);";
-    sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(_db.get(), insertSql, -1, &stmt, nullptr) != SQLITE_OK) {
-        throw InsertPrepareException(sqlite3_errmsg(_db.get()));
-    }
+    sqlite3_stmt* stmt = nullptr;
+    bool transactionStarted = false;
+    std::vector<int64_t> rowIds;
+    rowIds.reserve(documents.size());
+    try {
+        if (sqlite3_exec(_db.get(), beginSql, nullptr, nullptr, nullptr) != SQLITE_OK) {
+            throw InsertExecuteException(sqlite3_errmsg(_db.get()));
+        }
+        transactionStarted = true;
 
-    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, content.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_prepare_v2(_db.get(), insertSql, -1, &stmt, nullptr) != SQLITE_OK) {
+            throw InsertPrepareException(sqlite3_errmsg(_db.get()));
+        }
 
-    int status = sqlite3_step(stmt);
-    if (status != SQLITE_DONE) {
+        for (const auto& document : documents) {
+            sqlite3_bind_text(stmt, 1, document.name.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 2, document.content.c_str(), -1, SQLITE_TRANSIENT);
+
+            int status = sqlite3_step(stmt);
+            if (status != SQLITE_DONE) {
+                sqlite3_finalize(stmt);
+                stmt = nullptr;
+                throw InsertExecuteException(sqlite3_errmsg(_db.get()));
+            }
+
+            rowIds.push_back(sqlite3_last_insert_rowid(_db.get()));
+            if (sqlite3_reset(stmt) != SQLITE_OK) {
+                sqlite3_finalize(stmt);
+                stmt = nullptr;
+                throw InsertExecuteException(sqlite3_errmsg(_db.get()));
+            }
+            sqlite3_clear_bindings(stmt);
+        }
+
         sqlite3_finalize(stmt);
-        throw InsertExecuteException(sqlite3_errmsg(_db.get()));
+        stmt = nullptr;
+        if (sqlite3_exec(_db.get(), commitSql, nullptr, nullptr, nullptr) != SQLITE_OK) {
+            throw InsertExecuteException(sqlite3_errmsg(_db.get()));
+        }
+        PrivmxFS::endDbOperation(_filename);
+        return rowIds;
+    } catch (...) {
+        if (stmt != nullptr) {
+            sqlite3_finalize(stmt);
+        }
+        if (transactionStarted) {
+            sqlite3_exec(_db.get(), rollbackSql, nullptr, nullptr, nullptr);
+        }
+        PrivmxFS::endDbOperation(_filename);
+        throw;
     }
-
-    sqlite3_finalize(stmt);
-
-    return sqlite3_last_insert_rowid(_db.get());
 }
 
 Document FullTextSearch::getDocument(const int64_t documentId) {

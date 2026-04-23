@@ -1,13 +1,64 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cstring>
+#include <iostream>
+#include <mutex>
+#include <privmx/utils/Logger.hpp>
+#include <sstream>
+#include <type_traits>
+#include <unordered_map>
+
+#include "privmx/endpoint/core/ConvertedExceptions.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
-#include "privmx/endpoint/core/ConvertedExceptions.hpp"
-#include <privmx/utils/Logger.hpp>
 
 static const privmx::endpoint::core::Buffer META = privmx::endpoint::core::Buffer::from("{}");
 
 using namespace privmx::endpoint::search;
+
+namespace {
+
+struct ScopedPathInfo {
+    std::string sessionId;
+    std::string path;
+};
+
+struct ScopedDbLockState {
+    LockSession lockSession;
+    std::uint64_t refCount = 0;
+    bool locked = false;
+};
+
+std::mutex g_scopedDbLockMutex;
+std::unordered_map<std::string, std::shared_ptr<ScopedDbLockState>> g_scopedDbLocks;
+
+std::string makeScopedDbLockKey(const std::string& sessionId, const std::string& path) {
+    return sessionId + ":" + path;
+}
+
+ScopedPathInfo parseScopedPath(const std::string& fullPath) {
+    Poco::Path path;
+    path.parse(fullPath);
+    if (path.depth() >= 2 && path[0] == "pmx") {
+        ScopedPathInfo result{.sessionId = path[1], .path = std::string()};
+        path.popFrontDirectory();
+        path.popFrontDirectory();
+        result.path = path.toString();
+        return result;
+    }
+    throw std::runtime_error("Invalid PrivmxFS scoped path: " + fullPath);
+}
+
+bool isScopedDbLockActive(const std::shared_ptr<PrivmxSession>& session, const std::string& path) {
+    std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
+    auto it = g_scopedDbLocks.find(makeScopedDbLockKey(session->id, path));
+    return it != g_scopedDbLocks.end() && it->second->locked;
+}
+
+} // namespace
 
 std::shared_ptr<SessionManager> SessionManager::_singleton;
 
@@ -66,14 +117,33 @@ int64_t Writer::size() {
 }
 
 PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
-        : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
+        : PrivmxFile(session, fileId, path, false, nullptr) {}
+
+PrivmxFile::PrivmxFile(
+    std::shared_ptr<PrivmxSession> session,
+    const std::string& fileId,
+    const std::string& path,
+    bool memoryOnly,
+    std::shared_ptr<MemoryFileState> memoryFileState
+) : session(session),
+    fileId(fileId),
+    path(path),
+    lockSession(session->kvdbApi, session->kvdbId, path),
+    memoryOnly(memoryOnly),
+    memoryFileState(memoryFileState) {}
 
 void PrivmxFile::open() {
+    if (memoryOnly) {
+        return;
+    }
     LOG_TRACE("PrivmxFile::open - ", fileId)
     fh = session->storeApi.openFile(fileId);
 }
 
 void PrivmxFile::close() {
+    if (memoryOnly) {
+        return;
+    }
     if (fh != -1) {
         session->storeApi.closeFile(fh);
         fh = -1;
@@ -81,6 +151,17 @@ void PrivmxFile::close() {
 }
 
 privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
+    if (memoryOnly) {
+        if (offset < 0) {
+            return privmx::endpoint::core::Buffer::from("", 0);
+        }
+        if (static_cast<std::size_t>(offset) >= memoryFileState->data.size()) {
+            return privmx::endpoint::core::Buffer::from("", 0);
+        }
+        const auto availableSize = memoryFileState->data.size() - static_cast<std::size_t>(offset);
+        const auto readSize = std::min<std::size_t>(static_cast<std::size_t>(size), availableSize);
+        return privmx::endpoint::core::Buffer::from(memoryFileState->data.data() + offset, readSize);
+    }
     sync();
     session->storeApi.seekInFile(fh, offset);
     auto res = session->storeApi.readFromFile(fh, size);
@@ -88,6 +169,21 @@ privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
 }
 
 void PrivmxFile::write(const privmx::endpoint::core::Buffer& data, int64_t offset) {
+    if (memoryOnly) {
+        if (offset < 0) {
+            throw std::runtime_error("Invalid write offset");
+        }
+        const auto writeOffset = static_cast<std::size_t>(offset);
+        if (memoryFileState->data.size() < writeOffset) {
+            memoryFileState->data.resize(writeOffset, '\0');
+        }
+        const auto writeSize = data.size();
+        if (memoryFileState->data.size() < writeOffset + writeSize) {
+            memoryFileState->data.resize(writeOffset + writeSize, '\0');
+        }
+        std::memcpy(memoryFileState->data.data() + writeOffset, data.data(), writeSize);
+        return;
+    }
     int64_t of;
     std::string res;
     tie(of, res) = writer.write(offset, data.stdString());
@@ -98,11 +194,21 @@ void PrivmxFile::write(const privmx::endpoint::core::Buffer& data, int64_t offse
 }
 
 void PrivmxFile::truncate(int64_t size) {
+    if (memoryOnly) {
+        if (size < 0) {
+            throw std::runtime_error("Invalid truncate size");
+        }
+        memoryFileState->data.resize(static_cast<std::size_t>(size), '\0');
+        return;
+    }
     session->storeApi.seekInFile(fh, size);
     session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from("", 0), true);
 }
 
 void PrivmxFile::sync() {
+    if (memoryOnly) {
+        return;
+    }
     int64_t of;
     std::string res;
     tie(of, res) = writer.write(-1, "");
@@ -113,14 +219,26 @@ void PrivmxFile::sync() {
 }
 
 int64_t PrivmxFile::getFileSize() {
+    if (memoryOnly) {
+        return static_cast<int64_t>(memoryFileState->data.size());
+    }
     auto fileInfo = session->storeApi.getFile(fileId);
     if(fileInfo.statusCode != 0) {
-        throw MalformedInternalFileException(); 
+        throw MalformedInternalFileException();
     }
     return fileInfo.size;
 }
 
 bool PrivmxFile::lock(LockLevel level) {
+    const std::string lockStatName = memoryOnly ? "lock_journal" : "lock_db";
+    if (memoryOnly) {
+        memoryFileState->lockLevel = level;
+        memoryFileState->reservedLock = level >= LockLevel::RESERVED;
+        return true;
+    }
+    if (isScopedDbLockActive(session, path)) {
+        return true;
+    }
     bool val = lockSession.lock(level);
     if (val) {
         session->storeApi.syncFile(fh);
@@ -129,10 +247,24 @@ bool PrivmxFile::lock(LockLevel level) {
 }
 
 bool PrivmxFile::unlock(LockLevel level) {
+    if (memoryOnly) {
+        memoryFileState->lockLevel = level;
+        memoryFileState->reservedLock = level >= LockLevel::RESERVED;
+        return true;
+    }
+    if (isScopedDbLockActive(session, path)) {
+        return true;
+    }
     return lockSession.unlock(level);
 }
 
 bool PrivmxFile::checkReservedLock() {
+    if (memoryOnly) {
+        return memoryFileState->reservedLock;
+    }
+    if (isScopedDbLockActive(session, path)) {
+        return true;
+    }
     return lockSession.checkReservedLock();
 }
 
@@ -143,19 +275,119 @@ std::shared_ptr<PrivmxFS> PrivmxFS::create(
     return res;
 }
 
+void PrivmxFS::beginDbOperation(const std::string& fullPath) {
+    const auto parsed = parseScopedPath(fullPath);
+    if (parsed.path.size() >= 8 && parsed.path.compare(parsed.path.size() - 8, 8, "-journal") == 0) {
+        return;
+    }
+
+    const auto session = SessionManager::get()->getSession(parsed.sessionId);
+    const auto key = makeScopedDbLockKey(parsed.sessionId, parsed.path);
+
+    std::shared_ptr<ScopedDbLockState> state;
+    bool shouldAcquire = false;
+    {
+        std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
+        auto& entry = g_scopedDbLocks[key];
+        if (!entry) {
+            entry = std::make_shared<ScopedDbLockState>(ScopedDbLockState{
+                .lockSession = LockSession(session->kvdbApi, session->kvdbId, parsed.path),
+                .refCount = 0,
+                .locked = false
+            });
+        }
+        state = entry;
+        shouldAcquire = state->refCount == 0;
+        ++state->refCount;
+    }
+
+    if (!shouldAcquire) {
+        return;
+    }
+
+    try {
+        if (!state->lockSession.lock(LockLevel::EXCLUSIVE)) {
+            throw std::runtime_error("Unable to acquire scoped db lock");
+        }
+        std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
+        state->locked = true;
+    } catch (...) {
+        std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
+        auto it = g_scopedDbLocks.find(key);
+        if (it != g_scopedDbLocks.end()) {
+            if (it->second->refCount > 0) {
+                --it->second->refCount;
+            }
+            if (it->second->refCount == 0) {
+                g_scopedDbLocks.erase(it);
+            }
+        }
+        throw;
+    }
+}
+
+void PrivmxFS::endDbOperation(const std::string& fullPath) {
+    const auto parsed = parseScopedPath(fullPath);
+    if (parsed.path.size() >= 8 && parsed.path.compare(parsed.path.size() - 8, 8, "-journal") == 0) {
+        return;
+    }
+
+    const auto key = makeScopedDbLockKey(parsed.sessionId, parsed.path);
+    std::shared_ptr<ScopedDbLockState> state;
+    bool shouldRelease = false;
+    {
+        std::lock_guard<std::mutex> lock(g_scopedDbLockMutex);
+        auto it = g_scopedDbLocks.find(key);
+        if (it == g_scopedDbLocks.end()) {
+            return;
+        }
+        state = it->second;
+        if (state->refCount > 0) {
+            --state->refCount;
+        }
+        shouldRelease = state->refCount == 0 && state->locked;
+        if (state->refCount == 0) {
+            g_scopedDbLocks.erase(it);
+        }
+    }
+
+    if (shouldRelease) {
+        state->lockSession.unlock(LockLevel::NONE);
+    }
+}
+
 std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
-    std::string fileId = getFileId(path);
+    if (isJournalPath(path)) {
+        std::lock_guard<std::mutex> lock(_memoryFileMutex);
+        auto& memoryFileState = _memoryFiles[path];
+        if (!memoryFileState) {
+            memoryFileState = std::make_shared<PrivmxFile::MemoryFileState>();
+        }
+        std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, "", path, true, memoryFileState);
+        result->open();
+        return result;
+    }
+    std::string fileId = getCachedFileId(path);
     std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(_session, fileId, path);
     result->open();
     return result;
 }
 
 bool PrivmxFS::access(const std::string& path) {
+    if (isJournalPath(path)) {
+        std::lock_guard<std::mutex> lock(_memoryFileMutex);
+        return _memoryFiles.find(path) != _memoryFiles.end();
+    }
     LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
     return _session->kvdbApi.hasEntry(_session->kvdbId, path);
 }
 
 void PrivmxFS::deleteFile(const std::string& path) {
+    if (isJournalPath(path)) {
+        std::lock_guard<std::mutex> lock(_memoryFileMutex);
+        _memoryFiles.erase(path);
+        return;
+    }
     LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ",_session->kvdbId)
     privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, path);
     std::string fileId = "";
@@ -165,17 +397,39 @@ void PrivmxFS::deleteFile(const std::string& path) {
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
     LockSession::destroyLock(_session->kvdbApi, _session->kvdbId, path);
+    std::lock_guard<std::mutex> lock(_fileIdCacheMutex);
+    _fileIdCache.erase(path);
 }
 PrivmxFS::PrivmxFS(
     const std::shared_ptr<PrivmxSession>& session
 ) : _session(session) {}
+
+bool PrivmxFS::isJournalPath(const std::string& path) const {
+    return path.size() >= 8 && path.compare(path.size() - 8, 8, "-journal") == 0;
+}
+
+std::string PrivmxFS::getCachedFileId(const std::string& name) {
+    {
+        std::lock_guard<std::mutex> lock(_fileIdCacheMutex);
+        auto it = _fileIdCache.find(name);
+        if (it != _fileIdCache.end()) {
+            return it->second;
+        }
+    }
+
+    std::string fileId = getFileId(name);
+
+    std::lock_guard<std::mutex> lock(_fileIdCacheMutex);
+    _fileIdCache[name] = fileId;
+    return fileId;
+}
 
 std::string PrivmxFS::getFileId(const std::string& name) {
     LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
     try {
         privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
         if(kvdbEntry.statusCode != 0) {
-           throw MalformedInternalFileIdException(); 
+           throw MalformedInternalFileIdException();
         }
         std::string fileId = kvdbEntry.data.stdString();
         return fileId;

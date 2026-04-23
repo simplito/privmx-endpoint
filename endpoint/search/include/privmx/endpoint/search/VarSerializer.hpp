@@ -36,6 +36,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<search::SearchIndex>(const search::SearchIndex& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<search::NewDocument>(const search::NewDocument& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<search::Document>(const search::Document& val);
 
 

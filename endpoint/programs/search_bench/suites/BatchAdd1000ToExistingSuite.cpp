@@ -1,0 +1,43 @@
+#include "BatchAdd1000ToExistingSuite.hpp"
+
+#include "SearchBenchHelpers.hpp"
+
+#include <chrono>
+#include <iostream>
+
+namespace search_bench {
+
+namespace {
+
+constexpr std::size_t kMaxDocumentsToLoad = 100;
+
+}  // namespace
+
+void runBatchAdd1000ToExistingSuite(RuntimeContext& runtime) {
+    auto usersWithPubKey = getContextUsersWithPubKeys(runtime);
+
+    auto existingIndexId = runtime.options.searchIndex;
+    auto indexHandle = runtime.searchApi.openSearchIndex(existingIndexId);
+
+
+    auto documentsToAdd = loadDocumentsFromJsonDirectory(
+        runtime.options.messagesDir,
+        kMaxDocumentsToLoad
+    );
+    std::cout << "Adding 1000 documents...\n";
+
+    const auto batchAddStart = std::chrono::steady_clock::now();
+    for (int i = 0; i < 10; i++) {
+        runtime.searchApi.addDocuments(indexHandle, documentsToAdd);
+    }
+    const auto batchAddEnd = std::chrono::steady_clock::now();
+    const auto batchAddDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        batchAddEnd - batchAddStart
+    ).count();
+
+    std::cout << "Adding " << documentsToAdd.size() * 10
+              << " messages (as batch) - took: " << batchAddDurationMs << " ms\n";
+    runtime.searchApi.closeSearchIndex(indexHandle);
+}
+
+}  // namespace search_bench

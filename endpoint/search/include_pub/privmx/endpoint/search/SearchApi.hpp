@@ -138,6 +138,15 @@ public:
     int64_t addDocument(const int64_t indexHandle, const std::string& name, const std::string& content);
 
     /**
+     * Adds multiple new documents to the Search Index in a single batch.
+     *
+     * @param indexHandle Handle of the Index to add the documents to
+     * @param documents Documents to add
+     * @return IDs of the newly added documents in input order
+     */
+    std::vector<int64_t> addDocuments(const int64_t indexHandle, const std::vector<NewDocument>& documents);
+
+    /**
      * Updates an existing document in the Search Index.
      *
      * @param indexHandle Handle of the Index containing the document

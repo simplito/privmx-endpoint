@@ -12,8 +12,11 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_SEARCH_PRIVMXFS_HPP_
 
 #include <memory>
+#include <cstdint>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "privmx/endpoint/core/Connection.hpp"
@@ -76,6 +79,20 @@ class PrivmxFile
 {
 public:
     PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path);
+    struct MemoryFileState
+    {
+        std::string data;
+        LockLevel lockLevel = LockLevel::NONE;
+        bool reservedLock = false;
+    };
+
+    PrivmxFile(
+        std::shared_ptr<PrivmxSession> session,
+        const std::string& fileId,
+        const std::string& path,
+        bool memoryOnly,
+        std::shared_ptr<MemoryFileState> memoryFileState
+    );
     void open();
     void close();
     privmx::endpoint::core::Buffer read(int64_t size, int64_t offset);
@@ -93,21 +110,31 @@ public:
     int64_t fh = -1;
     Writer writer;
     LockSession lockSession;
+    bool memoryOnly = false;
+    std::shared_ptr<MemoryFileState> memoryFileState;
 };
 
 class PrivmxFS
 {
 public:
     static std::shared_ptr<PrivmxFS> create(std::shared_ptr<PrivmxSession> session);
+    static void beginDbOperation(const std::string& fullPath);
+    static void endDbOperation(const std::string& fullPath);
     PrivmxFS(const std::shared_ptr<PrivmxSession>& session);
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
     bool access(const std::string& path);
     void deleteFile(const std::string& path);
 
 private:
+    bool isJournalPath(const std::string& path) const;
+    std::string getCachedFileId(const std::string& name);
     std::string getFileId(const std::string& name);
 
     std::shared_ptr<PrivmxSession> _session;
+    mutable std::mutex _fileIdCacheMutex;
+    std::unordered_map<std::string, std::string> _fileIdCache;
+    mutable std::mutex _memoryFileMutex;
+    std::unordered_map<std::string, std::shared_ptr<PrivmxFile::MemoryFileState>> _memoryFiles;
 };
 
 class PrivmxExtFS
