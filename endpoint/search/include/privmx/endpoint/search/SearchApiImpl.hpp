@@ -84,7 +84,7 @@ public:
 
     core::PagingList<SearchIndex> listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
-    int64_t openSearchIndex(const std::string& indexId);
+    int64_t openSearchIndex(const std::string& indexId, bool loadFully = false);
 
     void closeSearchIndex(const int64_t indexHandle);
 

@@ -98,6 +98,7 @@ public:
         std::map<int64_t, std::string> dirtyRanges;
         std::optional<int64_t> logicalSize;
         std::optional<int64_t> remoteSize;
+        std::optional<std::string> fullReadCache;
     };
 
     PrivmxFile(
@@ -137,6 +138,7 @@ public:
     static void releaseSession(const std::string& fullPath);
     static void beginDbOperation(const std::string& fullPath);
     static void endDbOperation(const std::string& fullPath);
+    static void loadFileFully(const std::string& fullPath);
     PrivmxFS(const std::shared_ptr<PrivmxSession>& session);
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
     bool access(const std::string& path);
@@ -149,6 +151,8 @@ private:
     std::string getFileId(const std::string& name);
     std::optional<std::string> tryGetExistingFileId(const std::string& name);
     std::shared_ptr<PrivmxFile::MemoryFileState> getOrCreateMemoryFileState(const std::string& path);
+    std::shared_ptr<PrivmxFile::BufferedFileState> getOrCreateBufferedFileState(const std::string& path);
+    void loadFileFullyByPath(const std::string& path);
     void ensureJournalLoadedFromRemote(
         const std::string& path,
         const std::shared_ptr<PrivmxFile::MemoryFileState>& memoryFileState

@@ -48,6 +48,12 @@ const std::vector<SuiteDefinition>& getSuiteDefinitions() {
             .description = "List an index and run a search query.",
             .run = &runListAndSearchSuite,
         },
+        {
+            .id = SuiteId::ListAndSearchPreloaded,
+            .name = "list_and_search_preloaded",
+            .description = "List an index and run a search query with full index preload.",
+            .run = &runListAndSearchPreloadedSuite,
+        },
 {
     .id = SuiteId::BatchAdd1000ToExisting,
     .name = "batch_add_1000_to_existing",

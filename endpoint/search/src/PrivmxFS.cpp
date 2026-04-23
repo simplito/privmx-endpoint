@@ -419,6 +419,17 @@ privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
         }
 
         result.assign(static_cast<std::size_t>(readSize), '\0');
+        if (bufferedFileState->fullReadCache.has_value()) {
+            const auto& cache = *bufferedFileState->fullReadCache;
+            if (static_cast<std::size_t>(offset) < cache.size()) {
+                const auto cacheOffset = static_cast<std::size_t>(offset);
+                const auto availableSize = cache.size() - cacheOffset;
+                const auto cachedReadSize = std::min(result.size(), availableSize);
+                std::memcpy(result.data(), cache.data() + cacheOffset, cachedReadSize);
+            }
+            overlayDirtyRanges(result, offset, bufferedFileState->dirtyRanges);
+            return privmx::endpoint::core::Buffer::from(result);
+        }
         fullyCoveredByDirtyRanges = isRangeFullyCoveredByDirtyRanges(bufferedFileState->dirtyRanges, offset, readSize);
     }
 
@@ -465,9 +476,21 @@ void PrivmxFile::write(const privmx::endpoint::core::Buffer& data, int64_t offse
     }
 
     std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+    const auto dataString = data.stdString();
     const auto currentSize = ensureRemoteSizeLoaded(session, fileId, bufferedFileState);
-    mergeDirtyRange(bufferedFileState->dirtyRanges, offset, data.stdString());
-    bufferedFileState->logicalSize = std::max(currentSize, offset + static_cast<int64_t>(data.size()));
+    mergeDirtyRange(bufferedFileState->dirtyRanges, offset, dataString);
+    bufferedFileState->logicalSize = std::max(currentSize, offset + static_cast<int64_t>(dataString.size()));
+    if (bufferedFileState->fullReadCache.has_value()) {
+        auto& cache = *bufferedFileState->fullReadCache;
+        const auto writeOffset = static_cast<std::size_t>(offset);
+        if (cache.size() < writeOffset) {
+            cache.resize(writeOffset, '\0');
+        }
+        if (cache.size() < writeOffset + dataString.size()) {
+            cache.resize(writeOffset + dataString.size(), '\0');
+        }
+        std::memcpy(cache.data() + writeOffset, dataString.data(), dataString.size());
+    }
 }
 
 void PrivmxFile::truncate(int64_t size) {
@@ -495,6 +518,9 @@ void PrivmxFile::truncate(int64_t size) {
     ensureRemoteSizeLoaded(session, fileId, bufferedFileState);
     bufferedFileState->logicalSize = size;
     trimDirtyRanges(bufferedFileState->dirtyRanges, size);
+    if (bufferedFileState->fullReadCache.has_value()) {
+        bufferedFileState->fullReadCache->resize(static_cast<std::size_t>(size), '\0');
+    }
 }
 
 void PrivmxFile::sync() {
@@ -708,6 +734,15 @@ void PrivmxFS::endDbOperation(const std::string& fullPath) {
     }
 }
 
+void PrivmxFS::loadFileFully(const std::string& fullPath) {
+    const auto parsed = parseScopedPath(fullPath);
+    const auto session = SessionManager::get()->getSession(parsed.sessionId);
+    if (!session) {
+        throw std::runtime_error("PrivmxFS session not found: " + parsed.sessionId);
+    }
+    PrivmxFS::create(session)->loadFileFullyByPath(parsed.path);
+}
+
 std::shared_ptr<PrivmxFile::MemoryFileState> PrivmxFS::getOrCreateMemoryFileState(const std::string& path) {
     std::lock_guard<std::mutex> lock(_memoryFileMutex);
     auto& memoryFileState = _memoryFiles[path];
@@ -715,6 +750,47 @@ std::shared_ptr<PrivmxFile::MemoryFileState> PrivmxFS::getOrCreateMemoryFileStat
         memoryFileState = std::make_shared<PrivmxFile::MemoryFileState>();
     }
     return memoryFileState;
+}
+
+std::shared_ptr<PrivmxFile::BufferedFileState> PrivmxFS::getOrCreateBufferedFileState(const std::string& path) {
+    std::lock_guard<std::mutex> lock(_bufferedFileMutex);
+    auto& bufferedFileState = _bufferedFiles[path];
+    if (!bufferedFileState) {
+        bufferedFileState = std::make_shared<PrivmxFile::BufferedFileState>();
+    }
+    return bufferedFileState;
+}
+
+void PrivmxFS::loadFileFullyByPath(const std::string& path) {
+    if (isJournalPath(path)) {
+        return;
+    }
+
+    const auto fileId = getCachedFileId(path);
+    const auto bufferedFileState = getOrCreateBufferedFileState(path);
+    const auto fileInfo = _session->storeApi.getFile(fileId);
+    if (fileInfo.statusCode != 0) {
+        throw MalformedInternalFileException();
+    }
+
+    std::string data;
+    if (fileInfo.size > 0) {
+        const auto fh = _session->storeApi.openFile(fileId);
+        try {
+            data = _session->storeApi.readFromFile(fh, fileInfo.size).stdString();
+            _session->storeApi.closeFile(fh);
+        } catch (...) {
+            _session->storeApi.closeFile(fh);
+            throw;
+        }
+    }
+    data.resize(static_cast<std::size_t>(fileInfo.size), '\0');
+
+    std::lock_guard<std::mutex> lock(bufferedFileState->mutex);
+    bufferedFileState->fullReadCache = std::move(data);
+    bufferedFileState->remoteSize = fileInfo.size;
+    bufferedFileState->logicalSize = fileInfo.size;
+    bufferedFileState->dirtyRanges.clear();
 }
 
 std::optional<std::string> PrivmxFS::tryGetExistingFileId(const std::string& name) {
@@ -831,15 +907,7 @@ std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
         result->open();
         return result;
     }
-    std::shared_ptr<PrivmxFile::BufferedFileState> bufferedFileState;
-    {
-        std::lock_guard<std::mutex> lock(_bufferedFileMutex);
-        auto& entry = _bufferedFiles[path];
-        if (!entry) {
-            entry = std::make_shared<PrivmxFile::BufferedFileState>();
-        }
-        bufferedFileState = entry;
-    }
+    auto bufferedFileState = getOrCreateBufferedFileState(path);
     std::string fileId = getCachedFileId(path);
     std::shared_ptr<PrivmxFile> result = std::make_shared<PrivmxFile>(
         _session,

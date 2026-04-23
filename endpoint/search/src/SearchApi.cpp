@@ -125,11 +125,11 @@ core::PagingList<SearchIndex> SearchApi::listSearchIndexes(const std::string& co
     }
 }
 
-int64_t SearchApi::openSearchIndex(const std::string& indexId) {
+int64_t SearchApi::openSearchIndex(const std::string& indexId, bool loadFully) {
     auto impl = getImpl();
     core::Validator::validateId(indexId, "field:indexId ");
     try {
-        return impl->openSearchIndex(indexId);
+        return impl->openSearchIndex(indexId, loadFully);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

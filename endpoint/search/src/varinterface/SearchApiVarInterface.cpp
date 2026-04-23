@@ -93,9 +93,10 @@ Poco::Dynamic::Var SearchApiVarInterface::listSearchIndexes(const Poco::Dynamic:
 }
 
 Poco::Dynamic::Var SearchApiVarInterface::openSearchIndex(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1, 2);
     auto indexId = _deserializer.deserialize<std::string>(argsArr->get(0), "indexId");
-    auto result = _searchApi.openSearchIndex(indexId);
+    auto loadFully = argsArr->size() > 1 ? _deserializer.deserialize<bool>(argsArr->get(1), "loadFully") : false;
+    auto result = _searchApi.openSearchIndex(indexId, loadFully);
     return _serializer.serialize(result);
 }
 

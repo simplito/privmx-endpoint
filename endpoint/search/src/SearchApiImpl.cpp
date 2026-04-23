@@ -95,10 +95,13 @@ core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(const std::string
     return { .totalAvailable = kvdbs.totalAvailable, mapSearchIndexes(kvdbs.readItems) };
 }
 
-int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
+int64_t SearchApiImpl::openSearchIndex(const std::string& indexId, bool loadFully) {
     auto data = getIndexData(indexId);
     auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, indexId, data.storeId());
     std::string filename = "/pmx/" + session->id + "/index_db";
+    if (loadFully) {
+        PrivmxFS::loadFileFully(filename);
+    }
     auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode());
     fts->ensureTableCreated();
     return _fts.add(fts);

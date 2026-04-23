@@ -14,9 +14,7 @@ constexpr int64_t kDocumentListLimit = 100;
 constexpr int64_t kSearchResultLimit = 100;
 constexpr const char* kDefaultSearchQuery = "is";
 
-}  // namespace
-
-void runListAndSearchSuite(RuntimeContext& runtime) {
+void runListAndSearchSuite(RuntimeContext& runtime, bool loadFully) {
     // 1000 msgs index: 69e8db8d342e11bdac7522d1
     // 2000 msgs index: 69e8db908ebc3972d2ad4881
     // 3000 msgs index: 69e8db97c08f34d4d8e116e8
@@ -26,7 +24,7 @@ void runListAndSearchSuite(RuntimeContext& runtime) {
 
     auto existingIndexes = runtime.searchApi.listSearchIndexes(runtime.options.contextId, {0, 1, "desc"});
     auto existingIndexId = runtime.options.searchIndex;
-    auto reopenedIndexHandle = runtime.searchApi.openSearchIndex(existingIndexId);
+    auto reopenedIndexHandle = runtime.searchApi.openSearchIndex(existingIndexId, loadFully);
 
     privmx::endpoint::core::PagingQuery pagingQuery{
         .skip = 0,
@@ -50,6 +48,16 @@ void runListAndSearchSuite(RuntimeContext& runtime) {
     std::cout << "Found documents: " << result.totalAvailable << '\n';
     runtime.searchApi.closeSearchIndex(reopenedIndexHandle);
     std::cout << "Done!\n";
+}
+
+}  // namespace
+
+void runListAndSearchSuite(RuntimeContext& runtime) {
+    runListAndSearchSuite(runtime, false);
+}
+
+void runListAndSearchPreloadedSuite(RuntimeContext& runtime) {
+    runListAndSearchSuite(runtime, true);
 }
 
 }  // namespace search_bench

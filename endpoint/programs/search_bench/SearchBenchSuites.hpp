@@ -14,6 +14,7 @@ enum class SuiteId {
     BatchAdd3000,
     BatchAdd100k,
     ListAndSearch,
+    ListAndSearchPreloaded,
     BatchAdd1000ToExisting,
     BatchAdd1000Rfcs,
 };

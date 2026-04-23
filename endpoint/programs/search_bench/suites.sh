@@ -12,4 +12,5 @@ SEARCH_BENCH_SUITES=(
 #      "list_and_search --search-index 69e92d861e122afaf621e97b"
 #### RFCs documents
       "list_and_search --search-index 69ea12a6342e11bdac75232c"
+      "list_and_search_preloaded --search-index 69ea12a6342e11bdac75232c"
 )

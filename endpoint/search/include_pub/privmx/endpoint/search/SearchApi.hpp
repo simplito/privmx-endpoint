@@ -116,9 +116,10 @@ public:
      * Opens a Search Index for use and returns a handle.
      *
      * @param indexId ID of the Index to open
+     * @param loadFully if true, preloads the index database file into process memory
      * @return Handle to the opened Search Index
      */
-    int64_t openSearchIndex(const std::string& indexId);
+    int64_t openSearchIndex(const std::string& indexId, bool loadFully = false);
 
     /**
      * Closes the Search Index associated with the given handle.
