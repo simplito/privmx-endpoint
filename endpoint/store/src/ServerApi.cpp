@@ -52,7 +52,6 @@ server::StoreFileCreateResult ServerApi::storeFileCreate(const server::StoreFile
 }
 
 server::StoreFileReadResult ServerApi::storeFileRead(const server::StoreFileReadModel& model) {
-    std::cout << "storeFileRead" << std::endl;
     return request<server::StoreFileReadResult>("storeFileRead", model);
 }
 

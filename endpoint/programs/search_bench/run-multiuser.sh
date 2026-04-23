@@ -3,9 +3,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/suites.sh"
+source "$SCRIPT_DIR/suites-multiuser.sh"
 source "$SCRIPT_DIR/bridge-env.sh"
 #source "$SCRIPT_DIR/../../../build/build/Debug/generators/conanrun.sh"
+
 PROFILE_ARGS=()
 # PROFILE_ARGS=(--profile perf --profile-out /tmp/search-bench-profiles)
 
