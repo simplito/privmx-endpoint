@@ -28,7 +28,7 @@ public:
     std::string signAndEncode(const core::ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& authorKey);
     core::ExpandedDataIntegrityObject decodeAndVerify(const std::string& signedDio);
 private:
-    void assertDataFormat(const dynamic::DataIntegrityObject& dioJSON);
+    void assertDataFormat(const dynamic::DataIntegrityObject_c_struct& dioJSON);
     DataInnerEncryptorV4 _dataEncryptor;
 };
 

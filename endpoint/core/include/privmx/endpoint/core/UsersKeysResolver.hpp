@@ -38,6 +38,15 @@ public:
             const DecryptedEncKeyV2& moduleCurrentKey
     )-> decltype(moduleObj.users(), moduleObj.managers(), std::shared_ptr<UsersKeysResolver>());
 
+    static std::shared_ptr<UsersKeysResolver> create(
+            const std::vector<std::string>& currentUserIds,
+            const std::vector<std::string>& currentManagerIds,
+            const std::vector<core::UserWithPubKey>& users,
+            const std::vector<core::UserWithPubKey>& managers,
+            const bool forceGenerateNewKey,
+            const DecryptedEncKeyV2& moduleCurrentKey
+    );
+
     std::vector<core::UserWithPubKey> getUsersToAddKey();
     std::vector<core::UserWithPubKey> getNewUsers();
     bool doNeedNewKey();
@@ -51,6 +60,15 @@ private:
             const bool forceGenerateNewKey,
             const DecryptedEncKeyV2& moduleCurrentKey
     )-> decltype(moduleObj.users(), moduleObj.managers(), void());
+
+    void init(
+            const std::vector<std::string>& currentUserIds,
+            const std::vector<std::string>& currentManagerIds,
+            const std::vector<core::UserWithPubKey>& users,
+            const std::vector<core::UserWithPubKey>& managers,
+            const bool forceGenerateNewKey,
+            const DecryptedEncKeyV2& moduleCurrentKey
+    );
 
     std::vector<core::UserWithPubKey> _usersToAddMissingKey;
     std::vector<core::UserWithPubKey> _new_users;

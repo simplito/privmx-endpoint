@@ -39,7 +39,7 @@ struct DataIntegrityObject {
     std::string randomId;
     std::optional<std::string> containerId;
     std::optional<std::string> containerResourceId;
-    std::optional<BridgeIdentity> bridgeIdentity;
+    BridgeIdentity bridgeIdentity;
 };
 
 struct DecryptedVersionedData {
@@ -89,7 +89,7 @@ struct NotificationEvent {
 };
 
 struct ModuleKeys {
-        privmx::utils::List<server::KeyEntry> keys;
+        std::vector<server::KeyEntry_c_struct> keys;
         std::string currentKeyId;
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;

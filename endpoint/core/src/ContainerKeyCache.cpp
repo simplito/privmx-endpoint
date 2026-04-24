@@ -30,10 +30,10 @@ std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getKeys(
     }
     if(requiredKeyIds.has_value()) {
         std::set<std::string> keyIds = requiredKeyIds.value();
-        utils::List<server::KeyEntry> keysToDecrypt = utils::TypedObjectFactory::createNewList<server::KeyEntry>();
-        for (auto key : moduleKeys->keys) {
-            if(std::find(keyIds.begin(), keyIds.end(), key.keyId()) != keyIds.end()) {
-                keyIds.erase(key.keyId());
+        std::vector<server::KeyEntry_c_struct> keysToDecrypt;
+        for (const auto& key : moduleKeys->keys) {
+            if(std::find(keyIds.begin(), keyIds.end(), key.keyId) != keyIds.end()) {
+                keyIds.erase(key.keyId);
             }
         }
         if(keyIds.size() != 0) {

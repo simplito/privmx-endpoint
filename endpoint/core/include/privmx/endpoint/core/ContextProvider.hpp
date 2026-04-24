@@ -19,12 +19,12 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-class ContextProvider : public core::ContainerProvider<std::string, server::ContextInfo> {
+class ContextProvider : public core::ContainerProvider<std::string, server::ContextInfo_c_struct> {
 public:
-    ContextProvider(std::function<server::ContextInfo(std::string)> getContext);
+    ContextProvider(std::function<server::ContextInfo_c_struct(std::string)> getContext);
 protected:
-    bool isNewerOrSameAsInStorage(const server::ContextInfo& container) override;
-    inline std::string getID(const server::ContextInfo& container) override {return container.contextId();}
+    bool isNewerOrSameAsInStorage(const server::ContextInfo_c_struct& container) override;
+    inline std::string getID(const server::ContextInfo_c_struct& container) override {return container.contextId;}
 };
 
 } // core

@@ -14,6 +14,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/CoreConstants.hpp"
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -21,97 +22,66 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     if(dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
-    auto dioJSON = privmx::utils::TypedObjectFactory::createNewObject<dynamic::DataIntegrityObject>();
-    dioJSON.version(DataIntegrityObjectDataSchema::Version::VERSION_1);
-    dioJSON.creatorUserId(dio.creatorUserId);
-    dioJSON.creatorPublicKey(dio.creatorPubKey);
-    dioJSON.contextId(dio.contextId);
-    dioJSON.resourceId(dio.resourceId);
-    if (dio.containerId.has_value()) {
-        dioJSON.containerId(dio.containerId.value());
-    }
-    if (dio.containerResourceId.has_value()) {
-        dioJSON.containerResourceId(dio.containerResourceId.value());
-    }
-    dioJSON.timestamp(dio.timestamp);
-    dioJSON.randomId(dio.randomId);
-    auto dioJSONfieldChecksums = privmx::utils::TypedObjectFactory::createNewMap<std::string>();
-    for(auto  a: dio.fieldChecksums) {
-        dioJSONfieldChecksums.add(a.first, utils::Base64::from(a.second));
-    }
-    dioJSON.fieldChecksums(dioJSONfieldChecksums);
-    dioJSON.structureVersion(dio.structureVersion);
-    auto bridgeIdentity = privmx::utils::TypedObjectFactory::createNewObject<dynamic::BridgeIdentity>();
-    bridgeIdentity.url(dio.bridgeIdentity->url);
-    if(dio.bridgeIdentity->pubKey.has_value()) {
-        bridgeIdentity.pubKey(dio.bridgeIdentity->pubKey.value());
-    } else {
-        bridgeIdentity.pubKeyClear();
-    }
-    if(dio.bridgeIdentity->instanceId.has_value()) {
-        bridgeIdentity.instanceId(dio.bridgeIdentity->instanceId.value());
-    } else {
-        bridgeIdentity.instanceIdClear();
-    }
-    dioJSON.bridgeIdentity(bridgeIdentity);
-    return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON)), authorKey));
+    dynamic::DataIntegrityObject_c_struct dioJSON;
+    dioJSON.version = DataIntegrityObjectDataSchema::Version::VERSION_1;
+    dioJSON.creatorUserId = dio.creatorUserId ;
+    dioJSON.creatorPublicKey = dio.creatorPubKey;
+    dioJSON.contextId = dio.contextId;
+    dioJSON.resourceId = dio.resourceId;
+    dioJSON.containerId = dio.containerId;
+    dioJSON.containerResourceId = dio.containerResourceId;
+    dioJSON.timestamp = dio.timestamp;
+    dioJSON.randomId = dio.randomId;
+    dioJSON.fieldChecksums = dio.fieldChecksums;
+    dioJSON.structureVersion = dio.structureVersion;
+    dynamic::BridgeIdentity_c_struct bridgeIdentity;
+    bridgeIdentity.url = dio.bridgeIdentity.url;
+    bridgeIdentity.pubKey = dio.bridgeIdentity.pubKey;
+    bridgeIdentity.instanceId = dio.bridgeIdentity.instanceId;
+    dioJSON.bridgeIdentity = bridgeIdentity;
+    return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON.toJSON())), authorKey));
 }
 
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
     auto dioAndSignature = _dataEncryptor.extractDataWithSignature(_dataEncryptor.decode(signedDio));
-    dynamic::DataIntegrityObject dioJSON = privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::DataIntegrityObject>(
+    dynamic::DataIntegrityObject_c_struct dioJSON = dynamic::DataIntegrityObject_c_struct::formJSON(
        privmx::utils::Utils::parseJsonObject(dioAndSignature.data.stdString())
     );
     assertDataFormat(dioJSON);
-    auto signatureStatus = _dataEncryptor.verifySignature(dioAndSignature, privmx::crypto::PublicKey::fromBase58DER(dioJSON.creatorPublicKey()));
+    auto signatureStatus = _dataEncryptor.verifySignature(dioAndSignature, privmx::crypto::PublicKey::fromBase58DER(dioJSON.creatorPublicKey));
     if(!signatureStatus) {
         throw DataIntegrityObjectInvalidSignatureException();
-    }
-    std::unordered_map<std::string, std::string> fieldChecksums;
-    for(auto  a: dioJSON.fieldChecksums()) {
-        fieldChecksums.insert(std::make_pair(a.first, utils::Base64::toString(a.second)));
-    }
-    std::optional<std::string> containerId = std::nullopt;
-    if(!dioJSON.containerIdEmpty()) {
-        containerId =  dioJSON.containerId();
-    }
-    std::optional<std::string> containerResourceId = std::nullopt;
-    if(!dioJSON.containerResourceIdEmpty()) {
-        containerResourceId = dioJSON.containerResourceId();
     }
 
     return ExpandedDataIntegrityObject{
         DataIntegrityObject{
-            .creatorUserId=dioJSON.creatorUserId(),
-            .creatorPubKey=dioJSON.creatorPublicKey(),
-            .contextId=dioJSON.contextId(),
-            .resourceId=dioJSON.resourceId(),
-            .timestamp=dioJSON.timestamp(),
-            .randomId=dioJSON.randomId(),
-            .containerId=containerId,
-            .containerResourceId=containerResourceId,
+            .creatorUserId=dioJSON.creatorUserId,
+            .creatorPubKey=dioJSON.creatorPublicKey,
+            .contextId=dioJSON.contextId,
+            .resourceId=dioJSON.resourceId,
+            .timestamp=dioJSON.timestamp,
+            .randomId=dioJSON.randomId,
+            .containerId=dioJSON.containerId,
+            .containerResourceId=dioJSON.containerResourceId,
             .bridgeIdentity= BridgeIdentity{
-                .url=dioJSON.bridgeIdentity().url(),
-                .pubKey=dioJSON.bridgeIdentity().pubKeyOptional(),
-                .instanceId=dioJSON.bridgeIdentity().instanceIdOptional()
+                .url=dioJSON.bridgeIdentity.url,
+                .pubKey=dioJSON.bridgeIdentity.pubKey,
+                .instanceId=dioJSON.bridgeIdentity.instanceId
             }
         },
-        .structureVersion=dioJSON.structureVersion(),
-        .fieldChecksums=fieldChecksums
+        .structureVersion=dioJSON.structureVersion,
+        .fieldChecksums=dioJSON.fieldChecksums
     };
 }
 
-void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {
-    if (dioJSON.versionEmpty()                                                 ||
-        dioJSON.version() != DataIntegrityObjectDataSchema::Version::VERSION_1 ||
-        dioJSON.creatorUserIdEmpty()                                           ||
-        dioJSON.creatorPublicKeyEmpty()                                        ||
-        dioJSON.contextIdEmpty()                                               ||
-        dioJSON.resourceIdEmpty()                                              ||
-        dioJSON.randomIdEmpty()                                                ||
-        dioJSON.timestampEmpty()                                               ||
-        dioJSON.bridgeIdentityEmpty()                                          ||
-        dioJSON.fieldChecksumsEmpty()
+void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject_c_struct& dioJSON) {
+    if (
+        dioJSON.version != DataIntegrityObjectDataSchema::Version::VERSION_1   ||
+        dioJSON.creatorUserId == ""                                            ||
+        dioJSON.creatorPublicKey == ""                                         ||
+        dioJSON.contextId == ""                                                ||
+        dioJSON.resourceId == ""                                               ||
+        dioJSON.randomId == ""
     ) {
         throw MalformedDataIntegrityObjectException();
     }

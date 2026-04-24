@@ -32,11 +32,11 @@ namespace core {
 class KeyDecryptionAndVerificationRequest {
 public:
     KeyDecryptionAndVerificationRequest() = default;
-    void addOne(const utils::List<server::KeyEntry>& keys, const std::string& keyId, const EncKeyLocation& location);
-    void addMany(const utils::List<server::KeyEntry>& keys, std::set<std::string> keyIds, const EncKeyLocation& location);
-    void addAll(const utils::List<server::KeyEntry>& keys, const EncKeyLocation& location);
+    void addOne(const std::vector<server::KeyEntry_c_struct>& keys, const std::string& keyId, const EncKeyLocation& location);
+    void addMany(const std::vector<server::KeyEntry_c_struct>& keys, std::set<std::string> keyIds, const EncKeyLocation& location);
+    void addAll(const std::vector<server::KeyEntry_c_struct>& keys, const EncKeyLocation& location);
     void markAsCompleted();
-    std::unordered_map<EncKeyLocation, utils::Map<server::KeyEntry>> requestData;
+    std::unordered_map<EncKeyLocation, std::unordered_map<std::string, server::KeyEntry_c_struct>> requestData;
 private:
 
     bool _completed = false;
@@ -49,14 +49,14 @@ public:
     EncKey generateKey();
     std::string generateSecret();
     std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(const KeyDecryptionAndVerificationRequest& request);
-    privmx::utils::List<server::KeyEntrySet> prepareKeysList(
+    std::vector<server::KeyEntrySet_c_struct> prepareKeysList(
         const std::vector<UserWithPubKey>& users, 
         const EncKey& key, 
         const DataIntegrityObject& dio, 
         const EncKeyLocation& location, 
         const std::string& containerSecret
     );
-    privmx::utils::List<server::KeyEntrySet> prepareMissingKeysForNewUsers(
+    std::vector<server::KeyEntrySet_c_struct> prepareMissingKeysForNewUsers(
         const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, 
         const std::vector<UserWithPubKey>& users, 
         const DataIntegrityObject& dio, 
@@ -66,8 +66,8 @@ public:
     bool verifyKeysSecret(const std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location, const std::string& containerSecret);
     
 private:
-    std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyKeys(utils::Map<server::KeyEntry> keys, const EncKeyLocation& location);
-    server::KeyEntrySet createKeyEntrySet(
+    std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyKeys(std::unordered_map<std::string, server::KeyEntry_c_struct> keys, const EncKeyLocation& location);
+    server::KeyEntrySet_c_struct createKeyEntrySet(
         const UserWithPubKey& user,
         const EncKey& key, 
         const DataIntegrityObject& dio, 
