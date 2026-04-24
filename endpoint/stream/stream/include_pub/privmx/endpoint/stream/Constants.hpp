@@ -30,5 +30,5 @@ constexpr static StreamRoomDataSchema::Version CURRENT_STREAM_ROOM_DATA_SCHEMA_V
 }  // namespace endpoint
 }  // namespace privmx
 
-#endif  // #define _PRIVMXLIB_ENDPOINT_STREAM_CONSTANTS_HPP_
+#endif  // _PRIVMXLIB_ENDPOINT_STREAM_CONSTANTS_HPP_
 

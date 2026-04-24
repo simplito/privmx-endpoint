@@ -44,7 +44,7 @@ public:
     void OnIceGatheringState(libwebrtc::RTCIceGatheringState state) override;
     void OnIceConnectionState(libwebrtc::RTCIceConnectionState state) override;
     void OnIceCandidate(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate> candidate) override;
-    void OnAddStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) override;
+    void OnAddStream([[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) override;
     void OnRemoveStream(libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> stream) override;
     void OnDataChannel(libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) override;
     void OnRenegotiationNeeded() override;
@@ -71,6 +71,7 @@ private:
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<DataChannelImpl>> _dataChannels;
+    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::AudioLevelAnalyzer>> _audioLevelAnalyzers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
 
     std::optional<std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)>> _onIceCandidate;

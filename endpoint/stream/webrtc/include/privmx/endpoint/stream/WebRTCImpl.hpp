@@ -28,7 +28,6 @@ limitations under the License.
 #include <rtc_peerconnection.h>
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
-#include <rtc_peerconnection.h>
 #include <rtc_media_stream.h>
 #include <pmx_frame_cryptor.h>
 
@@ -75,7 +74,7 @@ public:
         const std::optional<std::pair<std::string, std::function<void(std::string)>*>>& dataChannel
     );
     void addRemoteStreamListener(const std::string& streamRoomId, int64_t streamId, std::shared_ptr<OnTrackInterface> onTrack);
-
+    void closeSingleConnection(const std::string& streamRoomId, ConnectionType connectionType);
 private:
     void AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = "0");
     void AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id = "0");
@@ -85,21 +84,16 @@ private:
     void RemoveDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc);
 
 
-    int64_t addKeyUpdateCallback(std::function<void(std::shared_ptr<privmx::webrtc::KeyStore>)> keyUpdateCallback);
-    void removeKeyUpdateCallback(int64_t keyUpdateCallbackId);
     static std::shared_ptr<privmx::webrtc::KeyStore> createWebRtcKeyStore(const std::vector<privmx::endpoint::stream::Key>& keys);
     std::shared_ptr<PeerConnection> createPeerConnection(const std::string& streamRoomId);
 
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
-    std::function<void(const int64_t, const dynamic::RTCIceCandidate&)> _onTrickle;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::shared_ptr<StreamApiLow> _apiLow;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;
-
-    
 };
 
 } // namespace stream

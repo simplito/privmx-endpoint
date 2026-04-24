@@ -2,11 +2,18 @@ file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(INCLUDE_PUB_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include_pub)
 
-add_library(libwebrtc SHARED IMPORTED)
-set_target_properties(libwebrtc PROPERTIES
-    IMPORTED_LOCATION "<path_to_libwebrtc>"
-    INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
-)
+if(PRIVMX_IMPORT_LIBWEBRTC)
+    add_library(libwebrtc SHARED IMPORTED)
+    set_target_properties(libwebrtc PROPERTIES
+        IMPORTED_LOCATION ${PRIVMX_LIBWEBRTC}
+        INTERFACE_INCLUDE_DIRECTORIES ${PRIVMX_LIBWEBRTC_INCLUDE}
+    )
+else()
+    find_package(libwebrtc REQUIRED CONFIG)
+    if(PRIVMX_CONAN)
+        add_library(libwebrtc ALIAS libwebrtc::libwebrtc)
+    endif()
+endif()
 
 add_library(privmxendpointstream_webrtc OBJECT ${SOURCES})
 target_include_directories(privmxendpointstream_webrtc PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})

@@ -57,4 +57,4 @@ int privmx_endpoint_stream_freeProxyWebRTC(privmx_endpoint_stream_ProxyWebRTC* p
 }
 #endif
 
-#endif // _PRIVMX_ENDPOINT_INBOX_INTERFACE_API_
+#endif // _PRIVMX_ENDPOINT_STREAM_LOW_INTERFACE_API_

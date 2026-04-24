@@ -14,8 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <functional>
-#include <memory>
 
 namespace privmx {
 namespace endpoint {
@@ -67,22 +65,6 @@ struct SdpWithTypeModel {
     std::string type;
 };
 
-struct SdpWithRoomModel {
-    std::string roomId;
-    std::string sdp;
-    std::string type;
-};
-
-struct UpdateSessionIdModel {
-    std::string streamRoomId;
-    std::string connectionType;
-    int64_t sessionId;
-};
-
-struct RoomModel {
-    std::string roomId;
-};
-
 struct StreamSubscription {
     int64_t streamId;
     std::optional<std::string> streamTrackId;
@@ -103,13 +85,6 @@ enum EventSelectorType: int64_t {
     STREAMROOM_ID = 1,
     STREAM_ID = 2,
 };
-
-// struct VideoRoomStreamTrack {
-//     std::string type;
-//     std::string codec;
-//     std::string mid;
-//     int64_t mindex;
-// };
 
 struct StreamTrackInfo {
     std::string type;                       // "audio" | "video" | "data"

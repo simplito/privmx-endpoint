@@ -25,7 +25,6 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
-#include "ThreadSafeQueue.hpp"
 #include "privmx/endpoint/stream/Constants.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamKeyManager.hpp"
@@ -60,19 +59,10 @@ public:
         const std::vector<core::UserWithPubKey>&managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::string& type = STREAM_TYPE_FILTER_FLAG
     );
-
-    std::string createStreamRoomEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
+    
     void updateStreamRoom(
         const std::string& streamRoomId, 
         const std::vector<core::UserWithPubKey>& users, 
@@ -84,10 +74,8 @@ public:
         const bool forceGenerateNewKey, 
         const std::optional<core::ContainerPolicy>& policies
     );
-    core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
-    core::PagingList<StreamRoom> listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
-    StreamRoom getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
-    StreamRoom getStreamRoom(const std::string& streamRoomId);
+    core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query, const std::string& type = STREAM_TYPE_FILTER_FLAG);
+    StreamRoom getStreamRoom(const std::string& streamRoomId, const std::string& type = STREAM_TYPE_FILTER_FLAG);
 
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
@@ -152,12 +140,6 @@ private:
     }; 
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
 
-    std::string _streamRoomCreateEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>&managers, const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta, const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
     void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processNotificationEvent(const core::NotificationEvent& notification);
     void processConnectedEvent();
@@ -171,8 +153,6 @@ private:
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = StreamRoomDataSchema::Version::UNKNOWN
     );
-    StreamRoom _streamRoomGetEx(const std::string& streamRoomId, const std::string& type);
-    core::PagingList<StreamRoom> _streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
 
     StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData);
     StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
@@ -181,12 +161,10 @@ private:
     StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom);
     void assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
-    int64_t generateNumericId();
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
-    void removeStream(std::shared_ptr<StreamRoomData> room, std::shared_ptr<StreamData> streamData, const StreamHandle& streamHandle);
     std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, const std::string& encryptionKeyId);
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(server::StreamRoomInfo streamRoomInfo);
     std::string deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 EncKey);
@@ -212,7 +190,6 @@ private:
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
     core::ModuleDataEncryptorV5 _streamRoomDataEncryptorV5;
-    core::DataEncryptorV4 _dataEncryptor;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;

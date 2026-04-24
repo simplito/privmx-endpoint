@@ -34,7 +34,6 @@ limitations under the License.
 #include <rtc_peerconnection.h>
 #include <base/portable.h>
 #include <rtc_mediaconstraints.h>
-#include <rtc_peerconnection.h>
 #include <rtc_desktop_media_list.h>
 #include <rtc_desktop_capturer.h>
 #include <rtc_desktop_device.h>
@@ -57,16 +56,6 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
-    std::string createStreamRoomEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
     void updateStreamRoom(
         const std::string& streamRoomId, 
         const std::vector<core::UserWithPubKey>& users, 
@@ -81,11 +70,7 @@ public:
 
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
 
-    core::PagingList<StreamRoom> listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
-
     StreamRoom getStreamRoom(const std::string& streamRoomId);
-
-    StreamRoom getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
 
     void deleteStreamRoom(const std::string& streamRoomId);
 
@@ -105,7 +90,7 @@ public:
     std::vector<VideoDevice> getVideoDevices();
     std::vector<DesktopDevice> getDesktopDevices(DesktopType desktopType);
     MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains);
-    MediaTrack addTrackEx(const StreamHandle& streamHandle, const MediaDevice& mediaDevice, const MediaTrackConstrains& mediaTrackConstrains, bool testing = false /*FIX ME*/);
+    MediaTrack addFakeVideoTrack(const StreamHandle& streamHandle);
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
@@ -241,7 +226,6 @@ private:
         std::string streamRoomId;
         std::mutex streamMutex;
     };
-    int64_t generateNumericId();
     inline std::string getTrimmedString(std::string s) {
         s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
         return s;
@@ -253,7 +237,7 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
-    int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
+    int _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<StreamApiLow> _api;
     std::shared_ptr<WebRTCImpl> _webRTC;
 };

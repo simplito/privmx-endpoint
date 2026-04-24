@@ -141,7 +141,7 @@ protected:
         streamApi->joinStreamRoom(streamRoomId);
         stream::StreamHandle handle = streamApi->createStream(streamRoomId);
         std::vector<stream::VideoDevice> mediaDevices = streamApi->getVideoDevices();
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
         streamApi->publishStream(handle);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         return handle;
@@ -767,9 +767,9 @@ TEST_F(StreamTest, joinStreamRoom) {
     EXPECT_NO_THROW({
         streamApi->joinStreamRoom(streamRoomId_1);
     });
-    EXPECT_NO_THROW({
+    EXPECT_THROW({
         streamApi->joinStreamRoom(streamRoomId_1);
-    });
+    }, core::Exception);
 }
 
 TEST_F(StreamTest, leaveStreamRoom) {
@@ -816,7 +816,7 @@ TEST_F(StreamTest, adding_Track_no_publish) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
 }
 
@@ -845,7 +845,7 @@ TEST_F(StreamTest, publish_with_tracks) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_THROW({
         streamApi->publishStream(-1);
@@ -869,8 +869,8 @@ TEST_F(StreamTest, publish_with_multiple_instance_of_same_track) {
     });
     // Load Fake video tracks
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
@@ -970,13 +970,13 @@ TEST_F(StreamTest, updateStream_remove_all_tracks) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
     });
     EXPECT_NO_THROW({
-        streamApi->removeTrack(handle, {"","",stream::DeviceType::Video});
+        streamApi->removeTrack(handle, {"FAKE", "FAKE",stream::DeviceType::Video});
     });
     EXPECT_NO_THROW({
     streamApi->updateStream(handle);
@@ -994,14 +994,14 @@ TEST_F(StreamTest, updateStream_adding_track) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->updateStream(handle);
@@ -1019,7 +1019,7 @@ TEST_F(StreamTest, updateStream_no_changes) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
@@ -1040,7 +1040,7 @@ TEST_F(StreamTest, updateStream_after_failed_add_track) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
@@ -1064,7 +1064,7 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     });
     // Load Fake video track
     EXPECT_NO_THROW({
-        streamApi->getImpl()->addTrackEx(handle, {"","",stream::DeviceType::Video}, stream::MediaTrackConstrains{.idealWidth=1280, .idealHeight=720, .idealFps=1}, true);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
@@ -1082,9 +1082,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_invalid_data) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
-    });
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
     });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
@@ -1125,9 +1122,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_remove_all_tracks) {
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
     });
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
-    });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
         auto streamlist = streamApi->listStreams(streamRoomId_1);
@@ -1150,9 +1144,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_new_track) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
-    });
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
     });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
@@ -1177,9 +1168,6 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_and_remove_same_track) {
         publishStream(streamRoomId_1);
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
-    });
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
         auto streamlist = streamApi->listStreams(streamRoomId_1);
