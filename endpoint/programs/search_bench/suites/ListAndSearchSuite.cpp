@@ -10,7 +10,7 @@ namespace search_bench {
 namespace {
 
 constexpr int64_t kSearchResultLimit = 100;
-constexpr const char* kDefaultSearchQuery = "console";
+constexpr const char* kDefaultSearchQuery = "is";
 
 int64_t openIndexForSuite(RuntimeContext& runtime, bool loadFully) {
     auto existingIndexId = runtime.options.searchIndex;
