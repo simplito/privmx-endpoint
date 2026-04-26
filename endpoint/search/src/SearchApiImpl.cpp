@@ -18,9 +18,12 @@ limitations under the License.
 #include "privmx/utils/Utils.hpp"
 #include "privmx/utils/TypedObject.hpp"
 
+#include "privmx/endpoint/store/ChunkDataProvider.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
 #include <privmx/utils/Logger.hpp>
+
+#include <iostream>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
@@ -145,7 +148,6 @@ core::PagingList<Document> SearchApiImpl::listDocuments(const int64_t indexHandl
 
 core::PagingList<Document> SearchApiImpl::searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery) {
     auto fts = _fts.get(indexHandle);
-    core::PagingList<Document> result;
     return fts->search(searchQuery, pagingQuery);
 }
 

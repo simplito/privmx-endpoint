@@ -139,6 +139,7 @@ public:
     static void beginDbOperation(const std::string& fullPath);
     static void endDbOperation(const std::string& fullPath);
     static void loadFileFully(const std::string& fullPath);
+    static int64_t getIndexSize(const std::string& fullPath);
     PrivmxFS(const std::shared_ptr<PrivmxSession>& session);
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
     bool access(const std::string& path);

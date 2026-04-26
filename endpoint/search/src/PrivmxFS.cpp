@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <mutex>
@@ -37,6 +38,7 @@ std::mutex g_scopedDbLockMutex;
 std::unordered_map<std::string, std::shared_ptr<ScopedDbLockState>> g_scopedDbLocks;
 std::mutex g_sessionFilesystemMutex;
 std::unordered_map<std::string, std::shared_ptr<PrivmxFS>> g_sessionFilesystems;
+thread_local std::uint64_t g_storeReadRequestCount = 0;
 
 constexpr auto SCOPED_DB_LOCK_TIMEOUT = std::chrono::seconds(10);
 constexpr auto SCOPED_DB_LOCK_RETRY_DELAY = std::chrono::milliseconds(50);
@@ -434,6 +436,7 @@ privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
     }
 
     if (!fullyCoveredByDirtyRanges) {
+        ++g_storeReadRequestCount;
         session->storeApi.seekInFile(fh, offset);
         auto remoteData = session->storeApi.readFromFile(fh, static_cast<int64_t>(result.size())).stdString();
         std::memcpy(result.data(), remoteData.data(), std::min(result.size(), remoteData.size()));
@@ -743,6 +746,26 @@ void PrivmxFS::loadFileFully(const std::string& fullPath) {
     PrivmxFS::create(session)->loadFileFullyByPath(parsed.path);
 }
 
+int64_t PrivmxFS::getIndexSize(const std::string& fullPath) {
+    const auto parsed = parseScopedPath(fullPath);
+    const auto session = SessionManager::get()->getSession(parsed.sessionId);
+    if (!session) {
+        throw std::runtime_error("PrivmxFS session not found: " + parsed.sessionId);
+    }
+    return PrivmxFS::create(session)->getIndexSizeByPath(parsed.path);
+}
+
+int64_t PrivmxFS::getIndexSizeByPath(const std::string& path) {
+    if (isJournalPath(path)) {
+        return -1;
+    }
+
+    const auto fileId = getCachedFileId(path);
+    const auto bufferedFileState = getOrCreateBufferedFileState(path);
+    const auto fileInfo = _session->storeApi.getFile(fileId);
+    return fileInfo.size;
+}
+
 std::shared_ptr<PrivmxFile::MemoryFileState> PrivmxFS::getOrCreateMemoryFileState(const std::string& path) {
     std::lock_guard<std::mutex> lock(_memoryFileMutex);
     auto& memoryFileState = _memoryFiles[path];
@@ -772,6 +795,13 @@ void PrivmxFS::loadFileFullyByPath(const std::string& path) {
     if (fileInfo.statusCode != 0) {
         throw MalformedInternalFileException();
     }
+
+    std::cout << "[PrivmxFS] preload index db"
+        << " path=" << path
+        << " fileId=" << fileId
+        << " size=" << fileInfo.size
+        << " bytes"
+        << '\n';
 
     std::string data;
     if (fileInfo.size > 0) {
