@@ -4,6 +4,6 @@
 
 namespace search_bench {
 
-void runBatchAdd1000RfcsSuite(RuntimeContext& runtime);
+void runBatchAdd500RfcsSuite(RuntimeContext& runtime);
 
 }  // namespace search_bench

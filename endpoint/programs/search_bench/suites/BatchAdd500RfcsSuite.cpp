@@ -1,4 +1,4 @@
-#include "BatchAdd1000RfcsSuite.hpp"
+#include "BatchAdd500RfcsSuite.hpp"
 
 #include <Poco/Exception.h>
 
@@ -16,7 +16,7 @@ constexpr std::size_t kMaxDocumentsToLoad = 400;
 // 1000 rfcs index: 69ea12a6342e11bdac75232c
 }  // namespace
 
-void runBatchAdd1000RfcsSuite(RuntimeContext& runtime) {
+void runBatchAdd500RfcsSuite(RuntimeContext& runtime) {
     auto usersWithPubKey = getContextUsersWithPubKeys(runtime);
 
     auto indexId = runtime.searchApi.createSearchIndex(
@@ -41,15 +41,20 @@ void runBatchAdd1000RfcsSuite(RuntimeContext& runtime) {
     int i = 0;
     int total = 0;
     int batchSize = 10;
-    while (i < documentsToAdd.size() - batchSize && total < 1000 - batchSize) {
+    while (total < 500) {
         std::vector<privmx::endpoint::search::NewDocument> batch {};
         for (int j = 0; j < batchSize; j++) {
            batch.push_back(documentsToAdd[i+j]);
         }
-        i += batchSize; total += batchSize;
-        std::cout << "Adding batch " << batch.size() << '\n';
+        std::cout << "Adding batch " << batch.size() << " with document ID starting from: " << i << '\n';
+
+        i += batchSize;
+        if (i > documentsToAdd.size() - batchSize) {
+            i = 0;
+        }
         try {
             runtime.searchApi.addDocuments(indexHandle, batch);
+            total += batchSize;
         } catch (...) {
             std::cout << "Failed to add batch " << batch.size() << '\n';
             for (int k = 0; k < batch.size(); ++k) {
