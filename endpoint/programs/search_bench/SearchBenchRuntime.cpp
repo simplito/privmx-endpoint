@@ -2,6 +2,7 @@
 
 #include <privmx/endpoint/core/Types.hpp>
 
+#include <stdexcept>
 #include <string_view>
 
 namespace search_bench {
@@ -22,6 +23,14 @@ std::string_view indexModeToString(privmx::endpoint::search::IndexMode mode) {
 }
 
 }  // namespace
+
+int64_t RuntimeContext::getSearchIndexSize(const std::string& searchIndexId) {
+    if (searchIndexId.empty()) {
+        throw std::runtime_error("Missing search index id");
+    }
+
+    return searchApi.getSearchIndexSize(searchIndexId);
+}
 
 RuntimeContext createRuntimeContext(const ProgramOptions& options) {
     auto connection = privmx::endpoint::core::Connection::connect(

@@ -86,6 +86,8 @@ public:
 
     int64_t openSearchIndex(const std::string& indexId, bool loadFully = false);
 
+    int64_t getSearchIndexSize(const std::string& indexId);
+
     void closeSearchIndex(const int64_t indexHandle);
 
     int64_t addDocument(const int64_t indexHandle, const std::string& name, const std::string& content);

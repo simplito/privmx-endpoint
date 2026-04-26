@@ -122,6 +122,14 @@ public:
     int64_t openSearchIndex(const std::string& indexId, bool loadFully = false);
 
     /**
+     * Gets the size of the Search Index database file.
+     *
+     * @param indexId ID of the Index
+     * @return Size of the Search Index database file in bytes
+     */
+    int64_t getSearchIndexSize(const std::string& indexId);
+
+    /**
      * Closes the Search Index associated with the given handle.
      *
      * @param indexHandle Handle of the Search Index to close

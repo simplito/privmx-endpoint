@@ -136,6 +136,17 @@ int64_t SearchApi::openSearchIndex(const std::string& indexId, bool loadFully) {
     }
 }
 
+int64_t SearchApi::getSearchIndexSize(const std::string& indexId) {
+    auto impl = getImpl();
+    core::Validator::validateId(indexId, "field:indexId ");
+    try {
+        return impl->getSearchIndexSize(indexId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void SearchApi::closeSearchIndex(const int64_t indexHandle) {
     auto impl = getImpl();
     try {

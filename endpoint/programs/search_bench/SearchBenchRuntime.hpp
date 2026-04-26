@@ -18,6 +18,8 @@ struct RuntimeContext {
     privmx::endpoint::kvdb::KvdbApi kvdbApi;
     privmx::endpoint::store::StoreApi storeApi;
     privmx::endpoint::search::SearchApi searchApi;
+
+    int64_t getSearchIndexSize(const std::string& searchIndexId);
 };
 
 RuntimeContext createRuntimeContext(const ProgramOptions& options);
