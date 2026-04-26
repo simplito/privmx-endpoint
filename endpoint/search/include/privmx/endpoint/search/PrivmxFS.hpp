@@ -145,6 +145,7 @@ public:
     bool access(const std::string& path);
     void deleteFile(const std::string& path);
     void materializeJournalForDb(const std::string& dbPath);
+    int64_t getIndexSizeByPath(const std::string& path);
 
 private:
     bool isJournalPath(const std::string& path) const;

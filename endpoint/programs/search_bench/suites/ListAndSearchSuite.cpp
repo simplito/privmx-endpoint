@@ -14,7 +14,7 @@ constexpr const char* kDefaultSearchQuery = "console";
 
 int64_t openIndexForSuite(RuntimeContext& runtime, bool loadFully) {
     auto existingIndexId = runtime.options.searchIndex;
-    privmx::endpoint::store::ChunkDataProvider::resetTotalServerReadRequestCount();
+    // privmx::endpoint::store::ChunkDataProvider::resetTotalServerReadRequestCount();
     return runtime.searchApi.openSearchIndex(existingIndexId, loadFully);
 }
 
@@ -25,12 +25,6 @@ privmx::endpoint::core::PagingQuery createPagingQuery() {
         .sortOrder = "asc",
     };
     return pagingQuery;
-}
-
-void printSuiteReadSummary() {
-    std::cout << "[SearchBench] suite total server read requests="
-        << privmx::endpoint::store::ChunkDataProvider::getTotalServerReadRequestCount()
-        << '\n';
 }
 
 void runListAndSearchSuite(RuntimeContext& runtime, bool loadFully) {
@@ -58,7 +52,6 @@ void runListAndSearchSuite(RuntimeContext& runtime, bool loadFully) {
     //     std::cout << document.name << ": " << document.content << '\n';
     // }
     std::cout << "Found documents: " << result.totalAvailable << '\n';
-    printSuiteReadSummary();
     runtime.searchApi.closeSearchIndex(reopenedIndexHandle);
     std::cout << "Done!\n";
 }
@@ -82,7 +75,6 @@ void runListSuite(RuntimeContext& runtime) {
     std::cout << "List documents took: " << listDurationMs << " ms\n";
     std::cout << "Total documents in Index: " << listResult.totalAvailable << '\n';
     std::cout << "Returned documents: " << listResult.readItems.size() << '\n';
-    printSuiteReadSummary();
     runtime.searchApi.closeSearchIndex(reopenedIndexHandle);
     std::cout << "Done!\n";
 }
@@ -103,7 +95,6 @@ void runSearchSuite(RuntimeContext& runtime) {
 
     std::cout << "Search query took: " << searchDurationMs << " ms\n";
     std::cout << "Found documents: " << result.totalAvailable << '\n';
-    printSuiteReadSummary();
     runtime.searchApi.closeSearchIndex(reopenedIndexHandle);
     std::cout << "Done!\n";
 }

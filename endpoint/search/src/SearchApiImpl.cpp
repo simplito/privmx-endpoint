@@ -110,6 +110,13 @@ int64_t SearchApiImpl::openSearchIndex(const std::string& indexId, bool loadFull
     return _fts.add(fts);
 }
 
+int64_t SearchApiImpl::getSearchIndexSize(const std::string& indexId) {
+    auto data = getIndexData(indexId);
+    auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, indexId, data.storeId());
+    std::string filename = "/pmx/" + session->id + "/index_db";
+    return PrivmxFS::getIndexSize(filename);
+}
+
 void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
     auto fts = _fts.get(indexHandle);
     fts->close();
