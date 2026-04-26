@@ -1,0 +1,116 @@
+﻿
+
+
+
+Internet Engineering Task Force (IETF)                             T. Li
+Request for Comments: 9650                              Juniper Networks
+Updates: 5029                                                August 2024
+Category: Standards Track                                               
+ISSN: 2070-1721
+
+
+ Revision to Registration Procedures for IS-IS Neighbor Link-Attribute
+                               Bit Values
+
+Abstract
+
+   RFC 5029, "Definition of an IS-IS Link Attribute Sub-TLV", defines an
+   IANA registry called "IS-IS Neighbor Link-Attribute Bit Values".
+   This document changes the registration procedure for that registry
+   from "Standards Action" to "Expert Review".  This document updates
+   RFC 5029.
+
+Status of This Memo
+
+   This is an Internet Standards Track document.
+
+   This document is a product of the Internet Engineering Task Force
+   (IETF).  It represents the consensus of the IETF community.  It has
+   received public review and has been approved for publication by the
+   Internet Engineering Steering Group (IESG).  Further information on
+   Internet Standards is available in Section 2 of RFC 7841.
+
+   Information about the current status of this document, any errata,
+   and how to provide feedback on it may be obtained at
+   https://www.rfc-editor.org/info/rfc9650.
+
+Copyright Notice
+
+   Copyright (c) 2024 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents
+   (https://trustee.ietf.org/license-info) in effect on the date of
+   publication of this document.  Please review these documents
+   carefully, as they describe your rights and restrictions with respect
+   to this document.  Code Components extracted from this document must
+   include Revised BSD License text as described in Section 4.e of the
+   Trust Legal Provisions and are provided without warranty as described
+   in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction
+   2.  IANA Considerations
+   3.  Security Considerations
+   4.  References
+     4.1.  Normative References
+     4.2.  Informative References
+   Acknowledgements
+   Author's Address
+
+1.  Introduction
+
+   [RFC5029] defines the "IS-IS Neighbor Link-Attribute Bit Values"
+   registry and specifies a registration procedure of "Standards
+   Action".  In practice, this registration procedure is unnecessarily
+   restrictive, as it prevents allocation of bits to experimental
+   protocols, which in turn increases the risk of conflicts introduced
+   by use of unregistered code points (so-called "code point
+   squatting").
+
+   Accordingly, this document changes the registration procedure for the
+   registry, as described in Section 2.
+
+2.  IANA Considerations
+
+   IANA has changed the registration procedure for the "IS-IS Neighbor
+   Link-Attribute Bit Values" registry to "Expert Review" [RFC8126] and
+   has listed this document as a reference for the registry.  General
+   guidance for the designated experts is defined in [RFC7370], and more
+   specific guidance can be found in [RFC5029].
+
+3.  Security Considerations
+
+   This document does not affect the security issues discussed in
+   [RFC5029].
+
+4.  References
+
+4.1.  Normative References
+
+   [RFC5029]  Vasseur, JP. and S. Previdi, "Definition of an IS-IS Link
+              Attribute Sub-TLV", RFC 5029, DOI 10.17487/RFC5029,
+              September 2007, <https://www.rfc-editor.org/info/rfc5029>.
+
+4.2.  Informative References
+
+   [RFC7370]  Ginsberg, L., "Updates to the IS-IS TLV Codepoints
+              Registry", RFC 7370, DOI 10.17487/RFC7370, September 2014,
+              <https://www.rfc-editor.org/info/rfc7370>.
+
+   [RFC8126]  Cotton, M., Leiba, B., and T. Narten, "Guidelines for
+              Writing an IANA Considerations Section in RFCs", BCP 26,
+              RFC 8126, DOI 10.17487/RFC8126, June 2017,
+              <https://www.rfc-editor.org/info/rfc8126>.
+
+Acknowledgements
+
+   The author would like to thank John Scudder for his contributions.
+
+Author's Address
+
+   Tony Li
+   Juniper Networks
+   Email: tony.li@tony.li
