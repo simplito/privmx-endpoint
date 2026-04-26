@@ -13,10 +13,12 @@ enum class SuiteId {
     BatchAdd2000,
     BatchAdd3000,
     BatchAdd100k,
+    ListSuite,
+    SearchSuite,
     ListAndSearch,
     ListAndSearchPreloaded,
     BatchAdd1000ToExisting,
-    BatchAdd1000Rfcs,
+    BatchAdd500Rfcs,
 };
 
 struct SuiteDefinition {

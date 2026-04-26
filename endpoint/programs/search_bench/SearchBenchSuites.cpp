@@ -1,23 +1,16 @@
 #include "SearchBenchSuites.hpp"
 
-#include "suites/BatchAddAndSearchSuite.hpp"
 #include "suites/BatchAdd1000Suite.hpp"
+#include "suites/BatchAdd1000ToExistingSuite.hpp"
 #include "suites/BatchAdd100kSuite.hpp"
 #include "suites/BatchAdd2000Suite.hpp"
 #include "suites/BatchAdd3000Suite.hpp"
+#include "suites/BatchAdd500RfcsSuite.hpp"
 #include "suites/ListAndSearchSuite.hpp"
-#include "suites/BatchAdd1000ToExistingSuite.hpp"
-#include "suites/BatchAdd1000RfcsSuite.hpp"
 namespace search_bench {
 
 const std::vector<SuiteDefinition>& getSuiteDefinitions() {
     static const std::vector<SuiteDefinition> suites{
-        {
-            .id = SuiteId::BatchAddAndSearch,
-            .name = "batch_add_and_search",
-            .description = "Create an index, add a batch of documents and run a search query.",
-            .run = &runBatchAddAndSearchSuite,
-        },
         {
             .id = SuiteId::BatchAdd1000,
             .name = "batch_add_1000",
@@ -43,6 +36,18 @@ const std::vector<SuiteDefinition>& getSuiteDefinitions() {
             .run = &runBatchAdd3000Suite,
         },
         {
+            .id = SuiteId::ListSuite,
+            .name = "list_suite",
+            .description = "Open an index and run only listDocuments().",
+            .run = &runListSuite,
+        },
+        {
+            .id = SuiteId::SearchSuite,
+            .name = "search_suite",
+            .description = "Open an index and run only searchDocuments().",
+            .run = &runSearchSuite,
+        },
+        {
             .id = SuiteId::ListAndSearch,
             .name = "list_and_search",
             .description = "List an index and run a search query.",
@@ -61,10 +66,10 @@ const std::vector<SuiteDefinition>& getSuiteDefinitions() {
     .run = &runBatchAdd1000ToExistingSuite,
 },
 {
-    .id = SuiteId::BatchAdd1000Rfcs,
-    .name = "batch_add_1000_rfcs",
+    .id = SuiteId::BatchAdd500Rfcs,
+    .name = "batch_add_500_rfcs",
     .description = "Create an index, add a batch of RRC documents and return the index id",
-    .run = &runBatchAdd1000RfcsSuite,
+    .run = &runBatchAdd500RfcsSuite,
 },
 };
 
