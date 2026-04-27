@@ -373,17 +373,17 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
     }
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "contextUserAdded") {
-            auto raw = server::ContextUserEventData_c_struct::formJSON(notification.data.extract<Poco::JSON::Object::Ptr>());
+            auto raw = server::ContextUserEventData_c_struct::formJSON(notification.data);
             auto data = Mapper::mapToContextUserEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUserAddedEvent>("context/userAdded", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "contextUserRemoved") {
-            auto raw = server::ContextUserEventData_c_struct::formJSON(notification.data.extract<Poco::JSON::Object::Ptr>());
+            auto raw = server::ContextUserEventData_c_struct::formJSON(notification.data);
             auto data = Mapper::mapToContextUserEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUserRemovedEvent>("context/userRemoved", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "contextUserStatusChanged") {
-            auto raw = server::ContextUsersStatusChangeEventData_c_struct::formJSON(notification.data.extract<Poco::JSON::Object::Ptr>());
+            auto raw = server::ContextUsersStatusChangeEventData_c_struct::formJSON(notification.data);
             auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
             _eventMiddleware->emitApiEvent(event);

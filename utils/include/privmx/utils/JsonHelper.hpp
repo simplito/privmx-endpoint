@@ -72,6 +72,9 @@ struct is_optional_null<optional_null<T>> : std::true_type {};
 
 template<typename JsonCompatableClass>
 struct JsonCompatable {
+    static JsonCompatableClass formJSON(Poco::Dynamic::Var JSON_Var) {
+        return JsonCompatableClass::formJSON(JSON_Var);
+    }
     static JsonCompatableClass formJSON(Poco::JSON::Object::Ptr JSON) {
         return JsonCompatableClass::formJSON(JSON);
     }
@@ -162,7 +165,7 @@ inline Poco::Dynamic::Var JsonHelper::deserialize<Poco::Dynamic::Var>(const Poco
 };
 template<>
 inline Poco::JSON::Object::Ptr JsonHelper::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& element) {
-    if(!element.isStruct()) throw JSONParseException("Failed to Parse JSON Object value, recived '" + std::string(element.type().name()) + "'");
+    if(element.type() != typeid(Poco::JSON::Object::Ptr)) throw JSONParseException("Failed to Parse JSON Object value, recived '" + std::string(element.type().name()) + "'");
     return element.extract<Poco::JSON::Object::Ptr>();
 };
 template<>
@@ -230,6 +233,12 @@ inline Poco::Dynamic::Var JsonHelper::serialize<bool>(const bool& element) {
 #define JSON_STRUCT(STRUCT_NAME, FIELDS) \
 struct STRUCT_NAME : public privmx::utils::JsonCompatable<STRUCT_NAME> { \
     FIELDS(_JSON_DECL) \
+    static STRUCT_NAME formJSON(Poco::Dynamic::Var JSON_Var) { \
+        if(JSON_Var.type() != typeid(Poco::JSON::Object::Ptr)) throw privmx::utils::JSONParseException("Failed to Parse JSON Object value, recived '" + std::string(JSON_Var.type().name()) + "'"); \
+        STRUCT_NAME obj; \
+        obj.fromJSON(JSON_Var.extract<Poco::JSON::Object::Ptr>()); \
+        return obj; \
+    } \
     static STRUCT_NAME formJSON(Poco::JSON::Object::Ptr JSON) { \
         STRUCT_NAME obj; \
         obj.fromJSON(JSON); \
@@ -252,6 +261,12 @@ protected: \
 #define JSON_STRUCT_EXT(STRUCT_NAME, BASE_NAME, FIELDS) \
 struct STRUCT_NAME : public BASE_NAME { \
     FIELDS(_JSON_DECL) \
+    static STRUCT_NAME formJSON(Poco::Dynamic::Var JSON_Var) { \
+        if(JSON_Var.type() != typeid(Poco::JSON::Object::Ptr)) throw privmx::utils::JSONParseException("Failed to Parse JSON Object value, recived '" + std::string(JSON_Var.type().name()) + "'"); \
+        STRUCT_NAME obj; \
+        obj.fromJSON(JSON_Var.extract<Poco::JSON::Object::Ptr>()); \
+        return obj; \
+    } \
     static STRUCT_NAME formJSON(Poco::JSON::Object::Ptr JSON) { \
         STRUCT_NAME obj; \
         obj.fromJSON(JSON); \

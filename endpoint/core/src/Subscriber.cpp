@@ -86,7 +86,7 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
     std::cout << JSON->getArray("channels")->size() << std::endl;
     std::cout << JSON->getArray("channels")->getElement<std::string>(0) << std::endl;
     LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(model.toJSON()));
-    auto requestResult = _gateway->request("subscribeToChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET}).extract<Poco::JSON::Object::Ptr>();
+    auto requestResult = _gateway->request("subscribeToChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET});
     server::SubscribeToChannelsResult_c_struct value = privmx::endpoint::core::server::SubscribeToChannelsResult_c_struct::formJSON(requestResult);
     LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")
     std::vector<std::string> result;

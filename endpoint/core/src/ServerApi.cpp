@@ -30,7 +30,7 @@ server::ContextListUsersResult_c_struct ServerApi::contextListUsers(server::Cont
 #include <privmx/utils/Logger.hpp>
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     LOG_INFO("gateway->request: ",method, "\n",privmx::utils::Utils::stringifyVar(params, true))
-    auto result = _gateway->request("context." + method, params).extract<Poco::JSON::Object::Ptr>();
+    auto result = _gateway->request("context." + method, params);
     LOG_INFO("gateway->request result: ",method, "\n",privmx::utils::Utils::stringifyVar(result, true))
 
     return T::formJSON(result);

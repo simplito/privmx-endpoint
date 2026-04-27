@@ -88,12 +88,12 @@ public:
     virtual std::tuple<Pson::BinaryString, T, Pson::BinaryString> decryptAndGetSign(const std::string& data, const EncKey& encKey) = 0;
 };
 
-template<class T = utils::TypedObject>
+template<class T>
 class DataEncryptor : public DataEncryptorBase<T>
 {
 public:
     std::string encrypt(const T& data, const std::string& key) {
-        auto buffer = utils::Utils::stringify(data);
+        auto buffer = utils::Utils::stringifyVar(data.toJSON());
         return utils::Base64::from(privmx::crypto::CryptoPrivmx::privmxEncrypt(privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), buffer, key));
     }
     std::string encrypt(const T& data, const EncKey& encKey) {
@@ -101,7 +101,7 @@ public:
     }
     
     Pson::BinaryString sign(const T& data, const privmx::crypto::PrivateKey& privKey) {
-        auto buffer = utils::Utils::stringify(data);
+        auto buffer = utils::Utils::stringifyVar(data.toJSON());
         auto signature = privKey.signToCompactSignatureWithHash(buffer);
         Pson::BinaryString plain;
         plain.push_back(1);
@@ -111,7 +111,7 @@ public:
     }
 
     Pson::BinaryString getSign(const T& data, const privmx::crypto::PrivateKey& privKey) {
-        auto buffer = utils::Utils::stringify(data);
+        auto buffer = utils::Utils::stringifyVar(data.toJSON());
         return Pson::BinaryString(privKey.signToCompactSignatureWithHash(buffer));
     }
 
@@ -129,8 +129,7 @@ public:
         Pson::BinaryString plain = privmx::crypto::CryptoPrivmx::privmxDecrypt(true, utils::Base64::toString(data), key);
         Pson::BinaryString signature, data_buf;
         std::tie(signature, data_buf) = this->extractSignAndDataBuff(plain);
-        Poco::JSON::Parser parser;
-        return {signature,  utils::TypedObjectFactory::createObjectFromVar<T>(parser.parse(data_buf)), data_buf};
+        return {signature, T::formJSON(privmx::utils::Utils::parseJsonObject(data_buf)), data_buf};
     }
     std::tuple<Pson::BinaryString, T, Pson::BinaryString> decryptAndGetSign(const std::string& data, const EncKey& encKey) {
         return decryptAndGetSign(data, encKey.key);

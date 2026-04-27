@@ -123,11 +123,11 @@ DataIntegrityObject ModuleDataEncryptorV5::getDIOAndAssertIntegrity(const dynami
 void ModuleDataEncryptorV5::assertDataFormat(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData) {
     if (
         encryptedModuleData.version != ModuleDataSchema::Version::VERSION_5 ||
-        encryptedModuleData.publicMeta == "" ||
-        encryptedModuleData.privateMeta == "" ||
-        encryptedModuleData.internalMeta == "" ||
-        encryptedModuleData.authorPubKey == "" ||
-        encryptedModuleData.dio == ""
+        encryptedModuleData.publicMeta.empty() ||
+        encryptedModuleData.privateMeta.empty() ||
+        encryptedModuleData.internalMeta.empty() ||
+        encryptedModuleData.authorPubKey.empty() ||
+        encryptedModuleData.dio.empty()
     ) {
         throw InvalidEncryptedModuleDataVersionException(std::to_string(encryptedModuleData.version) + " expected version: " + std::to_string(ModuleDataSchema::Version::VERSION_5));
     }

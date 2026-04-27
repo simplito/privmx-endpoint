@@ -219,7 +219,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
         if(key.second.data.type() == typeid(Poco::JSON::Object::Ptr)) {
             dynamic::VersionedData_c_struct versioned;
             try {
-                versioned = dynamic::VersionedData_c_struct::formJSON(key.second.data.extract<Poco::JSON::Object::Ptr>());
+                versioned = dynamic::VersionedData_c_struct::formJSON(key.second.data);
             } catch (const privmx::endpoint::core::Exception& e) {
                 decryptedEncKey.statusCode = e.getCode();
                 result.insert(std::make_pair(key.first, decryptedEncKey));
@@ -235,7 +235,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
             }
             if(versioned.version == EncryptionKeyDataSchema::Version::VERSION_2) { 
                 DecryptedEncKeyV2 decryptedEncKey = _encKeyEncryptorV2.decrypt(
-                    server::EncryptedKeyEntryDataV2_c_struct::formJSON(key.second.data.extract<Poco::JSON::Object::Ptr>()),
+                    server::EncryptedKeyEntryDataV2_c_struct::formJSON(key.second.data),
                     _key
                 );
                 result.insert(std::make_pair(key.first,decryptedEncKey));
