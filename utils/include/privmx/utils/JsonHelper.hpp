@@ -27,6 +27,7 @@ limitations under the License.
 namespace privmx {
 namespace utils {
 
+
 template<typename T>
 struct is_vector : std::false_type {};
 template<typename T, typename Alloc>
@@ -47,6 +48,28 @@ struct is_optional : std::false_type {};
 template<typename T>
 struct is_optional<std::optional<T>> : std::true_type {};
 
+template<typename T>
+class optional_null : public std::optional<T> {
+public:
+    optional_null() : std::optional<T>() {}
+    optional_null(const T& value) : std::optional<T>(value) {}
+    optional_null(std::nullopt_t) : std::optional<T>(std::nullopt) {}
+    optional_null(const optional_null&) = default;
+    optional_null(optional_null&&) = default;
+    optional_null& operator=(const optional_null& value) {
+        std::optional<T>::operator=(value);
+        return *this;
+    }
+    optional_null& operator=(optional_null&& value) {
+        std::optional<T>::operator=(std::move(value));
+        return *this;
+    }
+};
+template<typename T>
+struct is_optional_null : std::false_type {};
+template<typename T>
+struct is_optional_null<optional_null<T>> : std::true_type {};
+
 template<typename JsonCompatableClass>
 struct JsonCompatable {
     static JsonCompatableClass formJSON(Poco::JSON::Object::Ptr JSON) {
@@ -63,6 +86,8 @@ public:
             return JsonHelper::deserializeArray<typename T::value_type>(element);
         } else if constexpr (is_optional<T>::value) {
             return JsonHelper::deserializeOptional<typename T::value_type>(element);
+        } else if constexpr (is_optional_null<T>::value) {
+            return JsonHelper::deserializeOptionalNull<typename T::value_type>(element);
         } else if constexpr (is_unordered_map<T>::value) {
             return JsonHelper::deserializeUnorderedMap<typename T::mapped_type>(element);
         }  else if constexpr (is_map<T>::value) {
@@ -81,6 +106,11 @@ public:
     }
     template<typename T>
     static std::optional<T> deserializeOptional(const Poco::Dynamic::Var& element) {
+        if(element.isEmpty()) return std::nullopt;
+        return JsonHelper::deserialize<T>(element);
+    }
+    template<typename T>
+    static optional_null<T> deserializeOptionalNull(const Poco::Dynamic::Var& element) {
         if(element.isEmpty()) return std::nullopt;
         return JsonHelper::deserialize<T>(element);
     }
@@ -106,26 +136,23 @@ public:
     }
 
     template<typename T>
-    static std::optional<Poco::Dynamic::Var> serialize(const T& element) {
+    static Poco::Dynamic::Var serialize(const T& element) {
         if constexpr (is_vector<T>::value) {
             Poco::JSON::Array::Ptr array(new Poco::JSON::Array());
-            for(const auto& e : element) {
-                auto serialized = JsonHelper::serialize(e);
-                if(serialized.has_value()) array->add(serialized.value());
-            }
-            return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(array));
+            for(const auto& e : element) {array->add(JsonHelper::serialize(e));}
+            return Poco::Dynamic::Var(array);
         } else if constexpr (is_optional<T>::value) {
-            if(!element.has_value()) return std::nullopt;
-            return JsonHelper::serialize(element.value()).value();
+            if(!element.has_value()) return Poco::Dynamic::Var();
+            return JsonHelper::serialize(element.value());
+        } else if constexpr (is_optional_null<T>::value) {
+            if(!element.has_value()) return Poco::Dynamic::Var();
+            return JsonHelper::serialize(element.value());
         } else if constexpr (is_unordered_map<T>::value || is_map<T>::value)   {
             Poco::JSON::Object::Ptr object(new Poco::JSON::Object());
-            for(const auto& kv : element) {
-                auto serialized = JsonHelper::serialize(kv.second);
-                if(serialized.has_value()) object->set(kv.first, serialized.value());
-            }
-            return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(object));
+            for(const auto& kv : element) {object->set(kv.first, JsonHelper::serialize(kv.second));}
+            return Poco::Dynamic::Var(object);
         } else {
-            return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(element.toJSON()));
+            return Poco::Dynamic::Var(element.toJSON());
         }
     }
 };
@@ -159,35 +186,42 @@ inline bool JsonHelper::deserialize<bool>(const Poco::Dynamic::Var& element) {
     return element.convert<bool>();
 };
 template<>
-inline std::optional<Poco::Dynamic::Var> JsonHelper::serialize<Poco::Dynamic::Var>(const Poco::Dynamic::Var& element) {
-    return std::optional<Poco::Dynamic::Var>(element);
+inline Poco::Dynamic::Var JsonHelper::serialize<Poco::Dynamic::Var>(const Poco::Dynamic::Var& element) {
+    return Poco::Dynamic::Var(element);
 };
 template<>
-inline std::optional<Poco::Dynamic::Var> JsonHelper::serialize<Poco::JSON::Object::Ptr>(const Poco::JSON::Object::Ptr& element) {
-    return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(element));
+inline Poco::Dynamic::Var JsonHelper::serialize<Poco::JSON::Object::Ptr>(const Poco::JSON::Object::Ptr& element) {
+    return Poco::Dynamic::Var(Poco::Dynamic::Var(element));
 };
 template<>
-inline std::optional<Poco::Dynamic::Var> JsonHelper::serialize<Pson::BinaryString>(const Pson::BinaryString& element) {
-    return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(element));
+inline Poco::Dynamic::Var JsonHelper::serialize<Pson::BinaryString>(const Pson::BinaryString& element) {
+    return Poco::Dynamic::Var(Poco::Dynamic::Var(element));
 };
 template<>
-inline std::optional<Poco::Dynamic::Var> JsonHelper::serialize<std::string>(const std::string& element) {
-    return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(element));
+inline Poco::Dynamic::Var JsonHelper::serialize<std::string>(const std::string& element) {
+    return Poco::Dynamic::Var(Poco::Dynamic::Var(element));
 };
 template<>
-inline std::optional<Poco::Dynamic::Var> JsonHelper::serialize<int64_t>(const int64_t& element) {
-    return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(element));
+inline Poco::Dynamic::Var JsonHelper::serialize<int64_t>(const int64_t& element) {
+    return Poco::Dynamic::Var(Poco::Dynamic::Var(element));
 };
 template<>
-inline std::optional<Poco::Dynamic::Var> JsonHelper::serialize<bool>(const bool& element) {
-    return std::optional<Poco::Dynamic::Var>(Poco::Dynamic::Var(element));
+inline Poco::Dynamic::Var JsonHelper::serialize<bool>(const bool& element) {
+    return Poco::Dynamic::Var(Poco::Dynamic::Var(element));
 };
 
 // Internal helpers — not for direct use
 // F(NAME, TYPE) — name first, type last (variadic to support template types with commas, e.g. std::map<K,V>)
 #define _JSON_DECL(NAME, ...) __VA_ARGS__ NAME;
 #define _JSON_FROM(NAME, ...) NAME = privmx::utils::JsonHelper::deserialize<__VA_ARGS__>(JSON->has(#NAME) ? JSON->get(#NAME) : Poco::Dynamic::Var());
-#define _JSON_TO(NAME, ...)   { auto __value = privmx::utils::JsonHelper::serialize(NAME); if(__value.has_value()) (result->set(#NAME, __value.value())); }
+#define _JSON_TO(NAME, ...)   {\
+    if constexpr (privmx::utils::is_optional<__VA_ARGS__>::value) {\
+        auto __value = privmx::utils::JsonHelper::serialize<__VA_ARGS__>(NAME);\
+        if(!__value.isEmpty()) {result->set(#NAME, __value);}\
+    } else {\
+        result->set(#NAME, privmx::utils::JsonHelper::serialize<__VA_ARGS__>(NAME));\
+    }\
+}
 
 // Generate a JsonCompatable struct from an X-macro field list.
 // Usage:

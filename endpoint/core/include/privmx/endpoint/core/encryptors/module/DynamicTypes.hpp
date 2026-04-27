@@ -28,7 +28,7 @@ namespace dynamic {
     F(publicMeta, std::string)\
     F(publicMetaObject, Poco::Dynamic::Var)\
     F(privateMeta, std::string)\
-    F(internalMeta, std::optional<std::string>)\
+    F(internalMeta, privmx::utils::optional_null<std::string>)\
     F(authorPubKey, std::string)
 JSON_STRUCT_EXT(EncryptedModuleDataV4_c_struct, VersionedData_c_struct, ENCRYPTED_MODULE_DATA_V4_FIELDS);
 
