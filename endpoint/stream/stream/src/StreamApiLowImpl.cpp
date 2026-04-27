@@ -230,18 +230,22 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     auto model = privmx::utils::TypedObjectFactory::createNewObject<server::StreamRoomGetModel>();
     model.id(streamRoomId);
     auto streamRoom = _serverApi->streamRoomGet(model).streamRoom();
+    std::vector<stream::Key> encKeys;
+    std::shared_ptr<DataChannelMessageEncryptorV1> dataChannelMessageEncryptorV1;    
     std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom, streamRoom.data().get(streamRoom.data().size()-1).keyId());
+    dataChannelMessageEncryptorV1 = std::make_shared<DataChannelMessageEncryptorV1>(keys);
     webRtc->updateKeys(streamRoomId, keys);
     // setup event listener
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(streamRoomId)};
     std::vector<std::string> subscriptionsIds = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, subscriptionsIds);
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
-        streamRoomId,
-        webRtc,
-        subscriptionsIds,
-        streamRoom.data().get(streamRoom.data().size()-1).keyId()
-    );
+            dataChannelMessageEncryptorV1,
+            streamRoomId,
+            webRtc,
+            subscriptionsIds,
+            streamRoom.data().get(streamRoom.data().size()-1).keyId()
+        );
     _streamRoomMap.set(
         streamRoomId,
         streamRoomData
@@ -1049,4 +1053,14 @@ std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> Strea
 
 std::string StreamApiLowImpl::deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 encKey) {
     return crypto::Crypto::sha256(encKey.key);
+}
+
+core::Buffer StreamApiLowImpl::encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage) {
+    auto room = getStreamRoomData(streamRoomId);
+    return room->messageEncryptor->encryptMessage(plainMessage);
+}
+
+DecryptedDataChannelMessage StreamApiLowImpl::decryptDataChannelMessage(const std::string& streamRoomId, const core::Buffer& encryptedData) {
+    auto room = getStreamRoomData(streamRoomId);
+    return room->messageEncryptor->decryptMessage(encryptedData);
 }

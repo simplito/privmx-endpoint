@@ -29,6 +29,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/SubscriberImpl.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
+#include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 namespace privmx {
 namespace endpoint {
@@ -97,6 +98,9 @@ public:
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
+    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage); 
+    DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const core::Buffer& encryptedData); 
+
     inline static const std::string STREAM_TYPE_FILTER_FLAG = "stream";
 private:
     struct StreamData {
@@ -104,11 +108,12 @@ private:
         std::optional<StreamHandle> streamHandle;
     };
     struct StreamRoomData {
-        StreamRoomData(const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, const std::string& _encryptionKeyId = ""):
-            streamRoomId(_streamRoomId), webRtc(_webRtc), subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId)
+        StreamRoomData(std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, const std::string& _encryptionKeyId = ""):
+            messageEncryptor(_messageEncryptor), streamRoomId(_streamRoomId), webRtc(_webRtc), subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId)
         {}
         std::shared_ptr<StreamData> publisherStream;
         std::shared_ptr<StreamData> subscriberStream;
+        std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
         std::vector<std::string> subscriptionsIds;

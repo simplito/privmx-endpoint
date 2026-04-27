@@ -57,7 +57,8 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
         [apiLow](const int64_t sessionId, const std::string& candidateAsJson) {
             apiLow->trickle(sessionId, candidateAsJson);
         },
-        _frameCryptorOptions
+        _frameCryptorOptions,
+        _api
     );
 }
 
@@ -607,5 +608,5 @@ void StreamApiImpl::sendData(const StreamHandle& streamHandle, core::Buffer data
     if(!streamData->dataTrack || streamData->dataTrack->status == TrackStatus::ToAdd) {
         throw DataTrackNotInitializedException();
     }
-    streamData->dataTrack->sendData(data.stdString());
+    streamData->dataTrack->sendData(_api->encryptDataChannelMessage(streamData->streamRoomId, {data, streamData->dataTrack->seq.fetch_add(1)}).stdString());
 }

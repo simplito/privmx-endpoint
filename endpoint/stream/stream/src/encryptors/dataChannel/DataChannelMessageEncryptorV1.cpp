@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <cstring>
 #include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
@@ -24,28 +25,42 @@ using namespace privmx::endpoint::stream;
 
 DataChannelMessageEncryptorV1::DataChannelMessageEncryptorV1(const std::vector<Key>& keys): _keys(keys) {}
 
-core::Buffer DataChannelMessageEncryptorV1::encryptMessage(const core::Buffer& data, uint32_t seq) {
+core::Buffer DataChannelMessageEncryptorV1::encryptMessage(const DataChannelMessage& plainMessage) {
     auto encKey = getEncryptionKey();
     if(encKey.keyId.size() >= 0xff) {
         throw InvalidEncryptionKeyIdLengthException();
     }
     auto iv = privmx::crypto::Crypto::randomBytes(GCM_NONCE_LENGTH_BYTES);
-    auto serializedHeader = serializeHeader(Header{.version=WIRE_FORMAT_VERSION, .seq=seq, .iv=iv, .keyId=encKey.keyId});
-    std::string ciphertext = privmx::crypto::Crypto::aes256GcmEncrypt(data.stdString(), encKey.key.stdString(), iv, serializedHeader);
+    auto serializedHeader = serializeHeader(Header{.version=WIRE_FORMAT_VERSION, .seq=static_cast<uint32_t>(plainMessage.seq), .iv=iv, .keyId=encKey.keyId});
+    std::string ciphertext = privmx::crypto::Crypto::aes256GcmEncrypt(plainMessage.data.stdString(), encKey.key.stdString(), iv, serializedHeader);
     return core::Buffer::from(serializedHeader + ciphertext);
 }
-std::pair<core::Buffer, uint32_t> DataChannelMessageEncryptorV1::decryptMessage(const core::Buffer& encryptedData) {
-    assertData(encryptedData);
-    auto parsedEncryptedMessage = parseEncryptedMessage(encryptedData.stdString());
-    auto decKey = getDencryptionKey(parsedEncryptedMessage.header.keyId);
-    std::string plaintext = privmx::crypto::Crypto::aes256GcmDecrypt(
-        parsedEncryptedMessage.ciphertext, 
-        decKey.key.stdString(),
-        parsedEncryptedMessage.header.iv,
-        parsedEncryptedMessage.serializedHeader
-    );
-    return std::make_pair(core::Buffer::from(plaintext), parsedEncryptedMessage.header.seq);
+
+DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(const core::Buffer& encryptedData) {
+    DecryptedDataChannelMessage result = {core::Buffer(), 0, 0};
+    try {
+        assertData(encryptedData);
+        auto parsedEncryptedMessage = parseEncryptedMessage(encryptedData.stdString());
+        result.seq = parsedEncryptedMessage.header.seq;
+        auto decKey = getDencryptionKey(parsedEncryptedMessage.header.keyId);
+        result.data = core::Buffer::from(
+            privmx::crypto::Crypto::aes256GcmDecrypt(
+                parsedEncryptedMessage.ciphertext, 
+                decKey.key.stdString(),
+                parsedEncryptedMessage.header.iv,
+                parsedEncryptedMessage.serializedHeader
+            )
+        );
+    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        result.statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
+    return result;
 }
+
 void DataChannelMessageEncryptorV1::updateKey(const std::vector<Key>& keys) {
     std::unique_lock<std::shared_mutex> lock(_keysMutex);
     _keys = keys;
@@ -61,6 +76,7 @@ std::string DataChannelMessageEncryptorV1::serializeHeader(Header header) {
     serializedHeader << header.keyId;
     return serializedHeader.str();
 }
+
 DataChannelMessageEncryptorV1::Header DataChannelMessageEncryptorV1::deserializeHeader(std::string header) {
     Header deserializedHeader;
     uint8_t keyId_length = 0;

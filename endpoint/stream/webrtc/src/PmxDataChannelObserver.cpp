@@ -16,8 +16,8 @@ limitations under the License.
 using namespace privmx::endpoint::stream;
 
 
-PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor, const std::string& dataChannelId) 
-    : _onTrackInterface(onTrackInterface), _messageEncryptor(messageEncryptor), _dataChannelId(dataChannelId) {
+PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<StreamApiLow> apiLow, const std::string& dataChannelId, const std::string& streamRoomId) 
+    : _onTrackInterface(onTrackInterface), _apiLow(apiLow), _dataChannelId(dataChannelId), _streamRoomId(streamRoomId) {
     LOG_TRACE("PmxDataChannelObserver created")
 }
 void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state) {
@@ -55,11 +55,10 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
 }
 void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool binary) {
     std::lock_guard<std::mutex> lock(_onTrackInterfaceMutex);
-    //To Add Decryption
-    if(_onTrackInterface && _messageEncryptor) {
+    if(_onTrackInterface) {
         try {
-            auto decryptedData = _messageEncryptor->decryptMessage(core::Buffer::from(std::string(buffer, length)));
-            std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, decryptedData.first, decryptedData.second, binary);
+            auto decryptedData = _apiLow->decryptDataChannelMessage(_streamRoomId, core::Buffer::from(std::string(buffer, length)));
+            std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, decryptedData.data, decryptedData.seq, binary, decryptedData.statusCode);
             LOG_DEBUG("_onTrackInterface->OnData(data): ", data)
             _onTrackInterface->OnData(data);
         }  catch (const privmx::endpoint::core::Exception& e) {
