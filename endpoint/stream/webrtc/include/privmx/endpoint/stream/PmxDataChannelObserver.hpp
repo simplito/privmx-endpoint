@@ -15,6 +15,7 @@ limitations under the License.
 #include <string>
 #include <libwebrtc.h>
 #include <rtc_data_channel.h>
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
@@ -27,15 +28,16 @@ namespace stream {
 
 class PmxDataChannelObserver : public libwebrtc::RTCDataChannelObserver {
 public:
-    PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor, const std::string& dataChannelId);
+    PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<StreamApiLow> apiLow, const std::string& dataChannelId, const std::string& streamRoomId);
     virtual void OnStateChange(libwebrtc::RTCDataChannelState state) override;
     virtual void OnMessage(const char* buffer, int length, bool binary) override;
     void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
 private:
     std::mutex _onTrackInterfaceMutex;
     std::shared_ptr<OnTrackInterface> _onTrackInterface;
-    std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor;
+    std::shared_ptr<StreamApiLow> _apiLow;
     std::string _dataChannelId;
+    std::string _streamRoomId;
 };
 
 } // stream

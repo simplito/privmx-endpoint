@@ -95,6 +95,8 @@ public:
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
     void keyManagement(const std::string& streamRoomId, bool disable);
+    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage); 
+    DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const core::Buffer& encryptedData); 
 private:
     StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl);
 };

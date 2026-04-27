@@ -25,8 +25,8 @@ class DataChannelMessageEncryptorV1 {
 public:
     DataChannelMessageEncryptorV1(const std::vector<Key>& keys);
     DataChannelMessageEncryptorV1() = default;
-    core::Buffer encryptMessage(const core::Buffer& data, uint32_t seq);
-    std::pair<core::Buffer, uint32_t> decryptMessage(const core::Buffer& encryptedData);
+    core::Buffer encryptMessage(const DataChannelMessage& plainMessage);
+    DecryptedDataChannelMessage decryptMessage(const core::Buffer& encryptedMessage);
     void updateKey(const std::vector<Key>& keys);
 private:
     struct Header {
@@ -57,6 +57,7 @@ private:
     static constexpr uint64_t FIXED_HEADER_LENGTH = VERSION_LENGTH_BYTES + KEY_ID_LENGTH_BYTES + SEQUENCE_NUMBER_LENGTH_BYTES + GCM_NONCE_LENGTH_BYTES; 
     std::shared_mutex _keysMutex;
     std::vector<Key> _keys;
+
 };
 
 }  // namespace core

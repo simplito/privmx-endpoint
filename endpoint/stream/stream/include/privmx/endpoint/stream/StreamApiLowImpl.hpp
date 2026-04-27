@@ -31,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/SubscriberImpl.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
+#include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 namespace privmx {
 namespace endpoint {
@@ -102,6 +103,9 @@ public:
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
+    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage); 
+    DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const core::Buffer& encryptedData); 
+
     inline static const std::string STREAM_TYPE_FILTER_FLAG = "stream";
 private:
     struct StreamData {
@@ -109,11 +113,17 @@ private:
         std::optional<StreamHandle> streamHandle;
     };
     struct StreamRoomData {
-        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, StreamEncryptionMode streamEncryptionMode, const std::string& _encryptionKeyId = ""):
-            streamKeyManager(_streamKeyManager), streamRoomId(_streamRoomId), webRtc(_webRtc), subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId)
+        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, StreamEncryptionMode streamEncryptionMode, const std::string& _encryptionKeyId = ""):
+            streamKeyManager(_streamKeyManager), 
+            messageEncryptor(_messageEncryptor), 
+            streamRoomId(_streamRoomId), 
+            webRtc(_webRtc), 
+            subscriptionsIds(_subscriptionsIds), 
+            encryptionKeyId(_encryptionKeyId)
         {
             if(streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
-                keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
+                keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _messageEncryptor, _streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
+                    _messageEncryptor->updateKey(keys);
                     _webRtc->updateKeys(_streamRoomId, keys);
                 });
             }
@@ -121,6 +131,7 @@ private:
         std::shared_ptr<StreamData> publisherStream;
         std::shared_ptr<StreamData> subscriberStream;
         std::shared_ptr<StreamKeyManager> streamKeyManager;
+        std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
         int64_t keyUpdateCallbackId;

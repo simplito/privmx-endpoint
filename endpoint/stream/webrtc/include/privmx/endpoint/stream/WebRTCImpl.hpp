@@ -17,6 +17,7 @@ limitations under the License.
 #include <functional>
 #include <atomic>
 
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
@@ -42,7 +43,8 @@ public:
         libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
         libwebrtc::RTCConfiguration configuration,
         std::function<void(const int64_t, const std::string&)> onTrickle,
-        privmx::webrtc::FrameCryptorOptions _frameCryptorOptions
+        privmx::webrtc::FrameCryptorOptions _frameCryptorOptions,
+        std::shared_ptr<StreamApiLow> apiLow
     );
     ~WebRTCImpl();
     std::string createOfferAndSetLocalDescription(const std::string& streamRoomId) override;
@@ -76,7 +78,7 @@ public:
 private:
     void AddAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack, std::string id = "0");
     void AddVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack, std::string id = "0");
-    void AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, const std::pair<std::string, std::function<void(std::string)>*>& dataChannelInfo);
+    void AddDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, const std::pair<std::string, std::function<void(std::string)>*>& dataChannelInfo, const std::string& streamRoomId);
     void RemoveAudioTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
     void RemoveVideoTrack(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc, std::string id = "0");
     void RemoveDataChannel(std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc);
@@ -89,6 +91,7 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
+    std::shared_ptr<StreamApiLow> _apiLow;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;
 };
