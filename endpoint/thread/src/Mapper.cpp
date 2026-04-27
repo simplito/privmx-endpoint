@@ -13,14 +13,14 @@ limitations under the License.
 
 using namespace privmx::endpoint::thread;
 
-ThreadDeletedEventData Mapper::mapToThreadDeletedEventData(const server::ThreadDeletedEventData& data) {
-    return {.threadId = data.threadId()};
+ThreadDeletedEventData Mapper::mapToThreadDeletedEventData(const server::ThreadDeletedEventData_c_struct& data) {
+    return {.threadId = data.threadId};
 }
 
-ThreadDeletedMessageEventData Mapper::mapToThreadDeletedMessageEventData(const server::ThreadDeletedMessageEventData& data) {
-    return {.threadId = data.threadId(), .messageId = data.messageId()};
+ThreadDeletedMessageEventData Mapper::mapToThreadDeletedMessageEventData(const server::ThreadDeletedMessageEventData_c_struct& data) {
+    return {.threadId = data.threadId, .messageId = data.messageId};
 }
 
-ThreadStatsEventData Mapper::mapToThreadStatsEventData(const server::ThreadStatsEventData& data) {
-    return {.threadId = data.threadId(), .lastMsgDate = data.lastMsgDate(), .messagesCount = data.messages()};
+ThreadStatsEventData Mapper::mapToThreadStatsEventData(const server::ThreadStatsEventData_c_struct& data) {
+    return {.threadId = data.threadId, .lastMsgDate = data.lastMsgDate, .messagesCount = data.messages};
 }

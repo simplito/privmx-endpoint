@@ -35,10 +35,14 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.fieldChecksums = dio.fieldChecksums;
     dioJSON.structureVersion = dio.structureVersion;
     dynamic::BridgeIdentity_c_struct bridgeIdentity;
-    bridgeIdentity.url = dio.bridgeIdentity.url;
-    bridgeIdentity.pubKey = dio.bridgeIdentity.pubKey;
-    bridgeIdentity.instanceId = dio.bridgeIdentity.instanceId;
+    if(dio.bridgeIdentity.has_value()) {
+    bridgeIdentity.url = dio.bridgeIdentity->url;
+    bridgeIdentity.pubKey = dio.bridgeIdentity->pubKey;
+    bridgeIdentity.instanceId = dio.bridgeIdentity->instanceId;
     dioJSON.bridgeIdentity = bridgeIdentity;
+    } else {
+        throw MissingBridgeIdentityException();
+    }
     return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON.toJSON())), authorKey));
 }
 
@@ -64,9 +68,9 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .containerId=dioJSON.containerId,
             .containerResourceId=dioJSON.containerResourceId,
             .bridgeIdentity= BridgeIdentity{
-                .url=dioJSON.bridgeIdentity.url,
-                .pubKey=dioJSON.bridgeIdentity.pubKey,
-                .instanceId=dioJSON.bridgeIdentity.instanceId
+                .url=dioJSON.bridgeIdentity->url,
+                .pubKey=dioJSON.bridgeIdentity->pubKey,
+                .instanceId=dioJSON.bridgeIdentity->instanceId
             }
         },
         .structureVersion=dioJSON.structureVersion,

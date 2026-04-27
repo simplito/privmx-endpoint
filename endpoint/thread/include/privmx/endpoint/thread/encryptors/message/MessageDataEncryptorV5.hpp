@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_
 
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
@@ -26,16 +27,16 @@ namespace thread {
 
 class MessageDataEncryptorV5 {
 public:
-    server::EncryptedMessageDataV5 encrypt(
+    server::EncryptedMessageDataV5_c_struct encrypt(
         const MessageDataToEncryptV5& messageData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedMessageDataV5 decrypt(const server::EncryptedMessageDataV5& encryptedMessageData, const std::string& encryptionKey);
-    DecryptedMessageDataV5 extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encryptedMessageData);
+    DecryptedMessageDataV5 decrypt(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData, const std::string& encryptionKey);
+    DecryptedMessageDataV5 extractPublic(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData);
 private:
-    void assertDataFormat(const server::EncryptedMessageDataV5& encryptedThreadData);
+    void assertDataFormat(const server::EncryptedMessageDataV5_c_struct& encryptedThreadData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };

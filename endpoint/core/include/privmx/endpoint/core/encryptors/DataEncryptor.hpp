@@ -119,7 +119,7 @@ public:
         auto decrypted = privmx::crypto::CryptoPrivmx::privmxDecrypt(true, utils::Base64::toString(data), key);
         Poco::JSON::Parser parser;
         auto var = parser.parse(decrypted);
-        return utils::TypedObjectFactory::createObjectFromVar<T>(var);
+        return T::formJSON(var);
     }
     T decrypt(const std::string& data, const EncKey& encKey) {
         return decrypt(data, encKey.key);

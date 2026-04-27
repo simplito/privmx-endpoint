@@ -40,7 +40,7 @@ JSON_STRUCT(BridgeIdentity_c_struct, BRIDGE_IDENTITY_FIELDS);
     F(containerResourceId, std::optional<std::string>)\
     F(fieldChecksums, std::unordered_map<std::string, std::string>)\
     F(structureVersion, int64_t)\
-    F(bridgeIdentity, BridgeIdentity_c_struct)
+    F(bridgeIdentity, std::optional<BridgeIdentity_c_struct>)
 JSON_STRUCT_EXT(DataIntegrityObject_c_struct, VersionedData_c_struct, DATA_INTEGRITY_OBJECT_FIELDS);
 
 #define ENCRYPTION_KEY_OBJECT_FIELDS(F)\

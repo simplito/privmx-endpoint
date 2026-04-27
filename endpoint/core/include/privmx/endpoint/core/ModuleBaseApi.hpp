@@ -168,7 +168,7 @@ auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
     core::ModuleInternalMetaV5()
 ) {
     auto versioned = core::dynamic::VersionedData_c_struct::formJSON(moduleObj.data);
-    switch (versioned.versionOpt(core::ModuleDataSchema::Version::UNKNOWN)) {
+    switch (versioned.version) {
         case core::ModuleDataSchema::Version::UNKNOWN:
             return core::ModuleInternalMetaV5();
         case core::ModuleDataSchema::Version::VERSION_4:
