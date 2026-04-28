@@ -20,39 +20,39 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 template<>
-store::EventType VarDeserializer::deserialize<store::EventType>(const Poco::Dynamic::Var& val, const std::string& name) {
+void VarDeserializer::deserialize<store::EventType>(const Poco::Dynamic::Var& val, const std::string& name, store::EventType& out) {
 
     switch (val.convert<int64_t>()) {
         case store::EventType::STORE_CREATE:
-            return store::EventType::STORE_CREATE;
+            out = store::EventType::STORE_CREATE; return;
         case store::EventType::STORE_UPDATE:
-            return store::EventType::STORE_UPDATE;
+            out = store::EventType::STORE_UPDATE; return;
         case store::EventType::STORE_DELETE:
-            return store::EventType::STORE_DELETE;
+            out = store::EventType::STORE_DELETE; return;
         case store::EventType::STORE_STATS:
-            return store::EventType::STORE_STATS;
+            out = store::EventType::STORE_STATS; return;
         case store::EventType::FILE_CREATE:
-            return store::EventType::FILE_CREATE;
+            out = store::EventType::FILE_CREATE; return;
         case store::EventType::FILE_UPDATE:
-            return store::EventType::FILE_UPDATE;
+            out = store::EventType::FILE_UPDATE; return;
         case store::EventType::FILE_DELETE:
-            return store::EventType::FILE_DELETE;
+            out = store::EventType::FILE_DELETE; return;
         case store::EventType::COLLECTION_CHANGE:
-            return store::EventType::COLLECTION_CHANGE;
+            out = store::EventType::COLLECTION_CHANGE; return;
     }
     throw InvalidParamsException(name + " | " + ("Unknown store::EventType value, received " + std::to_string(val.convert<int64_t>())));
 }
 
 template<>
-store::EventSelectorType VarDeserializer::deserialize<store::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name) {
+void VarDeserializer::deserialize<store::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name, store::EventSelectorType& out) {
 
     switch (val.convert<int64_t>()) {
         case store::EventSelectorType::CONTEXT_ID:
-            return store::EventSelectorType::CONTEXT_ID;
+            out = store::EventSelectorType::CONTEXT_ID; return;
         case store::EventSelectorType::STORE_ID:
-            return store::EventSelectorType::STORE_ID;
+            out = store::EventSelectorType::STORE_ID; return;
         case store::EventSelectorType::FILE_ID:
-            return store::EventSelectorType::FILE_ID;
+            out = store::EventSelectorType::FILE_ID; return;
     }
     throw InvalidParamsException(name + " | " + ("Unknown store::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
 }

@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/core/VarSerialization.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -50,11 +51,11 @@ Poco::Dynamic::Var StoreApiVarInterface::create(const Poco::Dynamic::Var& args) 
 Poco::Dynamic::Var StoreApiVarInterface::createStore(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(5), "policies");
     auto result = _storeApi.createStore(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
@@ -62,14 +63,14 @@ Poco::Dynamic::Var StoreApiVarInterface::createStore(const Poco::Dynamic::Var& a
 Poco::Dynamic::Var StoreApiVarInterface::updateStore(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
     auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(8), "policies");
     _storeApi.updateStore(storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     return {};
 }
@@ -196,14 +197,14 @@ Poco::Dynamic::Var StoreApiVarInterface::syncFile(const Poco::Dynamic::Var& args
 
 Poco::Dynamic::Var StoreApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto subscriptionQueries = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionQueries");
     auto result = _storeApi.subscribeFor(subscriptionQueries);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    auto subscriptionIds = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionIds");
     _storeApi.unsubscribeFrom(subscriptionIds);
     return {};
 }

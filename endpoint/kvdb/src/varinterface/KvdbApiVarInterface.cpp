@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/core/VarSerialization.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
@@ -45,11 +46,11 @@ Poco::Dynamic::Var KvdbApiVarInterface::create(const Poco::Dynamic::Var& args) {
 Poco::Dynamic::Var KvdbApiVarInterface::createKvdb(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(5), "policies");
     auto result = _kvdbApi.createKvdb(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
@@ -57,14 +58,14 @@ Poco::Dynamic::Var KvdbApiVarInterface::createKvdb(const Poco::Dynamic::Var& arg
 Poco::Dynamic::Var KvdbApiVarInterface::updateKvdb(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(8), "policies");
     _kvdbApi.updateKvdb(kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     return {};
 }
@@ -142,7 +143,7 @@ Poco::Dynamic::Var KvdbApiVarInterface::deleteEntry(const Poco::Dynamic::Var& ar
 Poco::Dynamic::Var KvdbApiVarInterface::deleteEntries(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
-    auto keys = _deserializer.deserializeVector<std::string>(argsArr->get(1), "keys");
+    auto keys = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(1), "keys");
     auto result = _kvdbApi.deleteEntries(kvdbId, keys);
     return _serializer.serialize(result);
 }
@@ -157,14 +158,14 @@ Poco::Dynamic::Var KvdbApiVarInterface::hasEntry(const Poco::Dynamic::Var& args)
 
 Poco::Dynamic::Var KvdbApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto subscriptionQueries = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionQueries");
     auto result = _kvdbApi.subscribeFor(subscriptionQueries);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var KvdbApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    auto subscriptionIds = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionIds");
     _kvdbApi.unsubscribeFrom(subscriptionIds);
     return {};
 }
