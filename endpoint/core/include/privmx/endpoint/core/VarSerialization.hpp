@@ -41,27 +41,30 @@ VAR_DEFINE_TYPE(VerificationRequest, contextId, senderId, senderPubKey, date, br
 VAR_DEFINE_TYPE(PagingQuery, skip, limit, sortOrder, lastId, sortBy, queryAsJson)
 VAR_DEFINE_TYPE(PKIVerificationOptions, bridgePubKey, bridgeInstanceId)
 
+VAR_DEFINE_TYPE(PagingList<Context>, totalAvailable, readItems) // FIXME: custom __type
+VAR_DEFINE_TYPE(PagingList<UserInfo>, totalAvailable, readItems) // FIXME: custom __type
+
 // ---------------------------------------------------------------------------
 // PagingList<T> — custom __type strings
 // ---------------------------------------------------------------------------
 
-template<>
-inline Poco::Dynamic::Var VarSerializer::serialize<PagingList<Context>>(const PagingList<Context>& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) { obj->set("__type", "core$PagingList<core$Context>"); }
-    obj->set("totalAvailable", serialize(val.totalAvailable));
-    obj->set("readItems", serialize(val.readItems));
-    return obj;
-}
+// template<>
+// inline Poco::Dynamic::Var VarSerializer::serialize<PagingList<Context>>(const PagingList<Context>& val) {
+//     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+//     if (_options.addType) { obj->set("__type", "core$PagingList<core$Context>"); }
+//     obj->set("totalAvailable", serialize(val.totalAvailable));
+//     obj->set("readItems", serialize(val.readItems));
+//     return obj;
+// }
 
-template<>
-inline Poco::Dynamic::Var VarSerializer::serialize<PagingList<UserInfo>>(const PagingList<UserInfo>& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) { obj->set("__type", "core$PagingList<core$UserInfo>"); }
-    obj->set("totalAvailable", serialize(val.totalAvailable));
-    obj->set("readItems", serialize(val.readItems));
-    return obj;
-}
+// template<>
+// inline Poco::Dynamic::Var VarSerializer::serialize<PagingList<UserInfo>>(const PagingList<UserInfo>& val) {
+//     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+//     if (_options.addType) { obj->set("__type", "core$PagingList<core$UserInfo>"); }
+//     obj->set("totalAvailable", serialize(val.totalAvailable));
+//     obj->set("readItems", serialize(val.readItems));
+//     return obj;
+// }
 
 // ---------------------------------------------------------------------------
 // Event types — delegate to serializeBase / serializeBaseWithData
