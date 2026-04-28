@@ -16,7 +16,9 @@ limitations under the License.
 
 #include <Pson/BinaryString.hpp>
 #include <privmx/utils/Utils.hpp>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "privmx/endpoint/core/BufferVarHolderImpl.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
@@ -31,94 +33,90 @@ namespace core {
 class VarDeserializer {
 public:
     template<typename T>
-    T deserialize(const Poco::Dynamic::Var& value, const std::string& name) = delete;
+    T deserialize(const Poco::Dynamic::Var& value, const std::string& name);
     template<typename T>
-    std::vector<T> deserializeVector(const Poco::Dynamic::Var& value, const std::string& name);
+    void deserialize(const Poco::Dynamic::Var& value, const std::string& name, T& out) = delete;
     template<typename T>
-    std::optional<T> deserializeOptional(const Poco::Dynamic::Var& value, const std::string& name);
+    void deserialize(const Poco::Dynamic::Var& value, const std::string& name, std::vector<T>& out);
     template<typename T>
-    std::optional<std::vector<T>> deserializeOptionalVector(const Poco::Dynamic::Var& val, const std::string& name);
+    void deserialize(const Poco::Dynamic::Var& value, const std::string& name, std::optional<T>& out);
     template<typename T>
-    std::shared_ptr<T>* deserializePointer(const Poco::Dynamic::Var& value, const std::string& name);
+    void deserialize(const Poco::Dynamic::Var& value, const std::string& name, std::optional<std::vector<T>>& out);
+    template<typename T>
+    void deserialize(const Poco::Dynamic::Var& value, const std::string& name, std::shared_ptr<T>*& out);
 };
 
 template<typename T>
-inline std::vector<T> VarDeserializer::deserializeVector(const Poco::Dynamic::Var& val, const std::string& name) {
-    std::vector<T> res;
+inline T VarDeserializer::deserialize(const Poco::Dynamic::Var& value, const std::string& name) {
+    T tmp{};
+    deserialize(value, name, tmp);
+    return tmp;
+}
+
+template<typename T>
+inline void VarDeserializer::deserialize(const Poco::Dynamic::Var& val, const std::string& name, std::vector<T>& out) {
     TypeValidator::validateArray(val, name);
     Poco::JSON::Array::Ptr arr = val.extract<Poco::JSON::Array::Ptr>();
-    res.reserve(arr->size());
+    out.reserve(arr->size());
     for (const auto& item : *arr) {
-        res.emplace_back(deserialize<T>(item, name + "[]"));
+        T elem{};
+        deserialize(item, name + "[]", elem);
+        out.emplace_back(std::move(elem));
     }
-    return res;
 }
 
 template<typename T>
-inline std::optional<T> VarDeserializer::deserializeOptional(const Poco::Dynamic::Var& val, const std::string& name) {
+inline void VarDeserializer::deserialize(const Poco::Dynamic::Var& val, const std::string& name, std::optional<T>& out) {
     if (val.isEmpty()) {
-        return std::nullopt;
+        out = std::nullopt;
+        return;
     }
-    return deserialize<T>(val, name);
+    T tmp{};
+    deserialize(val, name, tmp);
+    out = std::move(tmp);
 }
 
 template<typename T>
-inline std::optional<std::vector<T>> VarDeserializer::deserializeOptionalVector(const Poco::Dynamic::Var& val, const std::string& name) {
+inline void VarDeserializer::deserialize(const Poco::Dynamic::Var& val, const std::string& name, std::optional<std::vector<T>>& out) {
     if (val.isEmpty()) {
-        return std::nullopt;
+        out = std::nullopt;
+        return;
     }
-    return deserializeVector<T>(val, name);
+    std::vector<T> tmp;
+    deserialize(val, name, tmp);
+    out = std::move(tmp);
 }
 
 template<typename T>
-std::shared_ptr<T>* VarDeserializer::deserializePointer(const Poco::Dynamic::Var& value, const std::string& name) {
+inline void VarDeserializer::deserialize(const Poco::Dynamic::Var& value, const std::string& name, std::shared_ptr<T>*& out) {
     if (value.isEmpty()) {
         throw InvalidArgumentTypeException(name + " | Expected pointer, value is empty");
     }
     if (!value.isInteger()) {
         throw InvalidArgumentTypeException(name + " | Expected pointer, value has type " + value.type().name());
     }
-    return reinterpret_cast<std::shared_ptr<T>*>(static_cast<uintptr_t>(value.convert<Poco::Int64>()));
+    out = reinterpret_cast<std::shared_ptr<T>*>(static_cast<uintptr_t>(value.convert<Poco::Int64>()));
 }
 
 template<>
-int64_t VarDeserializer::deserialize<int64_t>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<int64_t>(const Poco::Dynamic::Var& val, const std::string& name, int64_t& out);
 
 template<>
-std::string VarDeserializer::deserialize<std::string>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<std::string>(const Poco::Dynamic::Var& val, const std::string& name, std::string& out);
 
 template<>
-Buffer VarDeserializer::deserialize<Buffer>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<Buffer>(const Poco::Dynamic::Var& val, const std::string& name, Buffer& out);
 
 template<>
-bool VarDeserializer::deserialize<bool>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<bool>(const Poco::Dynamic::Var& val, const std::string& name, bool& out);
 
 template<>
-Poco::JSON::Object::Ptr VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
-UserWithPubKey VarDeserializer::deserialize<UserWithPubKey>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
-PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
-ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutItem>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
-ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
-PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
-core::EventType VarDeserializer::deserialize<core::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
-core::EventSelectorType VarDeserializer::deserialize<core::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& val, const std::string& name, Poco::JSON::Object::Ptr& out);
 
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
+
+#include "privmx/endpoint/core/VarSerialization.hpp"
 
 #endif  // _PRIVMXLIB_ENDPOINT_CORE_VARDESERIALIZER_HPP_

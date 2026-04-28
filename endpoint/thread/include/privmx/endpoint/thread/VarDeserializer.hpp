@@ -24,10 +24,10 @@ namespace endpoint {
 namespace core {
 
 template<>
-thread::EventType VarDeserializer::deserialize<thread::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<thread::EventType>(const Poco::Dynamic::Var& val, const std::string& name, thread::EventType& out);
 
 template<>
-thread::EventSelectorType VarDeserializer::deserialize<thread::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<thread::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name, thread::EventSelectorType& out);
 
 }  // namespace core
 }  // namespace endpoint

@@ -88,14 +88,14 @@ Poco::Dynamic::Var ConnectionVarInterface::setUserVerifier(const std::function<P
 
 Poco::Dynamic::Var ConnectionVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto subscriptionQueries = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionQueries");
     auto result = _connection.subscribeFor(subscriptionQueries);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var ConnectionVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    auto subscriptionIds = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionIds");
     _connection.unsubscribeFrom(subscriptionIds);
     return {};
 }

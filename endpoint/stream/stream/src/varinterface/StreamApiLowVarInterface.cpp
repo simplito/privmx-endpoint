@@ -15,6 +15,7 @@ limitations under the License.
 #include "../../include/privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/TypesMacros.hpp"
+#include "privmx/endpoint/core/VarSerialization.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 
@@ -67,14 +68,14 @@ Poco::Dynamic::Var StreamApiLowVarInterface::getTurnCredentials(const Poco::Dyna
 
 Poco::Dynamic::Var StreamApiLowVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto subscriptionQueries = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionQueries");
     auto result = _streamApi.subscribeFor(subscriptionQueries);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    auto subscriptionIds = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionIds");
     _streamApi.unsubscribeFrom(subscriptionIds);
     return {};
 }
@@ -91,11 +92,11 @@ Poco::Dynamic::Var StreamApiLowVarInterface::buildSubscriptionQuery(const Poco::
 Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(5), "policies");
     auto result = _streamApi.createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
@@ -103,14 +104,14 @@ Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynami
 Poco::Dynamic::Var StreamApiLowVarInterface::updateStreamRoom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
     auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(8), "policies");
     _streamApi.updateStreamRoom(inboxId, users, managers, publicMeta, privateMeta, version, force,
                           forceGenerateNewKey, policies);
     return {};
@@ -155,7 +156,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::joinStreamRoom(const Poco::Dynamic:
 Poco::Dynamic::Var StreamApiLowVarInterface::joinStreamRoomEx(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto webRtc = _deserializer.deserializePointer<WebRTCInterface>(argsArr->get(1), "webRtc");
+    auto webRtc = _deserializer.deserialize<std::shared_ptr<WebRTCInterface>*>(argsArr->get(1), "webRtc");
     _streamApi.joinStreamRoom(streamRoomId, *webRtc);
     return {};
 }
@@ -208,22 +209,22 @@ Poco::Dynamic::Var StreamApiLowVarInterface::unpublishStream(const Poco::Dynamic
 Poco::Dynamic::Var StreamApiLowVarInterface::subscribeToRemoteStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto subscriptions = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptions");
+    auto subscriptions = _deserializer.deserialize<std::vector<StreamSubscription>>(argsArr->get(1), "subscriptions");
     _streamApi.subscribeToRemoteStreams(streamRoomId, subscriptions);
     return {};
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto subscriptionsToAdd = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptionsToAdd");
-    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(2), "subscriptionsToRemove");
+    auto subscriptionsToAdd = _deserializer.deserialize<std::vector<StreamSubscription>>(argsArr->get(1), "subscriptionsToAdd");
+    auto subscriptionsToRemove = _deserializer.deserialize<std::vector<StreamSubscription>>(argsArr->get(2), "subscriptionsToRemove");
     _streamApi.modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
     return {};
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptionsToRemove");
+    auto subscriptionsToRemove = _deserializer.deserialize<std::vector<StreamSubscription>>(argsArr->get(1), "subscriptionsToRemove");
     _streamApi.unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
     return {};
 }

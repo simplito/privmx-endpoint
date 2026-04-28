@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/core/VarSerialization.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
@@ -42,11 +43,11 @@ Poco::Dynamic::Var ThreadApiVarInterface::create(const Poco::Dynamic::Var& args)
 Poco::Dynamic::Var ThreadApiVarInterface::createThread(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(5), "policies");
     auto result = _threadApi.createThread(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
@@ -54,14 +55,14 @@ Poco::Dynamic::Var ThreadApiVarInterface::createThread(const Poco::Dynamic::Var&
 Poco::Dynamic::Var ThreadApiVarInterface::updateThread(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
     auto threadId = _deserializer.deserialize<std::string>(argsArr->get(0), "threadId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicy>>(argsArr->get(8), "policies");
     _threadApi.updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     return {};
 }
@@ -132,14 +133,14 @@ Poco::Dynamic::Var ThreadApiVarInterface::deleteMessage(const Poco::Dynamic::Var
 
 Poco::Dynamic::Var ThreadApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto subscriptionQueries = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionQueries");
     auto result = _threadApi.subscribeFor(subscriptionQueries);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var ThreadApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    auto subscriptionIds = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionIds");
     _threadApi.unsubscribeFrom(subscriptionIds);
     return {};
 }

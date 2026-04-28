@@ -26,7 +26,7 @@ public:
     std::vector<bool> verify(const std::vector<VerificationRequest>& request) override {
         auto serializedRequest = _serializer.serialize(request);
         auto result = _verifierCallback(serializedRequest);
-        return _deserializer.deserializeVector<bool>(result, "validationResult");
+        return _deserializer.deserialize<std::vector<bool>>(result, "validationResult");
     }
 };
 
