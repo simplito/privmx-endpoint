@@ -16,6 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreConstants.hpp"
 #include <privmx/utils/Utils.hpp>
 
+
 using namespace privmx::endpoint::core;
 
 std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const privmx::crypto::PrivateKey& authorKey) {
@@ -32,7 +33,9 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.containerResourceId = dio.containerResourceId;
     dioJSON.timestamp = dio.timestamp;
     dioJSON.randomId = dio.randomId;
-    dioJSON.fieldChecksums = dio.fieldChecksums;
+    for(const auto& checksum : dio.fieldChecksums) {
+        dioJSON.fieldChecksums.insert_or_assign(checksum.first, privmx::utils::Base64::from(checksum.second));
+    }
     dioJSON.structureVersion = dio.structureVersion;
     dynamic::BridgeIdentity_c_struct bridgeIdentity;
     if(dio.bridgeIdentity.has_value()) {
@@ -52,6 +55,10 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
        privmx::utils::Utils::parseJsonObject(dioAndSignature.data.stdString())
     );
     assertDataFormat(dioJSON);
+    std::unordered_map<std::string, std::string> fieldChecksums;
+    for(const auto& checksumBase64 : dioJSON.fieldChecksums) {
+        fieldChecksums.insert_or_assign(checksumBase64.first, privmx::utils::Base64::toString(checksumBase64.second));
+    }
     auto signatureStatus = _dataEncryptor.verifySignature(dioAndSignature, privmx::crypto::PublicKey::fromBase58DER(dioJSON.creatorPublicKey));
     if(!signatureStatus) {
         throw DataIntegrityObjectInvalidSignatureException();
@@ -74,7 +81,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             }
         },
         .structureVersion=dioJSON.structureVersion,
-        .fieldChecksums=dioJSON.fieldChecksums
+        .fieldChecksums=fieldChecksums
     };
 }
 

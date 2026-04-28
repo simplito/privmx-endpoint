@@ -193,7 +193,7 @@ server::KeyEntrySet_c_struct KeyProvider::createKeyEntrySet(
             .secretHash = privmx::crypto::Crypto::hmacSha256(containerSecret ,keySecret + location.contextId + location.resourceId)
         }, 
         crypto::PublicKey::fromBase58DER(user.pubKey), _key
-    );
+    ).toJSON();
     return key_entry_set;
 }
 

@@ -58,7 +58,7 @@ void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel_c_struct mo
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
-    return privmx::utils::JsonHelper::deserialize<T>(_gateway->request("thread." + method, params));
+    return T::formJSON(_gateway->request("thread." + method, params));
 }
 
 Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {

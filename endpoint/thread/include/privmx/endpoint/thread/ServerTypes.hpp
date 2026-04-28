@@ -31,7 +31,7 @@ namespace server {
     F(keyId, std::string)\
     F(keys, std::vector<core::server::KeyEntrySet_c_struct>)\
     F(type, std::string)\
-    F(policy, Poco::Dynamic::Var)
+    F(policy, std::optional<Poco::Dynamic::Var>)
 JSON_STRUCT(ThreadCreateModel_c_struct, THREAD_CREATE_MODEL_FIELDS);
 
 #define THREAD_UPDATE_MODEL_FIELDS(F)\
@@ -44,7 +44,7 @@ JSON_STRUCT(ThreadCreateModel_c_struct, THREAD_CREATE_MODEL_FIELDS);
     F(keys, std::vector<core::server::KeyEntrySet_c_struct>)\
     F(version, int64_t)\
     F(force, bool)\
-    F(policy, Poco::Dynamic::Var)
+    F(policy, std::optional<Poco::Dynamic::Var>)
 JSON_STRUCT(ThreadUpdateModel_c_struct, THREAD_UPDATE_MODEL_FIELDS);
 
 #define THREAD2_DATA_ENTRY_FIELDS(F)\
@@ -82,12 +82,12 @@ JSON_STRUCT(ThreadDeleteModel_c_struct, THREAD_DELETE_MODEL_FIELDS);
 
 #define THREAD_GET_MODEL_FIELDS(F)\
     F(threadId, std::string)\
-    F(type, std::string)
+    F(type, std::optional<std::string>)
 JSON_STRUCT(ThreadGetModel_c_struct, THREAD_GET_MODEL_FIELDS);
 
 #define THREAD_LIST_MODEL_FIELDS(F)\
     F(contextId, std::string)\
-    F(type, std::string)
+    F(type, std::optional<std::string>)
 JSON_STRUCT_EXT(ThreadListModel_c_struct, core::server::ListModel_c_struct, THREAD_LIST_MODEL_FIELDS);
 
 #define THREAD_GET_RESULT_FIELDS(F)\
@@ -190,7 +190,7 @@ JSON_STRUCT_EXT(EncryptedMessageDataV4_c_struct, core::dynamic::VersionedData_c_
     F(publicMetaObject, Poco::Dynamic::Var)\
     F(privateMeta, std::string)\
     F(data, std::string)\
-    F(internalMeta, std::string)\
+    F(internalMeta, std::optional<std::string>)\
     F(authorPubKey, std::string)\
     F(dio, std::string)
 JSON_STRUCT_EXT(EncryptedMessageDataV5_c_struct, core::dynamic::VersionedData_c_struct, ENCRYPTED_MESSAGE_DATA_V5_FIELDS);

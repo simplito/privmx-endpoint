@@ -37,7 +37,7 @@ dynamic::EncryptedModuleDataV5_c_struct ModuleDataEncryptorV5::encrypt(const Mod
     internalMeta.secret = kvdbData.internalMeta.secret;
     internalMeta.resourceId =kvdbData.internalMeta.resourceId;
     internalMeta.randomId = kvdbData.internalMeta.randomId;
-    result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(Buffer::from(utils::Utils::stringifyVar(internalMeta)), authorPrivateKey, encryptionKey);
+    result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(Buffer::from(utils::Utils::stringifyVar(internalMeta.toJSON())), authorPrivateKey, encryptionKey);
     fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, .structureVersion=5, .fieldChecksums=fieldChecksums};
