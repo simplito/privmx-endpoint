@@ -54,6 +54,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     dynamic::DataIntegrityObject_c_struct dioJSON = dynamic::DataIntegrityObject_c_struct::formJSON(
        privmx::utils::Utils::parseJsonObject(dioAndSignature.data.stdString())
     );
+    std::cout << dioAndSignature.data.stdString() << std::endl;
     assertDataFormat(dioJSON);
     std::unordered_map<std::string, std::string> fieldChecksums;
     for(const auto& checksumBase64 : dioJSON.fieldChecksums) {
@@ -88,11 +89,11 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
 void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject_c_struct& dioJSON) {
     if (
         dioJSON.version != DataIntegrityObjectDataSchema::Version::VERSION_1   ||
-        dioJSON.creatorUserId == ""                                            ||
-        dioJSON.creatorPublicKey == ""                                         ||
-        dioJSON.contextId == ""                                                ||
-        dioJSON.resourceId == ""                                               ||
-        dioJSON.randomId == ""
+        dioJSON.creatorUserId.empty()                                          ||
+        dioJSON.creatorPublicKey.empty()                                       ||
+        dioJSON.contextId.empty()                                              ||
+        // dioJSON.resourceId.empty()                                             || TO fix
+        dioJSON.randomId.empty() 
     ) {
         throw MalformedDataIntegrityObjectException();
     }

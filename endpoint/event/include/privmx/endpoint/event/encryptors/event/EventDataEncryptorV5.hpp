@@ -25,15 +25,15 @@ namespace event {
 
 class EventDataEncryptorV5 {
 public:
-    server::EncryptedContextEventDataV5 encrypt(
+    server::EncryptedContextEventDataV5_c_struct encrypt(
         const ContextEventDataToEncryptV5& eventData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedEventDataV5 decrypt(const server::EncryptedContextEventDataV5& encryptedEventData, const crypto::PublicKey& authorPublicKey, const std::string& encryptionKey);
+    DecryptedEventDataV5 decrypt(const server::EncryptedContextEventDataV5_c_struct& encryptedEventData, const crypto::PublicKey& authorPublicKey, const std::string& encryptionKey);
 private:
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedContextEventDataV5& encryptedEventData, const crypto::PublicKey& authorPublicKey);
-    void assertDataFormat(const server::EncryptedContextEventDataV5& encryptedEventData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedContextEventDataV5_c_struct& encryptedEventData, const crypto::PublicKey& authorPublicKey);
+    void assertDataFormat(const server::EncryptedContextEventDataV5_c_struct& encryptedEventData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };

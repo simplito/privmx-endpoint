@@ -78,7 +78,6 @@ struct JsonCompatable {
     static JsonCompatableClass formJSON(Poco::JSON::Object::Ptr JSON) {
         return JsonCompatableClass::formJSON(JSON);
     }
-    virtual Poco::JSON::Object::Ptr toJSON() const = 0;
 };
 
 class JsonHelper {
@@ -244,14 +243,14 @@ struct STRUCT_NAME : public privmx::utils::JsonCompatable<STRUCT_NAME> { \
         obj.fromJSON(JSON); \
         return obj; \
     } \
-    virtual Poco::JSON::Object::Ptr toJSON() const override { \
+    Poco::JSON::Object::Ptr toJSON() const { \
         Poco::JSON::Object::Ptr result(new Poco::JSON::Object()); \
         serializeFields(result); \
         return result; \
     } \
 protected: \
-    virtual void fromJSON(Poco::JSON::Object::Ptr JSON) { FIELDS(_JSON_FROM) } \
-    virtual void serializeFields(Poco::JSON::Object::Ptr result) const { FIELDS(_JSON_TO) } \
+    void fromJSON(Poco::JSON::Object::Ptr JSON) { FIELDS(_JSON_FROM) } \
+    void serializeFields(Poco::JSON::Object::Ptr result) const { FIELDS(_JSON_TO) } \
 };
 
 // Extend a JSON_STRUCT with additional fields. Chains to base deserialization/serialization.
@@ -272,15 +271,18 @@ struct STRUCT_NAME : public BASE_NAME { \
         obj.fromJSON(JSON); \
         return obj; \
     } \
+    Poco::JSON::Object::Ptr toJSON() const { \
+        Poco::JSON::Object::Ptr result(new Poco::JSON::Object()); \
+        BASE_NAME::serializeFields(result); \
+        serializeFields(result); \
+        return result; \
+    } \
 protected: \
-    virtual void fromJSON(Poco::JSON::Object::Ptr JSON) override { \
+    void fromJSON(Poco::JSON::Object::Ptr JSON) { \
         BASE_NAME::fromJSON(JSON); \
         FIELDS(_JSON_FROM) \
     } \
-    virtual void serializeFields(Poco::JSON::Object::Ptr result) const override { \
-        BASE_NAME::serializeFields(result); \
-        FIELDS(_JSON_TO) \
-    } \
+    void serializeFields(Poco::JSON::Object::Ptr result) const { FIELDS(_JSON_TO) } \
 }
 
 #define TEST_STRUCT_FIELDS(F)\
