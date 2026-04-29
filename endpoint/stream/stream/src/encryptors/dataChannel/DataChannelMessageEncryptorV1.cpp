@@ -36,11 +36,23 @@ core::Buffer DataChannelMessageEncryptorV1::encryptMessage(const DataChannelMess
     return core::Buffer::from(serializedHeader + ciphertext);
 }
 
-DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(const core::Buffer& encryptedData) {
+DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(const std::string& remoteStreamId, const core::Buffer& encryptedData) {
     DecryptedDataChannelMessage result = {core::Buffer(), 0, 0};
     try {
         assertData(encryptedData);
-        auto parsedEncryptedMessage = parseEncryptedMessage(encryptedData.stdString());
+    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.statusCode = e.getCode();
+        return result;
+    } catch (const privmx::utils::PrivmxException& e) {
+        result.statusCode = core::ExceptionConverter::convert(e).getCode();
+        return result;
+    } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        return result;
+    }
+    auto parsedEncryptedMessage = parseEncryptedMessage(encryptedData.stdString());
+    assertSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
+    try {
         result.seq = parsedEncryptedMessage.header.seq;
         auto decKey = getDencryptionKey(parsedEncryptedMessage.header.keyId);
         result.data = core::Buffer::from(
@@ -51,6 +63,7 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(const 
                 parsedEncryptedMessage.serializedHeader
             )
         );
+        updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
     }  catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
@@ -59,6 +72,10 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(const 
         result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
     }
     return result;
+}
+
+void DataChannelMessageEncryptorV1::registerRemoteStreamId(const std::string& remoteStreamId, int64_t initialSeq) {
+    _remoteStreamSeqMap.set(remoteStreamId, initialSeq);
 }
 
 void DataChannelMessageEncryptorV1::updateKey(const std::vector<Key>& keys) {
@@ -112,6 +129,25 @@ void DataChannelMessageEncryptorV1::assertData(const core::Buffer& encryptedKvdb
     if((uint8_t)encryptedKvdbData.stdString()[0] != WIRE_FORMAT_VERSION) {
         throw UnsupportedMessageFormatVersionException();
     }
+}
+
+void DataChannelMessageEncryptorV1::assertSeq(const std::string& remoteStreamId, uint32_t seq) {
+    auto currentSeq = _remoteStreamSeqMap.get(remoteStreamId);
+    if(!currentSeq.has_value()) {
+        _remoteStreamSeqMap.set(remoteStreamId, -1);
+        currentSeq = _remoteStreamSeqMap.get(remoteStreamId);
+    }
+    if(static_cast<int64_t>(seq) <= currentSeq.value()) {
+        throw InvalidDataChannelSeqException(
+            "remoteStreamId=" + remoteStreamId +
+            ", currentSeq=" + std::to_string(currentSeq.value()) +
+            ", receivedSeq=" + std::to_string(seq)
+        );
+    }
+}
+
+void DataChannelMessageEncryptorV1::updateSeq(const std::string& remoteStreamId, uint32_t seq) {
+    _remoteStreamSeqMap.set(remoteStreamId, static_cast<int64_t>(seq));
 }
 
 Key DataChannelMessageEncryptorV1::getEncryptionKey() {

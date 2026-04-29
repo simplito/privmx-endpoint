@@ -1,11 +1,19 @@
+#include <condition_variable>
+#include <functional>
+#include <map>
+#include <mutex>
+#include <sstream>
 #include <thread>
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
 #include "../utils/FalseUserVerifierInterface.hpp"
+#include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
+#include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -25,21 +33,69 @@ public:
     };
 };
 
-class OnTrackPlainTesting : public stream::OnTrackInterface {
+class PlainDataCollector : public stream::OnTrackInterface {
 public:
-    OnTrackPlainTesting(const std::string& expectedData) : _expectedData(expectedData) {}
+    struct Message {
+        std::string trackId;
+        std::string payload;
+        uint64_t seq;
+        uint64_t statusCode;
+    };
+
     virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
     }
     virtual void OnData(std::shared_ptr<stream::Data> data) override {
-        if(data->type == stream::DataType::PLAIN) {
-            auto plainData = std::dynamic_pointer_cast<stream::PlainData>(data);
-            EXPECT_EQ(plainData->data.stdString(), _expectedData);
-        } else {
-            FAIL();
+        if(data->type != stream::DataType::PLAIN) {
+            ADD_FAILURE() << "Unexpected non-plain data received";
+            return;
+        }
+        auto plainData = std::dynamic_pointer_cast<stream::PlainData>(data);
+        if(!plainData) {
+            ADD_FAILURE() << "Failed to cast incoming data to PlainData";
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _messages.push_back(Message{
+                .trackId = plainData->track,
+                .payload = plainData->data.stdString(),
+                .seq = plainData->seq,
+                .statusCode = plainData->statusCode
+            });
+        }
+        _condition.notify_all();
+    }
+
+    bool waitForMessages(size_t expectedCount, const std::chrono::milliseconds& timeout) {
+        std::unique_lock<std::mutex> lock(_mutex);
+        return _condition.wait_for(lock, timeout, [this, expectedCount]() {
+            return _messages.size() >= expectedCount;
+        });
+    }
+
+    std::vector<Message> messages() const {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _messages;
+    }
+
+private:
+    mutable std::mutex _mutex;
+    std::condition_variable _condition;
+    std::vector<Message> _messages;
+};
+
+class ScopeExit {
+public:
+    explicit ScopeExit(std::function<void()> callback) : _callback(std::move(callback)) {}
+
+    ~ScopeExit() {
+        if(_callback) {
+            _callback();
         }
     }
+
 private:
-    std::string _expectedData;
+    std::function<void()> _callback;
 };
 
 enum ConnectionType {
@@ -50,6 +106,24 @@ enum ConnectionType {
 
 class StreamTest : public privmx::test::BaseTest {
 protected:
+    struct StreamClient {
+        std::string userId;
+        std::string pubKey;
+        std::string privKey;
+        std::shared_ptr<core::Connection> connection;
+        std::shared_ptr<event::EventApi> eventApi;
+        std::shared_ptr<stream::StreamApi> streamApi;
+
+        void disconnect() {
+            if(connection) {
+                connection->disconnect();
+            }
+            streamApi.reset();
+            eventApi.reset();
+            connection.reset();
+        }
+    };
+
     StreamTest() : BaseTest(privmx::test::BaseTestMode::online) {}
     void connectAs(ConnectionType type) {
         if(type == ConnectionType::User1) {
@@ -145,6 +219,58 @@ protected:
         streamApi->publishStream(handle);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         return handle;
+    }
+    stream::StreamHandle publishDataStream(const std::shared_ptr<stream::StreamApi>& api, const std::string& streamRoomId) {
+        api->joinStreamRoom(streamRoomId);
+        stream::StreamHandle handle = api->createStream(streamRoomId);
+        api->getImpl()->addTrack(handle, {"", "", stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
+        api->publishStream(handle);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        return handle;
+    }
+    StreamClient createClient(const std::string& userId, const std::string& pubKey, const std::string& privKey) {
+        std::cout << __LINE__ << std::endl;
+
+        StreamClient client;
+        client.userId = userId;
+        client.pubKey = pubKey;
+        client.privKey = privKey;
+        client.connection = std::make_shared<core::Connection>(
+            core::Connection::connect(
+                privKey,
+                reader->getString("Login.solutionId"),
+                getPlatformUrl(reader->getString("Login.instanceUrl"))
+            )
+        );
+        std::cout << __LINE__ << std::endl;
+
+        client.eventApi = std::make_shared<event::EventApi>(
+            event::EventApi::create(*client.connection)
+        );
+        std::cout << __LINE__ << std::endl;
+
+        client.streamApi = std::make_shared<stream::StreamApi>(
+            stream::StreamApi::create(*client.connection, *client.eventApi)
+        );
+        std::cout << __LINE__ << std::endl;
+
+        return client;
+    }
+    Poco::JSON::Object::Ptr backendRequest(const std::string& method, Poco::JSON::Object::Ptr params) {
+        auto response = core::BackendRequester::backendRequest(
+            getPlatformUrl(reader->getString("Login.instanceUrl")),
+            "api_key_id",
+            "api_key_secret",
+            0,
+            method,
+            privmx::utils::Utils::stringify(params)
+        );
+        return privmx::utils::Utils::parseJsonObject(response);
+    }
+    std::string stringifyJson(Poco::JSON::Object::Ptr object) {
+        std::stringstream stream;
+        object->stringify(stream);
+        return stream.str();
     }
 
     std::shared_ptr<core::Connection> connection;
@@ -1213,26 +1339,43 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_after_unpublish) {
     }, core::Exception);
 }
 
+TEST_F(StreamTest, user_3_can_connect) {
+    std::shared_ptr<core::Connection> connection3;
+    ScopeExit cleanup([&connection3]() {
+        if(connection3) {
+            try {
+                connection3->disconnect();
+            } catch(...) {
+            }
+            connection3.reset();
+        }
+    });
+
+    EXPECT_NO_THROW({
+        connection3 = std::make_shared<core::Connection>(
+            core::Connection::connect(
+                reader->getString("Login.user_3_privKey"),
+                reader->getString("Login.solutionId"),
+                getPlatformUrl(reader->getString("Login.instanceUrl"))
+            )
+        );
+    });
+    ASSERT_NE(connection3, nullptr);
+}
+
 TEST_F(StreamTest, dataChannel_send_and_get) {
-    auto connection2 = std::make_shared<core::Connection>(
-        core::Connection::connect(
-            reader->getString("Login.user_2_privKey"),
-            reader->getString("Login.solutionId"),
-            getPlatformUrl(reader->getString("Login.instanceUrl"))
-        )
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
     );
-    auto eventApi_2 = std::make_shared<event::EventApi>(
-        event::EventApi::create(*connection )
-    );
-    auto streamApi_2 = std::make_shared<stream::StreamApi>(
-        stream::StreamApi::create(*connection, *eventApi )
-    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
     //Publish Data Track as user_1
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     stream::StreamHandle handle_USER_1;
     EXPECT_NO_THROW({
         streamApi->joinStreamRoom(streamRoomId_1);
-        stream::StreamHandle handle_USER_1 = streamApi->createStream(streamRoomId_1);
+        handle_USER_1 = streamApi->createStream(streamRoomId_1);
         streamApi->getImpl()->addTrack(handle_USER_1, {"","",stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
         streamApi->publishStream(handle_USER_1);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
@@ -1240,7 +1383,7 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     //Subscribe for Data Track as user_1
     std::vector<stream::StreamSubscription> streamsId;
     EXPECT_NO_THROW({
-        auto streamlist = streamApi_2->listStreams(streamRoomId_1);
+        auto streamlist = client2.streamApi->listStreams(streamRoomId_1);
         for(auto stream : streamlist) {
             for(auto track : stream.tracks) {
                 streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
@@ -1248,15 +1391,169 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
         }
     });
     std::string dataToSend = "testing_data";
+    auto collector = std::make_shared<PlainDataCollector>();
     EXPECT_NO_THROW({
-        streamApi_2->joinStreamRoom(streamRoomId_1);
-        streamApi_2->addRemoteStreamListener(streamRoomId_1, std::nullopt, std::make_shared<OnTrackPlainTesting>(dataToSend));
-        streamApi_2->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        client2.streamApi->joinStreamRoom(streamRoomId_1);
+        client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
+        client2.streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     });
     //Send data
     EXPECT_NO_THROW({
         streamApi->sendData(handle_USER_1, core::Buffer::from(dataToSend));
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    ASSERT_TRUE(collector->waitForMessages(1, std::chrono::seconds(10)));
+    auto messages = collector->messages();
+    ASSERT_EQ(messages.size(), 1);
+    EXPECT_EQ(messages[0].payload, dataToSend);
+    EXPECT_EQ(messages[0].seq, 0);
+    EXPECT_EQ(messages[0].statusCode, 0);
+}
+
+TEST_F(StreamTest, dataChannel_seq_between_three_users) {
+    auto contextId = reader->getString("Context_1.contextId");
+    StreamClient client1;
+    client1.userId = reader->getString("Login.user_1_id");
+    client1.pubKey = reader->getString("Login.user_1_pubKey");
+    client1.privKey = reader->getString("Login.user_1_privKey");
+    client1.connection = connection;
+    client1.eventApi = eventApi;
+    client1.streamApi = streamApi;
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    auto client3 = createClient(
+        reader->getString("Login.user_3_id"),
+        reader->getString("Login.user_3_pubKey"),
+        reader->getString("Login.user_3_privKey")
+    );
+
+    std::string streamRoomId;
+
+    std::vector<core::UserWithPubKey> roomUsers = {
+        core::UserWithPubKey{.userId = client1.userId, .pubKey = client1.pubKey},
+        core::UserWithPubKey{.userId = client2.userId, .pubKey = client2.pubKey},
+        core::UserWithPubKey{.userId = client3.userId, .pubKey = client3.pubKey},
+    };
+
+    EXPECT_NO_THROW({
+        streamRoomId = client1.streamApi->createStreamRoom(
+            contextId,
+            roomUsers,
+            roomUsers,
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt
+        );
+    });
+    ASSERT_FALSE(streamRoomId.empty());
+
+    stream::StreamHandle handle1;
+    stream::StreamHandle handle2;
+    stream::StreamHandle handle3;
+
+    EXPECT_NO_THROW({
+        handle1 = publishDataStream(client1.streamApi, streamRoomId);
+        handle2 = publishDataStream(client2.streamApi, streamRoomId);
+        handle3 = publishDataStream(client3.streamApi, streamRoomId);
+    });
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    std::map<std::string, std::string> remoteStreamToUserId;
+    std::vector<stream::StreamSubscription> client1Subscriptions;
+    std::vector<stream::StreamSubscription> client2Subscriptions;
+    std::vector<stream::StreamSubscription> client3Subscriptions;
+    EXPECT_NO_THROW({
+    
+        auto streamList = client1.streamApi->listStreams(streamRoomId);
+        for(const auto& streamInfo : streamList) {
+            for(const auto& track : streamInfo.tracks) {
+                if(track.type != "data") {
+                    continue;
+                }
+                auto remoteStreamId = std::to_string(streamInfo.id);
+                remoteStreamToUserId[remoteStreamId] = streamInfo.userId;
+                stream::StreamSubscription subscription;
+                subscription.streamId = streamInfo.id;
+                subscription.streamTrackId = track.mid;
+                if(streamInfo.userId != client1.userId) {
+                    client1Subscriptions.push_back(subscription);
+                }
+                if(streamInfo.userId != client2.userId) {
+                    client2Subscriptions.push_back(subscription);
+                }
+                if(streamInfo.userId != client3.userId) {
+                    client3Subscriptions.push_back(subscription);
+                }
+            }
+        }
+    });
+    ASSERT_EQ(remoteStreamToUserId.size(), 3);
+
+    auto collector1 = std::make_shared<PlainDataCollector>();
+    auto collector2 = std::make_shared<PlainDataCollector>();
+    auto collector3 = std::make_shared<PlainDataCollector>();
+
+    EXPECT_NO_THROW({
+        client1.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector1);
+        client2.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector2);
+        client3.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector3);
+
+        client1.streamApi->subscribeToRemoteStreams(streamRoomId, client1Subscriptions);
+        client2.streamApi->subscribeToRemoteStreams(streamRoomId, client2Subscriptions);
+        client3.streamApi->subscribeToRemoteStreams(streamRoomId, client3Subscriptions);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    });
+
+    auto expectedPayloads = std::map<std::string, std::vector<std::string>>{
+        {client1.userId, {"msg-" + client1.userId + "-0", "msg-" + client1.userId + "-1"}},
+        {client2.userId, {"msg-" + client2.userId + "-0", "msg-" + client2.userId + "-1"}},
+        {client3.userId, {"msg-" + client3.userId + "-0", "msg-" + client3.userId + "-1"}}
+    };
+
+    EXPECT_NO_THROW({
+        client1.streamApi->sendData(handle1, core::Buffer::from(expectedPayloads.at(client1.userId)[0]));
+        client2.streamApi->sendData(handle2, core::Buffer::from(expectedPayloads.at(client2.userId)[0]));
+        client3.streamApi->sendData(handle3, core::Buffer::from(expectedPayloads.at(client3.userId)[0]));
+        client1.streamApi->sendData(handle1, core::Buffer::from(expectedPayloads.at(client1.userId)[1]));
+        client2.streamApi->sendData(handle2, core::Buffer::from(expectedPayloads.at(client2.userId)[1]));
+        client3.streamApi->sendData(handle3, core::Buffer::from(expectedPayloads.at(client3.userId)[1]));
+    });
+
+    ASSERT_TRUE(collector1->waitForMessages(4, std::chrono::seconds(15)));
+    ASSERT_TRUE(collector2->waitForMessages(4, std::chrono::seconds(15)));
+    ASSERT_TRUE(collector3->waitForMessages(4, std::chrono::seconds(15)));
+
+    auto assertCollector = [&](const std::string& receiverUserId, const std::shared_ptr<PlainDataCollector>& collector) {
+        auto messages = collector->messages();
+        ASSERT_EQ(messages.size(), 4);
+        std::map<std::string, std::vector<PlainDataCollector::Message>> groupedBySender;
+        for(const auto& message : messages) {
+            auto senderIt = remoteStreamToUserId.find(message.trackId);
+            ASSERT_NE(senderIt, remoteStreamToUserId.end()) << "Unknown remote stream id " << message.trackId;
+            EXPECT_EQ(message.statusCode, 0);
+            groupedBySender[senderIt->second].push_back(message);
+        }
+
+        ASSERT_EQ(groupedBySender.size(), 2);
+        for(const auto& [senderUserId, payloads] : expectedPayloads) {
+            if(senderUserId == receiverUserId) {
+                continue;
+            }
+            auto groupedIt = groupedBySender.find(senderUserId);
+            ASSERT_NE(groupedIt, groupedBySender.end()) << "Missing messages from " << senderUserId;
+            ASSERT_EQ(groupedIt->second.size(), 2);
+            EXPECT_EQ(groupedIt->second[0].seq, 0);
+            EXPECT_EQ(groupedIt->second[1].seq, 1);
+            EXPECT_EQ(groupedIt->second[0].payload, payloads[0]);
+            EXPECT_EQ(groupedIt->second[1].payload, payloads[1]);
+        }
+    };
+
+    assertCollector(client1.userId, collector1);
+    assertCollector(client2.userId, collector2);
+    assertCollector(client3.userId, collector3);
+    
 }

@@ -25,7 +25,7 @@ public:
         _onTrackInterface(onTrackInterface), 
         _dataChannel(dataChannel), 
         _dataChannelObserver(std::make_shared<PmxDataChannelObserver>(
-            onTrackInterface, apiLow, dataChannel->label().std_string()+":"+std::to_string(dataChannel->id()), streamRoomId
+            onTrackInterface, apiLow, dataChannel->label().std_string(), streamRoomId
         ))
     {
         _dataChannel->RegisterObserver(_dataChannelObserver.get());

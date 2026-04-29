@@ -104,7 +104,8 @@ public:
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage); 
-    DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const core::Buffer& encryptedData); 
+    void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
+    DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const std::string& remoteStreamId, const core::Buffer& encryptedData);
 
     inline static const std::string STREAM_TYPE_FILTER_FLAG = "stream";
 private:

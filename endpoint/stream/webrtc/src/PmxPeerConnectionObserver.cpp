@@ -88,6 +88,7 @@ void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scope
 }
 void PmxPeerConnectionObserver::OnDataChannel(libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON DATA CHANNEL channel_label: ", data_channel->label().std_string())
+    _apiLow->registerRemoteDataChannel(_streamRoomId, data_channel->label().std_string());
     std::shared_ptr<stream::OnTrackInterface> roomOnTrackInterface = nullptr;
     {
         std::shared_lock<std::shared_mutex> lock(_onTrackInterfaceMutex);

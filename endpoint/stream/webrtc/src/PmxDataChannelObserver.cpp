@@ -16,8 +16,8 @@ limitations under the License.
 using namespace privmx::endpoint::stream;
 
 
-PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<StreamApiLow> apiLow, const std::string& dataChannelId, const std::string& streamRoomId) 
-    : _onTrackInterface(onTrackInterface), _apiLow(apiLow), _dataChannelId(dataChannelId), _streamRoomId(streamRoomId) {
+PmxDataChannelObserver::PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<StreamApiLow> apiLow, const std::string& remoteStreamId, const std::string& streamRoomId)
+    : _onTrackInterface(onTrackInterface), _apiLow(apiLow), _remoteStreamId(remoteStreamId), _streamRoomId(streamRoomId) {
     LOG_TRACE("PmxDataChannelObserver created")
 }
 void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state) {
@@ -28,10 +28,10 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
         if(_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
                 Track{
-                    DataType::PLAIN, 
-                    std::vector<std::string>{}, 
-                    _dataChannelId, 
-                    false, 
+                    DataType::PLAIN,
+                    std::vector<std::string>{},
+                    _remoteStreamId,
+                    false,
                     [](bool mute) {return;}}, 
                 TrackAction::ADDED
             );
@@ -41,10 +41,10 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
         if(_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
                 Track{
-                    DataType::PLAIN, 
-                    std::vector<std::string>{}, 
-                    _dataChannelId, 
-                    false, 
+                    DataType::PLAIN,
+                    std::vector<std::string>{},
+                    _remoteStreamId,
+                    false,
                     [](bool mute) {return;}}, 
                 TrackAction::REMOVED
             );
@@ -57,8 +57,8 @@ void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool bina
     std::lock_guard<std::mutex> lock(_onTrackInterfaceMutex);
     if(_onTrackInterface) {
         try {
-            auto decryptedData = _apiLow->decryptDataChannelMessage(_streamRoomId, core::Buffer::from(std::string(buffer, length)));
-            std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _dataChannelId, decryptedData.data, decryptedData.seq, binary, decryptedData.statusCode);
+            auto decryptedData = _apiLow->decryptDataChannelMessage(_streamRoomId, _remoteStreamId, core::Buffer::from(std::string(buffer, length)));
+            std::shared_ptr<PlainData> data = std::make_shared<PlainData>(std::vector<std::string>{}, _remoteStreamId, decryptedData.data, decryptedData.seq, binary, decryptedData.statusCode);
             LOG_DEBUG("_onTrackInterface->OnData(data): ", data)
             _onTrackInterface->OnData(data);
         }  catch (const privmx::endpoint::core::Exception& e) {
@@ -75,5 +75,3 @@ void PmxDataChannelObserver::updateOnTrackInterface(std::shared_ptr<OnTrackInter
     std::lock_guard<std::mutex> lock(_onTrackInterfaceMutex);
     _onTrackInterface = onTrackInterface;
 }
-
-
