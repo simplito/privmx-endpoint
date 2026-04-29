@@ -52,7 +52,8 @@ int main(int argc, char** argv) {
                 auto eventHolder = eventQueue.waitEvent();
             }
         });
-        stream::StreamApi streamApi = stream::StreamApi::create(connection);
+        auto eventApi = event::EventApi::create(connection);
+        stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         std::string streamRoomId;
         if(streamRoomIdOpt.has_value()) {
             streamRoomId = streamRoomIdOpt.has_value();
@@ -140,5 +141,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
 

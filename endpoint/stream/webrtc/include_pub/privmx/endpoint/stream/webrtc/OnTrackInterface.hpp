@@ -1,9 +1,11 @@
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_ONTRACKINTERFACE_HPP
 #define _PRIVMXLIB_ENDPOINT_STREAM_ONTRACKINTERFACE_HPP
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <optional>
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include <vector>
 #include <privmx/endpoint/stream/Types.hpp>
 
 namespace privmx {

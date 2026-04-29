@@ -12,7 +12,6 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 
-#include <functional>
 #include <memory>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -39,7 +38,7 @@ public:
      * Creates an instance of 'StreamApi'.
      *
      * @param connection instance of 'Connection'
-     * @param eventApi instance of 'EventApi'
+     * @param eventApi (deprecated) instance of 'EventApi'
      *
      * @return StreamApi object
      */
