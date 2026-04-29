@@ -28,7 +28,7 @@ namespace stream {
 
 class PmxDataChannelObserver : public libwebrtc::RTCDataChannelObserver {
 public:
-    PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<StreamApiLow> apiLow, const std::string& dataChannelId, const std::string& streamRoomId);
+    PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<StreamApiLow> apiLow, const std::string& remoteStreamId, const std::string& streamRoomId);
     virtual void OnStateChange(libwebrtc::RTCDataChannelState state) override;
     virtual void OnMessage(const char* buffer, int length, bool binary) override;
     void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
@@ -36,7 +36,7 @@ private:
     std::mutex _onTrackInterfaceMutex;
     std::shared_ptr<OnTrackInterface> _onTrackInterface;
     std::shared_ptr<StreamApiLow> _apiLow;
-    std::string _dataChannelId;
+    std::string _remoteStreamId;
     std::string _streamRoomId;
 };
 
