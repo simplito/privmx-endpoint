@@ -8,6 +8,7 @@ privmxdrvecc/1.0.2
 privmxdrvnet/1.0.3
 gtest/[^1.15.0]
 readline/[^8.2.0]
+libwebrtc/m125
 
 [options]
 *:shared = True
