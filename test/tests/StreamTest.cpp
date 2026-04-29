@@ -215,8 +215,6 @@ protected:
         return handle;
     }
     StreamClient createClient(const std::string& userId, const std::string& pubKey, const std::string& privKey) {
-        std::cout << __LINE__ << std::endl;
-
         StreamClient client;
         client.userId = userId;
         client.pubKey = pubKey;
@@ -228,17 +226,14 @@ protected:
                 getPlatformUrl(reader->getString("Login.instanceUrl"))
             )
         );
-        std::cout << __LINE__ << std::endl;
 
         client.eventApi = std::make_shared<event::EventApi>(
             event::EventApi::create(*client.connection)
         );
-        std::cout << __LINE__ << std::endl;
 
         client.streamApi = std::make_shared<stream::StreamApi>(
             stream::StreamApi::create(*client.connection, *client.eventApi)
         );
-        std::cout << __LINE__ << std::endl;
 
         return client;
     }
