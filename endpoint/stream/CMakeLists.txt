@@ -1,7 +1,7 @@
 
 option(PRIVMX_BUILD_WITH_WEBRTC "Build Stream module with additional layer of the native WebRTC library" OFF)
 if(PRIVMX_BUILD_WITH_WEBRTC)
-    option(PRIVMX_IMPORT_LIBWEBRTC "Manually IMPORT libwebrtc provided by package manager" OFF)
+    option(PRIVMX_IMPORT_LIBWEBRTC "IMPORTING libwebrtc from given path" OFF)
     if(PRIVMX_IMPORT_LIBWEBRTC)
         message(STATUS  "Using IMPORTED libwebrtc library")
         message(STATUS  "path to libWEBRTC lib PRIVMX_LIBWEBRTC=${PRIVMX_LIBWEBRTC}")
