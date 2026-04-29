@@ -47,7 +47,7 @@ add_executable(test_e2e_KvdbModuleEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/K
 target_link_libraries(test_e2e_KvdbModuleEventsTest privmx privmxendpointcore privmxendpointkvdb Poco::Foundation Poco::Util GTest::GTest)
 # StreamLow
 add_executable(test_e2e_StreamLowTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamLowTest.cpp)
-target_link_libraries(test_e2e_StreamLowTest privmx privmxendpointcore privmxendpointevent privmxendpointstream Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+target_link_libraries(test_e2e_StreamLowTest privmx privmxendpointcore privmxendpointstream Poco::Foundation Poco::Util GTest::GTest GTest::Main)
 
 if(PRIVMX_BUILD_WITH_WEBRTC)
     if(PRIVMX_IMPORT_LIBWEBRTC)
@@ -64,7 +64,7 @@ if(PRIVMX_BUILD_WITH_WEBRTC)
     endif()
     # Stream
     add_executable(test_e2e_StreamTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamTest.cpp)
-    target_link_libraries(test_e2e_StreamTest privmx privmxendpointcore privmxendpointevent privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+    target_link_libraries(test_e2e_StreamTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
     endif()
 
 ## Docker Setup

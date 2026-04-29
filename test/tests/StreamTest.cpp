@@ -9,7 +9,6 @@
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/StreamApiImpl.hpp>
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
@@ -76,15 +75,9 @@ protected:
                 )
             );
         }
-        eventApi = std::make_shared<event::EventApi>(
-            event::EventApi::create(
-                *connection
-            )
-        );
         streamApi = std::make_shared<stream::StreamApi>(
             stream::StreamApi::create(
-                *connection,
-                *eventApi
+                *connection
             )
         );
     }
@@ -92,7 +85,6 @@ protected:
         connection->disconnect();
         connection.reset();
         streamApi.reset();
-        eventApi.reset();
     }
     void customSetUp() override {
         reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
@@ -103,15 +95,9 @@ protected:
                 getPlatformUrl(reader->getString("Login.instanceUrl"))
             )
         );
-        eventApi = std::make_shared<event::EventApi>(
-            event::EventApi::create(
-                *connection
-            )
-        );
         streamApi = std::make_shared<stream::StreamApi>(
             stream::StreamApi::create(
-                *connection,
-                *eventApi
+                *connection
             )
         );
     }
@@ -148,7 +134,6 @@ protected:
     }
 
     std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApi> streamApi;
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
@@ -1221,11 +1206,8 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
             getPlatformUrl(reader->getString("Login.instanceUrl"))
         )
     );
-    auto eventApi_2 = std::make_shared<event::EventApi>(
-        event::EventApi::create(*connection )
-    );
     auto streamApi_2 = std::make_shared<stream::StreamApi>(
-        stream::StreamApi::create(*connection, *eventApi )
+        stream::StreamApi::create(*connection)
     );
     //Publish Data Track as user_1
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));

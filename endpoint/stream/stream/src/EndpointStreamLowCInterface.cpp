@@ -19,16 +19,14 @@ limitations under the License.
 #include <privmx/endpoint/core/cinterface/InterfaceException.hpp>
 #include <privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp>
 #include "privmx/endpoint/stream/varinterface/StreamApiLowVarInterface.hpp"
-#include "privmx/endpoint/event/varinterface/EventApiVarInterface.hpp"
 #include "privmx/endpoint/stream/ProxyWebRTC.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::cinterface;
 
-int privmx_endpoint_newStreamApiLow(Connection* connectionPtr, EventApi* eventApiPtr, StreamApiLow** outPtr) {
+int privmx_endpoint_newStreamApiLow(Connection* connectionPtr, StreamApiLow** outPtr) {
     core::ConnectionVarInterface* _connectionPtr = (core::ConnectionVarInterface*)connectionPtr;
-    event::EventApiVarInterface* _eventApiPtr = (event::EventApiVarInterface*)eventApiPtr;
-    stream::StreamApiLowVarInterface* ptr = new stream::StreamApiLowVarInterface(_connectionPtr->getApi(), _eventApiPtr->getApi(), core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
+    stream::StreamApiLowVarInterface* ptr = new stream::StreamApiLowVarInterface(_connectionPtr->getApi(), core::VarSerializer::Options{.addType=true, .binaryFormat=core::VarSerializer::Options::PSON_BINARYSTRING});
     *outPtr = (StreamApiLow*)ptr;
     return 1;
 }

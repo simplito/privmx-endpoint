@@ -24,8 +24,10 @@
 #include <privmx/endpoint/core/Events.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/event/Events.hpp>
+#include <privmx/endpoint/thread/ThreadApi.hpp>
+#include <privmx/endpoint/thread/Events.hpp>
+#include <privmx/endpoint/store/StoreApi.hpp>
+#include <privmx/endpoint/store/Events.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
@@ -175,7 +177,6 @@ private:
     wxBitmap bmp = wxBitmap(MAX_VIDEO_W, MAX_VIDEO_H, 32);
     int tmp = 0;
     std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApi> streamApi;
     std::thread _event_handler;
     std::thread _renderer_handler;
@@ -430,8 +431,7 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
         PRIVMX_DEBUG("StreamProgram wx", "Connect", "Connected with Application Server")
         try {
             connection = std::make_shared<core::Connection>(core::Connection::connect(privKey, solutionId, bridgeUrl));
-            eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
-            streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection, *eventApi));
+            streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*connection));
         } catch (const privmx::endpoint::core::Exception& e) {
             PRIVMX_DEBUG("StreamProgram wx", "Connect", "Connection To bridge failed")
         }
@@ -442,7 +442,7 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
         } catch (const privmx::endpoint::core::Exception& e) {
             PRIVMX_DEBUG("StreamProgram wx", "Connect", "User not added to StreamRoom")
             auto admin_connection = std::make_shared<core::Connection>(core::Connection::connect(adminUserPrivKey, solutionId, bridgeUrl));
-            auto admin_streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*admin_connection, *eventApi));
+            auto admin_streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*admin_connection));
             bool stop = false;
             for (size_t i = 0;!stop;i++) {
                 PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Getting StreamRoomInfo")

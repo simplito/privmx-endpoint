@@ -20,14 +20,12 @@ limitations under the License.
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
-#include <privmx/endpoint/event/EventApiImpl.hpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "privmx/endpoint/stream/Constants.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
-#include "privmx/endpoint/stream/StreamKeyManager.hpp"
 #include "privmx/endpoint/stream/SubscriberImpl.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
@@ -40,14 +38,12 @@ namespace stream {
 class StreamApiLowImpl : public privmx::utils::ManualManagedClass<StreamApiLowImpl>, protected core::ModuleBaseApi {
 public:
     StreamApiLowImpl(
-        const std::shared_ptr<event::EventApiImpl>& eventApi,
         const core::Connection& connection,
         const privfs::RpcGateway::Ptr& gateway,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
-        const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        StreamEncryptionMode streamEncryptionMode = StreamEncryptionMode::SINGLE_KEY
+        const std::shared_ptr<core::EventMiddleware>& eventMiddleware
     );
     ~StreamApiLowImpl();
 
@@ -98,7 +94,6 @@ public:
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    void keyManagement(const std::string& streamRoomId, bool disable);
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
@@ -113,31 +108,17 @@ private:
         std::optional<StreamHandle> streamHandle;
     };
     struct StreamRoomData {
-        StreamRoomData(std::shared_ptr<StreamKeyManager> _streamKeyManager, std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, StreamEncryptionMode streamEncryptionMode, const std::string& _encryptionKeyId = ""):
-            streamKeyManager(_streamKeyManager), 
-            messageEncryptor(_messageEncryptor), 
-            streamRoomId(_streamRoomId), 
-            webRtc(_webRtc), 
-            subscriptionsIds(_subscriptionsIds), 
-            encryptionKeyId(_encryptionKeyId)
-        {
-            if(streamEncryptionMode == StreamEncryptionMode::MULTIPLE_KEY) {
-                keyUpdateCallbackId = streamKeyManager->addKeyUpdateCallback([_webRtc, _messageEncryptor, _streamRoomId](const std::vector<privmx::endpoint::stream::Key> keys) {
-                    _messageEncryptor->updateKey(keys);
-                    _webRtc->updateKeys(_streamRoomId, keys);
-                });
-            }
-        }
+        StreamRoomData(std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor, const std::string _streamRoomId, std::shared_ptr<WebRTCInterface> _webRtc, const std::vector<std::string>& _subscriptionsIds, const std::string& _encryptionKeyId = ""):
+            messageEncryptor(_messageEncryptor), streamRoomId(_streamRoomId), webRtc(_webRtc), subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId)
+        {}
         std::shared_ptr<StreamData> publisherStream;
         std::shared_ptr<StreamData> subscriberStream;
-        std::shared_ptr<StreamKeyManager> streamKeyManager;
         std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
-        int64_t keyUpdateCallbackId;
         std::vector<std::string> subscriptionsIds;
         std::string encryptionKeyId;
-    }; 
+    };
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
 
     void onNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
@@ -173,15 +154,12 @@ private:
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);
     void assertTurnServerUri(const std::string& uri);
 
-    void sendStreamKeyRequest(std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room, const std::set<RemoteStreamId>& streamIds);
-
     static int32_t nextIdCounter;
     static int32_t nextId() {
         return nextIdCounter++;
     }
 
 
-    std::shared_ptr<event::EventApiImpl> _eventApi;
     std::shared_ptr<core::ConnectionImpl> _connection;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -195,8 +173,6 @@ private:
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
-    std::vector<std::string> _internalSubscriptionIds;
-    StreamEncryptionMode _streamEncryptionMode;
 };
 
 }  // namespace stream

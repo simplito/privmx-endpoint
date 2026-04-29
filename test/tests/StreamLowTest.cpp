@@ -8,7 +8,6 @@
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApiLow.hpp>
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -71,15 +70,9 @@ protected:
                 )
             );
         }
-        eventApi = std::make_shared<event::EventApi>(
-            event::EventApi::create(
-                *connection
-            )
-        );
         streamApiLow = std::make_shared<stream::StreamApiLow>(
             stream::StreamApiLow::create(
-                *connection,
-                *eventApi
+                *connection
             )
         );
     }
@@ -87,7 +80,6 @@ protected:
         connection->disconnect();
         connection.reset();
         streamApiLow.reset();
-        eventApi.reset();
     }
     void customSetUp() override {
         reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
@@ -98,15 +90,9 @@ protected:
                 getPlatformUrl(reader->getString("Login.instanceUrl"))
             )
         );
-        eventApi = std::make_shared<event::EventApi>(
-            event::EventApi::create(
-                *connection
-            )
-        );
         streamApiLow = std::make_shared<stream::StreamApiLow>(
             stream::StreamApiLow::create(
-                *connection,
-                *eventApi
+                *connection
             )
         );
     }
@@ -133,7 +119,6 @@ protected:
         );
     }
     std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApiLow> streamApiLow;
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});

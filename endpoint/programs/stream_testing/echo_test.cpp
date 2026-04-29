@@ -6,7 +6,6 @@
 
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 
@@ -40,9 +39,8 @@ int main(int argc, char** argv) {
             privKey, 
             solutionId, 
             bridgeUrl
-        );    
-        event::EventApi eventApi = event::EventApi::create(connection);
-        stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+        );
+        stream::StreamApi streamApi = stream::StreamApi::create(connection);
         std::string streamRoomId;
         auto contextUsersInfo = connection.listContextUsers(contextId, {0, 100, "asc"});
         std::vector<core::UserWithPubKey> usersWithPubKey = {};

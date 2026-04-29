@@ -50,12 +50,11 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
     {SubscribeToRemoteStreams, &StreamApiLowVarInterface::subscribeToRemoteStreams},
     {ModifyRemoteStreamsSubscriptions, &StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions},
     {UnsubscribeFromRemoteStreams, &StreamApiLowVarInterface::unsubscribeFromRemoteStreams},
-    {Trickle, &StreamApiLowVarInterface::keyManagement},
-    {KeyManagement, &StreamApiLowVarInterface::keyManagement}
+    {Trickle, &StreamApiLowVarInterface::trickle}
 };
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _streamApi = StreamApiLow::create(_connection, _eventApi);
+    _streamApi = StreamApiLow::create(_connection);
     return {};
 }
 
@@ -252,13 +251,6 @@ Poco::Dynamic::Var StreamApiLowVarInterface::setNewOfferOnReconfigure(const Poco
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::keyManagement(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto disable = _deserializer.deserialize<bool>(argsArr->get(1), "disable");
-    _streamApi.keyManagement(streamRoomId, disable);
-    return {};
-}
 
 Poco::Dynamic::Var StreamApiLowVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);

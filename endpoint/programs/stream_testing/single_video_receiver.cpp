@@ -11,7 +11,6 @@
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
@@ -198,9 +197,8 @@ int main(int argc, char** argv) {
             privKey, 
             solutionId, 
             bridgeUrl
-        );    
-        event::EventApi eventApi = event::EventApi::create(connection);
-        stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
+        );
+        stream::StreamApi streamApi = stream::StreamApi::create(connection);
         std::string streamRoomId;
         if(streamRoomIdOpt.has_value()) {
             streamRoomId = streamRoomIdOpt.has_value();

@@ -20,7 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
 
@@ -36,7 +35,7 @@ class StreamApiLowImpl;
 class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
 public:
 
-    static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi, StreamEncryptionMode streamEncryptionMode = StreamEncryptionMode::SINGLE_KEY);
+    static StreamApiLow create(const core::Connection& connection);
     StreamApiLow();
     StreamApiLow(const StreamApiLow& obj);
     StreamApiLow& operator=(const StreamApiLow& obj);
@@ -94,7 +93,6 @@ public:
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    void keyManagement(const std::string& streamRoomId, bool disable);
     core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage); 
     DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const core::Buffer& encryptedData); 
 private:
