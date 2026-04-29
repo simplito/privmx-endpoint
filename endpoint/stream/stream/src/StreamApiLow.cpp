@@ -20,9 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
-#include <privmx/endpoint/event/EventApiImpl.hpp>
-
-
 #include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 
@@ -30,22 +27,17 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
 StreamApiLow StreamApiLow::create(
-    const core::Connection& connection, 
-    event::EventApi& eventApi,
-    StreamEncryptionMode streamEncryptionMode
+    const core::Connection& connection
 ) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<event::EventApiImpl> eventApiImpl = eventApi.getImpl();
         std::shared_ptr<StreamApiLowImpl> impl(new stream::StreamApiLowImpl(
-            eventApiImpl,
             connection,
             connectionImpl->getGateway(),
             connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
-            connectionImpl->getEventMiddleware(),
-            streamEncryptionMode
+            connectionImpl->getEventMiddleware()
         ));
         impl->attach(impl);
         return StreamApiLow(impl);
@@ -296,16 +288,6 @@ void StreamApiLow::unsubscribeFromRemoteStreams(const std::string& streamRoomId,
     auto impl = getImpl();
     try {
         return impl->unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApiLow::keyManagement(const std::string& streamRoomId, bool disable) {
-    auto impl = getImpl();
-    try {
-        return impl->keyManagement(streamRoomId, disable);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

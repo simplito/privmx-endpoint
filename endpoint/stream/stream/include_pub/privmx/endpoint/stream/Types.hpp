@@ -178,11 +178,6 @@ struct StreamsUpdatedData {
     std::vector<UpdatedStreamData> streams;
 };
 
-enum struct StreamEncryptionMode {
-    SINGLE_KEY,
-    MULTIPLE_KEY,
-};
-
 struct RecordingEncKey {
     core::Buffer id;
     core::Buffer key;

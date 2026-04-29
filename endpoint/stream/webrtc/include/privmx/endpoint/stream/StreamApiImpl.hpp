@@ -22,7 +22,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
@@ -45,7 +44,7 @@ namespace stream {
 
 class StreamApiImpl {
 public:
-    StreamApiImpl(core::Connection& connection, event::EventApi eventApi);
+    StreamApiImpl(core::Connection& connection);
 
     std::string createStreamRoom(
         const std::string& contextId, 

@@ -17,7 +17,6 @@ limitations under the License.
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
@@ -39,11 +38,10 @@ public:
      * Creates an instance of 'StreamApi'.
      *
      * @param connection instance of 'Connection'
-     * @param eventApi instance of 'EventApi'
      *
      * @return StreamApi object
      */
-    static StreamApi create(core::Connection& connection, event::EventApi& eventApi);
+    static StreamApi create(core::Connection& connection);
 
     /**
      * //doc-gen:ignore
