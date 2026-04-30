@@ -12,11 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 
-#include <functional>
 #include <memory>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
@@ -38,10 +38,11 @@ public:
      * Creates an instance of 'StreamApi'.
      *
      * @param connection instance of 'Connection'
+     * @param eventApi (deprecated) instance of 'EventApi'
      *
      * @return StreamApi object
      */
-    static StreamApi create(core::Connection& connection);
+    static StreamApi create(core::Connection& connection, event::EventApi& eventApi);
 
     /**
      * //doc-gen:ignore

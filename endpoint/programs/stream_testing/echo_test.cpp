@@ -40,7 +40,8 @@ int main(int argc, char** argv) {
             solutionId, 
             bridgeUrl
         );
-        stream::StreamApi streamApi = stream::StreamApi::create(connection);
+        auto eventApi = event::EventApi::create(connection);
+        stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         std::string streamRoomId;
         auto contextUsersInfo = connection.listContextUsers(contextId, {0, 100, "asc"});
         std::vector<core::UserWithPubKey> usersWithPubKey = {};
@@ -85,5 +86,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
 

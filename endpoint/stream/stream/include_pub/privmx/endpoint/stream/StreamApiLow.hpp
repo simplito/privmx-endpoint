@@ -12,9 +12,6 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 
-#include <Poco/Dynamic/Var.h>
-
-#include <functional>
 #include <memory>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -22,7 +19,6 @@ limitations under the License.
 #include <privmx/endpoint/core/Types.hpp>
 #include <string>
 #include <vector>
-
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
