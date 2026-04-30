@@ -18,12 +18,13 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApi.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
+#include <privmx/endpoint/event/EventApi.hpp>
 
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApi StreamApi::create(core::Connection& connection) {
+StreamApi StreamApi::create(core::Connection& connection, event::EventApi& _eventApi) {
     try {
         std::shared_ptr<StreamApiImpl> impl(new StreamApiImpl(
             connection

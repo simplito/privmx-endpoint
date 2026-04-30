@@ -75,15 +75,18 @@ protected:
                 )
             );
         }
+        eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
         streamApi = std::make_shared<stream::StreamApi>(
             stream::StreamApi::create(
-                *connection
+                *connection,
+                *eventApi
             )
         );
     }
     void disconnect() {
         connection->disconnect();
         connection.reset();
+        eventApi.reset();
         streamApi.reset();
     }
     void customSetUp() override {
@@ -95,14 +98,17 @@ protected:
                 getPlatformUrl(reader->getString("Login.instanceUrl"))
             )
         );
+        eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
         streamApi = std::make_shared<stream::StreamApi>(
             stream::StreamApi::create(
-                *connection
+                *connection,
+                *eventApi
             )
         );
     }
     void customTearDown() override { // tmp segfault fix
         connection.reset();
+        eventApi.reset();
         streamApi.reset();
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
@@ -134,6 +140,7 @@ protected:
     }
 
     std::shared_ptr<core::Connection> connection;
+    std::shared_ptr<event::EventApi> eventApi;
     std::shared_ptr<stream::StreamApi> streamApi;
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
@@ -1206,8 +1213,9 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
             getPlatformUrl(reader->getString("Login.instanceUrl"))
         )
     );
+    auto eventApi_2 = std::make_shared<event::EventApi>(event::EventApi::create(*connection2));
     auto streamApi_2 = std::make_shared<stream::StreamApi>(
-        stream::StreamApi::create(*connection)
+        stream::StreamApi::create(*connection2, *eventApi_2)
     );
     //Publish Data Track as user_1
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
