@@ -94,6 +94,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidEncryptionKeyIdLength
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidMessageHeaderLengthException, "Invalid message header length", 0x002B);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnsupportedMessageFormatVersionException, "Unsupported message format version length", 0x002C);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadyJoinedStreamRoomException, "StreamRoom already joined", 0x002D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E)
 } // stream
 } // endpoint
 } // privmx
