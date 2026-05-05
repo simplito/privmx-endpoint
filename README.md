@@ -24,5 +24,16 @@ PrivMX enables communication through **text messages**, **secure file storage** 
 - [API Reference](https://docs.privmx.dev/docs/latest/start/api-reference)
 - [other PrivMX repositories](https://github.com/orgs/simplito/repositories?q=privmx) (libraries and wrappers)
 
+## CI/CD
+
+This repository uses GitHub Actions for automated testing, documentation builds, and releases.
+
+- `Tests E2E` runs on pushes to `main` and on pull requests targeting `main` or `devel`.
+- `Build Doxygen Docs` can be started manually and also runs on every pushed tag.
+- `Deploy Release` creates a production GitHub release for tags such as `v1.2.3` when the tagged commit is reachable from `main`.
+- `Deploy Release` creates a GitHub pre-release for tags such as `v1.2.3-rc1` when the tagged commit is reachable from an `rc-*` branch.
+
+For the detailed release procedure, tag naming rules, and safe testing guidance, see [RELEASING.md](RELEASING.md).
+
 ## License
 PrivMX Free License

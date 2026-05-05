@@ -1,0 +1,105 @@
+name: Deploy Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release type
+        id: release_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_tag="${GITHUB_REF_NAME}"
+          release_commit="${GITHUB_SHA}"
+          remote_branches="$(git branch -r --contains "$release_commit" | sed 's/^[ *]*//')"
+
+          if [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if ! printf '%s\n' "$remote_branches" | grep -qx 'origin/main'; then
+              echo "Stable tag ${release_tag} does not point to a commit reachable from origin/main." >&2
+              exit 1
+            fi
+
+            prerelease="false"
+          elif [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9A-Za-z.-]*$ ]]; then
+            if ! printf '%s\n' "$remote_branches" | grep -Eq '^origin/rc-'; then
+              echo "RC tag ${release_tag} does not point to a commit reachable from origin/rc-*." >&2
+              exit 1
+            fi
+
+            prerelease="true"
+          else
+            echo "Unsupported tag format: ${release_tag}" >&2
+            echo "Supported formats: v1.2.3 and v1.2.3-rc1" >&2
+            exit 1
+          fi
+
+          echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "release_target=${release_commit}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.release_meta.outputs.release_tag }}
+          RELEASE_TARGET: ${{ steps.release_meta.outputs.release_target }}
+          PRERELEASE: ${{ steps.release_meta.outputs.prerelease }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            const target = process.env.RELEASE_TARGET;
+            const prerelease = process.env.PRERELEASE === "true";
+
+            let existing = null;
+            try {
+              existing = await github.rest.repos.getReleaseByTag({
+                ...context.repo,
+                tag,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            if (existing) {
+              await github.rest.repos.updateRelease({
+                ...context.repo,
+                release_id: existing.data.id,
+                tag_name: tag,
+                target_commitish: target,
+                name: tag,
+                body: existing.data.body ?? "",
+                prerelease,
+                draft: false,
+              });
+              return;
+            }
+
+            await github.rest.repos.createRelease({
+              ...context.repo,
+              tag_name: tag,
+              target_commitish: target,
+              name: tag,
+              generate_release_notes: true,
+              prerelease,
+              draft: false,
+            });
