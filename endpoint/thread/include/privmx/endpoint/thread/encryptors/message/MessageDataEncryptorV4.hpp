@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV4_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV4_HPP_
 
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
@@ -25,14 +26,14 @@ namespace thread {
 
 class MessageDataEncryptorV4 {
 public:
-    server::EncryptedMessageDataV4 encrypt(const MessageDataToEncryptV4& messageData,
+    server::EncryptedMessageDataV4_c_struct encrypt(const MessageDataToEncryptV4& messageData,
                                                  const crypto::PrivateKey& authorPrivateKey,
                                                  const std::string& encryptionKey);
-    DecryptedMessageDataV4 decrypt(const server::EncryptedMessageDataV4& encryptedMessageData,
+    DecryptedMessageDataV4 decrypt(const server::EncryptedMessageDataV4_c_struct& encryptedMessageData,
                                        const std::string& encryptionKey);
 
 private:
-    void validateVersion(const server::EncryptedMessageDataV4& encryptedMessageData);
+    void validateVersion(const server::EncryptedMessageDataV4_c_struct& encryptedMessageData);
 
     core::DataEncryptorV4 _dataEncryptor;
 };

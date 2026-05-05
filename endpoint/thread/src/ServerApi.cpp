@@ -10,56 +10,57 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/thread/ServerApi.hpp"
+#include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::thread;
 using namespace privmx::endpoint;
 
 ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
-server::ThreadCreateResult ServerApi::threadCreate(server::ThreadCreateModel model) {
-    return request<server::ThreadCreateResult>("threadCreate", model);
+server::ThreadCreateResult_c_struct ServerApi::threadCreate(server::ThreadCreateModel_c_struct model) {
+    return request<server::ThreadCreateResult_c_struct>("threadCreate", model.toJSON());
 }
 
-void ServerApi::threadUpdate(server::ThreadUpdateModel model) {
-    request("threadUpdate", model);
+void ServerApi::threadUpdate(server::ThreadUpdateModel_c_struct model) {
+    request("threadUpdate", model.toJSON());
 }
 
-void ServerApi::threadDelete(server::ThreadDeleteModel model) {
-    request("threadDelete", model);
+void ServerApi::threadDelete(server::ThreadDeleteModel_c_struct model) {
+    request("threadDelete", model.toJSON());
 }
 
-server::ThreadGetResult ServerApi::threadGet(server::ThreadGetModel model) {
-    return request<server::ThreadGetResult>("threadGet", model);
+server::ThreadGetResult_c_struct ServerApi::threadGet(server::ThreadGetModel_c_struct model) {
+    return request<server::ThreadGetResult_c_struct>("threadGet", model.toJSON());
 }
 
-server::ThreadListResult ServerApi::threadList(server::ThreadListModel model) {
-    return request<server::ThreadListResult>("threadList", model);
+server::ThreadListResult_c_struct ServerApi::threadList(server::ThreadListModel_c_struct model) {
+    return request<server::ThreadListResult_c_struct>("threadList", model.toJSON());
 }
 
-server::ThreadMessageSendResult ServerApi::threadMessageSend(server::ThreadMessageSendModel model) {
-    return request<server::ThreadMessageSendResult>("threadMessageSend", model);
+server::ThreadMessageSendResult_c_struct ServerApi::threadMessageSend(server::ThreadMessageSendModel_c_struct model) {
+    return request<server::ThreadMessageSendResult_c_struct>("threadMessageSend", model.toJSON());
 }
 
-void ServerApi::threadMessageDelete(server::ThreadMessageDeleteModel model) {
-    request("threadMessageDelete", model);
+void ServerApi::threadMessageDelete(server::ThreadMessageDeleteModel_c_struct model) {
+    request("threadMessageDelete", model.toJSON());
 }
 
-server::ThreadMessageGetResult ServerApi::threadMessageGet(server::ThreadMessageGetModel model) {
-    return request<server::ThreadMessageGetResult>("threadMessageGet", model);
+server::ThreadMessageGetResult_c_struct ServerApi::threadMessageGet(server::ThreadMessageGetModel_c_struct model) {
+    return request<server::ThreadMessageGetResult_c_struct>("threadMessageGet", model.toJSON());
 }
 
-server::ThreadMessagesGetResult ServerApi::threadMessagesGet(server::ThreadMessagesGetModel model) {
-    return request<server::ThreadMessagesGetResult>("threadMessagesGet", model);
+server::ThreadMessagesGetResult_c_struct ServerApi::threadMessagesGet(server::ThreadMessagesGetModel_c_struct model) {
+    return request<server::ThreadMessagesGetResult_c_struct>("threadMessagesGet", model.toJSON());
 }
 
-void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel model) {
-    request("threadMessageUpdate", model);
+void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel_c_struct model) {
+    request("threadMessageUpdate", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("thread." + method, params));
+template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+    return T::fromJSON(_gateway->request("thread." + method, params));
 }
 
-Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return _gateway->request("thread." + method, params);
 }
