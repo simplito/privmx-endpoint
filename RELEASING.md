@@ -78,7 +78,7 @@ Recommended approach:
 
 1. create a temporary `rc-*` branch
 2. push the workflow changes on that branch
-3. create a disposable RC tag such as `v2.7.6-rc99`
+3. create a disposable RC tag such as `v2.7.6-rc-testing`
 4. push the tag and inspect the workflow run
 5. delete the test tag after verification
 
@@ -88,14 +88,14 @@ Example:
 git checkout -b rc-2.7.6-test
 git push origin rc-2.7.6-test
 git tag v2.7.6-rc99
-git push origin v2.7.6-rc99
+git push origin v2.7.6-rc-testing
 ```
 
 Cleanup:
 
 ```bash
-git push origin :refs/tags/v2.7.6-rc99
-git tag -d v2.7.6-rc99
+git push origin :refs/tags/v2.7.6-rc-testing
+git tag -d v2.7.6-rc-testing
 ```
 
 Notes:
