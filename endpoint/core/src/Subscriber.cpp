@@ -64,38 +64,35 @@ Subscriber::Subscriber(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gatew
 
 std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries, bool force) {
     LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
-    auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelsModel>();
+    server::SubscribeToChannelsModel_c_struct model;
     std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
     for(const auto& subscriptionQueryString : subscriptionQueries) {
         parsedSubscriptionQueries.push_back(SubscriptionQueryObj(subscriptionQueryString));
     }
-    privmx::utils::List<std::string> modelChannels = privmx::utils::TypedObjectFactory::createNewList<std::string>();
     if(!force) {
         assertQuery(parsedSubscriptionQueries);
-        modelChannels = transform(parsedSubscriptionQueries);
+        model.channels = transform(parsedSubscriptionQueries);
     } else {
         for(const auto& subscriptionQueryString : subscriptionQueries) {
-            modelChannels.add(subscriptionQueryString);
+            model.channels.push_back(subscriptionQueryString);
         }
     }
-    LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
-    model.channels(modelChannels);
-    auto value = privmx::utils::TypedObjectFactory::createObjectFromVar<server::SubscribeToChannelsResult>(
-        _gateway->request("subscribeToChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET})
-    );
+    LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(model.toJSON()));
+    auto requestResult = _gateway->request("subscribeToChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET});
+    server::SubscribeToChannelsResult_c_struct value = privmx::endpoint::core::server::SubscribeToChannelsResult_c_struct::fromJSON(requestResult);
     LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")
     std::vector<std::string> result;
     {
         std::unique_lock<std::shared_mutex> lock(_map_mutex);
-        for(auto channel : modelChannels) {
+        for(const auto& channel : model.channels) {
             bool found = false;
-            for(size_t i = 0; i < value.subscriptions().size(); i++) {
-                auto subscription = value.subscriptions().get(i);
-                if(channel == subscription.channel()) {
-                    result.push_back(subscription.subscriptionId());
-                    _subscriptionIdToSubscriptionQuery.insert_or_assign(subscription.subscriptionId(), subscription.channel());
+            for(size_t i = 0; i < value.subscriptions.size(); i++) {
+                auto subscription = value.subscriptions[i];
+                if(channel == subscription.channel) {
+                    result.push_back(subscription.subscriptionId);
+                    _subscriptionIdToSubscriptionQuery.insert_or_assign(subscription.subscriptionId, subscription.channel);
                     found = true;
-                    value.subscriptions().remove(i);
+                    value.subscriptions.erase(value.subscriptions.begin() + i);
                     break;
                 }
             }
@@ -109,14 +106,14 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
 }
 
 void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    auto model = utils::TypedObjectFactory::createNewObject<server::UnsubscribeFromChannelsModel>();
-    auto subscriptionsIds = utils::TypedObjectFactory::createNewList<std::string>();
+    server::UnsubscribeFromChannelsModel_c_struct model;
+    std::vector<std::string> subscriptionsIds;
     for(auto subscriptionId: subscriptionIds) {
-        subscriptionsIds.add(subscriptionId);
+        subscriptionsIds.push_back(subscriptionId);
     }
     LOG_INFO("Subscriber:unsubscribeFrom subscriptionsIds:" + privmx::utils::Utils::stringifyVar(subscriptionsIds));
-    model.subscriptionsIds(subscriptionsIds);
-    _gateway->request("unsubscribeFromChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
+    model.subscriptionsIds = subscriptionsIds;
+    _gateway->request("unsubscribeFromChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET});
     {
         std::unique_lock<std::shared_mutex> lock(_map_mutex);
         for(auto subscriptionId: subscriptionIds) {

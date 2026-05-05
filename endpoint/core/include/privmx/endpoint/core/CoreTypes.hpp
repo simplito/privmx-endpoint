@@ -89,7 +89,7 @@ struct NotificationEvent {
 };
 
 struct ModuleKeys {
-        privmx::utils::List<server::KeyEntry> keys;
+        std::vector<server::KeyEntry_c_struct> keys;
         std::string currentKeyId;
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;

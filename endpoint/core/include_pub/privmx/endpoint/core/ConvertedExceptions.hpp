@@ -114,6 +114,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, VarIsNotArrayException, "Var is
 DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, OperationCancelledException, "Operation canceled", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, NotImplementedException, "Not implemented", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, InvalidVersionFormatException, "Invalid version format", 0x0007);
+DECLARE_ENDPOINT_EXCEPTION(EndpointLibException, JSONParseException, "JSON Parse", 0x0008);
 
 } // internal
 

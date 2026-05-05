@@ -28,16 +28,16 @@ namespace core {
 
 class ModuleDataEncryptorV5 {
 public:
-    dynamic::EncryptedModuleDataV5 encrypt(
+    dynamic::EncryptedModuleDataV5_c_struct encrypt(
         const ModuleDataToEncryptV5& kvdbData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedModuleDataV5 decrypt(const dynamic::EncryptedModuleDataV5& encryptedModuleData, const std::string& encryptionKey);
-    DecryptedModuleDataV5 extractPublic(const dynamic::EncryptedModuleDataV5& encryptedModuleData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const dynamic::EncryptedModuleDataV5& encryptedModuleData);
+    DecryptedModuleDataV5 decrypt(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData, const std::string& encryptionKey);
+    DecryptedModuleDataV5 extractPublic(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData);
 private:
-    void assertDataFormat(const dynamic::EncryptedModuleDataV5& encryptedModuleData);
+    void assertDataFormat(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };

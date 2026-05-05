@@ -21,19 +21,13 @@ namespace core {
 
 class ListQueryMapper {
 public:
-    static void map(server::ListModel obj, const PagingQuery& listQuery) {
-        obj.sortOrder(listQuery.sortOrder);
-        obj.limit(listQuery.limit);
-        obj.skip(listQuery.skip);
-        if (listQuery.lastId.has_value()) {
-            obj.lastId(listQuery.lastId.value());
-        }
-        if (listQuery.sortBy.has_value()) {
-            obj.sortBy(listQuery.sortBy.value());
-        }
-        if(listQuery.queryAsJson.has_value()) {
-            obj.query(privmx::utils::Utils::parseJson(listQuery.queryAsJson.value()));
-        }
+    static void map(server::ListModel_c_struct& obj, const PagingQuery& listQuery) {
+        obj.sortOrder = listQuery.sortOrder;
+        obj.limit = listQuery.limit;
+        obj.skip = listQuery.skip;
+        if (listQuery.lastId.has_value()) obj.lastId = listQuery.lastId.value();
+        if (listQuery.sortBy.has_value()) obj.sortBy = listQuery.sortBy.value();
+        if (listQuery.queryAsJson.has_value()) obj.query = privmx::utils::Utils::parseJson(listQuery.queryAsJson.value());
     }
 };
 

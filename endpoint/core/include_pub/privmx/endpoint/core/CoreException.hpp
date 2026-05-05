@@ -67,6 +67,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidEncryptedModuleDataVers
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleFormatException, "Unknown module format", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00024)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSingletonsHolderStateException, "Invalid Singletons Holder state", 0x00025)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MissingBridgeIdentityException, "Missing Bridge Identity Exception", 0x00026)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)

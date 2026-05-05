@@ -13,7 +13,6 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_CONTAINERPROVIDER_HPP_
 
 #include <privmx/utils/ThreadSaveMap.hpp>
-#include <privmx/utils/TypedObject.hpp>
 #include <functional>
 
 namespace privmx {

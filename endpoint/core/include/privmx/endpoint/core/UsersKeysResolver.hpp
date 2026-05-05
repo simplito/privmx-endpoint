@@ -18,7 +18,6 @@ limitations under the License.
 #include <set>
 #include <vector>
 #include <string>
-#include <privmx/utils/TypedObject.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Utils.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
@@ -36,7 +35,16 @@ public:
             const std::vector<core::UserWithPubKey>& managers,
             const bool forceGenerateNewKey,
             const DecryptedEncKeyV2& moduleCurrentKey
-    )-> decltype(moduleObj.users(), moduleObj.managers(), std::shared_ptr<UsersKeysResolver>());
+    )-> decltype(moduleObj.users, moduleObj.managers, std::shared_ptr<UsersKeysResolver>());
+
+    static std::shared_ptr<UsersKeysResolver> create(
+            const std::vector<std::string>& currentUserIds,
+            const std::vector<std::string>& currentManagerIds,
+            const std::vector<core::UserWithPubKey>& users,
+            const std::vector<core::UserWithPubKey>& managers,
+            const bool forceGenerateNewKey,
+            const DecryptedEncKeyV2& moduleCurrentKey
+    );
 
     std::vector<core::UserWithPubKey> getUsersToAddKey();
     std::vector<core::UserWithPubKey> getNewUsers();
@@ -50,7 +58,16 @@ private:
             const std::vector<core::UserWithPubKey>& managers,
             const bool forceGenerateNewKey,
             const DecryptedEncKeyV2& moduleCurrentKey
-    )-> decltype(moduleObj.users(), moduleObj.managers(), void());
+    )-> decltype(moduleObj.users, moduleObj.managers, void());
+
+    void init(
+            const std::vector<std::string>& currentUserIds,
+            const std::vector<std::string>& currentManagerIds,
+            const std::vector<core::UserWithPubKey>& users,
+            const std::vector<core::UserWithPubKey>& managers,
+            const bool forceGenerateNewKey,
+            const DecryptedEncKeyV2& moduleCurrentKey
+    );
 
     std::vector<core::UserWithPubKey> _usersToAddMissingKey;
     std::vector<core::UserWithPubKey> _new_users;
@@ -65,7 +82,7 @@ auto UsersKeysResolver::create(
         const std::vector<core::UserWithPubKey>& managers,
         const bool forceGenerateNewKey,
         const DecryptedEncKeyV2& moduleCurrentKey
-)-> decltype(moduleObj.users(), moduleObj.managers(), std::shared_ptr<UsersKeysResolver>()) {
+)-> decltype(moduleObj.users, moduleObj.managers, std::shared_ptr<UsersKeysResolver>()) {
     auto instance = std::make_shared<UsersKeysResolver>();
     instance->init(moduleObj, users, managers, forceGenerateNewKey, moduleCurrentKey);
     return instance;
@@ -78,10 +95,9 @@ auto UsersKeysResolver::init(
     const std::vector<core::UserWithPubKey>& managers,
     const bool forceGenerateNewKey,
     const DecryptedEncKeyV2& moduleCurrentKey
-)-> decltype(moduleObj.users(), moduleObj.managers(), void()) {
-    // extract current users info
-    auto usersVec {core::EndpointUtils::listToVector<std::string>(moduleObj.users())};
-    auto managersVec {core::EndpointUtils::listToVector<std::string>(moduleObj.managers())};
+)-> decltype(moduleObj.users, moduleObj.managers, void()) {
+    auto usersVec {std::vector<std::string>(moduleObj.users.begin(), moduleObj.users.end())};
+    auto managersVec {std::vector<std::string>(moduleObj.managers.begin(), moduleObj.managers.end())};
     auto oldUsersIds {core::EndpointUtils::uniqueList(usersVec, managersVec)};
 
     _new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);

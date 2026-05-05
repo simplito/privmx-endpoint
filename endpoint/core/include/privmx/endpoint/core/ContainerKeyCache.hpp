@@ -19,7 +19,6 @@ limitations under the License.
 #include <set>
 #include <vector>
 
-#include <privmx/utils/TypedObject.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 
 
@@ -32,7 +31,7 @@ class ContainerKeyCache {
 public:
     ContainerKeyCache();
     struct CachedModuleKeys {
-        privmx::utils::List<server::KeyEntry> keys;
+        std::vector<server::KeyEntry_c_struct> keys;
         std::string currentKeyId;
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;
