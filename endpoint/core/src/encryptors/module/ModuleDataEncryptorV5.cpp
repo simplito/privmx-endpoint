@@ -33,10 +33,7 @@ dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(const ModuleDataTo
     }
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(kvdbData.privateMeta, authorPrivateKey, encryptionKey);
     fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta)));
-    dynamic::ModuleInternalMetaV5 internalMeta;
-    internalMeta.secret = kvdbData.internalMeta.secret;
-    internalMeta.resourceId =kvdbData.internalMeta.resourceId;
-    internalMeta.randomId = kvdbData.internalMeta.randomId;
+    dynamic::ModuleInternalMetaV5 internalMeta{.secret=kvdbData.internalMeta.secret, .resourceId=kvdbData.internalMeta.resourceId, .randomId=kvdbData.internalMeta.randomId};
     result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(Buffer::from(utils::Utils::stringifyVar(internalMeta.toJSON())), authorPrivateKey, encryptionKey);
     fieldChecksums.insert(std::make_pair("internalMeta",privmx::crypto::Crypto::sha256(result.internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();

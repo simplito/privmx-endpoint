@@ -26,10 +26,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncry
 ) {
     server::EncryptedKeyEntryDataV2 result;
     result.version = EncryptionKeyDataSchema::Version::VERSION_2;
-    dynamic::EncryptionKey keyToEncrypt;
-    keyToEncrypt.id = key.id;
-    keyToEncrypt.key = utils::Base64::from(key.key);
-    keyToEncrypt.keySecret = utils::Base64::from(key.keySecret);
+    dynamic::EncryptionKey keyToEncrypt{.id=key.id, .key=utils::Base64::from(key.key), .keySecret=utils::Base64::from(key.keySecret)};
     result.encryptedKey = crypto::EciesEncryptor::encryptObjectToBase64(encryptionKey, keyToEncrypt.toJSON(), authorPrivateKey);
     std::unordered_map<std::string, std::string> fieldChecksums;
     fieldChecksums.insert(std::make_pair("encryptedKey",privmx::crypto::Crypto::sha256(result.encryptedKey)));

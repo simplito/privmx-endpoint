@@ -41,13 +41,13 @@ server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorMo
     }
     serverPrivateData.authorPubKey = authorPubKeyECC;
 
-    server::InboxData serverInboxData;
-    serverInboxData.storeId = plainData.storeId;
-    serverInboxData.threadId = plainData.threadId;
-    serverInboxData.fileConfig = InboxDataHelper::fileConfigToTypedObject(plainData.filesConfig);
-    serverInboxData.publicData = serverPublicData.toJSON();
-    serverInboxData.meta = serverPrivateData.toJSON();
-    return serverInboxData;
+    return server::InboxData{
+        .threadId = plainData.threadId,
+        .storeId = plainData.storeId,
+        .fileConfig = InboxDataHelper::fileConfigToTypedObject(plainData.filesConfig),
+        .meta = serverPrivateData.toJSON(),
+        .publicData = serverPublicData.toJSON(),
+    };
 }
 
 InboxDataResultV4 InboxDataProcessorV4::unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey) {

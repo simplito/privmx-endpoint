@@ -40,23 +40,24 @@ server::InboxData InboxDataProcessorV5::packForServer(const InboxDataProcessorMo
     serverPrivateData.privateMeta = _dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey);
     privateDataMapOfDataSha256.insert(std::make_pair("privateMeta", privmx::crypto::Crypto::sha256(serverPrivateData.privateMeta)));
 
-    dynamic::InboxInternalMetaV5 internalMetaObj;
-    internalMetaObj.secret = plainData.privateData.internalMeta.secret;
-    internalMetaObj.resourceId = plainData.privateData.internalMeta.resourceId;
-    internalMetaObj.randomId = plainData.privateData.internalMeta.randomId;
+    dynamic::InboxInternalMetaV5 internalMetaObj{
+        .secret = plainData.privateData.internalMeta.secret,
+        .resourceId = plainData.privateData.internalMeta.resourceId,
+        .randomId = plainData.privateData.internalMeta.randomId,
+    };
     serverPrivateData.internalMeta = _dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMetaObj.toJSON())), authorPrivateKey, inboxKey);
     privateDataMapOfDataSha256.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta)));
     serverPrivateData.authorPubKey = authorPubKeyECC;
     core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .structureVersion=InboxDataSchema::Version::VERSION_5, .fieldChecksums=privateDataMapOfDataSha256};
     serverPrivateData.dio = _DIOEncryptor.signAndEncode(privateDataExpandedDio, authorPrivateKey);
 
-    server::InboxData serverInboxData;
-    serverInboxData.storeId = plainData.storeId;
-    serverInboxData.threadId = plainData.threadId;
-    serverInboxData.fileConfig = InboxDataHelper::fileConfigToTypedObject(plainData.filesConfig);
-    serverInboxData.publicData = serverPublicData.toJSON();
-    serverInboxData.meta = serverPrivateData.toJSON();
-    return serverInboxData;
+    return server::InboxData{
+        .threadId = plainData.threadId,
+        .storeId = plainData.storeId,
+        .fileConfig = InboxDataHelper::fileConfigToTypedObject(plainData.filesConfig),
+        .meta = serverPrivateData.toJSON(),
+        .publicData = serverPublicData.toJSON(),
+    };
 }
 
 InboxDataResultV5 InboxDataProcessorV5::unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey) {

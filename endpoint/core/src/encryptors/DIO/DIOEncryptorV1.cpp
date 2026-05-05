@@ -23,26 +23,25 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     if(dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
-    dynamic::DataIntegrityObject dioJSON;
-    dioJSON.version = DataIntegrityObjectDataSchema::Version::VERSION_1;
-    dioJSON.creatorUserId = dio.creatorUserId ;
-    dioJSON.creatorPublicKey = dio.creatorPubKey;
-    dioJSON.contextId = dio.contextId;
-    dioJSON.resourceId = dio.resourceId;
-    dioJSON.containerId = dio.containerId;
-    dioJSON.containerResourceId = dio.containerResourceId;
-    dioJSON.timestamp = dio.timestamp;
-    dioJSON.randomId = dio.randomId;
+    dynamic::DataIntegrityObject dioJSON{
+        {.version = DataIntegrityObjectDataSchema::Version::VERSION_1},
+        .creatorUserId = dio.creatorUserId,
+        .creatorPublicKey = dio.creatorPubKey,
+        .contextId = dio.contextId,
+        .resourceId = dio.resourceId,
+        .timestamp = dio.timestamp,
+        .randomId = dio.randomId,
+        .containerId = dio.containerId,
+        .containerResourceId = dio.containerResourceId,
+        .fieldChecksums = std::unordered_map<std::string, std::string>(),
+        .structureVersion = dio.structureVersion,
+        .bridgeIdentity = std::nullopt
+    };
     for(const auto& checksum : dio.fieldChecksums) {
         dioJSON.fieldChecksums.insert_or_assign(checksum.first, privmx::utils::Base64::from(checksum.second));
     }
-    dioJSON.structureVersion = dio.structureVersion;
-    dynamic::BridgeIdentity bridgeIdentity;
     if(dio.bridgeIdentity.has_value()) {
-    bridgeIdentity.url = dio.bridgeIdentity->url;
-    bridgeIdentity.pubKey = dio.bridgeIdentity->pubKey;
-    bridgeIdentity.instanceId = dio.bridgeIdentity->instanceId;
-    dioJSON.bridgeIdentity = bridgeIdentity;
+        dioJSON.bridgeIdentity = {.url=dio.bridgeIdentity->url, .pubKey=dio.bridgeIdentity->pubKey, .instanceId=dio.bridgeIdentity->instanceId};
     } else {
         throw MissingBridgeIdentityException();
     }
