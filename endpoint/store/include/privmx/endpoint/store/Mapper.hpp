@@ -22,10 +22,10 @@ namespace store {
 
 class Mapper {
 public:
-    static StoreDeletedEventData mapToStoreDeletedEventData(const server::StoreDeletedEventData& data);
-    static StoreFileDeletedEventData mapToStoreFileDeletedEventData(const server::StoreFileDeletedEventData& data);
-    static StoreStatsChangedEventData mapToStoreStatsChangedEventData(const server::StoreStatsChangedEventData& data);
-    static StoreFileUpdatedEventData mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams);
+    static StoreDeletedEventData mapToStoreDeletedEventData(const server::StoreDeletedEventData_c_struct& data);
+    static StoreFileDeletedEventData mapToStoreFileDeletedEventData(const server::StoreFileDeletedEventData_c_struct& data);
+    static StoreStatsChangedEventData mapToStoreStatsChangedEventData(const server::StoreStatsChangedEventData_c_struct& data);
+    static StoreFileUpdatedEventData mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData_c_struct& data, const File& file, const FileDecryptionParams& fileDecryptionParams);
 };
 
 }  // namespace store

@@ -23,18 +23,18 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class RequestApi 
+class RequestApi
 {
-public:    
+public:
     RequestApi(privmx::privfs::RpcGateway::Ptr gateway);
-    server::CreateRequestResult createRequest(const server::CreateRequestModel& model);
-    void sendChunk(const server::ChunkModel& model);
-    void commitFile(const server::CommitFileModel& model);
-    
+    server::CreateRequestResult_c_struct createRequest(const server::CreateRequestModel_c_struct& model);
+    void sendChunk(const server::ChunkModel_c_struct& model);
+    void commitFile(const server::CommitFileModel_c_struct& model);
+
 private:
-    template<typename T> 
-    T request(const std::string& method, const Poco::JSON::Object::Ptr& params); //only typed object
-    Poco::Dynamic::Var request(const std::string& method, const Poco::JSON::Object::Ptr& params); //Var
+    template<typename T>
+    T request(const std::string& method, Poco::JSON::Object::Ptr params);
+    void requestVoid(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
 };

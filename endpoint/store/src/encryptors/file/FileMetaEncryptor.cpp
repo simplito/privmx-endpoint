@@ -30,23 +30,23 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(const FileInfo& fileInfo, const Fi
                 store::FileMetaToEncryptV4{
                     .publicMeta = fileMeta.publicMeta,
                     .privateMeta = fileMeta.privateMeta,
-                    .fileSize = fileMeta.internalFileMeta.size(),
-                    .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.asVar()))
+                    .fileSize = fileMeta.internalFileMeta.size,
+                    .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.toJSON()))
                 },
                 _userPrivKey,
                 encKey.key
-            ).asVar();
+            ).toJSON();
         case core::EncryptionKeyDataSchema::Version::VERSION_2:
             return FileMetaEncryptorV5().encrypt(
                 store::FileMetaToEncryptV5{
                     .publicMeta = fileMeta.publicMeta,
                     .privateMeta = fileMeta.privateMeta,
-                    .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.asVar())),
+                    .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.toJSON())),
                     .dio = createDIO(fileInfo)
                 },
                 _userPrivKey,
                 encKey.key
-            ).asVar();
+            ).toJSON();
         default:
             throw core::UnknownEncryptionKeyVersionException();
     }
@@ -62,11 +62,11 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(Poco::Dynamic::V
             return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV1.decrypt(encryptedFileMetaV1, encKey.key));
         }
         case FileDataSchema::Version::VERSION_4: {
-            auto encryptedFileMetaV4 = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(encryptedFileMeta);
+            auto encryptedFileMetaV4 = server::EncryptedFileMetaV4_c_struct::fromJSON(encryptedFileMeta);
             return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV4.decrypt(encryptedFileMetaV4, encKey.key));
         }
         case FileDataSchema::Version::VERSION_5: {
-            auto encryptedFileMetaV5 = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(encryptedFileMeta);
+            auto encryptedFileMetaV5 = server::EncryptedFileMetaV5_c_struct::fromJSON(encryptedFileMeta);
             return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV5.decrypt(encryptedFileMetaV5, encKey.key));
         }
     }
@@ -75,7 +75,7 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(Poco::Dynamic::V
 
 FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(Poco::Dynamic::Var encryptedFileMeta) {
     switch (getFileDataStructureVersion(encryptedFileMeta)) {
-        case FileDataSchema::Version::UNKNOWN: 
+        case FileDataSchema::Version::UNKNOWN:
             return FileMetaEncryptor::DecryptedFileMeta();
         case FileDataSchema::Version::VERSION_1: {
             // this can throw TODO
@@ -83,11 +83,11 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(Poco::Dyna
             return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV1.decrypt(encryptedFileMetaV1, ""));
         }
         case FileDataSchema::Version::VERSION_4: {
-            auto encryptedFileMetaV4 = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV4>(encryptedFileMeta);
+            auto encryptedFileMetaV4 = server::EncryptedFileMetaV4_c_struct::fromJSON(encryptedFileMeta);
             return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV4.decrypt(encryptedFileMetaV4, ""));
         }
         case FileDataSchema::Version::VERSION_5: {
-            auto encryptedFileMetaV5 = utils::TypedObjectFactory::createObjectFromVar<server::EncryptedFileMetaV5>(encryptedFileMeta);
+            auto encryptedFileMetaV5 = server::EncryptedFileMetaV5_c_struct::fromJSON(encryptedFileMeta);
             return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV5.extractPublic(encryptedFileMetaV5));
         }
     }
@@ -96,9 +96,8 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(Poco::Dyna
 
 FileDataSchema::Version FileMetaEncryptor::getFileDataStructureVersion(Poco::Dynamic::Var encryptedFileMeta) {
     if (encryptedFileMeta.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(encryptedFileMeta);
-        auto version = versioned.versionOpt(FileDataSchema::Version::UNKNOWN);
-        switch (version) {
+        auto versioned = core::dynamic::VersionedData_c_struct::fromJSON(encryptedFileMeta);
+        switch (versioned.version) {
             case FileDataSchema::Version::VERSION_4:
                 return FileDataSchema::Version::VERSION_4;
             case FileDataSchema::Version::VERSION_5:

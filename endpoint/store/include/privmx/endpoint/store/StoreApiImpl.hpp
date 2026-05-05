@@ -100,8 +100,8 @@ public:
     void seekInFile(const int64_t handle, const int64_t pos);
     void syncFile(const int64_t handle);
     std::string closeFile(const int64_t handle);
-    FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
-    std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
+    FileDecryptionParams getFileDecryptionParams(server::File_c_struct file, const core::DecryptedEncKey& encKey);
+    std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File_c_struct file, const core::DecryptedEncKey& encKey);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -122,36 +122,36 @@ private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    dynamic::compat_v1::StoreData decryptStoreV1(server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
+    dynamic::compat_v1::StoreData_c_struct decryptStoreV1(server::StoreDataEntry_c_struct storeEntry, const core::DecryptedEncKey& encKey);
     Store convertServerStoreToLibStore(
-        server::Store store,
+        server::Store_c_struct store,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = StoreDataSchema::Version::UNKNOWN
     );
-    Store convertStoreDataV1ToStore(server::Store store, dynamic::compat_v1::StoreData storeData);
-    Store convertDecryptedStoreDataV4ToStore(server::Store store, const core::DecryptedModuleDataV4& storeData);
-    Store convertDecryptedStoreDataV5ToStore(server::Store store, const core::DecryptedModuleDataV5& storeData);
-    StoreDataSchema::Version getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry);
-    std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Store> validateDecryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
-    Store validateDecryptAndConvertStoreDataToStore(server::Store store);
-    void assertStoreDataIntegrity(server::Store store);
-    uint32_t validateStoreDataIntegrity(server::Store store);
+    Store convertStoreDataV1ToStore(server::Store_c_struct store, dynamic::compat_v1::StoreData_c_struct storeData);
+    Store convertDecryptedStoreDataV4ToStore(server::Store_c_struct store, const core::DecryptedModuleDataV4& storeData);
+    Store convertDecryptedStoreDataV5ToStore(server::Store_c_struct store, const core::DecryptedModuleDataV5& storeData);
+    StoreDataSchema::Version getStoreEntryDataStructureVersion(server::StoreDataEntry_c_struct storeEntry);
+    std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store_c_struct store, server::StoreDataEntry_c_struct storeEntry, const core::DecryptedEncKey& encKey);
+    std::vector<Store> validateDecryptAndConvertStoresDataToStores(std::vector<server::Store_c_struct> stores);
+    Store validateDecryptAndConvertStoreDataToStore(server::Store_c_struct store);
+    void assertStoreDataIntegrity(server::Store_c_struct store);
+    uint32_t validateStoreDataIntegrity(server::Store_c_struct store);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys storeToModuleKeys(server::Store store);
+    core::ModuleKeys storeToModuleKeys(server::Store_c_struct store);
 
-    // OLD CODE    
-    StoreFile decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey);
-    // OLD CODE   
-    std::string verifyFileV1Signature(FileMetaSigned meta, server::File raw, std::string& serverId);
-    // OLD CODE   
-    StoreFile decryptAndVerifyFileV1(const std::string &filesKey, server::File x);
-    DecryptedFileMetaV4 decryptFileMetaV4(server::File file, const core::DecryptedEncKey& encKey);
-    DecryptedFileMetaV5 decryptFileMetaV5(server::File file, const core::DecryptedEncKey& encKey);
+    // OLD CODE
+    StoreFile decryptStoreFileV1(server::File_c_struct file, const core::DecryptedEncKey& encKey);
+    // OLD CODE
+    std::string verifyFileV1Signature(FileMetaSigned meta, server::File_c_struct raw, std::string& serverId);
+    // OLD CODE
+    StoreFile decryptAndVerifyFileV1(const std::string &filesKey, server::File_c_struct x);
+    DecryptedFileMetaV4 decryptFileMetaV4(server::File_c_struct file, const core::DecryptedEncKey& encKey);
+    DecryptedFileMetaV5 decryptFileMetaV5(server::File_c_struct file, const core::DecryptedEncKey& encKey);
     File convertServerFileToLibFile(
-        server::File file,
+        server::File_c_struct file,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
         const int64_t& size = 0,
@@ -160,20 +160,20 @@ private:
         const int64_t& schemaVersion = FileDataSchema::Version::UNKNOWN,
         const bool& randomWrite = false
     );
-    File convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta fileData);
-    File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
-    File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
-    FileDataSchema::Version getFileDataStructureVersion(server::File file);
-    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(utils::List<server::File> files, const core::ModuleKeys& storeKeys);
-    File validateDecryptAndConvertFileDataToFileInfo(server::File file, const core::ModuleKeys& storeKeys);
-    dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
-    dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(server::File file, const core::ModuleKeys& storeKeys);
-    core::ModuleKeys getFileDecryptionKeys(server::File file);
-    uint32_t validateFileDataIntegrity(server::File file, const std::string& storeResourceId);
+    File convertStoreFileMetaV1ToFile(server::File_c_struct file, dynamic::compat_v1::StoreFileMeta_c_struct fileData);
+    File convertDecryptedFileMetaV4ToFile(server::File_c_struct file, const DecryptedFileMetaV4& fileData);
+    File convertDecryptedFileMetaV5ToFile(server::File_c_struct file, const DecryptedFileMetaV5& fileData);
+    FileDataSchema::Version getFileDataStructureVersion(server::File_c_struct file);
+    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(std::vector<server::File_c_struct> files, const core::ModuleKeys& storeKeys);
+    File validateDecryptAndConvertFileDataToFileInfo(server::File_c_struct file, const core::ModuleKeys& storeKeys);
+    dynamic::InternalStoreFileMeta_c_struct decryptFileInternalMeta(server::File_c_struct file, const core::DecryptedEncKey& encKey);
+    dynamic::InternalStoreFileMeta_c_struct validateDecryptFileInternalMeta(server::File_c_struct file, const core::ModuleKeys& storeKeys);
+    core::ModuleKeys getFileDecryptionKeys(server::File_c_struct file);
+    uint32_t validateFileDataIntegrity(server::File_c_struct file, const std::string& storeResourceId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
-    FileEncryptionParams getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey);
-    FileEncryptionParams getFileEncryptionParams(server::File file, server::Store store);
-    FileDecryptionParams getFileDecryptionParams(server::File file, dynamic::InternalStoreFileMeta internalMeta);
+    FileEncryptionParams getFileEncryptionParams(server::File_c_struct file, const core::DecryptedEncKey& encKey);
+    FileEncryptionParams getFileEncryptionParams(server::File_c_struct file, server::Store_c_struct store);
+    FileDecryptionParams getFileDecryptionParams(server::File_c_struct file, dynamic::InternalStoreFileMeta_c_struct internalMeta);
     
     int64_t createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams);
     int64_t createFileRandomWriteHandle(const FileDecryptionParams& storeFileDecryptionParams, const FileMeta& fileMeta);
@@ -194,7 +194,7 @@ private:
     size_t _serverRequestChunkSize;
     
     FileHandleManager _fileHandleManager;
-    core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
+    core::DataEncryptor<dynamic::compat_v1::StoreData_c_struct> _dataEncryptorCompatV1;
     FileMetaEncryptorV1 _fileMetaEncryptorV1;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     SubscriberImpl _subscriber;

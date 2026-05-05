@@ -26,24 +26,23 @@ namespace store {
 
 class FileMetaEncryptorV5 {
 public:
-    store::server::EncryptedFileMetaV5 encrypt(const store::FileMetaToEncryptV5& fileMeta,
-                                              const crypto::PrivateKey& authorPrivateKey,
-                                              const std::string& encryptionKey);
-    store::DecryptedFileMetaV5 decrypt(const store::server::EncryptedFileMetaV5& encryptedFileMeta,
-                                    const std::string& encryptionKey);
-    store::DecryptedFileMetaV5 extractPublic(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta);
+    store::server::EncryptedFileMetaV5_c_struct encrypt(const store::FileMetaToEncryptV5& fileMeta,
+                                                        const crypto::PrivateKey& authorPrivateKey,
+                                                        const std::string& encryptionKey);
+    store::DecryptedFileMetaV5 decrypt(const store::server::EncryptedFileMetaV5_c_struct& encryptedFileMeta,
+                                       const std::string& encryptionKey);
+    store::DecryptedFileMetaV5 extractPublic(const store::server::EncryptedFileMetaV5_c_struct& encryptedFileMeta);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5_c_struct& encryptedFileMeta);
 private:
-    void assertDataFormat(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
+    void assertDataFormat(const store::server::EncryptedFileMetaV5_c_struct& encryptedFileMeta);
     core::Buffer serializeNumber(const int64_t& number);
     int64_t deserializeNumber(const core::Buffer& buffer);
 
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
-
 };
 
-}  // namespace core
+}  // namespace store
 }  // namespace endpoint
 }  // namespace privmx
 

@@ -26,7 +26,7 @@ namespace store {
 
 class FileMetaEncryptorV1 {
 public:
-    std::string signAndEncrypt(const dynamic::compat_v1::StoreFileMeta& data, const privmx::crypto::PrivateKey& priv, const std::string& key);
+    std::string signAndEncrypt(const dynamic::compat_v1::StoreFileMeta_c_struct& data, const privmx::crypto::PrivateKey& priv, const std::string& key);
     FileMetaSigned decrypt(const std::string& data, const std::string& key);
 };
 
