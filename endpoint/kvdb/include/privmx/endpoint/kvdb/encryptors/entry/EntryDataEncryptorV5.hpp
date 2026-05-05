@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_KVDB_ITEMDATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_KVDB_ITEMDATAENCRYPTORV5_HPP_
 
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
@@ -26,21 +27,21 @@ namespace kvdb {
 
 class EntryDataEncryptorV5 {
 public:
-    server::EncryptedKvdbEntryDataV5 encrypt(
+    server::EncryptedKvdbEntryDataV5_c_struct encrypt(
         const KvdbEntryDataToEncryptV5& messageData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedKvdbEntryDataV5 decrypt(const server::EncryptedKvdbEntryDataV5& encryptedEntryData, const std::string& encryptionKey);
-    DecryptedKvdbEntryDataV5 extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
+    DecryptedKvdbEntryDataV5 decrypt(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData, const std::string& encryptionKey);
+    DecryptedKvdbEntryDataV5 extractPublic(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData);
 private:
-    void assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedKvdbData);
+    void assertDataFormat(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedKvdbData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };
 
-}  // namespace core
+}  // namespace kvdb
 }  // namespace endpoint
 }  // namespace privmx
 

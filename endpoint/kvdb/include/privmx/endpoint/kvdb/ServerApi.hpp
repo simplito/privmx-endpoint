@@ -28,18 +28,18 @@ public:
 
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
-    server::KvdbCreateResult kvdbCreate(server::KvdbCreateModel model);
-    void kvdbUpdate(server::KvdbUpdateModel model);
-    void kvdbDelete(server::KvdbDeleteModel model);
-    server::KvdbDeleteManyResult kvdbDeleteMany(server::KvdbDeleteManyModel model);
-    server::KvdbGetResult kvdbGet(server::KvdbGetModel model);
-    server::KvdbListResult kvdbList(server::KvdbListModel model);
-    server::KvdbEntryGetResult kvdbEntryGet(server::KvdbEntryGetModel model);
-    void kvdbEntrySet(server::KvdbEntrySetModel model);
-    void kvdbEntryDelete(server::KvdbEntryDeleteModel model);
-    server::KvdbListKeysResult kvdbListKeys(server::KvdbListKeysModel model);
-    server::KvdbListEntriesResult kvdbListEntries(server::KvdbListEntriesModel model);
-    server::KvdbEntryDeleteManyResult kvdbEntryDeleteMany(server::KvdbEntryDeleteManyModel model);
+    server::KvdbCreateResult_c_struct kvdbCreate(server::KvdbCreateModel_c_struct model);
+    void kvdbUpdate(server::KvdbUpdateModel_c_struct model);
+    void kvdbDelete(server::KvdbDeleteModel_c_struct model);
+    server::KvdbDeleteManyResult_c_struct kvdbDeleteMany(server::KvdbDeleteManyModel_c_struct model);
+    server::KvdbGetResult_c_struct kvdbGet(server::KvdbGetModel_c_struct model);
+    server::KvdbListResult_c_struct kvdbList(server::KvdbListModel_c_struct model);
+    server::KvdbEntryGetResult_c_struct kvdbEntryGet(server::KvdbEntryGetModel_c_struct model);
+    void kvdbEntrySet(server::KvdbEntrySetModel_c_struct model);
+    void kvdbEntryDelete(server::KvdbEntryDeleteModel_c_struct model);
+    server::KvdbListKeysResult_c_struct kvdbListKeys(server::KvdbListKeysModel_c_struct model);
+    server::KvdbListEntriesResult_c_struct kvdbListEntries(server::KvdbListEntriesModel_c_struct model);
+    server::KvdbEntryDeleteManyResult_c_struct kvdbEntryDeleteMany(server::KvdbEntryDeleteManyModel_c_struct model);
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);

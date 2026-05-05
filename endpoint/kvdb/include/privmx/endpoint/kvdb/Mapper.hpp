@@ -13,7 +13,6 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_KVDB_MAPPER_HPP_
 
 #include "privmx/endpoint/kvdb/Events.hpp"
-#include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/kvdb/ServerTypes.hpp"
 
 namespace privmx {
@@ -23,9 +22,9 @@ namespace kvdb {
 class Mapper {
 public:
 
-    static KvdbDeletedEventData mapToKvdbDeletedEventData(const server::KvdbDeletedEventData& data);
-    static KvdbDeletedEntryEventData mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData& data);
-    static KvdbStatsEventData mapToKvdbStatsEventData(const server::KvdbStatsEventData& data);
+    static KvdbDeletedEventData mapToKvdbDeletedEventData(const server::KvdbDeletedEventData_c_struct& data);
+    static KvdbDeletedEntryEventData mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData_c_struct& data);
+    static KvdbStatsEventData mapToKvdbStatsEventData(const server::KvdbStatsEventData_c_struct& data);
 };
 
 }  // namespace kvdb

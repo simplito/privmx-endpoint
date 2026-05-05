@@ -35,7 +35,7 @@ private:
         KVDB_ID = 1,
         ENTRY_ID = 2
     };
-    virtual privmx::utils::List<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
+    virtual std::vector<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);;
 
     std::string _typeFilterFlag;
