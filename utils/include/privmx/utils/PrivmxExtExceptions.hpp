@@ -74,6 +74,7 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(KeyNotExistException, LibException, "Key not exis
 DECLARE_PRIVMX_EXCEPTION_CHILD(VarIsNotObjectException, LibException, "Var is not object", 0x0003);
 DECLARE_PRIVMX_EXCEPTION_CHILD(VarIsNotArrayException, LibException, "Var is not array", 0x0004);
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidVersionFormatException, LibException, "Invalid version format", 0x0005);
+DECLARE_PRIVMX_EXCEPTION_CHILD(JSONParseException, LibException, "JSON Parse", 0x0006);
 
 
 DECLARE_PRIVMX_EXCEPTION(OperationCancelledException, BaseException, "Operation canceled", 0x000C);
