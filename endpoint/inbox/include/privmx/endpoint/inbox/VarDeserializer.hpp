@@ -24,13 +24,13 @@ namespace endpoint {
 namespace core {
 
 template<>
-inbox::FilesConfig VarDeserializer::deserialize<inbox::FilesConfig>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<inbox::FilesConfig>(const Poco::Dynamic::Var& val, const std::string& name, inbox::FilesConfig& out);
 
 template<>
-inbox::EventType VarDeserializer::deserialize<inbox::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<inbox::EventType>(const Poco::Dynamic::Var& val, const std::string& name, inbox::EventType& out);
 
 template<>
-inbox::EventSelectorType VarDeserializer::deserialize<inbox::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<inbox::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name, inbox::EventSelectorType& out);
 
 }  // namespace core
 }  // namespace endpoint

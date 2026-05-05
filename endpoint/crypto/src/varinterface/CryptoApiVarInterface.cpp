@@ -64,7 +64,7 @@ Poco::Dynamic::Var CryptoApiVarInterface::verifySignature(const Poco::Dynamic::V
 
 Poco::Dynamic::Var CryptoApiVarInterface::generatePrivateKey(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto basestring = _deserializer.deserializeOptional<std::string>(argsArr->get(0), "randomSeed");
+    auto basestring = _deserializer.deserialize<std::optional<std::string>>(argsArr->get(0), "randomSeed");
     auto result = _cryptoApi.generatePrivateKey(basestring);
     return _serializer.serialize(result);
 }
