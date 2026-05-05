@@ -18,7 +18,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
-#include <privmx/endpoint/core/TypesMacros.hpp>
 #include "privmx/endpoint/inbox/InboxDataHelper.hpp"
 #include "privmx/endpoint/inbox/InboxTypes.hpp"
 #include <privmx/utils/Utils.hpp>
@@ -33,21 +32,21 @@ namespace inbox {
 
 class InboxDataProcessorV5 {
 public:
-    server::InboxData packForServer(const InboxDataProcessorModelV5& plainData,
+    server::InboxData_c_struct packForServer(const InboxDataProcessorModelV5& plainData,
                                         const crypto::PrivateKey& authorPrivateKey,
                                         const std::string& inboxKey);
-    InboxDataResultV5 unpackAll(const server::InboxData& encryptedData,
+    InboxDataResultV5 unpackAll(const server::InboxData_c_struct& encryptedData,
                                 const std::string& inboxKey);
 
     InboxPublicDataV5AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::InboxData& data);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::InboxData_c_struct& data);
 
 private:
     InboxPublicDataV5AsResult unpackPublic(const Poco::Dynamic::Var& publicData);
-    InboxPrivateDataV5AsResult unpackPrivate(const server::InboxData& encryptedData, const std::string& inboxKey);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::PrivateDataV5& encryptedPrivateData);
-    void assertDataFormat(const server::PrivateDataV5& encryptedPrivateData);
-    void assertDataFormat(const server::PublicDataV5& encryptedPublicData);
+    InboxPrivateDataV5AsResult unpackPrivate(const server::InboxData_c_struct& encryptedData, const std::string& inboxKey);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::PrivateDataV5_c_struct& encryptedPrivateData);
+    void assertDataFormat(const server::PrivateDataV5_c_struct& encryptedPrivateData);
+    void assertDataFormat(const server::PublicDataV5_c_struct& encryptedPublicData);
     void validateVersion(const Poco::Dynamic::Var& data);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;

@@ -30,23 +30,17 @@ public:
 
     ServerApi(const privmx::privfs::RpcGateway::Ptr gateway);
 
-    server::InboxCreateResult inboxCreate(server::InboxCreateModel model);
-
-    void inboxUpdate(server::InboxUpdateModel model);
-
-    server::InboxGetResult inboxGet(server::InboxGetModel model);
-
-    server::InboxGetPublicViewResult inboxGetPublicView(server::InboxGetModel model);
-
-    server::InboxListResult inboxList(server::InboxListModel model);
-
-    void inboxSend(server::InboxSendModel model);
-
-    void inboxDelete(server::InboxDeleteModel model);
+    server::InboxCreateResult_c_struct inboxCreate(server::InboxCreateModel_c_struct model);
+    void inboxUpdate(server::InboxUpdateModel_c_struct model);
+    server::InboxGetResult_c_struct inboxGet(server::InboxGetModel_c_struct model);
+    server::InboxGetPublicViewResult_c_struct inboxGetPublicView(server::InboxGetModel_c_struct model);
+    server::InboxListResult_c_struct inboxList(server::InboxListModel_c_struct model);
+    void inboxSend(server::InboxSendModel_c_struct model);
+    void inboxDelete(server::InboxDeleteModel_c_struct model);
 private:
     template<typename T>
-    T request(std::string method, Poco::JSON::Object::Ptr params); //only typed object
-    Poco::Dynamic::Var request(std::string method, Poco::JSON::Object::Ptr params); //Var
+    T request(const std::string& method, Poco::JSON::Object::Ptr params);
+    Poco::Dynamic::Var request(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
 };

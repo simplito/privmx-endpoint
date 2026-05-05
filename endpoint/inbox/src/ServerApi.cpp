@@ -10,43 +10,44 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/inbox/ServerApi.hpp>
+#include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::inbox;
 
 ServerApi::ServerApi(const privfs::RpcGateway::Ptr gateway) : thread::ServerApi(gateway), store::ServerApi(gateway), _gateway(gateway) {}
 
-server::InboxCreateResult ServerApi::inboxCreate(server::InboxCreateModel model) {
-    return request<server::InboxCreateResult>("inboxCreate", model);
+server::InboxCreateResult_c_struct ServerApi::inboxCreate(server::InboxCreateModel_c_struct model) {
+    return request<server::InboxCreateResult_c_struct>("inboxCreate", model.toJSON());
 }
 
-void ServerApi::inboxUpdate(server::InboxUpdateModel model) {
-    request("inboxUpdate", model);
+void ServerApi::inboxUpdate(server::InboxUpdateModel_c_struct model) {
+    request("inboxUpdate", model.toJSON());
 }
 
-server::InboxGetResult ServerApi::inboxGet(server::InboxGetModel model) {
-    return request<server::InboxGetResult>("inboxGet", model);
+server::InboxGetResult_c_struct ServerApi::inboxGet(server::InboxGetModel_c_struct model) {
+    return request<server::InboxGetResult_c_struct>("inboxGet", model.toJSON());
 }
 
-server::InboxGetPublicViewResult ServerApi::inboxGetPublicView(server::InboxGetModel model) {
-    return request<server::InboxGetPublicViewResult>("inboxGetPublicView", model);
+server::InboxGetPublicViewResult_c_struct ServerApi::inboxGetPublicView(server::InboxGetModel_c_struct model) {
+    return request<server::InboxGetPublicViewResult_c_struct>("inboxGetPublicView", model.toJSON());
 }
 
-server::InboxListResult ServerApi::inboxList(server::InboxListModel model) {
-    return request<server::InboxListResult>("inboxList", model);
+server::InboxListResult_c_struct ServerApi::inboxList(server::InboxListModel_c_struct model) {
+    return request<server::InboxListResult_c_struct>("inboxList", model.toJSON());
 }
 
-void ServerApi::inboxSend(server::InboxSendModel model) {
-    request("inboxSend", model);
+void ServerApi::inboxSend(server::InboxSendModel_c_struct model) {
+    request("inboxSend", model.toJSON());
 }
 
-void ServerApi::inboxDelete(server::InboxDeleteModel model) {
-    request("inboxDelete", model);
+void ServerApi::inboxDelete(server::InboxDeleteModel_c_struct model) {
+    request("inboxDelete", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string method, const Poco::JSON::Object::Ptr params) {  //only typed object
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("inbox." + method, params));
+template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+    return T::fromJSON(_gateway->request("inbox." + method, params));
 }
 
-Poco::Dynamic::Var ServerApi::request(const std::string method, const Poco::JSON::Object::Ptr params) {  //var
+Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return _gateway->request("inbox." + method, params);
 }
