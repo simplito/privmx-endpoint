@@ -22,9 +22,9 @@ namespace kvdb {
 class Mapper {
 public:
 
-    static KvdbDeletedEventData mapToKvdbDeletedEventData(const server::KvdbDeletedEventData_c_struct& data);
-    static KvdbDeletedEntryEventData mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData_c_struct& data);
-    static KvdbStatsEventData mapToKvdbStatsEventData(const server::KvdbStatsEventData_c_struct& data);
+    static KvdbDeletedEventData mapToKvdbDeletedEventData(const server::KvdbDeletedEventData& data);
+    static KvdbDeletedEntryEventData mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData& data);
+    static KvdbStatsEventData mapToKvdbStatsEventData(const server::KvdbStatsEventData& data);
 };
 
 }  // namespace kvdb

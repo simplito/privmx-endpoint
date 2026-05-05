@@ -22,10 +22,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-server::EncryptedKvdbEntryDataV5_c_struct EntryDataEncryptorV5::encrypt(const KvdbEntryDataToEncryptV5& messageData,
+server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(const KvdbEntryDataToEncryptV5& messageData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
-    server::EncryptedKvdbEntryDataV5_c_struct result;
+    server::EncryptedKvdbEntryDataV5 result;
     result.version = KvdbEntryDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta = _dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey);
@@ -49,7 +49,7 @@ server::EncryptedKvdbEntryDataV5_c_struct EntryDataEncryptorV5::encrypt(const Kv
     return result;
 }
 
-DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData, const std::string& encryptionKey) {
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(const server::EncryptedKvdbEntryDataV5& encryptedEntryData, const std::string& encryptionKey) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
@@ -81,7 +81,7 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(const server::EncryptedKv
     return result;
 }
 
-DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData) {
+DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedEntryData) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
@@ -108,7 +108,7 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(const server::Encry
     return result;
 }
 
-core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData) {
+core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedEntryData) {
     assertDataFormat(encryptedEntryData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedEntryData.dio);
     if (
@@ -126,7 +126,7 @@ core::DataIntegrityObject EntryDataEncryptorV5::getDIOAndAssertIntegrity(const s
     return dio;
 }
 
-void EntryDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData) {
+void EntryDataEncryptorV5::assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedEntryData) {
     if (
         encryptedEntryData.version != KvdbEntryDataSchema::Version::VERSION_5 ||
         encryptedEntryData.publicMeta.empty() ||

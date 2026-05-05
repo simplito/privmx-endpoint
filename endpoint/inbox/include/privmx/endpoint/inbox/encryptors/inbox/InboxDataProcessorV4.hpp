@@ -31,17 +31,17 @@ namespace inbox {
 
 class InboxDataProcessorV4 {
 public:
-    server::InboxData_c_struct packForServer(const InboxDataProcessorModelV4& plainData,
+    server::InboxData packForServer(const InboxDataProcessorModelV4& plainData,
                                         const crypto::PrivateKey& authorPrivateKey,
                                         const std::string& inboxKey);
-    InboxDataResultV4 unpackAll(const server::InboxData_c_struct& encryptedData,
+    InboxDataResultV4 unpackAll(const server::InboxData& encryptedData,
                                 const std::string& inboxKey);
 
     InboxPublicDataV4AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData);
 
 private:
     InboxPublicDataV4AsResult unpackPublic(const Poco::Dynamic::Var& publicData);
-    InboxPrivateDataV4AsResult unpackPrivate(const server::InboxData_c_struct& encryptedData, const std::string& inboxKey);
+    InboxPrivateDataV4AsResult unpackPrivate(const server::InboxData& encryptedData, const std::string& inboxKey);
     void validateVersion(const Poco::Dynamic::Var& data);
     core::DataEncryptorV4 _dataEncryptor;
 };

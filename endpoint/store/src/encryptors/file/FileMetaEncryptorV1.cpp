@@ -18,7 +18,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::store;
 
-std::string FileMetaEncryptorV1::signAndEncrypt(const dynamic::compat_v1::StoreFileMeta_c_struct& data, const privmx::crypto::PrivateKey& priv, const std::string& key) {
+std::string FileMetaEncryptorV1::signAndEncrypt(const dynamic::compat_v1::StoreFileMeta& data, const privmx::crypto::PrivateKey& priv, const std::string& key) {
     auto buffer {utils::Utils::stringify(data.toJSON())};
     auto signature = priv.signToCompactSignatureWithHash(buffer);
     std::string plain;
@@ -38,13 +38,13 @@ FileMetaSigned FileMetaEncryptorV1::decrypt(const std::string& data, const std::
         size_t sigLen = reinterpret_cast<Poco::UInt8&>(plain[1]);
         auto signature = plain.substr(2, sigLen);
         auto metaBuf = plain.substr(2 + sigLen);
-        auto meta = dynamic::compat_v1::StoreFileMeta_c_struct::fromJSON(parser.parse(metaBuf));
+        auto meta = dynamic::compat_v1::StoreFileMeta::fromJSON(parser.parse(metaBuf));
         metaSigned.signature = signature;
         metaSigned.metaBuf = metaBuf;
         metaSigned.meta = meta;
     }
     else if (plain[0] == 123) {
-        auto meta = dynamic::compat_v1::StoreFileMeta_c_struct::fromJSON(parser.parse(plain));
+        auto meta = dynamic::compat_v1::StoreFileMeta::fromJSON(parser.parse(plain));
         metaSigned.signature = Pson::BinaryString();
         metaSigned.metaBuf = Pson::BinaryString();
         metaSigned.meta = meta;

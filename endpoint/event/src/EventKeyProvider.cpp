@@ -42,13 +42,13 @@ DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(const std::string& encrypted
         .key = encKey
     };
 }
-std::vector<server::UserKey_c_struct> EventKeyProvider::prepareKeysList(
+std::vector<server::UserKey> EventKeyProvider::prepareKeysList(
     const std::vector<core::UserWithPubKey>& users, 
     const std::string& key
 ) {
-    std::vector<server::UserKey_c_struct> userKeys;
+    std::vector<server::UserKey> userKeys;
     for (auto& user : users) {
-        userKeys.push_back(server::UserKey_c_struct{
+        userKeys.push_back(server::UserKey{
             .id  = user.userId,
             .key = privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), key, _key)
         });

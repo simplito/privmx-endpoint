@@ -15,7 +15,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::stream;
 
-StreamTrackInfo Mapper::mapToStreamTrackInfo(const server::StreamTrackInfo_c_struct& s) {
+StreamTrackInfo Mapper::mapToStreamTrackInfo(const server::StreamTrackInfo& s) {
     return {
         .type        = s.type,
         .mindex      = s.mindex,
@@ -29,7 +29,7 @@ StreamTrackInfo Mapper::mapToStreamTrackInfo(const server::StreamTrackInfo_c_str
     };
 }
 
-StreamInfo Mapper::mapToStreamInfo(const server::StreamInfo_c_struct& s) {
+StreamInfo Mapper::mapToStreamInfo(const server::StreamInfo& s) {
     std::vector<StreamTrackInfo> tracks;
     tracks.reserve(s.tracks.size());
     for (const auto& t : s.tracks) {
@@ -45,14 +45,14 @@ StreamInfo Mapper::mapToStreamInfo(const server::StreamInfo_c_struct& s) {
     };
 }
 
-StreamTrackModificationPair Mapper::mapToStreamTrackModificationPair(const server::StreamTrackModificationPair_c_struct& s) {
+StreamTrackModificationPair Mapper::mapToStreamTrackModificationPair(const server::StreamTrackModificationPair& s) {
     return {
         .before = s.before.has_value() ? std::make_optional(mapToStreamTrackInfo(s.before.value())) : std::nullopt,
         .after  = s.after.has_value()  ? std::make_optional(mapToStreamTrackInfo(s.after.value()))  : std::nullopt,
     };
 }
 
-StreamTrackModification Mapper::mapToStreamTrackModification(const server::StreamTrackModification_c_struct& s) {
+StreamTrackModification Mapper::mapToStreamTrackModification(const server::StreamTrackModification& s) {
     std::vector<StreamTrackModificationPair> tracks;
     tracks.reserve(s.tracks.size());
     for (const auto& t : s.tracks) {
@@ -64,7 +64,7 @@ StreamTrackModification Mapper::mapToStreamTrackModification(const server::Strea
     };
 }
 
-NewStreams Mapper::mapToNewStreams(const server::NewStreams_c_struct& s) {
+NewStreams Mapper::mapToNewStreams(const server::NewStreams& s) {
     std::vector<StreamInfo> streams;
     streams.reserve(s.streams.size());
     for (const auto& st : s.streams) {
@@ -76,7 +76,7 @@ NewStreams Mapper::mapToNewStreams(const server::NewStreams_c_struct& s) {
     };
 }
 
-PublishedStreamData Mapper::mapToPublishedStreamData(const server::StreamPublishedEventData_c_struct& s) {
+PublishedStreamData Mapper::mapToPublishedStreamData(const server::StreamPublishedEventData& s) {
     return {
         .streamRoomId = s.streamRoomId,
         .stream       = mapToStreamInfo(s.stream),
@@ -84,7 +84,7 @@ PublishedStreamData Mapper::mapToPublishedStreamData(const server::StreamPublish
     };
 }
 
-PublishedStreamData Mapper::mapToPublishedStreamData(const server::PublishedStreamData_c_struct& s) {
+PublishedStreamData Mapper::mapToPublishedStreamData(const server::PublishedStreamData& s) {
     return {
         .streamRoomId = s.streamRoomId,
         .stream       = mapToStreamInfo(s.stream),
@@ -92,7 +92,7 @@ PublishedStreamData Mapper::mapToPublishedStreamData(const server::PublishedStre
     };
 }
 
-StreamUpdatedEventData Mapper::mapToStreamUpdatedEventData(const server::StreamUpdatedEventData_c_struct& s) {
+StreamUpdatedEventData Mapper::mapToStreamUpdatedEventData(const server::StreamUpdatedEventData& s) {
     std::vector<StreamInfo> streamsAdded;
     streamsAdded.reserve(s.streamsAdded.size());
     for (const auto& st : s.streamsAdded) {
@@ -116,7 +116,7 @@ StreamUpdatedEventData Mapper::mapToStreamUpdatedEventData(const server::StreamU
     };
 }
 
-UpdatedStreamData Mapper::mapToUpdatedStreamData(const server::UpdatedStreamData_c_struct& s) {
+UpdatedStreamData Mapper::mapToUpdatedStreamData(const server::UpdatedStreamData& s) {
     return {
         .active         = s.active,
         .type           = s.type,
@@ -131,7 +131,7 @@ UpdatedStreamData Mapper::mapToUpdatedStreamData(const server::UpdatedStreamData
     };
 }
 
-StreamsUpdatedData Mapper::mapToStreamsUpdatedData(const server::StreamsUpdatedData_c_struct& s) {
+StreamsUpdatedData Mapper::mapToStreamsUpdatedData(const server::StreamsUpdatedData& s) {
     std::vector<UpdatedStreamData> streams;
     streams.reserve(s.streams.size());
     for (const auto& st : s.streams) {

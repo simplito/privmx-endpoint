@@ -100,32 +100,32 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    dynamic::ThreadDataV1_c_struct decryptThreadV1(server::Thread2DataEntry_c_struct threadEntry, const core::DecryptedEncKey& encKey);
+    dynamic::ThreadDataV1 decryptThreadV1(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     Thread convertServerThreadToLibThread(
-        server::ThreadInfo_c_struct threadInfo,
+        server::ThreadInfo threadInfo,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = ThreadDataSchema::Version::UNKNOWN
     );
-    Thread convertThreadDataV1ToThread(server::ThreadInfo_c_struct threadInfo, dynamic::ThreadDataV1_c_struct threadData);
-    Thread convertDecryptedThreadDataV4ToThread(server::ThreadInfo_c_struct threadInfo, const core::DecryptedModuleDataV4& threadData);
-    Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo_c_struct threadInfo, const core::DecryptedModuleDataV5& threadData);
-    ThreadDataSchema::Version getThreadEntryDataStructureVersion(server::Thread2DataEntry_c_struct threadEntry);
-    std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(server::ThreadInfo_c_struct thread, server::Thread2DataEntry_c_struct threadEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Thread> validateDecryptAndConvertThreadsDataToThreads(std::vector<server::ThreadInfo_c_struct> threads);
-    Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo_c_struct thread);
-    void assertThreadDataIntegrity(server::ThreadInfo_c_struct thread);
-    uint32_t validateThreadDataIntegrity(server::ThreadInfo_c_struct thread);
+    Thread convertThreadDataV1ToThread(server::ThreadInfo threadInfo, dynamic::ThreadDataV1 threadData);
+    Thread convertDecryptedThreadDataV4ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV4& threadData);
+    Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV5& threadData);
+    ThreadDataSchema::Version getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry);
+    std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
+    std::vector<Thread> validateDecryptAndConvertThreadsDataToThreads(std::vector<server::ThreadInfo> threads);
+    Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo thread);
+    void assertThreadDataIntegrity(server::ThreadInfo thread);
+    uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys threadToModuleKeys(server::ThreadInfo_c_struct thread);
+    core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
 
-    dynamic::MessageDataV2_c_struct decryptMessageDataV2(server::Message_c_struct message, const core::DecryptedEncKey& encKey);
-    dynamic::MessageDataV3_c_struct decryptMessageDataV3(server::Message_c_struct message, const core::DecryptedEncKey& encKey);
-    DecryptedMessageDataV4 decryptMessageDataV4(server::Message_c_struct message, const core::DecryptedEncKey& encKey);
-    DecryptedMessageDataV5 decryptMessageDataV5(server::Message_c_struct message, const core::DecryptedEncKey& encKey);
+    dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
+    dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
+    DecryptedMessageDataV4 decryptMessageDataV4(server::Message message, const core::DecryptedEncKey& encKey);
+    DecryptedMessageDataV5 decryptMessageDataV5(server::Message message, const core::DecryptedEncKey& encKey);
     Message convertServerMessageToLibMessage(
-        server::Message_c_struct message,
+        server::Message message,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
         const core::Buffer& data = core::Buffer(),
@@ -133,16 +133,16 @@ private:
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = MessageDataSchema::Version::UNKNOWN
     );
-    Message convertMessageDataV2ToMessage(server::Message_c_struct message, dynamic::MessageDataV2_c_struct messageData);
-    Message convertMessageDataV3ToMessage(server::Message_c_struct message, dynamic::MessageDataV3_c_struct messageData);
-    Message convertDecryptedMessageDataV4ToMessage(server::Message_c_struct message, DecryptedMessageDataV4 messageData);
-    Message convertDecryptedMessageDataV5ToMessage(server::Message_c_struct message, DecryptedMessageDataV5 messageData);
-    MessageDataSchema::Version getMessagesDataStructureVersion(server::Message_c_struct message);
-    std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(server::Message_c_struct message, const core::DecryptedEncKey& encKey);
-    std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(std::vector<server::Message_c_struct> messages, const core::ModuleKeys& threadKeys);
-    Message validateDecryptAndConvertMessageDataToMessage(server::Message_c_struct message, const core::ModuleKeys& threadKeys);
-    core::ModuleKeys getMessageDecryptionKeys(server::Message_c_struct message);
-    uint32_t validateMessageDataIntegrity(server::Message_c_struct message, const std::string& threadResourceId);
+    Message convertMessageDataV2ToMessage(server::Message message, dynamic::MessageDataV2 messageData);
+    Message convertMessageDataV3ToMessage(server::Message message, dynamic::MessageDataV3 messageData);
+    Message convertDecryptedMessageDataV4ToMessage(server::Message message, DecryptedMessageDataV4 messageData);
+    Message convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData);
+    MessageDataSchema::Version getMessagesDataStructureVersion(server::Message message);
+    std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey);
+    std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(std::vector<server::Message> messages, const core::ModuleKeys& threadKeys);
+    Message validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleKeys& threadKeys);
+    core::ModuleKeys getMessageDecryptionKeys(server::Message message);
+    uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);
     Poco::Dynamic::Var encryptMessageData(
         const std::string& threadId, 
         const std::string& resourceId, 
@@ -177,7 +177,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
-    core::DataEncryptor<dynamic::ThreadDataV1_c_struct> _dataEncryptorThread;
+    core::DataEncryptor<dynamic::ThreadDataV1> _dataEncryptorThread;
     MessageDataV2Encryptor _messageDataV2Encryptor;
     MessageDataV3Encryptor _messageDataV3Encryptor;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;

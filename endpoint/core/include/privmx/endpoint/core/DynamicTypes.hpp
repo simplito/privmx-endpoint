@@ -21,13 +21,13 @@ namespace dynamic {
 
 #define VERSIONED_DATA_FIELDS(F)\
     F(version, int64_t)
-JSON_STRUCT(VersionedData_c_struct, VERSIONED_DATA_FIELDS);
+JSON_STRUCT(VersionedData, VERSIONED_DATA_FIELDS);
 
 #define BRIDGE_IDENTITY_FIELDS(F)\
     F(url, std::string)\
     F(pubKey, std::optional<std::string>)\
     F(instanceId, std::optional<std::string>)
-JSON_STRUCT(BridgeIdentity_c_struct, BRIDGE_IDENTITY_FIELDS);
+JSON_STRUCT(BridgeIdentity, BRIDGE_IDENTITY_FIELDS);
 
 #define DATA_INTEGRITY_OBJECT_FIELDS(F)\
     F(creatorUserId, std::string)\
@@ -40,14 +40,14 @@ JSON_STRUCT(BridgeIdentity_c_struct, BRIDGE_IDENTITY_FIELDS);
     F(containerResourceId, std::optional<std::string>)\
     F(fieldChecksums, std::unordered_map<std::string, std::string>)\
     F(structureVersion, int64_t)\
-    F(bridgeIdentity, std::optional<BridgeIdentity_c_struct>)
-JSON_STRUCT_EXT(DataIntegrityObject_c_struct, VersionedData_c_struct, DATA_INTEGRITY_OBJECT_FIELDS);
+    F(bridgeIdentity, std::optional<BridgeIdentity>)
+JSON_STRUCT_EXT(DataIntegrityObject, VersionedData, DATA_INTEGRITY_OBJECT_FIELDS);
 
 #define ENCRYPTION_KEY_OBJECT_FIELDS(F)\
     F(id , std::string)\
     F(key, std::string)\
     F(keySecret, std::string)
-JSON_STRUCT(EncryptionKey_c_struct, ENCRYPTION_KEY_OBJECT_FIELDS);
+JSON_STRUCT(EncryptionKey, ENCRYPTION_KEY_OBJECT_FIELDS);
 
 
 } // dynamic

@@ -21,9 +21,9 @@ namespace thread {
 
 class Mapper {
 public:
-    static ThreadDeletedEventData mapToThreadDeletedEventData(const server::ThreadDeletedEventData_c_struct& data);
-    static ThreadDeletedMessageEventData mapToThreadDeletedMessageEventData(const server::ThreadDeletedMessageEventData_c_struct& data);
-    static ThreadStatsEventData mapToThreadStatsEventData(const server::ThreadStatsEventData_c_struct& data);
+    static ThreadDeletedEventData mapToThreadDeletedEventData(const server::ThreadDeletedEventData& data);
+    static ThreadDeletedMessageEventData mapToThreadDeletedMessageEventData(const server::ThreadDeletedMessageEventData& data);
+    static ThreadStatsEventData mapToThreadStatsEventData(const server::ThreadStatsEventData& data);
 };
 
 }  // namespace thread

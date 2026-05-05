@@ -15,7 +15,7 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 CollectionItemChange Mapper::mapToCollectionItemChange(
-    const server::CollectionItemChange_c_struct& data
+    const server::CollectionItemChange& data
 ) {
     return {
         .itemId = data.itemId,
@@ -24,7 +24,7 @@ CollectionItemChange Mapper::mapToCollectionItemChange(
 }
 
 std::vector<CollectionItemChange> Mapper::mapToCollectionItemChanges(
-    const std::vector<server::CollectionItemChange_c_struct>& data) {
+    const std::vector<server::CollectionItemChange>& data) {
     std::vector<CollectionItemChange> result;
     result.reserve(data.size());
     for (auto item : data) {
@@ -34,7 +34,7 @@ std::vector<CollectionItemChange> Mapper::mapToCollectionItemChanges(
 }
 
 CollectionChangedEventData Mapper::mapToCollectionChangedEventData(
-    const std::string& moduleType, const server::CollectionChangedEventData_c_struct& data
+    const std::string& moduleType, const server::CollectionChangedEventData& data
 ) {
     return {
         .moduleType = moduleType,
@@ -45,7 +45,7 @@ CollectionChangedEventData Mapper::mapToCollectionChangedEventData(
 }
 
 UserWithAction Mapper::mapToUserWithAction(
-    const server::ContextUsersStatusChange_c_struct& data
+    const server::ContextUsersStatusChange& data
 ) {
     return {
         .user = {
@@ -57,7 +57,7 @@ UserWithAction Mapper::mapToUserWithAction(
 }
 
 std::vector<UserWithAction> Mapper::mapToUserWithActions(
-    const std::vector<server::ContextUsersStatusChange_c_struct>& data
+    const std::vector<server::ContextUsersStatusChange>& data
 ) {
     std::vector<UserWithAction> result;
     result.reserve(data.size());
@@ -68,7 +68,7 @@ std::vector<UserWithAction> Mapper::mapToUserWithActions(
 }
 
 ContextUsersStatusChangedEventData Mapper::mapToContextUsersStatusChangedEventData(
-    const server::ContextUsersStatusChangeEventData_c_struct& data
+    const server::ContextUsersStatusChangeEventData& data
 ) {
     return {
         .contextId = data.contextId,
@@ -77,7 +77,7 @@ ContextUsersStatusChangedEventData Mapper::mapToContextUsersStatusChangedEventDa
 }
 
 ContextUserEventData Mapper::mapToContextUserEventData(
-    const server::ContextUserEventData_c_struct& data
+    const server::ContextUserEventData& data
 ) {
     return {
         .contextId = data.contextId,

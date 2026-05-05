@@ -17,10 +17,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
-server::InboxData_c_struct InboxDataProcessorV4::packForServer(const InboxDataProcessorModelV4& plainData,
+server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorModelV4& plainData,
                                                                const crypto::PrivateKey& authorPrivateKey,
                                                                const std::string& inboxKey) {
-    server::PublicDataV4_c_struct serverPublicData;
+    server::PublicDataV4 serverPublicData;
     serverPublicData.version = InboxDataSchema::Version::VERSION_4;
     serverPublicData.publicMeta = _dataEncryptor.signAndEncode(plainData.publicData.publicMeta, authorPrivateKey);
     try {
@@ -33,7 +33,7 @@ server::InboxData_c_struct InboxDataProcessorV4::packForServer(const InboxDataPr
     serverPublicData.inboxPubKey = plainData.publicData.inboxEntriesPubKeyBase58DER;
     serverPublicData.inboxKeyId = plainData.publicData.inboxEntriesKeyId;
 
-    server::PrivateDataV4_c_struct serverPrivateData;
+    server::PrivateDataV4 serverPrivateData;
     serverPrivateData.version = InboxDataSchema::Version::VERSION_4;
     serverPrivateData.privateMeta = _dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey);
     if (plainData.privateData.internalMeta.has_value()) {
@@ -41,7 +41,7 @@ server::InboxData_c_struct InboxDataProcessorV4::packForServer(const InboxDataPr
     }
     serverPrivateData.authorPubKey = authorPubKeyECC;
 
-    server::InboxData_c_struct serverInboxData;
+    server::InboxData serverInboxData;
     serverInboxData.storeId = plainData.storeId;
     serverInboxData.threadId = plainData.threadId;
     serverInboxData.fileConfig = InboxDataHelper::fileConfigToTypedObject(plainData.filesConfig);
@@ -50,7 +50,7 @@ server::InboxData_c_struct InboxDataProcessorV4::packForServer(const InboxDataPr
     return serverInboxData;
 }
 
-InboxDataResultV4 InboxDataProcessorV4::unpackAll(const server::InboxData_c_struct& encryptedData, const std::string& inboxKey) {
+InboxDataResultV4 InboxDataProcessorV4::unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey) {
     InboxDataResultV4 result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
     result.storeId = encryptedData.storeId;
@@ -78,7 +78,7 @@ InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic
     result.statusCode = 0;
     try {
         validateVersion(publicData);
-        auto publicDataV4 = server::PublicDataV4_c_struct::fromJSON(publicData);
+        auto publicDataV4 = server::PublicDataV4::fromJSON(publicData);
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(publicDataV4.authorPubKey);
 
         result.publicMeta = _dataEncryptor.decodeAndVerify(publicDataV4.publicMeta, authorPublicKeyECC);
@@ -105,14 +105,14 @@ InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic
 }
 
 InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
-    const server::InboxData_c_struct& encryptedData, const std::string& inboxKey) {
+    const server::InboxData& encryptedData, const std::string& inboxKey) {
 
     InboxPrivateDataV4AsResult result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
     result.statusCode = 0;
     try {
         validateVersion(encryptedData.meta);
-        auto privateDataV4 = server::PrivateDataV4_c_struct::fromJSON(encryptedData.meta);
+        auto privateDataV4 = server::PrivateDataV4::fromJSON(encryptedData.meta);
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV4.authorPubKey);
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV4.privateMeta, authorPublicKeyECC, inboxKey);

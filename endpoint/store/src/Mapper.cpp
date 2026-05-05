@@ -14,22 +14,22 @@ limitations under the License.
 
 using namespace privmx::endpoint::store;
 
-StoreDeletedEventData Mapper::mapToStoreDeletedEventData(const server::StoreDeletedEventData_c_struct& data) {
+StoreDeletedEventData Mapper::mapToStoreDeletedEventData(const server::StoreDeletedEventData& data) {
     return {.storeId = data.storeId};
 }
 
-StoreFileDeletedEventData Mapper::mapToStoreFileDeletedEventData(const server::StoreFileDeletedEventData_c_struct& data) {
+StoreFileDeletedEventData Mapper::mapToStoreFileDeletedEventData(const server::StoreFileDeletedEventData& data) {
     return {.contextId = data.contextId, .storeId = data.storeId, .fileId = data.id};
 }
 
-StoreStatsChangedEventData Mapper::mapToStoreStatsChangedEventData(const server::StoreStatsChangedEventData_c_struct& data) {
+StoreStatsChangedEventData Mapper::mapToStoreStatsChangedEventData(const server::StoreStatsChangedEventData& data) {
     return {.contextId = data.contextId,
             .storeId = data.id,
             .lastFileDate = data.lastFileDate,
             .filesCount = data.files};
 }
 
-StoreFileUpdatedEventData Mapper::mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData_c_struct& data, const File& file, const FileDecryptionParams& fileDecryptionParams) {
+StoreFileUpdatedEventData Mapper::mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams) {
     auto result = StoreFileUpdatedEventData{.file = file, .changes = {}};
 
     if (data.changes.has_value() && !data.changes->empty()) {

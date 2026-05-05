@@ -20,10 +20,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-store::server::EncryptedFileMetaV4_c_struct FileMetaEncryptorV4::encrypt(const store::FileMetaToEncryptV4& fileMeta,
+store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::FileMetaToEncryptV4& fileMeta,
                                                                           const crypto::PrivateKey& authorPrivateKey,
                                                                           const std::string& encryptionKey) {
-    server::EncryptedFileMetaV4_c_struct result;
+    server::EncryptedFileMetaV4 result;
     result.version = FileDataSchema::Version::VERSION_4;
     result.publicMeta = _dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey);
     try {
@@ -38,7 +38,7 @@ store::server::EncryptedFileMetaV4_c_struct FileMetaEncryptorV4::encrypt(const s
     return result;
 }
 
-store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::EncryptedFileMetaV4_c_struct& encryptedFileMeta,
+store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
                                                         const std::string& encryptionKey) {
     DecryptedFileMetaV4 result;
     result.statusCode = 0;
@@ -69,7 +69,7 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::Enc
     return result;
 }
 
-void FileMetaEncryptorV4::validateVersion(const store::server::EncryptedFileMetaV4_c_struct& encryptedFileMeta) {
+void FileMetaEncryptorV4::validateVersion(const store::server::EncryptedFileMetaV4& encryptedFileMeta) {
     if (encryptedFileMeta.version != FileDataSchema::Version::VERSION_4) {
         throw InvalidEncryptedStoreFileMetaVersionException();
     }

@@ -303,12 +303,6 @@ protected: \
     void serializeFields([[maybe_unused]] Poco::JSON::Object::Ptr result) const { FIELDS(_JSON_TO) } \
 }
 
-#define TEST_STRUCT_FIELDS(F)\
-    F(type,           std::string)\
-    F(data,           Poco::Dynamic::Var)\
-    F(fieldChecksums, std::map<std::string, std::string>)
-JSON_STRUCT(TestStruct_c_struct, TEST_STRUCT_FIELDS);
-
 } // utils
 } // privmx
 

@@ -21,12 +21,12 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 
-server::EncryptedKeyEntryDataV2_c_struct EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncrypt& key, 
+server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(const EncKeyV2ToEncrypt& key, 
         const privmx::crypto::PublicKey& encryptionKey, const crypto::PrivateKey& authorPrivateKey
 ) {
-    server::EncryptedKeyEntryDataV2_c_struct result;
+    server::EncryptedKeyEntryDataV2 result;
     result.version = EncryptionKeyDataSchema::Version::VERSION_2;
-    dynamic::EncryptionKey_c_struct keyToEncrypt;
+    dynamic::EncryptionKey keyToEncrypt;
     keyToEncrypt.id = key.id;
     keyToEncrypt.key = utils::Base64::from(key.key);
     keyToEncrypt.keySecret = utils::Base64::from(key.keySecret);
@@ -43,7 +43,7 @@ server::EncryptedKeyEntryDataV2_c_struct EncKeyEncryptorV2::encrypt(const EncKey
     return result;
 }
 
-DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryDataV2_c_struct& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey) {
+DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryDataV2& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey) {
     DecryptedEncKeyV2 result;
     result.statusCode = 0;
     result.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_2;
@@ -56,7 +56,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
         ) {
             throw InvalidDataIntegrityObjectChecksumException();
         }
-        dynamic::EncryptionKey_c_struct decryptedKey = dynamic::EncryptionKey_c_struct::fromJSON(
+        dynamic::EncryptionKey decryptedKey = dynamic::EncryptionKey::fromJSON(
             crypto::EciesEncryptor::decryptObjectFromBase64(decryptionKey, encryptedEncKey.encryptedKey, privmx::crypto::PublicKey::fromBase58DER(result.dio.creatorPubKey))
         );
         if(decryptedKey.id == "" || decryptedKey.key == "") {
@@ -76,7 +76,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
     return result;
 }
 
-void EncKeyEncryptorV2::assertDataFormat(const server::EncryptedKeyEntryDataV2_c_struct& encryptedEncKey) {
+void EncKeyEncryptorV2::assertDataFormat(const server::EncryptedKeyEntryDataV2& encryptedEncKey) {
     if ( 
         encryptedEncKey.version != EncryptionKeyDataSchema::Version::VERSION_2  || 
         encryptedEncKey.encryptedKey == ""                                       

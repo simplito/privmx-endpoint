@@ -16,16 +16,16 @@ using namespace privmx::endpoint::core;
 
 ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
-server::ContextGetResult_c_struct ServerApi::contextGet(server::ContextGetModel_c_struct model) {
-    return request<server::ContextGetResult_c_struct>("contextGet", model.toJSON());
+server::ContextGetResult ServerApi::contextGet(server::ContextGetModel model) {
+    return request<server::ContextGetResult>("contextGet", model.toJSON());
 }
 
-server::ContextListResult_c_struct ServerApi::contextList(server::ListModel_c_struct model) {
-    return request<server::ContextListResult_c_struct>("contextList", model.toJSON());
+server::ContextListResult ServerApi::contextList(server::ListModel model) {
+    return request<server::ContextListResult>("contextList", model.toJSON());
 }
 
-server::ContextListUsersResult_c_struct ServerApi::contextListUsers(server::ContextListUsersModel_c_struct model) {
-    return request<server::ContextListUsersResult_c_struct>("contextListUsers", model.toJSON());
+server::ContextListUsersResult ServerApi::contextListUsers(server::ContextListUsersModel model) {
+    return request<server::ContextListUsersResult>("contextListUsers", model.toJSON());
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {

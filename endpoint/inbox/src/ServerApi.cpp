@@ -16,31 +16,31 @@ using namespace privmx::endpoint::inbox;
 
 ServerApi::ServerApi(const privfs::RpcGateway::Ptr gateway) : thread::ServerApi(gateway), store::ServerApi(gateway), _gateway(gateway) {}
 
-server::InboxCreateResult_c_struct ServerApi::inboxCreate(server::InboxCreateModel_c_struct model) {
-    return request<server::InboxCreateResult_c_struct>("inboxCreate", model.toJSON());
+server::InboxCreateResult ServerApi::inboxCreate(server::InboxCreateModel model) {
+    return request<server::InboxCreateResult>("inboxCreate", model.toJSON());
 }
 
-void ServerApi::inboxUpdate(server::InboxUpdateModel_c_struct model) {
+void ServerApi::inboxUpdate(server::InboxUpdateModel model) {
     request("inboxUpdate", model.toJSON());
 }
 
-server::InboxGetResult_c_struct ServerApi::inboxGet(server::InboxGetModel_c_struct model) {
-    return request<server::InboxGetResult_c_struct>("inboxGet", model.toJSON());
+server::InboxGetResult ServerApi::inboxGet(server::InboxGetModel model) {
+    return request<server::InboxGetResult>("inboxGet", model.toJSON());
 }
 
-server::InboxGetPublicViewResult_c_struct ServerApi::inboxGetPublicView(server::InboxGetModel_c_struct model) {
-    return request<server::InboxGetPublicViewResult_c_struct>("inboxGetPublicView", model.toJSON());
+server::InboxGetPublicViewResult ServerApi::inboxGetPublicView(server::InboxGetModel model) {
+    return request<server::InboxGetPublicViewResult>("inboxGetPublicView", model.toJSON());
 }
 
-server::InboxListResult_c_struct ServerApi::inboxList(server::InboxListModel_c_struct model) {
-    return request<server::InboxListResult_c_struct>("inboxList", model.toJSON());
+server::InboxListResult ServerApi::inboxList(server::InboxListModel model) {
+    return request<server::InboxListResult>("inboxList", model.toJSON());
 }
 
-void ServerApi::inboxSend(server::InboxSendModel_c_struct model) {
+void ServerApi::inboxSend(server::InboxSendModel model) {
     request("inboxSend", model.toJSON());
 }
 
-void ServerApi::inboxDelete(server::InboxDeleteModel_c_struct model) {
+void ServerApi::inboxDelete(server::InboxDeleteModel model) {
     request("inboxDelete", model.toJSON());
 }
 

@@ -27,7 +27,7 @@ namespace dynamic {
     F(key,         std::string)\
     F(hmac,        std::string)\
     F(randomWrite, std::optional<bool>)
-JSON_STRUCT(InternalStoreFileMeta_c_struct, INTERNAL_STORE_FILE_META_FIELDS);
+JSON_STRUCT(InternalStoreFileMeta, INTERNAL_STORE_FILE_META_FIELDS);
 
 #define STORE_FILE_META_V4_FIELDS(F)\
     F(version,           int64_t)\
@@ -36,50 +36,50 @@ JSON_STRUCT(InternalStoreFileMeta_c_struct, INTERNAL_STORE_FILE_META_FIELDS);
     F(encryptedFileSize, std::string)\
     F(internalMeta,      std::optional<std::string>)\
     F(authorPubKey,      std::string)
-JSON_STRUCT(StoreFileMetaV4_c_struct, STORE_FILE_META_V4_FIELDS);
+JSON_STRUCT(StoreFileMetaV4, STORE_FILE_META_V4_FIELDS);
 
 #define BLOB_PROPERTY_BAG_FIELDS(F)\
     F(type, std::string)
-JSON_STRUCT(BlobPropertyBag_c_struct, BLOB_PROPERTY_BAG_FIELDS);
+JSON_STRUCT(BlobPropertyBag, BLOB_PROPERTY_BAG_FIELDS);
 
 #define BLOB_FIELDS(F)\
     F(data,    Pson::BinaryString)\
-    F(options, BlobPropertyBag_c_struct)
-JSON_STRUCT(Blob_c_struct, BLOB_FIELDS);
+    F(options, BlobPropertyBag)
+JSON_STRUCT(Blob, BLOB_FIELDS);
 
-// File_c_struct extends Blob_c_struct directly; the intermediate BlobPropertyBag
+// File extends Blob directly; the intermediate BlobPropertyBag
 // chain is avoided to keep within the 2-level JSON_STRUCT_EXT limit.
 #define FILE_FIELDS_DYNAMIC(F)\
     F(lastModified,       int64_t)\
     F(name,               std::string)\
     F(webkitRelativePath, std::string)
-JSON_STRUCT_EXT(File_c_struct, Blob_c_struct, FILE_FIELDS_DYNAMIC);
+JSON_STRUCT_EXT(File, Blob, FILE_FIELDS_DYNAMIC);
 
 #define SEND_FILE_RESULT_FIELDS(F)\
-    F(file,      File_c_struct)\
+    F(file,      File)\
     F(cipherType, int64_t)\
     F(key,        std::string)\
     F(hmac,       std::string)\
     F(chunkSize,  int64_t)
-JSON_STRUCT(SendFileResult_c_struct, SEND_FILE_RESULT_FIELDS);
+JSON_STRUCT(SendFileResult, SEND_FILE_RESULT_FIELDS);
 
 namespace compat_v1 {
 
 #define STORE_DATA_FIELDS(F)\
     F(name,       std::string)\
     F(statusCode, int64_t)
-JSON_STRUCT(StoreData_c_struct, STORE_DATA_FIELDS);
+JSON_STRUCT(StoreData, STORE_DATA_FIELDS);
 
 #define STORE_FILE_META_AUTHOR_FIELDS(F)\
     F(pubKey, std::string)
-JSON_STRUCT(StoreFileMetaAuthor_c_struct, STORE_FILE_META_AUTHOR_FIELDS);
+JSON_STRUCT(StoreFileMetaAuthor, STORE_FILE_META_AUTHOR_FIELDS);
 
 #define STORE_FILE_META_DESTINATION_FIELDS(F)\
     F(server,    std::string)\
     F(contextId, std::string)\
     F(storeId,   std::string)\
     F(store,     std::string)
-JSON_STRUCT(StoreFileMetaDestination_c_struct, STORE_FILE_META_DESTINATION_FIELDS);
+JSON_STRUCT(StoreFileMetaDestination, STORE_FILE_META_DESTINATION_FIELDS);
 
 #define STORE_META_FIELDS(F)\
     F(mimetype,  std::string)\
@@ -89,18 +89,18 @@ JSON_STRUCT(StoreFileMetaDestination_c_struct, STORE_FILE_META_DESTINATION_FIELD
     F(key,        std::string)\
     F(hmac,       std::string)\
     F(statusCode, int64_t)
-JSON_STRUCT(StoreMeta_c_struct, STORE_META_FIELDS);
+JSON_STRUCT(StoreMeta, STORE_META_FIELDS);
 
 #define STORE_THUMB_META_FIELDS(F)
-JSON_STRUCT_EXT(StoreThumbMeta_c_struct, StoreMeta_c_struct, STORE_THUMB_META_FIELDS);
+JSON_STRUCT_EXT(StoreThumbMeta, StoreMeta, STORE_THUMB_META_FIELDS);
 
 #define STORE_FILE_META_FIELDS(F)\
     F(ver,         int64_t)\
     F(name,        std::string)\
-    F(author,      StoreFileMetaAuthor_c_struct)\
-    F(destination, StoreFileMetaDestination_c_struct)\
-    F(thumb,       std::optional<StoreThumbMeta_c_struct>)
-JSON_STRUCT_EXT(StoreFileMeta_c_struct, StoreMeta_c_struct, STORE_FILE_META_FIELDS);
+    F(author,      StoreFileMetaAuthor)\
+    F(destination, StoreFileMetaDestination)\
+    F(thumb,       std::optional<StoreThumbMeta>)
+JSON_STRUCT_EXT(StoreFileMeta, StoreMeta, STORE_FILE_META_FIELDS);
 
 } // compat_v1
 

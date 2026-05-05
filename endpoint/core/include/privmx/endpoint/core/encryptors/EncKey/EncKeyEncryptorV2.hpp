@@ -24,12 +24,12 @@ namespace core {
 
 class EncKeyEncryptorV2 {
 public:
-    server::EncryptedKeyEntryDataV2_c_struct encrypt(const EncKeyV2ToEncrypt& key, 
+    server::EncryptedKeyEntryDataV2 encrypt(const EncKeyV2ToEncrypt& key, 
         const privmx::crypto::PublicKey& encryptionKey, const crypto::PrivateKey& authorPrivateKey);
-    DecryptedEncKeyV2 decrypt(const server::EncryptedKeyEntryDataV2_c_struct& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey);
+    DecryptedEncKeyV2 decrypt(const server::EncryptedKeyEntryDataV2& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey);
 
 private:
-    void assertDataFormat(const server::EncryptedKeyEntryDataV2_c_struct& encryptedEncKey);
+    void assertDataFormat(const server::EncryptedKeyEntryDataV2& encryptedEncKey);
     DIOEncryptorV1 _DIOEncryptor;
 };
 

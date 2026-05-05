@@ -25,14 +25,14 @@ namespace store {
 
 class FileMetaEncryptorV4 {
 public:
-    store::server::EncryptedFileMetaV4_c_struct encrypt(const store::FileMetaToEncryptV4& fileMeta,
+    store::server::EncryptedFileMetaV4 encrypt(const store::FileMetaToEncryptV4& fileMeta,
                                                         const crypto::PrivateKey& authorPrivateKey,
                                                         const std::string& encryptionKey);
-    store::DecryptedFileMetaV4 decrypt(const store::server::EncryptedFileMetaV4_c_struct& encryptedFileMeta,
+    store::DecryptedFileMetaV4 decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
                                        const std::string& encryptionKey);
 
 private:
-    void validateVersion(const store::server::EncryptedFileMetaV4_c_struct& encryptedFileMeta);
+    void validateVersion(const store::server::EncryptedFileMetaV4& encryptedFileMeta);
     core::Buffer serializeNumber(const int64_t& number);
     int64_t deserializeNumber(const core::Buffer& buffer);
 

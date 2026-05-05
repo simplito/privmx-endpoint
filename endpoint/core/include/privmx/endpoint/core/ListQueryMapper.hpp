@@ -21,7 +21,7 @@ namespace core {
 
 class ListQueryMapper {
 public:
-    static void map(server::ListModel_c_struct& obj, const PagingQuery& listQuery) {
+    static void map(server::ListModel& obj, const PagingQuery& listQuery) {
         obj.sortOrder = listQuery.sortOrder;
         obj.limit = listQuery.limit;
         obj.skip = listQuery.skip;

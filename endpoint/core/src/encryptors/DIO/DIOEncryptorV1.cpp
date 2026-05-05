@@ -23,7 +23,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     if(dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
-    dynamic::DataIntegrityObject_c_struct dioJSON;
+    dynamic::DataIntegrityObject dioJSON;
     dioJSON.version = DataIntegrityObjectDataSchema::Version::VERSION_1;
     dioJSON.creatorUserId = dio.creatorUserId ;
     dioJSON.creatorPublicKey = dio.creatorPubKey;
@@ -37,7 +37,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
         dioJSON.fieldChecksums.insert_or_assign(checksum.first, privmx::utils::Base64::from(checksum.second));
     }
     dioJSON.structureVersion = dio.structureVersion;
-    dynamic::BridgeIdentity_c_struct bridgeIdentity;
+    dynamic::BridgeIdentity bridgeIdentity;
     if(dio.bridgeIdentity.has_value()) {
     bridgeIdentity.url = dio.bridgeIdentity->url;
     bridgeIdentity.pubKey = dio.bridgeIdentity->pubKey;
@@ -51,7 +51,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
 
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {
     auto dioAndSignature = _dataEncryptor.extractDataWithSignature(_dataEncryptor.decode(signedDio));
-    dynamic::DataIntegrityObject_c_struct dioJSON = dynamic::DataIntegrityObject_c_struct::fromJSON(
+    dynamic::DataIntegrityObject dioJSON = dynamic::DataIntegrityObject::fromJSON(
        privmx::utils::Utils::parseJsonObject(dioAndSignature.data.stdString())
     );
     assertDataFormat(dioJSON);
@@ -85,7 +85,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     };
 }
 
-void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject_c_struct& dioJSON) {
+void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {
     if (
         dioJSON.version != DataIntegrityObjectDataSchema::Version::VERSION_1   ||
         dioJSON.creatorUserId.empty()                                          ||

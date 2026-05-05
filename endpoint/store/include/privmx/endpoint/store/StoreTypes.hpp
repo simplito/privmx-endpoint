@@ -41,15 +41,15 @@ struct FileDecryptionParams {
 
 struct FileMetaSigned
 {
-    dynamic::compat_v1::StoreFileMeta_c_struct meta;
+    dynamic::compat_v1::StoreFileMeta meta;
     std::string metaBuf;
     std::string signature;
 };
 
 struct StoreFile
 {
-    server::File_c_struct raw;
-    dynamic::compat_v1::StoreFileMeta_c_struct meta;
+    server::File raw;
+    dynamic::compat_v1::StoreFileMeta meta;
     std::string verified;
 };
 
@@ -95,7 +95,7 @@ struct FileMeta
 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    dynamic::InternalStoreFileMeta_c_struct internalFileMeta;
+    dynamic::InternalStoreFileMeta internalFileMeta;
 };
 
 struct FileEncryptionParams {

@@ -27,7 +27,7 @@ public:
     using Ptr = Poco::SharedPtr<ServerApi>;
 
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
-    void contextSendCustomEvent(server::ContextEmitCustomEventModel_c_struct model);
+    void contextSendCustomEvent(server::ContextEmitCustomEventModel model);
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object

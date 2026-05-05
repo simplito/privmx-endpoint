@@ -82,7 +82,7 @@ void ConnectionImpl::connect(
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
-        server::ContextGetModel_c_struct model;
+        server::ContextGetModel model;
         model.id = id;
         return _serverApi->contextGet(model).context;
     });
@@ -156,7 +156,7 @@ void ConnectionImpl::connectPublic(
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
-        server::ContextInfo_c_struct context;
+        server::ContextInfo context;
         context.contextId = id;
         context.userId = "<anonymous>";
         return context;
@@ -201,7 +201,7 @@ int64_t ConnectionImpl::getConnectionId() {
 PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery) {
 
     LOG_TIME_DEBUG_START(PlatformThread contextList, "")
-    server::ListModel_c_struct listModel;
+    server::ListModel listModel;
     ListQueryMapper::map(listModel, pagingQuery);
     LOG_TIME_DEBUG_CHECKPOINT(PlatformThread contextList, "data")
     auto response = _serverApi->contextList(listModel);
@@ -215,7 +215,7 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
 }
 
 PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery) {
-    server::ContextListUsersModel_c_struct model;
+    server::ContextListUsersModel model;
     model.contextId = contextId;
     ListQueryMapper::map(model, pagingQuery);
     auto response = _serverApi->contextListUsers(model);
@@ -321,7 +321,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
 
 NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
     try {
-        auto tmp = server::RpcEvent_c_struct::fromJSON(event.data);
+        auto tmp = server::RpcEvent::fromJSON(event.data);
         return NotificationEvent{
             .source = EventSource::SERVER,
             .type = event.type,
@@ -373,17 +373,17 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
     }
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "contextUserAdded") {
-            auto raw = server::ContextUserEventData_c_struct::fromJSON(notification.data);
+            auto raw = server::ContextUserEventData::fromJSON(notification.data);
             auto data = Mapper::mapToContextUserEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUserAddedEvent>("context/userAdded", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "contextUserRemoved") {
-            auto raw = server::ContextUserEventData_c_struct::fromJSON(notification.data);
+            auto raw = server::ContextUserEventData::fromJSON(notification.data);
             auto data = Mapper::mapToContextUserEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUserRemovedEvent>("context/userRemoved", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "contextUserStatusChanged") {
-            auto raw = server::ContextUsersStatusChangeEventData_c_struct::fromJSON(notification.data);
+            auto raw = server::ContextUsersStatusChangeEventData::fromJSON(notification.data);
             auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
             _eventMiddleware->emitApiEvent(event);

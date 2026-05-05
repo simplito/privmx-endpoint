@@ -29,8 +29,8 @@ std::string InboxDataHelper::getRandomName() {
     return utils::Base64::from(crypto::Crypto::randomBytes(8));
 }
 
-server::FileConfig_c_struct InboxDataHelper::fileConfigToTypedObject(const FilesConfig& fileConfig) {
-    server::FileConfig_c_struct result;
+server::FileConfig InboxDataHelper::fileConfigToTypedObject(const FilesConfig& fileConfig) {
+    server::FileConfig result;
     result.minCount = fileConfig.minCount;
     result.maxCount = fileConfig.maxCount;
     result.maxFileSize = fileConfig.maxFileSize;
@@ -38,7 +38,7 @@ server::FileConfig_c_struct InboxDataHelper::fileConfigToTypedObject(const Files
     return result;
 }
 
-FilesConfig InboxDataHelper::fileConfigFromTypedObject(const server::FileConfig_c_struct& fileConfig) {
+FilesConfig InboxDataHelper::fileConfigFromTypedObject(const server::FileConfig& fileConfig) {
     return {
         .minCount = fileConfig.minCount,
         .maxCount = fileConfig.maxCount,

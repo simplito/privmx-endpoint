@@ -21,12 +21,12 @@ limitations under the License.
 
 using namespace privmx::endpoint::thread;
 
-std::string MessageDataV2Encryptor::signAndEncrypt(const dynamic::MessageDataV2_c_struct& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey) {
+std::string MessageDataV2Encryptor::signAndEncrypt(const dynamic::MessageDataV2& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey) {
     return _dataEncryptor.signAndEncrypt(data, priv, encKey);
 }
 
-dynamic::MessageDataV2Signed_c_struct  MessageDataV2Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
-    dynamic::MessageDataV2Signed_c_struct result;
+dynamic::MessageDataV2Signed  MessageDataV2Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
+    dynamic::MessageDataV2Signed result;
     auto decrypted = _dataEncryptor.decryptAndGetSign(data, key);
     result.dataSignature = std::get<0>(decrypted);
     result.data = std::get<1>(decrypted);
@@ -35,20 +35,20 @@ dynamic::MessageDataV2Signed_c_struct  MessageDataV2Encryptor::decryptAndGetSign
     return result;
 }
 
-std::string MessageDataV3Encryptor::signAndEncrypt(const dynamic::MessageDataV3_c_struct& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey) {
-    dynamic::MessageDataV3_c_struct messageDataV3Encrypted;
+std::string MessageDataV3Encryptor::signAndEncrypt(const dynamic::MessageDataV3& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey) {
+    dynamic::MessageDataV3 messageDataV3Encrypted;
     messageDataV3Encrypted.publicMeta = utils::Base64::from(data.publicMeta); // for extra save 
     messageDataV3Encrypted.privateMeta =_dataEncryptorBinaryString.encrypt(data.privateMeta, encKey);
     messageDataV3Encrypted.data =_dataEncryptorBinaryString.encrypt(data.data, encKey);
     return utils::Base64::from(_dataEncryptorMessageDataV3.sign(messageDataV3Encrypted, priv));
 }
 
-dynamic::MessageDataV3Signed_c_struct  MessageDataV3Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
-    dynamic::MessageDataV3Signed_c_struct result;
+dynamic::MessageDataV3Signed  MessageDataV3Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
+    dynamic::MessageDataV3Signed result;
     Pson::BinaryString dataBuf, dataSignature;
     std::tie(dataSignature, dataBuf) = _dataEncryptorMessageDataV3.extractSignAndDataBuff(utils::Base64::toString(data));
-    dynamic::MessageDataV3_c_struct messageDataV3Encrypted = dynamic::MessageDataV3_c_struct::fromJSON(privmx::utils::Utils::parseJsonObject(dataBuf));
-    dynamic::MessageDataV3_c_struct messageDataV3;
+    dynamic::MessageDataV3 messageDataV3Encrypted = dynamic::MessageDataV3::fromJSON(privmx::utils::Utils::parseJsonObject(dataBuf));
+    dynamic::MessageDataV3 messageDataV3;
     messageDataV3.publicMeta = utils::Base64::toString(messageDataV3Encrypted.publicMeta);
     try {
         messageDataV3.privateMeta = _dataEncryptorBinaryString.decrypt(messageDataV3Encrypted.privateMeta, key);

@@ -27,20 +27,20 @@ class ServerApi
 {
 public:
     ServerApi(const privmx::privfs::RpcGateway::Ptr& gateway);
-    server::StoreCreateResult_c_struct storeCreate(const server::StoreCreateModel_c_struct& model);
-    void storeUpdate(const server::StoreUpdateModel_c_struct& model);
-    void storeDelete(const server::StoreDeleteModel_c_struct& model);
-    server::StoreGetResult_c_struct storeGet(const server::StoreGetModel_c_struct& model);
-    server::StoreListResult_c_struct storeList(const server::StoreListModel_c_struct& model);
-    server::StoreFileGetResult_c_struct storeFileGet(const server::StoreFileGetModel_c_struct& model);
-    server::StoreFileGetManyResult_c_struct storeFileGetMany(const server::StoreFileGetManyModel_c_struct& model);
-    server::StoreFileListResult_c_struct storeFileList(const server::StoreFileListModel_c_struct& model);
-    server::StoreFileCreateResult_c_struct storeFileCreate(const server::StoreFileCreateModel_c_struct& model);
-    server::StoreFileReadResult_c_struct storeFileRead(const server::StoreFileReadModel_c_struct& model);
-    void storeFileWrite(const server::StoreFileWriteModel_c_struct& model);
-    void storeFileWrite(const server::StoreFileWriteModelByOperations_c_struct& model);
-    void storeFileUpdate(const server::StoreFileUpdateModel_c_struct& model);
-    void storeFileDelete(const server::StoreFileDeleteModel_c_struct& model);
+    server::StoreCreateResult storeCreate(const server::StoreCreateModel& model);
+    void storeUpdate(const server::StoreUpdateModel& model);
+    void storeDelete(const server::StoreDeleteModel& model);
+    server::StoreGetResult storeGet(const server::StoreGetModel& model);
+    server::StoreListResult storeList(const server::StoreListModel& model);
+    server::StoreFileGetResult storeFileGet(const server::StoreFileGetModel& model);
+    server::StoreFileGetManyResult storeFileGetMany(const server::StoreFileGetManyModel& model);
+    server::StoreFileListResult storeFileList(const server::StoreFileListModel& model);
+    server::StoreFileCreateResult storeFileCreate(const server::StoreFileCreateModel& model);
+    server::StoreFileReadResult storeFileRead(const server::StoreFileReadModel& model);
+    void storeFileWrite(const server::StoreFileWriteModel& model);
+    void storeFileWrite(const server::StoreFileWriteModelByOperations& model);
+    void storeFileUpdate(const server::StoreFileUpdateModel& model);
+    void storeFileDelete(const server::StoreFileDeleteModel& model);
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);

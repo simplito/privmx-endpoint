@@ -26,14 +26,14 @@ namespace thread {
 
 class MessageDataEncryptorV4 {
 public:
-    server::EncryptedMessageDataV4_c_struct encrypt(const MessageDataToEncryptV4& messageData,
+    server::EncryptedMessageDataV4 encrypt(const MessageDataToEncryptV4& messageData,
                                                  const crypto::PrivateKey& authorPrivateKey,
                                                  const std::string& encryptionKey);
-    DecryptedMessageDataV4 decrypt(const server::EncryptedMessageDataV4_c_struct& encryptedMessageData,
+    DecryptedMessageDataV4 decrypt(const server::EncryptedMessageDataV4& encryptedMessageData,
                                        const std::string& encryptionKey);
 
 private:
-    void validateVersion(const server::EncryptedMessageDataV4_c_struct& encryptedMessageData);
+    void validateVersion(const server::EncryptedMessageDataV4& encryptedMessageData);
 
     core::DataEncryptorV4 _dataEncryptor;
 };

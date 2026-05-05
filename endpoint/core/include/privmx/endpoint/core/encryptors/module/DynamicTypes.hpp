@@ -30,7 +30,7 @@ namespace dynamic {
     F(privateMeta, std::string)\
     F(internalMeta, privmx::utils::optional_null<std::string>)\
     F(authorPubKey, std::string)
-JSON_STRUCT_EXT(EncryptedModuleDataV4_c_struct, VersionedData_c_struct, ENCRYPTED_MODULE_DATA_V4_FIELDS);
+JSON_STRUCT_EXT(EncryptedModuleDataV4, VersionedData, ENCRYPTED_MODULE_DATA_V4_FIELDS);
 
 // Version 5 
 
@@ -38,7 +38,7 @@ JSON_STRUCT_EXT(EncryptedModuleDataV4_c_struct, VersionedData_c_struct, ENCRYPTE
     F(secret, std::string)\
     F(resourceId, std::string)\
     F(randomId, std::string)
-JSON_STRUCT(ModuleInternalMetaV5_c_struct, MODULE_INTERNAL_META_V5_FIELDS);
+JSON_STRUCT(ModuleInternalMetaV5, MODULE_INTERNAL_META_V5_FIELDS);
 
 #define ENCRYPTED_MODULE_DATA_V5_FIELDS(F)\
     F(publicMeta, std::string)\
@@ -47,7 +47,7 @@ JSON_STRUCT(ModuleInternalMetaV5_c_struct, MODULE_INTERNAL_META_V5_FIELDS);
     F(internalMeta, std::string)\
     F(authorPubKey, std::string)\
     F(dio, std::string)
-JSON_STRUCT_EXT(EncryptedModuleDataV5_c_struct, VersionedData_c_struct, ENCRYPTED_MODULE_DATA_V5_FIELDS);
+JSON_STRUCT_EXT(EncryptedModuleDataV5, VersionedData, ENCRYPTED_MODULE_DATA_V5_FIELDS);
 
 
 } // dynamic

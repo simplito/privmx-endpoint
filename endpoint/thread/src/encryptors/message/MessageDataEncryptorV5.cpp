@@ -22,10 +22,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-server::EncryptedMessageDataV5_c_struct MessageDataEncryptorV5::encrypt(const MessageDataToEncryptV5& messageData,
+server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(const MessageDataToEncryptV5& messageData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
-    server::EncryptedMessageDataV5_c_struct result;
+    server::EncryptedMessageDataV5 result;
     result.version = MessageDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta = _dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey);
@@ -50,7 +50,7 @@ server::EncryptedMessageDataV5_c_struct MessageDataEncryptorV5::encrypt(const Me
 }
 
 DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
-    const server::EncryptedMessageDataV5_c_struct& encryptedMessageData, const std::string& encryptionKey) {
+    const server::EncryptedMessageDataV5& encryptedMessageData, const std::string& encryptionKey) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
@@ -82,7 +82,7 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
     return result;
 }
 
-DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData) {
+DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
@@ -109,7 +109,7 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(const server::Encry
     return result;
 }
 
-core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData) {
+core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encryptedMessageData) {
     assertDataFormat(encryptedMessageData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedMessageData.dio);
     if (
@@ -127,7 +127,7 @@ core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const
     return dio;
 }
 
-void MessageDataEncryptorV5::assertDataFormat(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData) {
+void MessageDataEncryptorV5::assertDataFormat(const server::EncryptedMessageDataV5& encryptedMessageData) {
     if (
         encryptedMessageData.version != MessageDataSchema::Version::VERSION_5 ||
         encryptedMessageData.publicMeta.empty() ||

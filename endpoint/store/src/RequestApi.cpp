@@ -16,15 +16,15 @@ using namespace privmx::endpoint::store;
 
 RequestApi::RequestApi(privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
-server::CreateRequestResult_c_struct RequestApi::createRequest(const server::CreateRequestModel_c_struct& model) {
-    return request<server::CreateRequestResult_c_struct>("createRequest", model.toJSON());
+server::CreateRequestResult RequestApi::createRequest(const server::CreateRequestModel& model) {
+    return request<server::CreateRequestResult>("createRequest", model.toJSON());
 }
 
-void RequestApi::sendChunk(const server::ChunkModel_c_struct& model) {
+void RequestApi::sendChunk(const server::ChunkModel& model) {
     requestVoid("sendChunk", model.toJSON());
 }
 
-void RequestApi::commitFile(const server::CommitFileModel_c_struct& model) {
+void RequestApi::commitFile(const server::CommitFileModel& model) {
     requestVoid("commitFile", model.toJSON());
 }
 

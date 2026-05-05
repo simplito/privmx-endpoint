@@ -18,10 +18,10 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-dynamic::EncryptedModuleDataV5_c_struct ModuleDataEncryptorV5::encrypt(const ModuleDataToEncryptV5& kvdbData,
+dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(const ModuleDataToEncryptV5& kvdbData,
                                                                      const privmx::crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
-    dynamic::EncryptedModuleDataV5_c_struct result;
+    dynamic::EncryptedModuleDataV5 result;
     result.version = ModuleDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta = _dataEncryptor.signAndEncode(kvdbData.publicMeta, authorPrivateKey);
@@ -33,7 +33,7 @@ dynamic::EncryptedModuleDataV5_c_struct ModuleDataEncryptorV5::encrypt(const Mod
     }
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(kvdbData.privateMeta, authorPrivateKey, encryptionKey);
     fieldChecksums.insert(std::make_pair("privateMeta",privmx::crypto::Crypto::sha256(result.privateMeta)));
-    dynamic::ModuleInternalMetaV5_c_struct internalMeta;
+    dynamic::ModuleInternalMetaV5 internalMeta;
     internalMeta.secret = kvdbData.internalMeta.secret;
     internalMeta.resourceId =kvdbData.internalMeta.resourceId;
     internalMeta.randomId = kvdbData.internalMeta.randomId;
@@ -45,7 +45,7 @@ dynamic::EncryptedModuleDataV5_c_struct ModuleDataEncryptorV5::encrypt(const Mod
     return result;
 }
 
-DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData, const std::string& encryptionKey) {
+DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(const dynamic::EncryptedModuleDataV5& encryptedModuleData, const std::string& encryptionKey) {
     DecryptedModuleDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_5;
@@ -63,7 +63,7 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(const dynamic::EncryptedMod
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedModuleData.privateMeta, authorPublicKey, encryptionKey);
         auto internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedModuleData.internalMeta, authorPublicKey, encryptionKey).stdString();
-        auto internalMetaJSON = dynamic::ModuleInternalMetaV5_c_struct::fromJSON(utils::Utils::parseJsonObject(internalMeta));
+        auto internalMetaJSON = dynamic::ModuleInternalMetaV5::fromJSON(utils::Utils::parseJsonObject(internalMeta));
         result.internalMeta = ModuleInternalMetaV5{.secret=internalMetaJSON.secret, .resourceId=internalMetaJSON.resourceId, .randomId=internalMetaJSON.randomId};
         result.authorPubKey = encryptedModuleData.authorPubKey;    
     }  catch (const privmx::endpoint::core::Exception& e) {
@@ -77,7 +77,7 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(const dynamic::EncryptedMod
 }
 
 
-DecryptedModuleDataV5 ModuleDataEncryptorV5::extractPublic(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData) {
+DecryptedModuleDataV5 ModuleDataEncryptorV5::extractPublic(const dynamic::EncryptedModuleDataV5& encryptedModuleData) {
     DecryptedModuleDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_5;
@@ -104,7 +104,7 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::extractPublic(const dynamic::Encryp
     return result;
 }
 
-DataIntegrityObject ModuleDataEncryptorV5::getDIOAndAssertIntegrity(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData) {
+DataIntegrityObject ModuleDataEncryptorV5::getDIOAndAssertIntegrity(const dynamic::EncryptedModuleDataV5& encryptedModuleData) {
     assertDataFormat(encryptedModuleData);
     auto encryptedDIO = encryptedModuleData.dio;
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedDIO);
@@ -120,7 +120,7 @@ DataIntegrityObject ModuleDataEncryptorV5::getDIOAndAssertIntegrity(const dynami
     return dio;
 }
 
-void ModuleDataEncryptorV5::assertDataFormat(const dynamic::EncryptedModuleDataV5_c_struct& encryptedModuleData) {
+void ModuleDataEncryptorV5::assertDataFormat(const dynamic::EncryptedModuleDataV5& encryptedModuleData) {
     if (
         encryptedModuleData.version != ModuleDataSchema::Version::VERSION_5 ||
         encryptedModuleData.publicMeta.empty() ||

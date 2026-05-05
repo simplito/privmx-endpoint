@@ -19,12 +19,12 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 
-dynamic::EncryptedModuleDataV4_c_struct ModuleDataEncryptorV4::encrypt(
+dynamic::EncryptedModuleDataV4 ModuleDataEncryptorV4::encrypt(
     const ModuleDataToEncryptV4& moduleData, 
     const privmx::crypto::PrivateKey& authorPrivateKey,   
     const std::string& encryptionKey
 ) {
-    dynamic::EncryptedModuleDataV4_c_struct result;
+    dynamic::EncryptedModuleDataV4 result;
     result.version = ModuleDataSchema::Version::VERSION_4;
     result.publicMeta = _dataEncryptor.signAndEncode(moduleData.publicMeta, authorPrivateKey);
     try {
@@ -45,7 +45,7 @@ dynamic::EncryptedModuleDataV4_c_struct ModuleDataEncryptorV4::encrypt(
 }
 
 DecryptedModuleDataV4 ModuleDataEncryptorV4::decrypt(
-    const dynamic::EncryptedModuleDataV4_c_struct& encryptedModuleData, const std::string& encryptionKey
+    const dynamic::EncryptedModuleDataV4& encryptedModuleData, const std::string& encryptionKey
 ) {
     DecryptedModuleDataV4 result;
     result.statusCode = 0;
@@ -77,7 +77,7 @@ DecryptedModuleDataV4 ModuleDataEncryptorV4::decrypt(
     return result;
 }
 
-void ModuleDataEncryptorV4::validateVersion(const dynamic::EncryptedModuleDataV4_c_struct& encryptedModuleData) {
+void ModuleDataEncryptorV4::validateVersion(const dynamic::EncryptedModuleDataV4& encryptedModuleData) {
     if (encryptedModuleData.version != ModuleDataSchema::Version::VERSION_4) {
         throw InvalidEncryptedModuleDataVersionException(std::to_string(encryptedModuleData.version) + " expected version: " + std::to_string(ModuleDataSchema::Version::VERSION_4));
     }

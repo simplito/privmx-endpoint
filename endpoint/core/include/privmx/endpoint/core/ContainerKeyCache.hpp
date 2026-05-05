@@ -31,7 +31,7 @@ class ContainerKeyCache {
 public:
     ContainerKeyCache();
     struct CachedModuleKeys {
-        std::vector<server::KeyEntry_c_struct> keys;
+        std::vector<server::KeyEntry> keys;
         std::string currentKeyId;
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;

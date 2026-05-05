@@ -128,7 +128,7 @@ auto ModuleBaseApi::decryptModuleDataV4(
     core::DecryptedModuleDataV4()
 ) {
     try {
-        auto encryptedData = core::dynamic::EncryptedModuleDataV4_c_struct::fromJSON(moduleObj.data);
+        auto encryptedData = core::dynamic::EncryptedModuleDataV4::fromJSON(moduleObj.data);
         return _moduleDataEncryptorV4.decrypt(encryptedData, encKey.key);
     } catch (const core::Exception& e) {
         return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{}};
@@ -147,7 +147,7 @@ auto ModuleBaseApi::decryptModuleDataV5(
     core::DecryptedModuleDataV5()
 ) {
     try {
-        auto encryptedData = core::dynamic::EncryptedModuleDataV5_c_struct::fromJSON(moduleObj.data);
+        auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(moduleObj.data);
         if(encKey.statusCode != 0) {
             auto tmp = _moduleDataEncryptorV5.extractPublic(encryptedData);
             tmp.statusCode = encKey.statusCode;
@@ -170,7 +170,7 @@ auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
     moduleObj.keyId, moduleObj.data, 
     core::ModuleInternalMetaV5()
 ) {
-    auto versioned = core::dynamic::VersionedData_c_struct::fromJSON(moduleObj.data);
+    auto versioned = core::dynamic::VersionedData::fromJSON(moduleObj.data);
     switch (versioned.version) {
         case core::ModuleDataSchema::Version::UNKNOWN:
             return core::ModuleInternalMetaV5();

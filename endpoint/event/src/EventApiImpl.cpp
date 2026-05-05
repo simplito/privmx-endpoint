@@ -90,7 +90,7 @@ bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::ve
         auto channel = _subscriber.getSubscriptionQuery(subscriptions);
         if(!channel.has_value()) return false;
         PRIVMX_DEBUG("EventApiImpl", "isInternalContextEvent", "eventChannel: " + channel.value())
-        auto raw = server::ContextCustomEventData_c_struct::fromJSON(eventData);
+        auto raw = server::ContextCustomEventData::fromJSON(eventData);
         if( !raw.id.empty() && channel.value() == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + raw.id && raw.eventData.type() == typeid(Poco::JSON::Object::Ptr)) {
             auto rawEventDataJSON = raw.eventData.extract<Poco::JSON::Object::Ptr>();
             if(rawEventDataJSON->has("type")) {
@@ -108,14 +108,14 @@ bool EventApiImpl::isInternalContextEvent(const std::string& type, const std::ve
 }
 
 DecryptedInternalContextEventDataV1 EventApiImpl::extractInternalEventData(const Poco::JSON::Object::Ptr& eventData) {
-    auto rawEvent = server::ContextCustomEventData_c_struct::fromJSON(eventData);
+    auto rawEvent = server::ContextCustomEventData::fromJSON(eventData);
     DecryptedInternalContextEventDataV1 result;
     result.dataStructureVersion = EventDataSchema::Version::VERSION_5;
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, crypto::PublicKey::fromBase58DER(rawEvent.author.pub));
     result.statusCode = decryptedKey.statusCode;
     if(result.statusCode == 0) {
         auto tmp = _eventDataEncryptorV5.decrypt(
-            server::EncryptedContextEventDataV5_c_struct::fromJSON(rawEvent.eventData),
+            server::EncryptedContextEventDataV5::fromJSON(rawEvent.eventData),
             crypto::PublicKey::fromBase58DER(rawEvent.author.pub),
             decryptedKey.key
         );
@@ -138,7 +138,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
     std::string channel = subscriptionQuery.value();
     _guardedExecutor->exec([&, type, notification, channel]() {
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-        auto rawEvent = server::ContextCustomEventData_c_struct::fromJSON(data);
+        auto rawEvent = server::ContextCustomEventData::fromJSON(data);
         // fix if not internal check
         if(channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id) return;
         auto resultEventData = ContextCustomEventData{
@@ -154,7 +154,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
             resultEventData.schemaVersion = EventDataSchema::Version::VERSION_5;
             if(decryptedKey.statusCode == 0) {
                 auto tmp = _eventDataEncryptorV5.decrypt(
-                    server::EncryptedContextEventDataV5_c_struct::fromJSON(rawEvent.eventData),
+                    server::EncryptedContextEventDataV5::fromJSON(rawEvent.eventData),
                     crypto::PublicKey::fromBase58DER(rawEvent.author.pub),
                     decryptedKey.key
                 );
@@ -190,7 +190,7 @@ void EventApiImpl::processDisconnectedEvent() {
 }
 
 void EventApiImpl::emitEventEx(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, Poco::Dynamic::Var encryptedEventData, const std::string &encryptionKey) {
-    server::ContextEmitCustomEventModel_c_struct model;
+    server::ContextEmitCustomEventModel model;
     model.contextId = contextId;
     model.data = encryptedEventData;
     model.channel = channelName;

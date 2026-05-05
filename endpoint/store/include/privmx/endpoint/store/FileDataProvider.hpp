@@ -23,7 +23,7 @@ class FileDataProvider {
 public:
     FileDataProvider(const std::shared_ptr<ServerApi>& serverApi) : _server(serverApi) {}
     virtual ~FileDataProvider() = default;
-    virtual server::StoreFileReadResult_c_struct getFileData(const server::StoreFileReadModel_c_struct& model);
+    virtual server::StoreFileReadResult getFileData(const server::StoreFileReadModel& model);
 private:
     std::shared_ptr<ServerApi> _server;
 };

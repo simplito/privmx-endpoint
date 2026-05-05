@@ -75,9 +75,9 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
 }
 
 std::string ChunkDataProvider::getCurrentChecksumsFromBridge() {
-    server::StoreFileReadModel_c_struct fileDataModel {};
+    server::StoreFileReadModel fileDataModel {};
     fileDataModel.fileId = _fileId;
-    fileDataModel.range = server::BufferReadRange_c_struct{.type="checksum"}.toJSON();
+    fileDataModel.range = server::BufferReadRange{.type="checksum"}.toJSON();
     fileDataModel.thumb = false;
     return _server->storeFileRead(fileDataModel).data;
 }
@@ -99,17 +99,17 @@ void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, con
 }
 
 std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
-    server::BufferReadRangeSlice_c_struct range {
-        server::BufferReadRange_c_struct{.type="slice"}, 
+    server::BufferReadRangeSlice range {
+        server::BufferReadRange{.type="slice"}, 
         .from=_serverChunkSize * serverChunkNumber, 
         .to=_serverChunkSize * (serverChunkNumber + 1)
     };
-    server::StoreFileReadModel_c_struct fileDataModel {};
+    server::StoreFileReadModel fileDataModel {};
     fileDataModel.fileId = _fileId;
     fileDataModel.range = range.toJSON();
     fileDataModel.version = _fileVersion;
     fileDataModel.thumb = false;
-    server::StoreFileReadResult_c_struct fileData;
+    server::StoreFileReadResult fileData;
     try {
         fileData = _server->storeFileRead(fileDataModel);
     } catch(const utils::PrivmxException& e) {

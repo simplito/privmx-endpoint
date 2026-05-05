@@ -21,10 +21,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-store::server::EncryptedFileMetaV5_c_struct FileMetaEncryptorV5::encrypt(
+store::server::EncryptedFileMetaV5 FileMetaEncryptorV5::encrypt(
     const store::FileMetaToEncryptV5& fileMeta, const crypto::PrivateKey& authorPrivateKey, const std::string& encryptionKey)
 {
-    server::EncryptedFileMetaV5_c_struct result;
+    server::EncryptedFileMetaV5 result;
     result.version = FileDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta = _dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey);
@@ -45,7 +45,7 @@ store::server::EncryptedFileMetaV5_c_struct FileMetaEncryptorV5::encrypt(
     return result;
 }
 
-store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(const store::server::EncryptedFileMetaV5_c_struct& encryptedFileMeta,
+store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(const store::server::EncryptedFileMetaV5& encryptedFileMeta,
                                                         const std::string& encryptionKey) {
     DecryptedFileMetaV5 result;
     result.statusCode = 0;
@@ -75,7 +75,7 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(const store::server::Enc
     return result;
 }
 
-store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(const store::server::EncryptedFileMetaV5_c_struct& encryptedFileMeta) {
+store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(const store::server::EncryptedFileMetaV5& encryptedFileMeta) {
     DecryptedFileMetaV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = FileDataSchema::Version::VERSION_5;
@@ -102,7 +102,7 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(const store::serve
     return result;
 }
 
-core::DataIntegrityObject FileMetaEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5_c_struct& encryptedFileMeta) {
+core::DataIntegrityObject FileMetaEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta) {
     assertDataFormat(encryptedFileMeta);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedFileMeta.dio);
     if (
@@ -117,7 +117,7 @@ core::DataIntegrityObject FileMetaEncryptorV5::getDIOAndAssertIntegrity(const se
     return dio;
 }
 
-void FileMetaEncryptorV5::assertDataFormat(const server::EncryptedFileMetaV5_c_struct& encryptedFileMeta) {
+void FileMetaEncryptorV5::assertDataFormat(const server::EncryptedFileMetaV5& encryptedFileMeta) {
     if (
         encryptedFileMeta.version != FileDataSchema::Version::VERSION_5 ||
         encryptedFileMeta.publicMeta.empty() ||

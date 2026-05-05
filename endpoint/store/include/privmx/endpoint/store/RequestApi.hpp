@@ -27,9 +27,9 @@ class RequestApi
 {
 public:
     RequestApi(privmx::privfs::RpcGateway::Ptr gateway);
-    server::CreateRequestResult_c_struct createRequest(const server::CreateRequestModel_c_struct& model);
-    void sendChunk(const server::ChunkModel_c_struct& model);
-    void commitFile(const server::CommitFileModel_c_struct& model);
+    server::CreateRequestResult createRequest(const server::CreateRequestModel& model);
+    void sendChunk(const server::ChunkModel& model);
+    void commitFile(const server::CommitFileModel& model);
 
 private:
     template<typename T>

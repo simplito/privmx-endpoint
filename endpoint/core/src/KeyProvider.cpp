@@ -24,14 +24,14 @@ using namespace privmx::endpoint::core;
 
 
 void KeyDecryptionAndVerificationRequest::addOne(
-    const std::vector<server::KeyEntry_c_struct>& keys, 
+    const std::vector<server::KeyEntry>& keys, 
     const std::string& keyId, 
     const EncKeyLocation& location
 ) {
     if(_completed) {
         throw KeyProviderRequestCompletedException();
     }
-    server::KeyEntry_c_struct keyToDecrypt;
+    server::KeyEntry keyToDecrypt;
     keyToDecrypt.keyId = keyId;
     keyToDecrypt.data = Poco::Dynamic::Var();
     for (auto key : keys) {
@@ -43,21 +43,21 @@ void KeyDecryptionAndVerificationRequest::addOne(
     if(auto search = requestData.find(location); search != requestData.end()) {
         search->second.insert_or_assign(keyToDecrypt.keyId, keyToDecrypt);
     } else {
-        std::unordered_map<std::string, server::KeyEntry_c_struct> toDecrypt;
+        std::unordered_map<std::string, server::KeyEntry> toDecrypt;
         toDecrypt.insert_or_assign(keyToDecrypt.keyId, keyToDecrypt);
         requestData.insert(std::make_pair(location, toDecrypt));
     }
 }
 
 void KeyDecryptionAndVerificationRequest::addMany(
-    const std::vector<server::KeyEntry_c_struct>& keys,
+    const std::vector<server::KeyEntry>& keys,
     std::set<std::string> keyIds,
     const EncKeyLocation& location
 ) {
     if(_completed) {
         throw KeyProviderRequestCompletedException();
     }
-    std::vector<server::KeyEntry_c_struct> keysToDecrypt;
+    std::vector<server::KeyEntry> keysToDecrypt;
     for (auto key : keys) {
         if(std::find(keyIds.begin(), keyIds.end(), key.keyId) != keyIds.end()) {
             keysToDecrypt.push_back(key);
@@ -65,7 +65,7 @@ void KeyDecryptionAndVerificationRequest::addMany(
         }
     }
     for(std::string keyId : keyIds) {
-        server::KeyEntry_c_struct keyToDecrypt;
+        server::KeyEntry keyToDecrypt;
         keyToDecrypt.keyId = keyId;
         keyToDecrypt.data = Poco::Dynamic::Var();
         keysToDecrypt.push_back(keyToDecrypt);
@@ -75,7 +75,7 @@ void KeyDecryptionAndVerificationRequest::addMany(
             search->second.insert_or_assign(keyToDecrypt.keyId, keyToDecrypt);
         }
     } else {
-        std::unordered_map<std::string, server::KeyEntry_c_struct> toDecrypt;
+        std::unordered_map<std::string, server::KeyEntry> toDecrypt;
         for(auto keyToDecrypt : keysToDecrypt) {
             toDecrypt.insert_or_assign(keyToDecrypt.keyId, keyToDecrypt);
         }
@@ -84,7 +84,7 @@ void KeyDecryptionAndVerificationRequest::addMany(
 }
 
 void KeyDecryptionAndVerificationRequest::addAll(
-    const std::vector<server::KeyEntry_c_struct>& keys, 
+    const std::vector<server::KeyEntry>& keys, 
     const EncKeyLocation& location
 ) {
     if(_completed) {
@@ -95,7 +95,7 @@ void KeyDecryptionAndVerificationRequest::addAll(
             search->second.insert_or_assign(key.keyId, key);
         }
     } else {
-        std::unordered_map<std::string, server::KeyEntry_c_struct> toDecrypt;
+        std::unordered_map<std::string, server::KeyEntry> toDecrypt;
         for(auto key : keys) {
             toDecrypt.insert_or_assign(key.keyId, key);
         }
@@ -135,28 +135,28 @@ std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKe
     return result;
 }
 
-std::vector<server::KeyEntrySet_c_struct> KeyProvider::prepareKeysList(
+std::vector<server::KeyEntrySet> KeyProvider::prepareKeysList(
     const std::vector<UserWithPubKey>& users, 
     const EncKey& key, 
     const DataIntegrityObject& dio, 
     const EncKeyLocation& location, 
     const std::string& containerSecret
 ) {
-    std::vector<server::KeyEntrySet_c_struct> result;
+    std::vector<server::KeyEntrySet> result;
     for (auto user : users) {
         result.push_back(createKeyEntrySet(user, key, dio, location, containerSecret));
     }    
     return result;
 }
 
-std::vector<server::KeyEntrySet_c_struct> KeyProvider::prepareMissingKeysForNewUsers(
+std::vector<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(
     const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, 
     const std::vector<UserWithPubKey>& users, 
     const DataIntegrityObject& dio, 
     const EncKeyLocation& location, 
     const std::string& containerSecret
 ) {
-    std::vector<server::KeyEntrySet_c_struct> result;
+    std::vector<server::KeyEntrySet> result;
     for (auto t : missingKeys) {
         auto key = t.second;
         DataIntegrityObject missingKeyDIO = dio;
@@ -173,7 +173,7 @@ std::vector<server::KeyEntrySet_c_struct> KeyProvider::prepareMissingKeysForNewU
     return result;
 }
 
-server::KeyEntrySet_c_struct KeyProvider::createKeyEntrySet(
+server::KeyEntrySet KeyProvider::createKeyEntrySet(
     const UserWithPubKey& user,
     const EncKey& key, 
     const DataIntegrityObject& dio, 
@@ -181,7 +181,7 @@ server::KeyEntrySet_c_struct KeyProvider::createKeyEntrySet(
     const std::string& containerSecret
 ) {
     auto keySecret = generateSecret();
-    server::KeyEntrySet_c_struct key_entry_set;
+    server::KeyEntrySet key_entry_set;
     key_entry_set.user = user.userId;
     key_entry_set.keyId = key.id;
     key_entry_set.data = _encKeyEncryptorV2.encrypt(
@@ -211,15 +211,15 @@ bool KeyProvider::verifyKeysSecret(const std::unordered_map<std::string, Decrypt
     return true;
 }
 
-std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerifyKeys(std::unordered_map<std::string, server::KeyEntry_c_struct> keys, const EncKeyLocation& location) {
+std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerifyKeys(std::unordered_map<std::string, server::KeyEntry> keys, const EncKeyLocation& location) {
     std::unordered_map<std::string, DecryptedEncKeyV2> result;
     for(auto key : keys) {
         DecryptedEncKeyV2 decryptedEncKey;
         decryptedEncKey.statusCode = 0;
         if(key.second.data.type() == typeid(Poco::JSON::Object::Ptr)) {
-            dynamic::VersionedData_c_struct versioned;
+            dynamic::VersionedData versioned;
             try {
-                versioned = dynamic::VersionedData_c_struct::fromJSON(key.second.data);
+                versioned = dynamic::VersionedData::fromJSON(key.second.data);
             } catch (const privmx::endpoint::core::Exception& e) {
                 decryptedEncKey.statusCode = e.getCode();
                 result.insert(std::make_pair(key.first, decryptedEncKey));
@@ -235,7 +235,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
             }
             if(versioned.version == EncryptionKeyDataSchema::Version::VERSION_2) { 
                 DecryptedEncKeyV2 decryptedEncKey = _encKeyEncryptorV2.decrypt(
-                    server::EncryptedKeyEntryDataV2_c_struct::fromJSON(key.second.data),
+                    server::EncryptedKeyEntryDataV2::fromJSON(key.second.data),
                     _key
                 );
                 result.insert(std::make_pair(key.first,decryptedEncKey));

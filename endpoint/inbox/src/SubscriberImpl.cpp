@@ -143,7 +143,7 @@ void SubscriberImpl::updateSubscriptionQuerySelectors(core::SubscriptionQueryObj
         //getInbox to get threadId
         auto inboxId = selectors[inboxSelectorPos].selectorValue;
         if(inboxIdToThreadId[inboxId] == "") {
-            server::InboxGetModel_c_struct model;
+            server::InboxGetModel model;
             model.id = inboxId;
             auto inboxRaw = _serverApi.inboxGet(model).inbox;
             auto threadId = inboxRaw.data.back().data.threadId;

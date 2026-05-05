@@ -28,30 +28,30 @@ public:
 
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
-    server::StreamRoomCreateResult_c_struct streamRoomCreate(server::StreamRoomCreateModel_c_struct model);
-    void streamRoomUpdate(server::StreamRoomUpdateModel_c_struct model);
-    server::StreamRoomListResult_c_struct streamRoomList(server::StreamRoomListModel_c_struct model);
-    server::StreamRoomGetResult_c_struct streamRoomGet(server::StreamRoomGetModel_c_struct model);
-    void streamRoomDelete(server::StreamRoomDeleteModel_c_struct model);
-    server::StreamGetTurnCredentialsResult_c_struct streamGetTurnCredentials();
-    server::StreamListResult_c_struct streamList(server::StreamListModel_c_struct model);
-    server::StreamPublishResult_c_struct streamPublish(server::StreamPublishModel_c_struct model);
-    server::StreamPublishResult_c_struct streamUpdate(server::StreamUpdateModel_c_struct model);
+    server::StreamRoomCreateResult streamRoomCreate(server::StreamRoomCreateModel model);
+    void streamRoomUpdate(server::StreamRoomUpdateModel model);
+    server::StreamRoomListResult streamRoomList(server::StreamRoomListModel model);
+    server::StreamRoomGetResult streamRoomGet(server::StreamRoomGetModel model);
+    void streamRoomDelete(server::StreamRoomDeleteModel model);
+    server::StreamGetTurnCredentialsResult streamGetTurnCredentials();
+    server::StreamListResult streamList(server::StreamListModel model);
+    server::StreamPublishResult streamPublish(server::StreamPublishModel model);
+    server::StreamPublishResult streamUpdate(server::StreamUpdateModel model);
 
-    void streamAcceptOffer(server::StreamAcceptOfferModel_c_struct model);
-    void streamSetNewOffer(server::StreamSetNewOfferModel_c_struct model);
+    void streamAcceptOffer(server::StreamAcceptOfferModel model);
+    void streamSetNewOffer(server::StreamSetNewOfferModel model);
 
-    void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel_c_struct model);
-    void streamUnpublish(server::StreamUnpublishModel_c_struct model);
+    void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
+    void streamUnpublish(server::StreamUnpublishModel model);
 
-    server::StreamsSubscribeResult_c_struct streamsSubscribeToRemote(server::StreamsSubscribeModel_c_struct model);
-    server::StreamsSubscribeResult_c_struct streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel_c_struct model);
-    server::StreamsSubscribeResult_c_struct streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel_c_struct model);
-    void streamRoomJoin(server::StreamRoomJoinModel_c_struct model);
-    void streamRoomLeave(server::StreamRoomLeaveModel_c_struct model);
-    void streamRoomEnableRecording(server::StreamRoomRecordingModel_c_struct model);
+    server::StreamsSubscribeResult streamsSubscribeToRemote(server::StreamsSubscribeModel model);
+    server::StreamsSubscribeResult streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model);
+    server::StreamsSubscribeResult streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model);
+    void streamRoomJoin(server::StreamRoomJoinModel model);
+    void streamRoomLeave(server::StreamRoomLeaveModel model);
+    void streamRoomEnableRecording(server::StreamRoomRecordingModel model);
 
-    void trickle(server::StreamTrickleModel_c_struct model);
+    void trickle(server::StreamTrickleModel model);
     bool isConnected() {return _gateway ? _gateway->isConnected() : false;}
 private:
     template<typename T>

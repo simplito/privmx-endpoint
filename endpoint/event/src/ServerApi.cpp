@@ -16,7 +16,7 @@ using namespace privmx::endpoint;
 
 ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
-void ServerApi::contextSendCustomEvent(server::ContextEmitCustomEventModel_c_struct model) {
+void ServerApi::contextSendCustomEvent(server::ContextEmitCustomEventModel model) {
     request("contextSendCustomEvent", model.toJSON());
 }
 

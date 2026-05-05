@@ -21,10 +21,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-server::EncryptedMessageDataV4_c_struct MessageDataEncryptorV4::encrypt(const MessageDataToEncryptV4& messageData,
+server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageDataToEncryptV4& messageData,
                                                                      const crypto::PrivateKey& authorPrivateKey,
                                                                      const std::string& encryptionKey) {
-    server::EncryptedMessageDataV4_c_struct result;
+    server::EncryptedMessageDataV4 result;
     result.version = MessageDataSchema::Version::VERSION_4;
     result.publicMeta = _dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey);
     try {
@@ -44,7 +44,7 @@ server::EncryptedMessageDataV4_c_struct MessageDataEncryptorV4::encrypt(const Me
 }
 
 DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
-    const server::EncryptedMessageDataV4_c_struct& encryptedMessageData, const std::string& encryptionKey
+    const server::EncryptedMessageDataV4& encryptedMessageData, const std::string& encryptionKey
 ) {
     DecryptedMessageDataV4 result;
     result.statusCode = 0;
@@ -77,7 +77,7 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
     return result;
 }
 
-void MessageDataEncryptorV4::validateVersion(const server::EncryptedMessageDataV4_c_struct& encryptedMessageData) {
+void MessageDataEncryptorV4::validateVersion(const server::EncryptedMessageDataV4& encryptedMessageData) {
     if (encryptedMessageData.version != MessageDataSchema::Version::VERSION_4) {
         throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version) + " expected version: " + std::to_string(MessageDataSchema::Version::VERSION_4));
     }

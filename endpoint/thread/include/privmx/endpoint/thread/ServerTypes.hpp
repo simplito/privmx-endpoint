@@ -29,10 +29,10 @@ namespace server {
     F(managers, std::vector<std::string>)\
     F(data, Poco::Dynamic::Var)\
     F(keyId, std::string)\
-    F(keys, std::vector<core::server::KeyEntrySet_c_struct>)\
+    F(keys, std::vector<core::server::KeyEntrySet>)\
     F(type, std::string)\
     F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(ThreadCreateModel_c_struct, THREAD_CREATE_MODEL_FIELDS);
+JSON_STRUCT(ThreadCreateModel, THREAD_CREATE_MODEL_FIELDS);
 
 #define THREAD_UPDATE_MODEL_FIELDS(F)\
     F(id, std::string)\
@@ -41,16 +41,16 @@ JSON_STRUCT(ThreadCreateModel_c_struct, THREAD_CREATE_MODEL_FIELDS);
     F(managers, std::vector<std::string>)\
     F(data, Poco::Dynamic::Var)\
     F(keyId, std::string)\
-    F(keys, std::vector<core::server::KeyEntrySet_c_struct>)\
+    F(keys, std::vector<core::server::KeyEntrySet>)\
     F(version, int64_t)\
     F(force, bool)\
     F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(ThreadUpdateModel_c_struct, THREAD_UPDATE_MODEL_FIELDS);
+JSON_STRUCT(ThreadUpdateModel, THREAD_UPDATE_MODEL_FIELDS);
 
 #define THREAD2_DATA_ENTRY_FIELDS(F)\
     F(keyId, std::string)\
     F(data, Poco::Dynamic::Var)
-JSON_STRUCT(Thread2DataEntry_c_struct, THREAD2_DATA_ENTRY_FIELDS);
+JSON_STRUCT(Thread2DataEntry, THREAD2_DATA_ENTRY_FIELDS);
 
 #define THREAD_INFO_FIELDS(F)\
     F(id, std::string)\
@@ -60,64 +60,64 @@ JSON_STRUCT(Thread2DataEntry_c_struct, THREAD2_DATA_ENTRY_FIELDS);
     F(creator, std::string)\
     F(lastModificationDate, int64_t)\
     F(lastModifier, std::string)\
-    F(data, std::vector<Thread2DataEntry_c_struct>)\
+    F(data, std::vector<Thread2DataEntry>)\
     F(keyId, std::string)\
     F(users, std::vector<std::string>)\
     F(managers, std::vector<std::string>)\
-    F(keys, std::vector<core::server::KeyEntry_c_struct>)\
+    F(keys, std::vector<core::server::KeyEntry>)\
     F(version, int64_t)\
     F(lastMsgDate, int64_t)\
     F(messages, int64_t)\
     F(type, std::optional<std::string>)\
     F(policy, Poco::Dynamic::Var)
-JSON_STRUCT(ThreadInfo_c_struct, THREAD_INFO_FIELDS);
+JSON_STRUCT(ThreadInfo, THREAD_INFO_FIELDS);
 
 #define THREAD_CREATE_RESULT_FIELDS(F)\
     F(threadId, std::string)
-JSON_STRUCT(ThreadCreateResult_c_struct, THREAD_CREATE_RESULT_FIELDS);
+JSON_STRUCT(ThreadCreateResult, THREAD_CREATE_RESULT_FIELDS);
 
 #define THREAD_DELETE_MODEL_FIELDS(F)\
     F(threadId, std::string)
-JSON_STRUCT(ThreadDeleteModel_c_struct, THREAD_DELETE_MODEL_FIELDS);
+JSON_STRUCT(ThreadDeleteModel, THREAD_DELETE_MODEL_FIELDS);
 
 #define THREAD_GET_MODEL_FIELDS(F)\
     F(threadId, std::string)\
     F(type, std::optional<std::string>)
-JSON_STRUCT(ThreadGetModel_c_struct, THREAD_GET_MODEL_FIELDS);
+JSON_STRUCT(ThreadGetModel, THREAD_GET_MODEL_FIELDS);
 
 #define THREAD_LIST_MODEL_FIELDS(F)\
     F(contextId, std::string)\
     F(type, std::optional<std::string>)
-JSON_STRUCT_EXT(ThreadListModel_c_struct, core::server::ListModel_c_struct, THREAD_LIST_MODEL_FIELDS);
+JSON_STRUCT_EXT(ThreadListModel, core::server::ListModel, THREAD_LIST_MODEL_FIELDS);
 
 #define THREAD_GET_RESULT_FIELDS(F)\
-    F(thread, ThreadInfo_c_struct)
-JSON_STRUCT(ThreadGetResult_c_struct, THREAD_GET_RESULT_FIELDS);
+    F(thread, ThreadInfo)
+JSON_STRUCT(ThreadGetResult, THREAD_GET_RESULT_FIELDS);
 
 #define THREAD_LIST_RESULT_FIELDS(F)\
-    F(threads, std::vector<ThreadInfo_c_struct>)\
+    F(threads, std::vector<ThreadInfo>)\
     F(count, int64_t)
-JSON_STRUCT(ThreadListResult_c_struct, THREAD_LIST_RESULT_FIELDS);
+JSON_STRUCT(ThreadListResult, THREAD_LIST_RESULT_FIELDS);
 
 #define THREAD_MESSAGE_SEND_MODEL_FIELDS(F)\
     F(resourceId, std::string)\
     F(threadId, std::string)\
     F(data, Poco::Dynamic::Var)\
     F(keyId, std::string)
-JSON_STRUCT(ThreadMessageSendModel_c_struct, THREAD_MESSAGE_SEND_MODEL_FIELDS);
+JSON_STRUCT(ThreadMessageSendModel, THREAD_MESSAGE_SEND_MODEL_FIELDS);
 
 #define THREAD_MESSAGE_SEND_RESULT_FIELDS(F)\
     F(messageId, std::string)
-JSON_STRUCT(ThreadMessageSendResult_c_struct, THREAD_MESSAGE_SEND_RESULT_FIELDS);
+JSON_STRUCT(ThreadMessageSendResult, THREAD_MESSAGE_SEND_RESULT_FIELDS);
 
 #define THREAD_MESSAGE_DELETE_MODEL_FIELDS(F)\
     F(messageId, std::string)
-JSON_STRUCT(ThreadMessageDeleteModel_c_struct, THREAD_MESSAGE_DELETE_MODEL_FIELDS);
+JSON_STRUCT(ThreadMessageDeleteModel, THREAD_MESSAGE_DELETE_MODEL_FIELDS);
 
 #define MESSAGE_UPDATE_FIELDS(F)\
     F(createDate, int64_t)\
     F(author, std::string)
-JSON_STRUCT(MessageUpdate_c_struct, MESSAGE_UPDATE_FIELDS);
+JSON_STRUCT(MessageUpdate, MESSAGE_UPDATE_FIELDS);
 
 #define MESSAGE_FIELDS(F)\
     F(id, std::string)\
@@ -129,43 +129,43 @@ JSON_STRUCT(MessageUpdate_c_struct, MESSAGE_UPDATE_FIELDS);
     F(author, std::string)\
     F(data, Poco::Dynamic::Var)\
     F(keyId, std::string)\
-    F(updates, std::vector<MessageUpdate_c_struct>)
-JSON_STRUCT(Message_c_struct, MESSAGE_FIELDS);
+    F(updates, std::vector<MessageUpdate>)
+JSON_STRUCT(Message, MESSAGE_FIELDS);
 
 #define THREAD_MESSAGE_GET_MODEL_FIELDS(F)\
     F(messageId, std::string)
-JSON_STRUCT(ThreadMessageGetModel_c_struct, THREAD_MESSAGE_GET_MODEL_FIELDS);
+JSON_STRUCT(ThreadMessageGetModel, THREAD_MESSAGE_GET_MODEL_FIELDS);
 
 #define THREAD_MESSAGES_GET_MODEL_FIELDS(F)\
     F(threadId, std::string)
-JSON_STRUCT_EXT(ThreadMessagesGetModel_c_struct, core::server::ListModel_c_struct, THREAD_MESSAGES_GET_MODEL_FIELDS);
+JSON_STRUCT_EXT(ThreadMessagesGetModel, core::server::ListModel, THREAD_MESSAGES_GET_MODEL_FIELDS);
 
 #define THREAD_MESSAGE_GET_RESULT_FIELDS(F)\
-    F(message, Message_c_struct)
-JSON_STRUCT(ThreadMessageGetResult_c_struct, THREAD_MESSAGE_GET_RESULT_FIELDS);
+    F(message, Message)
+JSON_STRUCT(ThreadMessageGetResult, THREAD_MESSAGE_GET_RESULT_FIELDS);
 
 #define THREAD_MESSAGES_GET_RESULT_FIELDS(F)\
-    F(thread, ThreadInfo_c_struct)\
-    F(messages, std::vector<Message_c_struct>)\
+    F(thread, ThreadInfo)\
+    F(messages, std::vector<Message>)\
     F(count, int64_t)
-JSON_STRUCT(ThreadMessagesGetResult_c_struct, THREAD_MESSAGES_GET_RESULT_FIELDS);
+JSON_STRUCT(ThreadMessagesGetResult, THREAD_MESSAGES_GET_RESULT_FIELDS);
 
 #define THREAD_MESSAGE_UPDATE_MODEL_FIELDS(F)\
     F(messageId, std::string)\
     F(data, Poco::Dynamic::Var)\
     F(keyId, std::string)
-JSON_STRUCT(ThreadMessageUpdateModel_c_struct, THREAD_MESSAGE_UPDATE_MODEL_FIELDS);
+JSON_STRUCT(ThreadMessageUpdateModel, THREAD_MESSAGE_UPDATE_MODEL_FIELDS);
 
 #define THREAD_DELETED_EVENT_DATA_FIELDS(F)\
     F(type, std::optional<std::string>)\
     F(threadId, std::string)
-JSON_STRUCT(ThreadDeletedEventData_c_struct, THREAD_DELETED_EVENT_DATA_FIELDS);
+JSON_STRUCT(ThreadDeletedEventData, THREAD_DELETED_EVENT_DATA_FIELDS);
 
 #define THREAD_DELETED_MESSAGE_EVENT_DATA_FIELDS(F)\
     F(messageId, std::string)\
     F(threadId, std::string)\
     F(containerType, std::optional<std::string>)
-JSON_STRUCT(ThreadDeletedMessageEventData_c_struct, THREAD_DELETED_MESSAGE_EVENT_DATA_FIELDS);
+JSON_STRUCT(ThreadDeletedMessageEventData, THREAD_DELETED_MESSAGE_EVENT_DATA_FIELDS);
 
 #define THREAD_STATS_EVENT_DATA_FIELDS(F)\
     F(contextId, std::string)\
@@ -173,7 +173,7 @@ JSON_STRUCT(ThreadDeletedMessageEventData_c_struct, THREAD_DELETED_MESSAGE_EVENT
     F(lastMsgDate, int64_t)\
     F(messages, int64_t)\
     F(type, std::optional<std::string>)
-JSON_STRUCT(ThreadStatsEventData_c_struct, THREAD_STATS_EVENT_DATA_FIELDS);
+JSON_STRUCT(ThreadStatsEventData, THREAD_STATS_EVENT_DATA_FIELDS);
 
 #define ENCRYPTED_MESSAGE_DATA_V4_FIELDS(F)\
     F(publicMeta, std::string)\
@@ -182,7 +182,7 @@ JSON_STRUCT(ThreadStatsEventData_c_struct, THREAD_STATS_EVENT_DATA_FIELDS);
     F(data, std::string)\
     F(internalMeta, std::optional<std::string>)\
     F(authorPubKey, std::string)
-JSON_STRUCT_EXT(EncryptedMessageDataV4_c_struct, core::dynamic::VersionedData_c_struct, ENCRYPTED_MESSAGE_DATA_V4_FIELDS);
+JSON_STRUCT_EXT(EncryptedMessageDataV4, core::dynamic::VersionedData, ENCRYPTED_MESSAGE_DATA_V4_FIELDS);
 
 
 #define ENCRYPTED_MESSAGE_DATA_V5_FIELDS(F)\
@@ -193,11 +193,11 @@ JSON_STRUCT_EXT(EncryptedMessageDataV4_c_struct, core::dynamic::VersionedData_c_
     F(internalMeta, std::optional<std::string>)\
     F(authorPubKey, std::string)\
     F(dio, std::string)
-JSON_STRUCT_EXT(EncryptedMessageDataV5_c_struct, core::dynamic::VersionedData_c_struct, ENCRYPTED_MESSAGE_DATA_V5_FIELDS);
+JSON_STRUCT_EXT(EncryptedMessageDataV5, core::dynamic::VersionedData, ENCRYPTED_MESSAGE_DATA_V5_FIELDS);
 
 #define THREAD_MESSAGE_EVENT_DATA_FIELDS(F)\
     F(containerType, std::optional<std::string>)
-JSON_STRUCT_EXT(ThreadMessageEventData_c_struct, Message_c_struct, THREAD_MESSAGE_EVENT_DATA_FIELDS);
+JSON_STRUCT_EXT(ThreadMessageEventData, Message, THREAD_MESSAGE_EVENT_DATA_FIELDS);
 
 
 } // server

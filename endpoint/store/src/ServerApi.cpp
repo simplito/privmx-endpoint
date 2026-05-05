@@ -16,59 +16,59 @@ using namespace privmx::endpoint::store;
 
 ServerApi::ServerApi(const privfs::RpcGateway::Ptr& gateway) : _gateway(gateway) {}
 
-server::StoreCreateResult_c_struct ServerApi::storeCreate(const server::StoreCreateModel_c_struct& model) {
-    return request<server::StoreCreateResult_c_struct>("storeCreate", model.toJSON());
+server::StoreCreateResult ServerApi::storeCreate(const server::StoreCreateModel& model) {
+    return request<server::StoreCreateResult>("storeCreate", model.toJSON());
 }
 
-void ServerApi::storeUpdate(const server::StoreUpdateModel_c_struct& model) {
+void ServerApi::storeUpdate(const server::StoreUpdateModel& model) {
     requestVoid("storeUpdate", model.toJSON());
 }
 
-void ServerApi::storeDelete(const server::StoreDeleteModel_c_struct& model) {
+void ServerApi::storeDelete(const server::StoreDeleteModel& model) {
     requestVoid("storeDelete", model.toJSON());
 }
 
-server::StoreGetResult_c_struct ServerApi::storeGet(const server::StoreGetModel_c_struct& model) {
-    return request<server::StoreGetResult_c_struct>("storeGet", model.toJSON());
+server::StoreGetResult ServerApi::storeGet(const server::StoreGetModel& model) {
+    return request<server::StoreGetResult>("storeGet", model.toJSON());
 }
 
-server::StoreListResult_c_struct ServerApi::storeList(const server::StoreListModel_c_struct& model) {
-    return request<server::StoreListResult_c_struct>("storeList", model.toJSON());
+server::StoreListResult ServerApi::storeList(const server::StoreListModel& model) {
+    return request<server::StoreListResult>("storeList", model.toJSON());
 }
 
-server::StoreFileGetResult_c_struct ServerApi::storeFileGet(const server::StoreFileGetModel_c_struct& model) {
-    return request<server::StoreFileGetResult_c_struct>("storeFileGet", model.toJSON());
+server::StoreFileGetResult ServerApi::storeFileGet(const server::StoreFileGetModel& model) {
+    return request<server::StoreFileGetResult>("storeFileGet", model.toJSON());
 }
 
-server::StoreFileGetManyResult_c_struct ServerApi::storeFileGetMany(const server::StoreFileGetManyModel_c_struct& model) {
-    return request<server::StoreFileGetManyResult_c_struct>("storeFileGetMany", model.toJSON());
+server::StoreFileGetManyResult ServerApi::storeFileGetMany(const server::StoreFileGetManyModel& model) {
+    return request<server::StoreFileGetManyResult>("storeFileGetMany", model.toJSON());
 }
 
-server::StoreFileListResult_c_struct ServerApi::storeFileList(const server::StoreFileListModel_c_struct& model) {
-    return request<server::StoreFileListResult_c_struct>("storeFileList", model.toJSON());
+server::StoreFileListResult ServerApi::storeFileList(const server::StoreFileListModel& model) {
+    return request<server::StoreFileListResult>("storeFileList", model.toJSON());
 }
 
-server::StoreFileCreateResult_c_struct ServerApi::storeFileCreate(const server::StoreFileCreateModel_c_struct& model) {
-    return request<server::StoreFileCreateResult_c_struct>("storeFileCreate", model.toJSON());
+server::StoreFileCreateResult ServerApi::storeFileCreate(const server::StoreFileCreateModel& model) {
+    return request<server::StoreFileCreateResult>("storeFileCreate", model.toJSON());
 }
 
-server::StoreFileReadResult_c_struct ServerApi::storeFileRead(const server::StoreFileReadModel_c_struct& model) {
-    return request<server::StoreFileReadResult_c_struct>("storeFileRead", model.toJSON());
+server::StoreFileReadResult ServerApi::storeFileRead(const server::StoreFileReadModel& model) {
+    return request<server::StoreFileReadResult>("storeFileRead", model.toJSON());
 }
 
-void ServerApi::storeFileWrite(const server::StoreFileWriteModel_c_struct& model) {
+void ServerApi::storeFileWrite(const server::StoreFileWriteModel& model) {
     requestVoid("storeFileWrite", model.toJSON());
 }
 
-void ServerApi::storeFileWrite(const server::StoreFileWriteModelByOperations_c_struct& model) {
+void ServerApi::storeFileWrite(const server::StoreFileWriteModelByOperations& model) {
     requestVoid("storeFileWrite", model.toJSON());
 }
 
-void ServerApi::storeFileUpdate(const server::StoreFileUpdateModel_c_struct& model) {
+void ServerApi::storeFileUpdate(const server::StoreFileUpdateModel& model) {
     requestVoid("storeFileUpdate", model.toJSON());
 }
 
-void ServerApi::storeFileDelete(const server::StoreFileDeleteModel_c_struct& model) {
+void ServerApi::storeFileDelete(const server::StoreFileDeleteModel& model) {
     requestVoid("storeFileDelete", model.toJSON());
 }
 

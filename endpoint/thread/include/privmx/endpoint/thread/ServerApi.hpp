@@ -28,16 +28,16 @@ public:
 
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
-    server::ThreadCreateResult_c_struct threadCreate(server::ThreadCreateModel_c_struct model);
-    void threadUpdate(server::ThreadUpdateModel_c_struct model);
-    void threadDelete(server::ThreadDeleteModel_c_struct model);
-    server::ThreadGetResult_c_struct threadGet(server::ThreadGetModel_c_struct model);
-    server::ThreadListResult_c_struct threadList(server::ThreadListModel_c_struct model);
-    server::ThreadMessageSendResult_c_struct threadMessageSend(server::ThreadMessageSendModel_c_struct model);
-    void threadMessageDelete(server::ThreadMessageDeleteModel_c_struct model);
-    server::ThreadMessageGetResult_c_struct threadMessageGet(server::ThreadMessageGetModel_c_struct model);
-    server::ThreadMessagesGetResult_c_struct threadMessagesGet(server::ThreadMessagesGetModel_c_struct model);
-    void threadMessageUpdate(server::ThreadMessageUpdateModel_c_struct model);
+    server::ThreadCreateResult threadCreate(server::ThreadCreateModel model);
+    void threadUpdate(server::ThreadUpdateModel model);
+    void threadDelete(server::ThreadDeleteModel model);
+    server::ThreadGetResult threadGet(server::ThreadGetModel model);
+    server::ThreadListResult threadList(server::ThreadListModel model);
+    server::ThreadMessageSendResult threadMessageSend(server::ThreadMessageSendModel model);
+    void threadMessageDelete(server::ThreadMessageDeleteModel model);
+    server::ThreadMessageGetResult threadMessageGet(server::ThreadMessageGetModel model);
+    server::ThreadMessagesGetResult threadMessagesGet(server::ThreadMessagesGetModel model);
+    void threadMessageUpdate(server::ThreadMessageUpdateModel model);
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);

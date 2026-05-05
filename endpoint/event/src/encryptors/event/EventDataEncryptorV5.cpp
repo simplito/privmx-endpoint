@@ -20,12 +20,12 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
-server::EncryptedContextEventDataV5_c_struct EventDataEncryptorV5::encrypt(
+server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
     const ContextEventDataToEncryptV5& eventData,
     const privmx::crypto::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
-    server::EncryptedContextEventDataV5_c_struct result;
+    server::EncryptedContextEventDataV5 result;
     result.version = EventDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.encryptedData = _dataEncryptor.signAndEncryptAndEncode(eventData.data, authorPrivateKey, encryptionKey);
@@ -40,7 +40,7 @@ server::EncryptedContextEventDataV5_c_struct EventDataEncryptorV5::encrypt(
 }
 
 DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
-    const server::EncryptedContextEventDataV5_c_struct& encryptedEventData,
+    const server::EncryptedContextEventDataV5& encryptedEventData,
     const privmx::crypto::PublicKey& authorPublicKey,
     const std::string& encryptionKey
 ) {
@@ -62,7 +62,7 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
 }
 
 core::DataIntegrityObject EventDataEncryptorV5::getDIOAndAssertIntegrity(
-    const server::EncryptedContextEventDataV5_c_struct& encryptedEventData,
+    const server::EncryptedContextEventDataV5& encryptedEventData,
     const privmx::crypto::PublicKey& authorPublicKey
 ) {
     assertDataFormat(encryptedEventData);
@@ -80,7 +80,7 @@ core::DataIntegrityObject EventDataEncryptorV5::getDIOAndAssertIntegrity(
     return dio;
 }
 
-void EventDataEncryptorV5::assertDataFormat(const server::EncryptedContextEventDataV5_c_struct& encryptedEventData) {
+void EventDataEncryptorV5::assertDataFormat(const server::EncryptedContextEventDataV5& encryptedEventData) {
     if (
         encryptedEventData.version != EventDataSchema::Version::VERSION_5 ||
         encryptedEventData.encryptedData.empty() ||

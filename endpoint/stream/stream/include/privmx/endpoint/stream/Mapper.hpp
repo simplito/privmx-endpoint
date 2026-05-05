@@ -21,16 +21,16 @@ namespace stream {
 
 class Mapper {
 public:
-    static StreamTrackInfo mapToStreamTrackInfo(const server::StreamTrackInfo_c_struct& s);
-    static StreamInfo mapToStreamInfo(const server::StreamInfo_c_struct& s);
-    static StreamTrackModificationPair mapToStreamTrackModificationPair(const server::StreamTrackModificationPair_c_struct& s);
-    static StreamTrackModification mapToStreamTrackModification(const server::StreamTrackModification_c_struct& s);
-    static NewStreams mapToNewStreams(const server::NewStreams_c_struct& s);
-    static PublishedStreamData mapToPublishedStreamData(const server::PublishedStreamData_c_struct& s);
-    static PublishedStreamData mapToPublishedStreamData(const server::StreamPublishedEventData_c_struct& s);
-    static StreamUpdatedEventData mapToStreamUpdatedEventData(const server::StreamUpdatedEventData_c_struct& s);
-    static UpdatedStreamData mapToUpdatedStreamData(const server::UpdatedStreamData_c_struct& s);
-    static StreamsUpdatedData mapToStreamsUpdatedData(const server::StreamsUpdatedData_c_struct& s);
+    static StreamTrackInfo mapToStreamTrackInfo(const server::StreamTrackInfo& s);
+    static StreamInfo mapToStreamInfo(const server::StreamInfo& s);
+    static StreamTrackModificationPair mapToStreamTrackModificationPair(const server::StreamTrackModificationPair& s);
+    static StreamTrackModification mapToStreamTrackModification(const server::StreamTrackModification& s);
+    static NewStreams mapToNewStreams(const server::NewStreams& s);
+    static PublishedStreamData mapToPublishedStreamData(const server::PublishedStreamData& s);
+    static PublishedStreamData mapToPublishedStreamData(const server::StreamPublishedEventData& s);
+    static StreamUpdatedEventData mapToStreamUpdatedEventData(const server::StreamUpdatedEventData& s);
+    static UpdatedStreamData mapToUpdatedStreamData(const server::UpdatedStreamData& s);
+    static StreamsUpdatedData mapToStreamsUpdatedData(const server::StreamsUpdatedData& s);
 };
 
 } // stream

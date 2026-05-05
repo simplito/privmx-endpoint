@@ -27,16 +27,16 @@ namespace kvdb {
 
 class EntryDataEncryptorV5 {
 public:
-    server::EncryptedKvdbEntryDataV5_c_struct encrypt(
+    server::EncryptedKvdbEntryDataV5 encrypt(
         const KvdbEntryDataToEncryptV5& messageData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedKvdbEntryDataV5 decrypt(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData, const std::string& encryptionKey);
-    DecryptedKvdbEntryDataV5 extractPublic(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedEntryData);
+    DecryptedKvdbEntryDataV5 decrypt(const server::EncryptedKvdbEntryDataV5& encryptedEntryData, const std::string& encryptionKey);
+    DecryptedKvdbEntryDataV5 extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
 private:
-    void assertDataFormat(const server::EncryptedKvdbEntryDataV5_c_struct& encryptedKvdbData);
+    void assertDataFormat(const server::EncryptedKvdbEntryDataV5& encryptedKvdbData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };

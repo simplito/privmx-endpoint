@@ -114,53 +114,53 @@ public:
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
-    inbox::server::InboxInfo_c_struct getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
+    inbox::server::InboxInfo getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
-    InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry_c_struct inboxEntry, const core::DecryptedEncKey& encKey);
-    InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry_c_struct inboxEntry, const core::DecryptedEncKey& encKey);
+    InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::Inbox convertServerInboxToLibInbox(
-        inbox::server::InboxInfo_c_struct inbox,
+        inbox::server::InboxInfo inbox,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
         const std::optional<privmx::endpoint::inbox::FilesConfig>& filesConfig = std::nullopt,
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = InboxDataSchema::Version::UNKNOWN
     );
-    inbox::Inbox convertInboxV4(inbox::server::InboxInfo_c_struct inboxRaw, const InboxDataResultV4& inboxData);
-    inbox::Inbox convertInboxV5(inbox::server::InboxInfo_c_struct inboxRaw, const InboxDataResultV5& inboxData);
-    InboxDataSchema::Version getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry_c_struct inboxEntry);
-    std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::InboxInfo_c_struct inbox, inbox::server::InboxDataEntry_c_struct inboxEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Inbox> validateDecryptAndConvertInboxesDataToInboxes(std::vector<inbox::server::InboxInfo_c_struct> inboxes);
-    inbox::Inbox validateDecryptAndConvertInboxDataToInbox(inbox::server::InboxInfo_c_struct inbox);
-    InboxInternalMetaV5 decryptInboxInternalMeta(inbox::server::InboxDataEntry_c_struct inboxEntry, const core::DecryptedEncKey& encKey);
-    inbox::server::InboxDataEntry_c_struct getInboxCurrentDataEntry(inbox::server::InboxInfo_c_struct inbox);
-    inbox::server::InboxMessageServer_c_struct unpackInboxOrigMessage(const std::string& serialized);
-    void assertInboxDataIntegrity(inbox::server::InboxInfo_c_struct inbox);
-    uint32_t validateInboxDataIntegrity(inbox::server::InboxInfo_c_struct inbox);
+    inbox::Inbox convertInboxV4(inbox::server::InboxInfo inboxRaw, const InboxDataResultV4& inboxData);
+    inbox::Inbox convertInboxV5(inbox::server::InboxInfo inboxRaw, const InboxDataResultV5& inboxData);
+    InboxDataSchema::Version getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry inboxEntry);
+    std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::InboxInfo inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    std::vector<Inbox> validateDecryptAndConvertInboxesDataToInboxes(std::vector<inbox::server::InboxInfo> inboxes);
+    inbox::Inbox validateDecryptAndConvertInboxDataToInbox(inbox::server::InboxInfo inbox);
+    InboxInternalMetaV5 decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
+    inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
+    void assertInboxDataIntegrity(inbox::server::InboxInfo inbox);
+    uint32_t validateInboxDataIntegrity(inbox::server::InboxInfo inbox);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys inboxToModuleKeys(inbox::server::InboxInfo_c_struct inbox);
+    core::ModuleKeys inboxToModuleKeys(inbox::server::InboxInfo inbox);
 
-    InboxEntryResult decryptInboxEntry(thread::server::Message_c_struct message, const core::ModuleKeys& inboxKeys);
-    inbox::InboxEntry convertInboxEntry(thread::server::Message_c_struct message, const inbox::InboxEntryResult& inboxEntry);
-    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message_c_struct message, const core::ModuleKeys& inboxKeys);
+    InboxEntryResult decryptInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
+    inbox::InboxEntry convertInboxEntry(thread::server::Message message, const inbox::InboxEntryResult& inboxEntry);
+    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
     store::FileMetaToEncryptV4 prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
-    core::ModuleKeys getEntryDecryptionKeys(thread::server::Message_c_struct message);
+    core::ModuleKeys getEntryDecryptionKeys(thread::server::Message message);
 
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    InboxDeletedEventData convertInboxDeletedEventData(server::InboxDeletedEventData_c_struct data);
+    InboxDeletedEventData convertInboxDeletedEventData(server::InboxDeletedEventData data);
 
-    int64_t createInboxFileHandleForRead(const store::server::File_c_struct& file);
+    int64_t createInboxFileHandleForRead(const store::server::File& file);
 
     std::string readInboxIdFromMessageKeyId(const std::string& keyId);
     std::string readMessageIdFromFileKeyId(const std::string& keyId);
-    void deleteMessageAndFiles(thread::server::Message_c_struct message);
-    thread::server::Message_c_struct getServerMessage(const std::string& messageId);
+    void deleteMessageAndFiles(thread::server::Message message);
+    thread::server::Message getServerMessage(const std::string& messageId);
     InboxEntryResult getEmptyResultWithStatusCode(const int64_t statusCode);
-    std::vector<std::string> getFilesIdsFromServerMessage(inbox::server::InboxMessageServer_c_struct serverMessage);
+    std::vector<std::string> getFilesIdsFromServerMessage(inbox::server::InboxMessageServer serverMessage);
     void assertInboxExist(const std::string& inboxId);
 
     static const Poco::Int64 _CHUNK_SIZE;

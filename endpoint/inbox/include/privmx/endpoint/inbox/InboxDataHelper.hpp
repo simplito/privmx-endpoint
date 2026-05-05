@@ -32,8 +32,8 @@ public:
     static privmx::endpoint::core::EncKey deserializeEncKey(const std::string& serializedKey);
     static std::string getRandomName();
 
-    static server::FileConfig_c_struct fileConfigToTypedObject(const FilesConfig& fileConfig);
-    static FilesConfig fileConfigFromTypedObject(const server::FileConfig_c_struct& fileConfig);
+    static server::FileConfig fileConfigToTypedObject(const FilesConfig& fileConfig);
+    static FilesConfig fileConfigFromTypedObject(const server::FileConfig& fileConfig);
 
     static std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 };

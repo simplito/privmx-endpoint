@@ -17,43 +17,43 @@ using namespace privmx::endpoint;
 
 ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
-server::ThreadCreateResult_c_struct ServerApi::threadCreate(server::ThreadCreateModel_c_struct model) {
-    return request<server::ThreadCreateResult_c_struct>("threadCreate", model.toJSON());
+server::ThreadCreateResult ServerApi::threadCreate(server::ThreadCreateModel model) {
+    return request<server::ThreadCreateResult>("threadCreate", model.toJSON());
 }
 
-void ServerApi::threadUpdate(server::ThreadUpdateModel_c_struct model) {
+void ServerApi::threadUpdate(server::ThreadUpdateModel model) {
     request("threadUpdate", model.toJSON());
 }
 
-void ServerApi::threadDelete(server::ThreadDeleteModel_c_struct model) {
+void ServerApi::threadDelete(server::ThreadDeleteModel model) {
     request("threadDelete", model.toJSON());
 }
 
-server::ThreadGetResult_c_struct ServerApi::threadGet(server::ThreadGetModel_c_struct model) {
-    return request<server::ThreadGetResult_c_struct>("threadGet", model.toJSON());
+server::ThreadGetResult ServerApi::threadGet(server::ThreadGetModel model) {
+    return request<server::ThreadGetResult>("threadGet", model.toJSON());
 }
 
-server::ThreadListResult_c_struct ServerApi::threadList(server::ThreadListModel_c_struct model) {
-    return request<server::ThreadListResult_c_struct>("threadList", model.toJSON());
+server::ThreadListResult ServerApi::threadList(server::ThreadListModel model) {
+    return request<server::ThreadListResult>("threadList", model.toJSON());
 }
 
-server::ThreadMessageSendResult_c_struct ServerApi::threadMessageSend(server::ThreadMessageSendModel_c_struct model) {
-    return request<server::ThreadMessageSendResult_c_struct>("threadMessageSend", model.toJSON());
+server::ThreadMessageSendResult ServerApi::threadMessageSend(server::ThreadMessageSendModel model) {
+    return request<server::ThreadMessageSendResult>("threadMessageSend", model.toJSON());
 }
 
-void ServerApi::threadMessageDelete(server::ThreadMessageDeleteModel_c_struct model) {
+void ServerApi::threadMessageDelete(server::ThreadMessageDeleteModel model) {
     request("threadMessageDelete", model.toJSON());
 }
 
-server::ThreadMessageGetResult_c_struct ServerApi::threadMessageGet(server::ThreadMessageGetModel_c_struct model) {
-    return request<server::ThreadMessageGetResult_c_struct>("threadMessageGet", model.toJSON());
+server::ThreadMessageGetResult ServerApi::threadMessageGet(server::ThreadMessageGetModel model) {
+    return request<server::ThreadMessageGetResult>("threadMessageGet", model.toJSON());
 }
 
-server::ThreadMessagesGetResult_c_struct ServerApi::threadMessagesGet(server::ThreadMessagesGetModel_c_struct model) {
-    return request<server::ThreadMessagesGetResult_c_struct>("threadMessagesGet", model.toJSON());
+server::ThreadMessagesGetResult ServerApi::threadMessagesGet(server::ThreadMessagesGetModel model) {
+    return request<server::ThreadMessagesGetResult>("threadMessagesGet", model.toJSON());
 }
 
-void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel_c_struct model) {
+void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel model) {
     request("threadMessageUpdate", model.toJSON());
 }
 

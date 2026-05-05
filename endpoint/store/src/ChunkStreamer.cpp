@@ -28,11 +28,11 @@ ChunkStreamer::ChunkStreamer(const std::shared_ptr<store::RequestApi>& requestAp
 void ChunkStreamer::createRequest(bool randomWriteSupport) {
     _key = privmx::crypto::Crypto::randomBytes(32);
     auto size = getFileSize();
-    server::FileDefinition_c_struct fileDefinition {};
+    server::FileDefinition fileDefinition {};
     fileDefinition.size = size.size;
     fileDefinition.checksumSize = size.checksumSize;
     fileDefinition.randomWrite = randomWriteSupport;
-    server::CreateRequestModel_c_struct createRequestModel {};
+    server::CreateRequestModel createRequestModel {};
     createRequestModel.files = {fileDefinition};
     _fileIndex = 0;
     auto createRequestResult = _requestApi->createRequest(createRequestModel);
@@ -122,7 +122,7 @@ ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data
 void ChunkStreamer::commitFile() {
     sendFullChunksWhileCollected();
     sendLastChunkIfNonEmpty();
-    server::CommitFileModel_c_struct commitFileModel {};
+    server::CommitFileModel commitFileModel {};
     commitFileModel.requestId = _requestId;
     commitFileModel.fileIndex = _fileIndex;
     commitFileModel.seq = _serverSeq;
@@ -152,7 +152,7 @@ void ChunkStreamer::sendLastChunkIfNonEmpty() {
 }
 
 void ChunkStreamer::sendChunkToServer(std::string&& data) {
-    server::ChunkModel_c_struct chunkModel {};
+    server::ChunkModel chunkModel {};
     chunkModel.requestId = _requestId;
     chunkModel.fileIndex = _fileIndex;
     chunkModel.seq = _serverSeq;

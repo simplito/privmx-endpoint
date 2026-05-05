@@ -29,20 +29,20 @@ namespace thread {
 class MessageDataV2Encryptor
 {
 public:
-    std::string signAndEncrypt(const dynamic::MessageDataV2_c_struct& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey);
-    dynamic::MessageDataV2Signed_c_struct decryptAndGetSign(const std::string& data, const core::EncKey& key);
+    std::string signAndEncrypt(const dynamic::MessageDataV2& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey);
+    dynamic::MessageDataV2Signed decryptAndGetSign(const std::string& data, const core::EncKey& key);
 private:
-    core::DataEncryptor<dynamic::MessageDataV2_c_struct> _dataEncryptor;
+    core::DataEncryptor<dynamic::MessageDataV2> _dataEncryptor;
 };
 
 class MessageDataV3Encryptor
 {
 public:
-    std::string signAndEncrypt(const dynamic::MessageDataV3_c_struct& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey);
-    dynamic::MessageDataV3Signed_c_struct decryptAndGetSign(const std::string& data, const core::EncKey& key);
+    std::string signAndEncrypt(const dynamic::MessageDataV3& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey);
+    dynamic::MessageDataV3Signed decryptAndGetSign(const std::string& data, const core::EncKey& key);
 private:
     core::DataEncryptor<Pson::BinaryString> _dataEncryptorBinaryString;
-    core::DataEncryptor<dynamic::MessageDataV3_c_struct> _dataEncryptorMessageDataV3;
+    core::DataEncryptor<dynamic::MessageDataV3> _dataEncryptorMessageDataV3;
 };
 
 

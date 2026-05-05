@@ -64,7 +64,7 @@ Subscriber::Subscriber(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gatew
 
 std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries, bool force) {
     LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
-    server::SubscribeToChannelsModel_c_struct model;
+    server::SubscribeToChannelsModel model;
     std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
     for(const auto& subscriptionQueryString : subscriptionQueries) {
         parsedSubscriptionQueries.push_back(SubscriptionQueryObj(subscriptionQueryString));
@@ -79,7 +79,7 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
     }
     LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(model.toJSON()));
     auto requestResult = _gateway->request("subscribeToChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET});
-    server::SubscribeToChannelsResult_c_struct value = privmx::endpoint::core::server::SubscribeToChannelsResult_c_struct::fromJSON(requestResult);
+    server::SubscribeToChannelsResult value = privmx::endpoint::core::server::SubscribeToChannelsResult::fromJSON(requestResult);
     LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")
     std::vector<std::string> result;
     {
@@ -106,7 +106,7 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
 }
 
 void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    server::UnsubscribeFromChannelsModel_c_struct model;
+    server::UnsubscribeFromChannelsModel model;
     std::vector<std::string> subscriptionsIds;
     for(auto subscriptionId: subscriptionIds) {
         subscriptionsIds.push_back(subscriptionId);

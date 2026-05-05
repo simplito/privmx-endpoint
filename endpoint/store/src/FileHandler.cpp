@@ -89,7 +89,7 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
     store::FileMeta newFileMeta = {
         _fileMeta.publicMeta,
         _fileMeta.privateMeta,
-        dynamic::InternalStoreFileMeta_c_struct::fromJSON(privmx::utils::Utils::jsonObjectDeepCopy(_fileMeta.internalFileMeta.toJSON()))
+        dynamic::InternalStoreFileMeta::fromJSON(privmx::utils::Utils::jsonObjectDeepCopy(_fileMeta.internalFileMeta.toJSON()))
     };
     newFileMeta.internalFileMeta.hmac = utils::Base64::from(_hashList->getTopHash());
     newFileMeta.internalFileMeta.size = newPlainfileSize;
@@ -176,16 +176,16 @@ FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, uint
 void FileHandler::updateOnServer(const std::vector<FileHandler::UpdateChanges>& updatedChunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
     for(size_t i = 0; i < updatedChunks.size();) { 
         // update file by operation
-        std::vector<server::StoreFileRandomWriteOperation_c_struct> operations;
+        std::vector<server::StoreFileRandomWriteOperation> operations;
         for(size_t j = 0; j < (SERVER_OPERATIONS_LIMIT>>1) && i < updatedChunks.size(); ++j,++i) {
             auto& updatedChunk = updatedChunks.at(i);
-            server::StoreFileRandomWriteOperation_c_struct operation1 {
+            server::StoreFileRandomWriteOperation operation1 {
                 .type = "file",
                 .pos = updatedChunk.dataPos,
                 .data = updatedChunk.data,
                 .truncate = (i == updatedChunks.size()-1 ? truncate : true),
             };
-            server::StoreFileRandomWriteOperation_c_struct operation2 {
+            server::StoreFileRandomWriteOperation operation2 {
                 .type = "checksum",
                 .pos = updatedChunk.checksumPos,
                 .data = updatedChunk.checksum,
@@ -196,7 +196,7 @@ void FileHandler::updateOnServer(const std::vector<FileHandler::UpdateChanges>& 
             operations.push_back(operation2);
         }
 
-        server::StoreFileWriteModelByOperations_c_struct writeRequest {
+        server::StoreFileWriteModelByOperations writeRequest {
             .fileId = _fileInfo.fileId,
             .operations = operations,
             .meta = updatedMeta,

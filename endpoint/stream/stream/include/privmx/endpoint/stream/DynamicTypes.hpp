@@ -24,41 +24,41 @@ namespace dynamic {
 
 #define VERSIONED_DATA_FIELDS(F)\
     F(version, int64_t)
-JSON_STRUCT(VersionedData_c_struct, VERSIONED_DATA_FIELDS);
+JSON_STRUCT(VersionedData, VERSIONED_DATA_FIELDS);
 
 #define STREAM_ENC_KEY_FIELDS(F)\
     F(keyId, std::string)\
     F(key,   std::string)\
     F(TTL,   int64_t)
-JSON_STRUCT(StreamEncKey_c_struct, STREAM_ENC_KEY_FIELDS);
+JSON_STRUCT(StreamEncKey, STREAM_ENC_KEY_FIELDS);
 
 #define NEW_STREAM_ENC_KEY_FIELDS(F)\
     F(oldKeyId,  std::string)\
     F(oldKeyTTL, int64_t)
-JSON_STRUCT_EXT(NewStreamEncKey_c_struct, StreamEncKey_c_struct, NEW_STREAM_ENC_KEY_FIELDS);
+JSON_STRUCT_EXT(NewStreamEncKey, StreamEncKey, NEW_STREAM_ENC_KEY_FIELDS);
 
 #define STREAM_CUSTOM_EVENT_DATA_FIELDS(F)\
     F(streamRoomId, std::string)
-JSON_STRUCT(StreamCustomEventData_c_struct, STREAM_CUSTOM_EVENT_DATA_FIELDS);
+JSON_STRUCT(StreamCustomEventData, STREAM_CUSTOM_EVENT_DATA_FIELDS);
 
 #define STREAM_KEY_MANAGEMENT_EVENT_FIELDS(F)\
     F(subtype, std::string)
-JSON_STRUCT_EXT(StreamKeyManagementEvent_c_struct, StreamCustomEventData_c_struct, STREAM_KEY_MANAGEMENT_EVENT_FIELDS);
+JSON_STRUCT_EXT(StreamKeyManagementEvent, StreamCustomEventData, STREAM_KEY_MANAGEMENT_EVENT_FIELDS);
 
 #define REQUEST_KEY_EVENT_FIELDS(F)
-JSON_STRUCT_EXT(RequestKeyEvent_c_struct, StreamKeyManagementEvent_c_struct, REQUEST_KEY_EVENT_FIELDS);
+JSON_STRUCT_EXT(RequestKeyEvent, StreamKeyManagementEvent, REQUEST_KEY_EVENT_FIELDS);
 
 #define REQUEST_KEY_RESPOND_EVENT_FIELDS(F)\
-    F(encKey, StreamEncKey_c_struct)
-JSON_STRUCT_EXT(RequestKeyRespondEvent_c_struct, StreamKeyManagementEvent_c_struct, REQUEST_KEY_RESPOND_EVENT_FIELDS);
+    F(encKey, StreamEncKey)
+JSON_STRUCT_EXT(RequestKeyRespondEvent, StreamKeyManagementEvent, REQUEST_KEY_RESPOND_EVENT_FIELDS);
 
 #define UPDATE_KEY_EVENT_FIELDS(F)\
-    F(encKey, NewStreamEncKey_c_struct)
-JSON_STRUCT_EXT(UpdateKeyEvent_c_struct, StreamKeyManagementEvent_c_struct, UPDATE_KEY_EVENT_FIELDS);
+    F(encKey, NewStreamEncKey)
+JSON_STRUCT_EXT(UpdateKeyEvent, StreamKeyManagementEvent, UPDATE_KEY_EVENT_FIELDS);
 
 #define UPDATE_KEY_ACK_EVENT_FIELDS(F)\
     F(keyId, std::string)
-JSON_STRUCT_EXT(UpdateKeyACKEvent_c_struct, StreamKeyManagementEvent_c_struct, UPDATE_KEY_ACK_EVENT_FIELDS);
+JSON_STRUCT_EXT(UpdateKeyACKEvent, StreamKeyManagementEvent, UPDATE_KEY_ACK_EVENT_FIELDS);
 
 // [MDN Reference](https://developer.mozilla.org/docs/Web/API/RTCIceCandidate)
 #define RTC_ICE_CANDIDATE_FIELDS(F)\
@@ -76,7 +76,7 @@ JSON_STRUCT_EXT(UpdateKeyACKEvent_c_struct, StreamKeyManagementEvent_c_struct, U
     F(tcpType,          std::optional<std::string>)\
     F(type,             std::optional<std::string>)\
     F(usernameFragment, std::optional<std::string>)
-JSON_STRUCT(RTCIceCandidate_c_struct, RTC_ICE_CANDIDATE_FIELDS);
+JSON_STRUCT(RTCIceCandidate, RTC_ICE_CANDIDATE_FIELDS);
 
 } // dynamic
 } // stream

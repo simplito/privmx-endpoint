@@ -25,7 +25,7 @@ namespace dynamic {
     F(secret, std::string)\
     F(resourceId, std::string)\
     F(randomId, std::string)
-JSON_STRUCT(InboxInternalMetaV5_c_struct, INBOX_INTERNAL_META_V5_FIELDS);
+JSON_STRUCT(InboxInternalMetaV5, INBOX_INTERNAL_META_V5_FIELDS);
 
 } // dynamic
 } // inbox

@@ -28,18 +28,18 @@ namespace core {
 
 class ModuleDataEncryptorV4 {
 public:
-    dynamic::EncryptedModuleDataV4_c_struct encrypt(
+    dynamic::EncryptedModuleDataV4 encrypt(
         const ModuleDataToEncryptV4& moduleData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedModuleDataV4 decrypt(
-        const dynamic::EncryptedModuleDataV4_c_struct& encryptedModuleData, 
+        const dynamic::EncryptedModuleDataV4& encryptedModuleData, 
         const std::string& encryptionKey
     );
 
 private:
-    void validateVersion(const dynamic::EncryptedModuleDataV4_c_struct& encryptedModuleData);
+    void validateVersion(const dynamic::EncryptedModuleDataV4& encryptedModuleData);
 
     core::DataEncryptorV4 _dataEncryptor;
 };

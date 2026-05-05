@@ -27,9 +27,9 @@ public:
 
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
-    server::ContextGetResult_c_struct contextGet(server::ContextGetModel_c_struct model);
-    server::ContextListResult_c_struct contextList(server::ListModel_c_struct model);
-    server::ContextListUsersResult_c_struct contextListUsers(server::ContextListUsersModel_c_struct model);
+    server::ContextGetResult contextGet(server::ContextGetModel model);
+    server::ContextListResult contextList(server::ListModel model);
+    server::ContextListUsersResult contextListUsers(server::ContextListUsersModel model);
 
 private:
     template<typename T>

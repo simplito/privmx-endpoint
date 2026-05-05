@@ -13,6 +13,6 @@ limitations under the License.
 
 using namespace privmx::endpoint::store;
 
-server::StoreFileReadResult_c_struct FileDataProvider::getFileData(const server::StoreFileReadModel_c_struct& model) {
+server::StoreFileReadResult FileDataProvider::getFileData(const server::StoreFileReadModel& model) {
     return _server->storeFileRead(model);
 }

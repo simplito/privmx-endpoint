@@ -27,16 +27,16 @@ namespace thread {
 
 class MessageDataEncryptorV5 {
 public:
-    server::EncryptedMessageDataV5_c_struct encrypt(
+    server::EncryptedMessageDataV5 encrypt(
         const MessageDataToEncryptV5& messageData,
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedMessageDataV5 decrypt(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData, const std::string& encryptionKey);
-    DecryptedMessageDataV5 extractPublic(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5_c_struct& encryptedMessageData);
+    DecryptedMessageDataV5 decrypt(const server::EncryptedMessageDataV5& encryptedMessageData, const std::string& encryptionKey);
+    DecryptedMessageDataV5 extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encryptedMessageData);
 private:
-    void assertDataFormat(const server::EncryptedMessageDataV5_c_struct& encryptedThreadData);
+    void assertDataFormat(const server::EncryptedMessageDataV5& encryptedThreadData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };
