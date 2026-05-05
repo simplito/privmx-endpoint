@@ -17,95 +17,100 @@ using namespace privmx::endpoint;
 
 ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
-
-server::StreamRoomCreateResult ServerApi::streamRoomCreate(server::StreamRoomCreateModel model)  {
-    return request<server::StreamRoomCreateResult>("streamRoomCreate", model);
+server::StreamRoomCreateResult_c_struct ServerApi::streamRoomCreate(server::StreamRoomCreateModel_c_struct model) {
+    return request<server::StreamRoomCreateResult_c_struct>("streamRoomCreate", model.toJSON());
 }
 
-void ServerApi::streamRoomUpdate(server::StreamRoomUpdateModel model) {
-    request("streamRoomUpdate", model);
+void ServerApi::streamRoomUpdate(server::StreamRoomUpdateModel_c_struct model) {
+    request("streamRoomUpdate", model.toJSON());
 }
 
-server::StreamRoomListResult ServerApi::streamRoomList(server::StreamRoomListModel model)  {
-    return request<server::StreamRoomListResult>("streamRoomList", model);
+server::StreamRoomListResult_c_struct ServerApi::streamRoomList(server::StreamRoomListModel_c_struct model) {
+    return request<server::StreamRoomListResult_c_struct>("streamRoomList", model.toJSON());
 }
 
-server::StreamRoomGetResult ServerApi::streamRoomGet(server::StreamRoomGetModel model)  {
-    return request<server::StreamRoomGetResult>("streamRoomGet", model);
+server::StreamRoomGetResult_c_struct ServerApi::streamRoomGet(server::StreamRoomGetModel_c_struct model) {
+    return request<server::StreamRoomGetResult_c_struct>("streamRoomGet", model.toJSON());
 }
 
-void ServerApi::streamRoomDelete(server::StreamRoomDeleteModel model) {
-    request("streamRoomDelete", model);
+void ServerApi::streamRoomDelete(server::StreamRoomDeleteModel_c_struct model) {
+    request("streamRoomDelete", model.toJSON());
 }
 
-server::StreamGetTurnCredentialsResult ServerApi::streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model) {
-    return requestWS<server::StreamGetTurnCredentialsResult>("streamGetTurnCredentials", model);
+server::StreamGetTurnCredentialsResult_c_struct ServerApi::streamGetTurnCredentials() {
+    return requestWS<server::StreamGetTurnCredentialsResult_c_struct>("streamGetTurnCredentials", Poco::JSON::Object::Ptr(new Poco::JSON::Object()));
 }
 
-server::StreamListResult ServerApi::streamList(server::StreamListModel model)  {
-    return requestWS<server::StreamListResult>("streamList", model);
+server::StreamListResult_c_struct ServerApi::streamList(server::StreamListModel_c_struct model) {
+    return requestWS<server::StreamListResult_c_struct>("streamList", model.toJSON());
 }
 
-server::StreamPublishResult ServerApi::streamPublish(server::StreamPublishModel model)  {
-    return requestWS<server::StreamPublishResult>("streamPublish", model);
+server::StreamPublishResult_c_struct ServerApi::streamPublish(server::StreamPublishModel_c_struct model) {
+    return requestWS<server::StreamPublishResult_c_struct>("streamPublish", model.toJSON());
 }
 
-server::StreamPublishResult ServerApi::streamUpdate(server::StreamUpdateModel model)  {
-    return requestWS<server::StreamPublishResult>("streamUpdate", model);
+server::StreamPublishResult_c_struct ServerApi::streamUpdate(server::StreamUpdateModel_c_struct model) {
+    return requestWS<server::StreamPublishResult_c_struct>("streamUpdate", model.toJSON());
 }
 
-void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
-    requestWS("streamAcceptOffer", model);
+void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel_c_struct model) {
+    requestWS("streamAcceptOffer", model.toJSON());
 }
 
-void ServerApi::streamSetNewOffer(server::StreamSetNewOfferModel model) {
-    requestWS("streamSetNewOffer", model);
+void ServerApi::streamSetNewOffer(server::StreamSetNewOfferModel_c_struct model) {
+    requestWS("streamSetNewOffer", model.toJSON());
 }
 
-void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
-    requestWS("streamUnpublish", model);
+void ServerApi::streamUnpublish(server::StreamUnpublishModel_c_struct model) {
+    requestWS("streamUnpublish", model.toJSON());
 }
 
-server::StreamsSubscribeResult ServerApi::streamsSubscribeToRemote(server::StreamsSubscribeModel model) {
-    return requestWS<server::StreamsSubscribeResult>("streamsSubscribeToRemote", model);
+server::StreamsSubscribeResult_c_struct ServerApi::streamsSubscribeToRemote(server::StreamsSubscribeModel_c_struct model) {
+    return requestWS<server::StreamsSubscribeResult_c_struct>("streamsSubscribeToRemote", model.toJSON());
 }
 
-server::StreamsSubscribeResult ServerApi::streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model) {
-    return requestWS<server::StreamsSubscribeResult>("streamsModifyRemoteSubscriptions", model);
+server::StreamsSubscribeResult_c_struct ServerApi::streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel_c_struct model) {
+    return requestWS<server::StreamsSubscribeResult_c_struct>("streamsModifyRemoteSubscriptions", model.toJSON());
 }
 
-server::StreamsSubscribeResult ServerApi::streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model)  {
-    return requestWS<server::StreamsSubscribeResult>("streamsUnsubscribeFromRemote", model);
+server::StreamsSubscribeResult_c_struct ServerApi::streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel_c_struct model) {
+    return requestWS<server::StreamsSubscribeResult_c_struct>("streamsUnsubscribeFromRemote", model.toJSON());
 }
 
-void ServerApi::streamRoomJoin(server::StreamRoomJoinModel model) {
-    requestWS("streamRoomJoin", model);
+void ServerApi::streamRoomJoin(server::StreamRoomJoinModel_c_struct model) {
+    requestWS("streamRoomJoin", model.toJSON());
 }
 
-void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model)  {
-    requestWS("streamRoomLeave", model);
+void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel_c_struct model) {
+    requestWS("streamRoomLeave", model.toJSON());
 }
 
-void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model) {
-    requestWS("streamRoomEnableRecording", model);
+void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel_c_struct model) {
+    requestWS("streamRoomEnableRecording", model.toJSON());
 }
 
-void ServerApi::trickle(server::StreamTrickleModel model) {
-    requestWS("streamTrickle", model);
+void ServerApi::trickle(server::StreamTrickleModel_c_struct model) {
+    requestWS("streamTrickle", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params));
+template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+    LOG_FATAL("ServerApi::request::stream.", method, "\n", privmx::utils::Utils::stringifyVar(params, true))
+    auto result = _gateway->request("stream." + method, params);
+    LOG_FATAL("ServerApi::request::stream.", method, "\n", privmx::utils::Utils::stringifyVar(result, true))
+    return T::fromJSON(result);
 }
 
-Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return _gateway->request("stream." + method, params);
 }
-
-template<class T> T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET}));
+#include <privmx/utils/Logger.hpp>
+template<class T> T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {
+    LOG_INFO("ServerApi::requestWS::stream.", method, "\n Params: ", privmx::utils::Utils::stringifyVar(params, true))
+    auto result = _gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET});
+    LOG_INFO("ServerApi::requestWS::stream.", method, "\n Result: ", privmx::utils::Utils::stringifyVar(result, true))
+    return T::fromJSON(result);
 }
 
-Poco::Dynamic::Var ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+Poco::Dynamic::Var ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {
     return _gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET});
 }

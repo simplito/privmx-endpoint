@@ -12,376 +12,349 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_SERVERTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_SERVERTYPES_HPP_
 
-#include <Poco/Dynamic/Var.h>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include <privmx/endpoint/core/ServerTypes.hpp>
-#include <privmx/endpoint/core/TypesMacros.hpp>
-#include <string>
-
-#include "privmx/utils/TypedObject.hpp"
-#include "privmx/utils/TypesMacros.hpp"
+#include <privmx/utils/JsonHelper.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
 namespace server {
 
-ENDPOINT_SERVER_TYPE(StreamRoomDataEntry)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-TYPE_END
+#define STREAM_ROOM_DATA_ENTRY_FIELDS(F)\
+    F(keyId, std::string)\
+    F(data,  Poco::Dynamic::Var)
+JSON_STRUCT(StreamRoomDataEntry_c_struct, STREAM_ROOM_DATA_ENTRY_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomInfo)
-    STRING_FIELD(id)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(contextId)
-    INT64_FIELD(createDate)
-    STRING_FIELD(creator)
-    INT64_FIELD(lastModificationDate)
-    STRING_FIELD(lastModifier)
-    LIST_FIELD(data, StreamRoomDataEntry)
-    STRING_FIELD(keyId)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    LIST_FIELD(keys, core::server::KeyEntry)
-    INT64_FIELD(version)
-    STRING_FIELD(type)
-    VAR_FIELD(policy)
-    BOOL_FIELD(closed)
-TYPE_END
+#define STREAM_ROOM_INFO_FIELDS(F)\
+    F(id,                   std::string)\
+    F(resourceId,           std::optional<std::string>)\
+    F(contextId,            std::string)\
+    F(createDate,           int64_t)\
+    F(creator,              std::string)\
+    F(lastModificationDate, int64_t)\
+    F(lastModifier,         std::string)\
+    F(data,                 std::vector<StreamRoomDataEntry_c_struct>)\
+    F(keyId,                std::string)\
+    F(users,                std::vector<std::string>)\
+    F(managers,             std::vector<std::string>)\
+    F(keys,                 std::vector<core::server::KeyEntry_c_struct>)\
+    F(version,              int64_t)\
+    F(type,                 std::optional<std::string>)\
+    F(policy,               Poco::Dynamic::Var)\
+    F(closed,               std::optional<bool>)
+JSON_STRUCT(StreamRoomInfo_c_struct, STREAM_ROOM_INFO_FIELDS);
 
+#define SESSION_DESCRIPTION_FIELDS(F)\
+    F(sdp,  std::string)\
+    F(type, std::string)
+JSON_STRUCT(SessionDescription_c_struct, SESSION_DESCRIPTION_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomCreateModel)
-    STRING_FIELD(contextId)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    LIST_FIELD(keys, core::server::KeyEntrySet)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(publicMeta)
-    STRING_FIELD(type)
-    VAR_FIELD(policy)
-TYPE_END
+#define STREAM_ROOM_CREATE_MODEL_FIELDS(F)\
+    F(contextId,   std::string)\
+    F(resourceId,  std::string)\
+    F(keyId,       std::string)\
+    F(data,        Poco::Dynamic::Var)\
+    F(users,       std::vector<std::string>)\
+    F(managers,    std::vector<std::string>)\
+    F(keys,        std::vector<core::server::KeyEntrySet_c_struct>)\
+    F(type,        std::string)\
+    F(policy,      std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(StreamRoomCreateModel_c_struct, STREAM_ROOM_CREATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomCreateResult)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAM_ROOM_CREATE_RESULT_FIELDS(F)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamRoomCreateResult_c_struct, STREAM_ROOM_CREATE_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomUpdateModel)
-    STRING_FIELD(id)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    LIST_FIELD(keys, core::server::KeyEntrySet)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(publicMeta)
-    INT64_FIELD(version)
-    BOOL_FIELD(force)
-    VAR_FIELD(policy)
-TYPE_END
+#define STREAM_ROOM_UPDATE_MODEL_FIELDS(F)\
+    F(id,          std::string)\
+    F(resourceId,  std::string)\
+    F(keyId,       std::string)\
+    F(data,        Poco::Dynamic::Var)\
+    F(users,       std::vector<std::string>)\
+    F(managers,    std::vector<std::string>)\
+    F(keys,        std::vector<core::server::KeyEntrySet_c_struct>)\
+    F(version,     int64_t)\
+    F(force,       bool)\
+    F(policy,      std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(StreamRoomUpdateModel_c_struct, STREAM_ROOM_UPDATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomGetModel)
-    STRING_FIELD(id)
-    STRING_FIELD(type)
-TYPE_END
+#define STREAM_ROOM_GET_MODEL_FIELDS(F)\
+    F(id,   std::string)\
+    F(type, std::optional<std::string>)
+JSON_STRUCT(StreamRoomGetModel_c_struct, STREAM_ROOM_GET_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomGetResult)
-    OBJECT_FIELD(streamRoom, StreamRoomInfo)
-TYPE_END
+#define STREAM_ROOM_GET_RESULT_FIELDS(F)\
+    F(streamRoom, StreamRoomInfo_c_struct)
+JSON_STRUCT(StreamRoomGetResult_c_struct, STREAM_ROOM_GET_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE_INHERIT(StreamRoomListModel, core::server::ListModel)
-    STRING_FIELD(contextId)
-    STRING_FIELD(type)
-TYPE_END
+#define STREAM_ROOM_LIST_MODEL_FIELDS(F)\
+    F(contextId, std::string)\
+    F(type,      std::optional<std::string>)
+JSON_STRUCT_EXT(StreamRoomListModel_c_struct, core::server::ListModel_c_struct, STREAM_ROOM_LIST_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomListResult)
-    LIST_FIELD(list, StreamRoomInfo)
-    INT64_FIELD(count)
-TYPE_END
+#define STREAM_ROOM_LIST_RESULT_FIELDS(F)\
+    F(list,  std::vector<StreamRoomInfo_c_struct>)\
+    F(count, int64_t)
+JSON_STRUCT(StreamRoomListResult_c_struct, STREAM_ROOM_LIST_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomDeleteModel)
-    STRING_FIELD(id)
-TYPE_END
+#define STREAM_ROOM_DELETE_MODEL_FIELDS(F)\
+    F(id, std::string)
+JSON_STRUCT(StreamRoomDeleteModel_c_struct, STREAM_ROOM_DELETE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamGetTurnCredentialsModel)
-TYPE_END
+#define TURN_CREDENTIALS_FIELDS(F)\
+    F(url,            std::string)\
+    F(username,       std::string)\
+    F(password,       std::string)\
+    F(expirationTime, int64_t)
+JSON_STRUCT(TurnCredentials_c_struct, TURN_CREDENTIALS_FIELDS);
 
-ENDPOINT_SERVER_TYPE(TurnCredentials)
-    STRING_FIELD(url)
-    STRING_FIELD(username)
-    STRING_FIELD(password)
-    INT64_FIELD(expirationTime)
-TYPE_END
+#define STREAM_GET_TURN_CREDENTIALS_RESULT_FIELDS(F)\
+    F(credentials, std::vector<TurnCredentials_c_struct>)
+JSON_STRUCT(StreamGetTurnCredentialsResult_c_struct, STREAM_GET_TURN_CREDENTIALS_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamGetTurnCredentialsResult)
-    LIST_FIELD(credentials, TurnCredentials)
-TYPE_END
+#define STREAM_PUBLISH_MODEL_FIELDS(F)\
+    F(offer,        SessionDescription_c_struct)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamPublishModel_c_struct, STREAM_PUBLISH_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(SessionDescription)
-    STRING_FIELD(sdp)
-    STRING_FIELD(type)
-TYPE_END
+#define STREAM_UPDATE_MODEL_FIELDS(F)\
+    F(offer,        SessionDescription_c_struct)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamUpdateModel_c_struct, STREAM_UPDATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamPublishModel)
-    OBJECT_FIELD(offer, SessionDescription)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAM_SUBSCRIPTION_FIELDS(F)\
+    F(streamId,      int64_t)\
+    F(streamTrackId, std::optional<std::string>)
+JSON_STRUCT(StreamSubscription_c_struct, STREAM_SUBSCRIPTION_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamUpdateModel)
-    OBJECT_FIELD(offer, SessionDescription)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAMS_SUBSCRIBE_MODEL_FIELDS(F)\
+    F(streamRoomId,       std::string)\
+    F(subscriptionsToAdd, std::vector<StreamSubscription_c_struct>)
+JSON_STRUCT(StreamsSubscribeModel_c_struct, STREAMS_SUBSCRIBE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamSubscription)
-    INT64_FIELD(streamId)
-    STRING_FIELD(streamTrackId)
-TYPE_END
+#define STREAMS_MODIFY_SUBSCRIPTIONS_MODEL_FIELDS(F)\
+    F(streamRoomId,          std::string)\
+    F(subscriptionsToAdd,    std::vector<StreamSubscription_c_struct>)\
+    F(subscriptionsToRemove, std::vector<StreamSubscription_c_struct>)
+JSON_STRUCT(StreamsModifySubscriptionsModel_c_struct, STREAMS_MODIFY_SUBSCRIPTIONS_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamsSubscribeModel)
-    STRING_FIELD(streamRoomId)
-    LIST_FIELD(subscriptionsToAdd, StreamSubscription)
-TYPE_END
+#define STREAMS_UNSUBSCRIBE_MODEL_FIELDS(F)\
+    F(streamRoomId,          std::string)\
+    F(subscriptionsToRemove, std::vector<StreamSubscription_c_struct>)
+JSON_STRUCT(StreamsUnsubscribeModel_c_struct, STREAMS_UNSUBSCRIBE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamsModifySubscriptionsModel)
-    STRING_FIELD(streamRoomId)
-    LIST_FIELD(subscriptionsToAdd, StreamSubscription)
-    LIST_FIELD(subscriptionsToRemove, StreamSubscription)
-TYPE_END
+#define STREAMS_SUBSCRIBE_RESULT_FIELDS(F)\
+    F(offer,     std::optional<SessionDescription_c_struct>)\
+    F(sessionId, int64_t)
+JSON_STRUCT(StreamsSubscribeResult_c_struct, STREAMS_SUBSCRIBE_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamsUnsubscribeModel)
-    STRING_FIELD(streamRoomId)
-    LIST_FIELD(subscriptionsToRemove, StreamSubscription)
-TYPE_END
+#define STREAM_ROOM_JOIN_MODEL_FIELDS(F)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamRoomJoinModel_c_struct, STREAM_ROOM_JOIN_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamsSubscribeResult)
-    OBJECT_FIELD(offer, SessionDescription)
-    INT64_FIELD(sessionId)
-TYPE_END
+#define STREAM_ROOM_LEAVE_MODEL_FIELDS(F)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamRoomLeaveModel_c_struct, STREAM_ROOM_LEAVE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomJoinModel)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAM_ROOM_RECORDING_MODEL_FIELDS(F)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamRoomRecordingModel_c_struct, STREAM_ROOM_RECORDING_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomLeaveModel)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAM_LIST_MODEL_FIELDS(F)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamListModel_c_struct, STREAM_LIST_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomRecordingModel)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAM_TRACK_INFO_FIELDS(F)\
+    F(type,        std::string)\
+    F(mindex,      int64_t)\
+    F(mid,         std::string)\
+    F(disabled,    std::optional<bool>)\
+    F(codec,       std::optional<std::string>)\
+    F(description, std::optional<std::string>)\
+    F(moderated,   std::optional<bool>)\
+    F(simulcast,   std::optional<bool>)\
+    F(talking,     std::optional<bool>)
+JSON_STRUCT(StreamTrackInfo_c_struct, STREAM_TRACK_INFO_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamListModel)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAM_INFO_FIELDS(F)\
+    F(id,       int64_t)\
+    F(userId,   std::string)\
+    F(metadata, std::optional<Poco::Dynamic::Var>)\
+    F(dummy,    std::optional<bool>)\
+    F(tracks,   std::vector<StreamTrackInfo_c_struct>)\
+    F(talking,  std::optional<bool>)
+JSON_STRUCT(StreamInfo_c_struct, STREAM_INFO_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamTrackInfo)
-    STRING_FIELD(type)
-    /** unique mindex of published track */
-    INT64_FIELD(mindex)
-    /** unique mid of published stream */
-    STRING_FIELD(mid)
-    /** true if track is currently inactive/disabled */
-    BOOL_FIELD(disabled)
-    /** codec used for this track */
-    STRING_FIELD(codec)
-    /** optional description of this track */
-    STRING_FIELD(description)
-    /** true if track has been moderated for this participant */
-    BOOL_FIELD(moderated)
-    /** true if this track uses simulcast */
-    BOOL_FIELD(simulcast)
-    /** whether the publisher track has audio activity or not */
-    BOOL_FIELD(talking)
-TYPE_END
+#define STREAM_PUBLISHED_EVENT_DATA_FIELDS(F)\
+    F(streamRoomId, std::string)\
+    F(stream,       StreamInfo_c_struct)\
+    F(userId,       std::string)
+JSON_STRUCT(StreamPublishedEventData_c_struct, STREAM_PUBLISHED_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamInfo)
-    /** unique ID of active stream */
-    INT64_FIELD(id)
-    /** display name of active stream, if any */
-    STRING_FIELD(userId)
-    /** valid JSON object of metadata, if any */
-    VAR_FIELD(metadata)
-    /** true if this participant is a dummy stream */
-    BOOL_FIELD(dummy)
-    /** list of published tracks */
-    LIST_FIELD(tracks, StreamTrackInfo)
-    /** whether the stream is talking or not (deprecated field) */
-    BOOL_FIELD(talking)
-TYPE_END
+#define STREAM_TRACK_MODIFICATION_PAIR_FIELDS(F)\
+    F(before, std::optional<StreamTrackInfo_c_struct>)\
+    F(after,  std::optional<StreamTrackInfo_c_struct>)
+JSON_STRUCT(StreamTrackModificationPair_c_struct, STREAM_TRACK_MODIFICATION_PAIR_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamPublishedEventData)
-    STRING_FIELD(streamRoomId)
-    OBJECT_FIELD(stream, StreamInfo)
-    STRING_FIELD(userId)
-TYPE_END
+#define STREAM_TRACK_MODIFICATION_FIELDS(F)\
+    F(streamId, int64_t)\
+    F(tracks,   std::vector<StreamTrackModificationPair_c_struct>)
+JSON_STRUCT(StreamTrackModification_c_struct, STREAM_TRACK_MODIFICATION_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamTrackModificationPair)
-    OBJECT_FIELD(before, StreamTrackInfo)
-    OBJECT_FIELD(after, StreamTrackInfo)
-TYPE_END
+#define STREAM_UPDATED_EVENT_DATA_FIELDS(F)\
+    F(streamRoomId,    std::string)\
+    F(streamsAdded,    std::vector<StreamInfo_c_struct>)\
+    F(streamsRemoved,  std::vector<StreamInfo_c_struct>)\
+    F(streamsModified, std::vector<StreamTrackModification_c_struct>)
+JSON_STRUCT(StreamUpdatedEventData_c_struct, STREAM_UPDATED_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamTrackModification)
-    INT64_FIELD(streamId)
-    LIST_FIELD(tracks, StreamTrackModificationPair)
-TYPE_END
+#define NEW_STREAMS_FIELDS(F)\
+    F(room,    std::string)\
+    F(streams, std::vector<StreamInfo_c_struct>)
+JSON_STRUCT(NewStreams_c_struct, NEW_STREAMS_FIELDS);
 
+#define STREAM_SET_NEW_OFFER_MODEL_FIELDS(F)\
+    F(offer,     SessionDescription_c_struct)\
+    F(sessionId, int64_t)
+JSON_STRUCT(StreamSetNewOfferModel_c_struct, STREAM_SET_NEW_OFFER_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamUpdatedEventData)
-    STRING_FIELD(streamRoomId)
-    LIST_FIELD(streamsAdded, StreamInfo)
-    LIST_FIELD(streamsRemoved, StreamInfo)
-    LIST_FIELD(streamsModified, StreamTrackModification)
-TYPE_END
+#define STREAM_ACCEPT_OFFER_MODEL_FIELDS(F)\
+    F(answer,    SessionDescription_c_struct)\
+    F(sessionId, int64_t)
+JSON_STRUCT(StreamAcceptOfferModel_c_struct, STREAM_ACCEPT_OFFER_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(NewStreams)
-    STRING_FIELD(room)
-    LIST_FIELD(streams, StreamInfo)
-TYPE_END
+#define STREAM_SEND_EVENT_MODEL_FIELDS(F)\
+    F(keys, std::vector<core::server::KeyEntrySet_c_struct>)\
+    F(data, std::string)
+JSON_STRUCT(StreamSendEventModel_c_struct, STREAM_SEND_EVENT_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamSetNewOfferModel)
-    OBJECT_FIELD(offer, SessionDescription)
-    INT64_FIELD(sessionId)
-TYPE_END
+#define STREAM_ROOM_SEND_CUSTOM_EVENT_MODEL_FIELDS(F)\
+    F(streamRoomId, std::string)\
+    F(channel,      std::string)\
+    F(keyId,        std::string)\
+    F(data,         Poco::Dynamic::Var)\
+    F(users,        std::vector<std::string>)
+JSON_STRUCT(StreamRoomSendCustomEventModel_c_struct, STREAM_ROOM_SEND_CUSTOM_EVENT_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamAcceptOfferModel)
-    OBJECT_FIELD(answer, SessionDescription)
-    INT64_FIELD(sessionId)
-TYPE_END
+#define STREAM_UNPUBLISH_MODEL_FIELDS(F)\
+    F(sessionId, int64_t)
+JSON_STRUCT(StreamUnpublishModel_c_struct, STREAM_UNPUBLISH_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamSendEventModel)
-    LIST_FIELD(keys, privmx::endpoint::core::server::KeyEntrySet);
-    STRING_FIELD(data)
-TYPE_END
+#define STREAM_TRICKLE_MODEL_FIELDS(F)\
+    F(rtcCandidate, Poco::Dynamic::Var)\
+    F(sessionId,    int64_t)
+JSON_STRUCT(StreamTrickleModel_c_struct, STREAM_TRICKLE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamRoomSendCustomEventModel)
-    STRING_FIELD(streamRoomId)
-    STRING_FIELD(channel)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-    LIST_FIELD(users, std::string)
-TYPE_END
+#define CONTEXT_GET_USERS_MODEL_FIELDS(F)\
+    F(contextId, std::string)
+JSON_STRUCT(ContextGetUsersModel_c_struct, CONTEXT_GET_USERS_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamUnpublishModel)
-    INT64_FIELD(sessionId)
-TYPE_END
+#define CONTEXT_GET_USER_RESULT_FIELDS(F)\
+    F(users, std::vector<core::server::UserIdentity_c_struct>)
+JSON_STRUCT(ContextGetUserResult_c_struct, CONTEXT_GET_USER_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamTrickleModel)
-    OBJECT_PTR_FIELD(rtcCandidate)
-    INT64_FIELD(sessionId)
-TYPE_END
+#define PUBLISHED_STREAM_DATA_FIELDS(F)\
+    F(streamRoomId, std::string)\
+    F(stream,       StreamInfo_c_struct)\
+    F(userId,       std::string)
+JSON_STRUCT(PublishedStreamData_c_struct, PUBLISHED_STREAM_DATA_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(ContextGetUsersModel)
-    STRING_FIELD(contextId)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(ContextGetUserResult)
-    LIST_FIELD(users, core::server::UserIdentity)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(PublishedStreamData)
-    STRING_FIELD(streamRoomId)
-    OBJECT_FIELD(stream, StreamInfo)
-    STRING_FIELD(userId)
-TYPE_END
-
-
-ENDPOINT_SERVER_TYPE(StreamPublishResult)
-    OBJECT_FIELD(answer, SessionDescription)
-    INT64_FIELD(sessionId)
-    OBJECT_FIELD(publishedData, PublishedStreamData)
-TYPE_END
-
+#define STREAM_PUBLISH_RESULT_FIELDS(F)\
+    F(answer,        std::optional<SessionDescription_c_struct>)\
+    F(sessionId,     int64_t)\
+    F(publishedData, std::optional<PublishedStreamData_c_struct>)
+JSON_STRUCT(StreamPublishResult_c_struct, STREAM_PUBLISH_RESULT_FIELDS);
 
 // Events
 
-ENDPOINT_SERVER_TYPE(StreamRoomDeletedEventData)
-    STRING_FIELD(streamRoomId)
-    STRING_FIELD(type)
-TYPE_END
+#define STREAM_ROOM_DELETED_EVENT_DATA_FIELDS(F)\
+    F(streamRoomId, std::string)\
+    F(type,         std::optional<std::string>)
+JSON_STRUCT(StreamRoomDeletedEventData_c_struct, STREAM_ROOM_DELETED_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamEventData)
-    STRING_FIELD(streamRoomId)
-    LIST_FIELD(streamIds, int64_t)
-    STRING_FIELD(userId)
-TYPE_END
+#define STREAM_EVENT_DATA_FIELDS(F)\
+    F(streamRoomId, std::string)\
+    F(streamIds,    std::vector<int64_t>)\
+    F(userId,       std::string)
+JSON_STRUCT(StreamEventData_c_struct, STREAM_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamUnpublishedEventData)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
-TYPE_END
+#define STREAM_UNPUBLISHED_EVENT_DATA_FIELDS(F)\
+    F(streamRoomId, std::string)\
+    F(streamId,     int64_t)
+JSON_STRUCT(StreamUnpublishedEventData_c_struct, STREAM_UNPUBLISHED_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamLeftEventData)
-    STRING_FIELD(streamRoomId)
-    INT64_FIELD(streamId)
-    STRING_FIELD(userId)
-TYPE_END
+#define STREAM_LEFT_EVENT_DATA_FIELDS(F)\
+    F(streamRoomId, std::string)\
+    F(streamId,     int64_t)\
+    F(userId,       std::string)
+JSON_STRUCT(StreamLeftEventData_c_struct, STREAM_LEFT_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(JanusEventData)
-    STRING_FIELD(janus)
-    INT64_FIELD(sender)
-    INT64_FIELD(session_id)
-TYPE_END
+#define JANUS_EVENT_DATA_FIELDS(F)\
+    F(janus,      std::string)\
+    F(sender,     int64_t)\
+    F(session_id, int64_t)
+JSON_STRUCT(JanusEventData_c_struct, JANUS_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(JanusJSEP)
-    STRING_FIELD(sdp)
-    STRING_FIELD(type)
-TYPE_END
+#define JANUS_JSEP_FIELDS(F)\
+    F(sdp,  std::string)\
+    F(type, std::string)
+JSON_STRUCT(JanusJSEP_c_struct, JANUS_JSEP_FIELDS);
 
-ENDPOINT_SERVER_TYPE(JanusVideoRoomStream)
-    BOOL_FIELD(active)
-    INT64_FIELD(mid)
-    INT64_FIELD(mindex)
-    BOOL_FIELD(ready)
-    BOOL_FIELD(send)
-    STRING_FIELD(type)
-TYPE_END
+#define JANUS_VIDEO_ROOM_STREAM_FIELDS(F)\
+    F(active,  bool)\
+    F(mid,     int64_t)\
+    F(mindex,  int64_t)\
+    F(ready,   bool)\
+    F(send,    bool)\
+    F(type,    std::string)
+JSON_STRUCT(JanusVideoRoomStream_c_struct, JANUS_VIDEO_ROOM_STREAM_FIELDS);
 
-ENDPOINT_SERVER_TYPE(JanusVideoRoom)
-    STRING_FIELD(videoroom)
-TYPE_END
+#define JANUS_VIDEO_ROOM_FIELDS(F)\
+    F(videoroom, std::string)
+JSON_STRUCT(JanusVideoRoom_c_struct, JANUS_VIDEO_ROOM_FIELDS);
 
-ENDPOINT_SERVER_TYPE_INHERIT(JanusVideoRoomUpdated, JanusVideoRoom)
-    STRING_FIELD(room)
-    LIST_FIELD(streams, JanusVideoRoomStream)    
-TYPE_END
+#define JANUS_VIDEO_ROOM_UPDATED_FIELDS(F)\
+    F(room,    std::string)\
+    F(streams, std::vector<JanusVideoRoomStream_c_struct>)
+JSON_STRUCT_EXT(JanusVideoRoomUpdated_c_struct, JanusVideoRoom_c_struct, JANUS_VIDEO_ROOM_UPDATED_FIELDS);
 
-ENDPOINT_SERVER_TYPE(JanusPluginDataEvent)
-    VAR_FIELD(data)
-    STRING_FIELD(plugin)
-TYPE_END
+#define JANUS_PLUGIN_DATA_EVENT_FIELDS(F)\
+    F(data,   Poco::Dynamic::Var)\
+    F(plugin, std::string)
+JSON_STRUCT(JanusPluginDataEvent_c_struct, JANUS_PLUGIN_DATA_EVENT_FIELDS);
 
-ENDPOINT_SERVER_TYPE_INHERIT(JanusPluginEvent, JanusEventData)
-    OBJECT_FIELD(jsep, JanusJSEP)
-    OBJECT_FIELD(plugindata, JanusPluginDataEvent)
-TYPE_END
+#define JANUS_PLUGIN_EVENT_FIELDS(F)\
+    F(jsep,       JanusJSEP_c_struct)\
+    F(plugindata, JanusPluginDataEvent_c_struct)
+JSON_STRUCT_EXT(JanusPluginEvent_c_struct, JanusEventData_c_struct, JANUS_PLUGIN_EVENT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamListResult)
-    LIST_FIELD(list, StreamInfo)
-TYPE_END
+#define STREAM_LIST_RESULT_FIELDS(F)\
+    F(list, std::vector<StreamInfo_c_struct>)
+JSON_STRUCT(StreamListResult_c_struct, STREAM_LIST_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(UpdatedStreamData)
-    STRING_FIELD(type)
-    INT64_FIELD(feed_id)
-    INT64_FIELD(feed_mid)
-    STRING_FIELD(feed_display)
-    INT64_FIELD(mindex)
-    STRING_FIELD(mid)
-    BOOL_FIELD(send)
-    BOOL_FIELD(ready)
-TYPE_END
+#define UPDATED_STREAM_DATA_FIELDS(F)\
+    F(active,       bool)\
+    F(type,         std::string)\
+    F(codec,        std::optional<std::string>)\
+    F(feed_id,      std::optional<int64_t>)\
+    F(feed_mid,     std::optional<std::string>)\
+    F(feed_display, std::optional<std::string>)\
+    F(mindex,       int64_t)\
+    F(mid,          std::string)\
+    F(send,         bool)\
+    F(ready,        bool)
+JSON_STRUCT(UpdatedStreamData_c_struct, UPDATED_STREAM_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StreamsUpdatedData)
-    STRING_FIELD(room)
-    INT64_FIELD(sessionId)
-    LIST_FIELD(streams, UpdatedStreamData)
-    OBJECT_FIELD(jsep, JanusJSEP)
-TYPE_END
-
-
+#define STREAMS_UPDATED_DATA_FIELDS(F)\
+    F(room,      std::string)\
+    F(sessionId, int64_t)\
+    F(streams,   std::vector<UpdatedStreamData_c_struct>)\
+    F(jsep,      std::optional<JanusJSEP_c_struct>)
+JSON_STRUCT(StreamsUpdatedData_c_struct, STREAMS_UPDATED_DATA_FIELDS);
 
 } // server
 } // stream

@@ -127,32 +127,32 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     StreamRoom convertServerStreamRoomToLibStreamRoom(
-        server::StreamRoomInfo streamRoomInfo,
+        server::StreamRoomInfo_c_struct streamRoomInfo,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = StreamRoomDataSchema::Version::UNKNOWN
     );
 
-    StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData);
-    StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
-    std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom, server::StreamRoomDataEntry streamRoomEntry, const core::DecryptedEncKey& encKey);
-    std::vector<StreamRoom> decryptAndConvertStreamRoomsDataToStreamRooms(utils::List<server::StreamRoomInfo> streamRooms);
-    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom);
-    void assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
-    uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
+    StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo_c_struct streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData);
+    StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry_c_struct streamRoomEntry);
+    std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo_c_struct streamRoom, server::StreamRoomDataEntry_c_struct streamRoomEntry, const core::DecryptedEncKey& encKey);
+    std::vector<StreamRoom> decryptAndConvertStreamRoomsDataToStreamRooms(std::vector<server::StreamRoomInfo_c_struct> streamRooms);
+    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo_c_struct streamRoom);
+    void assertStreamRoomDataIntegrity(server::StreamRoomInfo_c_struct streamRoom);
+    uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo_c_struct streamRoom);
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc);
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
-    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, const std::string& encryptionKeyId);
-    std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(server::StreamRoomInfo streamRoomInfo);
+    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo_c_struct streamRoomInfo, const std::string& encryptionKeyId);
+    std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(server::StreamRoomInfo_c_struct streamRoomInfo);
     std::string deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 EncKey);
 
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);
+    core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo_c_struct streamRoom);
     void assertTurnServerUri(const std::string& uri);
 
     static int32_t nextIdCounter;
