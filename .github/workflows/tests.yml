@@ -22,6 +22,11 @@ jobs:
         sudo pipx install conan
         echo "/root/.local/bin" >> $GITHUB_PATH
 
+    - name: Setup virtual audio device
+      run: |
+        sudo apt-get install -y pulseaudio libasound2-plugins
+        pulseaudio --start --exit-idle-time=-1
+
     - name: Setup conan
       run: |
         conan profile detect --force
@@ -31,7 +36,7 @@ jobs:
       run: conan remote login -p "${{ secrets.CONAN_PASSWORD }}" privmx "${{ vars.CONAN_USER }}"
 
     - name: Build library
-      run: ./build.sh
+      run: ./build-with-streams.sh
 
     - name: Upload binaries
       run: conan upload "*" --remote=privmx --confirm

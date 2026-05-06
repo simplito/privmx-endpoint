@@ -28,7 +28,7 @@ TEST_CMAKE_FILE = SCRIPT_DIR / "CMakeLists.txt"
 
 MAX_WORKERS = 4
 TIMEOUT_PER_TEST = 300
-RETRY_COUNT = 2
+RETRY_COUNT = 0
 RETRY_DELAY = 5
 
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
