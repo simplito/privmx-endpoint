@@ -12,10 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_SERVERTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_SERVERTYPES_HPP_
 
-#include <string>
-
-#include <privmx/endpoint/core/ServerTypes.hpp>
-#include <privmx/endpoint/core/TypesMacros.hpp>
+#include <privmx/utils/JsonHelper.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 
 namespace privmx {
@@ -23,337 +20,305 @@ namespace endpoint {
 namespace store {
 namespace server {
 
-// BEGIN BUF
-class BufferReadRange : public utils::TypedObject
-{
-public:
-    ENDPOINT_TYPE_CONSTRUCTOR(BufferReadRange)
-    void initialize() override {
-        type(std::string("all"));
-    }
-    STRING_FIELD(type)
-};
-class BufferReadRangeSlice : public BufferReadRange
-{
-public:
-    ENDPOINT_TYPE_CONSTRUCTOR_INHERIT(BufferReadRangeSlice, BufferReadRange)
-    void initialize() override {
-        type(std::string("slice"));
-    }
-    INT64_FIELD(from)
-    INT64_FIELD(to)
-};
+#define BUFFER_READ_RANGE_FIELDS(F)\
+    F(type, std::string)
+JSON_STRUCT(BufferReadRange, BUFFER_READ_RANGE_FIELDS);
 
-class BufferReadRangeChecksum : public BufferReadRange
-{
-public:
-    ENDPOINT_TYPE_CONSTRUCTOR_INHERIT(BufferReadRangeChecksum, BufferReadRange)
-    void initialize() override {
-        type(std::string("checksum"));
-    }
-};
-// END BUF
-ENDPOINT_SERVER_TYPE(StoreDataEntry)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(Store)
-    STRING_FIELD(id)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(contextId)
-    INT64_FIELD(createDate)
-    STRING_FIELD(creator)
-    INT64_FIELD(lastModificationDate)
-    STRING_FIELD(lastModifier)
-    LIST_FIELD(data, StoreDataEntry)
-    STRING_FIELD(keyId)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    LIST_FIELD(keys, core::server::KeyEntry)
-    INT64_FIELD(version)
-    INT64_FIELD(lastFileDate)
-    INT64_FIELD(files)
-    STRING_FIELD(type)
-    VAR_FIELD(policy)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StoreCreateModel)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(contextId)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    VAR_FIELD(data)
-    STRING_FIELD(keyId)
-    LIST_FIELD(keys, core::server::KeyEntrySet)
-    STRING_FIELD(type)
-    VAR_FIELD(policy)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StoreUpdateModel)
-    STRING_FIELD(id)
-    STRING_FIELD(resourceId)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    VAR_FIELD(data)
-    STRING_FIELD(keyId)
-    LIST_FIELD(keys, core::server::KeyEntrySet)
-    INT64_FIELD(version)
-    BOOL_FIELD(force)
-    VAR_FIELD(policy)
-TYPE_END
-
-//-----------------------------------------------------
-
-// File/sMetaGet
-
-ENDPOINT_SERVER_TYPE(FileThumb)
-    INT64_FIELD(size)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(File)
-    STRING_FIELD(id)
-    STRING_FIELD(resourceId)
-    INT64_FIELD(version)
-    STRING_FIELD(contextId)
-    STRING_FIELD(storeId)
-    INT64_FIELD(created)
-    STRING_FIELD(creator)
-    INT64_FIELD(lastModificationDate)
-    STRING_FIELD(lastModifier)
-    VAR_FIELD(meta)  // meta: unknown
-    INT64_FIELD(size)
-    STRING_FIELD(keyId)
-    OBJECT_FIELD(thumb, FileThumb)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(FileError)
-    INT64_FIELD(code)
-    STRING_FIELD(message)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE_INHERIT(FileListElement, File)
-    STRING_FIELD(id)
-    OBJECT_FIELD(error, FileError)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StoreFileGetModel)
-    STRING_FIELD(fileId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StoreFileGetManyModel)
-    STRING_FIELD(storeId)
-    LIST_FIELD(fileIds, std::string)
-    BOOL_FIELD(failOnError)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StoreFileGetResult)
-    OBJECT_FIELD(store, Store)
-    OBJECT_FIELD(file, File)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StoreFileGetManyResult)
-    OBJECT_FIELD(store, Store)
-    LIST_FIELD(files, FileListElement)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE_INHERIT(StoreFileListModel, core::server::ListModel)
-    STRING_FIELD(storeId)
-TYPE_END
-
-ENDPOINT_SERVER_TYPE(StoreFileListResult)
-    OBJECT_FIELD(store, Store)
-    LIST_FIELD(files, File)
-    INT64_FIELD(count)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedFileMetaV4, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(fileSize)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedFileMetaV5, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-    STRING_FIELD(dio)
-TYPE_END
-
-//-----------------------------------------------------
+#define BUFFER_READ_RANGE_SLICE_FIELDS(F)\
+    F(from, int64_t)\
+    F(to,   int64_t)
+JSON_STRUCT_EXT(BufferReadRangeSlice, BufferReadRange, BUFFER_READ_RANGE_SLICE_FIELDS);
 
 
+#define STORE_DATA_ENTRY_FIELDS(F)\
+    F(keyId, std::string)\
+    F(data,  Poco::Dynamic::Var)
+JSON_STRUCT(StoreDataEntry, STORE_DATA_ENTRY_FIELDS);
 
+#define STORE_FIELDS(F)\
+    F(id,                   std::string)\
+    F(resourceId,           std::optional<std::string>)\
+    F(contextId,            std::string)\
+    F(createDate,           int64_t)\
+    F(creator,              std::string)\
+    F(lastModificationDate, int64_t)\
+    F(lastModifier,         std::string)\
+    F(data,                 std::vector<StoreDataEntry>)\
+    F(keyId,                std::string)\
+    F(users,                std::vector<std::string>)\
+    F(managers,             std::vector<std::string>)\
+    F(keys,                 std::vector<core::server::KeyEntry>)\
+    F(version,              int64_t)\
+    F(lastFileDate,         int64_t)\
+    F(files,                int64_t)\
+    F(type,                 std::optional<std::string>)\
+    F(policy,               Poco::Dynamic::Var)
+JSON_STRUCT(Store, STORE_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreCreateResult)
-    STRING_FIELD(storeId)
-TYPE_END
+#define STORE_CREATE_MODEL_FIELDS(F)\
+    F(resourceId, std::string)\
+    F(contextId,  std::string)\
+    F(users,      std::vector<std::string>)\
+    F(managers,   std::vector<std::string>)\
+    F(data,       Poco::Dynamic::Var)\
+    F(keyId,      std::string)\
+    F(keys,       std::vector<core::server::KeyEntrySet>)\
+    F(type,       std::string)\
+    F(policy,     std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(StoreCreateModel, STORE_CREATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreDeleteModel)
-    STRING_FIELD(storeId)
-TYPE_END
+#define STORE_UPDATE_MODEL_FIELDS(F)\
+    F(id,         std::string)\
+    F(resourceId, std::string)\
+    F(users,      std::vector<std::string>)\
+    F(managers,   std::vector<std::string>)\
+    F(data,       Poco::Dynamic::Var)\
+    F(keyId,      std::string)\
+    F(keys,       std::vector<core::server::KeyEntrySet>)\
+    F(version,    int64_t)\
+    F(force,      bool)\
+    F(policy,     std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(StoreUpdateModel, STORE_UPDATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreGetModel)
-    STRING_FIELD(storeId)
-    STRING_FIELD(type)
-TYPE_END
+#define FILE_THUMB_FIELDS(F)\
+    F(size, int64_t)
+JSON_STRUCT(FileThumb, FILE_THUMB_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreGetResult)
-    OBJECT_FIELD(store, Store)
-TYPE_END
+#define FILE_FIELDS_SERVER(F)\
+    F(id,                   std::string)\
+    F(resourceId,           std::string)\
+    F(version,              int64_t)\
+    F(contextId,            std::string)\
+    F(storeId,              std::string)\
+    F(created,              int64_t)\
+    F(creator,              std::string)\
+    F(lastModificationDate, int64_t)\
+    F(lastModifier,         std::string)\
+    F(meta,                 Poco::Dynamic::Var)\
+    F(size,                 int64_t)\
+    F(keyId,                std::string)\
+    F(thumb,                std::optional<FileThumb>)
+JSON_STRUCT(File, FILE_FIELDS_SERVER);
 
-ENDPOINT_SERVER_TYPE_INHERIT(StoreListModel, core::server::ListModel)
-    STRING_FIELD(contextId)
-    STRING_FIELD(type)
-TYPE_END
+#define FILE_ERROR_FIELDS(F)\
+    F(code,    int64_t)\
+    F(message, std::string)
+JSON_STRUCT(FileError, FILE_ERROR_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreListResult)
-    LIST_FIELD(stores, Store)
-    INT64_FIELD(count)
-TYPE_END
+#define FILE_LIST_ELEMENT_FIELDS(F)\
+    F(error, std::optional<FileError>)
+JSON_STRUCT_EXT(FileListElement, File, FILE_LIST_ELEMENT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreMetaThumb)
-    INT64_FIELD(size)         // size: number;
-TYPE_END
+#define STORE_FILE_GET_MODEL_FIELDS(F)\
+    F(fileId, std::string)
+JSON_STRUCT(StoreFileGetModel, STORE_FILE_GET_MODEL_FIELDS);
 
+#define STORE_FILE_GET_MANY_MODEL_FIELDS(F)\
+    F(storeId,      std::string)\
+    F(fileIds,      std::vector<std::string>)\
+    F(failOnError,  bool)
+JSON_STRUCT(StoreFileGetManyModel, STORE_FILE_GET_MANY_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileCreateModel)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(storeId)     
-    STRING_FIELD(requestId)        // request.RequestId
-    INT64_FIELD(fileIndex)
-    VAR_FIELD(meta)        // meta: unknown
-    STRING_FIELD(keyId)
-    INT64_FIELD(thumbIndex)
-TYPE_END
+#define STORE_FILE_GET_RESULT_FIELDS(F)\
+    F(store, Store)\
+    F(file,  File)
+JSON_STRUCT(StoreFileGetResult, STORE_FILE_GET_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileCreateResult)
-    STRING_FIELD(fileId)
-TYPE_END
+#define STORE_FILE_GET_MANY_RESULT_FIELDS(F)\
+    F(store, Store)\
+    F(files, std::vector<FileListElement>)
+JSON_STRUCT(StoreFileGetManyResult, STORE_FILE_GET_MANY_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileReadModel)
-    STRING_FIELD(fileId)
-    OBJECT_FIELD(range, BufferReadRange)
-    INT64_FIELD(version)
-    BOOL_FIELD(thumb)
-TYPE_END
+#define STORE_FILE_LIST_MODEL_FIELDS(F)\
+    F(storeId, std::string)
+JSON_STRUCT_EXT(StoreFileListModel, core::server::ListModel, STORE_FILE_LIST_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileReadResult)
-    BINARYSTRING_FIELD(data)
-TYPE_END
+#define STORE_FILE_LIST_RESULT_FIELDS(F)\
+    F(store, Store)\
+    F(files, std::vector<File>)\
+    F(count, int64_t)
+JSON_STRUCT(StoreFileListResult, STORE_FILE_LIST_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileWriteModel)
-    STRING_FIELD(fileId)
-    STRING_FIELD(requestId)
-    INT64_FIELD(fileIndex)
-    VAR_FIELD(meta) // meta: unknown
-    STRING_FIELD(keyId)
-    INT64_FIELD(thumbIndex)
-TYPE_END
+#define ENCRYPTED_FILE_META_V4_FIELDS(F)\
+    F(publicMeta,       std::string)\
+    F(publicMetaObject, Poco::Dynamic::Var)\
+    F(privateMeta,      std::string)\
+    F(fileSize,         std::string)\
+    F(internalMeta,     std::optional<std::string>)\
+    F(authorPubKey,     std::string)
+JSON_STRUCT_EXT(EncryptedFileMetaV4, core::dynamic::VersionedData, ENCRYPTED_FILE_META_V4_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileRandomWriteOperation)
-    STRING_FIELD(type)
-    INT64_FIELD(pos)
-    BINARYSTRING_FIELD(data)
-    BOOL_FIELD(truncate)
-TYPE_END
+#define ENCRYPTED_FILE_META_V5_FIELDS(F)\
+    F(publicMeta,       std::string)\
+    F(publicMetaObject, Poco::Dynamic::Var)\
+    F(privateMeta,      std::string)\
+    F(internalMeta,     std::optional<std::string>)\
+    F(authorPubKey,     std::string)\
+    F(dio,              std::string)
+JSON_STRUCT_EXT(EncryptedFileMetaV5, core::dynamic::VersionedData, ENCRYPTED_FILE_META_V5_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileWriteModelByOperations)
-    STRING_FIELD(fileId)
-    LIST_FIELD(operations, StoreFileRandomWriteOperation)
-    VAR_FIELD(meta) // meta: unknown
-    STRING_FIELD(keyId)
-    INT64_FIELD(version)
-    BOOL_FIELD(force)
-TYPE_END
+#define STORE_CREATE_RESULT_FIELDS(F)\
+    F(storeId, std::string)
+JSON_STRUCT(StoreCreateResult, STORE_CREATE_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileUpdateModel)
-    STRING_FIELD(fileId)     
-    VAR_FIELD(meta) // meta: unknown
-    STRING_FIELD(keyId)
-TYPE_END
+#define STORE_DELETE_MODEL_FIELDS(F)\
+    F(storeId, std::string)
+JSON_STRUCT(StoreDeleteModel, STORE_DELETE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileDeleteModel)
-    STRING_FIELD(fileId)
-TYPE_END
+#define STORE_GET_MODEL_FIELDS(F)\
+    F(storeId, std::string)\
+    F(type,    std::optional<std::string>)
+JSON_STRUCT(StoreGetModel, STORE_GET_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(FileDefinition)
-    INT64_FIELD(size)
-    INT64_FIELD(checksumSize)
-    BOOL_FIELD(randomWrite)
-TYPE_END
+#define STORE_GET_RESULT_FIELDS(F)\
+    F(store, Store)
+JSON_STRUCT(StoreGetResult, STORE_GET_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(CreateRequestModel)
-    LIST_FIELD(files, FileDefinition)
-TYPE_END
+#define STORE_LIST_MODEL_FIELDS(F)\
+    F(contextId, std::string)\
+    F(type,      std::optional<std::string>)
+JSON_STRUCT_EXT(StoreListModel, core::server::ListModel, STORE_LIST_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(CreateRequestResult)
-    STRING_FIELD(id)
-TYPE_END
+#define STORE_LIST_RESULT_FIELDS(F)\
+    F(stores, std::vector<Store>)\
+    F(count,  int64_t)
+JSON_STRUCT(StoreListResult, STORE_LIST_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ChunkModel)
-    STRING_FIELD(requestId)
-    INT64_FIELD(fileIndex)
-    INT64_FIELD(seq)
-    BINARYSTRING_FIELD(data)
-TYPE_END
+#define STORE_FILE_CREATE_MODEL_FIELDS(F)\
+    F(resourceId, std::string)\
+    F(storeId,    std::string)\
+    F(requestId,  std::string)\
+    F(fileIndex,  int64_t)\
+    F(meta,       Poco::Dynamic::Var)\
+    F(keyId,      std::string)\
+    F(thumbIndex, std::optional<int64_t>)
+JSON_STRUCT(StoreFileCreateModel, STORE_FILE_CREATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(CommitFileModel)
-    STRING_FIELD(requestId)
-    INT64_FIELD(fileIndex)
-    INT64_FIELD(seq)
-    BINARYSTRING_FIELD(checksum)
-TYPE_END
+#define STORE_FILE_CREATE_RESULT_FIELDS(F)\
+    F(fileId, std::string)
+JSON_STRUCT(StoreFileCreateResult, STORE_FILE_CREATE_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(FileSizeResult)
-    INT64_FIELD(size)
-    INT64_FIELD(checksumSize)
-TYPE_END
+#define STORE_FILE_READ_MODEL_FIELDS(F)\
+    F(fileId,  std::string)\
+    F(range,   Poco::Dynamic::Var)\
+    F(version, std::optional<int64_t>)\
+    F(thumb,   bool)
+JSON_STRUCT(StoreFileReadModel, STORE_FILE_READ_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(PrepareChunkRespond)
-    STRING_FIELD(hmac)
-    STRING_FIELD(cipher)
-TYPE_END
+#define STORE_FILE_READ_RESULT_FIELDS(F)\
+    F(data, Pson::BinaryString)
+JSON_STRUCT(StoreFileReadResult, STORE_FILE_READ_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreDeletedEventData)
-    STRING_FIELD(storeId)
-    STRING_FIELD(type)
-TYPE_END
+#define STORE_FILE_WRITE_MODEL_FIELDS(F)\
+    F(fileId,     std::string)\
+    F(requestId,  std::string)\
+    F(fileIndex,  int64_t)\
+    F(meta,       Poco::Dynamic::Var)\
+    F(keyId,      std::string)\
+    F(thumbIndex, std::optional<int64_t>)
+JSON_STRUCT(StoreFileWriteModel, STORE_FILE_WRITE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreStatsChangedEventData)
-    STRING_FIELD(id)
-    STRING_FIELD(contextId)
-    INT64_FIELD(lastFileDate)
-    INT64_FIELD(files)
-    STRING_FIELD(type)
-TYPE_END
+#define STORE_FILE_RANDOM_WRITE_OPERATION_FIELDS(F)\
+    F(type,     std::string)\
+    F(pos,      int64_t)\
+    F(data,     Pson::BinaryString)\
+    F(truncate, bool)
+JSON_STRUCT(StoreFileRandomWriteOperation, STORE_FILE_RANDOM_WRITE_OPERATION_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileDeletedEventData)
-    STRING_FIELD(id)
-    STRING_FIELD(contextId)
-    STRING_FIELD(storeId)
-    STRING_FIELD(containerType)
-TYPE_END
+#define STORE_FILE_WRITE_MODEL_BY_OPERATIONS_FIELDS(F)\
+    F(fileId,     std::string)\
+    F(operations, std::vector<StoreFileRandomWriteOperation>)\
+    F(meta,       Poco::Dynamic::Var)\
+    F(keyId,      std::string)\
+    F(version,    int64_t)\
+    F(force,      bool)
+JSON_STRUCT(StoreFileWriteModelByOperations, STORE_FILE_WRITE_MODEL_BY_OPERATIONS_FIELDS);
 
-ENDPOINT_SERVER_TYPE(StoreFileChange)
-    STRING_FIELD(type)
-    INT64_FIELD(pos)
-    INT64_FIELD(length)
-    BOOL_FIELD(truncate)
-TYPE_END
+#define STORE_FILE_UPDATE_MODEL_FIELDS(F)\
+    F(fileId, std::string)\
+    F(meta,   Poco::Dynamic::Var)\
+    F(keyId,  std::string)
+JSON_STRUCT(StoreFileUpdateModel, STORE_FILE_UPDATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE_INHERIT(StoreFileEventData, File)
-    STRING_FIELD(containerType)
-TYPE_END
+#define STORE_FILE_DELETE_MODEL_FIELDS(F)\
+    F(fileId, std::string)
+JSON_STRUCT(StoreFileDeleteModel, STORE_FILE_DELETE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE_INHERIT(StoreFileUpdatedEventData, StoreFileEventData)
-    LIST_FIELD(changes, StoreFileChange)
-TYPE_END
+#define FILE_DEFINITION_FIELDS(F)\
+    F(size,         int64_t)\
+    F(checksumSize, int64_t)\
+    F(randomWrite,  bool)
+JSON_STRUCT(FileDefinition, FILE_DEFINITION_FIELDS);
+
+#define CREATE_REQUEST_MODEL_FIELDS(F)\
+    F(files, std::vector<FileDefinition>)
+JSON_STRUCT(CreateRequestModel, CREATE_REQUEST_MODEL_FIELDS);
+
+#define CREATE_REQUEST_RESULT_FIELDS(F)\
+    F(id, std::string)
+JSON_STRUCT(CreateRequestResult, CREATE_REQUEST_RESULT_FIELDS);
+
+#define CHUNK_MODEL_FIELDS(F)\
+    F(requestId, std::string)\
+    F(fileIndex, int64_t)\
+    F(seq,       int64_t)\
+    F(data,      Pson::BinaryString)
+JSON_STRUCT(ChunkModel, CHUNK_MODEL_FIELDS);
+
+#define COMMIT_FILE_MODEL_FIELDS(F)\
+    F(requestId, std::string)\
+    F(fileIndex, int64_t)\
+    F(seq,       int64_t)\
+    F(checksum,  Pson::BinaryString)
+JSON_STRUCT(CommitFileModel, COMMIT_FILE_MODEL_FIELDS);
+
+#define FILE_SIZE_RESULT_FIELDS(F)\
+    F(size,         int64_t)\
+    F(checksumSize, int64_t)
+JSON_STRUCT(FileSizeResult, FILE_SIZE_RESULT_FIELDS);
+
+#define PREPARE_CHUNK_RESPOND_FIELDS(F)\
+    F(hmac,   std::string)\
+    F(cipher, std::string)
+JSON_STRUCT(PrepareChunkRespond, PREPARE_CHUNK_RESPOND_FIELDS);
+
+#define STORE_DELETED_EVENT_DATA_FIELDS(F)\
+    F(storeId, std::string)\
+    F(type,    std::optional<std::string>)
+JSON_STRUCT(StoreDeletedEventData, STORE_DELETED_EVENT_DATA_FIELDS);
+
+#define STORE_STATS_CHANGED_EVENT_DATA_FIELDS(F)\
+    F(id,           std::string)\
+    F(contextId,    std::string)\
+    F(lastFileDate, int64_t)\
+    F(files,        int64_t)\
+    F(type,         std::optional<std::string>)
+JSON_STRUCT(StoreStatsChangedEventData, STORE_STATS_CHANGED_EVENT_DATA_FIELDS);
+
+#define STORE_FILE_DELETED_EVENT_DATA_FIELDS(F)\
+    F(id,            std::string)\
+    F(contextId,     std::string)\
+    F(storeId,       std::string)\
+    F(containerType, std::optional<std::string>)
+JSON_STRUCT(StoreFileDeletedEventData, STORE_FILE_DELETED_EVENT_DATA_FIELDS);
+
+#define STORE_FILE_CHANGE_FIELDS(F)\
+    F(type,     std::string)\
+    F(pos,      int64_t)\
+    F(length,   int64_t)\
+    F(truncate, bool)
+JSON_STRUCT(StoreFileChange, STORE_FILE_CHANGE_FIELDS);
+
+#define STORE_FILE_EVENT_DATA_FIELDS(F)\
+    F(containerType, std::optional<std::string>)
+JSON_STRUCT_EXT(StoreFileEventData, File, STORE_FILE_EVENT_DATA_FIELDS);
+
+// StoreFileUpdatedEventData extends File directly (not StoreFileEventData)
+// to avoid a 3-level JSON_STRUCT_EXT chain, which is unsupported.
+#define STORE_FILE_UPDATED_EVENT_DATA_FIELDS(F)\
+    F(containerType, std::optional<std::string>)\
+    F(changes,       std::optional<std::vector<StoreFileChange>>)
+JSON_STRUCT_EXT(StoreFileUpdatedEventData, File, STORE_FILE_UPDATED_EVENT_DATA_FIELDS);
 
 } // server
 } // store

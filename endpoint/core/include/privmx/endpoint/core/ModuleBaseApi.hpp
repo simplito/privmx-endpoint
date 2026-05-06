@@ -59,7 +59,7 @@ protected:
     auto decryptModuleDataV4(
         ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
     ) -> decltype(
-        moduleObj.keyId(), moduleObj.data(), 
+        moduleObj.keyId, moduleObj.data, 
         core::DecryptedModuleDataV4()
     );
 
@@ -67,7 +67,7 @@ protected:
     auto decryptModuleDataV5(
         ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
     ) -> decltype(
-        moduleObj.keyId(), moduleObj.data(), 
+        moduleObj.keyId, moduleObj.data, 
         core::DecryptedModuleDataV5()
     );
 
@@ -75,19 +75,22 @@ protected:
     auto extractAndDecryptModuleInternalMeta(
         ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
     ) -> decltype(
-        moduleObj.keyId(), moduleObj.data(), 
+        moduleObj.keyId, moduleObj.data, 
         core::ModuleInternalMetaV5()
     );
 
     template<typename ModuleStructAsTypedObj>
-    auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKeyV2());
+    auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2());
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
 
     template<typename ModuleStructAsTypedObj>
-    auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), core::EncKeyLocation());
+    auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId, core::EncKeyLocation());
+    template<typename ModuleStructAsTypedObj>
+    auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::optional<std::string>& resourceIdOpt) -> decltype(moduleObj.contextId, core::EncKeyLocation());
+
 
     template<typename ModuleStructAsTypedObj>
-    auto getAndValidateModuleKeys(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), std::unordered_map<std::string, DecryptedEncKeyV2>());
+    auto getAndValidateModuleKeys(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
     DecryptedEncKeyV2 findEncKeyByKeyId(std::unordered_map<std::string, DecryptedEncKeyV2> keys, const std::string& keyId);
     
@@ -121,11 +124,11 @@ template<typename ModuleStructAsTypedObj>
 auto ModuleBaseApi::decryptModuleDataV4(
     ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
 ) -> decltype(
-    moduleObj.keyId(), moduleObj.data(), 
+    moduleObj.keyId, moduleObj.data, 
     core::DecryptedModuleDataV4()
 ) {
     try {
-        auto encryptedData = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV4>(moduleObj.data());
+        auto encryptedData = core::dynamic::EncryptedModuleDataV4::fromJSON(moduleObj.data);
         return _moduleDataEncryptorV4.decrypt(encryptedData, encKey.key);
     } catch (const core::Exception& e) {
         return core::DecryptedModuleDataV4{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = e.getCode()}, {},{},{},{}};
@@ -140,11 +143,11 @@ template<typename ModuleStructAsTypedObj>
 auto ModuleBaseApi::decryptModuleDataV5(
     ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
 ) -> decltype(
-    moduleObj.keyId(), moduleObj.data(), 
+    moduleObj.keyId, moduleObj.data, 
     core::DecryptedModuleDataV5()
 ) {
     try {
-        auto encryptedData = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::EncryptedModuleDataV5>(moduleObj.data());
+        auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(moduleObj.data);
         if(encKey.statusCode != 0) {
             auto tmp = _moduleDataEncryptorV5.extractPublic(encryptedData);
             tmp.statusCode = encKey.statusCode;
@@ -164,11 +167,11 @@ template<typename ModuleStructAsTypedObj>
 auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
     ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
 ) -> decltype(
-    moduleObj.keyId(), moduleObj.data(), 
+    moduleObj.keyId, moduleObj.data, 
     core::ModuleInternalMetaV5()
 ) {
-    auto versioned = utils::TypedObjectFactory::createObjectFromVar<core::dynamic::VersionedData>(moduleObj.data());
-    switch (versioned.versionOpt(core::ModuleDataSchema::Version::UNKNOWN)) {
+    auto versioned = core::dynamic::VersionedData::fromJSON(moduleObj.data);
+    switch (versioned.version) {
         case core::ModuleDataSchema::Version::UNKNOWN:
             return core::ModuleInternalMetaV5();
         case core::ModuleDataSchema::Version::VERSION_4:
@@ -181,26 +184,54 @@ auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
 }
 
 template<typename ModuleStructAsTypedObj>
-auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data(), moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), core::DecryptedEncKeyV2()) {
-    auto data_entry = moduleObj.data().get(moduleObj.data().size()-1);
+auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
+    ModuleStructAsTypedObj moduleObj
+) -> decltype(
+    moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId,
+    core::DecryptedEncKeyV2()
+) {
+    auto data_entry = moduleObj.data.back();
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    auto location {getModuleEncKeyLocation(moduleObj, moduleObj.resourceIdOpt(""))};
-    keyProviderRequest.addOne(moduleObj.keys(), data_entry.keyId(), location);
-    core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(data_entry.keyId());
+    auto location {getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
+    keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
+    core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(data_entry.keyId);
     return ret;
 }
 
 template<typename ModuleStructAsTypedObj>
-auto ModuleBaseApi::getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), core::EncKeyLocation()) {
-    core::EncKeyLocation location{.contextId=moduleObj.contextId(), .resourceId=resourceId};
+auto ModuleBaseApi::getModuleEncKeyLocation(
+    ModuleStructAsTypedObj moduleObj, const std::string& resourceId
+) -> decltype(
+    moduleObj.contextId,
+    core::EncKeyLocation()
+) {
+    core::EncKeyLocation location{.contextId=moduleObj.contextId, .resourceId=resourceId};
     return location;
 }
 
 template<typename ModuleStructAsTypedObj>
-auto ModuleBaseApi::getAndValidateModuleKeys(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId(), moduleObj.keys(), moduleObj.resourceId(), std::unordered_map<std::string, DecryptedEncKeyV2>()) {
+auto ModuleBaseApi::getModuleEncKeyLocation(
+    ModuleStructAsTypedObj moduleObj, const std::optional<std::string>& resourceIdOpt
+) -> decltype(
+    moduleObj.contextId,
+    core::EncKeyLocation()
+) {
+    core::EncKeyLocation location{.contextId=moduleObj.contextId, .resourceId=resourceIdOpt.value_or("")};
+    return location;
+}
+
+template<typename ModuleStructAsTypedObj>
+auto ModuleBaseApi::getAndValidateModuleKeys(
+    ModuleStructAsTypedObj moduleObj, const std::string& resourceId
+) -> decltype(
+    moduleObj.contextId,
+    moduleObj.keys,
+    moduleObj.resourceId,
+    std::unordered_map<std::string, DecryptedEncKeyV2>()
+) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location {getModuleEncKeyLocation(moduleObj, resourceId)};
-    keyProviderRequest.addAll(moduleObj.keys(), location);
+    keyProviderRequest.addAll(moduleObj.keys, location);
     auto moduleKeys {_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     return moduleKeys;
 }

@@ -14,7 +14,6 @@ limitations under the License.
 
 #include "../../include/privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/TypesMacros.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 

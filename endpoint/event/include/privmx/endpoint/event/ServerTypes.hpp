@@ -12,51 +12,43 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_EVENT_SERVERTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_EVENT_SERVERTYPES_HPP_
 
-#include <string>
-
-#include <privmx/endpoint/core/TypesMacros.hpp>
-#include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/utils/JsonHelper.hpp>
+#include "privmx/endpoint/core/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace event {
 namespace server {
 
-ENDPOINT_SERVER_TYPE(UserIdentity)
-    STRING_FIELD(id)
-    STRING_FIELD(pub)
-TYPE_END
+#define USER_KEY_FIELDS(F)\
+    F(id,  std::string)\
+    F(key, std::string)
+JSON_STRUCT(UserKey, USER_KEY_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(UserKey)
-    STRING_FIELD(id)  // userId
-    STRING_FIELD(key) // encKey encrypted with user pubkey;
-TYPE_END
+#define CONTEXT_EMIT_CUSTOM_EVENT_MODEL_FIELDS(F)\
+    F(contextId, std::string)\
+    F(channel,   std::string)\
+    F(data,      Poco::Dynamic::Var)\
+    F(users,     std::vector<UserKey>)
+JSON_STRUCT(ContextEmitCustomEventModel, CONTEXT_EMIT_CUSTOM_EVENT_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(ContextEmitCustomEventModel)
-    STRING_FIELD(contextId)
-    STRING_FIELD(channel)
-    VAR_FIELD(data) // encrypted
-    LIST_FIELD(users, UserKey)
-TYPE_END
+#define CONTEXT_CUSTOM_EVENT_DATA_FIELDS(F)\
+    F(id,        std::string)\
+    F(eventData, Poco::Dynamic::Var)\
+    F(key,       std::string)\
+    F(author,    core::server::UserIdentity)
+JSON_STRUCT(ContextCustomEventData, CONTEXT_CUSTOM_EVENT_DATA_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(ContextCustomEventData)
-    STRING_FIELD(id)
-    VAR_FIELD(eventData)
-    STRING_FIELD(key) // encryption Key
-    OBJECT_FIELD(author, UserIdentity)
-TYPE_END
+#define ENCRYPTED_INTERNAL_CONTEXT_EVENT_FIELDS(F)\
+    F(encryptedData, std::string)\
+    F(type,          std::string)
+JSON_STRUCT(EncryptedInternalContextEvent, ENCRYPTED_INTERNAL_CONTEXT_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(EncryptedInternalContextEvent) // ForInternalEvents
-    STRING_FIELD(encryptedData)
-    STRING_FIELD(type) // public data about event type
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedContextEventDataV5, core::dynamic::VersionedData)
-    STRING_FIELD(encryptedData)
-    STRING_FIELD(type) // public data about event type, used only in internal events
-    STRING_FIELD(dio)
-TYPE_END
+#define ENCRYPTED_CONTEXT_EVENT_DATA_V5_FIELDS(F)\
+    F(encryptedData, std::string)\
+    F(type,          std::optional<std::string>)\
+    F(dio,           std::string)
+JSON_STRUCT_EXT(EncryptedContextEventDataV5, core::dynamic::VersionedData, ENCRYPTED_CONTEXT_EVENT_DATA_V5_FIELDS);
 
 } // server
 } // event

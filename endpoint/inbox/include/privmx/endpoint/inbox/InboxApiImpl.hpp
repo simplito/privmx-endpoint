@@ -43,7 +43,6 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Events.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV4.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV5.hpp"
-#include "privmx/endpoint/inbox/Factory.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
 #include "privmx/endpoint/inbox/SubscriberImpl.hpp"
@@ -92,9 +91,9 @@ public:
     core::PagingList<inbox::Inbox> listInboxes(const std::string& contextId, const core::PagingQuery& query);
     inbox::InboxPublicView getInboxPublicView(const std::string& inboxId);
     void deleteInbox(const std::string& inboxId);
-    
+
     int64_t/*inboxHandle*/ prepareEntry(
-            const std::string& inboxId, 
+            const std::string& inboxId,
             const core::Buffer& data,
             const std::vector<int64_t>& inboxFileHandles = std::vector<int64_t>(),
             const std::optional<std::string>& userPrivKey = std::nullopt
@@ -115,34 +114,33 @@ public:
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 private:
-    inbox::server::Inbox getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
+    inbox::server::InboxInfo getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
     InboxDataResultV4 decryptInboxV4(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     InboxDataResultV5 decryptInboxV5(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
     inbox::Inbox convertServerInboxToLibInbox(
-        inbox::server::Inbox inbox,
+        inbox::server::InboxInfo inbox,
         const core::Buffer& publicMeta = core::Buffer(),
         const core::Buffer& privateMeta = core::Buffer(),
         const std::optional<privmx::endpoint::inbox::FilesConfig>& filesConfig = std::nullopt,
         const int64_t& statusCode = 0,
         const int64_t& schemaVersion = InboxDataSchema::Version::UNKNOWN
     );
-    inbox::Inbox convertInboxV4(inbox::server::Inbox inboxRaw, const InboxDataResultV4& inboxData);
-    inbox::Inbox convertInboxV5(inbox::server::Inbox inboxRaw, const InboxDataResultV5& inboxData);
+    inbox::Inbox convertInboxV4(inbox::server::InboxInfo inboxRaw, const InboxDataResultV4& inboxData);
+    inbox::Inbox convertInboxV5(inbox::server::InboxInfo inboxRaw, const InboxDataResultV5& inboxData);
     InboxDataSchema::Version getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry inboxEntry);
-    std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Inbox> validateDecryptAndConvertInboxesDataToInboxes(utils::List<inbox::server::Inbox> inboxes);
-    inbox::Inbox validateDecryptAndConvertInboxDataToInbox(inbox::server::Inbox inbox);
+    std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::InboxInfo inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    std::vector<Inbox> validateDecryptAndConvertInboxesDataToInboxes(std::vector<inbox::server::InboxInfo> inboxes);
+    inbox::Inbox validateDecryptAndConvertInboxDataToInbox(inbox::server::InboxInfo inbox);
     InboxInternalMetaV5 decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
-    inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::Inbox inbox);
+    inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
-    void assertInboxDataIntegrity(inbox::server::Inbox inbox);
-    uint32_t validateInboxDataIntegrity(inbox::server::Inbox inbox);
+    void assertInboxDataIntegrity(inbox::server::InboxInfo inbox);
+    uint32_t validateInboxDataIntegrity(inbox::server::InboxInfo inbox);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys inboxToModuleKeys(inbox::server::Inbox inbox);
-
+    core::ModuleKeys inboxToModuleKeys(inbox::server::InboxInfo inbox);
 
     InboxEntryResult decryptInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
     inbox::InboxEntry convertInboxEntry(thread::server::Message message, const inbox::InboxEntryResult& inboxEntry);
@@ -165,14 +163,6 @@ private:
     std::vector<std::string> getFilesIdsFromServerMessage(inbox::server::InboxMessageServer serverMessage);
     void assertInboxExist(const std::string& inboxId);
 
-    template <typename T = std::string>
-    static std::vector<T> listToVector(utils::List<T> list) {
-        std::vector<T> ret {};
-        for (auto x: list) {
-            ret.push_back(x);
-        }
-        return ret;
-    }
     static const Poco::Int64 _CHUNK_SIZE;
     core::Connection _connection;
     endpoint::thread::ThreadApi _threadApi;
@@ -193,7 +183,7 @@ private:
     store::FileMetaEncryptorV4 _fileMetaEncryptorV4;
     store::FileMetaEncryptorV5 _fileMetaEncryptorV5;
     SubscriberImpl _subscriber;
-    
+
     InboxDataProcessorV4 _inboxDataProcessorV4;
     InboxDataProcessorV5 _inboxDataProcessorV5;
     core::DataEncryptorV4 _eventDataEncryptorV4;

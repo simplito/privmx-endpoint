@@ -12,44 +12,42 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_DYNAMICTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_DYNAMICTYPES_HPP_
 
-#include <string>
-
-#include "privmx/endpoint/core/TypesMacros.hpp"
+#include <privmx/utils/JsonHelper.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 namespace dynamic {
 
-ENDPOINT_CLIENT_TYPE(VersionedData)
-    INT64_FIELD(version)
-TYPE_END
+#define VERSIONED_DATA_FIELDS(F)\
+    F(version, int64_t)
+JSON_STRUCT(VersionedData, VERSIONED_DATA_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(BridgeIdentity)
-    STRING_FIELD(url)
-    STRING_FIELD(pubKey)
-    STRING_FIELD(instanceId)
-TYPE_END
+#define BRIDGE_IDENTITY_FIELDS(F)\
+    F(url, std::string)\
+    F(pubKey, std::optional<std::string>)\
+    F(instanceId, std::optional<std::string>)
+JSON_STRUCT(BridgeIdentity, BRIDGE_IDENTITY_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(DataIntegrityObject, VersionedData)
-    STRING_FIELD(creatorUserId)
-    STRING_FIELD(creatorPublicKey)
-    STRING_FIELD(contextId)
-    STRING_FIELD(resourceId)
-    INT64_FIELD(timestamp)
-    STRING_FIELD(randomId)
-    STRING_FIELD(containerId)
-    STRING_FIELD(containerResourceId)
-    MAP_FIELD(fieldChecksums, std::string)
-    INT64_FIELD(structureVersion)
-    OBJECT_FIELD(bridgeIdentity, BridgeIdentity)
-TYPE_END
+#define DATA_INTEGRITY_OBJECT_FIELDS(F)\
+    F(creatorUserId, std::string)\
+    F(creatorPublicKey, std::string)\
+    F(contextId, std::string)\
+    F(resourceId, std::string)\
+    F(timestamp, int64_t)\
+    F(randomId, std::string)\
+    F(containerId, std::optional<std::string>)\
+    F(containerResourceId, std::optional<std::string>)\
+    F(fieldChecksums, std::unordered_map<std::string, std::string>)\
+    F(structureVersion, int64_t)\
+    F(bridgeIdentity, std::optional<BridgeIdentity>)
+JSON_STRUCT_EXT(DataIntegrityObject, VersionedData, DATA_INTEGRITY_OBJECT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(EncryptionKey)
-    STRING_FIELD(id)
-    STRING_FIELD(key)
-    STRING_FIELD(keySecret)
-TYPE_END
+#define ENCRYPTION_KEY_OBJECT_FIELDS(F)\
+    F(id , std::string)\
+    F(key, std::string)\
+    F(keySecret, std::string)
+JSON_STRUCT(EncryptionKey, ENCRYPTION_KEY_OBJECT_FIELDS);
 
 
 } // dynamic

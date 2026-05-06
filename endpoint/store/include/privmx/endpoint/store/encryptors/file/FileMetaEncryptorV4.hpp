@@ -26,10 +26,10 @@ namespace store {
 class FileMetaEncryptorV4 {
 public:
     store::server::EncryptedFileMetaV4 encrypt(const store::FileMetaToEncryptV4& fileMeta,
-                                              const crypto::PrivateKey& authorPrivateKey,
-                                              const std::string& encryptionKey);
+                                                        const crypto::PrivateKey& authorPrivateKey,
+                                                        const std::string& encryptionKey);
     store::DecryptedFileMetaV4 decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
-                                    const std::string& encryptionKey);
+                                       const std::string& encryptionKey);
 
 private:
     void validateVersion(const store::server::EncryptedFileMetaV4& encryptedFileMeta);
@@ -39,7 +39,7 @@ private:
     core::DataEncryptorV4 _dataEncryptor;
 };
 
-}  // namespace core
+}  // namespace store
 }  // namespace endpoint
 }  // namespace privmx
 

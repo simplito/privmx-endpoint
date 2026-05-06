@@ -93,236 +93,238 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                 case 0x0001:
                     throw core::NotConnectedException("Reason: " + privmx::utils::Hex::from(code_first_two_bytes) + "::" + privmx::utils::Hex::from(code_second_two_bytes));
                 case 0x0002:
-                    throw network::WebsocketDisconnectedException(e.what());
+                    throw network::WebsocketDisconnectedException(e.getData());
                 case 0x0003:
-                    throw network::NoMessageReceivedException(e.what());
+                    throw network::NoMessageReceivedException(e.getData());
                 default:
-                    throw network::EndpointNotConnectedException(e.what());
+                    throw network::EndpointNotConnectedException(e.getData());
             }
         case 0x0002:
             switch (code_second_two_bytes) {
                 case 0x0001:
-                    throw network::InvalidHttpStatusException(e.what());
+                    throw network::InvalidHttpStatusException(e.getData());
                 case 0x0002:
-                    throw network::UnexpectedServerDataException(e.what());
+                    throw network::UnexpectedServerDataException(e.getData());
                 default:
-                    throw network::EndpointServerException(e.what());
+                    throw network::EndpointServerException(e.getData());
             }
         case 0x0003:
             switch (code_second_two_bytes) {
                 case 0x0001:
-                    throw internal::CannotStringifyVarException(e.what());
+                    throw internal::CannotStringifyVarException(e.getData());
                 case 0x0002:
-                    throw internal::KeyNotExistException(e.what());
+                    throw internal::KeyNotExistException(e.getData());
                 case 0x0003:
-                    throw internal::VarIsNotObjectException(e.what());
+                    throw internal::VarIsNotObjectException(e.getData());
                 case 0x0004:
-                    throw internal::VarIsNotArrayException(e.what());
+                    throw internal::VarIsNotArrayException(e.getData());
                 case 0x0005:
-                    throw internal::InvalidVersionFormatException(e.what());
+                    throw internal::InvalidVersionFormatException(e.getData());
+                case 0x0006:
+                    throw internal::JSONParseException(e.getData());
                 default:
-                    throw internal::EndpointLibException(e.what());
+                    throw internal::EndpointLibException(e.getData() + "-" + e.getData());
             }
         case 0x000C:
-            throw internal::OperationCancelledException(e.what());
+            throw internal::OperationCancelledException(e.getData());
         case 0x000D:
-            throw internal::NotImplementedException(e.what());
+            throw internal::NotImplementedException(e.getData());
         case 0x00A1:
             switch (code_second_two_bytes) {
                 case 0x0001:
-                    throw crypto::UnsupportedKeyFormatException(e.what());
+                    throw crypto::UnsupportedKeyFormatException(e.getData());
                 case 0x0002:
-                    throw crypto::EmptyPointException(e.what());
+                    throw crypto::EmptyPointException(e.getData());
                 case 0x0003:
-                    throw crypto::InvalidSignatureSizeException(e.what());
+                    throw crypto::InvalidSignatureSizeException(e.getData());
                 case 0x0004:
-                    throw crypto::InvalidSignatureHeaderException(e.what());
+                    throw crypto::InvalidSignatureHeaderException(e.getData());
                 case 0x0005:
-                    throw crypto::ECCIsNotInitializedException(e.what());
+                    throw crypto::ECCIsNotInitializedException(e.getData());
                 case 0x0006:
-                    throw crypto::EmptyBNException(e.what());
+                    throw crypto::EmptyBNException(e.getData());
                 case 0x0007:
-                    throw crypto::WrongMessageSecurityTagException(e.what());
+                    throw crypto::WrongMessageSecurityTagException(e.getData());
                 case 0x0008:
-                    throw crypto::DecryptInvalidKeyLengthException(e.what());
+                    throw crypto::DecryptInvalidKeyLengthException(e.getData());
                 case 0x0009:
-                    throw crypto::MissingIvException(e.what());
+                    throw crypto::MissingIvException(e.getData());
                 case 0x000A:
-                    throw crypto::UnknownDecryptionTypeException(e.what());
+                    throw crypto::UnknownDecryptionTypeException(e.getData());
                 case 0x000B:
-                    throw crypto::UnsupportedHashAlgorithmException(e.what());
+                    throw crypto::UnsupportedHashAlgorithmException(e.getData());
                 case 0x000C:
-                    throw crypto::CryptoNotImplementedException(e.what());
+                    throw crypto::CryptoNotImplementedException(e.getData());
                 case 0x000D:
-                    throw crypto::InvalidStrengthException(e.what());
+                    throw crypto::InvalidStrengthException(e.getData());
                 case 0x000E:
-                    throw crypto::InvalidEntropyException(e.what());
+                    throw crypto::InvalidEntropyException(e.getData());
                 case 0x000F:
-                    throw crypto::InvalidMnemonicException(e.what());
+                    throw crypto::InvalidMnemonicException(e.getData());
                 case 0x0010:
-                    throw crypto::InvalidChecksumException(e.what());
+                    throw crypto::InvalidChecksumException(e.getData());
                 case 0x0011:
-                    throw crypto::EncryptInvalidKeyLengthException(e.what());
+                    throw crypto::EncryptInvalidKeyLengthException(e.getData());
                 case 0x0012:
-                    throw crypto::OnlyHmacSHA256WithIvIsSupportedForAES256CBCException(e.what());
+                    throw crypto::OnlyHmacSHA256WithIvIsSupportedForAES256CBCException(e.getData());
                 case 0x0013:
-                    throw crypto::CannotPassIvToDeterministicAES256CBCHmacSHA256Exception(e.what());
+                    throw crypto::CannotPassIvToDeterministicAES256CBCHmacSHA256Exception(e.getData());
                 case 0x0014:
-                    throw crypto::XTEAECBEncryptionDoesntSupportHmacAndIvException(e.what());
+                    throw crypto::XTEAECBEncryptionDoesntSupportHmacAndIvException(e.getData());
                 case 0x0015:
-                    throw crypto::UnsupportedEncryptionAlgorithmException(e.what());
+                    throw crypto::UnsupportedEncryptionAlgorithmException(e.getData());
                 case 0x0016:
-                    throw crypto::MissingRequiredSignatureException(e.what());
+                    throw crypto::MissingRequiredSignatureException(e.getData());
                 case 0x0017:
-                    throw crypto::InvalidFirstByteOfCipherException(e.what());
+                    throw crypto::InvalidFirstByteOfCipherException(e.getData());
                 case 0x0018:
-                    throw crypto::GivenPrivKeyDoesNotMatchException(e.what());
+                    throw crypto::GivenPrivKeyDoesNotMatchException(e.getData());
                 case 0x0019:
-                    throw crypto::UnsupportedAlgorithmException(e.what());
+                    throw crypto::UnsupportedAlgorithmException(e.getData());
                 case 0x001A:
-                    throw crypto::UnsupportedVersionException(e.what());
+                    throw crypto::UnsupportedVersionException(e.getData());
                 case 0x001B:
-                    throw crypto::IncorrectParamsException(e.what());
+                    throw crypto::IncorrectParamsException(e.getData());
                 case 0x001C:
-                    throw crypto::InvalidHandshakeStateException(e.what());
+                    throw crypto::InvalidHandshakeStateException(e.getData());
                 case 0x001D:
-                    throw crypto::InvalidBNException(e.what());
+                    throw crypto::InvalidBNException(e.getData());
                 case 0x0001E:
-                    throw crypto::InvalidM2Exception(e.what());
+                    throw crypto::InvalidM2Exception(e.getData());
                 case 0x001F:
-                    throw crypto::InvalidVersionException(e.what());
+                    throw crypto::InvalidVersionException(e.getData());
                 case 0x0020:
-                    throw crypto::InvalidParentFingerprintException(e.what());
+                    throw crypto::InvalidParentFingerprintException(e.getData());
                 case 0x0022:
-                    throw crypto::InvalidResultSizeException(e.what());
+                    throw crypto::InvalidResultSizeException(e.getData());
                 case 0x0023:
-                    throw crypto::InvalidNetworkException(e.what());
+                    throw crypto::InvalidNetworkException(e.getData());
                 case 0x0024:
-                    throw crypto::InvalidCompressionFlagException(e.what());
+                    throw crypto::InvalidCompressionFlagException(e.getData());
                 case 0x0025:
-                    throw crypto::InvalidWIFPayloadLengthException(e.what());
+                    throw crypto::InvalidWIFPayloadLengthException(e.getData());
                 case 0x0026:
-                    throw crypto::OpenSSLException(e.what());
+                    throw crypto::OpenSSLException(e.getData());
                 case 0x0027:
-                    throw crypto::PrivmxDriverCryptoException(e.what());
+                    throw crypto::PrivmxDriverCryptoException(e.getData());
                 case 0x0028:
-                    throw crypto::PrivmxDriverEccException(e.what());
+                    throw crypto::PrivmxDriverEccException(e.getData());
                 case 0x0029:
-                    throw crypto::GivenPublicKeyDoesNotMatchWithSignatureException(e.what());
+                    throw crypto::GivenPublicKeyDoesNotMatchWithSignatureException(e.getData());
                 case 0x002A:
-                    throw crypto::ExtKeyDoesNotHoldPrivateKeyException(e.what());
+                    throw crypto::ExtKeyDoesNotHoldPrivateKeyException(e.getData());
                 default:
-                    throw crypto::EndpointCryptoException(e.what());
+                    throw crypto::EndpointCryptoException(e.getData() + "-" + e.getData());
             }
         case 0x00A3:
             switch (code_second_two_bytes) {
                 case 0x0001:
-                    throw crypto::InvalidHostException(e.what());
+                    throw crypto::InvalidHostException(e.getData());
                 case 0x0002:
-                    throw crypto::NoCallbackForAdditionalLoginStepException(e.what());
+                    throw crypto::NoCallbackForAdditionalLoginStepException(e.getData());
                 case 0x0003:
-                    throw crypto::UnsupportedEmptyKeystoreException(e.what());
+                    throw crypto::UnsupportedEmptyKeystoreException(e.getData());
                 case 0x0004:
-                    throw crypto::DifferentIdentityException(e.what());
+                    throw crypto::DifferentIdentityException(e.getData());
                 case 0x0005:
-                    throw crypto::UnsupportedMasterRecordVersionException(e.what());
+                    throw crypto::UnsupportedMasterRecordVersionException(e.getData());
                 case 0x0006:
-                    throw crypto::CannotDecryptLevel2OfMasterRecordException(e.what());
+                    throw crypto::CannotDecryptLevel2OfMasterRecordException(e.getData());
                 case 0x0007:
-                    throw crypto::RpcProxyRequestNotImplementedException(e.what());
+                    throw crypto::RpcProxyRequestNotImplementedException(e.getData());
                 case 0x0008:
-                    throw crypto::UserDoesNotExistsException(e.what());
+                    throw crypto::UserDoesNotExistsException(e.getData());
                 case 0x0009:
-                    throw crypto::SenderCannotBeEmptyException(e.what());
+                    throw crypto::SenderCannotBeEmptyException(e.getData());
                 case 0x000A:
-                    throw crypto::SenderMustBeInstanceOfIdentityException(e.what());
+                    throw crypto::SenderMustBeInstanceOfIdentityException(e.getData());
                 case 0x000B:
-                    throw crypto::MessageMustContainsAtLeastOneReceiverException(e.what());
+                    throw crypto::MessageMustContainsAtLeastOneReceiverException(e.getData());
                 case 0x000C:
-                    throw crypto::InvalidSinkPrivateKeyException(e.what());
+                    throw crypto::InvalidSinkPrivateKeyException(e.getData());
                 case 0x000D:
-                    throw crypto::PrivFsNotImplementedException(e.what());
+                    throw crypto::PrivFsNotImplementedException(e.getData());
                 case 0x000E:
-                    throw crypto::MnemonicIsNotGeneratedYetException(e.what());
+                    throw crypto::MnemonicIsNotGeneratedYetException(e.getData());
                 case 0x000F:
-                    throw crypto::InvalidResponseException(e.what());
+                    throw crypto::InvalidResponseException(e.getData());
                 case 0x0010:
-                    throw crypto::UnsupportedPrivDataInfoVersionException(e.what());
+                    throw crypto::UnsupportedPrivDataInfoVersionException(e.getData());
                 case 0x0011:
-                    throw crypto::CosignerKeystoreStateAndUuidAreRequiredException(e.what());
+                    throw crypto::CosignerKeystoreStateAndUuidAreRequiredException(e.getData());
                 case 0x0012:
-                    throw crypto::ExpectedDocumentsPacketExportClassException(e.what());
+                    throw crypto::ExpectedDocumentsPacketExportClassException(e.getData());
                 case 0x0013:
-                    throw crypto::CannotGetPropertiesFromNonSrpKeySessionConnectionException(e.what());
+                    throw crypto::CannotGetPropertiesFromNonSrpKeySessionConnectionException(e.getData());
                 case 0x0014:
-                    throw crypto::CannotGetUsernameFromNonSrpKeySessionConnectionException(e.what());
+                    throw crypto::CannotGetUsernameFromNonSrpKeySessionConnectionException(e.getData());
                 case 0x0015:
-                    throw crypto::CannotReloginUserMismatchException(e.what());
+                    throw crypto::CannotReloginUserMismatchException(e.getData());
                 case 0x0016:
-                    throw crypto::ConnectionCannotBeRestoredBySessionException(e.what());
+                    throw crypto::ConnectionCannotBeRestoredBySessionException(e.getData());
                 case 0x0017:
-                    throw crypto::WorkerRunningException(e.what());
+                    throw crypto::WorkerRunningException(e.getData());
                 default:
-                    throw crypto::EndpointPrivFsException(e.what());
+                    throw crypto::EndpointPrivFsException(e.getData() + "-" + e.getData());
             }
         case 0x00A4:
             switch (code_second_two_bytes) {
                 case 0x0001:
                     throw core::NotConnectedException("Reason: " + privmx::utils::Hex::from(code_first_two_bytes) + "::" + privmx::utils::Hex::from(code_second_two_bytes));
                 case 0x0002:
-                    throw network::WsConnectException(e.what());
+                    throw network::WsConnectException(e.getData());
                 case 0x0003:
-                    throw network::WsSend1Exception(e.what());
+                    throw network::WsSend1Exception(e.getData());
                 case 0x0004:
-                    throw network::WebSocketInvalidPayloadLengthException(e.what());
+                    throw network::WebSocketInvalidPayloadLengthException(e.getData());
                 case 0x0005:
-                    throw network::InvalidWebSocketRequestIdException(e.what());
+                    throw network::InvalidWebSocketRequestIdException(e.getData());
                 case 0x0006:
-                    throw network::HttpConnectException(e.what());
+                    throw network::HttpConnectException(e.getData());
                 case 0x0007:
-                    throw network::HttpRequestException(e.what());
+                    throw network::HttpRequestException(e.getData());
                 case 0x0008:
-                    throw network::WebSocketPingLoopStoppedException(e.what());
+                    throw network::WebSocketPingLoopStoppedException(e.getData());
                 case 0x0009:
-                    throw network::WebSocketPingTimeoutException(e.what());
+                    throw network::WebSocketPingTimeoutException(e.getData());
                 case 0x000A:
-                    throw network::InvalidHandshakeStateException(e.what());
+                    throw network::InvalidHandshakeStateException(e.getData());
                 case 0x000B:
-                    throw network::IncorrectHashmailException(e.what());
+                    throw network::IncorrectHashmailException(e.getData());
                 case 0x000C:
-                    throw network::UnexpectedEcdhePacketFromServerException(e.what());
+                    throw network::UnexpectedEcdhePacketFromServerException(e.getData());
                 case 0x000D:
-                    throw network::UnexpectedEcdhexPacketFromServerException(e.what());
+                    throw network::UnexpectedEcdhexPacketFromServerException(e.getData());
                 case 0x000E:
-                    throw network::InvalidWsChannelIdException(e.what());
+                    throw network::InvalidWsChannelIdException(e.getData());
                 case 0x000F:
-                    throw network::ErrorDuringGettingHTTPChannelException(e.what());
+                    throw network::ErrorDuringGettingHTTPChannelException(e.getData());
                 case 0x0010:
-                    throw network::ConnectionDestroyedException(e.what());
+                    throw network::ConnectionDestroyedException(e.getData());
                 case 0x0011:
-                    throw network::SessionLostException(e.what());
+                    throw network::SessionLostException(e.getData());
                 case 0x0012:
-                    throw network::ProbeFailException(e.what());
+                    throw network::ProbeFailException(e.getData());
                 case 0x0013:
-                    throw network::InvalidHostException(e.what());
+                    throw network::InvalidHostException(e.getData());
                 case 0x0014:
-                    throw network::WebsocketCannotBeMainChannelWhenItIsDisabledException(e.what());
+                    throw network::WebsocketCannotBeMainChannelWhenItIsDisabledException(e.getData());
                 case 0x0015:
-                    throw network::RejectedException(e.what());
+                    throw network::RejectedException(e.getData());
                 case 0x0016:
-                    throw network::FrameHeaderTagsAreNotEqualException(e.what());
+                    throw network::FrameHeaderTagsAreNotEqualException(e.getData());
                 case 0x0017:
-                    throw network::UnsupportedFrameVersionException(e.what());
+                    throw network::UnsupportedFrameVersionException(e.getData());
                 case 0x0018:
-                    throw network::FrameMacsAreNotEqualException(e.what());
+                    throw network::FrameMacsAreNotEqualException(e.getData());
                 case 0x0019:
-                    throw network::InvalidNextReadStateException(e.what());
+                    throw network::InvalidNextReadStateException(e.getData());
                 case 0x001A:
-                    throw network::WriteStateIsNotInitializedException(e.what());
+                    throw network::WriteStateIsNotInitializedException(e.getData());
                 case 0x001B:
-                    throw network::TicketHandshakeErrorException(e.what());
+                    throw network::TicketHandshakeErrorException(e.getData());
                 default:
-                    throw network::EndpointRpcException(e.what());
+                    throw network::EndpointRpcException(e.getData() + "-" + e.getData());
             }
     }
     throw Exception("Unknown exception", "Unknown", "unknown", e.getCode() | 0xE0000000, "Msg: " + (std::string)e.what() + "\nDescription: " + e.getData());

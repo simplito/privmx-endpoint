@@ -69,6 +69,7 @@ void ConnectionImpl::connect(
     } else {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
     }
+    _serverApi.emplace(_gateway);
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
     _userPrivKey = key;
@@ -81,9 +82,9 @@ void ConnectionImpl::connect(
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
-        auto model = privmx::utils::TypedObjectFactory::createNewObject<server::ContextGetModel>();
-        model.id(id);
-        return utils::TypedObjectFactory::createObjectFromVar<server::ContextGetResult>(_gateway->request("context.contextGet", model)).context();
+        server::ContextGetModel model;
+        model.id = id;
+        return _serverApi->contextGet(model).context;
     });
     if (_gateway->isConnected()) {
         auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
@@ -145,6 +146,7 @@ void ConnectionImpl::connectPublic(
     _userPrivKey = key;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
     _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
+    _serverApi.emplace(_gateway);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware =
         std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
@@ -154,9 +156,9 @@ void ConnectionImpl::connectPublic(
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
-        auto context = privmx::utils::TypedObjectFactory::createNewObject<server::ContextInfo>();
-        context.contextId(id);
-        context.userId("<anonymous>");
+        server::ContextInfo context;
+        context.contextId = id;
+        context.userId = "<anonymous>";
         return context;
     });
     if (_gateway->isConnected()) {
@@ -199,42 +201,40 @@ int64_t ConnectionImpl::getConnectionId() {
 PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery) {
 
     LOG_TIME_DEBUG_START(PlatformThread contextList, "")
-    auto listModel = utils::TypedObjectFactory::createNewObject<server::ListModel>();
+    server::ListModel listModel;
     ListQueryMapper::map(listModel, pagingQuery);
     LOG_TIME_DEBUG_CHECKPOINT(PlatformThread contextList, "data")
-    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextListResult>(
-        _gateway->request("context.contextList", listModel));
+    auto response = _serverApi->contextList(listModel);
     LOG_TIME_DEBUG_CHECKPOINT(PlatformThread contextList, "data send")
     std::vector<Context> contexts{};
-    for (auto resp : response.contexts()) {
-        contexts.push_back({.userId = resp.userId(), .contextId = resp.contextId()});
+    for (const auto& resp : response.contexts) {
+        contexts.push_back({.userId = resp.userId, .contextId = resp.contextId});
     }
     LOG_TIME_DEBUG_STOP(PlatformThread contextList , "")
-    return PagingList<Context>{.totalAvailable = response.count(), .readItems = contexts};
+    return PagingList<Context>{.totalAvailable = response.count, .readItems = contexts};
 }
 
 PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery) {
-    auto model = utils::TypedObjectFactory::createNewObject<server::ContextListUsersModel>();
-    model.contextId(contextId);
+    server::ContextListUsersModel model;
+    model.contextId = contextId;
     ListQueryMapper::map(model, pagingQuery);
-    auto response = utils::TypedObjectFactory::createObjectFromVar<server::ContextListUsersResult>(
-        _gateway->request("context.contextListUsers", model));
+    auto response = _serverApi->contextListUsers(model);
     PagingList<UserInfo> result;
-    result.readItems.reserve(response.users().size());
-    for (auto user : response.users()) {
+    result.readItems.reserve(response.users.size());
+    for (const auto& user : response.users) {
         result.readItems.push_back(UserInfo {
             .user=UserWithPubKey{
-                .userId=user.id(), 
-                .pubKey=user.pub()
-            }, 
-            .isActive= user.status() == "active",
-            .lastStatusChange = user.lastStatusChangeEmpty() ? std::nullopt : std::make_optional(UserStatusChange{
-                .action = user.lastStatusChange().action(),
-                .timestamp = user.lastStatusChange().timestamp()
-            })
+                .userId=user.id,
+                .pubKey=user.pub
+            },
+            .isActive= user.status == "active",
+            .lastStatusChange = user.lastStatusChange.has_value() ? std::make_optional(UserStatusChange{
+                .action = user.lastStatusChange->action,
+                .timestamp = user.lastStatusChange->timestamp
+            }) : std::nullopt
         });
     }
-    result.totalAvailable = response.count();
+    result.totalAvailable = response.count;
     return result;
 }
 
@@ -275,7 +275,7 @@ int64_t ConnectionImpl::generateConnectionId() {
 }
 
 std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
-    return _contextProvider->get(contextId).container.userId();
+    return _contextProvider->get(contextId).container.userId;
 }
 
 DataIntegrityObject ConnectionImpl::createDIO(
@@ -321,18 +321,14 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
 
 NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
     try {
-        std::vector<std::string> subscriptions;
-        auto tmp = privmx::utils::TypedObjectFactory::createObjectFromVar<server::RpcEvent>(event.data);
-        for(auto subscription : tmp.subscriptions()) {
-            subscriptions.push_back(subscription);
-        }
+        auto tmp = server::RpcEvent::fromJSON(event.data);
         return NotificationEvent{
             .source = EventSource::SERVER,
             .type = event.type,
-            .data = tmp.data(),
-            .version = tmp.version(),
-            .timestamp = tmp.timestamp(),
-            .subscriptions = subscriptions
+            .data = tmp.data,
+            .version = tmp.version,
+            .timestamp = tmp.timestamp,
+            .subscriptions = tmp.subscriptions
         };
     } catch (std::exception& e) {
         LOG_ERROR("Error on event: ", privmx::utils::Utils::stringifyVar(event.data))
@@ -377,17 +373,17 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
     }
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "contextUserAdded") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+            auto raw = server::ContextUserEventData::fromJSON(notification.data);
             auto data = Mapper::mapToContextUserEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUserAddedEvent>("context/userAdded", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "contextUserRemoved") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUserEventData>(notification.data);
+            auto raw = server::ContextUserEventData::fromJSON(notification.data);
             auto data = Mapper::mapToContextUserEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUserRemovedEvent>("context/userRemoved", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "contextUserStatusChanged") {
-            auto raw = utils::TypedObjectFactory::createObjectFromVar<server::ContextUsersStatusChangeEventData>(notification.data);
+            auto raw = server::ContextUsersStatusChangeEventData::fromJSON(notification.data);
             auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
             _eventMiddleware->emitApiEvent(event);

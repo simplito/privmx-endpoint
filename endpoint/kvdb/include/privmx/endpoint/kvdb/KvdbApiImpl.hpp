@@ -51,21 +51,21 @@ public:
         const core::Connection& connection
     );
     ~KvdbApiImpl();
-    std::string createKvdb(const std::string& contextId, 
+    std::string createKvdb(const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers, 
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
-    void updateKvdb(const std::string& kvdbId, 
+    void updateKvdb(const std::string& kvdbId,
         const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers, 
-        const core::Buffer& publicMeta, 
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const int64_t version, 
-        const bool force, 
-        const bool forceGenerateNewKey, 
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
     void deleteKvdb(const std::string& kvdbId);
@@ -88,8 +88,8 @@ public:
     std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
 private:
     std::string createKvdbEx(
-        const std::string& contextId, 
-        const std::vector<core::UserWithPubKey>& users, 
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
@@ -100,7 +100,7 @@ private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 
     Kvdb convertServerKvdbToLibKvdb(
         server::KvdbInfo kvdb,
@@ -112,13 +112,12 @@ private:
     Kvdb convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const core::DecryptedModuleDataV5& kvdbData);
     KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Kvdb> validateDecryptAndConvertKvdbsDataToKvdbs(utils::List<server::KvdbInfo> kvdbs);
+    std::vector<Kvdb> validateDecryptAndConvertKvdbsDataToKvdbs(std::vector<server::KvdbInfo> kvdbs);
     Kvdb validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
     void assertKvdbDataIntegrity(server::KvdbInfo kvdb);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
-
 
     DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
     KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo entry, DecryptedKvdbEntryDataV5 entryData);
@@ -133,24 +132,24 @@ private:
     );
     KvdbEntryDataSchema::Version getEntryDataStructureVersion(server::KvdbEntryInfo entry);
     std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
-    std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(utils::List<server::KvdbEntryInfo> entries, const core::ModuleKeys& kvdbKeys);
+    std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(std::vector<server::KvdbEntryInfo> entries, const core::ModuleKeys& kvdbKeys);
     KvdbEntry validateDecryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::ModuleKeys& kvdbKeys);
     core::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry);
     uint32_t validateEntryDataIntegrity(server::KvdbEntryInfo entry, const std::string& kvdbResourceId);
     Poco::Dynamic::Var encryptEntryData(
-        const std::string& kvdbId, 
-        const std::string& resourceId, 
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
-        const core::Buffer& data, 
+        const std::string& kvdbId,
+        const std::string& resourceId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data,
         const core::ModuleKeys& kvdbKeys
     );
     void setEntryRequest(
-        const std::string& kvdbId, 
-        const std::string& key, 
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
-        const core::Buffer& data, 
+        const std::string& kvdbId,
+        const std::string& key,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data,
         int64_t version,
         const core::ModuleKeys& keys
     );

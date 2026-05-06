@@ -22,10 +22,10 @@ namespace core {
 class Mapper {
 public:
     static CollectionItemChange mapToCollectionItemChange(const server::CollectionItemChange& data);
-    static std::vector<CollectionItemChange> mapToCollectionItemChanges(const privmx::utils::List<server::CollectionItemChange>& data);
+    static std::vector<CollectionItemChange> mapToCollectionItemChanges(const std::vector<server::CollectionItemChange>& data);
     static CollectionChangedEventData mapToCollectionChangedEventData(const std::string& moduleType, const server::CollectionChangedEventData& data);
     static UserWithAction mapToUserWithAction(const server::ContextUsersStatusChange& data);
-    static std::vector<UserWithAction> mapToUserWithActions(const privmx::utils::List<server::ContextUsersStatusChange>& data);
+    static std::vector<UserWithAction> mapToUserWithActions(const std::vector<server::ContextUsersStatusChange>& data);
     static ContextUsersStatusChangedEventData mapToContextUsersStatusChangedEventData(const server::ContextUsersStatusChangeEventData& data);
     static ContextUserEventData mapToContextUserEventData(const server::ContextUserEventData& data);
 };

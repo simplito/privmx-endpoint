@@ -13,7 +13,6 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_KVDB_MAPPER_HPP_
 
 #include "privmx/endpoint/kvdb/Events.hpp"
-#include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/kvdb/ServerTypes.hpp"
 
 namespace privmx {

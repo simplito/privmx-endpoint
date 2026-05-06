@@ -31,22 +31,16 @@ public:
     ServerApi(const privmx::privfs::RpcGateway::Ptr gateway);
 
     server::InboxCreateResult inboxCreate(server::InboxCreateModel model);
-
     void inboxUpdate(server::InboxUpdateModel model);
-
     server::InboxGetResult inboxGet(server::InboxGetModel model);
-
     server::InboxGetPublicViewResult inboxGetPublicView(server::InboxGetModel model);
-
     server::InboxListResult inboxList(server::InboxListModel model);
-
     void inboxSend(server::InboxSendModel model);
-
     void inboxDelete(server::InboxDeleteModel model);
 private:
     template<typename T>
-    T request(std::string method, Poco::JSON::Object::Ptr params); //only typed object
-    Poco::Dynamic::Var request(std::string method, Poco::JSON::Object::Ptr params); //Var
+    T request(const std::string& method, Poco::JSON::Object::Ptr params);
+    Poco::Dynamic::Var request(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
 };

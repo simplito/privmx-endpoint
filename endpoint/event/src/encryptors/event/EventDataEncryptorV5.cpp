@@ -25,23 +25,23 @@ server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
     const privmx::crypto::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
-    auto result = utils::TypedObjectFactory::createNewObject<server::EncryptedContextEventDataV5>();
-    result.version(EventDataSchema::Version::VERSION_5);
+    server::EncryptedContextEventDataV5 result;
+    result.version = EventDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
-    result.encryptedData(_dataEncryptor.signAndEncryptAndEncode(eventData.data, authorPrivateKey, encryptionKey));
-    fieldChecksums.insert(std::make_pair("encryptedData",privmx::crypto::Crypto::sha256(result.encryptedData())));
+    result.encryptedData = _dataEncryptor.signAndEncryptAndEncode(eventData.data, authorPrivateKey, encryptionKey);
+    fieldChecksums.insert(std::make_pair("encryptedData", privmx::crypto::Crypto::sha256(result.encryptedData)));
     if (eventData.type.has_value()) {
-        result.type(eventData.type.value());
-        fieldChecksums.insert(std::make_pair("type",result.type()));
+        result.type = eventData.type.value();
+        fieldChecksums.insert(std::make_pair("type", result.type.value()));
     }
     core::ExpandedDataIntegrityObject expandedDio = {eventData.dio, .structureVersion=EventDataSchema::Version::VERSION_5, .fieldChecksums=fieldChecksums};
-    result.dio(_DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey));
-    return result; 
+    result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
+    return result;
 }
 
 DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
-    const server::EncryptedContextEventDataV5& encryptedEventData, 
-    const privmx::crypto::PublicKey& authorPublicKey, 
+    const server::EncryptedContextEventDataV5& encryptedEventData,
+    const privmx::crypto::PublicKey& authorPublicKey,
     const std::string& encryptionKey
 ) {
     DecryptedEventDataV5 result;
@@ -49,9 +49,9 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
     result.dataStructureVersion = EventDataSchema::Version::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedEventData, authorPublicKey);
-        result.data = _dataEncryptor.decodeAndDecryptAndVerify(encryptedEventData.encryptedData(), authorPublicKey, encryptionKey);
-        result.type = encryptedEventData.typeOptional();
-    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.data = _dataEncryptor.decodeAndDecryptAndVerify(encryptedEventData.encryptedData, authorPublicKey, encryptionKey);
+        result.type = encryptedEventData.type;
+    } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
@@ -62,17 +62,17 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
 }
 
 core::DataIntegrityObject EventDataEncryptorV5::getDIOAndAssertIntegrity(
-    const server::EncryptedContextEventDataV5& encryptedEventData, 
+    const server::EncryptedContextEventDataV5& encryptedEventData,
     const privmx::crypto::PublicKey& authorPublicKey
 ) {
     assertDataFormat(encryptedEventData);
-    auto dio = _DIOEncryptor.decodeAndVerify(encryptedEventData.dio());
+    auto dio = _DIOEncryptor.decodeAndVerify(encryptedEventData.dio);
     if (
         dio.structureVersion != EventDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != authorPublicKey.toBase58DER() ||
-        dio.fieldChecksums.at("encryptedData") != privmx::crypto::Crypto::sha256(encryptedEventData.encryptedData()) || (
-            !encryptedEventData.typeEmpty() &&
-            dio.fieldChecksums.at("type") != encryptedEventData.type()
+        dio.fieldChecksums.at("encryptedData") != privmx::crypto::Crypto::sha256(encryptedEventData.encryptedData) || (
+            encryptedEventData.type.has_value() &&
+            dio.fieldChecksums.at("type") != encryptedEventData.type.value()
         )
     ) {
         throw core::InvalidDataIntegrityObjectChecksumException();
@@ -81,11 +81,11 @@ core::DataIntegrityObject EventDataEncryptorV5::getDIOAndAssertIntegrity(
 }
 
 void EventDataEncryptorV5::assertDataFormat(const server::EncryptedContextEventDataV5& encryptedEventData) {
-    if (encryptedEventData.versionEmpty() ||
-        encryptedEventData.version() != EventDataSchema::Version::VERSION_5 ||
-        encryptedEventData.encryptedDataEmpty() ||
-        encryptedEventData.dioEmpty()
+    if (
+        encryptedEventData.version != EventDataSchema::Version::VERSION_5 ||
+        encryptedEventData.encryptedData.empty() ||
+        encryptedEventData.dio.empty()
     ) {
-        throw InvalidEncryptedEventDataVersionException(std::to_string(encryptedEventData.version()) + " expected version: " + std::to_string(EventDataSchema::Version::VERSION_5));
+        throw InvalidEncryptedEventDataVersionException(std::to_string(encryptedEventData.version) + " expected version: " + std::to_string(EventDataSchema::Version::VERSION_5));
     }
 }

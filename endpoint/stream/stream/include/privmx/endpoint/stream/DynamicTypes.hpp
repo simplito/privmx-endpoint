@@ -12,72 +12,71 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_DYNAMICTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_DYNAMICTYPES_HPP_
 
+#include <optional>
 #include <string>
 
-#include <privmx/endpoint/core/TypesMacros.hpp>
+#include <privmx/utils/JsonHelper.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
 namespace dynamic {
-//V4
 
-ENDPOINT_CLIENT_TYPE(VersionedData)
-    INT64_FIELD(version)
-TYPE_END
+#define VERSIONED_DATA_FIELDS(F)\
+    F(version, int64_t)
+JSON_STRUCT(VersionedData, VERSIONED_DATA_FIELDS);
 
+#define STREAM_ENC_KEY_FIELDS(F)\
+    F(keyId, std::string)\
+    F(key,   std::string)\
+    F(TTL,   int64_t)
+JSON_STRUCT(StreamEncKey, STREAM_ENC_KEY_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(StreamEncKey)
-    STRING_FIELD(keyId)
-    STRING_FIELD(key)
-    INT64_FIELD(TTL) // time in miliseconds
-TYPE_END
+#define NEW_STREAM_ENC_KEY_FIELDS(F)\
+    F(oldKeyId,  std::string)\
+    F(oldKeyTTL, int64_t)
+JSON_STRUCT_EXT(NewStreamEncKey, StreamEncKey, NEW_STREAM_ENC_KEY_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(NewStreamEncKey, StreamEncKey)
-    STRING_FIELD(oldKeyId)
-    INT64_FIELD(oldKeyTTL) // time in miliseconds
-TYPE_END
+#define STREAM_CUSTOM_EVENT_DATA_FIELDS(F)\
+    F(streamRoomId, std::string)
+JSON_STRUCT(StreamCustomEventData, STREAM_CUSTOM_EVENT_DATA_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(StreamCustomEventData)
-    STRING_FIELD(streamRoomId)
-TYPE_END
+#define STREAM_KEY_MANAGEMENT_EVENT_FIELDS(F)\
+    F(subtype, std::string)
+JSON_STRUCT_EXT(StreamKeyManagementEvent, StreamCustomEventData, STREAM_KEY_MANAGEMENT_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(StreamKeyManagementEvent, StreamCustomEventData)
-    STRING_FIELD(subtype)
-TYPE_END
+#define REQUEST_KEY_EVENT_FIELDS(F)
+JSON_STRUCT_EXT(RequestKeyEvent, StreamKeyManagementEvent, REQUEST_KEY_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyEvent, StreamKeyManagementEvent)
-TYPE_END
+#define REQUEST_KEY_RESPOND_EVENT_FIELDS(F)\
+    F(encKey, StreamEncKey)
+JSON_STRUCT_EXT(RequestKeyRespondEvent, StreamKeyManagementEvent, REQUEST_KEY_RESPOND_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(RequestKeyRespondEvent, StreamKeyManagementEvent)
-    OBJECT_FIELD(encKey, StreamEncKey)
-TYPE_END
+#define UPDATE_KEY_EVENT_FIELDS(F)\
+    F(encKey, NewStreamEncKey)
+JSON_STRUCT_EXT(UpdateKeyEvent, StreamKeyManagementEvent, UPDATE_KEY_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(UpdateKeyEvent, StreamKeyManagementEvent)
-    OBJECT_FIELD(encKey, NewStreamEncKey)
-TYPE_END
+#define UPDATE_KEY_ACK_EVENT_FIELDS(F)\
+    F(keyId, std::string)
+JSON_STRUCT_EXT(UpdateKeyACKEvent, StreamKeyManagementEvent, UPDATE_KEY_ACK_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(UpdateKeyACKEvent, StreamKeyManagementEvent)
-    STRING_FIELD(keyId)
-TYPE_END
-
-ENDPOINT_CLIENT_TYPE(RTCIceCandidate)
-/** [MDN Reference](https://developer.mozilla.org/docs/Web/API/RTCIceCandidate/candidate) */
-    STRING_FIELD(address) /** string | null */
-    STRING_FIELD(candidate)
-    STRING_FIELD(component) /** string enum: "rtcp" | "rtp" | null */
-    STRING_FIELD(foundation) /** string | null */
-    INT64_FIELD(port) /** number | null */
-    INT64_FIELD(priority) /** number | null */
-    STRING_FIELD(protocol) /** string enum: "tcp" | "udp" | null */
-    STRING_FIELD(relatedAddress) /** string | null */
-    INT64_FIELD(relatedPort) /** number | null */
-    INT64_FIELD(sdpMLineIndex) /** number | null */
-    STRING_FIELD(sdpMid) /** string | null */
-    STRING_FIELD(tcpType) /** string enum: "active" | "passive" | "so" | null */
-    STRING_FIELD(type) /** string enum: "host" | "prflx" | "relay" | "srflx" | null */
-    STRING_FIELD(usernameFragment) /** string | null */
-TYPE_END
+// [MDN Reference](https://developer.mozilla.org/docs/Web/API/RTCIceCandidate)
+#define RTC_ICE_CANDIDATE_FIELDS(F)\
+    F(candidate,        std::string)\
+    F(address,          std::optional<std::string>)\
+    F(component,        std::optional<std::string>)\
+    F(foundation,       std::optional<std::string>)\
+    F(port,             std::optional<int64_t>)\
+    F(priority,         std::optional<int64_t>)\
+    F(protocol,         std::optional<std::string>)\
+    F(relatedAddress,   std::optional<std::string>)\
+    F(relatedPort,      std::optional<int64_t>)\
+    F(sdpMLineIndex,    std::optional<int64_t>)\
+    F(sdpMid,           std::optional<std::string>)\
+    F(tcpType,          std::optional<std::string>)\
+    F(type,             std::optional<std::string>)\
+    F(usernameFragment, std::optional<std::string>)
+JSON_STRUCT(RTCIceCandidate, RTC_ICE_CANDIDATE_FIELDS);
 
 } // dynamic
 } // stream

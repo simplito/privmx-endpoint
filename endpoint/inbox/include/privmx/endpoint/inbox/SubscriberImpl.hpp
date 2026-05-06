@@ -28,7 +28,7 @@ public:
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
     std::optional<std::string> convertKnownThreadIdToInboxId(const std::string& threadId);
 private:
-    virtual privmx::utils::List<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
+    virtual std::vector<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     static std::vector<std::string> getChannelPath(EventType eventType);
     static std::vector<core::SubscriptionQueryObj::QuerySelector> getSelectors(EventSelectorType selectorType, const std::string& selectorId);

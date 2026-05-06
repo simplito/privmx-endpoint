@@ -12,9 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_SERVERTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_SERVERTYPES_HPP_
 
-#include <string>
-
-#include "privmx/endpoint/core/TypesMacros.hpp"
+#include <privmx/utils/JsonHelper.hpp>
 #include "privmx/endpoint/core/DynamicTypes.hpp"
 
 namespace privmx {
@@ -22,134 +20,134 @@ namespace endpoint {
 namespace core {
 namespace server {
 
-ENDPOINT_CLIENT_TYPE(ServerEvent)
-    STRING_FIELD(type)
-    VAR_FIELD(data)
-    INT64_FIELD(timestamp)
-    INT64_FIELD(version)
-    LIST_FIELD(subscriptions, std::string)
-TYPE_END
+#define SERVER_EVENT_FIELDS(F)\
+    F(type,   std::string)\
+    F(data,   Poco::Dynamic::Var)\
+    F(timestamp, int64_t)\
+    F(version, int64_t)\
+    F(subscriptions, std::vector<std::string>)
+JSON_STRUCT(ServerEvent, SERVER_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKeyEntryDataV2, dynamic::VersionedData)
-    STRING_FIELD(encryptedKey) // encrypted EncryptionKey
-    STRING_FIELD(dio) // signed and encoded in base64 DataIntegrityObject
-TYPE_END
+#define ENCRYPTED_KEY_ENTRY_DATA_V2_FIELDS(F)\
+    F(encryptedKey, std::string)\
+    F(dio,   std::string)
+JSON_STRUCT_EXT(EncryptedKeyEntryDataV2, dynamic::VersionedData, ENCRYPTED_KEY_ENTRY_DATA_V2_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KeyEntry)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-TYPE_END
+#define KEY_ENTRY_FIELDS(F)\
+    F(keyId, std::string)\
+    F(data, Poco::Dynamic::Var)
+JSON_STRUCT(KeyEntry, KEY_ENTRY_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KeyEntrySet)
-    STRING_FIELD(user)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-TYPE_END
+#define KEY_ENTRY_SET_FIELDS(F)\
+    F(user, std::string)\
+    F(keyId, std::string)\
+    F(data, Poco::Dynamic::Var)
+JSON_STRUCT(KeyEntrySet, KEY_ENTRY_SET_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ListModel)
-    STRING_FIELD(sortOrder)
-    INT64_FIELD(skip)
-    INT64_FIELD(limit)
-    STRING_FIELD(lastId)
-    STRING_FIELD(sortBy)
-    VAR_FIELD(query) // JSON
-TYPE_END
+#define LIST_MODEL_FIELDS(F)\
+    F(sortOrder, std::string)\
+    F(skip, int64_t)\
+    F(limit, int64_t)\
+    F(lastId, std::optional<std::string>)\
+    F(sortBy, std::optional<std::string>)\
+    F(query, std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(ListModel, LIST_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ContextInfo)
-    STRING_FIELD(userId)
-    STRING_FIELD(contextId)
-TYPE_END
+#define CONTEXT_INFO_FIELDS(F)\
+    F(userId, std::string)\
+    F(contextId, std::string)
+JSON_STRUCT(ContextInfo, CONTEXT_INFO_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ContextListResult)
-    LIST_FIELD(contexts, ContextInfo)
-    INT64_FIELD(count)
-TYPE_END
+#define CONTEXT_LIST_RESULT_FIELDS(F)\
+    F(contexts, std::vector<ContextInfo>)\
+    F(count, int64_t)
+JSON_STRUCT(ContextListResult, CONTEXT_LIST_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ContextGetModel)
-    STRING_FIELD(id)
-TYPE_END
+#define CONTEXT_GET_MODEL_FIELDS(F)\
+    F(id, std::string)
+JSON_STRUCT(ContextGetModel, CONTEXT_GET_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(ContextListUsersModel, core::server::ListModel)
-    STRING_FIELD(contextId)
-TYPE_END
+#define CONTEXT_LIST_USERS_MODEL_FIELDS(F)\
+    F(contextId, std::string)
+JSON_STRUCT_EXT(ContextListUsersModel, ListModel, CONTEXT_LIST_USERS_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(ContextGetResult)
-    OBJECT_FIELD(context, ContextInfo)
-TYPE_END
+#define CONTEXT_GET_RESULT_FIELDS(F)\
+    F(context, ContextInfo)
+JSON_STRUCT(ContextGetResult, CONTEXT_GET_RESULT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(UserIdentity)
-    STRING_FIELD(id)
-    STRING_FIELD(pub)
-TYPE_END
+#define USER_IDENTITY_FIELDS(F)\
+    F(id, std::string)\
+    F(pub, std::string)
+JSON_STRUCT(UserIdentity, USER_IDENTITY_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KnownKeyStatusChange)
-    STRING_FIELD(action)
-    INT64_FIELD(timestamp)
-TYPE_END
+#define KNOWN_KEY_STATUS_CHANGE_FIELDS(F)\
+    F(action, std::string)\
+    F(timestamp, int64_t)
+JSON_STRUCT(KnownKeyStatusChange, KNOWN_KEY_STATUS_CHANGE_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(UserIdentityWithStatusAndAction, UserIdentity)
-    STRING_FIELD(status)
-    OBJECT_FIELD(lastStatusChange, KnownKeyStatusChange)
-TYPE_END
+#define USER_IDENTITY_WITH_STATUS_AND_ACTION_FIELDS(F)\
+    F(status,    std::string)\
+    F(lastStatusChange, std::optional<KnownKeyStatusChange>)
+JSON_STRUCT_EXT(UserIdentityWithStatusAndAction, UserIdentity, USER_IDENTITY_WITH_STATUS_AND_ACTION_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(ContextListUsersResult)
-    LIST_FIELD(users, UserIdentityWithStatusAndAction)
-    INT64_FIELD(count)
-TYPE_END
+#define CONTEXT_LIST_USERS_RESULT_FIELDS(F)\
+    F(users, std::vector<UserIdentityWithStatusAndAction>)\
+    F(count, int64_t)
+JSON_STRUCT(ContextListUsersResult, CONTEXT_LIST_USERS_RESULT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(RpcEvent)
-    STRING_FIELD(type) 
-    VAR_FIELD(data)
-    INT64_FIELD(version)
-    INT64_FIELD(timestamp)
-    LIST_FIELD(subscriptions, std::string)
-TYPE_END
+#define RPC_EVENT_FIELDS(F)\
+    F(type,   std::string)\
+    F(data,   Poco::Dynamic::Var)\
+    F(version, int64_t)\
+    F(timestamp, int64_t)\
+    F(subscriptions, std::vector<std::string>)
+JSON_STRUCT(RpcEvent, RPC_EVENT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(UnsubscribeFromChannelsModel)
-    LIST_FIELD(subscriptionsIds, std::string)
-TYPE_END
+#define UNSUBSCRIBE_FROM_CHANNELS_MODEL_FIELDS(F)\
+    F(subscriptionsIds, std::vector<std::string>)
+JSON_STRUCT(UnsubscribeFromChannelsModel, UNSUBSCRIBE_FROM_CHANNELS_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(SubscribeToChannelsModel)
-    LIST_FIELD(channels, std::string)
-TYPE_END
+#define SUBSCRIBE_TO_CHANNELS_MODEL_FIELDS(F)\
+    F(channels, std::vector<std::string>)
+JSON_STRUCT(SubscribeToChannelsModel, SUBSCRIBE_TO_CHANNELS_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(Subscription)
-    STRING_FIELD(subscriptionId) 
-    STRING_FIELD(channel) 
-TYPE_END
+#define SUBSCRIPTION_FIELDS(F)\
+    F(subscriptionId, std::string)\
+    F(channel, std::string)
+JSON_STRUCT(Subscription, SUBSCRIPTION_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(SubscribeToChannelsResult)
-    LIST_FIELD(subscriptions, Subscription)
-TYPE_END
+#define SUBSCRIBE_TO_CHANNELS_RESULT_FIELDS(F)\
+    F(subscriptions, std::vector<Subscription>)
+JSON_STRUCT(SubscribeToChannelsResult, SUBSCRIBE_TO_CHANNELS_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ContextUserEventData)
-    STRING_FIELD(contextId)
-    STRING_FIELD(userId)
-    STRING_FIELD(pubKey)
-TYPE_END
+#define CONTEXT_USER_EVENT_DATA_FIELDS(F)\
+    F(contextId, std::string)\
+    F(userId, std::string)\
+    F(pubKey, std::string)
+JSON_STRUCT(ContextUserEventData, CONTEXT_USER_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ContextUsersStatusChange)
-    STRING_FIELD(userId)
-    STRING_FIELD(pubKey)
-    STRING_FIELD(action)
-TYPE_END
+#define CONTEXT_USERS_STATUS_CHANGE_FIELDS(F)\
+    F(userId, std::string)\
+    F(pubKey, std::string)\
+    F(action, std::string)
+JSON_STRUCT(ContextUsersStatusChange, CONTEXT_USERS_STATUS_CHANGE_FIELDS);
 
-ENDPOINT_SERVER_TYPE(ContextUsersStatusChangeEventData)
-    STRING_FIELD(contextId)
-    LIST_FIELD(users, ContextUsersStatusChange)
-TYPE_END
+#define CONTEXT_USERS_STATUS_CHANGE_EVENT_DATA_FIELDS(F)\
+    F(contextId, std::string)\
+    F(users, std::vector<ContextUsersStatusChange>)
+JSON_STRUCT(ContextUsersStatusChangeEventData, CONTEXT_USERS_STATUS_CHANGE_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE(CollectionItemChange)
-    STRING_FIELD(itemId)
-    STRING_FIELD(action)
-TYPE_END
+#define COLLECTION_ITEM_CHANGE_FIELDS(F)\
+    F(itemId, std::string)\
+    F(action, std::string)
+JSON_STRUCT(CollectionItemChange, COLLECTION_ITEM_CHANGE_FIELDS);
 
-ENDPOINT_SERVER_TYPE(CollectionChangedEventData)
-    STRING_FIELD(containerId)
-    INT64_FIELD(affectedItemsCount)
-    STRING_FIELD(containerType)
-    LIST_FIELD(items, CollectionItemChange)
-TYPE_END
+#define COLLECTION_CHANGED_EVENT_DATA_FIELDS(F)\
+    F(containerId, std::string)\
+    F(affectedItemsCount, int64_t)\
+    F(containerType, std::optional<std::string>)\
+    F(items,       std::vector<CollectionItemChange>)
+JSON_STRUCT(CollectionChangedEventData, COLLECTION_CHANGED_EVENT_DATA_FIELDS);
 
 } // server
 } // core

@@ -89,10 +89,10 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
     store::FileMeta newFileMeta = {
         _fileMeta.publicMeta,
         _fileMeta.privateMeta,
-        privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(privmx::utils::Utils::jsonObjectDeepCopy(_fileMeta.internalFileMeta))
+        dynamic::InternalStoreFileMeta::fromJSON(privmx::utils::Utils::jsonObjectDeepCopy(_fileMeta.internalFileMeta.toJSON()))
     };
-    newFileMeta.internalFileMeta.hmac(utils::Base64::from(_hashList->getTopHash()));
-    newFileMeta.internalFileMeta.size(newPlainfileSize);
+    newFileMeta.internalFileMeta.hmac = utils::Base64::from(_hashList->getTopHash());
+    newFileMeta.internalFileMeta.size = newPlainfileSize;
     auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, newFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
     try {
         updateOnServer(squashedChunksToUpdate, newMeta, _fileEncKey.id, truncate);
@@ -176,32 +176,34 @@ FileHandler::UpdateChunkData FileHandler::createUpdateChunk(uint64_t index, uint
 void FileHandler::updateOnServer(const std::vector<FileHandler::UpdateChanges>& updatedChunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
     for(size_t i = 0; i < updatedChunks.size();) { 
         // update file by operation
-        auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
+        std::vector<server::StoreFileRandomWriteOperation> operations;
         for(size_t j = 0; j < (SERVER_OPERATIONS_LIMIT>>1) && i < updatedChunks.size(); ++j,++i) {
             auto& updatedChunk = updatedChunks.at(i);
-            auto operation1 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-            operation1.type("file");
-            operation1.pos(updatedChunk.dataPos);
-            operation1.data(updatedChunk.data);
-            operation1.truncate(i == updatedChunks.size()-1 ? truncate : true);
+            server::StoreFileRandomWriteOperation operation1 {
+                .type = "file",
+                .pos = updatedChunk.dataPos,
+                .data = updatedChunk.data,
+                .truncate = (i == updatedChunks.size()-1 ? truncate : true),
+            };
+            server::StoreFileRandomWriteOperation operation2 {
+                .type = "checksum",
+                .pos = updatedChunk.checksumPos,
+                .data = updatedChunk.checksum,
+                .truncate = (i == updatedChunks.size()-1 ? truncate : true),
+            };
 
-            auto operation2 = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-            operation2.type("checksum");
-            operation2.pos(updatedChunk.checksumPos);
-            operation2.data(updatedChunk.checksum);
-            operation2.truncate(i == updatedChunks.size()-1 ? truncate : true);
-
-            operations.add(operation1);
-            operations.add(operation2);
+            operations.push_back(operation1);
+            operations.push_back(operation2);
         }
 
-        auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
-        writeRequest.fileId(_fileInfo.fileId);
-        writeRequest.operations(operations);
-        writeRequest.meta(updatedMeta);
-        writeRequest.keyId(encKeyId);
-        writeRequest.version(_version);
-        writeRequest.force(false);
+        server::StoreFileWriteModelByOperations writeRequest {
+            .fileId = _fileInfo.fileId,
+            .operations = operations,
+            .meta = updatedMeta,
+            .keyId = encKeyId,
+            .version = _version,
+            .force = false,
+        };
         _server->storeFileWrite(writeRequest);
     }
 }
