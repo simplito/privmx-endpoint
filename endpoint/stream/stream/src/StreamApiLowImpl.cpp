@@ -102,13 +102,10 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         auto type {notification.type};
         LOG_DEBUG("StreamApiLowImpl::processNotificationEvent event type: "+ type);
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
-
         auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
         if(!subscriptionQuery.has_value()) {
             return;
         }
-
-        LOG_DEBUG("StreamApiLowImpl::processNotificationEvent Bridge Event: " + type + "\n" + privmx::utils::Utils::stringifyVar(notification.data, true));
         if (type == "streamRoomCreated") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomInfo>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
@@ -125,13 +122,20 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             }
             auto eventData = decryptAndConvertStreamRoomDataToStreamRoom(raw);
             auto event = core::EventBuilder::buildEvent<StreamRoomUpdatedEvent, StreamRoom>("stream", eventData, notification);
-            _eventMiddleware->emitApiEvent(event);
-            //update keys
             auto streamRoomData = _streamRoomMap.get(eventData.streamRoomId);
+            auto subscriptions = notification.subscriptions;
+            //update keys
             if(streamRoomData.has_value()) {
                 std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw, streamRoomData.value()->encryptionKeyId);
                 streamRoomData.value()->webRtc->updateKeys(eventData.streamRoomId, keys);
+                for(const auto& internalSubscription : streamRoomData.value()->subscriptionsIds) {
+                    subscriptions.erase(remove(subscriptions.begin(), subscriptions.end(), internalSubscription), subscriptions.end());
+                }
             }
+            if(!_subscriber.getSubscriptionQuery(subscriptions).has_value()) {
+                return;
+            }
+            _eventMiddleware->emitApiEvent(event);
         } else if (type == "streamRoomDeleted") {
             auto raw = utils::TypedObjectFactory::createObjectFromVar<server::StreamRoomDeletedEventData>(data);
             if(raw.typeOpt(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
@@ -237,7 +241,8 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     webRtc->updateKeys(streamRoomId, keys);
     // setup event listener
     auto internalSubscriptionQuery {_subscriber.getInternalEventsSubscriptionQuery(streamRoomId)};
-    std::vector<std::string> subscriptionsIds = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
+    auto updatedStreamRoom {_subscriber.buildQuery(EventType::STREAMROOM_UPDATE, EventSelectorType::STREAMROOM_ID, streamRoomId)};
+    std::vector<std::string> subscriptionsIds = _subscriber.subscribeFor({internalSubscriptionQuery, updatedStreamRoom}, true);
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, subscriptionsIds);
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
             dataChannelMessageEncryptorV1,
