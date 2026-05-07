@@ -214,8 +214,7 @@ void KvdbApiImpl::updateKvdb(
 }
 
 void KvdbApiImpl::deleteKvdb(const std::string& kvdbId) {
-    server::KvdbDeleteModel model;
-    model.kvdbId = kvdbId;
+    server::KvdbDeleteModel model {.kvdbId = kvdbId};
     _serverApi.kvdbDelete(model);
     invalidateModuleKeysInCache(kvdbId);
 }
@@ -268,9 +267,7 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbsEx(const std::string& contextId, co
 
 KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& key) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, getEntry)
-    server::KvdbEntryGetModel model;
-    model.kvdbId = kvdbId;
-    model.kvdbEntryKey = key;
+    server::KvdbEntryGetModel model {.kvdbId = kvdbId, .kvdbEntryKey = key};
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, getting entry)
     auto entry = _serverApi.kvdbEntryGet(model).kvdbEntry;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, data recived);
@@ -283,9 +280,7 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
 
 bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
     try {
-        server::KvdbEntryGetModel model;
-        model.kvdbId = kvdbId;
-        model.kvdbEntryKey = key;
+        server::KvdbEntryGetModel model {.kvdbId = kvdbId, .kvdbEntryKey = key};
         PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, getting entry)
         _serverApi.kvdbEntryGet(model);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -900,14 +895,12 @@ Poco::Dynamic::Var KvdbApiImpl::encryptEntryData(
 }
 
 void KvdbApiImpl::assertKvdbExist(const std::string& kvdbId) {
-    kvdb::server::KvdbGetModel params;
-    params.kvdbId = kvdbId;
+    kvdb::server::KvdbGetModel params {.kvdbId = kvdbId, .type = std::nullopt};
     _serverApi.kvdbGet(params);
 }
 
 std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    kvdb::server::KvdbGetModel params;
-    params.kvdbId = moduleId;
+    kvdb::server::KvdbGetModel params {.kvdbId = moduleId, .type = std::nullopt};
     auto kvdb = _serverApi.kvdbGet(params).kvdb;
     // validate kvdb Data before returning data
     assertKvdbDataIntegrity(kvdb);

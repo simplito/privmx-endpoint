@@ -156,10 +156,7 @@ void ConnectionImpl::connectPublic(
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
-        server::ContextInfo context;
-        context.contextId = id;
-        context.userId = "<anonymous>";
-        return context;
+        return server::ContextInfo{.userId = "<anonymous>", .contextId = id};
     });
     if (_gateway->isConnected()) {
         auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();

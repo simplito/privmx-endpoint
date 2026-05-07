@@ -270,8 +270,7 @@ Inbox InboxApiImpl::getInboxEx(const std::string& inboxId, const std::string& ty
 
 inbox::server::InboxInfo InboxApiImpl::getServerInbox(const std::string& inboxId, const std::optional<std::string>& type) {
     PRIVMX_DEBUG_TIME_START(PlatformInbox, getServerInbox)
-    server::InboxGetModel model;
-    model.id = inboxId;
+    server::InboxGetModel model {.id = inboxId, .type=std::nullopt};
     if (type.has_value() && type->length() > 0) {
         model.type = type.value();
     }
@@ -320,8 +319,7 @@ InboxPublicView InboxApiImpl::getInboxPublicView(const std::string& inboxId) {
 
 void InboxApiImpl::deleteInbox(const std::string& inboxId) {
     auto inboxDataRaw {getInboxCurrentDataEntry(getServerInbox(inboxId)).data};
-    server::InboxDeleteModel inboxDeleteModel;
-    inboxDeleteModel.inboxId = inboxId;
+    server::InboxDeleteModel inboxDeleteModel {.inboxId = inboxId};
     _serverApi->inboxDelete(inboxDeleteModel);
     invalidateModuleKeysInCache(inboxId);
     (_storeApi.getImpl())->deleteStore(inboxDataRaw.storeId);
@@ -526,8 +524,7 @@ void InboxApiImpl::writeToFile(const int64_t inboxHandle, const int64_t inboxFil
 
 int64_t InboxApiImpl::openFile(const std::string& fileId) {
     PRIVMX_DEBUG_TIME_START(InboxApi, openFile)
-    store::server::StoreFileGetModel storeFileGetModel;
-    storeFileGetModel.fileId = fileId;
+    store::server::StoreFileGetModel storeFileGetModel {.fileId = fileId};
     auto file {_serverApi->storeFileGet(storeFileGetModel).file};
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, openFile, data recv);
     auto result = createInboxFileHandleForRead(file);

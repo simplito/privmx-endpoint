@@ -231,8 +231,7 @@ void ThreadApiImpl::updateThread(
 }
 
 void ThreadApiImpl::deleteThread(const std::string& threadId) {
-    server::ThreadDeleteModel model;
-    model.threadId = threadId;
+    server::ThreadDeleteModel model {.threadId = threadId};
     _serverApi.threadDelete(model);
     invalidateModuleKeysInCache(threadId);
 }
@@ -294,8 +293,7 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(const std::string& contex
 }
 Message ThreadApiImpl::getMessage(const std::string& messageId) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, getMessage)
-    server::ThreadMessageGetModel model;
-    model.messageId = messageId;
+    server::ThreadMessageGetModel model {.messageId = messageId};
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data recived);
@@ -357,8 +355,7 @@ std::string ThreadApiImpl::sendMessageRequest(const std::string& threadId, const
 }
 
 void ThreadApiImpl::deleteMessage(const std::string& messageId) {
-    server::ThreadMessageDeleteModel model;
-    model.messageId = messageId;
+    server::ThreadMessageDeleteModel model {.messageId = messageId};
     _serverApi.threadMessageDelete(model);
 }
 void ThreadApiImpl::updateMessage(
@@ -1171,8 +1168,7 @@ void ThreadApiImpl::assertThreadExist(const std::string& threadId) {
 }
 
 std::pair<core::ModuleKeys, int64_t> ThreadApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    thread::server::ThreadGetModel params;
-    params.threadId = moduleId;
+    thread::server::ThreadGetModel params {.threadId = moduleId, .type = std::nullopt};
     auto thread = _serverApi.threadGet(params).thread;
     // validate thread Data before returning data
     assertThreadDataIntegrity(thread);

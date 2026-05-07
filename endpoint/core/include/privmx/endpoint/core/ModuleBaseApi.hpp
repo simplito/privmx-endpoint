@@ -55,42 +55,42 @@ public:
     virtual ~ModuleBaseApi() = default;
 protected:
 
-    template<typename ModuleStructAsTypedObj>
+    template<typename ModuleStruct>
     auto decryptModuleDataV4(
-        ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+        ModuleStruct moduleObj, const core::DecryptedEncKey& encKey
     ) -> decltype(
         moduleObj.keyId, moduleObj.data, 
         core::DecryptedModuleDataV4()
     );
 
-    template<typename ModuleStructAsTypedObj>
+    template<typename ModuleStruct>
     auto decryptModuleDataV5(
-        ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+        ModuleStruct moduleObj, const core::DecryptedEncKey& encKey
     ) -> decltype(
         moduleObj.keyId, moduleObj.data, 
         core::DecryptedModuleDataV5()
     );
 
-    template<typename ModuleStructAsTypedObj>
+    template<typename ModuleStruct>
     auto extractAndDecryptModuleInternalMeta(
-        ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+        ModuleStruct moduleObj, const core::DecryptedEncKey& encKey
     ) -> decltype(
         moduleObj.keyId, moduleObj.data, 
         core::ModuleInternalMetaV5()
     );
 
-    template<typename ModuleStructAsTypedObj>
-    auto getAndValidateModuleCurrentEncKey(ModuleStructAsTypedObj moduleObj) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2());
+    template<typename ModuleStruct>
+    auto getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2());
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
 
-    template<typename ModuleStructAsTypedObj>
-    auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId, core::EncKeyLocation());
-    template<typename ModuleStructAsTypedObj>
-    auto getModuleEncKeyLocation(ModuleStructAsTypedObj moduleObj, const std::optional<std::string>& resourceIdOpt) -> decltype(moduleObj.contextId, core::EncKeyLocation());
+    template<typename ModuleStruct>
+    auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId, core::EncKeyLocation());
+    template<typename ModuleStruct>
+    auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceIdOpt) -> decltype(moduleObj.contextId, core::EncKeyLocation());
 
 
-    template<typename ModuleStructAsTypedObj>
-    auto getAndValidateModuleKeys(ModuleStructAsTypedObj moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
+    template<typename ModuleStruct>
+    auto getAndValidateModuleKeys(ModuleStruct moduleObj, const std::string& resourceId) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
     DecryptedEncKeyV2 findEncKeyByKeyId(std::unordered_map<std::string, DecryptedEncKeyV2> keys, const std::string& keyId);
     
@@ -120,9 +120,9 @@ private:
     core::ContainerKeyCache _keyCache;
 };
 
-template<typename ModuleStructAsTypedObj>
+template<typename ModuleStruct>
 auto ModuleBaseApi::decryptModuleDataV4(
-    ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+    ModuleStruct moduleObj, const core::DecryptedEncKey& encKey
 ) -> decltype(
     moduleObj.keyId, moduleObj.data, 
     core::DecryptedModuleDataV4()
@@ -139,9 +139,9 @@ auto ModuleBaseApi::decryptModuleDataV4(
     }
 }
 
-template<typename ModuleStructAsTypedObj>
+template<typename ModuleStruct>
 auto ModuleBaseApi::decryptModuleDataV5(
-    ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+    ModuleStruct moduleObj, const core::DecryptedEncKey& encKey
 ) -> decltype(
     moduleObj.keyId, moduleObj.data, 
     core::DecryptedModuleDataV5()
@@ -163,9 +163,9 @@ auto ModuleBaseApi::decryptModuleDataV5(
     }
 }
 
-template<typename ModuleStructAsTypedObj>
+template<typename ModuleStruct>
 auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
-    ModuleStructAsTypedObj moduleObj, const core::DecryptedEncKey& encKey
+    ModuleStruct moduleObj, const core::DecryptedEncKey& encKey
 ) -> decltype(
     moduleObj.keyId, moduleObj.data, 
     core::ModuleInternalMetaV5()
@@ -183,9 +183,9 @@ auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(
     }
 }
 
-template<typename ModuleStructAsTypedObj>
+template<typename ModuleStruct>
 auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
-    ModuleStructAsTypedObj moduleObj
+    ModuleStruct moduleObj
 ) -> decltype(
     moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId,
     core::DecryptedEncKeyV2()
@@ -198,9 +198,9 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     return ret;
 }
 
-template<typename ModuleStructAsTypedObj>
+template<typename ModuleStruct>
 auto ModuleBaseApi::getModuleEncKeyLocation(
-    ModuleStructAsTypedObj moduleObj, const std::string& resourceId
+    ModuleStruct moduleObj, const std::string& resourceId
 ) -> decltype(
     moduleObj.contextId,
     core::EncKeyLocation()
@@ -209,9 +209,9 @@ auto ModuleBaseApi::getModuleEncKeyLocation(
     return location;
 }
 
-template<typename ModuleStructAsTypedObj>
+template<typename ModuleStruct>
 auto ModuleBaseApi::getModuleEncKeyLocation(
-    ModuleStructAsTypedObj moduleObj, const std::optional<std::string>& resourceIdOpt
+    ModuleStruct moduleObj, const std::optional<std::string>& resourceIdOpt
 ) -> decltype(
     moduleObj.contextId,
     core::EncKeyLocation()
@@ -220,9 +220,9 @@ auto ModuleBaseApi::getModuleEncKeyLocation(
     return location;
 }
 
-template<typename ModuleStructAsTypedObj>
+template<typename ModuleStruct>
 auto ModuleBaseApi::getAndValidateModuleKeys(
-    ModuleStructAsTypedObj moduleObj, const std::string& resourceId
+    ModuleStruct moduleObj, const std::string& resourceId
 ) -> decltype(
     moduleObj.contextId,
     moduleObj.keys,

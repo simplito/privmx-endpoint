@@ -94,21 +94,15 @@ void ServerApi::trickle(server::StreamTrickleModel model) {
 }
 
 template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
-    LOG_FATAL("ServerApi::request::stream.", method, "\n", privmx::utils::Utils::stringifyVar(params, true))
-    auto result = _gateway->request("stream." + method, params);
-    LOG_FATAL("ServerApi::request::stream.", method, "\n", privmx::utils::Utils::stringifyVar(result, true))
-    return T::fromJSON(result);
+    return T::fromJSON(_gateway->request("stream." + method, params));
 }
 
 Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return _gateway->request("stream." + method, params);
 }
-#include <privmx/utils/Logger.hpp>
+
 template<class T> T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {
-    LOG_INFO("ServerApi::requestWS::stream.", method, "\n Params: ", privmx::utils::Utils::stringifyVar(params, true))
-    auto result = _gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET});
-    LOG_INFO("ServerApi::requestWS::stream.", method, "\n Result: ", privmx::utils::Utils::stringifyVar(result, true))
-    return T::fromJSON(result);
+    return T::fromJSON(_gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET}));
 }
 
 Poco::Dynamic::Var ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {

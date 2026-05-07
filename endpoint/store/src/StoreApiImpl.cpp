@@ -1477,20 +1477,17 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
 }
 
 void StoreApiImpl::assertStoreExist(const std::string& storeId) {
-    store::server::StoreGetModel params;
-    params.storeId = storeId;
+    store::server::StoreGetModel params {.storeId = storeId, .type = std::nullopt};
     _serverApi->storeGet(params);
 }
 
 void StoreApiImpl::assertFileExist(const std::string& fileId) {
-    server::StoreFileGetModel storeFileGetModel;
-    storeFileGetModel.fileId = fileId;
+    server::StoreFileGetModel storeFileGetModel {.fileId = fileId};
     _serverApi->storeFileGet(storeFileGetModel).file;
 }
 
 std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    store::server::StoreGetModel params;
-    params.storeId = moduleId;
+    store::server::StoreGetModel params {.storeId = moduleId, .type = std::nullopt};
     auto store = _serverApi->storeGet(params).store;
     assertStoreDataIntegrity(store);
     return std::make_pair(storeToModuleKeys(store), store.version);

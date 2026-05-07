@@ -97,7 +97,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                 case 0x0003:
                     throw network::NoMessageReceivedException(e.getData());
                 default:
-                    throw network::EndpointNotConnectedException(e.getData());
+                    throw network::EndpointNotConnectedException(std::string(e.what()) + "-" + e.getData());
             }
         case 0x0002:
             switch (code_second_two_bytes) {
@@ -106,7 +106,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                 case 0x0002:
                     throw network::UnexpectedServerDataException(e.getData());
                 default:
-                    throw network::EndpointServerException(e.getData());
+                    throw network::EndpointServerException(std::string(e.what()) + "-" + e.getData());
             }
         case 0x0003:
             switch (code_second_two_bytes) {
@@ -123,7 +123,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                 case 0x0006:
                     throw internal::JSONParseException(e.getData());
                 default:
-                    throw internal::EndpointLibException(e.getData() + "-" + e.getData());
+                    throw internal::EndpointLibException(std::string(e.what()) + "-" + e.getData());
             }
         case 0x000C:
             throw internal::OperationCancelledException(e.getData());
@@ -214,7 +214,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                 case 0x002A:
                     throw crypto::ExtKeyDoesNotHoldPrivateKeyException(e.getData());
                 default:
-                    throw crypto::EndpointCryptoException(e.getData() + "-" + e.getData());
+                    throw crypto::EndpointCryptoException(std::string(e.what()) + "-" + e.getData());
             }
         case 0x00A3:
             switch (code_second_two_bytes) {
@@ -265,7 +265,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                 case 0x0017:
                     throw crypto::WorkerRunningException(e.getData());
                 default:
-                    throw crypto::EndpointPrivFsException(e.getData() + "-" + e.getData());
+                    throw crypto::EndpointPrivFsException(std::string(e.what()) + "-" + "-" + e.getData());
             }
         case 0x00A4:
             switch (code_second_two_bytes) {
@@ -324,7 +324,7 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
                 case 0x001B:
                     throw network::TicketHandshakeErrorException(e.getData());
                 default:
-                    throw network::EndpointRpcException(e.getData() + "-" + e.getData());
+                    throw network::EndpointRpcException(std::string(e.what()) + "-" + e.getData());
             }
     }
     throw Exception("Unknown exception", "Unknown", "unknown", e.getCode() | 0xE0000000, "Msg: " + (std::string)e.what() + "\nDescription: " + e.getData());

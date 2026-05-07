@@ -43,7 +43,7 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     if(dio.bridgeIdentity.has_value()) {
         dioJSON.bridgeIdentity = {.url=dio.bridgeIdentity->url, .pubKey=dio.bridgeIdentity->pubKey, .instanceId=dio.bridgeIdentity->instanceId};
     } else {
-        throw MissingBridgeIdentityException();
+        dioJSON.bridgeIdentity = std::nullopt;
     }
     return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(privmx::utils::Utils::stringify(dioJSON.toJSON())), authorKey));
 }
@@ -90,7 +90,6 @@ void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSO
         dioJSON.creatorUserId.empty()                                          ||
         dioJSON.creatorPublicKey.empty()                                       ||
         dioJSON.contextId.empty()                                              ||
-        // dioJSON.resourceId.empty()                                             || TO fix
         dioJSON.randomId.empty() 
     ) {
         throw MalformedDataIntegrityObjectException();

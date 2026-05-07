@@ -56,7 +56,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
         dynamic::EncryptionKey decryptedKey = dynamic::EncryptionKey::fromJSON(
             crypto::EciesEncryptor::decryptObjectFromBase64(decryptionKey, encryptedEncKey.encryptedKey, privmx::crypto::PublicKey::fromBase58DER(result.dio.creatorPubKey))
         );
-        if(decryptedKey.id == "" || decryptedKey.key == "") {
+        if(decryptedKey.id.empty() || decryptedKey.key.empty()) {
             throw MalformedEncryptionKeyException();
         }
         result.id = decryptedKey.id;
@@ -76,7 +76,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(const server::EncryptedKeyEntryData
 void EncKeyEncryptorV2::assertDataFormat(const server::EncryptedKeyEntryDataV2& encryptedEncKey) {
     if ( 
         encryptedEncKey.version != EncryptionKeyDataSchema::Version::VERSION_2  || 
-        encryptedEncKey.encryptedKey == ""                                       
+        encryptedEncKey.encryptedKey.empty()                                       
     ) {
         throw MalformedEncryptionKeyException();
     }
