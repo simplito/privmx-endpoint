@@ -99,81 +99,10 @@ inline Poco::JSON::Object::Ptr VarSerializer::serializeBaseWithData(const D& val
     return obj;
 }
 
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<Context>(const Context& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<PagingList<Context>>(const PagingList<Context>& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<LibPlatformDisconnectedEvent>(const LibPlatformDisconnectedEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<LibConnectedEvent>(const LibConnectedEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<LibDisconnectedEvent>(const LibDisconnectedEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<LibBreakEvent>(const LibBreakEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUserEventData>(const ContextUserEventData& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<UserWithAction>(const UserWithAction& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(const ContextUsersStatusChangedEventData& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUserAddedEvent>(const ContextUserAddedEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUserRemovedEvent>(const ContextUserRemovedEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEvent>(const ContextUsersStatusChangedEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<CollectionItemChange>(const CollectionItemChange& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEventData>(const CollectionChangedEventData& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<CollectionChangedEvent>(const CollectionChangedEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const ContainerPolicyWithoutItem& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ItemPolicy>(const ItemPolicy& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicy>(const ContainerPolicy& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<UserWithPubKey>(const UserWithPubKey& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<UserStatusChange>(const UserStatusChange& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<UserInfo>(const UserInfo& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<PagingList<UserInfo>>(const PagingList<UserInfo>& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const VerificationRequest& val);
-
-
 }  // namespace core
 }  // namespace endpoint
 }  // namespace privmx
+
+#include "privmx/endpoint/core/VarSerialization.hpp"
 
 #endif  // _PRIVMXLIB_ENDPOINT_CORE_VARSERIALIZER_HPP_

@@ -13,23 +13,23 @@ struct VerificationRequest {
     /**
      * Id of the Context
      */
-    const std::string contextId;
+    std::string contextId;
     /**
      * id of the sender
      */
-    const std::string senderId;
+    std::string senderId;
     /**
      * Public key of the sender
      */
-    const std::string senderPubKey;
+    std::string senderPubKey;
     /**
      * The data creation date
      */
-    const int64_t date;
+    int64_t date;
     /**
      * Bridge Identity.
      */
-    const std::optional<BridgeIdentity> bridgeIdentity;
+    std::optional<BridgeIdentity> bridgeIdentity;
 };
 
 /**

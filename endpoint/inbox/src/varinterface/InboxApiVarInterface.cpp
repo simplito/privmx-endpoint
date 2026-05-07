@@ -12,6 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
 
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/VarSerialization.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 
 using namespace privmx::endpoint;
@@ -49,12 +50,12 @@ Poco::Dynamic::Var InboxApiVarInterface::create(const Poco::Dynamic::Var& args) 
 Poco::Dynamic::Var InboxApiVarInterface::createInbox(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto filesConfig = _deserializer.deserializeOptional<inbox::FilesConfig>(argsArr->get(5), "filesConfig");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(6), "policies");
+    auto filesConfig = _deserializer.deserialize<std::optional<inbox::FilesConfig>>(argsArr->get(5), "filesConfig");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicyWithoutItem>>(argsArr->get(6), "policies");
     auto result = _inboxApi.createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
     return _serializer.serialize(result);
 }
@@ -62,15 +63,15 @@ Poco::Dynamic::Var InboxApiVarInterface::createInbox(const Poco::Dynamic::Var& a
 Poco::Dynamic::Var InboxApiVarInterface::updateInbox(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 10);
     auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto filesConfig = _deserializer.deserializeOptional<inbox::FilesConfig>(argsArr->get(5), "filesConfig");
+    auto filesConfig = _deserializer.deserialize<std::optional<inbox::FilesConfig>>(argsArr->get(5), "filesConfig");
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(6), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(7), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(8), "forceGenerateNewKey");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(9), "policies");
+    auto policies = _deserializer.deserialize<std::optional<core::ContainerPolicyWithoutItem>>(argsArr->get(9), "policies");
     _inboxApi.updateInbox(inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force,
                           forceGenerateNewKey, policies);
     return {};
@@ -109,8 +110,8 @@ Poco::Dynamic::Var InboxApiVarInterface::prepareEntry(const Poco::Dynamic::Var& 
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
     auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
     auto data = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "data");
-    auto inboxFileHandles = _deserializer.deserializeVector<int64_t>(argsArr->get(2), "inboxFileHandles");
-    auto userPrivKey = _deserializer.deserializeOptional<std::string>(argsArr->get(3), "userPrivKey");
+    auto inboxFileHandles = _deserializer.deserialize<std::vector<int64_t>>(argsArr->get(2), "inboxFileHandles");
+    auto userPrivKey = _deserializer.deserialize<std::optional<std::string>>(argsArr->get(3), "userPrivKey");
     auto result = _inboxApi.prepareEntry(inboxId, data, inboxFileHandles, userPrivKey);
     return _serializer.serialize(result);
 }
@@ -194,14 +195,14 @@ Poco::Dynamic::Var InboxApiVarInterface::closeFile(const Poco::Dynamic::Var& arg
 
 Poco::Dynamic::Var InboxApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto subscriptionQueries = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionQueries");
     auto result = _inboxApi.subscribeFor(subscriptionQueries);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var InboxApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    auto subscriptionIds = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionIds");
     _inboxApi.unsubscribeFrom(subscriptionIds);
     return {};
 }

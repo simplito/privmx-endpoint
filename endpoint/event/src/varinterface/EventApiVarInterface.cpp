@@ -12,6 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/event/varinterface/EventApiVarInterface.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/core/VarSerialization.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
@@ -32,7 +33,7 @@ Poco::Dynamic::Var EventApiVarInterface::create(const Poco::Dynamic::Var& args) 
 Poco::Dynamic::Var EventApiVarInterface::emitEvent(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
+    auto users = _deserializer.deserialize<std::vector<core::UserWithPubKey>>(argsArr->get(1), "users");
     auto channelName = _deserializer.deserialize<std::string>(argsArr->get(2), "channelName");
     auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "eventData");
     _eventApi.emitEvent(contextId, users, channelName, eventData);
@@ -41,14 +42,14 @@ Poco::Dynamic::Var EventApiVarInterface::emitEvent(const Poco::Dynamic::Var& arg
 
 Poco::Dynamic::Var EventApiVarInterface::subscribeFor(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionQueries = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionQueries");
+    auto subscriptionQueries = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionQueries");
     auto result = _eventApi.subscribeFor(subscriptionQueries);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var EventApiVarInterface::unsubscribeFrom(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto subscriptionIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "subscriptionIds");
+    auto subscriptionIds = _deserializer.deserialize<std::vector<std::string>>(argsArr->get(0), "subscriptionIds");
     _eventApi.unsubscribeFrom(subscriptionIds);
     return {};
 }

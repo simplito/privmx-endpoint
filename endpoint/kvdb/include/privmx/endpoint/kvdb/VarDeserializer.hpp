@@ -24,10 +24,10 @@ namespace endpoint {
 namespace core {
 
 template<>
-kvdb::EventType VarDeserializer::deserialize<kvdb::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<kvdb::EventType>(const Poco::Dynamic::Var& val, const std::string& name, kvdb::EventType& out);
 
 template<>
-kvdb::EventSelectorType VarDeserializer::deserialize<kvdb::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+void VarDeserializer::deserialize<kvdb::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name, kvdb::EventSelectorType& out);
 
 }  // namespace core
 }  // namespace endpoint
