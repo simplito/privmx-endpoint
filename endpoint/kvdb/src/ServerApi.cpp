@@ -65,7 +65,8 @@ server::KvdbEntryDeleteManyResult ServerApi::kvdbEntryDeleteMany(server::KvdbEnt
     return request<server::KvdbEntryDeleteManyResult>("kvdbEntryDeleteMany", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("kvdb." + method, params));
 }
 

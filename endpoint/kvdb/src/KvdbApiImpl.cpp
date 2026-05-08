@@ -12,25 +12,24 @@ limitations under the License.
 #include <privmx/utils/Debug.hpp>
 #include <privmx/utils/Utils.hpp>
 
-#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/VarDeserializer.hpp>
-#include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
-#include <privmx/endpoint/core/CoreConstants.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/VarDeserializer.hpp>
+#include <privmx/endpoint/core/VarSerializer.hpp>
 
+#include "privmx/endpoint/core/EventBuilder.hpp"
+#include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
-#include "privmx/endpoint/kvdb/ServerTypes.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 #include "privmx/endpoint/kvdb/Mapper.hpp"
-#include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include "privmx/endpoint/kvdb/ServerTypes.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
-#include "privmx/endpoint/core/UsersKeysResolver.hpp"
-#include <privmx/endpoint/core/ConvertedExceptions.hpp>
-#include "privmx/endpoint/core/Mapper.hpp"
-#include "privmx/endpoint/core/EventBuilder.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
@@ -42,19 +41,19 @@ KvdbApiImpl::KvdbApiImpl(
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection
-) : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
-    _gateway(gateway),
-    _userPrivKey(userPrivKey),
-    _keyProvider(keyProvider),
-    _host(host),
-    _eventMiddleware(eventMiddleware),
-    _connection(connection),
-    _serverApi(ServerApi(gateway)),
-    _subscriber(gateway, KVDB_TYPE_FILTER_FLAG)
-{
-    _notificationListenerId = _eventMiddleware->addNotificationEventListener(std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
-    _connectedListenerId = _eventMiddleware->addConnectedEventListener(std::bind(&KvdbApiImpl::processConnectedEvent, this));
-    _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(std::bind(&KvdbApiImpl::processDisconnectedEvent, this));
+)
+    : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
+      _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
+      _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, KVDB_TYPE_FILTER_FLAG) {
+    _notificationListenerId = _eventMiddleware->addNotificationEventListener(
+        std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
+    );
+    _connectedListenerId = _eventMiddleware->addConnectedEventListener(
+        std::bind(&KvdbApiImpl::processConnectedEvent, this)
+    );
+    _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(
+        std::bind(&KvdbApiImpl::processDisconnectedEvent, this)
+    );
 }
 
 KvdbApiImpl::~KvdbApiImpl() {
@@ -91,10 +90,11 @@ std::string KvdbApiImpl::createKvdbEx(
     auto kvdbDIO = _connection.getImpl()->createDIO(contextId, resourceId);
     auto kvdbSecret = _keyProvider->generateSecret();
 
-    core::ModuleDataToEncryptV5 kvdbDataToEncrypt {
+    core::ModuleDataToEncryptV5 kvdbDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{.secret=kvdbSecret, .resourceId=resourceId, .randomId=kvdbDIO.randomId},
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = kvdbSecret, .resourceId = resourceId, .randomId = kvdbDIO.randomId},
         .dio = kvdbDIO
     };
     server::KvdbCreateModel create_kvdb_model;
@@ -104,11 +104,7 @@ std::string KvdbApiImpl::createKvdbEx(
     create_kvdb_model.data = _kvdbDataEncryptorV5.encrypt(kvdbDataToEncrypt, _userPrivKey, kvdbKey.key).toJSON();
     auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     create_kvdb_model.keys = _keyProvider->prepareKeysList(
-        allUsers,
-        kvdbKey,
-        kvdbDIO,
-        {.contextId=contextId, .resourceId=resourceId},
-        kvdbSecret
+        allUsers, kvdbKey, kvdbDIO, {.contextId = contextId, .resourceId = resourceId}, kvdbSecret
     );
     create_kvdb_model.users = mapUsers(users);
     create_kvdb_model.managers = mapUsers(managers);
@@ -143,49 +139,46 @@ void KvdbApiImpl::updateKvdb(
     auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
     auto currentKvdbEntry = currentKvdb.data.back();
     auto currentKvdbResourceId = currentKvdb.resourceId;
-    auto location {getModuleEncKeyLocation(currentKvdb, currentKvdbResourceId)};
-    auto kvdbKeys {getAndValidateModuleKeys(currentKvdb, currentKvdbResourceId)};
-    auto currentKvdbKey {findEncKeyByKeyId(kvdbKeys, currentKvdbEntry.keyId)};
+    auto location{getModuleEncKeyLocation(currentKvdb, currentKvdbResourceId)};
+    auto kvdbKeys{getAndValidateModuleKeys(currentKvdb, currentKvdbResourceId)};
+    auto currentKvdbKey{findEncKeyByKeyId(kvdbKeys, currentKvdbEntry.keyId)};
     auto kvdbInternalMeta = extractAndDecryptModuleInternalMeta(currentKvdbEntry, currentKvdbKey);
 
-    auto usersKeysResolver {core::UsersKeysResolver::create(currentKvdb, users, managers, forceGenerateNewKey, currentKvdbKey)};
+    auto usersKeysResolver{
+        core::UsersKeysResolver::create(currentKvdb, users, managers, forceGenerateNewKey, currentKvdbKey)
+    };
 
-    if(!_keyProvider->verifyKeysSecret(kvdbKeys, location, kvdbInternalMeta.secret)) {
+    if (!_keyProvider->verifyKeysSecret(kvdbKeys, location, kvdbInternalMeta.secret)) {
         throw KvdbEncryptionKeyValidationException();
     }
     // setting kvdb Key adding new users
     core::EncKey kvdbKey = currentKvdbKey;
-    core::DataIntegrityObject updateKvdbDio = _connection.getImpl()->createDIO(currentKvdb.contextId, currentKvdbResourceId);
+    core::DataIntegrityObject updateKvdbDio = _connection.getImpl()->createDIO(
+        currentKvdb.contextId, currentKvdbResourceId
+    );
     std::vector<core::server::KeyEntrySet> keys;
-    if(usersKeysResolver->doNeedNewKey()) {
+    if (usersKeysResolver->doNeedNewKey()) {
         kvdbKey = _keyProvider->generateKey();
         keys = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(),
-            kvdbKey,
-            updateKvdbDio,
-            location,
-            kvdbInternalMeta.secret
+            usersKeysResolver->getNewUsers(), kvdbKey, updateKvdbDio, location, kvdbInternalMeta.secret
         );
     }
 
-    auto usersToAddMissingKey {usersKeysResolver->getUsersToAddKey()};
-    if(usersToAddMissingKey.size() > 0) {
+    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
+    if (usersToAddMissingKey.size() > 0) {
         auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            kvdbKeys,
-            usersToAddMissingKey,
-            updateKvdbDio,
-            location,
-            kvdbInternalMeta.secret
+            kvdbKeys, usersToAddMissingKey, updateKvdbDio, location, kvdbInternalMeta.secret
         );
-        for(auto t: tmp) keys.push_back(t);
+        for (auto t : tmp)
+            keys.push_back(t);
     }
     server::KvdbUpdateModel model;
     std::vector<std::string> usersList;
-    for (auto user: users) {
+    for (auto user : users) {
         usersList.push_back(user.userId);
     }
     std::vector<std::string> managersList;
-    for (auto x: managers) {
+    for (auto x : managers) {
         managersList.push_back(x.userId);
     }
     model.id = kvdbId;
@@ -199,10 +192,15 @@ void KvdbApiImpl::updateKvdb(
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
-    core::ModuleDataToEncryptV5 kvdbDataToEncrypt {
+    core::ModuleDataToEncryptV5 kvdbDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{.secret=kvdbInternalMeta.secret, .resourceId=currentKvdbResourceId, .randomId=updateKvdbDio.randomId},
+        .internalMeta =
+            core::ModuleInternalMetaV5{
+                .secret = kvdbInternalMeta.secret,
+                .resourceId = currentKvdbResourceId,
+                .randomId = updateKvdbDio.randomId
+            },
         .dio = updateKvdbDio
     };
     model.data = _kvdbDataEncryptorV5.encrypt(kvdbDataToEncrypt, _userPrivKey, kvdbKey.key).toJSON();
@@ -214,7 +212,7 @@ void KvdbApiImpl::updateKvdb(
 }
 
 void KvdbApiImpl::deleteKvdb(const std::string& kvdbId) {
-    server::KvdbDeleteModel model {.kvdbId = kvdbId};
+    server::KvdbDeleteModel model{.kvdbId = kvdbId};
     _serverApi.kvdbDelete(model);
     invalidateModuleKeysInCache(kvdbId);
 }
@@ -243,7 +241,11 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(const std::string& contextId, cons
     return listKvdbsEx(contextId, pagingQuery, KVDB_TYPE_FILTER_FLAG);
 }
 
-core::PagingList<Kvdb> KvdbApiImpl::listKvdbsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type) {
+core::PagingList<Kvdb> KvdbApiImpl::listKvdbsEx(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery,
+    const std::string& type
+) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, _listKvdbsEx)
     server::KvdbListModel model;
     model.contextId = contextId;
@@ -259,15 +261,12 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbsEx(const std::string& contextId, co
     }
     std::vector<Kvdb> kvdbs = validateDecryptAndConvertKvdbsDataToKvdbs(kvdbsList.kvdbs);
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, _listKvdbsEx, data decrypted)
-    return core::PagingList<Kvdb>({
-        .totalAvailable = kvdbsList.count,
-        .readItems = kvdbs
-    });
+    return core::PagingList<Kvdb>({.totalAvailable = kvdbsList.count, .readItems = kvdbs});
 }
 
 KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& key) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, getEntry)
-    server::KvdbEntryGetModel model {.kvdbId = kvdbId, .kvdbEntryKey = key};
+    server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, getting entry)
     auto entry = _serverApi.kvdbEntryGet(model).kvdbEntry;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, data recived);
@@ -280,11 +279,12 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
 
 bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
     try {
-        server::KvdbEntryGetModel model {.kvdbId = kvdbId, .kvdbEntryKey = key};
+        server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
         PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, getting entry)
         _serverApi.kvdbEntryGet(model);
     } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
+        if (core::ExceptionConverter::convert(e).getCode() ==
+            privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
             return false;
         }
         e.rethrow();
@@ -292,7 +292,10 @@ bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
     return true;
 }
 
-core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
+core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(
+    const std::string& kvdbId,
+    const core::PagingQuery& pagingQuery
+) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listEntriesKeys)
     server::KvdbListKeysModel model;
     model.kvdbId = kvdbId;
@@ -301,14 +304,11 @@ core::PagingList<std::string> KvdbApiImpl::listEntriesKeys(const std::string& kv
     auto entriesList = _serverApi.kvdbListKeys(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
     std::vector<std::string> keys;
-    for(auto key : entriesList.kvdbEntryKeys) {
+    for (auto key : entriesList.kvdbEntryKeys) {
         keys.push_back(key);
     }
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, listEntriesKeys, data decrypted)
-    return core::PagingList<std::string>({
-        .totalAvailable = entriesList.count,
-        .readItems = keys
-    });
+    return core::PagingList<std::string>({.totalAvailable = entriesList.count, .readItems = keys});
 }
 
 core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
@@ -323,20 +323,27 @@ core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, 
     assertKvdbDataIntegrity(kvdb);
     setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
-    auto entries = validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(entriesList.kvdbEntries, kvdbToModuleKeys(kvdb));
+    auto entries = validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
+        entriesList.kvdbEntries, kvdbToModuleKeys(kvdb)
+    );
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, listEntriesKeys, data decrypted)
-    return core::PagingList<KvdbEntry>({
-        .totalAvailable = entriesList.count,
-        .readItems = entries
-    });
+    return core::PagingList<KvdbEntry>({.totalAvailable = entriesList.count, .readItems = entries});
 }
 
-void KvdbApiImpl::setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
+void KvdbApiImpl::setEntry(
+    const std::string& kvdbId,
+    const std::string& key,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const core::Buffer& data,
+    int64_t version
+) {
     try {
         auto currentKeys{getModuleKeys(kvdbId)};
         return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, currentKeys);
     } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::InvalidKeyIdException().getCode()) {
+        if (core::ExceptionConverter::convert(e).getCode() ==
+            privmx::endpoint::server::InvalidKeyIdException().getCode()) {
             auto newestKeys{getNewModuleKeysAndUpdateCache(kvdbId)};
             return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, newestKeys);
         }
@@ -355,8 +362,10 @@ void KvdbApiImpl::setEntryRequest(
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, sendEntry);
     auto msgKey = getAndValidateModuleCurrentEncKey(keys);
-    if(msgKey.statusCode != 0) {
-        throw KvdbEncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(msgKey.statusCode));
+    if (msgKey.statusCode != 0) {
+        throw KvdbEncryptionKeyValidationException(
+            "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
+        );
     }
     server::KvdbEntrySetModel send_entry_model;
     send_entry_model.kvdbId = kvdbId;
@@ -376,15 +385,18 @@ void KvdbApiImpl::deleteEntry(const std::string& kvdbId, const std::string& key)
     _serverApi.kvdbEntryDelete(model);
 }
 
-std::map<std::string, bool> KvdbApiImpl::deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys) {
+std::map<std::string, bool> KvdbApiImpl::deleteEntries(
+    const std::string& kvdbId,
+    const std::vector<std::string>& keys
+) {
     server::KvdbEntryDeleteManyModel model;
     model.kvdbId = kvdbId;
-    for(auto key : keys) {
+    for (auto key : keys) {
         model.kvdbEntryKeys.push_back(key);
     }
     auto deleteStatuses = _serverApi.kvdbEntryDeleteMany(model).results;
     std::map<std::string, bool> result;
-    for(auto deleteStatus : deleteStatuses) {
+    for (auto deleteStatus : deleteStatuses) {
         result.insert(std::make_pair(deleteStatus.kvdbEntryKey, deleteStatus.status == "OK"));
     }
     return result;
@@ -392,13 +404,13 @@ std::map<std::string, bool> KvdbApiImpl::deleteEntries(const std::string& kvdbId
 
 void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
-    if(!subscriptionQuery.has_value()) {
+    if (!subscriptionQuery.has_value()) {
         return;
     }
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "kvdbCreated") {
             auto raw = server::KvdbInfo::fromJSON(notification.data);
-            if(raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
                 privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw);
                 auto event = core::EventBuilder::buildEvent<KvdbCreatedEvent>("kvdb", data, notification);
@@ -406,7 +418,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             }
         } else if (type == "kvdbUpdated") {
             auto raw = server::KvdbInfo::fromJSON(notification.data);
-            if(raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
                 privmx::endpoint::kvdb::Kvdb data = validateDecryptAndConvertKvdbDataToKvdb(raw);
                 auto event = core::EventBuilder::buildEvent<KvdbUpdatedEvent>("kvdb", data, notification);
@@ -414,7 +426,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             }
         } else if (type == "kvdbDeleted") {
             auto raw = server::KvdbDeletedEventData::fromJSON(notification.data);
-            if(raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 invalidateModuleKeysInCache(raw.kvdbId);
                 auto data = Mapper::mapToKvdbDeletedEventData(raw);
                 auto event = core::EventBuilder::buildEvent<KvdbDeletedEvent>("kvdb", data, notification);
@@ -422,37 +434,45 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             }
         } else if (type == "kvdbStats") {
             auto raw = server::KvdbStatsEventData::fromJSON(notification.data);
-            if(raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 auto data = Mapper::mapToKvdbStatsEventData(raw);
                 auto event = core::EventBuilder::buildEvent<KvdbStatsChangedEvent>("kvdb", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "kvdbNewEntry") {
             auto raw = server::KvdbEntryEventData::fromJSON(notification.data);
-            if(raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 auto data = validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw));
-                auto event = core::EventBuilder::buildEvent<KvdbNewEntryEvent>("kvdb/" + raw.kvdbId + "/entries", data, notification);
+                auto event = core::EventBuilder::buildEvent<KvdbNewEntryEvent>(
+                    "kvdb/" + raw.kvdbId + "/entries", data, notification
+                );
                 _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "kvdbUpdatedEntry") {
             auto raw = server::KvdbEntryEventData::fromJSON(notification.data);
-            if(raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 auto data = validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw));
-                auto event = core::EventBuilder::buildEvent<KvdbEntryUpdatedEvent>("kvdb/" + raw.kvdbId + "/entries", data, notification);
+                auto event = core::EventBuilder::buildEvent<KvdbEntryUpdatedEvent>(
+                    "kvdb/" + raw.kvdbId + "/entries", data, notification
+                );
                 _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "kvdbDeletedEntry") {
             auto raw = server::KvdbDeletedEntryEventData::fromJSON(notification.data);
-            if(raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
+            if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 auto data = Mapper::mapToKvdbDeletedEntryEventData(raw);
-                auto event = core::EventBuilder::buildEvent<KvdbEntryDeletedEvent>("kvdb/" + raw.kvdbId + "/entries", data, notification);
+                auto event = core::EventBuilder::buildEvent<KvdbEntryDeletedEvent>(
+                    "kvdb/" + raw.kvdbId + "/entries", data, notification
+                );
                 _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "kvdbCollectionChanged") {
             auto raw = core::server::CollectionChangedEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 auto data = core::Mapper::mapToCollectionChangedEventData(KVDB_TYPE_FILTER_FLAG, raw);
-                auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("kvdb/collectionChanged", data, notification);
+                auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>(
+                    "kvdb/collectionChanged", data, notification
+                );
                 _eventMiddleware->emitApiEvent(event);
             }
         }
@@ -512,13 +532,12 @@ Kvdb KvdbApiImpl::convertServerKvdbToLibKvdb(
     };
 }
 
-Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const core::DecryptedModuleDataV5& kvdbData) {
+Kvdb KvdbApiImpl::convertDecryptedKvdbDataV5ToKvdb(
+    server::KvdbInfo kvdbInfo,
+    const core::DecryptedModuleDataV5& kvdbData
+) {
     return convertServerKvdbToLibKvdb(
-        kvdbInfo,
-        kvdbData.publicMeta,
-        kvdbData.privateMeta,
-        kvdbData.statusCode,
-        KvdbDataSchema::Version::VERSION_5
+        kvdbInfo, kvdbData.publicMeta, kvdbData.privateMeta, kvdbData.statusCode, KvdbDataSchema::Version::VERSION_5
     );
 }
 
@@ -527,28 +546,32 @@ KvdbDataSchema::Version KvdbApiImpl::getKvdbDataEntryStructureVersion(server::Kv
         auto versioned = core::dynamic::VersionedData::fromJSON(kvdbEntry.data);
         auto version = versioned.version;
         switch (version) {
-            case core::ModuleDataSchema::Version::VERSION_5:
-                return KvdbDataSchema::Version::VERSION_5;
-            default:
-                return KvdbDataSchema::Version::UNKNOWN;
+        case core::ModuleDataSchema::Version::VERSION_5:
+            return KvdbDataSchema::Version::VERSION_5;
+        default:
+            return KvdbDataSchema::Version::UNKNOWN;
         }
     }
     return KvdbDataSchema::Version::UNKNOWN;
 }
 
-std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey) {
+std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(
+    server::KvdbInfo kvdb,
+    server::KvdbDataEntry kvdbEntry,
+    const core::DecryptedEncKey& encKey
+) {
     switch (getKvdbDataEntryStructureVersion(kvdbEntry)) {
-        case KvdbDataSchema::Version::UNKNOWN: {
-            auto e = UnknownKvdbFormatException();
-            return std::make_tuple(convertServerKvdbToLibKvdb(kvdb,{},{},e.getCode()), core::DataIntegrityObject());
-        }
-        case KvdbDataSchema::Version::VERSION_5: {
-            auto decryptedKvdbData = decryptModuleDataV5(kvdbEntry, encKey);
-            return std::make_tuple(convertDecryptedKvdbDataV5ToKvdb(kvdb, decryptedKvdbData), decryptedKvdbData.dio);
-        }
+    case KvdbDataSchema::Version::UNKNOWN: {
+        auto e = UnknownKvdbFormatException();
+        return std::make_tuple(convertServerKvdbToLibKvdb(kvdb, {}, {}, e.getCode()), core::DataIntegrityObject());
+    }
+    case KvdbDataSchema::Version::VERSION_5: {
+        auto decryptedKvdbData = decryptModuleDataV5(kvdbEntry, encKey);
+        return std::make_tuple(convertDecryptedKvdbDataV5ToKvdb(kvdb, decryptedKvdbData), decryptedKvdbData.dio);
+    }
     }
     auto e = UnknownKvdbFormatException();
-    return std::make_tuple(convertServerKvdbToLibKvdb(kvdb,{},{},e.getCode()), core::DataIntegrityObject());
+    return std::make_tuple(convertServerKvdbToLibKvdb(kvdb, {}, {}, e.getCode()), core::DataIntegrityObject());
 }
 
 std::vector<Kvdb> KvdbApiImpl::validateDecryptAndConvertKvdbsDataToKvdbs(std::vector<server::KvdbInfo> kvdbs) {
@@ -558,7 +581,7 @@ std::vector<Kvdb> KvdbApiImpl::validateDecryptAndConvertKvdbsDataToKvdbs(std::ve
     for (size_t i = 0; i < kvdbs.size(); i++) {
         auto kvdb = kvdbs[i];
         result[i].statusCode = validateKvdbDataIntegrity(kvdb);
-        if(result[i].statusCode != 0) {
+        if (result[i].statusCode != 0) {
             result[i] = convertServerKvdbToLibKvdb(kvdb, {}, {}, result[i].statusCode);
         }
     }
@@ -566,31 +589,31 @@ std::vector<Kvdb> KvdbApiImpl::validateDecryptAndConvertKvdbsDataToKvdbs(std::ve
     // Create request to KeyProvider for keys
     for (size_t i = 0; i < kvdbs.size(); i++) {
         auto kvdb = kvdbs[i];
-        core::EncKeyLocation location{.contextId=kvdb.contextId, .resourceId=kvdb.resourceId};
+        core::EncKeyLocation location{.contextId = kvdb.contextId, .resourceId = kvdb.resourceId};
         auto kvdb_data_entry = kvdb.data.back();
         keyProviderRequest.addOne(kvdb.keys, kvdb_data_entry.keyId, location);
     }
     // Send request to KeyProvider
-    auto kvdbsKeys {_keyProvider->getKeysAndVerify(keyProviderRequest)};
+    auto kvdbsKeys{_keyProvider->getKeysAndVerify(keyProviderRequest)};
     std::vector<core::DataIntegrityObject> kvdbsDIO(kvdbs.size());
     std::map<std::string, bool> duplication_check;
     for (size_t i = 0; i < kvdbs.size(); i++) {
-        if(result[i].statusCode != 0) {
+        if (result[i].statusCode != 0) {
             kvdbsDIO.push_back(core::DataIntegrityObject{});
         } else {
             auto kvdb = kvdbs[i];
             try {
                 auto tmp = decryptAndConvertKvdbDataToKvdb(
-                    kvdb,
-                    kvdb.data.back(),
-                    kvdbsKeys.at(core::EncKeyLocation{.contextId=kvdb.contextId, .resourceId=kvdb.resourceId}).at(kvdb.data.back().keyId)
+                    kvdb, kvdb.data.back(),
+                    kvdbsKeys.at(core::EncKeyLocation{.contextId = kvdb.contextId, .resourceId = kvdb.resourceId})
+                        .at(kvdb.data.back().keyId)
                 );
                 result[i] = std::get<0>(tmp);
                 auto kvdbDIO = std::get<1>(tmp);
                 kvdbsDIO[i] = kvdbDIO;
                 //find duplication
                 std::string fullRandomId = kvdbDIO.randomId + "-" + std::to_string(kvdbDIO.timestamp);
-                if(duplication_check.find(fullRandomId) == duplication_check.end()) {
+                if (duplication_check.find(fullRandomId) == duplication_check.end()) {
                     duplication_check.insert(std::make_pair(fullRandomId, true));
                 } else {
                     result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
@@ -601,23 +624,26 @@ std::vector<Kvdb> KvdbApiImpl::validateDecryptAndConvertKvdbsDataToKvdbs(std::ve
             }
         }
     }
-    std::vector<core::VerificationRequest> verifierInput {};
+    std::vector<core::VerificationRequest> verifierInput{};
     for (size_t i = 0; i < result.size(); i++) {
-        if(result[i].statusCode == 0) {
-            verifierInput.push_back(core::VerificationRequest{
-                .contextId = result[i].contextId,
-                .senderId = result[i].lastModifier,
-                .senderPubKey = kvdbsDIO[i].creatorPubKey,
-                .date = result[i].lastModificationDate,
-                .bridgeIdentity = kvdbsDIO[i].bridgeIdentity
-            });
+        if (result[i].statusCode == 0) {
+            verifierInput.push_back(
+                core::VerificationRequest{
+                    .contextId = result[i].contextId,
+                    .senderId = result[i].lastModifier,
+                    .senderPubKey = kvdbsDIO[i].creatorPubKey,
+                    .date = result[i].lastModificationDate,
+                    .bridgeIdentity = kvdbsDIO[i].bridgeIdentity
+                }
+            );
         }
     }
     std::vector<bool> verified;
-    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); i++) {
-        if(result[i].statusCode == 0) {
-            result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        if (result[i].statusCode == 0) {
+            result[i].statusCode = verified[j] ? 0 :
+                                                 core::ExceptionConverter::getCodeOfUserVerificationFailureException();
             j++;
         }
     }
@@ -627,14 +653,14 @@ std::vector<Kvdb> KvdbApiImpl::validateDecryptAndConvertKvdbsDataToKvdbs(std::ve
 Kvdb KvdbApiImpl::validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb) {
     // Validate data Integrity
     auto statusCode = validateKvdbDataIntegrity(kvdb);
-    if(statusCode != 0) {
+    if (statusCode != 0) {
         return convertServerKvdbToLibKvdb(kvdb, {}, {}, statusCode);
     }
     // Get current KvdbEntry and Key
     auto kvdb_data_entry = kvdb.data.back();
     // Create request to KeyProvider for keys
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=kvdb.contextId, .resourceId=kvdb.resourceId};
+    core::EncKeyLocation location{.contextId = kvdb.contextId, .resourceId = kvdb.resourceId};
     keyProviderRequest.addOne(kvdb.keys, kvdb_data_entry.keyId, location);
     //Send request to KeyProvider
     auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(kvdb_data_entry.keyId);
@@ -643,37 +669,68 @@ Kvdb KvdbApiImpl::validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb)
     // Decrypt
     std::tie(result, kvdbDIO) = decryptAndConvertKvdbDataToKvdb(kvdb, kvdb_data_entry, key);
     // Validate with UserVerifier
-    if(result.statusCode != 0) return result;
-    std::vector<core::VerificationRequest> verifierInput {};
-    verifierInput.push_back(core::VerificationRequest{
-        .contextId = result.contextId,
-        .senderId = result.lastModifier,
-        .senderPubKey = kvdbDIO.creatorPubKey,
-        .date = result.lastModificationDate,
-        .bridgeIdentity = kvdbDIO.bridgeIdentity
-    });
+    if (result.statusCode != 0)
+        return result;
+    std::vector<core::VerificationRequest> verifierInput{};
+    verifierInput.push_back(
+        core::VerificationRequest{
+            .contextId = result.contextId,
+            .senderId = result.lastModifier,
+            .senderPubKey = kvdbDIO.creatorPubKey,
+            .date = result.lastModificationDate,
+            .bridgeIdentity = kvdbDIO.bridgeIdentity
+        }
+    );
     std::vector<bool> verified;
-    verified =_connection.getImpl()->getUserVerifier()->verify(verifierInput);
+    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     return result;
 }
 
-
-DecryptedKvdbEntryDataV5 KvdbApiImpl::decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey) {
+DecryptedKvdbEntryDataV5 KvdbApiImpl::decryptKvdbEntryDataV5(
+    server::KvdbEntryInfo entry,
+    const core::DecryptedEncKey& encKey
+) {
     try {
         auto encryptedEntryData = server::EncryptedKvdbEntryDataV5::fromJSON(entry.kvdbEntryValue);
-        if(encKey.statusCode != 0) {
+        if (encKey.statusCode != 0) {
             auto tmp = _entryDataEncryptorV5.extractPublic(encryptedEntryData);
             tmp.statusCode = encKey.statusCode;
             return tmp;
         }
         return _entryDataEncryptorV5.decrypt(encryptedEntryData, encKey.key);
     } catch (const core::Exception& e) {
-        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = e.getCode()}, {},{},{},{},{},{}};
+        return DecryptedKvdbEntryDataV5{
+            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = e.getCode()},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {}
+        };
     } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = core::ExceptionConverter::convert(e).getCode()}, {},{},{},{},{},{}};
+        return DecryptedKvdbEntryDataV5{
+            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5,
+             .statusCode = core::ExceptionConverter::convert(e).getCode()},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {}
+        };
     } catch (...) {
-        return DecryptedKvdbEntryDataV5{{.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE}, {},{},{},{},{},{}};
+        return DecryptedKvdbEntryDataV5{
+            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5,
+             .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {}
+        };
     }
 }
 
@@ -687,12 +744,13 @@ KvdbEntry KvdbApiImpl::convertServerKvdbEntryToLibKvdbEntry(
     const int64_t& schemaVersion
 ) {
     return KvdbEntry{
-        .info = {
-            .kvdbId = entry.kvdbId,
-            .key = entry.kvdbEntryKey,
-            .createDate = entry.createDate,
-            .author = entry.author,
-        },
+        .info =
+            {
+                .kvdbId = entry.kvdbId,
+                .key = entry.kvdbEntryKey,
+                .createDate = entry.createDate,
+                .author = entry.author,
+            },
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .data = data,
@@ -703,15 +761,13 @@ KvdbEntry KvdbApiImpl::convertServerKvdbEntryToLibKvdbEntry(
     };
 }
 
-KvdbEntry KvdbApiImpl::convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo entry, DecryptedKvdbEntryDataV5 entryData) {
+KvdbEntry KvdbApiImpl::convertDecryptedKvdbEntryDataV5ToKvdbEntry(
+    server::KvdbEntryInfo entry,
+    DecryptedKvdbEntryDataV5 entryData
+) {
     return convertServerKvdbEntryToLibKvdbEntry(
-        entry,
-        entryData.publicMeta,
-        entryData.privateMeta,
-        entryData.data,
-        entryData.authorPubKey,
-        entryData.statusCode,
-        KvdbEntryDataSchema::Version::VERSION_5
+        entry, entryData.publicMeta, entryData.privateMeta, entryData.data, entryData.authorPubKey,
+        entryData.statusCode, KvdbEntryDataSchema::Version::VERSION_5
     );
 }
 
@@ -720,37 +776,47 @@ KvdbEntryDataSchema::Version KvdbApiImpl::getEntryDataStructureVersion(server::K
         auto versioned = core::dynamic::VersionedData::fromJSON(entry.kvdbEntryValue);
         auto version = versioned.version;
         switch (version) {
-            case core::ModuleDataSchema::Version::VERSION_5:
-                return KvdbEntryDataSchema::Version::VERSION_5;
-            default:
-                return KvdbEntryDataSchema::Version::UNKNOWN;
+        case core::ModuleDataSchema::Version::VERSION_5:
+            return KvdbEntryDataSchema::Version::VERSION_5;
+        default:
+            return KvdbEntryDataSchema::Version::UNKNOWN;
         }
     }
     return KvdbEntryDataSchema::Version::UNKNOWN;
 }
 
-std::tuple<KvdbEntry, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey) {
+std::tuple<KvdbEntry, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertEntryDataToEntry(
+    server::KvdbEntryInfo entry,
+    const core::DecryptedEncKey& encKey
+) {
     switch (getEntryDataStructureVersion(entry)) {
-        case KvdbEntryDataSchema::Version::UNKNOWN: {
-            auto e = UnknownKvdbEntryFormatException();
-            return std::make_tuple(convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},e.getCode()), core::DataIntegrityObject());
-        }
-        case KvdbEntryDataSchema::Version::VERSION_5: {
-            auto decryptEntry = decryptKvdbEntryDataV5(entry, encKey);
-            return std::make_tuple(convertDecryptedKvdbEntryDataV5ToKvdbEntry(entry, decryptEntry), decryptEntry.dio);
-        }
+    case KvdbEntryDataSchema::Version::UNKNOWN: {
+        auto e = UnknownKvdbEntryFormatException();
+        return std::make_tuple(
+            convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, e.getCode()), core::DataIntegrityObject()
+        );
+    }
+    case KvdbEntryDataSchema::Version::VERSION_5: {
+        auto decryptEntry = decryptKvdbEntryDataV5(entry, encKey);
+        return std::make_tuple(convertDecryptedKvdbEntryDataV5ToKvdbEntry(entry, decryptEntry), decryptEntry.dio);
+    }
     }
     auto e = UnknownKvdbEntryFormatException();
-    return std::make_tuple(convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},e.getCode()), core::DataIntegrityObject());
+    return std::make_tuple(
+        convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, e.getCode()), core::DataIntegrityObject()
+    );
 }
 
-std::vector<KvdbEntry> KvdbApiImpl::validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(std::vector<server::KvdbEntryInfo> entries, const core::ModuleKeys& kvdbKeys) {
+std::vector<KvdbEntry> KvdbApiImpl::validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
+    std::vector<server::KvdbEntryInfo> entries,
+    const core::ModuleKeys& kvdbKeys
+) {
     std::set<std::string> keyIds;
     for (auto entry : entries) {
         keyIds.insert(entry.keyId);
     }
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    core::EncKeyLocation location{.contextId=kvdbKeys.contextId, .resourceId=kvdbKeys.moduleResourceId};
+    core::EncKeyLocation location{.contextId = kvdbKeys.contextId, .resourceId = kvdbKeys.moduleResourceId};
     keyProviderRequest.addMany(kvdbKeys.keys, keyIds, location);
     auto keyMap = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
     std::vector<KvdbEntry> result;
@@ -759,63 +825,71 @@ std::vector<KvdbEntry> KvdbApiImpl::validateDecryptAndConvertKvdbEntriesDataToKv
     for (auto entry : entries) {
         try {
             auto statusCode = validateEntryDataIntegrity(entry, kvdbKeys.moduleResourceId);
-            if(statusCode == 0) {
+            if (statusCode == 0) {
                 auto tmp = decryptAndConvertEntryDataToEntry(entry, keyMap.at(entry.keyId));
                 result.push_back(std::get<0>(tmp));
                 auto entryDIO = std::get<1>(tmp);
                 entriesDIO.push_back(entryDIO);
                 //find duplication
                 std::string fullRandomId = entryDIO.randomId + "-" + std::to_string(entryDIO.timestamp);
-                if(duplication_check.find(fullRandomId) == duplication_check.end()) {
+                if (duplication_check.find(fullRandomId) == duplication_check.end()) {
                     duplication_check.insert(std::make_pair(fullRandomId, true));
                 } else {
-                    result[result.size()-1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
+                    result[result.size() - 1].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
                 }
             } else {
-                result.push_back(convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},statusCode));
+                result.push_back(convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, statusCode));
             }
         } catch (const core::Exception& e) {
-            result.push_back(convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},e.getCode()));
+            result.push_back(convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, e.getCode()));
         } catch (const privmx::utils::PrivmxException& e) {
-            result.push_back(convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},core::ExceptionConverter::convert(e).getCode()));
+            result.push_back(convertServerKvdbEntryToLibKvdbEntry(
+                entry, {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode()
+            ));
         } catch (...) {
-            result.push_back(convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},ENDPOINT_CORE_EXCEPTION_CODE));
+            result.push_back(convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE));
         }
     }
-    std::vector<core::VerificationRequest> verifierInput {};
+    std::vector<core::VerificationRequest> verifierInput{};
     for (size_t i = 0; i < result.size(); i++) {
-        if(result[i].statusCode == 0) {
-            verifierInput.push_back(core::VerificationRequest{
-                .contextId = kvdbKeys.contextId,
-                .senderId = result[i].info.author,
-                .senderPubKey = result[i].authorPubKey,
-                .date = result[i].info.createDate,
-                .bridgeIdentity = entriesDIO[i].bridgeIdentity
-            });
+        if (result[i].statusCode == 0) {
+            verifierInput.push_back(
+                core::VerificationRequest{
+                    .contextId = kvdbKeys.contextId,
+                    .senderId = result[i].info.author,
+                    .senderPubKey = result[i].authorPubKey,
+                    .date = result[i].info.createDate,
+                    .bridgeIdentity = entriesDIO[i].bridgeIdentity
+                }
+            );
         }
     }
     std::vector<bool> verified;
     verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     for (size_t j = 0, i = 0; i < result.size(); ++i) {
         if (result[i].statusCode == 0) {
-            result[i].statusCode = verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+            result[i].statusCode = verified[j] ? 0 :
+                                                 core::ExceptionConverter::getCodeOfUserVerificationFailureException();
             j++;
         }
     }
     return result;
 }
 
-KvdbEntry KvdbApiImpl::validateDecryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::ModuleKeys& kvdbKeys) {
+KvdbEntry KvdbApiImpl::validateDecryptAndConvertEntryDataToEntry(
+    server::KvdbEntryInfo entry,
+    const core::ModuleKeys& kvdbKeys
+) {
     try {
         auto keyId = entry.keyId;
         // Validate data Integrity
         auto statusCode = validateEntryDataIntegrity(entry, kvdbKeys.moduleResourceId);
-        if(statusCode != 0) {
+        if (statusCode != 0) {
             return convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, statusCode);
         }
         // Create request to KeyProvider for keys
         core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-        core::EncKeyLocation location{.contextId=entry.contextId, .resourceId=kvdbKeys.moduleResourceId};
+        core::EncKeyLocation location{.contextId = entry.contextId, .resourceId = kvdbKeys.moduleResourceId};
         keyProviderRequest.addOne(kvdbKeys.keys, keyId, location);
         // Send request to KeyProvider
         auto encKey = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(keyId);
@@ -823,39 +897,42 @@ KvdbEntry KvdbApiImpl::validateDecryptAndConvertEntryDataToEntry(server::KvdbEnt
         KvdbEntry result;
         core::DataIntegrityObject entryDIO;
         std::tie(result, entryDIO) = decryptAndConvertEntryDataToEntry(entry, encKey);
-        if(result.statusCode != 0) return result;
+        if (result.statusCode != 0)
+            return result;
         // Validate with UserVerifier
-        std::vector<core::VerificationRequest> verifierInput {};
-            verifierInput.push_back(core::VerificationRequest{
+        std::vector<core::VerificationRequest> verifierInput{};
+        verifierInput.push_back(
+            core::VerificationRequest{
                 .contextId = entry.contextId,
                 .senderId = result.info.author,
                 .senderPubKey = result.authorPubKey,
                 .date = result.info.createDate,
                 .bridgeIdentity = entryDIO.bridgeIdentity
-            });
+            }
+        );
         std::vector<bool> verified;
         verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
         result.statusCode = verified[0] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
         return result;
     } catch (const core::Exception& e) {
-        return convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},e.getCode());
+        return convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, e.getCode());
     } catch (const privmx::utils::PrivmxException& e) {
-        return convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},core::ExceptionConverter::convert(e).getCode());
-    } catch (...) {
-        return convertServerKvdbEntryToLibKvdbEntry(entry,{},{},{},{},ENDPOINT_CORE_EXCEPTION_CODE);
-    }
+        return convertServerKvdbEntryToLibKvdbEntry(
+            entry, {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode()
+        );
+    } catch (...) { return convertServerKvdbEntryToLibKvdbEntry(entry, {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE); }
 }
 
 core::ModuleKeys KvdbApiImpl::getEntryDecryptionKeys(server::KvdbEntryInfo entry) {
     auto keyId = entry.keyId;
     kvdb::KvdbDataSchema::Version minimumKvdbSchemaVersion;
     switch (getEntryDataStructureVersion(entry)) {
-        case kvdb::KvdbEntryDataSchema::Version::UNKNOWN:
-            minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::UNKNOWN;
-            break;
-        case kvdb::KvdbEntryDataSchema::Version::VERSION_5:
-            minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::VERSION_5;
-            break;
+    case kvdb::KvdbEntryDataSchema::Version::UNKNOWN:
+        minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::UNKNOWN;
+        break;
+    case kvdb::KvdbEntryDataSchema::Version::VERSION_5:
+        minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::VERSION_5;
+        break;
     }
     return getModuleKeys(entry.kvdbId, std::set<std::string>{keyId}, minimumKvdbSchemaVersion);
 }
@@ -870,37 +947,34 @@ Poco::Dynamic::Var KvdbApiImpl::encryptEntryData(
 ) {
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(kvdbKeys);
     switch (msgKey.dataStructureVersion) {
-        case core::EncryptionKeyDataSchema::Version::UNKNOWN:
-            case core::EncryptionKeyDataSchema::Version::VERSION_1:
-            throw UnknownKvdbFormatException();
-        case core::EncryptionKeyDataSchema::Version::VERSION_2: {
-            auto entryDIO = _connection.getImpl()->createDIO(
-                kvdbKeys.contextId,
-                resourceId,
-                kvdbId,
-                kvdbKeys.moduleResourceId
-            );
-            KvdbEntryDataToEncryptV5 entryData {
-                .publicMeta = publicMeta,
-                .privateMeta = privateMeta,
-                .data = data,
-                .internalMeta = std::nullopt,
-                .dio = entryDIO
-            };
-            auto encryptedEntryData = _entryDataEncryptorV5.encrypt(entryData, _userPrivKey, msgKey.key);
-            return encryptedEntryData.toJSON();
-        }
+    case core::EncryptionKeyDataSchema::Version::UNKNOWN:
+    case core::EncryptionKeyDataSchema::Version::VERSION_1:
+        throw UnknownKvdbFormatException();
+    case core::EncryptionKeyDataSchema::Version::VERSION_2: {
+        auto entryDIO = _connection.getImpl()->createDIO(
+            kvdbKeys.contextId, resourceId, kvdbId, kvdbKeys.moduleResourceId
+        );
+        KvdbEntryDataToEncryptV5 entryData{
+            .publicMeta = publicMeta,
+            .privateMeta = privateMeta,
+            .data = data,
+            .internalMeta = std::nullopt,
+            .dio = entryDIO
+        };
+        auto encryptedEntryData = _entryDataEncryptorV5.encrypt(entryData, _userPrivKey, msgKey.key);
+        return encryptedEntryData.toJSON();
+    }
     }
     throw UnknownKvdbFormatException();
 }
 
 void KvdbApiImpl::assertKvdbExist(const std::string& kvdbId) {
-    kvdb::server::KvdbGetModel params {.kvdbId = kvdbId, .type = std::nullopt};
+    kvdb::server::KvdbGetModel params{.kvdbId = kvdbId, .type = std::nullopt};
     _serverApi.kvdbGet(params);
 }
 
 std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    kvdb::server::KvdbGetModel params {.kvdbId = moduleId, .type = std::nullopt};
+    kvdb::server::KvdbGetModel params{.kvdbId = moduleId, .type = std::nullopt};
     auto kvdb = _serverApi.kvdbGet(params).kvdb;
     // validate kvdb Data before returning data
     assertKvdbDataIntegrity(kvdb);
@@ -909,10 +983,10 @@ std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromSer
 
 core::ModuleKeys KvdbApiImpl::kvdbToModuleKeys(server::KvdbInfo kvdb) {
     return core::ModuleKeys{
-        .keys=kvdb.keys,
-        .currentKeyId=kvdb.keyId,
-        .moduleSchemaVersion=getKvdbDataEntryStructureVersion(kvdb.data.back()),
-        .moduleResourceId=kvdb.resourceId,
+        .keys = kvdb.keys,
+        .currentKeyId = kvdb.keyId,
+        .moduleSchemaVersion = getKvdbDataEntryStructureVersion(kvdb.data.back()),
+        .moduleResourceId = kvdb.resourceId,
         .contextId = kvdb.contextId
     };
 }
@@ -920,21 +994,19 @@ core::ModuleKeys KvdbApiImpl::kvdbToModuleKeys(server::KvdbInfo kvdb) {
 void KvdbApiImpl::assertKvdbDataIntegrity(server::KvdbInfo kvdb) {
     auto kvdb_data_entry = kvdb.data.back();
     switch (getKvdbDataEntryStructureVersion(kvdb_data_entry)) {
-        case KvdbDataSchema::Version::UNKNOWN:
-            throw UnknownKvdbFormatException();
-        case KvdbDataSchema::Version::VERSION_5: {
-            auto kvdb_data = core::dynamic::EncryptedModuleDataV5::fromJSON(kvdb_data_entry.data);
-            auto dio = _kvdbDataEncryptorV5.getDIOAndAssertIntegrity(kvdb_data);
-            if(
-                dio.contextId != kvdb.contextId ||
-                dio.resourceId != kvdb.resourceId ||
-                dio.creatorUserId != kvdb.lastModifier ||
-                !core::TimestampValidator::validate(dio.timestamp, kvdb.lastModificationDate)
-            ) {
-                throw KvdbDataIntegrityException();
-            }
-            return;
+    case KvdbDataSchema::Version::UNKNOWN:
+        throw UnknownKvdbFormatException();
+    case KvdbDataSchema::Version::VERSION_5: {
+        auto kvdb_data = core::dynamic::EncryptedModuleDataV5::fromJSON(kvdb_data_entry.data);
+        auto dio = _kvdbDataEncryptorV5.getDIOAndAssertIntegrity(kvdb_data);
+        if (dio.contextId != kvdb.contextId ||
+            dio.resourceId != kvdb.resourceId ||
+            dio.creatorUserId != kvdb.lastModifier ||
+            !core::TimestampValidator::validate(dio.timestamp, kvdb.lastModificationDate)) {
+            throw KvdbDataIntegrityException();
         }
+        return;
+    }
     }
     throw UnknownKvdbFormatException();
 }
@@ -943,44 +1015,37 @@ uint32_t KvdbApiImpl::validateKvdbDataIntegrity(server::KvdbInfo kvdb) {
     try {
         assertKvdbDataIntegrity(kvdb);
         return 0;
-    } catch (const core::Exception& e) {
-        return e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        return core::ExceptionConverter::convert(e).getCode();;
-    } catch (...) {
-        return ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
+        return core::ExceptionConverter::convert(e).getCode();
+        ;
+    } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
     return UnknownKvdbFormatException().getCode();
 }
 
 uint32_t KvdbApiImpl::validateEntryDataIntegrity(server::KvdbEntryInfo entry, const std::string& kvdbResourceId) {
     try {
         switch (getEntryDataStructureVersion(entry)) {
-            case KvdbEntryDataSchema::Version::UNKNOWN:
-                return UnknownKvdbEntryFormatException().getCode();
-            case KvdbEntryDataSchema::Version::VERSION_5: {
-                auto encData = server::EncryptedKvdbEntryDataV5::fromJSON(entry.kvdbEntryValue);
-                auto dio = _entryDataEncryptorV5.getDIOAndAssertIntegrity(encData);
-                if(
-                    dio.contextId != entry.contextId ||
-                    dio.resourceId != entry.kvdbEntryKey ||
-                    !dio.containerId.has_value() || dio.containerId.value() != entry.kvdbId ||
-                    !dio.containerResourceId.has_value() || dio.containerResourceId.value() != kvdbResourceId ||
-                    dio.creatorUserId != entry.lastModifier ||
-                    !core::TimestampValidator::validate(dio.timestamp, entry.lastModificationDate)
-                ) {
-                    return KvdbEntryDataIntegrityException().getCode();
-                }
-                return 0;
+        case KvdbEntryDataSchema::Version::UNKNOWN:
+            return UnknownKvdbEntryFormatException().getCode();
+        case KvdbEntryDataSchema::Version::VERSION_5: {
+            auto encData = server::EncryptedKvdbEntryDataV5::fromJSON(entry.kvdbEntryValue);
+            auto dio = _entryDataEncryptorV5.getDIOAndAssertIntegrity(encData);
+            if (dio.contextId != entry.contextId ||
+                dio.resourceId != entry.kvdbEntryKey ||
+                !dio.containerId.has_value() ||
+                dio.containerId.value() != entry.kvdbId ||
+                !dio.containerResourceId.has_value() ||
+                dio.containerResourceId.value() != kvdbResourceId ||
+                dio.creatorUserId != entry.lastModifier ||
+                !core::TimestampValidator::validate(dio.timestamp, entry.lastModificationDate)) {
+                return KvdbEntryDataIntegrityException().getCode();
             }
+            return 0;
         }
-    } catch (const core::Exception& e) {
-        return e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
+        }
+    } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
         return core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        return ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
     return UnknownKvdbEntryFormatException().getCode();
 }
 
@@ -995,10 +1060,18 @@ void KvdbApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionId
     _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
-std::string KvdbApiImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string KvdbApiImpl::buildSubscriptionQuery(
+    EventType eventType,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }
 
-std::string KvdbApiImpl::buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey) {
+std::string KvdbApiImpl::buildSubscriptionQueryForSelectedEntry(
+    EventType eventType,
+    const std::string& kvdbId,
+    const std::string& kvdbEntryKey
+) {
     return SubscriberImpl::buildQueryForSelectedEntry(eventType, kvdbId, kvdbEntryKey);
 }
