@@ -11,10 +11,10 @@ limitations under the License.
 
 #include "privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp"
 
-#include <Poco/ByteOrder.h>
-#include <privmx/crypto/Crypto.hpp>
 #include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
+#include <Poco/ByteOrder.h>
+#include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -27,10 +27,7 @@ IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const uint64_t index, const std::
     std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
     std::string ivWithCipher = iv + cipher;
     std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);
-    return {
-        .data = hmac + ivWithCipher,
-        .hmac = hmac
-    };
+    return {.data = hmac + ivWithCipher, .hmac = hmac};
 }
 
 std::string ChunkEncryptor::decrypt(const uint64_t index, const Chunk& chunk) {
@@ -69,16 +66,20 @@ uint64_t ChunkEncryptor::getEncryptedFileSize(const uint64_t& fileSize) {
     // 16 iv + 32 hmac + max 16 padding
     auto fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
     auto lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
-    auto encryptedFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) + lastChunkSize + HMAC_SIZE + IV_SIZE + lastChunkPaddingSize;
+    auto encryptedFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) +
+        lastChunkSize +
+        HMAC_SIZE +
+        IV_SIZE +
+        lastChunkPaddingSize;
     return encryptedFileSize;
 }
 
 void ChunkEncryptor::sync(std::string key, size_t chunkSize) {
     _key = key;
-    _chunkSize = chunkSize; 
+    _chunkSize = chunkSize;
 }
 
 std::string ChunkEncryptor::chunkIndexToBE(const uint64_t index) {
     uint32_t index_be = Poco::ByteOrder::toBigEndian(static_cast<uint32_t>(index));
-    return std::string((char *)&index_be, 4);
+    return std::string((char*)&index_be, 4);
 }

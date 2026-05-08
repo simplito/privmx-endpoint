@@ -10,9 +10,9 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
-#include "privmx/endpoint/store/StoreException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include "privmx/endpoint/store/StoreException.hpp"
 
 using namespace privmx::endpoint::store;
 
@@ -24,30 +24,26 @@ ChunkDataProvider::ChunkDataProvider(
     uint64_t serverFileSize,
     int64_t fileVersion
 )
-    : _server(server),
-    _encryptedChunkSize(chunkSize),
-    _serverChunkSize(getServerReadDataSize(chunkSize, severChunkSize)),
-    _fileId(fileId),
-    _serverFileSize(serverFileSize),
-    _fileVersion(fileVersion)
-{}
+    : _server(server), _encryptedChunkSize(chunkSize),
+      _serverChunkSize(getServerReadDataSize(chunkSize, severChunkSize)), _fileId(fileId),
+      _serverFileSize(serverFileSize), _fileVersion(fileVersion) {}
 
 void ChunkDataProvider::sync(
-    int64_t newfileVersion, 
-    int64_t encryptedFileSize, 
-    std::optional<size_t> encryptedChunkSize, 
+    int64_t newfileVersion,
+    int64_t encryptedFileSize,
+    std::optional<size_t> encryptedChunkSize,
     std::optional<size_t> serverChunkSize
 ) {
-    if(_fileVersion < newfileVersion) {
+    if (_fileVersion < newfileVersion) {
         _lastServerChunkNumber = std::nullopt;
         _lastServerChunk = "";
     }
     _serverFileSize = encryptedFileSize;
     _fileVersion = newfileVersion;
-    if(encryptedChunkSize.has_value()) {
+    if (encryptedChunkSize.has_value()) {
         _encryptedChunkSize = encryptedChunkSize.value();
     }
-    if(serverChunkSize.has_value()) {
+    if (serverChunkSize.has_value()) {
         _serverChunkSize = serverChunkSize.value();
     }
 }
@@ -57,39 +53,45 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber) {
 }
 
 std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersion) {
-    if(fileVersion != _fileVersion) {
+    if (fileVersion != _fileVersion) {
         _lastServerChunkNumber = std::nullopt;
         _fileVersion = fileVersion;
     }
     uint64_t from = _encryptedChunkSize * chunkNumber;
     uint64_t serverChunkNumber = from / _serverChunkSize;
     uint64_t serverChunkPos = from % _serverChunkSize;
-    if(!_lastServerChunkNumber.has_value() || _lastServerChunkNumber.value() != serverChunkNumber) {
+    if (!_lastServerChunkNumber.has_value() || _lastServerChunkNumber.value() != serverChunkNumber) {
         _lastServerChunk = requestServerChunk(serverChunkNumber);
         _lastServerChunkNumber = serverChunkNumber;
     }
-    if(serverChunkPos > _lastServerChunk.size()) {
+    if (serverChunkPos > _lastServerChunk.size()) {
         return std::string();
     }
     return _lastServerChunk.substr(serverChunkPos, _encryptedChunkSize);
 }
 
 std::string ChunkDataProvider::getCurrentChecksumsFromBridge() {
-    server::StoreFileReadModel fileDataModel {};
+    server::StoreFileReadModel fileDataModel{};
     fileDataModel.fileId = _fileId;
-    fileDataModel.range = server::BufferReadRange{.type="checksum"}.toJSON();
+    fileDataModel.range = server::BufferReadRange{.type = "checksum"}.toJSON();
     fileDataModel.thumb = false;
     return _server->storeFileRead(fileDataModel).data;
 }
 
-void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) {
+void ChunkDataProvider::update(
+    int64_t newfileVersion,
+    uint32_t chunkNumber,
+    const std::string newChunkEncryptedData,
+    int64_t encryptedFileSize,
+    bool truncate
+) {
     uint64_t from = _encryptedChunkSize * chunkNumber;
     uint64_t serverChunkNumber = from / _serverChunkSize;
     uint64_t serverChunkPos = from % _serverChunkSize;
-    if(_lastServerChunkNumber.has_value() && _lastServerChunkNumber.value() == serverChunkNumber) {
+    if (_lastServerChunkNumber.has_value() && _lastServerChunkNumber.value() == serverChunkNumber) {
         std::string oldServerChunkDataBefore = _lastServerChunk.substr(0, serverChunkPos);
         std::string oldServerChunkDataAfter = "";
-        if(!truncate && _lastServerChunk.size() > serverChunkPos + newChunkEncryptedData.size()) {
+        if (!truncate && _lastServerChunk.size() > serverChunkPos + newChunkEncryptedData.size()) {
             oldServerChunkDataAfter = _lastServerChunk.substr(serverChunkPos + newChunkEncryptedData.size());
         }
         _lastServerChunk = oldServerChunkDataBefore + newChunkEncryptedData + oldServerChunkDataAfter;
@@ -99,12 +101,11 @@ void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, con
 }
 
 std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
-    server::BufferReadRangeSlice range {
-        server::BufferReadRange{.type="slice"}, 
-        .from=_serverChunkSize * serverChunkNumber, 
-        .to=_serverChunkSize * (serverChunkNumber + 1)
+    server::BufferReadRangeSlice range{
+        server::BufferReadRange{.type = "slice"}, .from = _serverChunkSize * serverChunkNumber,
+        .to = _serverChunkSize * (serverChunkNumber + 1)
     };
-    server::StoreFileReadModel fileDataModel {};
+    server::StoreFileReadModel fileDataModel{};
     fileDataModel.fileId = _fileId;
     fileDataModel.range = range.toJSON();
     fileDataModel.version = _fileVersion;
@@ -112,8 +113,9 @@ std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
     server::StoreFileReadResult fileData;
     try {
         fileData = _server->storeFileRead(fileDataModel);
-    } catch(const utils::PrivmxException& e) {
-        if(core::ExceptionConverter::convert(e).getCode() == privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
+    } catch (const utils::PrivmxException& e) {
+        if (core::ExceptionConverter::convert(e).getCode() ==
+            privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
             // STORE_FILE_VERSION_MISMATCH
             throw store::FileVersionMismatchException();
         } else {
@@ -124,5 +126,5 @@ std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
 }
 
 int64_t ChunkDataProvider::getServerReadDataSize(int64_t encryptedChunkSize, int64_t severChunkSize) {
-    return ((severChunkSize + encryptedChunkSize -1) / encryptedChunkSize) * encryptedChunkSize;
+    return ((severChunkSize + encryptedChunkSize - 1) / encryptedChunkSize) * encryptedChunkSize;
 }

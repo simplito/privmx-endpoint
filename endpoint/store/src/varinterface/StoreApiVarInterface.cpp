@@ -18,28 +18,29 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
 std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    StoreApiVarInterface::methodMap = {{Create, &StoreApiVarInterface::create},
-                                       {CreateStore, &StoreApiVarInterface::createStore},
-                                       {UpdateStore, &StoreApiVarInterface::updateStore},
-                                       {DeleteStore, &StoreApiVarInterface::deleteStore},
-                                       {GetStore, &StoreApiVarInterface::getStore},
-                                       {ListStores, &StoreApiVarInterface::listStores},
-                                       {CreateFile, &StoreApiVarInterface::createFile},
-                                       {UpdateFile, &StoreApiVarInterface::updateFile},
-                                       {UpdateFileMeta, &StoreApiVarInterface::updateFileMeta},
-                                       {WriteToFile, &StoreApiVarInterface::writeToFile},
-                                       {DeleteFile, &StoreApiVarInterface::deleteFile},
-                                       {GetFile, &StoreApiVarInterface::getFile},
-                                       {ListFiles, &StoreApiVarInterface::listFiles},
-                                       {OpenFile, &StoreApiVarInterface::openFile},
-                                       {ReadFromFile, &StoreApiVarInterface::readFromFile},
-                                       {SeekInFile, &StoreApiVarInterface::seekInFile},
-                                       {CloseFile, &StoreApiVarInterface::closeFile},
-                                       {SyncFile, &StoreApiVarInterface::syncFile},
-                                       {SubscribeFor, &StoreApiVarInterface::subscribeFor},
-                                       {UnsubscribeFrom, &StoreApiVarInterface::unsubscribeFrom},
-                                       {BuildSubscriptionQuery, &StoreApiVarInterface::buildSubscriptionQuery}};
-
+    StoreApiVarInterface::methodMap = {
+        {Create, &StoreApiVarInterface::create},
+        {CreateStore, &StoreApiVarInterface::createStore},
+        {UpdateStore, &StoreApiVarInterface::updateStore},
+        {DeleteStore, &StoreApiVarInterface::deleteStore},
+        {GetStore, &StoreApiVarInterface::getStore},
+        {ListStores, &StoreApiVarInterface::listStores},
+        {CreateFile, &StoreApiVarInterface::createFile},
+        {UpdateFile, &StoreApiVarInterface::updateFile},
+        {UpdateFileMeta, &StoreApiVarInterface::updateFileMeta},
+        {WriteToFile, &StoreApiVarInterface::writeToFile},
+        {DeleteFile, &StoreApiVarInterface::deleteFile},
+        {GetFile, &StoreApiVarInterface::getFile},
+        {ListFiles, &StoreApiVarInterface::listFiles},
+        {OpenFile, &StoreApiVarInterface::openFile},
+        {ReadFromFile, &StoreApiVarInterface::readFromFile},
+        {SeekInFile, &StoreApiVarInterface::seekInFile},
+        {CloseFile, &StoreApiVarInterface::closeFile},
+        {SyncFile, &StoreApiVarInterface::syncFile},
+        {SubscribeFor, &StoreApiVarInterface::subscribeFor},
+        {UnsubscribeFrom, &StoreApiVarInterface::unsubscribeFrom},
+        {BuildSubscriptionQuery, &StoreApiVarInterface::buildSubscriptionQuery}
+};
 
 Poco::Dynamic::Var StoreApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -70,7 +71,9 @@ Poco::Dynamic::Var StoreApiVarInterface::updateStore(const Poco::Dynamic::Var& a
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
-    _storeApi.updateStore(storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+    _storeApi.updateStore(
+        storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+    );
     return {};
 }
 

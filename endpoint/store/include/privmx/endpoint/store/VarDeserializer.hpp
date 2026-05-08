@@ -27,10 +27,13 @@ template<>
 store::EventType VarDeserializer::deserialize<store::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
-store::EventSelectorType VarDeserializer::deserialize<store::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+store::EventSelectorType VarDeserializer::deserialize<store::EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STORE_VARDESERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STORE_VARDESERIALIZER_HPP_

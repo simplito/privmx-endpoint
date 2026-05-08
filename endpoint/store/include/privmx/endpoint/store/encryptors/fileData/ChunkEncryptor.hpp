@@ -12,17 +12,15 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_HPP_
 
-
+#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include <cstdint>
 #include <string>
-#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class ChunkEncryptor : public IChunkEncryptor
-{
+class ChunkEncryptor : public IChunkEncryptor {
 public:
     ChunkEncryptor(std::string key, size_t chunkSize);
     IChunkEncryptor::Chunk encrypt(const uint64_t index, const std::string& data) override;
@@ -31,14 +29,15 @@ public:
     size_t getEncryptedChunkSize() override;
     uint64_t getEncryptedFileSize(const uint64_t& fileSize) override;
     void sync(std::string key, size_t chunkSize) override;
+
 private:
     std::string chunkIndexToBE(const uint64_t index);
 
     std::string _key;
     size_t _chunkSize;
 };
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_HPP_

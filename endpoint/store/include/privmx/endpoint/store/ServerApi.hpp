@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_SERVERAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_SERVERAPI_HPP_
 
-#include <string>
 #include <Poco/Dynamic/Var.h>
+#include <string>
 
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 
@@ -23,8 +23,7 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class ServerApi
-{
+class ServerApi {
 public:
     ServerApi(const privmx::privfs::RpcGateway::Ptr& gateway);
     server::StoreCreateResult storeCreate(const server::StoreCreateModel& model);
@@ -41,6 +40,7 @@ public:
     void storeFileWrite(const server::StoreFileWriteModelByOperations& model);
     void storeFileUpdate(const server::StoreFileUpdateModel& model);
     void storeFileDelete(const server::StoreFileDeleteModel& model);
+
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);
@@ -49,8 +49,8 @@ private:
     privfs::RpcGateway::Ptr _gateway;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_SERVERAPI_HPP_

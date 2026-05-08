@@ -9,17 +9,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <Poco/JSON/Parser.h>
 #include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <Poco/JSON/Parser.h>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV1.hpp"
 
 using namespace privmx::endpoint::store;
 
-std::string FileMetaEncryptorV1::signAndEncrypt(const dynamic::compat_v1::StoreFileMeta& data, const privmx::crypto::PrivateKey& priv, const std::string& key) {
-    auto buffer {utils::Utils::stringify(data.toJSON())};
+std::string FileMetaEncryptorV1::signAndEncrypt(
+    const dynamic::compat_v1::StoreFileMeta& data,
+    const privmx::crypto::PrivateKey& priv,
+    const std::string& key
+) {
+    auto buffer{utils::Utils::stringify(data.toJSON())};
     auto signature = priv.signToCompactSignatureWithHash(buffer);
     std::string plain;
     plain.push_back(1);
@@ -42,8 +46,7 @@ FileMetaSigned FileMetaEncryptorV1::decrypt(const std::string& data, const std::
         metaSigned.signature = signature;
         metaSigned.metaBuf = metaBuf;
         metaSigned.meta = meta;
-    }
-    else if (plain[0] == 123) {
+    } else if (plain[0] == 123) {
         auto meta = dynamic::compat_v1::StoreFileMeta::fromJSON(parser.parse(plain));
         metaSigned.signature = Pson::BinaryString();
         metaSigned.metaBuf = Pson::BinaryString();

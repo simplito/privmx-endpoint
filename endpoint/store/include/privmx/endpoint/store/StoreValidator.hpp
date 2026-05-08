@@ -12,52 +12,45 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_STOREVALIDATOR_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_STOREVALIDATOR_HPP_
 
-#include <string>
-#include <privmx/endpoint/core/Validator.hpp>
-#include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/Events.hpp"
-
+#include "privmx/endpoint/store/StoreApi.hpp"
+#include <privmx/endpoint/core/Validator.hpp>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
 template<>
-class StructValidator<store::Store>
-{
+class StructValidator<store::Store> {
 public:
     static void validate(const store::Store& value, const std::string& stack_trace = "");
-    static std::string getReadableType() {return "Store";}
+    static std::string getReadableType() { return "Store"; }
 };
 
 template<>
-class StructValidator<PagingList<store::Store>>
-{
+class StructValidator<PagingList<store::Store>> {
 public:
     static void validate(const PagingList<store::Store>& value, const std::string& stack_trace = "");
-    static std::string getReadableType() {return "PagingList<Store>";}
+    static std::string getReadableType() { return "PagingList<Store>"; }
 };
 
 template<>
-class StructValidator<store::File>
-{
+class StructValidator<store::File> {
 public:
     static void validate(const store::File& value, const std::string& stack_trace = "");
-    static std::string getReadableType() {return "File";}
+    static std::string getReadableType() { return "File"; }
 };
 
 template<>
-class StructValidator<PagingList<store::File>>
-{
+class StructValidator<PagingList<store::File>> {
 public:
     static void validate(const PagingList<store::File>& value, const std::string& stack_trace = "");
-    static std::string getReadableType() {return "PagingList<File>";}
+    static std::string getReadableType() { return "PagingList<File>"; }
 };
 
-
-
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_STOREVALIDATOR_HPP_

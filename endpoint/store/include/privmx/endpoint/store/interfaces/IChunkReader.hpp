@@ -16,8 +16,7 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class IChunkReader
-{
+class IChunkReader {
 public:
     virtual ~IChunkReader() = default;
     virtual uint64_t filePosToFileChunkIndex(uint64_t pos) = 0;
@@ -27,9 +26,8 @@ public:
     virtual void update(int64_t newfileVersion, uint64_t index) = 0;
 };
 
-
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNKREADER_INTERFACE_HPP_

@@ -12,16 +12,15 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKBUFFEREDSTREAM_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKBUFFEREDSTREAM_HPP_
 
-#include <string>
 #include <optional>
 #include <privmx/utils/Debug.hpp>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class ChunkBufferedStream
-{
+class ChunkBufferedStream {
 public:
     ChunkBufferedStream() = default;
     ChunkBufferedStream(size_t chunkSize, std::optional<uint64_t> maxStreamLength = std::nullopt);
@@ -33,6 +32,7 @@ public:
     std::string getFullChunk(uint64_t pos);
     void freeFullChunks();
     void write(const std::string& data);
+
 private:
     size_t _chunkSize;
     std::string _buf;
@@ -55,12 +55,15 @@ inline uint64_t ChunkBufferedStream::getNumberOfFullChunks() const {
 }
 
 inline bool ChunkBufferedStream::isFullyFilled() {
-    PRIVMX_DEBUG("DEBUG", "ChunkBufferedStream::isFullyFilled", std::to_string(_totalDataSize) + " == " + std::to_string(_maxTotalDataSize));
+    PRIVMX_DEBUG(
+        "DEBUG", "ChunkBufferedStream::isFullyFilled",
+        std::to_string(_totalDataSize) + " == " + std::to_string(_maxTotalDataSize)
+    );
     return _sizeControl ? _totalDataSize == _maxTotalDataSize : false;
 }
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNKBUFFEREDSTREAM_HPP_

@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_REQUESTAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_REQUESTAPI_HPP_
 
-#include <string>
 #include <Poco/Dynamic/Var.h>
+#include <string>
 
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 
@@ -23,8 +23,7 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class RequestApi
-{
+class RequestApi {
 public:
     RequestApi(privmx::privfs::RpcGateway::Ptr gateway);
     server::CreateRequestResult createRequest(const server::CreateRequestModel& model);
@@ -39,8 +38,8 @@ private:
     privfs::RpcGateway::Ptr _gateway;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_REQUESTAPI_HPP_

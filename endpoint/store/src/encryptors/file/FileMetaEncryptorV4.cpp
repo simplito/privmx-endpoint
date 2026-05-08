@@ -11,35 +11,41 @@ limitations under the License.
 
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
 
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/store/StoreException.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
+#include "privmx/endpoint/store/StoreException.hpp"
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::FileMetaToEncryptV4& fileMeta,
-                                                                          const crypto::PrivateKey& authorPrivateKey,
-                                                                          const std::string& encryptionKey) {
+store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(
+    const store::FileMetaToEncryptV4& fileMeta,
+    const crypto::PrivateKey& authorPrivateKey,
+    const std::string& encryptionKey
+) {
     server::EncryptedFileMetaV4 result;
     result.version = FileDataSchema::Version::VERSION_4;
     result.publicMeta = _dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey);
     try {
         result.publicMetaObject = utils::Utils::parseJsonObject(fileMeta.publicMeta.stdString());
-    } catch (...) {
-        result.publicMetaObject = Poco::Dynamic::Var();
-    }
+    } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(fileMeta.privateMeta, authorPrivateKey, encryptionKey);
-    result.fileSize = _dataEncryptor.signAndEncryptAndEncode(serializeNumber(fileMeta.fileSize), authorPrivateKey, encryptionKey);
-    result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(fileMeta.internalMeta, authorPrivateKey, encryptionKey);
+    result.fileSize = _dataEncryptor.signAndEncryptAndEncode(
+        serializeNumber(fileMeta.fileSize), authorPrivateKey, encryptionKey
+    );
+    result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
+        fileMeta.internalMeta, authorPrivateKey, encryptionKey
+    );
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     return result;
 }
 
-store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
-                                                        const std::string& encryptionKey) {
+store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(
+    const store::server::EncryptedFileMetaV4& encryptedFileMeta,
+    const std::string& encryptionKey
+) {
     DecryptedFileMetaV4 result;
     result.statusCode = 0;
     result.dataStructureVersion = FileDataSchema::Version::VERSION_4;
@@ -55,17 +61,21 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::Enc
                 result.statusCode = e.getCode();
             }
         }
-        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.privateMeta, authorPublicKey, encryptionKey);
-        result.fileSize = deserializeNumber(_dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.fileSize, authorPublicKey, encryptionKey));
-        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.internalMeta.value(), authorPublicKey, encryptionKey);
+        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
+            encryptedFileMeta.privateMeta, authorPublicKey, encryptionKey
+        );
+        result.fileSize = deserializeNumber(
+            _dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.fileSize, authorPublicKey, encryptionKey)
+        );
+        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(
+            encryptedFileMeta.internalMeta.value(), authorPublicKey, encryptionKey
+        );
         result.authorPubKey = encryptedFileMeta.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 

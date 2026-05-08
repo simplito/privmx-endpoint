@@ -12,25 +12,24 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_FILEREADER_INTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEREADER_INTERFACE_HPP_
 
-#include <cstdint>
-#include <string>
-#include <optional>
 #include "privmx/endpoint/store/StoreTypes.hpp"
+#include <cstdint>
+#include <optional>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class IFileReader
-{
+class IFileReader {
 public:
     virtual ~IFileReader() = default;
     virtual std::string read(uint64_t pos, uint64_t length) = 0;
     virtual void sync(const store::FileDecryptionParams& newParms) = 0;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_FILEREADER_INTERFACE_HPP_
