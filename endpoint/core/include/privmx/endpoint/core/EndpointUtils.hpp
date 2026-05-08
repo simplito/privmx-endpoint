@@ -27,17 +27,23 @@ namespace core {
 
 class EndpointUtils {
 public:
-    static std::vector<UserWithPubKey> uniqueListUserWithPubKey(const std::vector<UserWithPubKey>& list1,
-                                                                const std::vector<UserWithPubKey>& list2);
+    static std::vector<UserWithPubKey> uniqueListUserWithPubKey(
+        const std::vector<UserWithPubKey>& list1,
+        const std::vector<UserWithPubKey>& list2
+    );
 
     /**
      * Returns vector of elements which do exist on the baseList and not on the subList
      */
-    static std::vector<std::string> getDifference(const std::vector<std::string>& baseList,
-                                                  const std::vector<std::string>& subList);
+    static std::vector<std::string> getDifference(
+        const std::vector<std::string>& baseList,
+        const std::vector<std::string>& subList
+    );
 
-    static std::vector<std::string> uniqueList(const std::vector<std::string>& list1,
-                                               const std::vector<std::string>& list2);
+    static std::vector<std::string> uniqueList(
+        const std::vector<std::string>& list1,
+        const std::vector<std::string>& list2
+    );
 
     template<typename T = std::string>
     static std::vector<T> listToVector(utils::List<T> list) {
@@ -55,8 +61,8 @@ public:
     static std::string generateDIORandomId();
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_UTILS_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_UTILS_HPP_

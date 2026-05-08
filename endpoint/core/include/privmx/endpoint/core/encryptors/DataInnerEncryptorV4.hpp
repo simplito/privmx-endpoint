@@ -33,16 +33,17 @@ public:
     core::Buffer decrypt(const core::Buffer& privateData, const std::string& encryptionKey);
     core::Buffer signAndPackDataWithSignature(const core::Buffer& data, const crypto::PrivateKey& authorPrivateKey);
     core::Buffer verifyAndExtractData(const core::Buffer& signedData, const crypto::PublicKey& authorPublicKey);
-    
+
     DataWithSignature extractDataWithSignature(const core::Buffer& signedData);
     bool verifySignature(const DataWithSignature& dataWithSignature, const crypto::PublicKey& authorPublicKey);
+
 private:
     DataWithSignature sign(const core::Buffer& data, const crypto::PrivateKey& authorPrivateKey);
     core::Buffer packDataWithSignature(const DataWithSignature& dataWithSignature);
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_DATAINNERENCRYPTORV4_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_DATAINNERENCRYPTORV4_HPP_

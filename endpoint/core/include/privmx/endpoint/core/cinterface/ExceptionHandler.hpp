@@ -12,22 +12,21 @@ limitations under the License.
 #ifndef _PRIVMXLIB_UTILS_EXCEPTIONHANDLER_HPP_
 #define _PRIVMXLIB_UTILS_EXCEPTIONHANDLER_HPP_
 
-#include <exception>
-#include <string>
 #include <Poco/Dynamic/Var.h>
 #include <Poco/Exception.h>
 #include <Poco/JSON/Object.h>
+#include <exception>
+#include <string>
 
-#include <privmx/utils/PrivmxException.hpp>
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/cinterface/InterfaceException.hpp"
+#include <privmx/utils/PrivmxException.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace cinterface {
 
-class ExceptionHandler
-{
+class ExceptionHandler {
 public:
     static Poco::Dynamic::Var make_error(const std::string& message = "Unknown");
     static Poco::Dynamic::Var make_error(const endpoint::core::Exception& e);
@@ -52,9 +51,12 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exc
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const utils::PrivmxException& e) {
-    std::string message = std::string("utils::PrivmxException: ") + e.what() +
-        ", type: " + std::to_string(e.getType()) +
-        ", code: " + std::to_string(e.getCode());
+    std::string message = std::string("utils::PrivmxException: ") +
+        e.what() +
+        ", type: " +
+        std::to_string(e.getType()) +
+        ", code: " +
+        std::to_string(e.getCode());
     return make_error(message);
 }
 
@@ -68,8 +70,8 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const std::exception& e) 
     return make_error(message);
 }
 
-} // cinterface
-} // endpoint
-} // privmx
+} // namespace cinterface
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_UTILS_EXCEPTIONHANDLER_HPP_

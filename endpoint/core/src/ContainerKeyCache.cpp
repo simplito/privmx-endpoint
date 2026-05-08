@@ -16,7 +16,7 @@ using namespace privmx::endpoint::core;
 ContainerKeyCache::ContainerKeyCache() : _storage(std::map<std::string, ContainerKeyCache::CachedModuleKeys>()) {}
 
 std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getKeys(
-    const std::string& moduleId, 
+    const std::string& moduleId,
     const std::optional<std::set<std::string>>& requiredKeyIds,
     const std::optional<int64_t> minimumRequiredModuleSchemaVersion
 ) {
@@ -25,43 +25,40 @@ std::optional<ContainerKeyCache::CachedModuleKeys> ContainerKeyCache::getKeys(
         std::shared_lock<std::shared_mutex> lock(_mutex);
         moduleKeys = getCachedModuleKeys(moduleId);
     }
-    if(!moduleKeys.has_value()) {
+    if (!moduleKeys.has_value()) {
         return std::nullopt;
     }
-    if(requiredKeyIds.has_value()) {
+    if (requiredKeyIds.has_value()) {
         std::set<std::string> keyIds = requiredKeyIds.value();
         std::vector<server::KeyEntry> keysToDecrypt;
         for (const auto& key : moduleKeys->keys) {
-            if(std::find(keyIds.begin(), keyIds.end(), key.keyId) != keyIds.end()) {
+            if (std::find(keyIds.begin(), keyIds.end(), key.keyId) != keyIds.end()) {
                 keyIds.erase(key.keyId);
             }
         }
-        if(keyIds.size() != 0) {
+        if (keyIds.size() != 0) {
             return std::nullopt;
         }
     }
-    if(requiredKeyIds.has_value() && moduleKeys->moduleSchemaVersion < minimumRequiredModuleSchemaVersion) {
+    if (requiredKeyIds.has_value() && moduleKeys->moduleSchemaVersion < minimumRequiredModuleSchemaVersion) {
         return std::nullopt;
-    }  
+    }
     return moduleKeys;
 }
 
 void ContainerKeyCache::set(const std::string& moduleId, const CachedModuleKeys& newKeys, bool force) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
     auto moduleKeys = getCachedModuleKeys(moduleId);
-    if(moduleKeys.has_value() && moduleKeys->moduleVersion > newKeys.moduleVersion && !force) {
+    if (moduleKeys.has_value() && moduleKeys->moduleVersion > newKeys.moduleVersion && !force) {
         // nothin to change version is older then version in cache
         return;
     }
-    _storage.insert_or_assign(
-        moduleId,
-        newKeys
-    );
+    _storage.insert_or_assign(moduleId, newKeys);
 }
 
 void ContainerKeyCache::clear(const std::optional<std::string>& moduleId) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
-    if(!moduleId.has_value()) {
+    if (!moduleId.has_value()) {
         _storage.clear();
         return;
     }
