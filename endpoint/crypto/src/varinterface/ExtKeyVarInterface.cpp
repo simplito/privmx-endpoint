@@ -19,22 +19,22 @@ using namespace privmx::endpoint::crypto;
 
 std::map<ExtKeyVarInterface::METHOD, Poco::Dynamic::Var (ExtKeyVarInterface::*)(const Poco::Dynamic::Var&)>
     ExtKeyVarInterface::methodMap = {
-                                        {FromSeed, &ExtKeyVarInterface::fromSeed},
-                                        {FromBase58, &ExtKeyVarInterface::fromBase58},
-                                        {GenerateRandom, &ExtKeyVarInterface::generateRandom},
+        {FromSeed, &ExtKeyVarInterface::fromSeed},
+        {FromBase58, &ExtKeyVarInterface::fromBase58},
+        {GenerateRandom, &ExtKeyVarInterface::generateRandom},
 
-                                        {Derive, &ExtKeyVarInterface::derive},
-                                        {DeriveHardened, &ExtKeyVarInterface::deriveHardened},
-                                        {GetPrivatePartAsBase58, &ExtKeyVarInterface::getPrivatePartAsBase58},
-                                        {GetPublicPartAsBase58, &ExtKeyVarInterface::getPublicPartAsBase58},
-                                        {GetPrivateKey, &ExtKeyVarInterface::getPrivateKey},
-                                        {GetPublicKey, &ExtKeyVarInterface::getPublicKey},
-                                        {GetPrivateEncKey, &ExtKeyVarInterface::getPrivateEncKey},
-                                        {GetPublicKeyAsBase58Address, &ExtKeyVarInterface::getPublicKeyAsBase58Address},
-                                        {GetChainCode, &ExtKeyVarInterface::getChainCode},
-                                        {VerifyCompactSignatureWithHash, &ExtKeyVarInterface::verifyCompactSignatureWithHash},
-                                        {IsPrivate, &ExtKeyVarInterface::isPrivate}};
-
+        {Derive, &ExtKeyVarInterface::derive},
+        {DeriveHardened, &ExtKeyVarInterface::deriveHardened},
+        {GetPrivatePartAsBase58, &ExtKeyVarInterface::getPrivatePartAsBase58},
+        {GetPublicPartAsBase58, &ExtKeyVarInterface::getPublicPartAsBase58},
+        {GetPrivateKey, &ExtKeyVarInterface::getPrivateKey},
+        {GetPublicKey, &ExtKeyVarInterface::getPublicKey},
+        {GetPrivateEncKey, &ExtKeyVarInterface::getPrivateEncKey},
+        {GetPublicKeyAsBase58Address, &ExtKeyVarInterface::getPublicKeyAsBase58Address},
+        {GetChainCode, &ExtKeyVarInterface::getChainCode},
+        {VerifyCompactSignatureWithHash, &ExtKeyVarInterface::verifyCompactSignatureWithHash},
+        {IsPrivate, &ExtKeyVarInterface::isPrivate}
+};
 
 Poco::Dynamic::Var ExtKeyVarInterface::fromSeed(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
