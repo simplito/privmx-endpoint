@@ -611,7 +611,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(const std::shared_ptr<Fi
                 .publicMeta = handle->getPublicMeta(),
                 .privateMeta = handle->getPrivateMeta(),
                 .fileSize = handle->getSize(),
-                .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.toJSON()))
+                .internalMeta = core::Buffer::from(internalFileMeta.serialize())
             };
             encryptedMetaVar = _fileMetaEncryptorV4.encrypt(fileMeta, _userPrivKey, key.key).toJSON();
             break;
@@ -626,7 +626,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(const std::shared_ptr<Fi
             store::FileMetaToEncryptV5 fileMeta {
                 .publicMeta = handle->getPublicMeta(),
                 .privateMeta = handle->getPrivateMeta(),
-                .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.toJSON())),
+                .internalMeta = core::Buffer::from(internalFileMeta.serialize()),
                 .dio = fileDIO
             };
             auto encryptedMeta = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key);
@@ -1136,7 +1136,7 @@ File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::comp
     return convertServerFileToLibFile(
         file,
         core::Buffer(),
-        core::Buffer::from(utils::Utils::stringifyVar(storeFileMeta.toJSON())),
+        core::Buffer::from(storeFileMeta.serialize()),
         storeFileMeta.size,
         storeFileMeta.author.pubKey,
         storeFileMeta.statusCode,
@@ -1437,7 +1437,7 @@ void StoreApiImpl::updateFileMeta(const std::string& fileId, const core::Buffer&
     }
     Poco::Dynamic::Var encryptedMetaVar;
     auto fileInternalMeta = validateDecryptFileInternalMeta(file, storeToModuleKeys(store));
-    auto internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileInternalMeta.toJSON()));
+    auto internalMeta = core::Buffer::from(fileInternalMeta.serialize());
     switch (getStoreEntryDataStructureVersion(store.data.back())) {
         case StoreDataSchema::Version::UNKNOWN:
             throw UnknowStoreFormatException();

@@ -77,7 +77,7 @@ std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>
             model.channels.push_back(subscriptionQueryString);
         }
     }
-    LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(model.toJSON()));
+    LOG_INFO("Subscriber:subscribeFor channels:" + model.serialize());
     auto requestResult = _gateway->request("subscribeToChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET});
     server::SubscribeToChannelsResult value = privmx::endpoint::core::server::SubscribeToChannelsResult::fromJSON(requestResult);
     LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")

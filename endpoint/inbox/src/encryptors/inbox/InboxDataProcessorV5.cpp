@@ -45,7 +45,7 @@ server::InboxData InboxDataProcessorV5::packForServer(const InboxDataProcessorMo
         .resourceId = plainData.privateData.internalMeta.resourceId,
         .randomId = plainData.privateData.internalMeta.randomId,
     };
-    serverPrivateData.internalMeta = _dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(utils::Utils::stringifyVar(internalMetaObj.toJSON())), authorPrivateKey, inboxKey);
+    serverPrivateData.internalMeta = _dataEncryptor.signAndEncryptAndEncode(core::Buffer::from(internalMetaObj.serialize()), authorPrivateKey, inboxKey);
     privateDataMapOfDataSha256.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta)));
     serverPrivateData.authorPubKey = authorPubKeyECC;
     core::ExpandedDataIntegrityObject privateDataExpandedDio = {plainData.privateData.dio, .structureVersion=InboxDataSchema::Version::VERSION_5, .fieldChecksums=privateDataMapOfDataSha256};

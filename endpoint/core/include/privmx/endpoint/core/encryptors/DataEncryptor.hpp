@@ -91,15 +91,14 @@ class DataEncryptor : public DataEncryptorBase<T>
 {
 public:
     std::string encrypt(const T& data, const std::string& key) {
-        auto buffer = utils::Utils::stringifyVar(data.toJSON());
-        return utils::Base64::from(privmx::crypto::CryptoPrivmx::privmxEncrypt(privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), buffer, key));
+        return utils::Base64::from(privmx::crypto::CryptoPrivmx::privmxEncrypt(privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), data.serialize(), key));
     }
     std::string encrypt(const T& data, const EncKey& encKey) {
         return encrypt(data, encKey.key);
     }
     
     Pson::BinaryString sign(const T& data, const privmx::crypto::PrivateKey& privKey) {
-        auto buffer = utils::Utils::stringifyVar(data.toJSON());
+        auto buffer = data.serialize();
         auto signature = privKey.signToCompactSignatureWithHash(buffer);
         Pson::BinaryString plain;
         plain.push_back(1);
@@ -109,15 +108,12 @@ public:
     }
 
     Pson::BinaryString getSign(const T& data, const privmx::crypto::PrivateKey& privKey) {
-        auto buffer = utils::Utils::stringifyVar(data.toJSON());
-        return Pson::BinaryString(privKey.signToCompactSignatureWithHash(buffer));
+        return Pson::BinaryString(privKey.signToCompactSignatureWithHash(data.serialize()));
     }
 
     T decrypt(const std::string& data, const std::string& key) {
         auto decrypted = privmx::crypto::CryptoPrivmx::privmxDecrypt(true, utils::Base64::toString(data), key);
-        Poco::JSON::Parser parser;
-        auto var = parser.parse(decrypted);
-        return T::fromJSON(var);
+        return T::deserialize(decrypted);
     }
     T decrypt(const std::string& data, const EncKey& encKey) {
         return decrypt(data, encKey.key);
@@ -127,7 +123,7 @@ public:
         Pson::BinaryString plain = privmx::crypto::CryptoPrivmx::privmxDecrypt(true, utils::Base64::toString(data), key);
         Pson::BinaryString signature, data_buf;
         std::tie(signature, data_buf) = this->extractSignAndDataBuff(plain);
-        return {signature, T::fromJSON(privmx::utils::Utils::parseJsonObject(data_buf)), data_buf};
+        return {signature, T::deserialize(data_buf), data_buf};
     }
     std::tuple<Pson::BinaryString, T, Pson::BinaryString> decryptAndGetSign(const std::string& data, const EncKey& encKey) {
         return decryptAndGetSign(data, encKey.key);
