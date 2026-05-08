@@ -14,7 +14,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-ContextProvider::ContextProvider(std::function<server::ContextInfo(std::string)> getContext) 
+ContextProvider::ContextProvider(std::function<server::ContextInfo(std::string)> getContext)
     : core::ContainerProvider<std::string, server::ContextInfo>(getContext, []([[maybe_unused]]server::ContextInfo c) {return 0;}) {}
 
 bool ContextProvider::isNewerOrSameAsInStorage([[maybe_unused]] const server::ContextInfo& container) {

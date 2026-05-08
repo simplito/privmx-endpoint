@@ -74,7 +74,7 @@ public:
 private:
     
 
-    virtual privmx::utils::List<std::string> transform(const std::vector<SubscriptionQueryObj>& subscriptionQueries) = 0;
+    virtual std::vector<std::string> transform(const std::vector<SubscriptionQueryObj>& subscriptionQueries) = 0;
     virtual void assertQuery(const std::vector<SubscriptionQueryObj>& subscriptionQueries) = 0;
     
     privmx::privfs::RpcGateway::Ptr _gateway;

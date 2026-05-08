@@ -3,6 +3,7 @@
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include "privmx/endpoint/stream/DataChannelImpl.hpp"
 #include <future>
+#include <privmx/utils/Utils.hpp>
 #include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::stream;

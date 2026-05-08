@@ -28,17 +28,15 @@ ChunkStreamer::ChunkStreamer(const std::shared_ptr<store::RequestApi>& requestAp
 void ChunkStreamer::createRequest(bool randomWriteSupport) {
     _key = privmx::crypto::Crypto::randomBytes(32);
     auto size = getFileSize();
-    auto createRequestModel = utils::TypedObjectFactory::createNewObject<server::CreateRequestModel>();
-    auto fileDefinitions = utils::TypedObjectFactory::createNewList<server::FileDefinition>();
-    auto fileDefinition = utils::TypedObjectFactory::createNewObject<server::FileDefinition>();
-    fileDefinition.size(size.size);
-    fileDefinition.checksumSize(size.checksumSize);
-    fileDefinition.randomWrite(randomWriteSupport);
-    fileDefinitions.add(fileDefinition);
-    createRequestModel.files(fileDefinitions);
+    server::FileDefinition fileDefinition {};
+    fileDefinition.size = size.size;
+    fileDefinition.checksumSize = size.checksumSize;
+    fileDefinition.randomWrite = randomWriteSupport;
+    server::CreateRequestModel createRequestModel {};
+    createRequestModel.files = {fileDefinition};
     _fileIndex = 0;
     auto createRequestResult = _requestApi->createRequest(createRequestModel);
-    _requestId = createRequestResult.id();
+    _requestId = createRequestResult.id;
 }
 
 void ChunkStreamer::setRequestData(const std::string& requestId, const std::string& key, const uint64_t& fileIndex) {
@@ -124,11 +122,11 @@ ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data
 void ChunkStreamer::commitFile() {
     sendFullChunksWhileCollected();
     sendLastChunkIfNonEmpty();
-    server::CommitFileModel commitFileModel = utils::TypedObjectFactory::createNewObject<server::CommitFileModel>();
-    commitFileModel.requestId(_requestId);
-    commitFileModel.fileIndex(_fileIndex);
-    commitFileModel.seq(_serverSeq);
-    commitFileModel.checksum(_checksums);
+    server::CommitFileModel commitFileModel {};
+    commitFileModel.requestId = _requestId;
+    commitFileModel.fileIndex = _fileIndex;
+    commitFileModel.seq = _serverSeq;
+    commitFileModel.checksum = _checksums;
     _requestApi->commitFile(commitFileModel);
 }
 
@@ -154,11 +152,11 @@ void ChunkStreamer::sendLastChunkIfNonEmpty() {
 }
 
 void ChunkStreamer::sendChunkToServer(std::string&& data) {
-    server::ChunkModel chunkModel = utils::TypedObjectFactory::createNewObject<server::ChunkModel>();
-    chunkModel.requestId(_requestId);
-    chunkModel.fileIndex(_fileIndex);
-    chunkModel.seq(_serverSeq);
-    chunkModel.data(Pson::BinaryString(std::move(data)));
+    server::ChunkModel chunkModel {};
+    chunkModel.requestId = _requestId;
+    chunkModel.fileIndex = _fileIndex;
+    chunkModel.seq = _serverSeq;
+    chunkModel.data = Pson::BinaryString(std::move(data));
     _requestApi->sendChunk(chunkModel);
     ++_serverSeq;
 }

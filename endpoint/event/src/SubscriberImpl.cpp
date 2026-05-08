@@ -44,13 +44,13 @@ std::string SubscriberImpl::buildQuery(const std::string& channelName, EventSele
     ); 
 }
 
-privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
-    auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+std::vector<std::string> SubscriberImpl::transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
+    std::vector<std::string> result;
     for(auto s: subscriptionQueries) {
         auto transformedChannelPath = s.channelPath();
         transformedChannelPath[MODULE_NAME_IN_QUERY_PATH] = "context";
         s.channelPath(transformedChannelPath);
-        result.add(s.toSubscriptionQueryString());
+        result.push_back(s.toSubscriptionQueryString());
     }
     return result;
 }

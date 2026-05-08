@@ -17,7 +17,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
-#include <privmx/endpoint/core/TypesMacros.hpp>
 #include "privmx/endpoint/inbox/InboxDataHelper.hpp"
 #include "privmx/endpoint/inbox/InboxTypes.hpp"
 #include <privmx/utils/Utils.hpp>

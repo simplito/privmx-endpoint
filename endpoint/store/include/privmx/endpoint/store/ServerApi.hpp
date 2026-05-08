@@ -23,9 +23,9 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class ServerApi 
+class ServerApi
 {
-public:    
+public:
     ServerApi(const privmx::privfs::RpcGateway::Ptr& gateway);
     server::StoreCreateResult storeCreate(const server::StoreCreateModel& model);
     void storeUpdate(const server::StoreUpdateModel& model);
@@ -42,9 +42,9 @@ public:
     void storeFileUpdate(const server::StoreFileUpdateModel& model);
     void storeFileDelete(const server::StoreFileDeleteModel& model);
 private:
-    template<typename T> 
-    T request(const std::string& method, const Poco::JSON::Object::Ptr& params); //only typed object
-    Poco::Dynamic::Var request(const std::string& method, const Poco::JSON::Object::Ptr& params); //Var
+    template<typename T>
+    T request(const std::string& method, Poco::JSON::Object::Ptr params);
+    void requestVoid(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
 };

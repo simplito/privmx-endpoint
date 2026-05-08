@@ -27,10 +27,10 @@ namespace store {
 class FileMetaEncryptorV5 {
 public:
     store::server::EncryptedFileMetaV5 encrypt(const store::FileMetaToEncryptV5& fileMeta,
-                                              const crypto::PrivateKey& authorPrivateKey,
-                                              const std::string& encryptionKey);
+                                                        const crypto::PrivateKey& authorPrivateKey,
+                                                        const std::string& encryptionKey);
     store::DecryptedFileMetaV5 decrypt(const store::server::EncryptedFileMetaV5& encryptedFileMeta,
-                                    const std::string& encryptionKey);
+                                       const std::string& encryptionKey);
     store::DecryptedFileMetaV5 extractPublic(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta);
 private:
@@ -40,10 +40,9 @@ private:
 
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
-
 };
 
-}  // namespace core
+}  // namespace store
 }  // namespace endpoint
 }  // namespace privmx
 

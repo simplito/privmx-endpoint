@@ -32,7 +32,7 @@ public:
     EventKeyProvider(const privmx::crypto::PrivateKey& key);
     std::string generateKey();
     DecryptedEventEncKeyV1 decryptKey(const std::string& encryptedKey, const privmx::crypto::PublicKey& authorPubKey);
-    utils::List<server::UserKey> prepareKeysList(
+    std::vector<server::UserKey> prepareKeysList(
         const std::vector<core::UserWithPubKey>& users, 
         const std::string& key
     );

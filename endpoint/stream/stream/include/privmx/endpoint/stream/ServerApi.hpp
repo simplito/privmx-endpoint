@@ -33,7 +33,7 @@ public:
     server::StreamRoomListResult streamRoomList(server::StreamRoomListModel model);
     server::StreamRoomGetResult streamRoomGet(server::StreamRoomGetModel model);
     void streamRoomDelete(server::StreamRoomDeleteModel model);
-    server::StreamGetTurnCredentialsResult streamGetTurnCredentials(server::StreamGetTurnCredentialsModel model);
+    server::StreamGetTurnCredentialsResult streamGetTurnCredentials();
     server::StreamListResult streamList(server::StreamListModel model);
     server::StreamPublishResult streamPublish(server::StreamPublishModel model);
     server::StreamPublishResult streamUpdate(server::StreamUpdateModel model);
@@ -55,11 +55,11 @@ public:
     bool isConnected() {return _gateway ? _gateway->isConnected() : false;}
 private:
     template<typename T>
-    T request(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object
-    Poco::Dynamic::Var request(const std::string& method, Poco::JSON::Object::Ptr params); //Var
+    T request(const std::string& method, Poco::JSON::Object::Ptr params);
+    Poco::Dynamic::Var request(const std::string& method, Poco::JSON::Object::Ptr params);
     template<typename T>
-    T requestWS(const std::string& method, Poco::JSON::Object::Ptr params); //only typed object using websocket
-    Poco::Dynamic::Var requestWS(const std::string& method, Poco::JSON::Object::Ptr params); //Var using websocket
+    T requestWS(const std::string& method, Poco::JSON::Object::Ptr params);
+    Poco::Dynamic::Var requestWS(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
 };

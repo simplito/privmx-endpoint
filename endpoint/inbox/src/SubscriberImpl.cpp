@@ -1,6 +1,5 @@
 #include "privmx/endpoint/inbox/SubscriberImpl.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
-#include "privmx/endpoint/inbox/Factory.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
@@ -79,9 +78,9 @@ std::string SubscriberImpl::buildQuery(EventType eventType, EventSelectorType se
     ); 
 }
 
-privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
+std::vector<std::string> SubscriberImpl::transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     std::map<std::string, std::string> inboxIdToThreadId;
-    auto result = privmx::utils::TypedObjectFactory::createNewList<std::string>();
+    std::vector<std::string> result;
     for(auto subscriptionQuery: subscriptionQueries) {
         if(
             subscriptionQuery.channelPath().size() == 3 && 
@@ -103,7 +102,7 @@ privmx::utils::List<std::string> SubscriberImpl::transform(const std::vector<cor
             updateSubscriptionQuerySelectors(subscriptionQuery);
             subscriptionQuery.selectorsPushBack(core::SubscriptionQueryObj::QuerySelector{.selectorKey="containerType", .selectorValue=_typeFilterFlag});
         }
-        result.add(subscriptionQuery.toSubscriptionQueryString());
+        result.push_back(subscriptionQuery.toSubscriptionQueryString());
     }
     return result;        
 }
@@ -144,10 +143,10 @@ void SubscriberImpl::updateSubscriptionQuerySelectors(core::SubscriptionQueryObj
         //getInbox to get threadId
         auto inboxId = selectors[inboxSelectorPos].selectorValue;
         if(inboxIdToThreadId[inboxId] == "") {
-            auto model = Factory::createObject<server::InboxGetModel>();
-            model.id(inboxId);
-            auto inboxRaw = _serverApi.inboxGet(model).inbox();
-            auto threadId = inboxRaw.data().get(inboxRaw.data().size()-1).data().threadId();
+            server::InboxGetModel model;
+            model.id = inboxId;
+            auto inboxRaw = _serverApi.inboxGet(model).inbox;
+            auto threadId = inboxRaw.data.back().data.threadId;
             inboxIdToThreadId[inboxId] = threadId;
             _threadIdToInboxId[threadId] = inboxId;
         }

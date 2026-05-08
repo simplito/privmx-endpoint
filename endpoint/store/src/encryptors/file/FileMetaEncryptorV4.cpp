@@ -15,53 +15,51 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
+#include <privmx/utils/Utils.hpp>
+
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
 store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(const store::FileMetaToEncryptV4& fileMeta,
-                                                                const crypto::PrivateKey& authorPrivateKey,
-                                                                const std::string& encryptionKey) {
-    auto result = utils::TypedObjectFactory::createNewObject<store::server::EncryptedFileMetaV4>();
-    {
-    result.version(FileDataSchema::Version::VERSION_4);
-    result.publicMeta(_dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey));
+                                                                          const crypto::PrivateKey& authorPrivateKey,
+                                                                          const std::string& encryptionKey) {
+    server::EncryptedFileMetaV4 result;
+    result.version = FileDataSchema::Version::VERSION_4;
+    result.publicMeta = _dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey);
     try {
-        result.publicMetaObject(utils::Utils::parseJsonObject(fileMeta.publicMeta.stdString()));
+        result.publicMetaObject = utils::Utils::parseJsonObject(fileMeta.publicMeta.stdString());
     } catch (...) {
-        result.publicMetaObjectClear();
+        result.publicMetaObject = Poco::Dynamic::Var();
     }
-    result.privateMeta(_dataEncryptor.signAndEncryptAndEncode(fileMeta.privateMeta, authorPrivateKey, encryptionKey));
-    result.fileSize(
-        _dataEncryptor.signAndEncryptAndEncode(serializeNumber(fileMeta.fileSize), authorPrivateKey, encryptionKey));
-    result.internalMeta(_dataEncryptor.signAndEncryptAndEncode(fileMeta.internalMeta, authorPrivateKey, encryptionKey));
-    result.authorPubKey(authorPrivateKey.getPublicKey().toBase58DER());
-    }
-    
+    result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(fileMeta.privateMeta, authorPrivateKey, encryptionKey);
+    result.fileSize = _dataEncryptor.signAndEncryptAndEncode(serializeNumber(fileMeta.fileSize), authorPrivateKey, encryptionKey);
+    result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(fileMeta.internalMeta, authorPrivateKey, encryptionKey);
+    result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     return result;
 }
 
 store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
-                                                      const std::string& encryptionKey) {
+                                                        const std::string& encryptionKey) {
     DecryptedFileMetaV4 result;
     result.statusCode = 0;
     result.dataStructureVersion = FileDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedFileMeta);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedFileMeta.authorPubKey());
-        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta(), authorPublicKey);
-        if(!encryptedFileMeta.publicMetaObjectEmpty()) {
-            auto tmp_1 = utils::Utils::stringify(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
-            auto tmp_2 = utils::Utils::stringify(encryptedFileMeta.publicMetaObject());
-            if(tmp_1 != tmp_2) {
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedFileMeta.authorPubKey);
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta, authorPublicKey);
+        if (!encryptedFileMeta.publicMetaObject.isEmpty()) {
+            auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
+            auto tmp_2 = utils::Utils::stringifyVar(encryptedFileMeta.publicMetaObject);
+            if (tmp_1 != tmp_2) {
                 auto e = FilePublicDataMismatchException();
                 result.statusCode = e.getCode();
             }
         }
-        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.privateMeta(), authorPublicKey, encryptionKey);
-        result.fileSize = deserializeNumber(_dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.fileSize(), authorPublicKey, encryptionKey));
-        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.internalMeta(), authorPublicKey, encryptionKey);
-        result.authorPubKey = encryptedFileMeta.authorPubKey();   
-    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.privateMeta, authorPublicKey, encryptionKey);
+        result.fileSize = deserializeNumber(_dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.fileSize, authorPublicKey, encryptionKey));
+        result.internalMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedFileMeta.internalMeta.value(), authorPublicKey, encryptionKey);
+        result.authorPubKey = encryptedFileMeta.authorPubKey;
+    } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
@@ -72,7 +70,7 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(const store::server::Enc
 }
 
 void FileMetaEncryptorV4::validateVersion(const store::server::EncryptedFileMetaV4& encryptedFileMeta) {
-    if (encryptedFileMeta.version() != FileDataSchema::Version::VERSION_4) {
+    if (encryptedFileMeta.version != FileDataSchema::Version::VERSION_4) {
         throw InvalidEncryptedStoreFileMetaVersionException();
     }
 }

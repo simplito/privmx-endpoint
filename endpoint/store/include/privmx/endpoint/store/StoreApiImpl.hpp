@@ -135,18 +135,18 @@ private:
     Store convertDecryptedStoreDataV5ToStore(server::Store store, const core::DecryptedModuleDataV5& storeData);
     StoreDataSchema::Version getStoreEntryDataStructureVersion(server::StoreDataEntry storeEntry);
     std::tuple<Store, core::DataIntegrityObject> decryptAndConvertStoreDataToStore(server::Store store, server::StoreDataEntry storeEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Store> validateDecryptAndConvertStoresDataToStores(utils::List<server::Store> stores);
+    std::vector<Store> validateDecryptAndConvertStoresDataToStores(std::vector<server::Store> stores);
     Store validateDecryptAndConvertStoreDataToStore(server::Store store);
     void assertStoreDataIntegrity(server::Store store);
     uint32_t validateStoreDataIntegrity(server::Store store);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys storeToModuleKeys(server::Store store);
 
-    // OLD CODE    
+    // OLD CODE
     StoreFile decryptStoreFileV1(server::File file, const core::DecryptedEncKey& encKey);
-    // OLD CODE   
+    // OLD CODE
     std::string verifyFileV1Signature(FileMetaSigned meta, server::File raw, std::string& serverId);
-    // OLD CODE   
+    // OLD CODE
     StoreFile decryptAndVerifyFileV1(const std::string &filesKey, server::File x);
     DecryptedFileMetaV4 decryptFileMetaV4(server::File file, const core::DecryptedEncKey& encKey);
     DecryptedFileMetaV5 decryptFileMetaV5(server::File file, const core::DecryptedEncKey& encKey);
@@ -164,7 +164,7 @@ private:
     File convertDecryptedFileMetaV4ToFile(server::File file, const DecryptedFileMetaV4& fileData);
     File convertDecryptedFileMetaV5ToFile(server::File file, const DecryptedFileMetaV5& fileData);
     FileDataSchema::Version getFileDataStructureVersion(server::File file);
-    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(utils::List<server::File> files, const core::ModuleKeys& storeKeys);
+    std::vector<File> validateDecryptAndConvertFilesDataToFilesInfo(std::vector<server::File> files, const core::ModuleKeys& storeKeys);
     File validateDecryptAndConvertFileDataToFileInfo(server::File file, const core::ModuleKeys& storeKeys);
     dynamic::InternalStoreFileMeta decryptFileInternalMeta(server::File file, const core::DecryptedEncKey& encKey);
     dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(server::File file, const core::ModuleKeys& storeKeys);

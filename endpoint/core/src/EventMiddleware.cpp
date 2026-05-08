@@ -12,6 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/core/EventMiddleware.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
 #include <privmx/utils/Logger.hpp>
+#include <privmx/utils/Utils.hpp>
 #include <algorithm>
 
 using namespace privmx::endpoint::core;

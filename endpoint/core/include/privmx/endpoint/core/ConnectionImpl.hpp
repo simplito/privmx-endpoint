@@ -35,6 +35,7 @@ limitations under the License.
 #include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
 #include "privmx/endpoint/core/ContextProvider.hpp"
 #include "privmx/endpoint/core/SubscriberImpl.hpp"
+#include "privmx/endpoint/core/ServerApi.hpp"
 #include <privmx/utils/GuardedExecutor.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
@@ -124,6 +125,7 @@ private:
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;
+    std::optional<ServerApi> _serverApi;
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
     int _gatewayNotificationEventListener, _gatewayConnectedEventListener, _gatewayDisconnectedEventListener, _gatewaySessionLostEventListener;
     int _notificationListenerId;

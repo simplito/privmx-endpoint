@@ -75,12 +75,11 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
 }
 
 std::string ChunkDataProvider::getCurrentChecksumsFromBridge() {
-    auto range = utils::TypedObjectFactory::createNewObject<server::BufferReadRangeChecksum>();
-    auto fileDataModel = utils::TypedObjectFactory::createNewObject<server::StoreFileReadModel>();
-    fileDataModel.fileId(_fileId);
-    fileDataModel.range(range);
-    fileDataModel.thumb(false);
-    return _server->storeFileRead(fileDataModel).data();
+    server::StoreFileReadModel fileDataModel {};
+    fileDataModel.fileId = _fileId;
+    fileDataModel.range = server::BufferReadRange{.type="checksum"}.toJSON();
+    fileDataModel.thumb = false;
+    return _server->storeFileRead(fileDataModel).data;
 }
 
 void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) {
@@ -100,18 +99,17 @@ void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, con
 }
 
 std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
-    auto range = utils::TypedObjectFactory::createNewObject<server::BufferReadRangeSlice>();
-    auto from = _serverChunkSize * serverChunkNumber;
-    range.from(from);
-    auto to = _serverChunkSize * (serverChunkNumber + 1);
-    range.to(to);
-
-    auto fileDataModel = utils::TypedObjectFactory::createNewObject<server::StoreFileReadModel>();
-    fileDataModel.fileId(_fileId);
-    fileDataModel.version(_fileVersion);
-    fileDataModel.range(range);
-    fileDataModel.thumb(false);
-    auto fileData = utils::TypedObjectFactory::createNewObject<server::StoreFileReadResult>();
+    server::BufferReadRangeSlice range {
+        server::BufferReadRange{.type="slice"}, 
+        .from=_serverChunkSize * serverChunkNumber, 
+        .to=_serverChunkSize * (serverChunkNumber + 1)
+    };
+    server::StoreFileReadModel fileDataModel {};
+    fileDataModel.fileId = _fileId;
+    fileDataModel.range = range.toJSON();
+    fileDataModel.version = _fileVersion;
+    fileDataModel.thumb = false;
+    server::StoreFileReadResult fileData;
     try {
         fileData = _server->storeFileRead(fileDataModel);
     } catch(const utils::PrivmxException& e) {
@@ -122,7 +120,7 @@ std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
             e.rethrow();
         }
     }
-    return fileData.data();
+    return fileData.data;
 }
 
 int64_t ChunkDataProvider::getServerReadDataSize(int64_t encryptedChunkSize, int64_t severChunkSize) {

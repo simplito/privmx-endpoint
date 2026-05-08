@@ -14,18 +14,18 @@ limitations under the License.
 
 #include <string>
 
-#include <privmx/endpoint/core/TypesMacros.hpp>
+#include <privmx/utils/JsonHelper.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
 namespace dynamic {
 
-ENDPOINT_CLIENT_TYPE(InboxInternalMetaV5)
-    STRING_FIELD(secret)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(randomId)
-TYPE_END
+#define INBOX_INTERNAL_META_V5_FIELDS(F)\
+    F(secret, std::string)\
+    F(resourceId, std::string)\
+    F(randomId, std::string)
+JSON_STRUCT(InboxInternalMetaV5, INBOX_INTERNAL_META_V5_FIELDS);
 
 } // dynamic
 } // inbox

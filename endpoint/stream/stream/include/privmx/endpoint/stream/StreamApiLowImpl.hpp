@@ -127,7 +127,7 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     StreamRoom convertServerStreamRoomToLibStreamRoom(
         server::StreamRoomInfo streamRoomInfo,
         const core::Buffer& publicMeta = core::Buffer(),
@@ -139,7 +139,7 @@ private:
     StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(server::StreamRoomInfo streamRoomInfo, const core::DecryptedModuleDataV5& streamRoomData);
     StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
     std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom, server::StreamRoomDataEntry streamRoomEntry, const core::DecryptedEncKey& encKey);
-    std::vector<StreamRoom> decryptAndConvertStreamRoomsDataToStreamRooms(utils::List<server::StreamRoomInfo> streamRooms);
+    std::vector<StreamRoom> decryptAndConvertStreamRoomsDataToStreamRooms(std::vector<server::StreamRoomInfo> streamRooms);
     StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom);
     void assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
