@@ -4,9 +4,9 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/Types.hpp"
-#include "privmx/endpoint/thread/Types.hpp"
-#include "privmx/endpoint/store/Types.hpp"
 #include "privmx/endpoint/inbox/Types.hpp"
+#include "privmx/endpoint/store/Types.hpp"
+#include "privmx/endpoint/thread/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -127,12 +127,12 @@ struct InboxEntryCreatedEvent : public core::Event {
  * Holds information of `InboxEntryDeleted` event data.
  */
 struct InboxEntryDeletedEventData {
-    
+
     /**
      * Inbox ID
      */
     std::string inboxId;
-    
+
     /**
      * Inbox Entry ID
      */
@@ -160,7 +160,7 @@ struct InboxEntryDeletedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -172,7 +172,6 @@ struct InboxEntryDeletedEvent : public core::Event {
  */
 class Events {
 public:
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'InboxCreatedEvent' 
      * 
@@ -254,9 +253,8 @@ public:
     static InboxEntryDeletedEvent extractInboxEntryDeletedEvent(const core::EventHolder& eventHolder);
 };
 
-
-}
-}
-}
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif

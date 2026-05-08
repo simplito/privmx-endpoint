@@ -14,7 +14,8 @@ limitations under the License.
 
 using namespace privmx::endpoint::inbox;
 
-ServerApi::ServerApi(const privfs::RpcGateway::Ptr gateway) : thread::ServerApi(gateway), store::ServerApi(gateway), _gateway(gateway) {}
+ServerApi::ServerApi(const privfs::RpcGateway::Ptr gateway)
+    : thread::ServerApi(gateway), store::ServerApi(gateway), _gateway(gateway) {}
 
 server::InboxCreateResult ServerApi::inboxCreate(server::InboxCreateModel model) {
     return request<server::InboxCreateResult>("inboxCreate", model.toJSON());
@@ -44,7 +45,8 @@ void ServerApi::inboxDelete(server::InboxDeleteModel model) {
     request("inboxDelete", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("inbox." + method, params));
 }
 

@@ -16,8 +16,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
-InboxHandleManager::InboxHandleManager(std::shared_ptr<core::HandleManager> handleManager) :
-   _handleManager(handleManager), _fileHandleManager(store::FileHandleManager(handleManager, "Inbox")) {}
+InboxHandleManager::InboxHandleManager(std::shared_ptr<core::HandleManager> handleManager)
+    : _handleManager(handleManager), _fileHandleManager(store::FileHandleManager(handleManager, "Inbox")) {}
 
 std::shared_ptr<InboxHandle> InboxHandleManager::createInboxHandle(
     const std::string& inboxId,
@@ -27,19 +27,19 @@ std::shared_ptr<InboxHandle> InboxHandleManager::createInboxHandle(
     std::optional<std::string> userPrivKey
 ) {
     std::vector<std::shared_ptr<store::FileWriteHandle>> fileHandles;
-    for(auto inboxFileHandle: inboxFileHandles) {
+    for (auto inboxFileHandle : inboxFileHandles) {
         std::shared_ptr<store::FileWriteHandle> handle = _fileHandleManager.getFileWriteHandle(inboxFileHandle);
         fileHandles.push_back(handle);
         _fileHandlesUsedByInboxHandles.push_back(inboxFileHandle);
     }
     int64_t id = _handleManager->createHandle("Inbox:FilesWrite");
     std::shared_ptr<InboxHandle> result = std::make_shared<InboxHandle>(InboxHandle{
-        .id=id, 
-        .inboxId=inboxId, 
-        .inboxResourceId=inboxResourceId, 
-        .data=data, 
-        .inboxFileHandles=fileHandles, 
-        .userPrivKey=userPrivKey
+        .id = id,
+        .inboxId = inboxId,
+        .inboxResourceId = inboxResourceId,
+        .data = data,
+        .inboxFileHandles = fileHandles,
+        .userPrivKey = userPrivKey
     });
     _map.set(id, result);
     return result;
@@ -47,7 +47,7 @@ std::shared_ptr<InboxHandle> InboxHandleManager::createInboxHandle(
 
 std::shared_ptr<InboxHandle> InboxHandleManager::getInboxHandle(const int64_t& id) {
     auto inboxHandle = _map.get(id);
-    if(!inboxHandle.has_value()) {
+    if (!inboxHandle.has_value()) {
         throw UnknownInboxHandleException();
     }
     return inboxHandle.value();
@@ -59,16 +59,17 @@ bool InboxHandleManager::hasInboxHandle(const int64_t& id) {
 
 CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
     auto inboxHandle = _map.get(id);
-    if(!inboxHandle.has_value()) throw UnknownInboxHandleException();
-    CommitSendInfo result; 
-    if(!inboxHandle.value()->inboxFileHandles.empty()) {
-        for(auto file_handle : inboxHandle.value()->inboxFileHandles) {
-            if(!file_handle->isReadyToFinalize()) {
+    if (!inboxHandle.has_value())
+        throw UnknownInboxHandleException();
+    CommitSendInfo result;
+    if (!inboxHandle.value()->inboxFileHandles.empty()) {
+        for (auto file_handle : inboxHandle.value()->inboxFileHandles) {
+            if (!file_handle->isReadyToFinalize()) {
                 throw core::DataDifferentThanDeclaredException();
             }
         }
 
-        for(auto file_handle : inboxHandle.value()->inboxFileHandles) {
+        for (auto file_handle : inboxHandle.value()->inboxFileHandles) {
             CommitFileInfo file_info;
             file_info.fileSendResult = file_handle->finalize();
             file_info.fileSize = file_handle->getEncryptedFileSize();
@@ -80,8 +81,9 @@ CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
     }
     _map.erase(id);
     _handleManager->removeHandle(id);
-    if(!inboxHandle.value()->inboxFileHandles.empty()) {
-        for(auto file_handle : inboxHandle.value()->inboxFileHandles) {;
+    if (!inboxHandle.value()->inboxFileHandles.empty()) {
+        for (auto file_handle : inboxHandle.value()->inboxFileHandles) {
+            ;
             removeFileHandle(file_handle->getId(), true);
         }
     }
@@ -90,31 +92,36 @@ CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
 
 void InboxHandleManager::abortInboxHandle(const int64_t& id) {
     auto inboxHandle = _map.get(id);
-    if(!inboxHandle.has_value()) throw UnknownInboxHandleException();
+    if (!inboxHandle.has_value())
+        throw UnknownInboxHandleException();
     _map.erase(id);
     _handleManager->removeHandle(id);
-    if(!inboxHandle.value()->inboxFileHandles.empty()) {
-        for(auto file_handle : inboxHandle.value()->inboxFileHandles) {;
-           removeFileHandle(file_handle->getId(), true);
+    if (!inboxHandle.value()->inboxFileHandles.empty()) {
+        for (auto file_handle : inboxHandle.value()->inboxFileHandles) {
+            ;
+            removeFileHandle(file_handle->getId(), true);
         }
     }
 }
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandle(
-        const std::string& storeId,
-        const std::string& fileId,
-        uint64_t size,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        uint64_t chunkSize,
-        uint64_t serverRequestChunkSize,
-        std::shared_ptr<store::RequestApi> requestApi
+    const std::string& storeId,
+    const std::string& fileId,
+    uint64_t size,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    uint64_t chunkSize,
+    uint64_t serverRequestChunkSize,
+    std::shared_ptr<store::RequestApi> requestApi
 ) {
-    return _fileHandleManager.createFileWriteHandle(storeId, fileId, std::string(), size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi, false);
+    return _fileHandleManager.createFileWriteHandle(
+        storeId, fileId, std::string(), size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi,
+        false
+    );
 }
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {
-    if(!isFileWriteHandle(fileHandleId)) {
+    if (!isFileWriteHandle(fileHandleId)) {
         throw InvalidFileWriteHandleException();
     }
     return _fileHandleManager.getFileWriteHandle(fileHandleId);
@@ -137,15 +144,18 @@ bool InboxHandleManager::isFileWriteHandle(int64_t fileHandleId) {
 }
 
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::getFileReadHandle(int64_t fileHandleId) {
-    if(!isFileReadHandle(fileHandleId)) {
+    if (!isFileReadHandle(fileHandleId)) {
         throw InvalidFileReadHandleException();
     }
     return _fileHandleManager.getFileReadHandle(fileHandleId);
 }
 void InboxHandleManager::removeFileHandle(int64_t fileHandleId, bool force) {
-    if(force) {
-        _fileHandlesUsedByInboxHandles.erase(std::find(_fileHandlesUsedByInboxHandles.begin(),_fileHandlesUsedByInboxHandles.end(),fileHandleId));
-    } else if ( std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) != _fileHandlesUsedByInboxHandles.end() ) {
+    if (force) {
+        _fileHandlesUsedByInboxHandles.erase(
+            std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId)
+        );
+    } else if (std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) !=
+               _fileHandlesUsedByInboxHandles.end()) {
         throw HandleIsUsedInInboxHandleException();
     }
     return _fileHandleManager.removeHandle(fileHandleId);
