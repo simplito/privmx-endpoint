@@ -1,9 +1,9 @@
 #ifndef _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_HPP_
 
+#include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/event/Types.hpp"
-#include "privmx/endpoint/core/Buffer.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 namespace privmx {
@@ -17,7 +17,6 @@ class EventApiImpl;
  */
 class EventApi : public privmx::endpoint::core::ExtendedPointer<EventApiImpl> {
 public:
-
     /**
      * Creates an instance of 'EventApi'.
      * 
@@ -44,7 +43,12 @@ public:
      * @param channelName name of the Channel
      * @param eventData event's data
      */
-    void emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData);
+    void emitEvent(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::string& channelName,
+        const core::Buffer& eventData
+    );
 
     /**
      * Subscribe for the custom events on the given subscription query.
@@ -66,14 +70,18 @@ public:
      * @param selectorType selector of scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        const std::string& channelName,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
 private:
     EventApi(const std::shared_ptr<EventApiImpl>& impl);
 };
 
-}  // namespace event
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_HPP_

@@ -20,10 +20,11 @@ void ServerApi::contextSendCustomEvent(server::ContextEmitCustomEventModel model
     request("contextSendCustomEvent", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("context." + method, params));
 }
 
-Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) { //var
     return _gateway->request("context." + method, params);
 }
