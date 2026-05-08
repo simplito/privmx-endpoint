@@ -4,38 +4,56 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-ProxyWebRTC::ProxyWebRTC(
-    privmx_endpoint_stream_WebRTCInterface webRTCInterface
-) : _webRTCInterface(webRTCInterface) {}
+ProxyWebRTC::ProxyWebRTC(privmx_endpoint_stream_WebRTCInterface webRTCInterface) : _webRTCInterface(webRTCInterface) {}
 
 std::string ProxyWebRTC::createOfferAndSetLocalDescription(const std::string& streamRoomId) {
     if (_webRTCInterface.createOfferAndSetLocalDescriptionCallback == nullptr) {
         throw NullCallbackException("CreateOfferAndSetLocalDescriptionCallback");
     }
-    const char* result = _webRTCInterface.createOfferAndSetLocalDescriptionCallback(_webRTCInterface.ctx, streamRoomId.c_str());
+    const char* result = _webRTCInterface.createOfferAndSetLocalDescriptionCallback(
+        _webRTCInterface.ctx, streamRoomId.c_str()
+    );
     return std::string(result);
 }
 
-std::string ProxyWebRTC::createAnswerAndSetDescriptions(const std::string& streamRoomId, const std::string& sdp, const std::string& type) {
+std::string ProxyWebRTC::createAnswerAndSetDescriptions(
+    const std::string& streamRoomId,
+    const std::string& sdp,
+    const std::string& type
+) {
     if (_webRTCInterface.createAnswerAndSetDescriptionsCallback == nullptr) {
         throw NullCallbackException("CreateAnswerAndSetDescriptionsCallback");
     }
-    const char* result = _webRTCInterface.createAnswerAndSetDescriptionsCallback(_webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str());
+    const char* result = _webRTCInterface.createAnswerAndSetDescriptionsCallback(
+        _webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str()
+    );
     return std::string(result);
 }
 
-void ProxyWebRTC::setAnswerAndSetRemoteDescription(const std::string& streamRoomId, const std::string& sdp, const std::string& type) {
+void ProxyWebRTC::setAnswerAndSetRemoteDescription(
+    const std::string& streamRoomId,
+    const std::string& sdp,
+    const std::string& type
+) {
     if (_webRTCInterface.setAnswerAndSetRemoteDescriptionCallback == nullptr) {
         throw NullCallbackException("SetAnswerAndSetRemoteDescriptionCallback");
     }
-    _webRTCInterface.setAnswerAndSetRemoteDescriptionCallback(_webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str());
+    _webRTCInterface.setAnswerAndSetRemoteDescriptionCallback(
+        _webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str()
+    );
 }
 
-void ProxyWebRTC::updateSessionId(const std::string& streamRoomId, const int64_t sessionId, const std::string& connectionType) {
+void ProxyWebRTC::updateSessionId(
+    const std::string& streamRoomId,
+    const int64_t sessionId,
+    const std::string& connectionType
+) {
     if (_webRTCInterface.updateSessionIdCallback == nullptr) {
         throw NullCallbackException("UpdateSessionIdCallback");
     }
-    _webRTCInterface.updateSessionIdCallback(_webRTCInterface.ctx, streamRoomId.c_str(), sessionId, connectionType.c_str());
+    _webRTCInterface.updateSessionIdCallback(
+        _webRTCInterface.ctx, streamRoomId.c_str(), sessionId, connectionType.c_str()
+    );
 }
 
 void ProxyWebRTC::close(const std::string& streamRoomId) {
@@ -54,7 +72,9 @@ void ProxyWebRTC::updateKeys(const std::string& streamRoomId, const std::vector<
 }
 
 std::shared_ptr<privmx_endpoint_stream_Key> ProxyWebRTC::mapKeys(const std::vector<Key>& keys) {
-    std::shared_ptr<privmx_endpoint_stream_Key> keys_c(new privmx_endpoint_stream_Key[keys.size()], [](privmx_endpoint_stream_Key* p){ delete[] p; });
+    std::shared_ptr<privmx_endpoint_stream_Key> keys_c(
+        new privmx_endpoint_stream_Key[keys.size()], [](privmx_endpoint_stream_Key* p) { delete[] p; }
+    );
     for (size_t i = 0; i < keys.size(); ++i) {
         auto& key = keys[i];
         auto& key_c = keys_c.get()[i];
@@ -68,10 +88,10 @@ std::shared_ptr<privmx_endpoint_stream_Key> ProxyWebRTC::mapKeys(const std::vect
 
 privmx_endpoint_stream_KeyType ProxyWebRTC::mapKeyType(KeyType type) {
     switch (type) {
-        case LOCAL:
-            return privmx_endpoint_stream_KeyType_LOCAL;
-        case REMOTE:
-            return privmx_endpoint_stream_KeyType_REMOTE;
+    case LOCAL:
+        return privmx_endpoint_stream_KeyType_LOCAL;
+    case REMOTE:
+        return privmx_endpoint_stream_KeyType_REMOTE;
     }
     throw UnknownTypeException(std::to_string(type));
 }

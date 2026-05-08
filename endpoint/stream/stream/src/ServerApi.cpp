@@ -8,9 +8,9 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include "privmx/utils/Logger.hpp"
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include "privmx/utils/Logger.hpp"
 
 using namespace privmx::endpoint::stream;
 using namespace privmx::endpoint;
@@ -38,7 +38,9 @@ void ServerApi::streamRoomDelete(server::StreamRoomDeleteModel model) {
 }
 
 server::StreamGetTurnCredentialsResult ServerApi::streamGetTurnCredentials() {
-    return requestWS<server::StreamGetTurnCredentialsResult>("streamGetTurnCredentials", Poco::JSON::Object::Ptr(new Poco::JSON::Object()));
+    return requestWS<server::StreamGetTurnCredentialsResult>(
+        "streamGetTurnCredentials", Poco::JSON::Object::Ptr(new Poco::JSON::Object())
+    );
 }
 
 server::StreamListResult ServerApi::streamList(server::StreamListModel model) {
@@ -69,7 +71,9 @@ server::StreamsSubscribeResult ServerApi::streamsSubscribeToRemote(server::Strea
     return requestWS<server::StreamsSubscribeResult>("streamsSubscribeToRemote", model.toJSON());
 }
 
-server::StreamsSubscribeResult ServerApi::streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model) {
+server::StreamsSubscribeResult ServerApi::streamsModifyRemoteSubscriptions(
+    server::StreamsModifySubscriptionsModel model
+) {
     return requestWS<server::StreamsSubscribeResult>("streamsModifyRemoteSubscriptions", model.toJSON());
 }
 
@@ -93,7 +97,8 @@ void ServerApi::trickle(server::StreamTrickleModel model) {
     requestWS("streamTrickle", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("stream." + method, params));
 }
 
@@ -101,10 +106,13 @@ Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Obj
     return _gateway->request("stream." + method, params);
 }
 
-template<class T> T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {
-    return T::fromJSON(_gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET}));
+template<class T>
+T ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {
+    return T::fromJSON(
+        _gateway->request("stream." + method, params, {.channel_type = privmx::rpc::ChannelType::WEBSOCKET})
+    );
 }
 
 Poco::Dynamic::Var ServerApi::requestWS(const std::string& method, Poco::JSON::Object::Ptr params) {
-    return _gateway->request("stream." + method, params, {.channel_type=privmx::rpc::ChannelType::WEBSOCKET});
+    return _gateway->request("stream." + method, params, {.channel_type = privmx::rpc::ChannelType::WEBSOCKET});
 }

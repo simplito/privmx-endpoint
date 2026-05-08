@@ -12,15 +12,15 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_PMX_DATA_CHANNEL_OBSERVER_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_PMX_DATA_CHANNEL_OBSERVER_HPP_
 
-#include <string>
-#include <libwebrtc.h>
-#include <rtc_data_channel.h>
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
-#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
-#include <privmx/utils/ThreadSaveMap.hpp>
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
+#include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include <libwebrtc.h>
 #include <privmx/utils/Logger.hpp>
+#include <privmx/utils/ThreadSaveMap.hpp>
+#include <rtc_data_channel.h>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -28,10 +28,16 @@ namespace stream {
 
 class PmxDataChannelObserver : public libwebrtc::RTCDataChannelObserver {
 public:
-    PmxDataChannelObserver(std::shared_ptr<OnTrackInterface> onTrackInterface, std::shared_ptr<StreamApiLow> apiLow, const std::string& remoteStreamId, const std::string& streamRoomId);
+    PmxDataChannelObserver(
+        std::shared_ptr<OnTrackInterface> onTrackInterface,
+        std::shared_ptr<StreamApiLow> apiLow,
+        const std::string& remoteStreamId,
+        const std::string& streamRoomId
+    );
     virtual void OnStateChange(libwebrtc::RTCDataChannelState state) override;
     virtual void OnMessage(const char* buffer, int length, bool binary) override;
     void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface);
+
 private:
     std::mutex _onTrackInterfaceMutex;
     std::shared_ptr<OnTrackInterface> _onTrackInterface;
@@ -40,8 +46,8 @@ private:
     std::string _streamRoomId;
 };
 
-} // stream
-} // endpoint
-} // privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STREAM_PMX_DATA_CHANNEL_OBSERVER_HPP_

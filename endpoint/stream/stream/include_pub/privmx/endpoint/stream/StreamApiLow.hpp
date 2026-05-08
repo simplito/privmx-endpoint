@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 
+#include "privmx/endpoint/stream/Types.hpp"
+#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include <memory>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -19,8 +21,6 @@ limitations under the License.
 #include <privmx/endpoint/core/Types.hpp>
 #include <string>
 #include <vector>
-#include "privmx/endpoint/stream/Types.hpp"
-#include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -30,7 +30,6 @@ class StreamApiLowImpl;
 
 class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
 public:
-
     static StreamApiLow create(const core::Connection& connection);
     StreamApiLow();
     StreamApiLow(const StreamApiLow& obj);
@@ -41,23 +40,23 @@ public:
     std::vector<TurnCredentials> getTurnCredentials();
 
     std::string createStreamRoom(
-        const std::string& contextId, 
-        const std::vector<core::UserWithPubKey>& users, 
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta, 
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies
     );
 
     void updateStreamRoom(
-        const std::string& streamRoomId, 
-        const std::vector<core::UserWithPubKey>& users, 
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
-        const int64_t version, 
-        const bool force, 
-        const bool forceGenerateNewKey, 
+        const std::string& streamRoomId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies
     );
 
@@ -68,7 +67,10 @@ public:
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
-    void joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc); // required before createStream and openStream
+    void joinStreamRoom(
+        const std::string& streamRoomId,
+        std::shared_ptr<WebRTCInterface> webRtc
+    ); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
     void enableStreamRoomRecording(const std::string& streamRoomId);
     std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
@@ -77,9 +79,19 @@ public:
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void unpublishStream(const StreamHandle& streamHandle);
 
-    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions);
-    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove);
-    void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
+    void subscribeToRemoteStreams(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptions
+    );
+    void modifyRemoteStreamsSubscriptions(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptionsToAdd,
+        const std::vector<StreamSubscription>& subscriptionsToRemove
+    );
+    void unsubscribeFromRemoteStreams(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptionsToRemove
+    );
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
@@ -87,17 +99,26 @@ public:
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
-    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage); 
+    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);
     void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
-    DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const std::string& remoteStreamId, const core::Buffer& encryptedData);
+    DecryptedDataChannelMessage decryptDataChannelMessage(
+        const std::string& streamRoomId,
+        const std::string& remoteStreamId,
+        const core::Buffer& encryptedData
+    );
+
 private:
     StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl);
 };
 
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_

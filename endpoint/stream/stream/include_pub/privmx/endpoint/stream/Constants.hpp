@@ -19,16 +19,16 @@ namespace endpoint {
 namespace stream {
 
 namespace StreamRoomDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_5 = 5
-   };
-}
-constexpr static StreamRoomDataSchema::Version CURRENT_STREAM_ROOM_DATA_SCHEMA_VERSION = StreamRoomDataSchema::Version::VERSION_5;
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_5 = 5
+};
+} // namespace StreamRoomDataSchema
+constexpr static StreamRoomDataSchema::Version
+    CURRENT_STREAM_ROOM_DATA_SCHEMA_VERSION = StreamRoomDataSchema::Version::VERSION_5;
 
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_CONSTANTS_HPP_
-
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_CONSTANTS_HPP_

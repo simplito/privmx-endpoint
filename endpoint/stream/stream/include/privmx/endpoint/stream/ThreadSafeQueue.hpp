@@ -5,12 +5,12 @@
 #ifndef PRIVMXLIB_THREADSAFEQUEUE_HPP
 #define PRIVMXLIB_THREADSAFEQUEUE_HPP
 
-#include <queue>
-#include <mutex>
 #include <condition_variable>
+#include <mutex>
 #include <optional>
+#include <queue>
 
-template <typename T>
+template<typename T>
 class ThreadSafeQueue {
 public:
     ThreadSafeQueue() = default;
@@ -66,5 +66,4 @@ private:
     std::queue<T> queue_;
 };
 
-
-#endif  //PRIVMXLIB_THREADSAFEQUEUE_HPP
+#endif //PRIVMXLIB_THREADSAFEQUEUE_HPP
