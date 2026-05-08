@@ -20,38 +20,48 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 template<>
-thread::EventType VarDeserializer::deserialize<thread::EventType>(const Poco::Dynamic::Var& val, const std::string& name) {
+thread::EventType VarDeserializer::deserialize<thread::EventType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
     switch (val.convert<int64_t>()) {
-        case thread::EventType::THREAD_CREATE:
-            return thread::EventType::THREAD_CREATE;
-        case thread::EventType::THREAD_UPDATE:
-            return thread::EventType::THREAD_UPDATE;
-        case thread::EventType::THREAD_DELETE:
-            return thread::EventType::THREAD_DELETE;
-        case thread::EventType::THREAD_STATS:
-            return thread::EventType::THREAD_STATS;
-        case thread::EventType::MESSAGE_CREATE:
-            return thread::EventType::MESSAGE_CREATE;
-        case thread::EventType::MESSAGE_UPDATE:
-            return thread::EventType::MESSAGE_UPDATE;
-        case thread::EventType::MESSAGE_DELETE:
-            return thread::EventType::MESSAGE_DELETE;
-        case thread::EventType::COLLECTION_CHANGE:
-            return thread::EventType::COLLECTION_CHANGE;
+    case thread::EventType::THREAD_CREATE:
+        return thread::EventType::THREAD_CREATE;
+    case thread::EventType::THREAD_UPDATE:
+        return thread::EventType::THREAD_UPDATE;
+    case thread::EventType::THREAD_DELETE:
+        return thread::EventType::THREAD_DELETE;
+    case thread::EventType::THREAD_STATS:
+        return thread::EventType::THREAD_STATS;
+    case thread::EventType::MESSAGE_CREATE:
+        return thread::EventType::MESSAGE_CREATE;
+    case thread::EventType::MESSAGE_UPDATE:
+        return thread::EventType::MESSAGE_UPDATE;
+    case thread::EventType::MESSAGE_DELETE:
+        return thread::EventType::MESSAGE_DELETE;
+    case thread::EventType::COLLECTION_CHANGE:
+        return thread::EventType::COLLECTION_CHANGE;
     }
-    throw InvalidParamsException(name + " | " + ("Unknown thread::EventType value, received " + std::to_string(val.convert<int64_t>())));
+    throw InvalidParamsException(
+        name + " | " + ("Unknown thread::EventType value, received " + std::to_string(val.convert<int64_t>()))
+    );
 }
 
 template<>
-thread::EventSelectorType VarDeserializer::deserialize<thread::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name) {
+thread::EventSelectorType VarDeserializer::deserialize<thread::EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
 
     switch (val.convert<int64_t>()) {
-        case thread::EventSelectorType::CONTEXT_ID:
-            return thread::EventSelectorType::CONTEXT_ID;
-        case thread::EventSelectorType::THREAD_ID:
-            return thread::EventSelectorType::THREAD_ID;
-        case thread::EventSelectorType::MESSAGE_ID:
-            return thread::EventSelectorType::MESSAGE_ID;
+    case thread::EventSelectorType::CONTEXT_ID:
+        return thread::EventSelectorType::CONTEXT_ID;
+    case thread::EventSelectorType::THREAD_ID:
+        return thread::EventSelectorType::THREAD_ID;
+    case thread::EventSelectorType::MESSAGE_ID:
+        return thread::EventSelectorType::MESSAGE_ID;
     }
-    throw InvalidParamsException(name + " | " + ("Unknown thread::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
+    throw InvalidParamsException(
+        name + " | " + ("Unknown thread::EventSelectorType value, received " + std::to_string(val.convert<int64_t>()))
+    );
 }

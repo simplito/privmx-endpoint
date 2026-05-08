@@ -11,28 +11,29 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV4.hpp"
 
-#include "privmx/utils/Utils.hpp"
-#include "privmx/utils/Debug.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
-#include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
-
+#include "privmx/endpoint/thread/ThreadException.hpp"
+#include "privmx/utils/Debug.hpp"
+#include "privmx/utils/Utils.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageDataToEncryptV4& messageData,
-                                                                     const crypto::PrivateKey& authorPrivateKey,
-                                                                     const std::string& encryptionKey) {
+server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(
+    const MessageDataToEncryptV4& messageData,
+    const crypto::PrivateKey& authorPrivateKey,
+    const std::string& encryptionKey
+) {
     server::EncryptedMessageDataV4 result;
     result.version = MessageDataSchema::Version::VERSION_4;
     result.publicMeta = _dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey);
     try {
         result.publicMetaObject = utils::Utils::parseJsonObject(messageData.publicMeta.stdString());
-    } catch (...) {
-        result.publicMetaObject = Poco::Dynamic::Var();
-    }
-    result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(messageData.privateMeta, authorPrivateKey, encryptionKey);
+    } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
+    result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(
+        messageData.privateMeta, authorPrivateKey, encryptionKey
+    );
     result.data = _dataEncryptor.signAndEncryptAndEncode(messageData.data, authorPrivateKey, encryptionKey);
     if (messageData.internalMeta.has_value()) {
         result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
@@ -44,7 +45,8 @@ server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(const MessageData
 }
 
 DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
-    const server::EncryptedMessageDataV4& encryptedMessageData, const std::string& encryptionKey
+    const server::EncryptedMessageDataV4& encryptedMessageData,
+    const std::string& encryptionKey
 ) {
     DecryptedMessageDataV4 result;
     result.statusCode = 0;
@@ -53,32 +55,40 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
         validateVersion(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta, authorPublicKey);
-        if(!encryptedMessageData.publicMetaObject.isEmpty()) {
+        if (!encryptedMessageData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedMessageData.publicMetaObject);
-            if(tmp_1 != tmp_2) {
+            if (tmp_1 != tmp_2) {
                 auto e = MessagePublicDataMismatchException();
                 result.statusCode = e.getCode();
             }
         }
-        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedMessageData.privateMeta, authorPublicKey, encryptionKey);
-        result.data = _dataEncryptor.decodeAndDecryptAndVerify(encryptedMessageData.data, authorPublicKey, encryptionKey);
-        result.internalMeta = encryptedMessageData.internalMeta.has_value() ? 
-            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(encryptedMessageData.internalMeta.value(), authorPublicKey, encryptionKey)) :
+        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
+            encryptedMessageData.privateMeta, authorPublicKey, encryptionKey
+        );
+        result.data = _dataEncryptor.decodeAndDecryptAndVerify(
+            encryptedMessageData.data, authorPublicKey, encryptionKey
+        );
+        result.internalMeta = encryptedMessageData.internalMeta.has_value() ?
+            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(
+                encryptedMessageData.internalMeta.value(), authorPublicKey, encryptionKey
+            )) :
             std::nullopt;
-        result.authorPubKey = encryptedMessageData.authorPubKey;   
-    }  catch (const privmx::endpoint::core::Exception& e) {
+        result.authorPubKey = encryptedMessageData.authorPubKey;
+    } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 
 void MessageDataEncryptorV4::validateVersion(const server::EncryptedMessageDataV4& encryptedMessageData) {
     if (encryptedMessageData.version != MessageDataSchema::Version::VERSION_4) {
-        throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version) + " expected version: " + std::to_string(MessageDataSchema::Version::VERSION_4));
+        throw InvalidEncryptedMessageDataVersionException(
+            std::to_string(encryptedMessageData.version) +
+            " expected version: " +
+            std::to_string(MessageDataSchema::Version::VERSION_4)
+        );
     }
 }

@@ -12,20 +12,27 @@ limitations under the License.
 #include <Poco/JSON/Parser.h>
 
 #include <privmx/crypto/CryptoPrivmx.hpp>
-#include <privmx/utils/Utils.hpp>
 #include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Utils.hpp>
 
-#include <privmx/endpoint/thread/ThreadException.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptor.hpp"
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/thread/ThreadException.hpp>
 
 using namespace privmx::endpoint::thread;
 
-std::string MessageDataV2Encryptor::signAndEncrypt(const dynamic::MessageDataV2& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey) {
+std::string MessageDataV2Encryptor::signAndEncrypt(
+    const dynamic::MessageDataV2& data,
+    const privmx::crypto::PrivateKey& priv,
+    const core::EncKey& encKey
+) {
     return _dataEncryptor.signAndEncrypt(data, priv, encKey);
 }
 
-dynamic::MessageDataV2Signed  MessageDataV2Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
+dynamic::MessageDataV2Signed MessageDataV2Encryptor::decryptAndGetSign(
+    const std::string& data,
+    const core::EncKey& key
+) {
     dynamic::MessageDataV2Signed result;
     auto decrypted = _dataEncryptor.decryptAndGetSign(data, key);
     result.dataSignature = std::get<0>(decrypted);
@@ -35,19 +42,30 @@ dynamic::MessageDataV2Signed  MessageDataV2Encryptor::decryptAndGetSign(const st
     return result;
 }
 
-std::string MessageDataV3Encryptor::signAndEncrypt(const dynamic::MessageDataV3& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey) {
+std::string MessageDataV3Encryptor::signAndEncrypt(
+    const dynamic::MessageDataV3& data,
+    const privmx::crypto::PrivateKey& priv,
+    const core::EncKey& encKey
+) {
     dynamic::MessageDataV3 messageDataV3Encrypted;
-    messageDataV3Encrypted.publicMeta = utils::Base64::from(data.publicMeta); // for extra save 
-    messageDataV3Encrypted.privateMeta =_dataEncryptorBinaryString.encrypt(data.privateMeta, encKey);
-    messageDataV3Encrypted.data =_dataEncryptorBinaryString.encrypt(data.data, encKey);
+    messageDataV3Encrypted.publicMeta = utils::Base64::from(data.publicMeta); // for extra save
+    messageDataV3Encrypted.privateMeta = _dataEncryptorBinaryString.encrypt(data.privateMeta, encKey);
+    messageDataV3Encrypted.data = _dataEncryptorBinaryString.encrypt(data.data, encKey);
     return utils::Base64::from(_dataEncryptorMessageDataV3.sign(messageDataV3Encrypted, priv));
 }
 
-dynamic::MessageDataV3Signed  MessageDataV3Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
+dynamic::MessageDataV3Signed MessageDataV3Encryptor::decryptAndGetSign(
+    const std::string& data,
+    const core::EncKey& key
+) {
     dynamic::MessageDataV3Signed result;
     Pson::BinaryString dataBuf, dataSignature;
-    std::tie(dataSignature, dataBuf) = _dataEncryptorMessageDataV3.extractSignAndDataBuff(utils::Base64::toString(data));
-    dynamic::MessageDataV3 messageDataV3Encrypted = dynamic::MessageDataV3::fromJSON(privmx::utils::Utils::parseJsonObject(dataBuf));
+    std::tie(dataSignature, dataBuf) = _dataEncryptorMessageDataV3.extractSignAndDataBuff(
+        utils::Base64::toString(data)
+    );
+    dynamic::MessageDataV3 messageDataV3Encrypted = dynamic::MessageDataV3::fromJSON(
+        privmx::utils::Utils::parseJsonObject(dataBuf)
+    );
     dynamic::MessageDataV3 messageDataV3;
     messageDataV3.publicMeta = utils::Base64::toString(messageDataV3Encrypted.publicMeta);
     try {
@@ -58,11 +76,9 @@ dynamic::MessageDataV3Signed  MessageDataV3Encryptor::decryptAndGetSign(const st
         messageDataV3.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         messageDataV3.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        messageDataV3.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { messageDataV3.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     result.data = messageDataV3;
     result.dataSignature = dataSignature;
-    result.dataBuf =dataBuf;
+    result.dataBuf = dataBuf;
     return result;
 }

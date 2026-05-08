@@ -17,9 +17,9 @@ limitations under the License.
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <string>
 
-#include "privmx/endpoint/thread/Types.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ThreadValidator.hpp"
+#include "privmx/endpoint/thread/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -29,7 +29,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::Thread>(const thread::Thread& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<thread::Thread>>(const core::PagingList<thread::Thread>& val);
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<thread::Thread>>(
+    const core::PagingList<thread::Thread>& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ServerMessageInfo>(const thread::ServerMessageInfo& val);
@@ -38,7 +40,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::Message>(const thread::Message& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<thread::Message>>(const core::PagingList<thread::Message>& val);
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<thread::Message>>(
+    const core::PagingList<thread::Message>& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadCreatedEvent>(const thread::ThreadCreatedEvent& val);
@@ -56,24 +60,30 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsEventData>(const thread::ThreadStatsEventData& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsChangedEvent>(const thread::ThreadStatsChangedEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsChangedEvent>(
+    const thread::ThreadStatsChangedEvent& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadNewMessageEvent>(const thread::ThreadNewMessageEvent& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageUpdatedEvent>(const thread::ThreadMessageUpdatedEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageUpdatedEvent>(
+    const thread::ThreadMessageUpdatedEvent& val
+);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadDeletedMessageEventData>(const thread::ThreadDeletedMessageEventData& val);
+Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadDeletedMessageEventData>(
+    const thread::ThreadDeletedMessageEventData& val
+);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageDeletedEvent>(const thread::ThreadMessageDeletedEvent& val);
+Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageDeletedEvent>(
+    const thread::ThreadMessageDeletedEvent& val
+);
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_THREAD_VARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_THREAD_VARSERIALIZER_HPP_

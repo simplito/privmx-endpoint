@@ -17,7 +17,9 @@ ThreadDeletedEventData Mapper::mapToThreadDeletedEventData(const server::ThreadD
     return {.threadId = data.threadId};
 }
 
-ThreadDeletedMessageEventData Mapper::mapToThreadDeletedMessageEventData(const server::ThreadDeletedMessageEventData& data) {
+ThreadDeletedMessageEventData Mapper::mapToThreadDeletedMessageEventData(
+    const server::ThreadDeletedMessageEventData& data
+) {
     return {.threadId = data.threadId, .messageId = data.messageId};
 }
 

@@ -9,9 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
 
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
@@ -48,31 +48,45 @@ std::string ThreadStatsChangedEvent::toJSON() const {
 }
 
 std::shared_ptr<core::SerializedEvent> ThreadCreatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> ThreadUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> ThreadDeletedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> ThreadNewMessageEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> ThreadMessageUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> ThreadMessageDeletedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> ThreadStatsChangedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 bool Events::isThreadCreatedEvent(const core::EventHolder& handler) {
     return handler.type() == "threadCreated";
@@ -196,4 +210,3 @@ ThreadMessageDeletedEvent Events::extractThreadMessageDeletedEvent(const core::E
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-
