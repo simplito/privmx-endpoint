@@ -12,11 +12,12 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_INTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_INTERFACE_HPP_
 
+#include <cstdint>
+#include <string>
+
 namespace privmx {
 namespace endpoint {
 namespace store {
-
-#include <string>
 
 class IChunkEncryptor {
 public:

@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKREADER_INTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKREADER_INTERFACE_HPP_
 
+#include "privmx/endpoint/store/StoreTypes.hpp"
+
 namespace privmx {
 namespace endpoint {
 namespace store {
