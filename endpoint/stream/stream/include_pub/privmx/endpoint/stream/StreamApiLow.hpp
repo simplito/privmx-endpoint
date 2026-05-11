@@ -12,19 +12,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOW_HPP_
 
-#include <Poco/Dynamic/Var.h>
-
-#include <functional>
 #include <memory>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
-
-// #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
@@ -37,7 +31,7 @@ class StreamApiLowImpl;
 class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
 public:
 
-    static StreamApiLow create(const core::Connection& connection, event::EventApi& eventApi, StreamEncryptionMode streamEncryptionMode = StreamEncryptionMode::SINGLE_KEY);
+    static StreamApiLow create(const core::Connection& connection);
     StreamApiLow();
     StreamApiLow(const StreamApiLow& obj);
     StreamApiLow& operator=(const StreamApiLow& obj);
@@ -55,16 +49,6 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
-    std::string createStreamRoomEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
     void updateStreamRoom(
         const std::string& streamRoomId, 
         const std::vector<core::UserWithPubKey>& users, 
@@ -78,10 +62,8 @@ public:
     );
 
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
-    core::PagingList<StreamRoom> listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
 
     StreamRoom getStreamRoom(const std::string& streamRoomId);
-    StreamRoom getStreamRoomEx(const std::string& streamRoomId, const std::string& type);
 
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
@@ -107,22 +89,11 @@ public:
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
-    void keyManagement(const std::string& streamRoomId, bool disable);
+    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage); 
+    void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
+    DecryptedDataChannelMessage decryptDataChannelMessage(const std::string& streamRoomId, const std::string& remoteStreamId, const core::Buffer& encryptedData);
 private:
     StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl);
-    std::string _streamRoomCreateEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-    core::PagingList<StreamRoom> _streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type);
-    StreamRoom _streamRoomGetEx(const std::string& streamRoomId, const std::string& type);
-
-    // inline static const std::string STREAM_TYPE_FILTER_FLAG = "stream";
 };
 
 }  // namespace stream

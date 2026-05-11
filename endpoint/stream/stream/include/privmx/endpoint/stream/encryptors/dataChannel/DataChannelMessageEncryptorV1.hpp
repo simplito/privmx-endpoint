@@ -15,6 +15,7 @@ limitations under the License.
 #include <mutex>
 #include <shared_mutex>
 #include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/utils/ThreadSaveMap.hpp>
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 
 namespace privmx {
@@ -25,8 +26,9 @@ class DataChannelMessageEncryptorV1 {
 public:
     DataChannelMessageEncryptorV1(const std::vector<Key>& keys);
     DataChannelMessageEncryptorV1() = default;
-    core::Buffer encryptMessage(const core::Buffer& data, uint32_t seq);
-    std::pair<core::Buffer, uint32_t> decryptMessage(const core::Buffer& encryptedData);
+    core::Buffer encryptMessage(const DataChannelMessage& plainMessage);
+    DecryptedDataChannelMessage decryptMessage(const std::string& remoteStreamId, const core::Buffer& encryptedMessage);
+    void registerRemoteStreamId(const std::string& remoteStreamId, int64_t initialSeq = -1);
     void updateKey(const std::vector<Key>& keys);
 private:
     struct Header {
@@ -45,6 +47,8 @@ private:
     Header deserializeHeader(std::string header);
     ParsedEncryptedMessage parseEncryptedMessage(const std::string& encryptedData);
     void assertData(const core::Buffer& encryptedKvdbData);
+    void assertSeq(const std::string& remoteStreamId, uint32_t seq);
+    void updateSeq(const std::string& remoteStreamId, uint32_t seq);
     Key getEncryptionKey();
     Key getDencryptionKey(const std::string& keyId);
 
@@ -57,6 +61,8 @@ private:
     static constexpr uint64_t FIXED_HEADER_LENGTH = VERSION_LENGTH_BYTES + KEY_ID_LENGTH_BYTES + SEQUENCE_NUMBER_LENGTH_BYTES + GCM_NONCE_LENGTH_BYTES; 
     std::shared_mutex _keysMutex;
     std::vector<Key> _keys;
+    privmx::utils::ThreadSaveMap<std::string, int64_t> _remoteStreamSeqMap;
+
 };
 
 }  // namespace core

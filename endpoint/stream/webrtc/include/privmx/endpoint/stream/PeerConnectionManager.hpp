@@ -21,7 +21,6 @@ limitations under the License.
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
-#include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
@@ -59,8 +58,6 @@ struct PeerConnection {
     std::map<std::string, AudioTrackInfo> audioTracks;
     std::map<std::string, VideoTrackInfo> videoTracks;
     std::optional<DataChannelInfo> dataChannel;
-    std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
-    std::atomic<uint64_t> messagesSeq {0};
 
     std::shared_mutex trackMutex;
     std::vector<privmx::endpoint::stream::Key> cpp_keys;
@@ -97,10 +94,21 @@ public:
     void closeConnection(const std::string& streamRoomId, ConnectionType connectionType);
     void closeSession(const std::string& streamRoomId);
 private:
+    class RoomConnections {
+        public:
+            void set(ConnectionType connectionType, std::shared_ptr<JanusConnection> connection);
+            std::shared_ptr<JanusConnection> get(ConnectionType connectionType);
+            bool has(ConnectionType connectionType);
+        private:
+            std::shared_ptr<JanusConnection> _subscriber;
+            std::shared_ptr<JanusConnection> _publisher;
+    };
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> _createPeerConnection;
     std::function<void(const int64_t, const std::string&)> _onTrickle;
-    privmx::utils::ThreadSaveMap<std::string, std::map<ConnectionType,std::shared_ptr<JanusConnection>>> _connections;
+    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RoomConnections>> _connections;
 };
+
+
 
 } // stream
 } // endpoint

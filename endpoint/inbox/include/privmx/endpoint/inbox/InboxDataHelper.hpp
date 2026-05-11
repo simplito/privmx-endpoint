@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATAHELPER_HPP_
 
 #include <string>
+#include <vector>
 #include "privmx/utils/Utils.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/Types.hpp"
@@ -20,7 +21,6 @@ limitations under the License.
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
-#include "privmx/endpoint/inbox/Factory.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -35,7 +35,7 @@ public:
     static server::FileConfig fileConfigToTypedObject(const FilesConfig& fileConfig);
     static FilesConfig fileConfigFromTypedObject(const server::FileConfig& fileConfig);
 
-    static privmx::utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    static std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 };
 
 

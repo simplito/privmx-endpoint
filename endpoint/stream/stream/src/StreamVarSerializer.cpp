@@ -392,40 +392,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stre
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithRoomModel>(const stream::SdpWithRoomModel& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$SdpWithRoomModel");
-    }
-    obj->set("roomId", serialize(val.roomId));
-    obj->set("sdp", serialize(val.sdp));
-    obj->set("type", serialize(val.type));
-    return obj;
-}
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::UpdateSessionIdModel>(const stream::UpdateSessionIdModel& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$UpdateSessionIdModel");
-    }
-    obj->set("streamRoomId", serialize(val.streamRoomId));
-    obj->set("connectionType", serialize(val.connectionType));
-    obj->set("sessionId", serialize(val.sessionId));
-    return obj;
-}
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::RoomModel>(const stream::RoomModel& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$RoomModel");
-    }
-    obj->set("roomId", serialize(val.roomId));
-    return obj;
-}
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::Key>(const stream::Key& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

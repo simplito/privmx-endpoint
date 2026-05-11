@@ -14,8 +14,8 @@ limitations under the License.
 
 #include <string>
 
-#include "privmx/endpoint/core/TypesMacros.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include <privmx/utils/JsonHelper.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -23,201 +23,203 @@ namespace kvdb {
 namespace server {
 
 // KVDB
-ENDPOINT_SERVER_TYPE(KvdbDataEntry)
-    STRING_FIELD(keyId)
-    VAR_FIELD(data)
-TYPE_END
 
-ENDPOINT_SERVER_TYPE(KvdbInfo)
-    STRING_FIELD(id)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(contextId)
-    INT64_FIELD(createDate)
-    STRING_FIELD(creator)
-    INT64_FIELD(lastModificationDate)
-    STRING_FIELD(lastModifier)
-    LIST_FIELD(data, KvdbDataEntry)
-    STRING_FIELD(keyId)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    LIST_FIELD(keys, core::server::KeyEntry)
-    INT64_FIELD(version)
-    STRING_FIELD(type)
-    VAR_FIELD(policy)
-    INT64_FIELD(entries)
-    INT64_FIELD(lastEntryDate)
-TYPE_END
+#define KVDB_DATA_ENTRY_FIELDS(F)\
+    F(keyId, std::string)\
+    F(data,  Poco::Dynamic::Var)
+JSON_STRUCT(KvdbDataEntry, KVDB_DATA_ENTRY_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbCreateModel)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(type)
-    STRING_FIELD(contextId)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    VAR_FIELD(data)
-    STRING_FIELD(keyId)
-    LIST_FIELD(keys, core::server::KeyEntrySet)
-    VAR_FIELD(policy)
-TYPE_END
+#define KVDB_INFO_FIELDS(F)\
+    F(id,                   std::string)\
+    F(resourceId,           std::string)\
+    F(contextId,            std::string)\
+    F(createDate,           int64_t)\
+    F(creator,              std::string)\
+    F(lastModificationDate, int64_t)\
+    F(lastModifier,         std::string)\
+    F(data,                 std::vector<KvdbDataEntry>)\
+    F(keyId,                std::string)\
+    F(users,                std::vector<std::string>)\
+    F(managers,             std::vector<std::string>)\
+    F(keys,                 std::vector<core::server::KeyEntry>)\
+    F(version,              int64_t)\
+    F(type,                 std::optional<std::string>)\
+    F(policy,               Poco::Dynamic::Var)\
+    F(entries,              int64_t)\
+    F(lastEntryDate,        int64_t)
+JSON_STRUCT(KvdbInfo, KVDB_INFO_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbCreateResult)
-    STRING_FIELD(kvdbId)
-TYPE_END
+#define KVDB_CREATE_MODEL_FIELDS(F)\
+    F(resourceId, std::string)\
+    F(type,       std::string)\
+    F(contextId,  std::string)\
+    F(users,      std::vector<std::string>)\
+    F(managers,   std::vector<std::string>)\
+    F(data,       Poco::Dynamic::Var)\
+    F(keyId,      std::string)\
+    F(keys,       std::vector<core::server::KeyEntrySet>)\
+    F(policy,     std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(KvdbCreateModel, KVDB_CREATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbUpdateModel)
-    STRING_FIELD(id)
-    STRING_FIELD(resourceId)
-    LIST_FIELD(users, std::string)
-    LIST_FIELD(managers, std::string)
-    VAR_FIELD(data)
-    STRING_FIELD(keyId)
-    LIST_FIELD(keys, core::server::KeyEntrySet)
-    INT64_FIELD(version)
-    BOOL_FIELD(force)
-    VAR_FIELD(policy)
-TYPE_END
+#define KVDB_CREATE_RESULT_FIELDS(F)\
+    F(kvdbId, std::string)
+JSON_STRUCT(KvdbCreateResult, KVDB_CREATE_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbDeleteModel)
-    STRING_FIELD(kvdbId)
-TYPE_END
+#define KVDB_UPDATE_MODEL_FIELDS(F)\
+    F(id,         std::string)\
+    F(resourceId, std::string)\
+    F(users,      std::vector<std::string>)\
+    F(managers,   std::vector<std::string>)\
+    F(data,       Poco::Dynamic::Var)\
+    F(keyId,      std::string)\
+    F(keys,       std::vector<core::server::KeyEntrySet>)\
+    F(version,    int64_t)\
+    F(force,      bool)\
+    F(policy,     std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(KvdbUpdateModel, KVDB_UPDATE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbDeleteManyModel)
-    LIST_FIELD(kvdbsIds, std::string)
-TYPE_END
+#define KVDB_DELETE_MODEL_FIELDS(F)\
+    F(kvdbId, std::string)
+JSON_STRUCT(KvdbDeleteModel, KVDB_DELETE_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbDeleteStatus)
-    STRING_FIELD(id)
-    STRING_FIELD(status) // "OK" | "KVDB_DOES_NOT_EXIST" | "ACCESS_DENIED"
-TYPE_END
+#define KVDB_DELETE_MANY_MODEL_FIELDS(F)\
+    F(kvdbsIds, std::vector<std::string>)
+JSON_STRUCT(KvdbDeleteManyModel, KVDB_DELETE_MANY_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbDeleteManyResult)
-    LIST_FIELD(kvdbsIds, KvdbDeleteStatus)
-TYPE_END
+// status: "OK" | "KVDB_DOES_NOT_EXIST" | "ACCESS_DENIED"
+#define KVDB_DELETE_STATUS_FIELDS(F)\
+    F(id,     std::string)\
+    F(status, std::string)
+JSON_STRUCT(KvdbDeleteStatus, KVDB_DELETE_STATUS_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbGetModel)
-    STRING_FIELD(kvdbId)
-    STRING_FIELD(type)
-TYPE_END
+#define KVDB_DELETE_MANY_RESULT_FIELDS(F)\
+    F(kvdbsIds, std::vector<KvdbDeleteStatus>)
+JSON_STRUCT(KvdbDeleteManyResult, KVDB_DELETE_MANY_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbGetResult)
-    OBJECT_FIELD(kvdb, KvdbInfo)
-TYPE_END
+#define KVDB_GET_MODEL_FIELDS(F)\
+    F(kvdbId, std::string)\
+    F(type,   std::optional<std::string>)
+JSON_STRUCT(KvdbGetModel, KVDB_GET_MODEL_FIELDS);
 
-ENDPOINT_SERVER_TYPE_INHERIT(KvdbListModel, core::server::ListModel)
-    STRING_FIELD(contextId)
-    STRING_FIELD(type)
-TYPE_END
+#define KVDB_GET_RESULT_FIELDS(F)\
+    F(kvdb, KvdbInfo)
+JSON_STRUCT(KvdbGetResult, KVDB_GET_RESULT_FIELDS);
 
-ENDPOINT_SERVER_TYPE(KvdbListResult)
-    LIST_FIELD(kvdbs, KvdbInfo)
-    INT64_FIELD(count)
-TYPE_END
+#define KVDB_LIST_MODEL_FIELDS(F)\
+    F(contextId, std::string)\
+    F(type,      std::string)
+JSON_STRUCT_EXT(KvdbListModel, core::server::ListModel, KVDB_LIST_MODEL_FIELDS);
+
+#define KVDB_LIST_RESULT_FIELDS(F)\
+    F(kvdbs, std::vector<KvdbInfo>)\
+    F(count, int64_t)
+JSON_STRUCT(KvdbListResult, KVDB_LIST_RESULT_FIELDS);
 
 // KVDB ENTRY
 
-ENDPOINT_SERVER_TYPE(KvdbEntryInfo)
-    STRING_FIELD(kvdbEntryKey)
-    VAR_FIELD(kvdbEntryValue)
-    STRING_FIELD(kvdbId)
-    INT64_FIELD(version)
-    STRING_FIELD(contextId)
-    INT64_FIELD(createDate)
-    STRING_FIELD(author)
-    STRING_FIELD(keyId)
-    INT64_FIELD(lastModificationDate)
-    STRING_FIELD(lastModifier)
-TYPE_END
+#define KVDB_ENTRY_INFO_FIELDS(F)\
+    F(kvdbEntryKey,         std::string)\
+    F(kvdbEntryValue,       Poco::Dynamic::Var)\
+    F(kvdbId,               std::string)\
+    F(version,              int64_t)\
+    F(contextId,            std::string)\
+    F(createDate,           int64_t)\
+    F(author,               std::string)\
+    F(keyId,                std::string)\
+    F(lastModificationDate, int64_t)\
+    F(lastModifier,         std::string)
+JSON_STRUCT(KvdbEntryInfo, KVDB_ENTRY_INFO_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedKvdbEntryDataV5, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(data)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-    STRING_FIELD(dio)
-TYPE_END
+#define ENCRYPTED_KVDB_ENTRY_DATA_V5_FIELDS(F)\
+    F(publicMeta,       std::string)\
+    F(publicMetaObject, Poco::Dynamic::Var)\
+    F(privateMeta,      std::string)\
+    F(data,             std::string)\
+    F(internalMeta,     std::optional<std::string>)\
+    F(authorPubKey,     std::string)\
+    F(dio,              std::string)
+JSON_STRUCT_EXT(EncryptedKvdbEntryDataV5, core::dynamic::VersionedData, ENCRYPTED_KVDB_ENTRY_DATA_V5_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbEntryGetModel)
-    STRING_FIELD(kvdbId)
-    STRING_FIELD(kvdbEntryKey)
-TYPE_END
+#define KVDB_ENTRY_GET_MODEL_FIELDS(F)\
+    F(kvdbId,       std::string)\
+    F(kvdbEntryKey, std::string)
+JSON_STRUCT(KvdbEntryGetModel, KVDB_ENTRY_GET_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbEntryGetResult)
-    OBJECT_FIELD(kvdbEntry, KvdbEntryInfo)
-TYPE_END
+#define KVDB_ENTRY_GET_RESULT_FIELDS(F)\
+    F(kvdbEntry, KvdbEntryInfo)
+JSON_STRUCT(KvdbEntryGetResult, KVDB_ENTRY_GET_RESULT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbEntrySetModel)
-    STRING_FIELD(kvdbId)
-    STRING_FIELD(kvdbEntryKey)
-    VAR_FIELD(kvdbEntryValue)
-    STRING_FIELD(keyId)
-    INT64_FIELD(version)
-TYPE_END
+#define KVDB_ENTRY_SET_MODEL_FIELDS(F)\
+    F(kvdbId,         std::string)\
+    F(kvdbEntryKey,   std::string)\
+    F(kvdbEntryValue, Poco::Dynamic::Var)\
+    F(keyId,          std::string)\
+    F(version,        int64_t)
+JSON_STRUCT(KvdbEntrySetModel, KVDB_ENTRY_SET_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteModel)
-    STRING_FIELD(kvdbId)
-    STRING_FIELD(kvdbEntryKey)
-TYPE_END
+#define KVDB_ENTRY_DELETE_MODEL_FIELDS(F)\
+    F(kvdbId,       std::string)\
+    F(kvdbEntryKey, std::string)
+JSON_STRUCT(KvdbEntryDeleteModel, KVDB_ENTRY_DELETE_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(KvdbListKeysModel, core::server::ListModel)
-    STRING_FIELD(kvdbId)
-TYPE_END
+#define KVDB_LIST_KEYS_MODEL_FIELDS(F)\
+    F(kvdbId, std::string)
+JSON_STRUCT_EXT(KvdbListKeysModel, core::server::ListModel, KVDB_LIST_KEYS_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbListKeysResult)
-    OBJECT_FIELD(kvdb, KvdbInfo)
-    LIST_FIELD(kvdbEntryKeys, std::string)
-    INT64_FIELD(count)
-TYPE_END
+#define KVDB_LIST_KEYS_RESULT_FIELDS(F)\
+    F(kvdb,          KvdbInfo)\
+    F(kvdbEntryKeys, std::vector<std::string>)\
+    F(count,         int64_t)
+JSON_STRUCT(KvdbListKeysResult, KVDB_LIST_KEYS_RESULT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(KvdbListEntriesModel, core::server::ListModel)
-    STRING_FIELD(kvdbId)
-TYPE_END
+#define KVDB_LIST_ENTRIES_MODEL_FIELDS(F)\
+    F(kvdbId, std::string)
+JSON_STRUCT_EXT(KvdbListEntriesModel, core::server::ListModel, KVDB_LIST_ENTRIES_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbListEntriesResult)
-    OBJECT_FIELD(kvdb, KvdbInfo)
-    LIST_FIELD(kvdbEntries, KvdbEntryInfo)
-    INT64_FIELD(count)
-TYPE_END
+#define KVDB_LIST_ENTRIES_RESULT_FIELDS(F)\
+    F(kvdb,        KvdbInfo)\
+    F(kvdbEntries, std::vector<KvdbEntryInfo>)\
+    F(count,       int64_t)
+JSON_STRUCT(KvdbListEntriesResult, KVDB_LIST_ENTRIES_RESULT_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteManyModel)
-    STRING_FIELD(kvdbId)
-    LIST_FIELD(kvdbEntryKeys, std::string)
-TYPE_END
+#define KVDB_ENTRY_DELETE_MANY_MODEL_FIELDS(F)\
+    F(kvdbId,        std::string)\
+    F(kvdbEntryKeys, std::vector<std::string>)
+JSON_STRUCT(KvdbEntryDeleteManyModel, KVDB_ENTRY_DELETE_MANY_MODEL_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteStatus)
-    STRING_FIELD(kvdbEntryKey)
-    STRING_FIELD(status)
-TYPE_END
+#define KVDB_ENTRY_DELETE_STATUS_FIELDS(F)\
+    F(kvdbEntryKey, std::string)\
+    F(status,       std::string)
+JSON_STRUCT(KvdbEntryDeleteStatus, KVDB_ENTRY_DELETE_STATUS_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbEntryDeleteManyResult)
-    LIST_FIELD(results, KvdbEntryDeleteStatus)
-TYPE_END
+#define KVDB_ENTRY_DELETE_MANY_RESULT_FIELDS(F)\
+    F(results, std::vector<KvdbEntryDeleteStatus>)
+JSON_STRUCT(KvdbEntryDeleteManyResult, KVDB_ENTRY_DELETE_MANY_RESULT_FIELDS);
 
 // EVENTS
 
-ENDPOINT_CLIENT_TYPE(KvdbDeletedEventData)
-    STRING_FIELD(kvdbId)
-    STRING_FIELD(type)
-TYPE_END
+#define KVDB_DELETED_EVENT_DATA_FIELDS(F)\
+    F(kvdbId, std::string)\
+    F(type,   std::optional<std::string>)
+JSON_STRUCT(KvdbDeletedEventData, KVDB_DELETED_EVENT_DATA_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbDeletedEntryEventData)
-    STRING_FIELD(kvdbEntryKey)
-    STRING_FIELD(kvdbId)
-    STRING_FIELD(containerType)
-TYPE_END
+#define KVDB_DELETED_ENTRY_EVENT_DATA_FIELDS(F)\
+    F(kvdbEntryKey,  std::string)\
+    F(kvdbId,        std::string)\
+    F(containerType, std::optional<std::string>)
+JSON_STRUCT(KvdbDeletedEntryEventData, KVDB_DELETED_ENTRY_EVENT_DATA_FIELDS);
 
-ENDPOINT_CLIENT_TYPE(KvdbStatsEventData)
-    STRING_FIELD(kvdbId)
-    STRING_FIELD(contextId)
-    STRING_FIELD(type)
-    INT64_FIELD(lastEntryDate)
-    INT64_FIELD(entries)
-TYPE_END
+#define KVDB_STATS_EVENT_DATA_FIELDS(F)\
+    F(kvdbId,       std::string)\
+    F(contextId,    std::string)\
+    F(type,         std::optional<std::string>)\
+    F(lastEntryDate, int64_t)\
+    F(entries,      int64_t)
+JSON_STRUCT(KvdbStatsEventData, KVDB_STATS_EVENT_DATA_FIELDS);
 
-ENDPOINT_SERVER_TYPE_INHERIT(KvdbEntryEventData, KvdbEntryInfo)
-    STRING_FIELD(containerType)
-TYPE_END
+#define KVDB_ENTRY_EVENT_DATA_FIELDS(F)\
+    F(containerType, std::optional<std::string>)
+JSON_STRUCT_EXT(KvdbEntryEventData, KvdbEntryInfo, KVDB_ENTRY_EVENT_DATA_FIELDS);
 
 } // server
 } // kvdb

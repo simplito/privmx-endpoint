@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/InboxHandleManager.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
-#include "privmx/endpoint/inbox/Factory.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint;

@@ -20,9 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
-#include <privmx/endpoint/event/EventApiImpl.hpp>
-
-
 #include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 
@@ -30,22 +27,17 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
 StreamApiLow StreamApiLow::create(
-    const core::Connection& connection, 
-    event::EventApi& eventApi,
-    StreamEncryptionMode streamEncryptionMode
+    const core::Connection& connection
 ) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<event::EventApiImpl> eventApiImpl = eventApi.getImpl();
         std::shared_ptr<StreamApiLowImpl> impl(new stream::StreamApiLowImpl(
-            eventApiImpl,
             connection,
             connectionImpl->getGateway(),
             connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(),
             connectionImpl->getHost(),
-            connectionImpl->getEventMiddleware(),
-            streamEncryptionMode
+            connectionImpl->getEventMiddleware()
         ));
         impl->attach(impl);
         return StreamApiLow(impl);
@@ -83,36 +75,12 @@ std::string StreamApiLow::createStreamRoom(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, StreamApiLowImpl::STREAM_TYPE_FILTER_FLAG, policies);
-}
-
-std::string StreamApiLow::createStreamRoomEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    return _streamRoomCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
-}
-
-std::string StreamApiLow::_streamRoomCreateEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return impl->createStreamRoomEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
+        return impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -143,38 +111,22 @@ void StreamApiLow::updateStreamRoom(
 }
 
 core::PagingList<StreamRoom> StreamApiLow::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
-    return _streamRoomsListEx(contextId, query, StreamApiLowImpl::STREAM_TYPE_FILTER_FLAG);
-}
-
-core::PagingList<StreamRoom> StreamApiLow::listStreamRoomsEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
-    return _streamRoomsListEx(contextId, query, type);
-}
-
-core::PagingList<StreamRoom> StreamApiLow::_streamRoomsListEx(const std::string& contextId, const core::PagingQuery& query, const std::string& type) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
     try {
-        return impl->listStreamRoomsEx(contextId, query, type);
+        return impl->listStreamRooms(contextId, query);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
-}   
+}
 
 StreamRoom StreamApiLow::getStreamRoom(const std::string& streamRoomId) {
-    return _streamRoomGetEx(streamRoomId, StreamApiLowImpl::STREAM_TYPE_FILTER_FLAG);
-}
-
-StreamRoom StreamApiLow::getStreamRoomEx(const std::string& streamRoomId, const std::string& type) {
-    return _streamRoomGetEx(streamRoomId, type);
-}
-
-StreamRoom StreamApiLow::_streamRoomGetEx(const std::string& streamRoomId, const std::string& type) {
     auto impl = getImpl();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return impl->getStreamRoomEx(streamRoomId, type);
+        return impl->getStreamRoom(streamRoomId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -342,16 +294,6 @@ void StreamApiLow::unsubscribeFromRemoteStreams(const std::string& streamRoomId,
     }
 }
 
-void StreamApiLow::keyManagement(const std::string& streamRoomId, bool disable) {
-    auto impl = getImpl();
-    try {
-        return impl->keyManagement(streamRoomId, disable);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 void StreamApiLow::trickle(const int64_t sessionId, const std::string& candidateAsJson) {
     auto impl = getImpl();
     core::Validator::validateNumberPositive(sessionId, "field:sessionId ");
@@ -379,6 +321,39 @@ void StreamApiLow::setNewOfferOnReconfigure(const int64_t sessionId, const SdpWi
     core::Validator::validateNumberPositive(sessionId, "field:sessionId ");
     try {
         return impl->setNewOfferOnReconfigure(sessionId, sdp);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::Buffer StreamApiLow::encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage) {
+    auto impl = getImpl();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return impl->encryptDataChannelMessage(streamRoomId, plainMessage);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApiLow::registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId) {
+    auto impl = getImpl();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return impl->registerRemoteDataChannel(streamRoomId, remoteStreamId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+DecryptedDataChannelMessage StreamApiLow::decryptDataChannelMessage(const std::string& streamRoomId, const std::string& remoteStreamId, const core::Buffer& encryptedMessage) {
+    auto impl = getImpl();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return impl->decryptDataChannelMessage(streamRoomId, remoteStreamId, encryptedMessage);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

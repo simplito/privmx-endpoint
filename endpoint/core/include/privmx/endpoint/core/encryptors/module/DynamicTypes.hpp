@@ -12,9 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_MODULE_DYNAMICTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_MODULE_DYNAMICTYPES_HPP_
 
-#include <privmx/endpoint/core/TypesMacros.hpp>
+#include <privmx/utils/JsonHelper.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
-
 
 namespace privmx {
 namespace endpoint {
@@ -23,30 +22,33 @@ namespace dynamic {
 
 // Version 4 (deprecated)
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedModuleDataV4, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-TYPE_END
+
+
+#define ENCRYPTED_MODULE_DATA_V4_FIELDS(F)\
+    F(publicMeta, std::string)\
+    F(publicMetaObject, Poco::Dynamic::Var)\
+    F(privateMeta, std::string)\
+    F(internalMeta, privmx::utils::optional_null<std::string>)\
+    F(authorPubKey, std::string)
+JSON_STRUCT_EXT(EncryptedModuleDataV4, VersionedData, ENCRYPTED_MODULE_DATA_V4_FIELDS);
 
 // Version 5 
 
-ENDPOINT_CLIENT_TYPE(ModuleInternalMetaV5)
-    STRING_FIELD(secret)
-    STRING_FIELD(resourceId)
-    STRING_FIELD(randomId)
-TYPE_END
+#define MODULE_INTERNAL_META_V5_FIELDS(F)\
+    F(secret, std::string)\
+    F(resourceId, std::string)\
+    F(randomId, std::string)
+JSON_STRUCT(ModuleInternalMetaV5, MODULE_INTERNAL_META_V5_FIELDS);
 
-ENDPOINT_CLIENT_TYPE_INHERIT(EncryptedModuleDataV5, core::dynamic::VersionedData)
-    STRING_FIELD(publicMeta)
-    OBJECT_PTR_FIELD(publicMetaObject)
-    STRING_FIELD(privateMeta)
-    STRING_FIELD(internalMeta)
-    STRING_FIELD(authorPubKey)
-    STRING_FIELD(dio)
-TYPE_END
+#define ENCRYPTED_MODULE_DATA_V5_FIELDS(F)\
+    F(publicMeta, std::string)\
+    F(publicMetaObject, Poco::Dynamic::Var)\
+    F(privateMeta, std::string)\
+    F(internalMeta, std::string)\
+    F(authorPubKey, std::string)\
+    F(dio, std::string)
+JSON_STRUCT_EXT(EncryptedModuleDataV5, VersionedData, ENCRYPTED_MODULE_DATA_V5_FIELDS);
+
 
 } // dynamic
 } // core

@@ -100,7 +100,7 @@ std::shared_ptr<core::SerializedEvent> StreamsUpdatedEvent::serialize() const {
 }
 
 bool Events::isStreamRoomCreatedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamCreated";
+    return handler.type() == "streamRoomCreated";
 }
 
 StreamRoomCreatedEvent Events::extractStreamRoomCreatedEvent(const core::EventHolder& handler) {
@@ -117,7 +117,7 @@ StreamRoomCreatedEvent Events::extractStreamRoomCreatedEvent(const core::EventHo
 }
 
 bool Events::isStreamRoomUpdatedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamUpdated";
+    return handler.type() == "streamRoomUpdated";
 }
 
 StreamRoomUpdatedEvent Events::extractStreamRoomUpdatedEvent(const core::EventHolder& handler) {
@@ -134,7 +134,7 @@ StreamRoomUpdatedEvent Events::extractStreamRoomUpdatedEvent(const core::EventHo
 }
 
 bool Events::isStreamRoomDeletedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamDeleted";
+    return handler.type() == "streamRoomDeleted";
 }
 
 StreamRoomDeletedEvent Events::extractStreamRoomDeletedEvent(const core::EventHolder& handler) {
@@ -185,7 +185,7 @@ StreamUpdatedEvent Events::extractStreamUpdatedEvent(const core::EventHolder& ha
 }
 
 bool Events::isStreamJoinedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamUpdatedMessage";
+    return handler.type() == "streamJoined";
 }
 
 StreamJoinedEvent Events::extractStreamJoinedEvent(const core::EventHolder& handler) {

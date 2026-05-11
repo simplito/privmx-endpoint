@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/stream/Types.hpp"

@@ -8,7 +8,6 @@
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
@@ -53,7 +52,7 @@ int main(int argc, char** argv) {
                 auto eventHolder = eventQueue.waitEvent();
             }
         });
-        event::EventApi eventApi = event::EventApi::create(connection);
+        auto eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         std::string streamRoomId;
         if(streamRoomIdOpt.has_value()) {
@@ -142,5 +141,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
 

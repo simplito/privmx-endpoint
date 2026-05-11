@@ -20,13 +20,13 @@ PmxPeerConnectionObserver::PmxPeerConnectionObserver(
     const std::string& streamRoomId, 
     std::shared_ptr<privmx::webrtc::KeyStore> keys, 
     const privmx::webrtc::FrameCryptorOptions& options,
-    std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor
+    std::shared_ptr<StreamApiLow> apiLow
 ) : 
 _peerConnectionFactory(peerConnectionFactory), 
 _streamRoomId(streamRoomId), 
 _currentKeys(keys), 
 _options(options),
-_messageEncryptor(messageEncryptor),
+_apiLow(apiLow),
 _roomOnTrackInterface(nullptr),
 _streamOnTrackInterfacesMap(std::make_shared<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>>()) {}
 
@@ -88,12 +88,13 @@ void PmxPeerConnectionObserver::OnRemoveStream([[maybe_unused]] libwebrtc::scope
 }
 void PmxPeerConnectionObserver::OnDataChannel(libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON DATA CHANNEL channel_label: ", data_channel->label().std_string())
+    _apiLow->registerRemoteDataChannel(_streamRoomId, data_channel->label().std_string());
     std::shared_ptr<stream::OnTrackInterface> roomOnTrackInterface = nullptr;
     {
         std::shared_lock<std::shared_mutex> lock(_onTrackInterfaceMutex);
         if(_roomOnTrackInterface) roomOnTrackInterface = _roomOnTrackInterface;
     }
-    std::shared_ptr<DataChannelImpl> dataChannelImpl = std::make_shared<DataChannelImpl>(roomOnTrackInterface, _messageEncryptor, data_channel);
+    std::shared_ptr<DataChannelImpl> dataChannelImpl = std::make_shared<DataChannelImpl>(roomOnTrackInterface, _apiLow, data_channel, _streamRoomId);
     _dataChannels.set(data_channel->label().std_string(), dataChannelImpl);
 }
 void PmxPeerConnectionObserver::OnRenegotiationNeeded() {
@@ -180,7 +181,7 @@ void PmxPeerConnectionObserver::OnRemoveTrack([[maybe_unused]] libwebrtc::scoped
     for(const auto& stream: streams.std_vector()) {
         auto tmp = _streamOnTrackInterfacesMap->get(stream->id().std_string());
         if(tmp.has_value()) {
-            tmp.value()->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled(), [track](bool mute) {return track->set_enabled(!mute);}}, TrackAction::ADDED);
+            tmp.value()->OnRemoteTrack(Track{dataType, streamIds, track->id().std_string(), !track->enabled(), [track](bool mute) {return track->set_enabled(!mute);}}, TrackAction::REMOVED);
         }
     }
     if (dataType == DataType::AUDIO) _audioLevelAnalyzers.erase(receiver->track()->id().std_string());

@@ -76,15 +76,6 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stream::SdpWithTypeModel& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithRoomModel>(const stream::SdpWithRoomModel& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::UpdateSessionIdModel>(const stream::UpdateSessionIdModel& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::RoomModel>(const stream::RoomModel& val);
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::RemoteStreamsChangedEvent>(const stream::RemoteStreamsChangedEvent& val);
 
 template<>

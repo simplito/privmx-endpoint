@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_KVDB_ITEMDATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_KVDB_ITEMDATAENCRYPTORV5_HPP_
 
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
@@ -40,7 +41,7 @@ private:
     core::DIOEncryptorV1 _DIOEncryptor;
 };
 
-}  // namespace core
+}  // namespace kvdb
 }  // namespace endpoint
 }  // namespace privmx
 

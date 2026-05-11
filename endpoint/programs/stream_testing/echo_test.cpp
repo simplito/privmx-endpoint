@@ -1,15 +1,11 @@
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <fstream>
 #include <vector>
 #include <thread>
-// #include <privmx/utils/IniFileReader.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 
@@ -43,8 +39,8 @@ int main(int argc, char** argv) {
             privKey, 
             solutionId, 
             bridgeUrl
-        );    
-        event::EventApi eventApi = event::EventApi::create(connection);
+        );
+        auto eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         std::string streamRoomId;
         auto contextUsersInfo = connection.listContextUsers(contextId, {0, 100, "asc"});
@@ -90,5 +86,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
 

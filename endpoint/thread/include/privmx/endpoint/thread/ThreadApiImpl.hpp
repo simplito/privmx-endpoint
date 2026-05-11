@@ -99,7 +99,7 @@ private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     dynamic::ThreadDataV1 decryptThreadV1(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
     Thread convertServerThreadToLibThread(
         server::ThreadInfo threadInfo,
@@ -113,14 +113,12 @@ private:
     Thread convertDecryptedThreadDataV5ToThread(server::ThreadInfo threadInfo, const core::DecryptedModuleDataV5& threadData);
     ThreadDataSchema::Version getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry);
     std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(server::ThreadInfo thread, server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Thread> validateDecryptAndConvertThreadsDataToThreads(utils::List<server::ThreadInfo> threads);
+    std::vector<Thread> validateDecryptAndConvertThreadsDataToThreads(std::vector<server::ThreadInfo> threads);
     Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo thread);
     void assertThreadDataIntegrity(server::ThreadInfo thread);
     uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
-
-
 
     dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
     dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
@@ -141,7 +139,7 @@ private:
     Message convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData);
     MessageDataSchema::Version getMessagesDataStructureVersion(server::Message message);
     std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(server::Message message, const core::DecryptedEncKey& encKey);
-    std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(utils::List<server::Message> messages, const core::ModuleKeys& threadKeys);
+    std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(std::vector<server::Message> messages, const core::ModuleKeys& threadKeys);
     Message validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleKeys& threadKeys);
     core::ModuleKeys getMessageDecryptionKeys(server::Message message);
     uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);

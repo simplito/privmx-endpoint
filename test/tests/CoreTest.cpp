@@ -355,8 +355,8 @@ TEST_F(CoreTest, listContextUsers) {
             }
         );
     });
-    EXPECT_EQ(userInfo.totalAvailable, 2);
-    EXPECT_EQ(userInfo.readItems.size(), 2);
+    EXPECT_EQ(userInfo.totalAvailable, 3);
+    EXPECT_EQ(userInfo.readItems.size(), 3);
     EXPECT_EQ(userInfo.readItems[0].isActive, true);
     EXPECT_EQ(userInfo.readItems[0].user.userId, reader->getString("Login.user_1_id"));
     EXPECT_EQ(userInfo.readItems[0].user.pubKey, reader->getString("Login.user_1_pubKey"));
@@ -384,8 +384,8 @@ TEST_F(CoreTest, listContextUsers) {
             }
         );
     });
-    EXPECT_EQ(userInfo.totalAvailable, 2);
-    EXPECT_EQ(userInfo.readItems.size(), 2);
+    EXPECT_EQ(userInfo.totalAvailable, 3);
+    EXPECT_EQ(userInfo.readItems.size(), 3);
     EXPECT_EQ(userInfo.readItems[0].isActive, true);
     EXPECT_EQ(userInfo.readItems[0].user.userId, reader->getString("Login.user_1_id"));
     EXPECT_EQ(userInfo.readItems[0].user.pubKey, reader->getString("Login.user_1_pubKey"));

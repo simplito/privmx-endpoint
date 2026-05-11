@@ -26,44 +26,43 @@ std::string MessageDataV2Encryptor::signAndEncrypt(const dynamic::MessageDataV2&
 }
 
 dynamic::MessageDataV2Signed  MessageDataV2Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
-    dynamic::MessageDataV2Signed result = utils::TypedObjectFactory::createNewObject<dynamic::MessageDataV2Signed>();
+    dynamic::MessageDataV2Signed result;
     auto decrypted = _dataEncryptor.decryptAndGetSign(data, key);
-    result.dataSignature(std::get<0>(decrypted));
-    result.data(std::get<1>(decrypted));
-    result.data().statusCode(0);
-    result.dataBuf(std::get<2>(decrypted));
+    result.dataSignature = std::get<0>(decrypted);
+    result.data = std::get<1>(decrypted);
+    result.data.statusCode = 0;
+    result.dataBuf = std::get<2>(decrypted);
     return result;
 }
 
 std::string MessageDataV3Encryptor::signAndEncrypt(const dynamic::MessageDataV3& data, const privmx::crypto::PrivateKey& priv, const core::EncKey& encKey) {
-    auto messageDataV3Encrypted = utils::TypedObjectFactory::createObjectFromVar<dynamic::MessageDataV3>(utils::Utils::jsonObjectDeepCopy(data));
-    messageDataV3Encrypted.publicMeta(utils::Base64::from(data.publicMeta())); // for extra save 
-    messageDataV3Encrypted.privateMeta(_dataEncryptorBinaryString.encrypt(data.privateMeta(), encKey));
-    messageDataV3Encrypted.data(_dataEncryptorBinaryString.encrypt(data.data(), encKey));
+    dynamic::MessageDataV3 messageDataV3Encrypted;
+    messageDataV3Encrypted.publicMeta = utils::Base64::from(data.publicMeta); // for extra save 
+    messageDataV3Encrypted.privateMeta =_dataEncryptorBinaryString.encrypt(data.privateMeta, encKey);
+    messageDataV3Encrypted.data =_dataEncryptorBinaryString.encrypt(data.data, encKey);
     return utils::Base64::from(_dataEncryptorMessageDataV3.sign(messageDataV3Encrypted, priv));
 }
 
 dynamic::MessageDataV3Signed  MessageDataV3Encryptor::decryptAndGetSign(const std::string& data, const core::EncKey& key) {
-    dynamic::MessageDataV3Signed result = utils::TypedObjectFactory::createNewObject<dynamic::MessageDataV3Signed>();
-    Poco::JSON::Parser parser;
+    dynamic::MessageDataV3Signed result;
     Pson::BinaryString dataBuf, dataSignature;
     std::tie(dataSignature, dataBuf) = _dataEncryptorMessageDataV3.extractSignAndDataBuff(utils::Base64::toString(data));
-    auto messageDataV3Encrypted = utils::TypedObjectFactory::createObjectFromVar<dynamic::MessageDataV3>(parser.parse(dataBuf));
-    auto messageDataV3 = utils::TypedObjectFactory::createNewObject<dynamic::MessageDataV3>();
-    messageDataV3.publicMeta(utils::Base64::toString(messageDataV3Encrypted.publicMeta()));
+    dynamic::MessageDataV3 messageDataV3Encrypted = dynamic::MessageDataV3::fromJSON(privmx::utils::Utils::parseJsonObject(dataBuf));
+    dynamic::MessageDataV3 messageDataV3;
+    messageDataV3.publicMeta = utils::Base64::toString(messageDataV3Encrypted.publicMeta);
     try {
-        messageDataV3.privateMeta(_dataEncryptorBinaryString.decrypt(messageDataV3Encrypted.privateMeta(), key));
-        messageDataV3.data(_dataEncryptorBinaryString.decrypt(messageDataV3Encrypted.data(), key));
-        messageDataV3.statusCode(0);
+        messageDataV3.privateMeta = _dataEncryptorBinaryString.decrypt(messageDataV3Encrypted.privateMeta, key);
+        messageDataV3.data = _dataEncryptorBinaryString.decrypt(messageDataV3Encrypted.data, key);
+        messageDataV3.statusCode = 0;
     } catch (const privmx::endpoint::core::Exception& e) {
-        messageDataV3.statusCode(e.getCode());
+        messageDataV3.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
-        messageDataV3.statusCode(core::ExceptionConverter::convert(e).getCode());
+        messageDataV3.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) {
-        messageDataV3.statusCode(ENDPOINT_CORE_EXCEPTION_CODE);
+        messageDataV3.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
     }
-    result.data(messageDataV3);
-    result.dataSignature(dataSignature);
-    result.dataBuf(dataBuf);
+    result.data = messageDataV3;
+    result.dataSignature = dataSignature;
+    result.dataBuf =dataBuf;
     return result;
 }
