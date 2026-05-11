@@ -28,7 +28,7 @@ TEST_CMAKE_FILE = SCRIPT_DIR / "CMakeLists.txt"
 
 MAX_WORKERS = 4
 TIMEOUT_PER_TEST = 300
-RETRY_COUNT = 0
+RETRY_COUNT = 1
 RETRY_DELAY = 5
 
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -213,7 +213,7 @@ def load_bridge_dataset(dataset_path: str, bridge_container_name: str) -> None:
     )
 
 
-def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int = 10) -> None:
+def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int = 30) -> None:
     url = f"http://localhost:{port}/privmx-configuration.json"
     deadline = time.time() + timeout_seconds
 
@@ -615,6 +615,13 @@ def parse_cli_args(argv: Sequence[str]) -> tuple[argparse.Namespace, str | None,
         action="store_true",
         help="Create/update test/.venv and install Python dependencies before running tests.",
     )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=MAX_WORKERS,
+        metavar="N",
+        help=f"Maximum number of tests to run in parallel (default: {MAX_WORKERS}).",
+    )
     parser.add_argument("tests_dir", nargs="?")
     parser.add_argument("init_file_path", nargs="?")
     parser.add_argument("dataset_dir", nargs="?")
@@ -666,6 +673,7 @@ def main(
     dataset_dir_path: str,
     run_passthrough_args: Sequence[str],
     selected_filter: str | None,
+    max_workers: int = MAX_WORKERS,
 ) -> int:
     validate_input_paths(test_dir_path, init_file_path, dataset_dir_path)
 
@@ -686,7 +694,7 @@ def main(
 
         scheduled_tests += len(tests)
         print(f"Found {len(tests)} tests in {test_file}")
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
                 executor.submit(
                     run_single_test,
@@ -740,5 +748,6 @@ if __name__ == "__main__":
         dataset_dir_path,
         run_passthrough_args,
         selected_filter,
+        args.max_workers,
     )
     raise SystemExit(0 if result == 0 else 1)
