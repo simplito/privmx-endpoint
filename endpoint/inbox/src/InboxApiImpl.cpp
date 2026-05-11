@@ -575,7 +575,7 @@ store::FileMetaToEncryptV4 InboxApiImpl::prepareMeta(const privmx::endpoint::inb
         .publicMeta = commitFileInfo.publicMeta,
         .privateMeta = commitFileInfo.privateMeta,
         .fileSize = commitFileInfo.size,
-        .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.toJSON()))
+        .internalMeta = core::Buffer::from(internalFileMeta.serialize())
     };
     return fileMetaToEncrypt;
 }

@@ -24,6 +24,7 @@ limitations under the License.
 #include <Poco/JSON/Object.h>
 #include <privmx/utils/PrivmxExtExceptions.hpp>
 #include <privmx/utils/Logger.hpp>
+#include <privmx/utils/Utils.hpp>
 
 namespace privmx {
 namespace utils {
@@ -261,10 +262,16 @@ struct STRUCT_NAME { \
         obj._parseFields(JSON); \
         return obj; \
     } \
+    static STRUCT_NAME deserialize(std::string JSON_string) { \
+        return STRUCT_NAME::fromJSON(privmx::utils::Utils::parseJsonObject(JSON_string)); \
+    } \
     Poco::JSON::Object::Ptr toJSON() const { \
         Poco::JSON::Object::Ptr result(new Poco::JSON::Object()); \
         serializeFields(result); \
         return result; \
+    } \
+    std::string serialize() const { \
+        return privmx::utils::Utils::stringify(toJSON()); \
     } \
 protected: \
     void _parseFields(Poco::JSON::Object::Ptr JSON) { FIELDS(_JSON_FROM) } \
@@ -289,11 +296,17 @@ struct STRUCT_NAME : public BASE_NAME { \
         obj._parseFields(JSON); \
         return obj; \
     } \
+    static STRUCT_NAME deserialize(std::string JSON_string) { \
+        return STRUCT_NAME::fromJSON(privmx::utils::Utils::parseJsonObject(JSON_string)); \
+    } \
     Poco::JSON::Object::Ptr toJSON() const { \
         Poco::JSON::Object::Ptr result(new Poco::JSON::Object()); \
         BASE_NAME::serializeFields(result); \
         serializeFields(result); \
         return result; \
+    } \
+    std::string serialize() const { \
+        return privmx::utils::Utils::stringify(toJSON()); \
     } \
 protected: \
     void _parseFields(Poco::JSON::Object::Ptr JSON) { \
