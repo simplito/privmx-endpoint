@@ -726,6 +726,8 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
                 auto event = core::EventBuilder::buildEvent<core::CollectionChangedEvent>("store/collectionChanged", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
+        } else {
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
     });
 }
