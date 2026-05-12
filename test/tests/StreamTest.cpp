@@ -159,9 +159,9 @@ protected:
     }
     void disconnect() {
         connection->disconnect();
-        connection.reset();
-        eventApi.reset();
         streamApi.reset();
+        eventApi.reset();
+        connection.reset();
     }
     void customSetUp() override {
         reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
@@ -181,9 +181,9 @@ protected:
         );
     }
     void customTearDown() override { // tmp segfault fix
-        connection.reset();
-        eventApi.reset();
         streamApi.reset();
+        eventApi.reset();
+        connection.reset();
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
