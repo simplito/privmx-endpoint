@@ -45,6 +45,7 @@ namespace stream {
 class StreamApiImpl {
 public:
     StreamApiImpl(core::Connection& connection);
+    ~StreamApiImpl();
 
     std::string createStreamRoom(
         const std::string& contextId, 
