@@ -18,6 +18,92 @@ PrivMX enables communication through **text messages**, **secure file storage** 
 - **Store** –  data storage and communication tool used for **file exchange and management**.
 - **Inbox** – a communication tool used for **one-way communication with external users**.
 
+## Building
+
+### Prerequisites
+
+- CMake ≥ 3.10.2
+- C++17-capable compiler (GCC or Clang)
+- [Conan 2.x](https://conan.io/) (recommended) — or manually provided pre-built libraries
+
+The library always uses the driver backends (`privmxdrvcrypto`, `privmxdrvecc`, `privmxdrvnet`) for crypto and networking. These are resolved automatically by Conan or must be supplied manually when building without it.
+
+### 1. Building with Conan (Recommended)
+
+Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`, `privmxdrvcrypto`, `privmxdrvecc`, `privmxdrvnet`, `gtest`.
+
+**Quick start:**
+```bash
+./build.sh
+```
+
+**Manual steps:**
+```bash
+mkdir -p ./build
+conan install . --output-folder=build --build=missing -s build_type=Debug
+cd build
+source build/Debug/generators/conanbuild.sh
+cmake .. -G "Unix Makefiles" \
+  -DCMAKE_TOOLCHAIN_FILE=build/Debug/generators/conan_toolchain.cmake \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DPRIVMX_CONAN=ON \
+  -DPRIVMX_ENABLE_TESTS=ON
+cmake --build . -- -j$(nproc)
+source build/Debug/generators/deactivate_conanbuild.sh
+```
+
+### 2. Building without Conan (find_package)
+
+When Conan is not available, CMake will attempt to locate the following libraries via `find_package`:
+
+| Library | Version |
+|---------|---------|
+| poco | 1.13.2 |
+| pson | 1.0.7 |
+| openssl | ≥ 3.0, < 3.1 |
+| gmp | 6.2.1 |
+| privmxdrvcrypto | 1.0.3 |
+| privmxdrvecc | 1.0.2 |
+| privmxdrvnet | 1.0.3 |
+| gtest | ≥ 1.15.0 *(optional, needed for tests)* |
+| readline | ≥ 8.2.0 *(optional, needed for CLI)* |
+| libwebrtc | m125 *(optional, needed for WebRTC streaming)* |
+
+```bash
+mkdir -p build && cd build
+cmake .. \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DPRIVMX_CONAN=OFF
+cmake --build . -- -j$(nproc)
+```
+
+### CMake Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `PRIVMX_CONAN` | ON | Must be ON when using Conan toolchain |
+| `BUILD_SHARED_LIBS` | ON | Build shared (`.so`) vs. static (`.a`) library |
+| `PRIVMX_IMPORTED_LIBRARIES` | OFF | Point to pre-built libs instead of using `find_package` |
+| `PRIVMX_ENABLE_TESTS` | OFF | Build unit tests |
+| `PRIVMX_ENABLE_TESTS_E2E` | OFF | Build E2E integration tests |
+| `PRIVMX_BUILD_CLI` | OFF | Build `privmxcli` command-line tool |
+| `PRIVMX_EMSCRIPTEN` | OFF | WebAssembly/Emscripten build |
+| `PRIVMX_BUILD_WITH_WEBRTC` | OFF | Enable WebRTC support for real-time streaming |
+
+#### Logger Options (require `PRIVMX_BUILD_LOGGER=ON`)
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `PRIVMX_BUILD_LOGGER` | OFF | Enable the logging subsystem |
+| `PRIVMX_ENABLE_LOGGER_TIMER` | OFF | Include timing info in log entries |
+| `PRIVMX_LOGGER_LEVEL` | 3 | Verbosity level (e.g. `6` for All log levels) |
+| `PRIVMX_LOGGER_OUTPUT_INCLUDE_TIMESTAMP` | OFF | Prepend timestamp to each log line |
+| `PRIVMX_LOGGER_OUTPUT_INCLUDE_THREADID` | OFF | Prepend thread ID to each log line |
+| `PRIVMX_LOGGER_OUTPUT_STDOUT` | OFF | Log to stdout |
+| `PRIVMX_LOGGER_OUTPUT_STDERR` | OFF | Log to stderr |
+| `PRIVMX_LOGGER_OUTPUT_FILE` | OFF | Log to a file |
+| `PRIVMX_LOGGER_OUTPUT_FILE_PATH` | — | Path for the log file (e.g. `output.log`) |
+
 ## Resources
 
 - [PrivMX Documentation](https://docs.privmx.dev/)

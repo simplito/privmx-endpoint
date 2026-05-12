@@ -603,7 +603,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
             .publicMeta = handle->getPublicMeta(),
             .privateMeta = handle->getPrivateMeta(),
             .fileSize = handle->getSize(),
-            .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.toJSON()))
+            .internalMeta = core::Buffer::from(internalFileMeta.serialize())
         };
         encryptedMetaVar = _fileMetaEncryptorV4.encrypt(fileMeta, _userPrivKey, key.key).toJSON();
         break;
@@ -615,7 +615,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
         store::FileMetaToEncryptV5 fileMeta{
             .publicMeta = handle->getPublicMeta(),
             .privateMeta = handle->getPrivateMeta(),
-            .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(internalFileMeta.toJSON())),
+            .internalMeta = core::Buffer::from(internalFileMeta.serialize()),
             .dio = fileDIO
         };
         auto encryptedMeta = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key);
@@ -722,6 +722,8 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
                 );
                 _eventMiddleware->emitApiEvent(event);
             }
+        } else {
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
     });
 }
@@ -1181,9 +1183,8 @@ File StoreApiImpl::convertServerFileToLibFile(
 
 File StoreApiImpl::convertStoreFileMetaV1ToFile(server::File file, dynamic::compat_v1::StoreFileMeta storeFileMeta) {
     return convertServerFileToLibFile(
-        file, core::Buffer(), core::Buffer::from(utils::Utils::stringifyVar(storeFileMeta.toJSON())),
-        storeFileMeta.size, storeFileMeta.author.pubKey, storeFileMeta.statusCode, FileDataSchema::Version::VERSION_1,
-        false
+        file, core::Buffer(), core::Buffer::from(storeFileMeta.serialize()), storeFileMeta.size,
+        storeFileMeta.author.pubKey, storeFileMeta.statusCode, FileDataSchema::Version::VERSION_1, false
     );
 }
 
@@ -1488,7 +1489,7 @@ void StoreApiImpl::updateFileMeta(
     }
     Poco::Dynamic::Var encryptedMetaVar;
     auto fileInternalMeta = validateDecryptFileInternalMeta(file, storeToModuleKeys(store));
-    auto internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileInternalMeta.toJSON()));
+    auto internalMeta = core::Buffer::from(fileInternalMeta.serialize());
     switch (getStoreEntryDataStructureVersion(store.data.back())) {
     case StoreDataSchema::Version::UNKNOWN:
         throw UnknowStoreFormatException();

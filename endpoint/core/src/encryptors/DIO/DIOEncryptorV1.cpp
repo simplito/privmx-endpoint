@@ -51,9 +51,9 @@ std::string DIOEncryptorV1::signAndEncode(
     } else {
         dioJSON.bridgeIdentity = std::nullopt;
     }
-    return _dataEncryptor.encode(_dataEncryptor.signAndPackDataWithSignature(
-        core::Buffer::from(privmx::utils::Utils::stringify(dioJSON.toJSON())), authorKey
-    ));
+    return _dataEncryptor.encode(
+        _dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(dioJSON.serialize()), authorKey)
+    );
 }
 
 ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& signedDio) {

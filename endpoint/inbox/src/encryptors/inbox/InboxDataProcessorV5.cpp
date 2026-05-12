@@ -50,7 +50,7 @@ server::InboxData InboxDataProcessorV5::packForServer(
         .randomId = plainData.privateData.internalMeta.randomId,
     };
     serverPrivateData.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
-        core::Buffer::from(utils::Utils::stringifyVar(internalMetaObj.toJSON())), authorPrivateKey, inboxKey
+        core::Buffer::from(internalMetaObj.serialize()), authorPrivateKey, inboxKey
     );
     privateDataMapOfDataSha256.insert(
         std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(serverPrivateData.internalMeta))

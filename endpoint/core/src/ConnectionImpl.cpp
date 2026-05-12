@@ -414,6 +414,8 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
                 "context/userStatus", data, notification
             );
             _eventMiddleware->emitApiEvent(event);
+        } else {
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
     });
 }

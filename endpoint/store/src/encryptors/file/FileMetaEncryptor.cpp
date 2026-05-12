@@ -37,7 +37,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(
                     .publicMeta = fileMeta.publicMeta,
                     .privateMeta = fileMeta.privateMeta,
                     .fileSize = fileMeta.internalFileMeta.size,
-                    .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.toJSON()))
+                    .internalMeta = core::Buffer::from(fileMeta.internalFileMeta.serialize())
                 },
                 _userPrivKey, encKey.key
             )
@@ -48,7 +48,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(
                 store::FileMetaToEncryptV5{
                     .publicMeta = fileMeta.publicMeta,
                     .privateMeta = fileMeta.privateMeta,
-                    .internalMeta = core::Buffer::from(utils::Utils::stringifyVar(fileMeta.internalFileMeta.toJSON())),
+                    .internalMeta = core::Buffer::from(fileMeta.internalFileMeta.serialize()),
                     .dio = createDIO(fileInfo)
                 },
                 _userPrivKey, encKey.key

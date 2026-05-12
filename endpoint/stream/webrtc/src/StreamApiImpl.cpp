@@ -58,6 +58,13 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
     );
 }
 
+StreamApiImpl::~StreamApiImpl() {
+    _streamDataMap.clear();
+    _webRTC.reset();
+    _api.reset();
+    libwebrtc::LibWebRTC::Terminate();
+}
+
 std::vector<StreamInfo> StreamApiImpl::listStreams(const std::string& streamRoomId) {
     return _api->listStreams(streamRoomId);
 }

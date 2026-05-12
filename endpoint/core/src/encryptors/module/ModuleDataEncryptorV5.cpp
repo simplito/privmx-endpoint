@@ -39,7 +39,7 @@ dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(
         .randomId = kvdbData.internalMeta.randomId
     };
     result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
-        Buffer::from(utils::Utils::stringifyVar(internalMeta.toJSON())), authorPrivateKey, encryptionKey
+        Buffer::from(internalMeta.serialize()), authorPrivateKey, encryptionKey
     );
     fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(result.internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();

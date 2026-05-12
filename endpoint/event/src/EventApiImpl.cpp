@@ -223,7 +223,7 @@ void EventApiImpl::emitEventEx(
     model.channel = channelName;
     model.users = _eventKeyProvider.prepareKeysList(users, encryptionKey);
     _serverApi.contextSendCustomEvent(model);
-    PRIVMX_DEBUG("EventApiImpl", "emitEventEx", privmx::utils::Utils::stringify(model.toJSON(), true));
+    PRIVMX_DEBUG("EventApiImpl", "emitEventEx", model.serialize(), true);
 }
 
 void EventApiImpl::validateChannelName(const std::string& channelName) {

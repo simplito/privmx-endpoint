@@ -23,7 +23,7 @@ std::string FileMetaEncryptorV1::signAndEncrypt(
     const privmx::crypto::PrivateKey& priv,
     const std::string& key
 ) {
-    auto buffer{utils::Utils::stringify(data.toJSON())};
+    auto buffer{data.serialize()};
     auto signature = priv.signToCompactSignatureWithHash(buffer);
     std::string plain;
     plain.push_back(1);

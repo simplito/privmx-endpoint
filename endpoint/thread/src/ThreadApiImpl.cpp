@@ -504,6 +504,8 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
                 );
                 _eventMiddleware->emitApiEvent(event);
             }
+        } else {
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
     });
 }
