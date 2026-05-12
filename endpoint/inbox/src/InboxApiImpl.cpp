@@ -970,17 +970,15 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
                 setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
                 auto data = validateDecryptAndConvertInboxDataToInbox(raw);
                 auto event = core::EventBuilder::buildEvent<InboxCreatedEvent>("inbox", data, notification);
-                return _eventMiddleware->emitApiEvent(event);
+                _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "inboxUpdated") {
-            LOG_INFO("Processing Event type=", type)
-
             auto raw = server::InboxInfo::fromJSON(notification.data);
             if(raw.type.value_or(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
                 auto data = validateDecryptAndConvertInboxDataToInbox(raw);
                 auto event = core::EventBuilder::buildEvent<InboxUpdatedEvent>("inbox", data, notification);
-                return _eventMiddleware->emitApiEvent(event);
+                _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "inboxDeleted") {
             auto raw = server::InboxDeletedEventData::fromJSON(notification.data);
@@ -996,7 +994,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
                 auto inboxId = readInboxIdFromMessageKeyId(raw.keyId);
                 auto message = decryptAndConvertInboxEntryDataToInboxEntry(raw, getEntryDecryptionKeys(raw));
                 auto event = core::EventBuilder::buildEvent<InboxEntryCreatedEvent>("inbox/" + inboxId + "/entries", message, notification);
-                return _eventMiddleware->emitApiEvent(event);
+                _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "threadDeletedMessage") {
             auto raw = privmx::endpoint::thread::server::ThreadDeletedMessageEventData::fromJSON(notification.data);
@@ -1013,7 +1011,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
                     .entryId = raw.messageId
                 };
                 auto event = core::EventBuilder::buildEvent<InboxEntryDeletedEvent>("inbox/" + inboxId + "/entries", data, notification);
-                return _eventMiddleware->emitApiEvent(event);
+                _eventMiddleware->emitApiEvent(event);
             }
         } else if (type == "threadCollectionChanged") {
             auto raw = core::server::CollectionChangedEventData::fromJSON(notification.data);
@@ -1026,10 +1024,11 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
                 } else {
                     event->data.moduleId = "";
                 }
-                return _eventMiddleware->emitApiEvent(event);
+                _eventMiddleware->emitApiEvent(event);
             }
+        } else {
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
-        LOG_WARN("Failed to process Event type=", type)
     });
 }
 

@@ -384,6 +384,8 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
             auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
             auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
             _eventMiddleware->emitApiEvent(event);
+        } else {
+            LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
     });
 }
