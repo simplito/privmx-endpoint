@@ -83,7 +83,6 @@ std::shared_ptr<SerializedEvent> ContextUsersStatusChangedEvent::serialize() con
     return std::make_shared<SerializedEvent>(SerializedEvent{EventVarSerializer::getInstance()->serialize(*this)});
 }
 
-
 bool Events::isLibBreakEvent(const core::EventHolder& handler) {
     return handler.type() == "libBreak";
 }
@@ -118,7 +117,9 @@ LibPlatformDisconnectedEvent Events::extractLibPlatformDisconnectedEvent(const c
     }
 }
 
-bool Events::isLibConnectedEvent(const core::EventHolder& handler) { return handler.type() == "libConnected"; }
+bool Events::isLibConnectedEvent(const core::EventHolder& handler) {
+    return handler.type() == "libConnected";
+}
 
 LibConnectedEvent Events::extractLibConnectedEvent(const core::EventHolder& handler) {
     try {
@@ -133,7 +134,9 @@ LibConnectedEvent Events::extractLibConnectedEvent(const core::EventHolder& hand
     }
 }
 
-bool Events::isLibDisconnectedEvent(const core::EventHolder& handler) { return handler.type() == "libDisconnected"; }
+bool Events::isLibDisconnectedEvent(const core::EventHolder& handler) {
+    return handler.type() == "libDisconnected";
+}
 
 LibDisconnectedEvent Events::extractLibDisconnectedEvent(const core::EventHolder& handler) {
     try {
@@ -148,13 +151,16 @@ LibDisconnectedEvent Events::extractLibDisconnectedEvent(const core::EventHolder
     }
 }
 
-bool Events::isCollectionChangedEvent(const core::EventHolder& eventHolder) { return eventHolder.type() == "collectionChanged"; }
+bool Events::isCollectionChangedEvent(const core::EventHolder& eventHolder) {
+    return eventHolder.type() == "collectionChanged";
+}
 
 CollectionChangedEvent Events::extractCollectionChangedEvent(const core::EventHolder& eventHolder) {
     try {
         auto event = std::dynamic_pointer_cast<CollectionChangedEvent>(eventHolder.get());
         if (!event) {
-            throw CannotExtractCollectionChangedEventException();}
+            throw CannotExtractCollectionChangedEventException();
+        }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -162,7 +168,9 @@ CollectionChangedEvent Events::extractCollectionChangedEvent(const core::EventHo
     }
 }
 
-bool Events::isContextUserAddedEvent(const core::EventHolder& handler) { return handler.type() == "contextUserAdded"; }
+bool Events::isContextUserAddedEvent(const core::EventHolder& handler) {
+    return handler.type() == "contextUserAdded";
+}
 
 ContextUserAddedEvent Events::extractContextUserAddedEvent(const core::EventHolder& handler) {
     try {
@@ -177,7 +185,9 @@ ContextUserAddedEvent Events::extractContextUserAddedEvent(const core::EventHold
     }
 }
 
-bool Events::isContextUserRemovedEvent(const core::EventHolder& handler) { return handler.type() == "contextUserRemoved"; }
+bool Events::isContextUserRemovedEvent(const core::EventHolder& handler) {
+    return handler.type() == "contextUserRemoved";
+}
 
 ContextUserRemovedEvent Events::extractContextUserRemovedEvent(const core::EventHolder& handler) {
     try {
@@ -192,7 +202,9 @@ ContextUserRemovedEvent Events::extractContextUserRemovedEvent(const core::Event
     }
 }
 
-bool Events::isContextUsersStatusChangedEvent(const core::EventHolder& handler) { return handler.type() == "contextUserStatusChanged"; }
+bool Events::isContextUsersStatusChangedEvent(const core::EventHolder& handler) {
+    return handler.type() == "contextUserStatusChanged";
+}
 
 ContextUsersStatusChangedEvent Events::extractContextUsersStatusChangedEvent(const core::EventHolder& handler) {
     try {

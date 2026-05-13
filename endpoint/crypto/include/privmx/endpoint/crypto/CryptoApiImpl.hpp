@@ -16,16 +16,15 @@ limitations under the License.
 #include <optional>
 #include <string>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/crypto/Types.hpp"
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace crypto {
 
-class CryptoApiImpl
-{
+class CryptoApiImpl {
 public:
     core::Buffer signData(const core::Buffer& data, const std::string& key);
     bool verifySignature(const core::Buffer& data, const core::Buffer& signature, const std::string& key);
@@ -49,8 +48,8 @@ private:
     privmx::crypto::PrivateKey getPrivKeyFromSeed(const std::string& seed, size_t rounds);
 };
 
-} // crypto
-} // endpoint
-} // privmx
+} // namespace crypto
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOAPIIMPL_HPP_

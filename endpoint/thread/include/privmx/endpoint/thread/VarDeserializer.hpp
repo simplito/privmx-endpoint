@@ -24,13 +24,19 @@ namespace endpoint {
 namespace core {
 
 template<>
-thread::EventType VarDeserializer::deserialize<thread::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
+thread::EventType VarDeserializer::deserialize<thread::EventType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
 template<>
-thread::EventSelectorType VarDeserializer::deserialize<thread::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+thread::EventSelectorType VarDeserializer::deserialize<thread::EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_THREAD_VARDESERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_THREAD_VARDESERIALIZER_HPP_

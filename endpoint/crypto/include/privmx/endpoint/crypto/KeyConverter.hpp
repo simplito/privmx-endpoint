@@ -18,15 +18,14 @@ namespace privmx {
 namespace endpoint {
 namespace crypto {
 
-class KeyConverter
-{
+class KeyConverter {
 public:
     static std::string cryptoKeyConvertPEMToWIF(const std::string& keyPEM);
     static std::string cryptoKeyConvertPGPToBase58DER(const std::string& keyPGP);
 };
 
-} // crypto
-} // endpoint
-} // privmx
+} // namespace crypto
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CRYPTO_KEYCONVERTER_HPP_

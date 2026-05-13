@@ -17,11 +17,13 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
 std::map<EventApiVarInterface::METHOD, Poco::Dynamic::Var (EventApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    EventApiVarInterface::methodMap = {{Create, &EventApiVarInterface::create},
-                                       {EmitEvent, &EventApiVarInterface::emitEvent},
-                                       {SubscribeFor, &EventApiVarInterface::subscribeFor},
-                                       {UnsubscribeFrom, &EventApiVarInterface::unsubscribeFrom},
-                                       {BuildSubscriptionQuery, &EventApiVarInterface::buildSubscriptionQuery}};
+    EventApiVarInterface::methodMap = {
+        {Create, &EventApiVarInterface::create},
+        {EmitEvent, &EventApiVarInterface::emitEvent},
+        {SubscribeFor, &EventApiVarInterface::subscribeFor},
+        {UnsubscribeFrom, &EventApiVarInterface::unsubscribeFrom},
+        {BuildSubscriptionQuery, &EventApiVarInterface::buildSubscriptionQuery}
+};
 
 Poco::Dynamic::Var EventApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);

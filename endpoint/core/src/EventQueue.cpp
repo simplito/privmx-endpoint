@@ -9,13 +9,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <string>
 #include <Poco/AutoPtr.h>
+#include <string>
 
 #include "privmx/endpoint/core/EventQueue.hpp"
-#include "privmx/endpoint/core/JsonSerializer.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
+#include "privmx/endpoint/core/JsonSerializer.hpp"
 #include <privmx/endpoint/core/SingletonsHolder.hpp>
 
 using namespace privmx::endpoint::core;

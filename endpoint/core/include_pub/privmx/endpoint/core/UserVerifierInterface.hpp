@@ -1,9 +1,9 @@
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_USERVERIFIERINTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_USERVERIFIERINTERFACE_HPP_
 
-#include <string>
-#include <optional>
 #include "privmx/endpoint/core/Types.hpp"
+#include <optional>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -46,12 +46,13 @@ public:
      * @return List of verification results whose items correspond to the items in the input list
      */
     virtual std::vector<bool> verify(const std::vector<VerificationRequest>& request) = 0;
+
 protected:
-   virtual ~UserVerifierInterface()  = default;
+    virtual ~UserVerifierInterface() = default;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_USERVERIFIERINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_USERVERIFIERINTERFACE_HPP_

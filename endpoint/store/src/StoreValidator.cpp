@@ -20,7 +20,10 @@ void StructValidator<store::Store>::validate(const store::Store& value, const st
     Validator::validateId(value.contextId, stack_trace + ".contextId");
 }
 
-void StructValidator<PagingList<store::Store>>::validate(const PagingList<store::Store>& value, const std::string& stack_trace) {
+void StructValidator<PagingList<store::Store>>::validate(
+    const PagingList<store::Store>& value,
+    const std::string& stack_trace
+) {
     Validator::validateNumberNonNegative(value.totalAvailable, stack_trace + ".totalAvailable");
     StructValidator<std::vector<store::Store>>::validate(value.readItems, stack_trace + ".readItems");
 }
@@ -33,7 +36,10 @@ void StructValidator<store::File>::validate(const store::File& value, const std:
     Validator::validatePubKeyBase58DER(value.authorPubKey, stack_trace + ".authorPubKey");
 }
 
-void StructValidator<PagingList<store::File>>::validate(const PagingList<store::File>& value, const std::string& stack_trace) {
+void StructValidator<PagingList<store::File>>::validate(
+    const PagingList<store::File>& value,
+    const std::string& stack_trace
+) {
     Validator::validateNumberPositive(value.totalAvailable, stack_trace + ".totalAvailable");
     StructValidator<std::vector<store::File>>::validate(value.readItems, stack_trace + ".readItems");
 }

@@ -17,8 +17,8 @@ limitations under the License.
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <string>
 
-#include "privmx/endpoint/kvdb/Types.hpp"
 #include "privmx/endpoint/kvdb/Events.hpp"
+#include "privmx/endpoint/kvdb/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -34,10 +34,12 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::ServerKvdbEntryInfo>(const kvdb::ServerKvdbEntryInfo& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry>(const kvdb::KvdbEntry & val);
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry>(const kvdb::KvdbEntry& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<kvdb::KvdbEntry>>(const core::PagingList<kvdb::KvdbEntry>& val);
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<kvdb::KvdbEntry>>(
+    const core::PagingList<kvdb::KvdbEntry>& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEventData>(const kvdb::KvdbDeletedEventData& val);
@@ -46,7 +48,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsEventData>(const kvdb::KvdbStatsEventData& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEntryEventData>(const kvdb::KvdbDeletedEntryEventData& val);
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEntryEventData>(
+    const kvdb::KvdbDeletedEntryEventData& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbCreatedEvent>(const kvdb::KvdbCreatedEvent& val);
@@ -72,8 +76,8 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(const k
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<std::string>>(const core::PagingList<std::string>& val);
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_KVDB_VARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_KVDB_VARSERIALIZER_HPP_

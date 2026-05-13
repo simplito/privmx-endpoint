@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_CONTEXTPROVIDER_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_CONTEXTPROVIDER_HPP_
 
-#include <privmx/endpoint/core/ContainerProvider.hpp>
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include <privmx/endpoint/core/ContainerProvider.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -22,13 +22,14 @@ namespace core {
 class ContextProvider : public core::ContainerProvider<std::string, server::ContextInfo> {
 public:
     ContextProvider(std::function<server::ContextInfo(std::string)> getContext);
+
 protected:
     bool isNewerOrSameAsInStorage(const server::ContextInfo& container) override;
-    inline std::string getID(const server::ContextInfo& container) override {return container.contextId;}
+    inline std::string getID(const server::ContextInfo& container) override { return container.contextId; }
 };
 
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CORE_CONTEXTPROVIDER_HPP_

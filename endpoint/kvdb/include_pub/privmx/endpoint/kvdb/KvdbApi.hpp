@@ -1,11 +1,11 @@
 #ifndef _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_HPP_
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
-#include <map>
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
@@ -52,11 +52,12 @@ public:
      * @param policies KVDB's policies
      * @return ID of the created KVDB
      */
-    std::string createKvdb(const std::string& contextId, 
+    std::string createKvdb(
+        const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers, 
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
 
@@ -72,15 +73,16 @@ public:
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the KVDB
      * @param policies KVDB's policies
-     */    
-    void updateKvdb(const std::string& kvdbId, 
+     */
+    void updateKvdb(
+        const std::string& kvdbId,
         const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers, 
-        const core::Buffer& publicMeta, 
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const int64_t version, 
-        const bool force, 
-        const bool forceGenerateNewKey, 
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
 
@@ -105,7 +107,7 @@ public:
      * @param contextId ID of the Context to get the Kvdbs from
      * @param pagingQuery with list query parameters
      * @return struct containing a list of Kvdbs
-     */    
+     */
     core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     /**
@@ -114,7 +116,7 @@ public:
      * @param kvdbId KVDB ID of the KVDB entry to get
      * @param key key of the KVDB entry to get
      * @return struct containing the KVDB entry
-     */    
+     */
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
 
     /**
@@ -123,7 +125,7 @@ public:
      * @param kvdbId KVDB ID of the KVDB entry to check
      * @param key key of the KVDB entry to check
      * @returns 'true' if the KVDB has an entry with given key, 'false' otherwise
-     */   
+     */
     bool hasEntry(const std::string& kvdbId, const std::string& key);
 
     /**
@@ -132,7 +134,7 @@ public:
      * @param kvdbId ID of the KVDB to list KVDB entries from
      * @param pagingQuery with list query parameters
      * @return struct containing a list of KVDB entries
-     */    
+     */
     core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
 
     /**
@@ -141,7 +143,7 @@ public:
      * @param kvdbId ID of the KVDB to list KVDB entries from
      * @param pagingQuery  with list query parameters
      * @return struct containing a list of KVDB entries
-     */    
+     */
     core::PagingList<KvdbEntry> listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
 
     /**
@@ -151,15 +153,22 @@ public:
      * @param publicMeta public KVDB entry metadata
      * @param privateMeta private KVDB entry metadata
      * @param data content of the KVDB entry
-     */    
-    void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version = 0);
-    
+     */
+    void setEntry(
+        const std::string& kvdbId,
+        const std::string& key,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data,
+        int64_t version = 0
+    );
+
     /**
      * Deletes a KVDB entry by given KVDB entry ID.
      *
      * @param kvdbId KVDB ID of the KVDB entry to delete
      * @param key key of the KVDB entry to delete
-     */    
+     */
     void deleteEntry(const std::string& kvdbId, const std::string& key);
 
     /**
@@ -168,7 +177,7 @@ public:
      * @param kvdbId ID of the KVDB database to delete from
      * @param keys vector of the keys of the KVDB entries to delete
      * @return map with the statuses of deletion for every key
-     */    
+     */
     std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
 
     /**
@@ -191,7 +200,11 @@ public:
      * @param selectorType scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
     /**
      * Generate subscription Query for the KVDB events for single KvdbEntry.
@@ -199,14 +212,18 @@ public:
      * @param kvdbId Id of Kvdb 
      * @param kvdbEntryId Key of Kvdb Entry
      */
-    std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
+    std::string buildSubscriptionQueryForSelectedEntry(
+        EventType eventType,
+        const std::string& kvdbId,
+        const std::string& kvdbEntryKey
+    );
 
 private:
     KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl);
 };
 
-}  // namespace kvdb
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace kvdb
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_HPP_

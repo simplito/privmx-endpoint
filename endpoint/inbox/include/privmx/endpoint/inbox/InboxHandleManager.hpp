@@ -15,12 +15,11 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/utils/ThreadSaveMap.hpp>
+#include "privmx/endpoint/inbox/InboxApi.hpp"
 #include <privmx/endpoint/core/HandleManager.hpp>
 #include <privmx/endpoint/store/ChunkStreamer.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>
-#include "privmx/endpoint/inbox/InboxApi.hpp"
-
+#include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -47,9 +46,7 @@ struct InboxHandle {
     std::optional<std::string> userPrivKey;
 };
 
-
-class InboxHandleManager
-{
+class InboxHandleManager {
 public:
     InboxHandleManager(std::shared_ptr<core::HandleManager> handleManager);
     std::shared_ptr<InboxHandle> createInboxHandle(
@@ -75,7 +72,7 @@ public:
         std::shared_ptr<store::RequestApi> requestApi
     );
     std::shared_ptr<store::FileWriteHandle> getFileWriteHandle(int64_t fileHandleId);
-    std::shared_ptr<store::FileReadHandle> createFileReadHandle( 
+    std::shared_ptr<store::FileReadHandle> createFileReadHandle(
         const store::FileDecryptionParams& decryptionParams,
         size_t serverChunkSize,
         std::shared_ptr<store::ServerApi> server
@@ -84,6 +81,7 @@ public:
     bool isFileWriteHandle(int64_t fileHandleId);
     std::shared_ptr<store::FileReadHandle> getFileReadHandle(int64_t fileHandleId);
     void removeFileHandle(int64_t fileHandleId, bool force = false);
+
 private:
     std::shared_ptr<core::HandleManager> _handleManager;
     store::FileHandleManager _fileHandleManager;
@@ -91,8 +89,8 @@ private:
     std::vector<int64_t> _fileHandlesUsedByInboxHandles;
 };
 
-} // inbox
-} // endpoint
-} // privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOX_HANDLE_MANAGER_HPP_

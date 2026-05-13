@@ -12,49 +12,48 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPIIMPL_HPP_
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
-#include <atomic>
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 
-#include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/thread/ServerTypes.hpp>
-#include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/endpoint/store/StoreApi.hpp>
-#include <privmx/endpoint/store/FileHandle.hpp>
-#include <privmx/endpoint/store/DynamicTypes.hpp>
-#include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp>
-#include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp>
-#include <privmx/endpoint/core/ModuleBaseApi.hpp>
+#include "privmx/endpoint/core/Factory.hpp"
+#include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include "privmx/endpoint/inbox/Constants.hpp"
+#include "privmx/endpoint/inbox/Events.hpp"
+#include "privmx/endpoint/inbox/FileKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/inbox/InboxApi.hpp"
-#include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/InboxEntriesDataEncryptorSerializer.hpp"
-#include "privmx/endpoint/inbox/ServerApi.hpp"
 #include "privmx/endpoint/inbox/InboxHandleManager.hpp"
 #include "privmx/endpoint/inbox/MessageKeyIdFormatValidator.hpp"
-#include "privmx/endpoint/inbox/FileKeyIdFormatValidator.hpp"
-#include "privmx/endpoint/inbox/Events.hpp"
+#include "privmx/endpoint/inbox/ServerApi.hpp"
+#include "privmx/endpoint/inbox/ServerTypes.hpp"
+#include "privmx/endpoint/inbox/SubscriberImpl.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV4.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV5.hpp"
-#include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/inbox/Constants.hpp"
-#include "privmx/endpoint/inbox/SubscriberImpl.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/EventMiddleware.hpp>
+#include <privmx/endpoint/core/KeyProvider.hpp>
+#include <privmx/endpoint/core/ModuleBaseApi.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/store/DynamicTypes.hpp>
+#include <privmx/endpoint/store/FileHandle.hpp>
+#include <privmx/endpoint/store/StoreApi.hpp>
+#include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp>
+#include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp>
+#include <privmx/endpoint/thread/ServerTypes.hpp>
+#include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxApiImpl : public privmx::utils::ManualManagedClass<InboxApiImpl>, protected core::ModuleBaseApi
-{
+class InboxApiImpl : public privmx::utils::ManualManagedClass<InboxApiImpl>, protected core::ModuleBaseApi {
 public:
     InboxApiImpl(
         const core::Connection& connection,
@@ -74,17 +73,27 @@ public:
 
     // inbox
     std::string createInbox(
-        const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
         const std::optional<inbox::FilesConfig>& filesConfig,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies);
+        const std::optional<core::ContainerPolicyWithoutItem>& policies
+    );
 
-    void updateInbox(const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
-                     const std::vector<core::UserWithPubKey>& managers,
-                     const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                     const std::optional<inbox::FilesConfig>& filesConfig, const int64_t version, const bool force,
-                     const bool forceGenerateNewKey,
-                     const std::optional<core::ContainerPolicyWithoutItem>& policies);
+    void updateInbox(
+        const std::string& inboxId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<inbox::FilesConfig>& filesConfig,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicyWithoutItem>& policies
+    );
 
     inbox::Inbox getInbox(const std::string& inboxId);
     inbox::Inbox getInboxEx(const std::string& inboxId, const std::string& type);
@@ -92,18 +101,22 @@ public:
     inbox::InboxPublicView getInboxPublicView(const std::string& inboxId);
     void deleteInbox(const std::string& inboxId);
 
-    int64_t/*inboxHandle*/ prepareEntry(
-            const std::string& inboxId,
-            const core::Buffer& data,
-            const std::vector<int64_t>& inboxFileHandles = std::vector<int64_t>(),
-            const std::optional<std::string>& userPrivKey = std::nullopt
+    int64_t /*inboxHandle*/ prepareEntry(
+        const std::string& inboxId,
+        const core::Buffer& data,
+        const std::vector<int64_t>& inboxFileHandles = std::vector<int64_t>(),
+        const std::optional<std::string>& userPrivKey = std::nullopt
     );
 
     void sendEntry(const int64_t inboxHandle);
     inbox::InboxEntry readEntry(const std::string& inboxEntryId);
     core::PagingList<inbox::InboxEntry> listEntries(const std::string& inboxId, const core::PagingQuery& query);
     void deleteEntry(const std::string& inboxEntryId);
-    int64_t/*inboxFileHandle*/ createFileHandle(const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t fileSize);
+    int64_t /*inboxFileHandle*/ createFileHandle(
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t fileSize
+    );
     void writeToFile(const int64_t inboxHandle, const int64_t inboxFileHandle, const core::Buffer& dataChunk);
     int64_t openFile(const std::string& fileId);
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
@@ -112,9 +125,17 @@ public:
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
+
 private:
-    inbox::server::InboxInfo getServerInbox(const std::string& inboxId, const std::optional<std::string>& type = std::nullopt);
+    inbox::server::InboxInfo getServerInbox(
+        const std::string& inboxId,
+        const std::optional<std::string>& type = std::nullopt
+    );
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
@@ -131,10 +152,17 @@ private:
     inbox::Inbox convertInboxV4(inbox::server::InboxInfo inboxRaw, const InboxDataResultV4& inboxData);
     inbox::Inbox convertInboxV5(inbox::server::InboxInfo inboxRaw, const InboxDataResultV5& inboxData);
     InboxDataSchema::Version getInboxDataEntryStructureVersion(inbox::server::InboxDataEntry inboxEntry);
-    std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(inbox::server::InboxInfo inbox, inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    std::tuple<inbox::Inbox, core::DataIntegrityObject> decryptAndConvertInboxDataToInbox(
+        inbox::server::InboxInfo inbox,
+        inbox::server::InboxDataEntry inboxEntry,
+        const core::DecryptedEncKey& encKey
+    );
     std::vector<Inbox> validateDecryptAndConvertInboxesDataToInboxes(std::vector<inbox::server::InboxInfo> inboxes);
     inbox::Inbox validateDecryptAndConvertInboxDataToInbox(inbox::server::InboxInfo inbox);
-    InboxInternalMetaV5 decryptInboxInternalMeta(inbox::server::InboxDataEntry inboxEntry, const core::DecryptedEncKey& encKey);
+    InboxInternalMetaV5 decryptInboxInternalMeta(
+        inbox::server::InboxDataEntry inboxEntry,
+        const core::DecryptedEncKey& encKey
+    );
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
     inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
     void assertInboxDataIntegrity(inbox::server::InboxInfo inbox);
@@ -144,7 +172,10 @@ private:
 
     InboxEntryResult decryptInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
     inbox::InboxEntry convertInboxEntry(thread::server::Message message, const inbox::InboxEntryResult& inboxEntry);
-    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
+    inbox::InboxEntry decryptAndConvertInboxEntryDataToInboxEntry(
+        thread::server::Message message,
+        const core::ModuleKeys& inboxKeys
+    );
     store::FileMetaToEncryptV4 prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
     core::ModuleKeys getEntryDecryptionKeys(thread::server::Message message);
 
@@ -178,7 +209,8 @@ private:
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
-    std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId, _messageDeleterId;
+    std::string _messageDecryptorId, _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId,
+        _messageDeleterId;
     size_t _serverRequestChunkSize;
     store::FileMetaEncryptorV4 _fileMetaEncryptorV4;
     store::FileMetaEncryptorV5 _fileMetaEncryptorV5;
@@ -190,8 +222,8 @@ private:
     inline static const std::string INBOX_TYPE_FILTER_FLAG = "inbox";
 };
 
-} // inbox
-} // endpoint
-} // privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPIIMPL_HPP_

@@ -12,10 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_SERVER_API_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_SERVER_API_HPP_
 
-#include <string>
+#include "privmx/endpoint/core/ServerTypes.hpp"
 #include <Poco/Dynamic/Var.h>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
-#include "privmx/endpoint/core/ServerTypes.hpp"
+#include <string>
 
 namespace privmx {
 namespace endpoint {

@@ -12,13 +12,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_SERVERAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_SERVERAPI_HPP_
 
-#include <string>
-#include <Poco/Dynamic/Var.h>
-#include <privmx/privfs/gateway/RpcGateway.hpp>
-#include <privmx/endpoint/thread/ServerApi.hpp>
-#include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
+#include "privmx/endpoint/store/ServerApi.hpp"
+#include <Poco/Dynamic/Var.h>
+#include <privmx/endpoint/thread/ServerApi.hpp>
+#include <privmx/privfs/gateway/RpcGateway.hpp>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -37,6 +37,7 @@ public:
     server::InboxListResult inboxList(server::InboxListModel model);
     void inboxSend(server::InboxSendModel model);
     void inboxDelete(server::InboxDeleteModel model);
+
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);
@@ -45,8 +46,8 @@ private:
     privfs::RpcGateway::Ptr _gateway;
 };
 
-} // inbox
-} // endpoint
-} // privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_SERVERAPI_HPP_

@@ -10,11 +10,11 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp"
-#include "privmx/utils/Utils.hpp"
-#include "privmx/utils/Debug.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
-#include "privmx/endpoint/event/EventException.hpp"
 #include "privmx/endpoint/event/Constants.hpp"
+#include "privmx/endpoint/event/EventException.hpp"
+#include "privmx/utils/Debug.hpp"
+#include "privmx/utils/Utils.hpp"
 #include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint;
@@ -34,7 +34,9 @@ server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
         result.type = eventData.type.value();
         fieldChecksums.insert(std::make_pair("type", result.type.value()));
     }
-    core::ExpandedDataIntegrityObject expandedDio = {eventData.dio, .structureVersion=EventDataSchema::Version::VERSION_5, .fieldChecksums=fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {
+        eventData.dio, .structureVersion = EventDataSchema::Version::VERSION_5, .fieldChecksums = fieldChecksums
+    };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }
@@ -49,15 +51,15 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
     result.dataStructureVersion = EventDataSchema::Version::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedEventData, authorPublicKey);
-        result.data = _dataEncryptor.decodeAndDecryptAndVerify(encryptedEventData.encryptedData, authorPublicKey, encryptionKey);
+        result.data = _dataEncryptor.decodeAndDecryptAndVerify(
+            encryptedEventData.encryptedData, authorPublicKey, encryptionKey
+        );
         result.type = encryptedEventData.type;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 
@@ -67,25 +69,23 @@ core::DataIntegrityObject EventDataEncryptorV5::getDIOAndAssertIntegrity(
 ) {
     assertDataFormat(encryptedEventData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedEventData.dio);
-    if (
-        dio.structureVersion != EventDataSchema::Version::VERSION_5 ||
+    if (dio.structureVersion != EventDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != authorPublicKey.toBase58DER() ||
-        dio.fieldChecksums.at("encryptedData") != privmx::crypto::Crypto::sha256(encryptedEventData.encryptedData) || (
-            encryptedEventData.type.has_value() &&
-            dio.fieldChecksums.at("type") != encryptedEventData.type.value()
-        )
-    ) {
+        dio.fieldChecksums.at("encryptedData") != privmx::crypto::Crypto::sha256(encryptedEventData.encryptedData) ||
+        (encryptedEventData.type.has_value() && dio.fieldChecksums.at("type") != encryptedEventData.type.value())) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }
 
 void EventDataEncryptorV5::assertDataFormat(const server::EncryptedContextEventDataV5& encryptedEventData) {
-    if (
-        encryptedEventData.version != EventDataSchema::Version::VERSION_5 ||
+    // clang-format off
+    if (encryptedEventData.version != EventDataSchema::Version::VERSION_5 ||
         encryptedEventData.encryptedData.empty() ||
-        encryptedEventData.dio.empty()
-    ) {
-        throw InvalidEncryptedEventDataVersionException(std::to_string(encryptedEventData.version) + " expected version: " + std::to_string(EventDataSchema::Version::VERSION_5));
+        encryptedEventData.dio.empty()) {
+        throw InvalidEncryptedEventDataVersionException(
+            std::to_string(encryptedEventData.version) + " expected version: " + std::to_string(EventDataSchema::Version::VERSION_5)
+        );
     }
+    // clang-format on
 }

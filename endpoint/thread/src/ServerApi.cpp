@@ -57,7 +57,8 @@ void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel model) {
     request("threadMessageUpdate", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("thread." + method, params));
 }
 

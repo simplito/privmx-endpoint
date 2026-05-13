@@ -22,6 +22,7 @@ class KeyIdFormatValidator {
 public:
     virtual void assertKeyIdFormat(const std::string& keyId) = 0;
     virtual bool isKeyIdFormatValid(const std::string& keyId) = 0;
+
 protected:
     // Default Key
     // - 16 bites of data in Hex
@@ -34,8 +35,8 @@ protected:
     bool hasExtendedKeyIdFormat(const std::string& keyId, const std::string& prefix, size_t dataElements);
 };
 
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CORE_KEYID_FORMAT_VALIDATOR_HPP_

@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/utils/JsonHelper.hpp>
 #include <privmx/endpoint/store/ServerApi.hpp>
+#include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::store;
 
@@ -72,7 +72,8 @@ void ServerApi::storeFileDelete(const server::StoreFileDeleteModel& model) {
     requestVoid("storeFileDelete", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("store." + method, params));
 }
 

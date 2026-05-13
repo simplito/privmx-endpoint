@@ -12,15 +12,15 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_SUBSCRIBER_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_SUBSCRIBER_HPP_
 
-#include <vector>
+#include "privmx/endpoint/core/EventMiddleware.hpp"
+#include "privmx/endpoint/core/ServerTypes.hpp"
 #include <map>
-#include <string>
 #include <mutex>
-#include <shared_mutex>
 #include <optional>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
-#include "privmx/endpoint/core/ServerTypes.hpp"
-#include "privmx/endpoint/core/EventMiddleware.hpp"
+#include <shared_mutex>
+#include <string>
+#include <vector>
 
 namespace privmx {
 namespace endpoint {
@@ -35,15 +35,20 @@ public:
         std::string selectorValue;
     };
 
-    SubscriptionQueryObj(const std::vector<std::string>& channelPath, const std::vector<SubscriptionQueryObj::QuerySelector>& selectors);
+    SubscriptionQueryObj(
+        const std::vector<std::string>& channelPath,
+        const std::vector<SubscriptionQueryObj::QuerySelector>& selectors
+    );
     SubscriptionQueryObj(const std::string& subscriptionQueryString);
     std::string toSubscriptionQueryString() const;
-   
-    inline std::vector<std::string> channelPath() const {return _channelPath;}
-    inline void channelPath(const std::vector<std::string>& channelPath) {_channelPath = channelPath;}
-    inline std::vector<SubscriptionQueryObj::QuerySelector> selectors() const {return _selectors;}
-    inline void selectorsPushBack(const SubscriptionQueryObj::QuerySelector& selector) {_selectors.push_back(selector);}
-    inline void selectors(const std::vector<SubscriptionQueryObj::QuerySelector>& selectors) {_selectors = selectors;}
+
+    inline std::vector<std::string> channelPath() const { return _channelPath; }
+    inline void channelPath(const std::vector<std::string>& channelPath) { _channelPath = channelPath; }
+    inline std::vector<SubscriptionQueryObj::QuerySelector> selectors() const { return _selectors; }
+    inline void selectorsPushBack(const SubscriptionQueryObj::QuerySelector& selector) {
+        _selectors.push_back(selector);
+    }
+    inline void selectors(const std::vector<SubscriptionQueryObj::QuerySelector>& selectors) { _selectors = selectors; }
 
 private:
     std::vector<std::string> _channelPath;
@@ -62,8 +67,7 @@ private:
     constexpr static size_t SELECTOR_SIZE = 2;
 };
 
-class Subscriber 
-{
+class Subscriber {
 public:
     Subscriber(privmx::privfs::RpcGateway::Ptr gateway);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries, bool force = false);
@@ -71,20 +75,18 @@ public:
     void unsubscribeFromCurrentlySubscribed();
     std::optional<std::string> getSubscriptionQuery(const std::string& subscriptionId);
     std::optional<std::string> getSubscriptionQuery(const std::vector<std::string>& subscriptionIds);
-private:
-    
 
+private:
     virtual std::vector<std::string> transform(const std::vector<SubscriptionQueryObj>& subscriptionQueries) = 0;
     virtual void assertQuery(const std::vector<SubscriptionQueryObj>& subscriptionQueries) = 0;
-    
+
     privmx::privfs::RpcGateway::Ptr _gateway;
     std::shared_mutex _map_mutex;
     std::map<std::string, std::string> _subscriptionIdToSubscriptionQuery;
 };
 
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_SUBSCRIBER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_SUBSCRIBER_HPP_

@@ -9,35 +9,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/Validator.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
+#include <privmx/endpoint/core/Validator.hpp>
 
 #include "privmx/endpoint/event/EventApi.hpp"
-#include "privmx/endpoint/event/EventException.hpp"
 #include "privmx/endpoint/event/EventApiImpl.hpp"
+#include "privmx/endpoint/event/EventException.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
 EventApi::EventApi() {};
-EventApi::EventApi(const EventApi& obj): ExtendedPointer(obj) {};
+EventApi::EventApi(const EventApi& obj) : ExtendedPointer(obj) {};
 EventApi& EventApi::operator=(const EventApi& obj) {
     this->ExtendedPointer::operator=(obj);
     return *this;
 };
-EventApi::EventApi(EventApi&& obj): ExtendedPointer(std::move(obj)) {};
+EventApi::EventApi(EventApi&& obj) : ExtendedPointer(std::move(obj)) {};
 EventApi::~EventApi() {}
 
 EventApi EventApi::create(core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<EventApiImpl> impl(new EventApiImpl(
-            connection,
-            connectionImpl->getUserPrivKey(),
-            connectionImpl->getGateway(),
+            connection, connectionImpl->getUserPrivKey(), connectionImpl->getGateway(),
             connectionImpl->getEventMiddleware()
         ));
         impl->attach(impl);
@@ -50,7 +48,12 @@ EventApi EventApi::create(core::Connection& connection) {
 
 EventApi::EventApi(const std::shared_ptr<EventApiImpl>& impl) : ExtendedPointer(impl) {}
 
-void EventApi::emitEvent(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::string& channelName, const core::Buffer& eventData) {
+void EventApi::emitEvent(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::string& channelName,
+    const core::Buffer& eventData
+) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
@@ -82,7 +85,11 @@ void EventApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) 
     }
 }
 
-std::string EventApi::buildSubscriptionQuery(const std::string& channelName, EventSelectorType selectorType, const std::string& selectorId) {
+std::string EventApi::buildSubscriptionQuery(
+    const std::string& channelName,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     auto impl = getImpl();
     try {
         return impl->buildSubscriptionQuery(channelName, selectorType, selectorId);
@@ -91,4 +98,3 @@ std::string EventApi::buildSubscriptionQuery(const std::string& channelName, Eve
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-

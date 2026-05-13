@@ -12,13 +12,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXENTRIESDATAENCRYPTORSERIALIZER_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXENTRIESDATAENCRYPTORSERIALIZER_HPP_
 
-#include <string>
 #include <Poco/SharedPtr.h>
+#include <string>
 
-#include <privmx/crypto/ecc/PublicKey.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/endpoint/core/Types.hpp>
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/Types.hpp>
 #include <privmx/utils/Utils.hpp>
 
 namespace privmx {
@@ -52,7 +52,7 @@ struct InboxEntryDataResult {
 
 struct InboxEntryResult : public InboxEntryDataResult {
     std::string storeId;
-    std::vector<std::string> filesIds;                
+    std::vector<std::string> filesIds;
 };
 
 class InboxEntriesDataEncryptorSerializer {
@@ -60,14 +60,17 @@ public:
     using Ptr = Poco::SharedPtr<InboxEntriesDataEncryptorSerializer>;
 
     InboxEntriesDataEncryptorSerializer();
-    std::string packMessage(InboxEntrySendModel data, privmx::crypto::PrivateKey &userPriv, privmx::crypto::PublicKey &inboxPub);
-    InboxEntryDataResult unpackMessage(std::string &serializedBase64, privmx::crypto::PrivateKey &inboxPriv);
-    InboxEntryPublicDataResult unpackMessagePublicOnly(std::string &serializedBase64);
-
+    std::string packMessage(
+        InboxEntrySendModel data,
+        privmx::crypto::PrivateKey& userPriv,
+        privmx::crypto::PublicKey& inboxPub
+    );
+    InboxEntryDataResult unpackMessage(std::string& serializedBase64, privmx::crypto::PrivateKey& inboxPriv);
+    InboxEntryPublicDataResult unpackMessagePublicOnly(std::string& serializedBase64);
 };
 
-} // inbox
-} //endpoint
-} // privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXENTRIESDATAENCRYPTORSERIALIZER_HPP_

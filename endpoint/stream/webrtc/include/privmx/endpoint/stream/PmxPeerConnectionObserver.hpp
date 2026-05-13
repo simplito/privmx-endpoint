@@ -12,19 +12,19 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_PMX_PEER_CONNECTIN_OBSERVER_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_PMX_PEER_CONNECTIN_OBSERVER_HPP_
 
-#include <string>
-#include <libwebrtc.h>
-#include <rtc_peerconnection.h>
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
-#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
-#include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
-#include "privmx/endpoint/stream/StreamApiLow.hpp"
-#include "privmx/endpoint/stream/DataChannelImpl.hpp"
-#include "privmx/endpoint/stream/RTCVideoRendererImpl.hpp"
 #include "privmx/endpoint/stream/AudioTrackSinkImpl.hpp"
-#include <privmx/utils/ThreadSaveMap.hpp>
-#include <privmx/utils/Logger.hpp>
+#include "privmx/endpoint/stream/DataChannelImpl.hpp"
+#include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/RTCVideoRendererImpl.hpp"
+#include "privmx/endpoint/stream/StreamApiLow.hpp"
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
+#include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include <libwebrtc.h>
 #include <pmx_frame_cryptor.h>
+#include <privmx/utils/Logger.hpp>
+#include <privmx/utils/ThreadSaveMap.hpp>
+#include <rtc_peerconnection.h>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -34,8 +34,8 @@ class PmxPeerConnectionObserver : public libwebrtc::RTCPeerConnectionObserver {
 public:
     PmxPeerConnectionObserver(
         libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> peerConnectionFactory,
-        const std::string& streamRoomId, 
-        std::shared_ptr<privmx::webrtc::KeyStore> keys, 
+        const std::string& streamRoomId,
+        std::shared_ptr<privmx::webrtc::KeyStore> keys,
         const privmx::webrtc::FrameCryptorOptions& options,
         std::shared_ptr<StreamApiLow> apiLow
     );
@@ -49,21 +49,29 @@ public:
     void OnDataChannel(libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> data_channel) override;
     void OnRenegotiationNeeded() override;
     void OnTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpTransceiver> transceiver) override;
-    void OnAddTrack(libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams, libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
+    void OnAddTrack(
+        libwebrtc::vector<libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream>> streams,
+        libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver
+    ) override;
     void OnRemoveTrack(libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver) override;
 
     void UpdateCurrentKeys(std::shared_ptr<privmx::webrtc::KeyStore> newKeys);
     void SetFrameCryptorOptions(privmx::webrtc::FrameCryptorOptions options);
 
-    inline void setOnIceCandidate(std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)> callback) {_onIceCandidate = callback;}
+    inline void setOnIceCandidate(std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)> callback) {
+        _onIceCandidate = callback;
+    }
 
     void setOnTrackInterface(std::shared_ptr<OnTrackInterface> roomOnTrackInterface);
-    void addOnTrackInterfaceForSingleStream(const std::string& streamId, std::shared_ptr<OnTrackInterface> streamOnTrackInterface);
+    void addOnTrackInterfaceForSingleStream(
+        const std::string& streamId,
+        std::shared_ptr<OnTrackInterface> streamOnTrackInterface
+    );
     void removeOnTrackInterfaceFormSingleStream(const std::string& streamId);
-   
+
 private:
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
-    std::string _streamRoomId; 
+    std::string _streamRoomId;
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
     privmx::webrtc::FrameCryptorOptions _options;
     std::shared_ptr<StreamApiLow> _apiLow;
@@ -78,11 +86,12 @@ private:
     // onTrackInterfaces
     std::shared_mutex _onTrackInterfaceMutex;
     std::shared_ptr<OnTrackInterface> _roomOnTrackInterface;
-    std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>> _streamOnTrackInterfacesMap;
+    std::shared_ptr<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>>
+        _streamOnTrackInterfacesMap;
 };
 
-} // stream
-} // endpoint
-} // privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STREAM_PMX_PEER_CONNECTIN_OBSERVER_HPP_

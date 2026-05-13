@@ -12,11 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_KVDB_KVDBTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_KVDB_KVDBTYPES_HPP_
 
-#include <string>
+#include "privmx/endpoint/core/CoreTypes.hpp"
 #include <optional>
 #include <privmx/endpoint/core/Buffer.hpp>
-#include "privmx/endpoint/core/CoreTypes.hpp"
-
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -39,8 +38,8 @@ struct DecryptedKvdbEntryDataV5 : public core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
-} // kvdb
-} // endpoint
-} // privmx
+} // namespace kvdb
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_KVDB_KVDBTYPES_HPP_

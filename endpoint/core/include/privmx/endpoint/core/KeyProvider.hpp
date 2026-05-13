@@ -12,18 +12,18 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_KEYPROVIDER_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_KEYPROVIDER_HPP_
 
-#include <memory>
 #include <functional>
-#include <vector>
 #include <map>
+#include <memory>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <vector>
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/UserVerifier.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV1.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
-#include "privmx/endpoint/core/UserVerifier.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -33,12 +33,16 @@ class KeyDecryptionAndVerificationRequest {
 public:
     KeyDecryptionAndVerificationRequest() = default;
     void addOne(const std::vector<server::KeyEntry>& keys, const std::string& keyId, const EncKeyLocation& location);
-    void addMany(const std::vector<server::KeyEntry>& keys, std::set<std::string> keyIds, const EncKeyLocation& location);
+    void addMany(
+        const std::vector<server::KeyEntry>& keys,
+        std::set<std::string> keyIds,
+        const EncKeyLocation& location
+    );
     void addAll(const std::vector<server::KeyEntry>& keys, const EncKeyLocation& location);
     void markAsCompleted();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, server::KeyEntry>> requestData;
-private:
 
+private:
     bool _completed = false;
     // vector<KeyId, ServerKey, ValidationData>
 };
@@ -48,43 +52,54 @@ public:
     KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
     EncKey generateKey();
     std::string generateSecret();
-    std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(const KeyDecryptionAndVerificationRequest& request);
+    std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(
+        const KeyDecryptionAndVerificationRequest& request
+    );
     std::vector<server::KeyEntrySet> prepareKeysList(
-        const std::vector<UserWithPubKey>& users, 
-        const EncKey& key, 
-        const DataIntegrityObject& dio, 
-        const EncKeyLocation& location, 
+        const std::vector<UserWithPubKey>& users,
+        const EncKey& key,
+        const DataIntegrityObject& dio,
+        const EncKeyLocation& location,
         const std::string& containerSecret
     );
     std::vector<server::KeyEntrySet> prepareMissingKeysForNewUsers(
-        const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys, 
-        const std::vector<UserWithPubKey>& users, 
-        const DataIntegrityObject& dio, 
-        const EncKeyLocation& location, 
+        const std::unordered_map<std::string, DecryptedEncKeyV2>& missingKeys,
+        const std::vector<UserWithPubKey>& users,
+        const DataIntegrityObject& dio,
+        const EncKeyLocation& location,
         const std::string& containerSecret
     );
-    bool verifyKeysSecret(const std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location, const std::string& containerSecret);
-    
+    bool verifyKeysSecret(
+        const std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys,
+        const EncKeyLocation& location,
+        const std::string& containerSecret
+    );
+
 private:
-    std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyKeys(std::unordered_map<std::string, server::KeyEntry> keys, const EncKeyLocation& location);
+    std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyKeys(
+        std::unordered_map<std::string, server::KeyEntry> keys,
+        const EncKeyLocation& location
+    );
     server::KeyEntrySet createKeyEntrySet(
         const UserWithPubKey& user,
-        const EncKey& key, 
-        const DataIntegrityObject& dio, 
-        const EncKeyLocation& location, 
+        const EncKey& key,
+        const DataIntegrityObject& dio,
+        const EncKeyLocation& location,
         const std::string& containerSecret
     );
     void verifyForDuplication(std::unordered_map<std::string, DecryptedEncKeyV2>& keys);
     void verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location);
-    void verifyUserData(std::unordered_map<EncKeyLocation,std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys);
+    void verifyUserData(
+        std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys
+    );
     privmx::crypto::PrivateKey _key;
     std::function<std::shared_ptr<UserVerifier>()> _getUserVerifier;
     EncKeyEncryptorV1 _encKeyEncryptorV1;
     EncKeyEncryptorV2 _encKeyEncryptorV2;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_KEYPROVIDER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_KEYPROVIDER_HPP_

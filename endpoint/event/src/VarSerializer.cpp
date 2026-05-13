@@ -36,4 +36,3 @@ Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEventData>(const
 
     return obj;
 }
-

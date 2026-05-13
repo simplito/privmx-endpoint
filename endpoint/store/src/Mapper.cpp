@@ -23,17 +23,22 @@ StoreFileDeletedEventData Mapper::mapToStoreFileDeletedEventData(const server::S
 }
 
 StoreStatsChangedEventData Mapper::mapToStoreStatsChangedEventData(const server::StoreStatsChangedEventData& data) {
-    return {.contextId = data.contextId,
-            .storeId = data.id,
-            .lastFileDate = data.lastFileDate,
-            .filesCount = data.files};
+    return {
+        .contextId = data.contextId, .storeId = data.id, .lastFileDate = data.lastFileDate, .filesCount = data.files
+    };
 }
 
-StoreFileUpdatedEventData Mapper::mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams) {
+StoreFileUpdatedEventData Mapper::mapToStoreFileUpdatedEventData(
+    const server::StoreFileUpdatedEventData& data,
+    const File& file,
+    const FileDecryptionParams& fileDecryptionParams
+) {
     auto result = StoreFileUpdatedEventData{.file = file, .changes = {}};
 
     if (data.changes.has_value() && !data.changes->empty()) {
-        store::ChunkEncryptor chunkEncryptor = store::ChunkEncryptor(fileDecryptionParams.key, fileDecryptionParams.chunkSize);
+        store::ChunkEncryptor chunkEncryptor = store::ChunkEncryptor(
+            fileDecryptionParams.key, fileDecryptionParams.chunkSize
+        );
         auto encryptedChunkSize = chunkEncryptor.getEncryptedChunkSize();
         auto plainChunkSize = chunkEncryptor.getPlainChunkSize();
         for (auto change : data.changes.value()) {
@@ -43,11 +48,7 @@ StoreFileUpdatedEventData Mapper::mapToStoreFileUpdatedEventData(const server::S
                 if (pos + length > file.size) {
                     length = file.size - pos;
                 }
-                result.changes.push_back(FileChange{
-                    .pos = pos,
-                    .length = length,
-                    .truncate = change.truncate
-                });
+                result.changes.push_back(FileChange{.pos = pos, .length = length, .truncate = change.truncate});
             }
         }
     }

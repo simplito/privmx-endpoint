@@ -1,19 +1,17 @@
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_UTILS_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_UTILS_HPP_
 
+#include "privmx/endpoint/core/Buffer.hpp"
 #include <optional>
 #include <string>
 #include <vector>
-#include "privmx/endpoint/core/Buffer.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
-class Hex
-{
+class Hex {
 public:
-
     /**
      * Encodes buffer to a string in Hex format.
      *
@@ -42,10 +40,8 @@ public:
     static bool is(const std::string& data);
 };
 
-class Base32
-{
+class Base32 {
 public:
-
     /**
      * Encodes buffer to string in Base32 format.
      *
@@ -74,10 +70,8 @@ public:
     static bool is(const std::string& data);
 };
 
-class Base64
-{
+class Base64 {
 public:
-
     /**
      * Encodes buffer to string in Base64 format.
      *
@@ -106,10 +100,8 @@ public:
     static bool is(const std::string& data);
 };
 
-class Utils
-{
+class Utils {
 public:
-
     /**
      * Removes all trailing whitespace.
      *
@@ -143,8 +135,8 @@ public:
     static void rtrim(std::string& data);
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_UTILS_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_UTILS_HPP_

@@ -4,7 +4,6 @@
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/store/Types.hpp"
 
-
 namespace privmx {
 namespace endpoint {
 namespace inbox {
@@ -179,23 +178,22 @@ struct InboxEntry {
     int64_t schemaVersion;
 };
 
-enum EventType: int64_t {
+enum EventType : int64_t {
     INBOX_CREATE = 0,
     INBOX_UPDATE = 1,
     INBOX_DELETE = 2,
     ENTRY_CREATE = 3,
     ENTRY_DELETE = 4,
     COLLECTION_CHANGE = 5,
-
 };
-enum EventSelectorType: int64_t {
+enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
     INBOX_ID = 1,
     ENTRY_ID = 2,
 };
 
-}  // namespace inbox
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPI_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPI_TYPES_HPP_

@@ -11,20 +11,21 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV5.hpp"
 
-#include "privmx/utils/Utils.hpp"
-#include "privmx/utils/Debug.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
-#include "privmx/endpoint/thread/ThreadException.hpp"
-#include <privmx/crypto/Crypto.hpp>
 #include "privmx/endpoint/thread/Constants.hpp"
-
+#include "privmx/endpoint/thread/ThreadException.hpp"
+#include "privmx/utils/Debug.hpp"
+#include "privmx/utils/Utils.hpp"
+#include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(const MessageDataToEncryptV5& messageData,
-                                                                     const crypto::PrivateKey& authorPrivateKey,
-                                                                     const std::string& encryptionKey) {
+server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(
+    const MessageDataToEncryptV5& messageData,
+    const crypto::PrivateKey& authorPrivateKey,
+    const std::string& encryptionKey
+) {
     server::EncryptedMessageDataV5 result;
     result.version = MessageDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
@@ -32,25 +33,33 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(const MessageData
     fieldChecksums.insert(std::make_pair("publicMeta", privmx::crypto::Crypto::sha256(result.publicMeta)));
     try {
         result.publicMetaObject = utils::Utils::parseJsonObject(messageData.publicMeta.stdString());
-    } catch (...) {
-        result.publicMetaObject = Poco::Dynamic::Var();
-    }
-    result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(messageData.privateMeta, authorPrivateKey, encryptionKey);
+    } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
+    result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(
+        messageData.privateMeta, authorPrivateKey, encryptionKey
+    );
     fieldChecksums.insert(std::make_pair("privateMeta", privmx::crypto::Crypto::sha256(result.privateMeta)));
     result.data = _dataEncryptor.signAndEncryptAndEncode(messageData.data, authorPrivateKey, encryptionKey);
     fieldChecksums.insert(std::make_pair("data", privmx::crypto::Crypto::sha256(result.data)));
     if (messageData.internalMeta.has_value()) {
-        result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(messageData.internalMeta.value(), authorPrivateKey, encryptionKey);
-        fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(result.internalMeta.value())));
+        result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
+            messageData.internalMeta.value(), authorPrivateKey, encryptionKey
+        );
+        fieldChecksums.insert(
+            std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(result.internalMeta.value()))
+        );
     }
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
-    core::ExpandedDataIntegrityObject expandedDio = {messageData.dio, .structureVersion=MessageDataSchema::Version::VERSION_5, .fieldChecksums=fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {
+        messageData.dio, .structureVersion = MessageDataSchema::Version::VERSION_5, .fieldChecksums = fieldChecksums
+    };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }
 
 DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
-    const server::EncryptedMessageDataV5& encryptedMessageData, const std::string& encryptionKey) {
+    const server::EncryptedMessageDataV5& encryptedMessageData,
+    const std::string& encryptionKey
+) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
@@ -66,23 +75,29 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
                 result.statusCode = e.getCode();
             }
         }
-        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(encryptedMessageData.privateMeta, authorPublicKey, encryptionKey);
-        result.data = _dataEncryptor.decodeAndDecryptAndVerify(encryptedMessageData.data, authorPublicKey, encryptionKey);
+        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
+            encryptedMessageData.privateMeta, authorPublicKey, encryptionKey
+        );
+        result.data = _dataEncryptor.decodeAndDecryptAndVerify(
+            encryptedMessageData.data, authorPublicKey, encryptionKey
+        );
         result.internalMeta = encryptedMessageData.internalMeta.has_value() ?
-            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(encryptedMessageData.internalMeta.value(), authorPublicKey, encryptionKey)) : 
+            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(
+                encryptedMessageData.internalMeta.value(), authorPublicKey, encryptionKey
+            )) :
             std::nullopt;
         result.authorPubKey = encryptedMessageData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 
-DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData) {
+DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(
+    const server::EncryptedMessageDataV5& encryptedMessageData
+) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
@@ -103,39 +118,37 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(const server::Encry
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 
-core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encryptedMessageData) {
+core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(
+    const server::EncryptedMessageDataV5& encryptedMessageData
+) {
     assertDataFormat(encryptedMessageData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedMessageData.dio);
-    if (
-        dio.structureVersion != MessageDataSchema::Version::VERSION_5 ||
+    if (dio.structureVersion != MessageDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedMessageData.authorPubKey ||
         dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.publicMeta) ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.privateMeta) ||
-        dio.fieldChecksums.at("data") != privmx::crypto::Crypto::sha256(encryptedMessageData.data) || (
-            encryptedMessageData.internalMeta.has_value() &&
-            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedMessageData.internalMeta.value())
-        )
-    ) {
+        dio.fieldChecksums.at("data") != privmx::crypto::Crypto::sha256(encryptedMessageData.data) ||
+        (encryptedMessageData.internalMeta.has_value() &&
+         dio.fieldChecksums.at("internalMeta") !=
+             privmx::crypto::Crypto::sha256(encryptedMessageData.internalMeta.value()))) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }
 
 void MessageDataEncryptorV5::assertDataFormat(const server::EncryptedMessageDataV5& encryptedMessageData) {
-    if (
-        encryptedMessageData.version != MessageDataSchema::Version::VERSION_5 ||
+    if (encryptedMessageData.version != MessageDataSchema::Version::VERSION_5 ||
         encryptedMessageData.publicMeta.empty() ||
         encryptedMessageData.privateMeta.empty() ||
         encryptedMessageData.authorPubKey.empty() ||
         encryptedMessageData.data.empty() ||
-        encryptedMessageData.dio.empty()
-    ) {
-        throw InvalidEncryptedMessageDataVersionException(std::to_string(encryptedMessageData.version) + " expected version: 5");
+        encryptedMessageData.dio.empty()) {
+        throw InvalidEncryptedMessageDataVersionException(
+            std::to_string(encryptedMessageData.version) + " expected version: 5"
+        );
     }
 }

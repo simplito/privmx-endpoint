@@ -11,19 +11,19 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ConnectionImpl.hpp"
 
-#include <cstdint>
-#include <privmx/rpc/Types.hpp>
-#include <privmx/utils/Logger.hpp>
+#include "privmx/endpoint/core/Constants.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/EndpointUtils.hpp"
+#include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
-#include "privmx/endpoint/core/ServerTypes.hpp"
-#include "privmx/endpoint/core/Constants.hpp"
-#include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
-#include "privmx/endpoint/core/EventBuilder.hpp"
+#include "privmx/endpoint/core/ServerTypes.hpp"
+#include <cstdint>
 #include <privmx/endpoint/core/SingletonsHolder.hpp>
+#include <privmx/rpc/Types.hpp>
+#include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -34,7 +34,7 @@ ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
 }
 
 ConnectionImpl::~ConnectionImpl() {
-    if(_gateway) {
+    if (_gateway) {
         _gateway->removeNotificationEventListener(_gatewayNotificationEventListener);
         _gateway->removeConnectedEventListener(_gatewayConnectedEventListener);
         _gateway->removeDisconnectedEventListener(_gatewayDisconnectedEventListener);
@@ -46,9 +46,9 @@ ConnectionImpl::~ConnectionImpl() {
 
 void ConnectionImpl::connect(
     const std::shared_ptr<ConnectionImpl>& selfRef,
-    const std::string& userPrivKey, 
+    const std::string& userPrivKey,
     const std::string& solutionId,
-    const std::string& platformUrl, 
+    const std::string& platformUrl,
     const PKIVerificationOptions& verificationOptions
 ) {
     LOG_TIME_DEBUG_START(Platform platformConnect, "")
@@ -59,13 +59,15 @@ void ConnectionImpl::connect(
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = true;
     _bridgeIdentity = BridgeIdentity{
-        .url=options.url, 
-        .pubKey=verificationOptions.bridgePubKey, 
-        .instanceId=verificationOptions.bridgeInstanceId
+        .url = options.url,
+        .pubKey = verificationOptions.bridgePubKey,
+        .instanceId = verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::fromWIF(userPrivKey);
-    if(verificationOptions.bridgePubKey.has_value()) {
-        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId, crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value()));
+    if (verificationOptions.bridgePubKey.has_value()) {
+        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(
+            key, options, solutionId, crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value())
+        );
     } else {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
     }
@@ -73,9 +75,11 @@ void ConnectionImpl::connect(
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
     _userPrivKey = key;
-    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
-    _eventMiddleware =
-        std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
+    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
+    );
+    _eventMiddleware = std::shared_ptr<EventMiddleware>(
+        new EventMiddleware(EventQueueImpl::getInstance(), _connectionId)
+    );
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
         auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
@@ -94,30 +98,36 @@ void ConnectionImpl::connect(
         auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
-    _gatewayNotificationEventListener = _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
-        if (event.type == "janus") {
-            // emit as raw
-            _eventMiddleware->emitNotificationEvent(event.type, convertJanusEventToCoreNotificationEvent(event));
-        } else {
-            _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
+    _gatewayNotificationEventListener = _gateway->addNotificationEventListener(
+        [&, this](const rpc::NotificationEvent& event) {
+            if (event.type == "janus") {
+                // emit as raw
+                _eventMiddleware->emitNotificationEvent(event.type, convertJanusEventToCoreNotificationEvent(event));
+            } else {
+                _eventMiddleware->emitNotificationEvent(
+                    event.type, convertRpcNotificationEventToCoreNotificationEvent(event)
+                );
+            }
         }
-    });
+    );
     _gatewayConnectedEventListener = _gateway->addConnectedEventListener(
-        [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
+        [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); }
+    );
     _gatewayDisconnectedEventListener = _gateway->addDisconnectedEventListener(
-        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { 
+        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) {
             _eventMiddleware->emitDisconnectedEvent();
             cleanup();
         }
     );
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
-        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { 
+        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) {
             _eventMiddleware->emitDisconnectedEvent();
             cleanup();
         }
     );
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
-        std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2));
+        std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
+    );
     _subscriber = std::make_shared<SubscriberImpl>(_gateway);
     assertServerVersion();
     LOG_TIME_DEBUG_STOP(Platform platformConnect, "")
@@ -125,8 +135,8 @@ void ConnectionImpl::connect(
 
 void ConnectionImpl::connectPublic(
     const std::shared_ptr<ConnectionImpl>& selfRef,
-    const std::string& solutionId, 
-    const std::string& platformUrl, 
+    const std::string& solutionId,
+    const std::string& platformUrl,
     const PKIVerificationOptions& verificationOptions
 ) {
     // TODO: solutionId is reserved for future use
@@ -138,18 +148,20 @@ void ConnectionImpl::connectPublic(
     options.url = platformUrl + (platformUrl.back() == '/' ? "" : "/") + "api/v2.0";
     options.websocket = false;
     _bridgeIdentity = BridgeIdentity{
-        .url=options.url, 
-        .pubKey=verificationOptions.bridgePubKey, 
-        .instanceId=verificationOptions.bridgeInstanceId
+        .url = options.url,
+        .pubKey = verificationOptions.bridgePubKey,
+        .instanceId = verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::generateRandom();
     _userPrivKey = key;
-    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this)));
+    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
+    );
     _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
     _serverApi.emplace(_gateway);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
-    _eventMiddleware =
-        std::shared_ptr<EventMiddleware>(new EventMiddleware(EventQueueImpl::getInstance(), _connectionId));
+    _eventMiddleware = std::shared_ptr<EventMiddleware>(
+        new EventMiddleware(EventQueueImpl::getInstance(), _connectionId)
+    );
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
         auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
@@ -166,11 +178,14 @@ void ConnectionImpl::connectPublic(
         auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
-    _gatewayNotificationEventListener = _gateway->addNotificationEventListener([&, this](const rpc::NotificationEvent& event) {
+    _gatewayNotificationEventListener = _gateway->addNotificationEventListener([&, this](
+                                                                                   const rpc::NotificationEvent& event
+                                                                               ) {
         _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
     });
     _gatewayDisconnectedEventListener = _gateway->addConnectedEventListener(
-        [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); });
+        [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); }
+    );
     _gatewayDisconnectedEventListener = _gateway->addDisconnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) {
             _eventMiddleware->emitDisconnectedEvent();
@@ -178,8 +193,8 @@ void ConnectionImpl::connectPublic(
         }
     );
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
-        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { 
-            _eventMiddleware->emitDisconnectedEvent(); 
+        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) {
+            _eventMiddleware->emitDisconnectedEvent();
             cleanup();
         }
     );
@@ -207,7 +222,7 @@ PagingList<Context> ConnectionImpl::listContexts(const PagingQuery& pagingQuery)
     for (const auto& resp : response.contexts) {
         contexts.push_back({.userId = resp.userId, .contextId = resp.contextId});
     }
-    LOG_TIME_DEBUG_STOP(PlatformThread contextList , "")
+    LOG_TIME_DEBUG_STOP(PlatformThread contextList, "")
     return PagingList<Context>{.totalAvailable = response.count, .readItems = contexts};
 }
 
@@ -219,17 +234,19 @@ PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& context
     PagingList<UserInfo> result;
     result.readItems.reserve(response.users.size());
     for (const auto& user : response.users) {
-        result.readItems.push_back(UserInfo {
-            .user=UserWithPubKey{
-                .userId=user.id,
-                .pubKey=user.pub
-            },
-            .isActive= user.status == "active",
-            .lastStatusChange = user.lastStatusChange.has_value() ? std::make_optional(UserStatusChange{
-                .action = user.lastStatusChange->action,
-                .timestamp = user.lastStatusChange->timestamp
-            }) : std::nullopt
-        });
+        result.readItems.push_back(
+            UserInfo{
+                .user = UserWithPubKey{.userId = user.id, .pubKey = user.pub},
+                .isActive = user.status == "active",
+                .lastStatusChange = user.lastStatusChange.has_value() ?
+                    std::make_optional(
+                        UserStatusChange{
+                            .action = user.lastStatusChange->action, .timestamp = user.lastStatusChange->timestamp
+                        }
+                    ) :
+                    std::nullopt
+            }
+        );
     }
     result.totalAvailable = response.count;
     return result;
@@ -251,7 +268,11 @@ void ConnectionImpl::unsubscribeFrom(const std::vector<std::string>& subscriptio
     _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, subscriptionIds);
 }
 
-std::string ConnectionImpl::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string ConnectionImpl::buildSubscriptionQuery(
+    EventType eventType,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }
 
@@ -264,7 +285,6 @@ void ConnectionImpl::disconnect() {
     auto event = EventBuilder::buildLibEvent<LibPlatformDisconnectedEvent>();
     _eventMiddleware->emitApiEvent(event);
     LOG_DEBUG("disconnect: disconnected.");
-
 }
 
 int64_t ConnectionImpl::generateConnectionId() {
@@ -276,36 +296,37 @@ std::string ConnectionImpl::getMyUserId(const std::string& contextId) {
 }
 
 DataIntegrityObject ConnectionImpl::createDIO(
-    const std::string& contextId, 
-    const std::string& resourceId, 
-    const std::optional<std::string>& containerId, 
+    const std::string& contextId,
+    const std::string& resourceId,
+    const std::optional<std::string>& containerId,
     const std::optional<std::string>& containerResourceId
 ) {
     return createDIOExt(contextId, resourceId, containerId, containerResourceId);
 }
 
 DataIntegrityObject ConnectionImpl::createPublicDIO(
-    const std::string& contextId, 
-    const std::string& resourceId, 
-    const crypto::PublicKey& pubKey, 
-    const std::optional<std::string>& containerId, 
+    const std::string& contextId,
+    const std::string& resourceId,
+    const crypto::PublicKey& pubKey,
+    const std::optional<std::string>& containerId,
     const std::optional<std::string>& containerResourceId
 ) {
     return createDIOExt(contextId, resourceId, containerId, containerResourceId, "<anonymous>", pubKey);
 }
 
 DataIntegrityObject ConnectionImpl::createDIOExt(
-    const std::string& contextId, 
-    const std::string& resourceId, 
-    const std::optional<std::string>& containerId, 
+    const std::string& contextId,
+    const std::string& resourceId,
+    const std::optional<std::string>& containerId,
     const std::optional<std::string>& containerResourceId,
     const std::optional<std::string>& creatorUserId,
     const std::optional<crypto::PublicKey>& creatorPublicKey
 ) {
-    
+
     return core::DataIntegrityObject{
         .creatorUserId = creatorUserId.has_value() ? creatorUserId.value() : getMyUserId(contextId),
-        .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() : _userPrivKey.getPublicKey().toBase58DER(),
+        .creatorPubKey = creatorPublicKey.has_value() ? creatorPublicKey.value().toBase58DER() :
+                                                        _userPrivKey.getPublicKey().toBase58DER(),
         .contextId = contextId,
         .resourceId = resourceId,
         .timestamp = privmx::utils::Utils::getNowTimestamp(),
@@ -316,7 +337,9 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
     };
 }
 
-NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event) {
+NotificationEvent ConnectionImpl::convertRpcNotificationEventToCoreNotificationEvent(
+    const rpc::NotificationEvent& event
+) {
     try {
         auto tmp = server::RpcEvent::fromJSON(event.data);
         return NotificationEvent{
@@ -353,19 +376,24 @@ NotificationEvent ConnectionImpl::convertJanusEventToCoreNotificationEvent(const
 }
 
 void ConnectionImpl::assertServerVersion() {
-    if(_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {
+    if (_serverConfig.serverVersion < privmx::utils::VersionNumber(MINIMUM_REQUIRED_BRIDGE_VERSION)) {
         disconnect();
         throw ServerVersionMismatchException(
-            "Bridge Server current version: " + (std::string)_serverConfig.serverVersion + "\n" +
-            "PrivMX Ednpoint library current version: " + ENDPOINT_VERSION + "\n"
-            "Bridge Server minimal expected version: " + MINIMUM_REQUIRED_BRIDGE_VERSION
+            "Bridge Server current version: " +
+            (std::string)_serverConfig.serverVersion +
+            "\n" +
+            "PrivMX Ednpoint library current version: " +
+            ENDPOINT_VERSION +
+            "\n"
+            "Bridge Server minimal expected version: " +
+            MINIMUM_REQUIRED_BRIDGE_VERSION
         );
     }
 }
 
 void ConnectionImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     auto subscriptionQuery = _subscriber->getSubscriptionQuery(notification.subscriptions);
-    if(!subscriptionQuery.has_value()) {
+    if (!subscriptionQuery.has_value()) {
         return;
     }
     _guardedExecutor->exec([&, type, notification]() {
@@ -382,7 +410,9 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
         } else if (type == "contextUserStatusChanged") {
             auto raw = server::ContextUsersStatusChangeEventData::fromJSON(notification.data);
             auto data = Mapper::mapToContextUsersStatusChangedEventData(raw);
-            auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>("context/userStatus", data, notification);
+            auto event = EventBuilder::buildEvent<ContextUsersStatusChangedEvent>(
+                "context/userStatus", data, notification
+            );
             _eventMiddleware->emitApiEvent(event);
         } else {
             LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");

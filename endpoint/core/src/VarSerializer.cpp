@@ -34,14 +34,14 @@ Poco::Dynamic::Var VarSerializer::serialize<std::string>(const std::string& val)
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<Buffer>(const core::Buffer& val) {
     switch (_options.binaryFormat) {
-        case VarSerializer::Options::CORE_BUFFER:
-            return val;
-        case VarSerializer::Options::PSON_BINARYSTRING:
-            return Pson::BinaryString(val.stdString());
-        case VarSerializer::Options::STD_STRING_AS_BASE64:
-            return utils::Base64::from(val.stdString());
-        case VarSerializer::Options::STD_STRING:
-            return val.stdString();
+    case VarSerializer::Options::CORE_BUFFER:
+        return val;
+    case VarSerializer::Options::PSON_BINARYSTRING:
+        return Pson::BinaryString(val.stdString());
+    case VarSerializer::Options::STD_STRING_AS_BASE64:
+        return utils::Base64::from(val.stdString());
+    case VarSerializer::Options::STD_STRING:
+        return val.stdString();
     }
     throw UnsupportedSerializerBinaryFormatException();
 }
@@ -173,7 +173,9 @@ Poco::Dynamic::Var VarSerializer::serialize<UserWithAction>(const UserWithAction
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(const ContextUsersStatusChangedEventData& val) {
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(
+    const ContextUsersStatusChangedEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "core$ContextUsersStatusChangeData");

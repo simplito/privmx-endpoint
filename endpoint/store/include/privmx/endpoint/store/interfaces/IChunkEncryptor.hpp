@@ -12,17 +12,16 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_INTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_INTERFACE_HPP_
 
+#include <cstdint>
+#include <string>
+
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-#include <string>
-
-class IChunkEncryptor
-{
+class IChunkEncryptor {
 public:
-    struct Chunk
-    {
+    struct Chunk {
         std::string data;
         std::string hmac;
     };
@@ -34,11 +33,10 @@ public:
     virtual size_t getEncryptedChunkSize() = 0;
     virtual uint64_t getEncryptedFileSize(const uint64_t& fileSize) = 0;
     virtual void sync(std::string key, size_t chunkSize) = 0;
-
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_INTERFACE_HPP_

@@ -39,7 +39,7 @@ private:
     privmx::endpoint::core::Buffer _val;
 };
 
-}  // namespace Dynamic
-}  // namespace Poco
+} // namespace Dynamic
+} // namespace Poco
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_BUFFERVARHOLDERIMPL_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_BUFFERVARHOLDERIMPL_HPP_

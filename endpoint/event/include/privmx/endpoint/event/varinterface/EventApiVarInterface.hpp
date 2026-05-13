@@ -15,8 +15,8 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 
 #include "privmx/endpoint/event/EventApi.hpp"
-#include "privmx/endpoint/event/VarSerializer.hpp"
 #include "privmx/endpoint/event/VarDeserializer.hpp"
+#include "privmx/endpoint/event/VarSerializer.hpp"
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/event/VarDeserializer.hpp>
 
@@ -58,8 +58,8 @@ private:
     core::VarDeserializer _deserializer;
 };
 
-}  // namespace event
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_EVENTSAPIVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_EVENTSAPIVARINTERFACE_HPP_

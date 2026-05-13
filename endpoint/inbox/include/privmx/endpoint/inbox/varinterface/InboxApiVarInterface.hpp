@@ -52,8 +52,14 @@ public:
         BuildSubscriptionQuery = 24,
     };
 
-    InboxApiVarInterface(core::Connection connection, thread::ThreadApi threadApi, store::StoreApi storeApi, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _threadApi(std::move(threadApi)), _storeApi(std::move(storeApi)), _serializer(serializer) {}
+    InboxApiVarInterface(
+        core::Connection connection,
+        thread::ThreadApi threadApi,
+        store::StoreApi storeApi,
+        const core::VarSerializer& serializer
+    )
+        : _connection(std::move(connection)), _threadApi(std::move(threadApi)), _storeApi(std::move(storeApi)),
+          _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createInbox(const Poco::Dynamic::Var& args);
@@ -90,8 +96,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace inbox
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPIVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPIVARINTERFACE_HPP_

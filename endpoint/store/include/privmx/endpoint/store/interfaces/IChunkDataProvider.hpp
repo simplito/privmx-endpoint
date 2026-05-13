@@ -16,25 +16,30 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class IChunkDataProvider
-{
+class IChunkDataProvider {
 public:
     virtual ~IChunkDataProvider() = default;
     virtual void sync(
-        int64_t newfileVersion, 
-        int64_t encryptedFileSize, 
-        std::optional<size_t> encryptedChunkSize = std::nullopt, 
+        int64_t newfileVersion,
+        int64_t encryptedFileSize,
+        std::optional<size_t> encryptedChunkSize = std::nullopt,
         std::optional<size_t> serverChunkSize = std::nullopt
     ) = 0;
     virtual std::string getChunk(uint32_t chunkNumber) = 0;
     virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion) = 0;
-    virtual void update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) = 0;
-    
+    virtual void update(
+        int64_t newfileVersion,
+        uint32_t chunkNumber,
+        const std::string newChunkEncryptedData,
+        int64_t encryptedFileSize,
+        bool truncate
+    ) = 0;
+
     virtual std::string getCurrentChecksumsFromBridge() = 0;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNK_DATA_PROVIDER_INTERFACE_HPP_
