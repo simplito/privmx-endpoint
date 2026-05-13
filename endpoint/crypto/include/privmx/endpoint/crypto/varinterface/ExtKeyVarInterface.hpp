@@ -44,13 +44,11 @@ public:
     ExtKeyVarInterface(const crypto::ExtKey& extKey, const core::VarSerializer& serializer)
         : _extKey(std::move(extKey)), _serializer(serializer) {}
 
-    ExtKeyVarInterface(const core::VarSerializer& serializer)
-        : _serializer(serializer) {}
+    ExtKeyVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
 
     Poco::Dynamic::Var fromSeed(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var fromBase58(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var generateRandom(const Poco::Dynamic::Var& args);
-
 
     Poco::Dynamic::Var derive(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deriveHardened(const Poco::Dynamic::Var& args);
@@ -66,9 +64,8 @@ public:
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
-    const core::VarSerializer::Options& getSerializerOptions() const {
-        return _serializer.getOptions();
-    }
+    const core::VarSerializer::Options& getSerializerOptions() const { return _serializer.getOptions(); }
+
 private:
     static std::map<METHOD, Poco::Dynamic::Var (ExtKeyVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
@@ -77,8 +74,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace crypto
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace crypto
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEYVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEYVARINTERFACE_HPP_

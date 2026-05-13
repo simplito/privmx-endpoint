@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_LISTQUERYMAPPER_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_LISTQUERYMAPPER_HPP_
 
-#include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -25,14 +25,17 @@ public:
         obj.sortOrder = listQuery.sortOrder;
         obj.limit = listQuery.limit;
         obj.skip = listQuery.skip;
-        if (listQuery.lastId.has_value()) obj.lastId = listQuery.lastId.value();
-        if (listQuery.sortBy.has_value()) obj.sortBy = listQuery.sortBy.value();
-        if (listQuery.queryAsJson.has_value()) obj.query = privmx::utils::Utils::parseJson(listQuery.queryAsJson.value());
+        if (listQuery.lastId.has_value())
+            obj.lastId = listQuery.lastId.value();
+        if (listQuery.sortBy.has_value())
+            obj.sortBy = listQuery.sortBy.value();
+        if (listQuery.queryAsJson.has_value())
+            obj.query = privmx::utils::Utils::parseJson(listQuery.queryAsJson.value());
     }
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_LISTQUERYMAPPER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_LISTQUERYMAPPER_HPP_

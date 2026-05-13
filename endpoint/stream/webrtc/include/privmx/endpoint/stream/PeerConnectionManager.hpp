@@ -12,16 +12,16 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 #define _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 
-#include <atomic>
-#include <string>
-#include <memory>
-#include <libwebrtc.h>
-#include <rtc_peerconnection.h>
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
-#include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include <atomic>
+#include <libwebrtc.h>
+#include <memory>
 #include <privmx/utils/ThreadSaveMap.hpp>
+#include <rtc_peerconnection.h>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -67,15 +67,8 @@ struct PeerConnection {
 };
 
 struct JanusConnection {
-    JanusConnection(
-        std::shared_ptr<PeerConnection> _peerConnection,
-        int64_t _sessionId, 
-        bool _hasSubscriptions
-    ) :
-        peerConnection(_peerConnection), 
-        sessionId(_sessionId), 
-        hasSubscriptions(_hasSubscriptions) 
-    {}
+    JanusConnection(std::shared_ptr<PeerConnection> _peerConnection, int64_t _sessionId, bool _hasSubscriptions)
+        : peerConnection(_peerConnection), sessionId(_sessionId), hasSubscriptions(_hasSubscriptions) {}
     std::shared_ptr<PeerConnection> peerConnection;
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaStream> mediaStream;
     int64_t sessionId;
@@ -88,30 +81,37 @@ public:
         std::function<void(const int64_t, const std::string&)> onTrickle
     );
     void initialize(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId = -1);
-    void updateSessionForConnection(const std::string& streamRoomId, ConnectionType connectionType, const int64_t sessionId);
+    void updateSessionForConnection(
+        const std::string& streamRoomId,
+        ConnectionType connectionType,
+        const int64_t sessionId
+    );
     bool hasConnection(const std::string& streamRoomId, ConnectionType connectionType);
-    std::shared_ptr<JanusConnection> getConnectionWithSession(const std::string& streamRoomId, ConnectionType connectionType);
+    std::shared_ptr<JanusConnection> getConnectionWithSession(
+        const std::string& streamRoomId,
+        ConnectionType connectionType
+    );
     void closeConnection(const std::string& streamRoomId, ConnectionType connectionType);
     void closeSession(const std::string& streamRoomId);
+
 private:
     class RoomConnections {
-        public:
-            void set(ConnectionType connectionType, std::shared_ptr<JanusConnection> connection);
-            std::shared_ptr<JanusConnection> get(ConnectionType connectionType);
-            bool has(ConnectionType connectionType);
-        private:
-            std::shared_ptr<JanusConnection> _subscriber;
-            std::shared_ptr<JanusConnection> _publisher;
+    public:
+        void set(ConnectionType connectionType, std::shared_ptr<JanusConnection> connection);
+        std::shared_ptr<JanusConnection> get(ConnectionType connectionType);
+        bool has(ConnectionType connectionType);
+
+    private:
+        std::shared_ptr<JanusConnection> _subscriber;
+        std::shared_ptr<JanusConnection> _publisher;
     };
     std::function<std::shared_ptr<PeerConnection>(const std::string&)> _createPeerConnection;
     std::function<void(const int64_t, const std::string&)> _onTrickle;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RoomConnections>> _connections;
 };
 
-
-
-} // stream
-} // endpoint
-} // privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_

@@ -13,8 +13,6 @@ namespace core {
 
 struct SerializedEvent;
 
-
-
 /**
  * Holds the information about an event.
  */
@@ -31,7 +29,7 @@ struct Event {
      * //doc-gen:ignore
      */
     virtual ~Event() = default;
-    
+
     /**
      * Converts Event's data to JSON string
      * 
@@ -79,14 +77,13 @@ struct Event {
  */
 class EventHolder {
 public:
-
     /**
      * 'EventHolder' constructor
      * 
      * @param event pointer to the 'Event' object to use in the 'EventHolder'
      */
     EventHolder(const std::shared_ptr<Event>& event);
-    
+
     /**
      * Extracts Event's type
      * 
@@ -187,7 +184,6 @@ struct LibConnectedEvent : public Event {
      */
     std::shared_ptr<SerializedEvent> serialize() const override;
 };
-
 
 /**
  * Emitted after disconnection from the Endpoint by explicit disconnect call.
@@ -399,7 +395,6 @@ struct ContextUsersStatusChangedEvent : public Event {
  */
 class Events {
 public:
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'LibBreakEvent' 
      * 
@@ -421,7 +416,7 @@ public:
      * 
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'LibPlatformDisconnectedEvent', else otherwise
-     */    
+     */
     static bool isLibPlatformDisconnectedEvent(const EventHolder& eventHolder);
 
     /**
@@ -437,7 +432,7 @@ public:
      * 
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'LibConnectedEvent', else otherwise
-     */    
+     */
     static bool isLibConnectedEvent(const EventHolder& eventHolder);
 
     /**
@@ -453,7 +448,7 @@ public:
      * 
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'LibDisconnectedEvent', else otherwise
-     */    
+     */
     static bool isLibDisconnectedEvent(const EventHolder& eventHolder);
 
     /**
@@ -485,7 +480,7 @@ public:
      * 
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'ContextUserAddedEvent', else otherwise
-     */    
+     */
     static bool isContextUserAddedEvent(const EventHolder& eventHolder);
 
     /**
@@ -501,7 +496,7 @@ public:
      * 
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'ContextUserRemovedEvent', else otherwise
-     */    
+     */
     static bool isContextUserRemovedEvent(const EventHolder& eventHolder);
 
     /**
@@ -517,7 +512,7 @@ public:
      * 
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'ContextUsersStatusChangedEvent', else otherwise
-     */    
+     */
     static bool isContextUsersStatusChangedEvent(const EventHolder& eventHolder);
 
     /**
@@ -529,8 +524,8 @@ public:
     static ContextUsersStatusChangedEvent extractContextUsersStatusChangedEvent(const EventHolder& eventHolder);
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_CORE_EVENTS_HPP_
+#endif //_PRIVMXLIB_ENDPOINT_CORE_EVENTS_HPP_

@@ -3,10 +3,10 @@
 
 #include <functional>
 #include <memory>
-#include <string>
 #include <optional>
-#include <vector>
 #include <privmx/endpoint/stream/Types.hpp>
+#include <string>
+#include <vector>
 
 namespace privmx {
 namespace endpoint {
@@ -34,7 +34,7 @@ struct TrackEvent {
     Stream stream;
 };
 struct Data {
-    Data(DataType _type, const std::vector<std::string>& _streamIds, const std::string& _track) 
+    Data(DataType _type, const std::vector<std::string>& _streamIds, const std::string& _track)
         : type(_type), streamIds(_streamIds), track(_track) {}
     virtual ~Data() = default;
     DataType type;
@@ -48,23 +48,45 @@ public:
 };
 
 struct VideoData : public Data {
-    VideoData(const std::vector<std::string>& _streamIds, const std::string& _track, const int64_t _w,  const int64_t _h, std::shared_ptr<Frame> _frameData ) 
+    VideoData(
+        const std::vector<std::string>& _streamIds,
+        const std::string& _track,
+        const int64_t _w,
+        const int64_t _h,
+        std::shared_ptr<Frame> _frameData
+    )
         : Data(DataType::VIDEO, _streamIds, _track), w(_w), h(_h), frameData(_frameData) {}
-    const int64_t w; 
-    const int64_t h; 
+    const int64_t w;
+    const int64_t h;
     std::shared_ptr<Frame> frameData;
 };
 struct AudioData : public Data {
-    AudioData(const std::vector<std::string>& _streamIds, const std::string& _track, const void* _audio_data, int _bits_per_sample, int _sample_rate, size_t _number_of_channels, size_t _number_of_frames) 
-        : Data(DataType::AUDIO, _streamIds, _track), audio_data(_audio_data), bits_per_sample(_bits_per_sample), sample_rate(_sample_rate), number_of_channels(_number_of_channels), number_of_frames(_number_of_frames) {}
-    const void* audio_data; 
+    AudioData(
+        const std::vector<std::string>& _streamIds,
+        const std::string& _track,
+        const void* _audio_data,
+        int _bits_per_sample,
+        int _sample_rate,
+        size_t _number_of_channels,
+        size_t _number_of_frames
+    )
+        : Data(DataType::AUDIO, _streamIds, _track), audio_data(_audio_data), bits_per_sample(_bits_per_sample),
+          sample_rate(_sample_rate), number_of_channels(_number_of_channels), number_of_frames(_number_of_frames) {}
+    const void* audio_data;
     int bits_per_sample;
     int sample_rate;
-    size_t number_of_channels; 
+    size_t number_of_channels;
     size_t number_of_frames;
 };
 struct PlainData : public Data {
-    PlainData(const std::vector<std::string>& _streamIds, const std::string& _track, const core::Buffer& _data, const uint64_t& _seq, bool _binary, const uint64_t& _statusCode) 
+    PlainData(
+        const std::vector<std::string>& _streamIds,
+        const std::string& _track,
+        const core::Buffer& _data,
+        const uint64_t& _seq,
+        bool _binary,
+        const uint64_t& _statusCode
+    )
         : Data(DataType::PLAIN, _streamIds, _track), data(_data), seq(_seq), binary(_binary), statusCode(_statusCode) {}
     core::Buffer data;
     uint64_t seq;
@@ -76,12 +98,13 @@ class OnTrackInterface {
 public:
     virtual void OnRemoteTrack(Track tack, TrackAction action) = 0;
     virtual void OnData(std::shared_ptr<Data> data) = 0;
+
 protected:
     virtual ~OnTrackInterface() = default;
 };
 
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_ONTRACKINTERFACE_HPP
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_ONTRACKINTERFACE_HPP

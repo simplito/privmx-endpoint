@@ -12,15 +12,15 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATAHELPER_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATAHELPER_HPP_
 
-#include <string>
-#include <vector>
-#include "privmx/utils/Utils.hpp"
+#include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/Types.hpp"
-#include "privmx/endpoint/core/CoreTypes.hpp"
+#include "privmx/utils/Utils.hpp"
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
+#include <string>
+#include <vector>
 
 namespace privmx {
 namespace endpoint {
@@ -38,9 +38,8 @@ public:
     static std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 };
 
-
-}
-}
-}
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATAHELPER_HPP_

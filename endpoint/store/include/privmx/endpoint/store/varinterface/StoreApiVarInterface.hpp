@@ -77,7 +77,6 @@ public:
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
 
-
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
     StoreApi getApi() const { return _storeApi; }
@@ -91,8 +90,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace store
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STORE_STOREAPIVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STORE_STOREAPIVARINTERFACE_HPP_

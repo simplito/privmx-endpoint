@@ -12,11 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_SERVER_API_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_SERVER_API_HPP_
 
-#include <string>
-#include <Poco/Dynamic/Var.h>
-#include <privmx/privfs/gateway/RpcGateway.hpp>
-#include <privmx/endpoint/core/ServerTypes.hpp>
 #include "privmx/endpoint/stream/ServerTypes.hpp"
+#include <Poco/Dynamic/Var.h>
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/privfs/gateway/RpcGateway.hpp>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -52,7 +52,8 @@ public:
     void streamRoomEnableRecording(server::StreamRoomRecordingModel model);
 
     void trickle(server::StreamTrickleModel model);
-    bool isConnected() {return _gateway ? _gateway->isConnected() : false;}
+    bool isConnected() { return _gateway ? _gateway->isConnected() : false; }
+
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);
@@ -64,8 +65,8 @@ private:
     privfs::RpcGateway::Ptr _gateway;
 };
 
-} // stream
-} // endpoint
-} // privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STREAM_SERVER_API_HPP_

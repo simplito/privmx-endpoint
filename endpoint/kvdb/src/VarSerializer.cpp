@@ -66,7 +66,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::ServerKvdbEntryInfo>(const kvd
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry>(const kvdb::KvdbEntry & val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry>(const kvdb::KvdbEntry& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "kvdb$KvdbEntry");
@@ -92,7 +92,6 @@ Poco::Dynamic::Var VarSerializer::serialize<PagingList<kvdb::KvdbEntry>>(const P
     return obj;
 }
 
-
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEventData>(const kvdb::KvdbDeletedEventData& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
@@ -117,7 +116,8 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbStatsEventData>(const kvdb
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEntryEventData>(
-    const kvdb::KvdbDeletedEntryEventData& val) {
+    const kvdb::KvdbDeletedEntryEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "kvdb$KvdbDeletedEntryEventData");
@@ -126,7 +126,6 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbDeletedEntryEventData>(
     obj->set("kvdbEntryKey", serialize(val.kvdbEntryKey));
     return obj;
 }
-
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbCreatedEvent>(const kvdb::KvdbCreatedEvent& val) {
@@ -159,8 +158,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryUpdatedEvent>(const k
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(
-    const kvdb::KvdbEntryDeletedEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntryDeletedEvent>(const kvdb::KvdbEntryDeletedEvent& val) {
     return serializeBaseWithData<Event>(val, "kvdb$KvdbEntryDeletedEvent");
 }
 
@@ -174,6 +172,3 @@ Poco::Dynamic::Var VarSerializer::serialize<PagingList<std::string>>(const Pagin
     obj->set("readItems", serialize(val.readItems));
     return obj;
 }
-
-
-

@@ -33,7 +33,12 @@ class VarSerializer {
 public:
     struct Options {
         bool addType = false;
-        enum { CORE_BUFFER, PSON_BINARYSTRING, STD_STRING_AS_BASE64, STD_STRING } binaryFormat = CORE_BUFFER;
+        enum {
+            CORE_BUFFER,
+            PSON_BINARYSTRING,
+            STD_STRING_AS_BASE64,
+            STD_STRING
+        } binaryFormat = CORE_BUFFER;
     };
 
     VarSerializer(const Options& options) : _options(std::move(options)) {}
@@ -50,9 +55,8 @@ public:
     template<typename B, typename D>
     Poco::JSON::Object::Ptr serializeBaseWithData(const D& value, const std::string& type);
 
-    const Options& getOptions() const {
-        return _options;
-    }
+    const Options& getOptions() const { return _options; }
+
 private:
     const Options _options;
 };
@@ -124,7 +128,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<UserWithAction>(const UserWithAction& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(const ContextUsersStatusChangedEventData& val);
+Poco::Dynamic::Var VarSerializer::serialize<ContextUsersStatusChangedEventData>(
+    const ContextUsersStatusChangedEventData& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<ContextUserAddedEvent>(const ContextUserAddedEvent& val);
@@ -171,9 +177,8 @@ Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const VerificationRequest& val);
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_VARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_VARSERIALIZER_HPP_

@@ -12,14 +12,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_EVENTS_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_EVENTS_HPP_
 
+#include "privmx/endpoint/stream/Types.hpp"
 #include <privmx/endpoint/core/Events.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include "privmx/endpoint/stream/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
-
 
 struct StreamRoomDeletedEventData {
     /**
@@ -96,7 +95,7 @@ struct StreamRoomCreatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * all available StreamRoom information
      */
@@ -124,7 +123,7 @@ struct StreamRoomUpdatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * all available StreamRoom information
      */
@@ -152,7 +151,7 @@ struct StreamRoomDeletedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -180,13 +179,12 @@ struct StreamPublishedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
     StreamPublishedEventData data;
 };
-
 
 /**
  * Holds data of event that arrives when Stream is updated.
@@ -216,7 +214,6 @@ struct StreamUpdatedEvent : public core::Event {
     StreamUpdatedEventData data;
 };
 
-
 /**
  * Holds data of event that arrives when Stream is published.
  */
@@ -238,7 +235,7 @@ struct StreamJoinedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -266,7 +263,7 @@ struct StreamUnpublishedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -294,13 +291,12 @@ struct StreamLeftEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
     StreamLeftEventData data;
 };
-
 
 /**
  * Holds data of event that arrives on StreamPublish - contains information about available publishers/streams one can subscribe to.
@@ -330,7 +326,6 @@ struct RemoteStreamsChangedEvent : public core::Event {
     NewStreams data;
 };
 
-
 /**
  * Holds data of event that arrives after StreamJoin - contains information about updates on publishers streams one can subscribe to.
  */
@@ -359,13 +354,11 @@ struct StreamsUpdatedEvent : public core::Event {
     StreamsUpdatedData data;
 };
 
-
 /**
  * 'Events' provides the helpers methods for module's events management.
  */
 class Events {
 public:
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'StreamRoomCreatedEvent' 
      * 
@@ -510,7 +503,6 @@ public:
      */
     static RemoteStreamsChangedEvent extractRemoteStreamsChangedEvent(const core::EventHolder& eventHolder);
 
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'PublishersStreamsUpdatedEvent'
      *
@@ -528,8 +520,8 @@ public:
     static StreamsUpdatedEvent extractStreamsUpdatedEvent(const core::EventHolder& eventHolder);
 };
 
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STREAM_EVENTS_HPP_

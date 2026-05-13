@@ -15,9 +15,9 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 #include <string>
 
-#include <privmx/endpoint/core/VarSerializer.hpp>
 #include "privmx/endpoint/event/Events.hpp"
 #include "privmx/endpoint/event/Types.hpp"
+#include <privmx/endpoint/core/VarSerializer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -29,9 +29,8 @@ Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEvent>(const eve
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<event::ContextCustomEventData>(const event::ContextCustomEventData& val);
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_VARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_VARSERIALIZER_HPP_

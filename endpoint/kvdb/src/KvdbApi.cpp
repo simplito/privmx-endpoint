@@ -10,8 +10,8 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
 
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
@@ -22,24 +22,20 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
 KvdbApi::KvdbApi() {};
-KvdbApi::KvdbApi(const KvdbApi& obj): ExtendedPointer(obj) {};
+KvdbApi::KvdbApi(const KvdbApi& obj) : ExtendedPointer(obj) {};
 KvdbApi& KvdbApi::operator=(const KvdbApi& obj) {
     this->ExtendedPointer::operator=(obj);
     return *this;
 };
-KvdbApi::KvdbApi(KvdbApi&& obj): ExtendedPointer(std::move(obj)) {};
+KvdbApi::KvdbApi(KvdbApi&& obj) : ExtendedPointer(std::move(obj)) {};
 KvdbApi::~KvdbApi() {}
 
 KvdbApi KvdbApi::create(core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<KvdbApiImpl> impl(new KvdbApiImpl(
-            connectionImpl->getGateway(),
-            connectionImpl->getUserPrivKey(),
-            connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(),
-            connectionImpl->getEventMiddleware(),
-            connection
+            connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
+            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection
         ));
         impl->attach(impl);
         return KvdbApi(impl);
@@ -52,11 +48,11 @@ KvdbApi KvdbApi::create(core::Connection& connection) {
 KvdbApi::KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl) : ExtendedPointer(impl) {}
 
 std::string KvdbApi::createKvdb(
-    const std::string& contextId, 
+    const std::string& contextId,
     const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers, 
-    const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta, 
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
     auto impl = getImpl();
@@ -71,22 +67,25 @@ std::string KvdbApi::createKvdb(
     }
 }
 
-void KvdbApi::updateKvdb(const std::string& kvdbId, 
+void KvdbApi::updateKvdb(
+    const std::string& kvdbId,
     const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers, 
-    const core::Buffer& publicMeta, 
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const int64_t version, 
-    const bool force, 
-    const bool forceGenerateNewKey, 
+    const int64_t version,
+    const bool force,
+    const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies
-)  {
+) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return impl->updateKvdb(kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+        return impl->updateKvdb(
+            kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        );
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -148,10 +147,15 @@ bool KvdbApi::hasEntry(const std::string& kvdbId, const std::string& key) {
     }
 }
 
-core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
+core::PagingList<std::string> KvdbApi::listEntriesKeys(
+    const std::string& kvdbId,
+    const core::PagingQuery& pagingQuery
+) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(
+        pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery "
+    );
     try {
         return impl->listEntriesKeys(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -162,7 +166,9 @@ core::PagingList<std::string> KvdbApi::listEntriesKeys(const std::string& kvdbId
 core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(
+        pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery "
+    );
     try {
         return impl->listEntries(kvdbId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -171,7 +177,14 @@ core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, cons
     }
 }
 
-void KvdbApi::setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version) {
+void KvdbApi::setEntry(
+    const std::string& kvdbId,
+    const std::string& key,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const core::Buffer& data,
+    int64_t version
+) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     try {
@@ -224,7 +237,11 @@ void KvdbApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     }
 }
 
-std::string KvdbApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string KvdbApi::buildSubscriptionQuery(
+    EventType eventType,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     auto impl = getImpl();
     try {
         return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
@@ -234,7 +251,11 @@ std::string KvdbApi::buildSubscriptionQuery(EventType eventType, EventSelectorTy
     }
 }
 
-std::string KvdbApi::buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey) {
+std::string KvdbApi::buildSubscriptionQueryForSelectedEntry(
+    EventType eventType,
+    const std::string& kvdbId,
+    const std::string& kvdbEntryKey
+) {
     auto impl = getImpl();
     try {
         return impl->buildSubscriptionQueryForSelectedEntry(eventType, kvdbId, kvdbEntryKey);

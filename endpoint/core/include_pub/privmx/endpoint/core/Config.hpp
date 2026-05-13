@@ -12,7 +12,6 @@ namespace core {
  */
 class Config {
 public:
-    
     /**
      * Allows to set path to the SSL certificate file.
      * 
@@ -22,8 +21,8 @@ public:
     static void setCertsPath(const std::string& certsPath);
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_CONFIG_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_CONFIG_HPP_

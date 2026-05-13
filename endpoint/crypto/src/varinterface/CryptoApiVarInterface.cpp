@@ -18,26 +18,27 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::crypto;
 
 std::map<CryptoApiVarInterface::METHOD, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    CryptoApiVarInterface::methodMap = {{Create, &CryptoApiVarInterface::create},
-                                        {SignData, &CryptoApiVarInterface::signData},
-                                        {GeneratePrivateKey, &CryptoApiVarInterface::generatePrivateKey},
-                                        {DerivePrivateKey, &CryptoApiVarInterface::derivePrivateKey},
-                                        {DerivePrivateKey2, &CryptoApiVarInterface::derivePrivateKey2},
-                                        {DerivePublicKey, &CryptoApiVarInterface::derivePublicKey},
-                                        {GenerateKeySymmetric, &CryptoApiVarInterface::generateKeySymmetric},
-                                        {EncryptDataSymmetric, &CryptoApiVarInterface::encryptDataSymmetric},
-                                        {DecryptDataSymmetric, &CryptoApiVarInterface::decryptDataSymmetric},
-                                        {ConvertPEMKeytoWIFKey, &CryptoApiVarInterface::convertPEMKeytoWIFKey},
-                                        {VerifySignature, &CryptoApiVarInterface::verifySignature},
+    CryptoApiVarInterface::methodMap = {
+        {Create, &CryptoApiVarInterface::create},
+        {SignData, &CryptoApiVarInterface::signData},
+        {GeneratePrivateKey, &CryptoApiVarInterface::generatePrivateKey},
+        {DerivePrivateKey, &CryptoApiVarInterface::derivePrivateKey},
+        {DerivePrivateKey2, &CryptoApiVarInterface::derivePrivateKey2},
+        {DerivePublicKey, &CryptoApiVarInterface::derivePublicKey},
+        {GenerateKeySymmetric, &CryptoApiVarInterface::generateKeySymmetric},
+        {EncryptDataSymmetric, &CryptoApiVarInterface::encryptDataSymmetric},
+        {DecryptDataSymmetric, &CryptoApiVarInterface::decryptDataSymmetric},
+        {ConvertPEMKeytoWIFKey, &CryptoApiVarInterface::convertPEMKeytoWIFKey},
+        {VerifySignature, &CryptoApiVarInterface::verifySignature},
 
-                                        {GenerateBip39, &CryptoApiVarInterface::generateBip39},
-                                        {FromMnemonic, &CryptoApiVarInterface::fromMnemonic},
-                                        {FromEntropy, &CryptoApiVarInterface::fromEntropy},
-                                        {EntropyToMnemonic, &CryptoApiVarInterface::entropyToMnemonic},
-                                        {MnemonicToEntropy, &CryptoApiVarInterface::mnemonicToEntropy},
-                                        {MnemonicToSeed, &CryptoApiVarInterface::mnemonicToSeed},
-                                        {ConvertPGPAsn1KeyToBase58DERKey, &CryptoApiVarInterface::convertPGPAsn1KeyToBase58DERKey}};
-
+        {GenerateBip39, &CryptoApiVarInterface::generateBip39},
+        {FromMnemonic, &CryptoApiVarInterface::fromMnemonic},
+        {FromEntropy, &CryptoApiVarInterface::fromEntropy},
+        {EntropyToMnemonic, &CryptoApiVarInterface::entropyToMnemonic},
+        {MnemonicToEntropy, &CryptoApiVarInterface::mnemonicToEntropy},
+        {MnemonicToSeed, &CryptoApiVarInterface::mnemonicToSeed},
+        {ConvertPGPAsn1KeyToBase58DERKey, &CryptoApiVarInterface::convertPGPAsn1KeyToBase58DERKey}
+};
 
 Poco::Dynamic::Var CryptoApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);

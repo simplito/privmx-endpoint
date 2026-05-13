@@ -19,17 +19,15 @@ namespace endpoint {
 namespace core {
 
 namespace ModuleDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_4 = 4,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_4 = 4,
+    VERSION_5 = 5
+};
+} // namespace ModuleDataSchema
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-
-
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_CONSTANTS_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_CONSTANTS_HPP_

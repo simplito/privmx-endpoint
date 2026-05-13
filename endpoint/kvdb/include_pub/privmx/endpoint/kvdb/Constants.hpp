@@ -19,24 +19,24 @@ namespace endpoint {
 namespace kvdb {
 
 namespace KvdbDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_5 = 5
+};
+} // namespace KvdbDataSchema
 constexpr static KvdbDataSchema::Version CURRENT_KVDB_DATA_SCHEMA_VERSION = KvdbDataSchema::Version::VERSION_5;
 
 namespace KvdbEntryDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_5 = 5
-   };
-}
-constexpr static KvdbEntryDataSchema::Version CURRENT_KVDB_ENTRY_DATA_SCHEMA_VERSION = KvdbEntryDataSchema::Version::VERSION_5;
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_5 = 5
+};
+} // namespace KvdbEntryDataSchema
+constexpr static KvdbEntryDataSchema::Version
+    CURRENT_KVDB_ENTRY_DATA_SCHEMA_VERSION = KvdbEntryDataSchema::Version::VERSION_5;
 
-}  // namespace kvdb
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace kvdb
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // #define _PRIVMXLIB_ENDPOINT_KVDB_CONSTANTS_HPP_
-
+#endif // #define _PRIVMXLIB_ENDPOINT_KVDB_CONSTANTS_HPP_

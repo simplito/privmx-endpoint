@@ -16,9 +16,9 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "privmx/utils/Utils.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/Events.hpp"
+#include "privmx/utils/Utils.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -27,7 +27,11 @@ namespace core {
 class EventBuilder {
 public:
     template<typename T, typename D>
-    static std::shared_ptr<T> buildEvent(const std::string& channel, const D& data, const NotificationEvent& notification) {
+    static std::shared_ptr<T> buildEvent(
+        const std::string& channel,
+        const D& data,
+        const NotificationEvent& notification
+    ) {
         std::shared_ptr<T> event = std::make_shared<T>();
         event->channel = channel;
         event->data = data;
@@ -43,9 +47,8 @@ public:
     }
 };
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  //_PRIVMXLIB_ENDPOINT_CORE_EVENTBUILDER_HPP_
+#endif //_PRIVMXLIB_ENDPOINT_CORE_EVENTBUILDER_HPP_

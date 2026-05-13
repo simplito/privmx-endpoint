@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CRYPTO_TYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CRYPTO_TYPES_HPP_
 
-#include <string>
 #include "privmx/endpoint/crypto/ExtKey.hpp"
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -38,8 +38,8 @@ struct BIP39_t {
     core::Buffer entropy;
 };
 
-} // crypto
-} // endpoint
-} // privmx
+} // namespace crypto
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CRYPTO_TYPES_HPP_

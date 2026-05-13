@@ -21,7 +21,7 @@ std::string InboxDataHelper::serializeEncKey(const privmx::endpoint::core::EncKe
 }
 
 privmx::endpoint::core::EncKey InboxDataHelper::deserializeEncKey(const std::string& serializedKey) {
-    auto obj {utils::Utils::parseJsonObject(utils::Base64::toString(serializedKey))};
+    auto obj{utils::Utils::parseJsonObject(utils::Base64::toString(serializedKey))};
     return {.id = obj->get("id"), .key = obj->get("key")};
 }
 

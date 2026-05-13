@@ -39,11 +39,8 @@ public:
         Ltrim = 12,
         Rtrim = 13,
     };
-    
 
-    UtilsVarInterface(const core::VarSerializer& serializer)
-        : _serializer(serializer) {}
-
+    UtilsVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
 
     Poco::Dynamic::Var encodeHex(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var decodeHex(const Poco::Dynamic::Var& args);
@@ -66,8 +63,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_UTILSVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_UTILSVARINTERFACE_HPP_

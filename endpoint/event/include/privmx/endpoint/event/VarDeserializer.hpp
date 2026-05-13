@@ -12,18 +12,21 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_EVENT_VARDESERIALIZER_HPP_
 #define _PRIVMXLIB_ENDPOINT_EVENT_VARDESERIALIZER_HPP_
 
-#include <privmx/endpoint/core/VarDeserializer.hpp>
 #include "privmx/endpoint/event/Types.hpp"
+#include <privmx/endpoint/core/VarDeserializer.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
 template<>
-event::EventSelectorType VarDeserializer::deserialize<event::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+event::EventSelectorType VarDeserializer::deserialize<event::EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_VARDESERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_VARDESERIALIZER_HPP_

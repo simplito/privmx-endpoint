@@ -1,8 +1,8 @@
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTER_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTER_HPP_
 
-#include <string>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace privmx {
@@ -14,7 +14,6 @@ namespace core {
  */
 class BackendRequester {
 public:
-
     /**
      * Sends a request to PrivMX Bridge API using access token for authorization.
      * 
@@ -26,13 +25,12 @@ public:
      * @return JSON string representing raw server response
      */
     static std::string backendRequest(
-        const std::string& serverUrl, 
+        const std::string& serverUrl,
         const std::string& accessToken,
         const std::string& method,
         const std::string& paramsAsJson
     );
-    
-    
+
     /**
      * Sends request to PrivMX Bridge API.
      * 
@@ -44,10 +42,10 @@ public:
      */
     static std::string backendRequest(
         const std::string& serverUrl,
-        const std::string& method, 
+        const std::string& method,
         const std::string& paramsAsJson
     );
-    
+
     /**
      * Sends a request to PrivMX Bridge API using pair of API KEY ID and API KEY SECRET for authorization.
      * 
@@ -61,26 +59,26 @@ public:
      * @return JSON string representing raw server response
      */
     static std::string backendRequest(
-        const std::string& serverUrl, 
-        const std::string& apiKeyId, 
-        const std::string& apiKeySecret, 
+        const std::string& serverUrl,
+        const std::string& apiKeyId,
+        const std::string& apiKeySecret,
         const int64_t mode,
         const std::string& method,
         const std::string& paramsAsJson
-    );                            
+    );
 
 private:
     static std::string _backendRequest(
         const std::string& serverUrl,
-        const std::vector<std::pair<std::string, std::string>> headers, 
-        const std::string& method, 
+        const std::vector<std::pair<std::string, std::string>> headers,
+        const std::string& method,
         const std::string& paramsAsJson
     );
     static std::string getED25519KeyFromPEM(const std::string& keyPEM);
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTER_HPP_

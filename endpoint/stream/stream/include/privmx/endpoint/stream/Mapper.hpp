@@ -33,8 +33,8 @@ public:
     static StreamsUpdatedData mapToStreamsUpdatedData(const server::StreamsUpdatedData& s);
 };
 
-} // stream
-} // endpoint
-} // privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STREAM_MAPPER_HPP_

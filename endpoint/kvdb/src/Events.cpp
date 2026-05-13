@@ -9,9 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
 
 #include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
@@ -49,31 +49,45 @@ std::string KvdbStatsChangedEvent::toJSON() const {
 }
 
 std::shared_ptr<core::SerializedEvent> KvdbCreatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> KvdbUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> KvdbDeletedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> KvdbNewEntryEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> KvdbEntryUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> KvdbEntryDeletedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> KvdbStatsChangedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 bool Events::isKvdbCreatedEvent(const core::EventHolder& handler) {
     return handler.type() == "kvdbCreated";
@@ -193,4 +207,3 @@ KvdbEntryDeletedEvent Events::extractKvdbEntryDeletedEvent(const core::EventHold
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-

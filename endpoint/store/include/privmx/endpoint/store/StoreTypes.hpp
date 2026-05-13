@@ -14,10 +14,10 @@ limitations under the License.
 
 #include <string>
 
-#include "privmx/endpoint/store/DynamicTypes.hpp"
-#include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
+#include "privmx/endpoint/store/DynamicTypes.hpp"
+#include "privmx/endpoint/store/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -39,15 +39,13 @@ struct FileDecryptionParams {
     int64_t version;
 };
 
-struct FileMetaSigned
-{
+struct FileMetaSigned {
     dynamic::compat_v1::StoreFileMeta meta;
     std::string metaBuf;
     std::string signature;
 };
 
-struct StoreFile
-{
+struct StoreFile {
     server::File raw;
     dynamic::compat_v1::StoreFileMeta meta;
     std::string verified;
@@ -91,8 +89,7 @@ struct FileInfo {
     std::string resourceId;
 };
 
-struct FileMeta
-{
+struct FileMeta {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     dynamic::InternalStoreFileMeta internalFileMeta;
@@ -104,9 +101,8 @@ struct FileEncryptionParams {
     core::DecryptedEncKey encKey;
 };
 
-
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_STORETYPES_HPP_

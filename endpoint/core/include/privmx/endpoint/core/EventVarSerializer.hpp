@@ -34,8 +34,8 @@ private:
     static std::shared_ptr<VarSerializer> _serializer;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_EVENTVARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_EVENTVARSERIALIZER_HPP_

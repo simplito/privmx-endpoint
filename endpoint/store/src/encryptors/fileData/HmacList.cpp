@@ -8,16 +8,17 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+#include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
-#include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-HmacList::HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) : _topHashKey(topHashKey), _hashes(hashes) {
+HmacList::HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes)
+    : _topHashKey(topHashKey), _hashes(hashes) {
     _topHash = privmx::crypto::Crypto::hmacSha256(_topHashKey, _hashes);
-    if(_topHash != topHash) {
+    if (_topHash != topHash) {
         throw InvalidFileTopHashException();
     }
     if (_hashes.size() % HMAC_SIZE != 0) {
@@ -28,7 +29,7 @@ HmacList::HmacList(const std::string& topHashKey, const std::string& topHash, co
 
 void HmacList::sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) {
     auto tmp = privmx::crypto::Crypto::hmacSha256(topHashKey, hashes);
-    if(tmp != topHash) {
+    if (tmp != topHash) {
         throw InvalidFileTopHashException();
     }
     if (hashes.size() % HMAC_SIZE != 0) {
@@ -49,17 +50,16 @@ void HmacList::setAll(const std::string& hashes) {
     _size = _hashes.size() / HMAC_SIZE;
 }
 
-
-void HmacList::set(const uint64_t& chunkIndex, const std::string& hash, bool truncate ) {
+void HmacList::set(const uint64_t& chunkIndex, const std::string& hash, bool truncate) {
     if (hash.size() != HMAC_SIZE) {
         throw InvalidHashSizeException();
     }
     if (chunkIndex < _size) {
         auto offset = chunkIndex * HMAC_SIZE;
         std::memcpy(_hashes.data() + offset, hash.data(), HMAC_SIZE);
-        if(truncate) {
-            _size = chunkIndex+1;
-            _hashes.erase(offset+HMAC_SIZE);
+        if (truncate) {
+            _size = chunkIndex + 1;
+            _hashes.erase(offset + HMAC_SIZE);
         }
         _topHash.reset();
     } else if (chunkIndex == _size) {

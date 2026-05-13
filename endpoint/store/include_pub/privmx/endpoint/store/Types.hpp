@@ -52,7 +52,6 @@ struct FileChange {
     bool truncate;
 };
 
-
 /**
  * Holds information about the file.
  * 
@@ -99,7 +98,6 @@ struct File {
      */
     bool randomWrite;
 };
-
 
 /**
  * Holds all available information about a Store.
@@ -187,7 +185,7 @@ struct Store {
     int64_t schemaVersion;
 };
 
-enum EventType: int64_t {
+enum EventType : int64_t {
     STORE_CREATE = 0,
     STORE_UPDATE = 1,
     STORE_DELETE = 2,
@@ -198,14 +196,14 @@ enum EventType: int64_t {
     COLLECTION_CHANGE = 7,
 };
 
-enum EventSelectorType: int64_t {
+enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
     STORE_ID = 1,
     FILE_ID = 2,
 };
 
-}  // namespace store
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STORE_STOREAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STORE_STOREAPI_HPP_

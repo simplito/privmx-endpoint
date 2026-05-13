@@ -11,11 +11,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_EVENT_OLDEVENTDATADECRYPTOR_HPP_
 #define _PRIVMXLIB_ENDPOINT_EVENT_OLDEVENTDATADECRYPTOR_HPP_
 
-#include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/Types.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
 #include "privmx/endpoint/event/EventTypes.hpp"
+#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -23,14 +23,19 @@ namespace event {
 
 class OldEventDataDecryptor {
 public:
-    DecryptedContextEventDataV1 decryptV1(const Poco::Dynamic::Var& data, const crypto::PublicKey& authorPublicKey, const std::string& encryptionKey, const crypto::PrivateKey& userPrivateKey);
+    DecryptedContextEventDataV1 decryptV1(
+        const Poco::Dynamic::Var& data,
+        const crypto::PublicKey& authorPublicKey,
+        const std::string& encryptionKey,
+        const crypto::PrivateKey& userPrivateKey
+    );
+
 private:
     core::DataEncryptorV4 _dataEncryptor;
 };
 
-}  // namespace event
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_EVENT_OLDEVENTDATADECRYPTOR_HPP_
-
+#endif //_PRIVMXLIB_ENDPOINT_EVENT_OLDEVENTDATADECRYPTOR_HPP_

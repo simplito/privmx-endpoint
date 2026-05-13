@@ -11,6 +11,8 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 
+#include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
+#include "privmx/endpoint/stream/StreamException.hpp"
 #include <iostream>
 #include <ostream>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -20,24 +22,16 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
-#include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
-#include "privmx/endpoint/stream/StreamException.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiLow StreamApiLow::create(
-    const core::Connection& connection
-) {
+StreamApiLow StreamApiLow::create(const core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<StreamApiLowImpl> impl(new stream::StreamApiLowImpl(
-            connection,
-            connectionImpl->getGateway(),
-            connectionImpl->getUserPrivKey(),
-            connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(),
-            connectionImpl->getEventMiddleware()
+            connection, connectionImpl->getGateway(), connectionImpl->getUserPrivKey(),
+            connectionImpl->getKeyProvider(), connectionImpl->getHost(), connectionImpl->getEventMiddleware()
         ));
         impl->attach(impl);
         return StreamApiLow(impl);
@@ -48,12 +42,12 @@ StreamApiLow StreamApiLow::create(
 }
 
 StreamApiLow::StreamApiLow() {};
-StreamApiLow::StreamApiLow(const StreamApiLow& obj): ExtendedPointer(obj) {};
+StreamApiLow::StreamApiLow(const StreamApiLow& obj) : ExtendedPointer(obj) {};
 StreamApiLow& StreamApiLow::operator=(const StreamApiLow& obj) {
     this->ExtendedPointer::operator=(obj);
     return *this;
 };
-StreamApiLow::StreamApiLow(StreamApiLow&& obj): ExtendedPointer(std::move(obj)) {};
+StreamApiLow::StreamApiLow(StreamApiLow&& obj) : ExtendedPointer(std::move(obj)) {};
 StreamApiLow::~StreamApiLow() {}
 StreamApiLow::StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl) : ExtendedPointer(impl) {}
 
@@ -68,10 +62,10 @@ std::vector<TurnCredentials> StreamApiLow::getTurnCredentials() {
 }
 
 std::string StreamApiLow::createStreamRoom(
-    const std::string& contextId, 
-    const std::vector<core::UserWithPubKey>& users, 
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta, 
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
@@ -88,14 +82,14 @@ std::string StreamApiLow::createStreamRoom(
 }
 
 void StreamApiLow::updateStreamRoom(
-    const std::string& streamRoomId, 
-    const std::vector<core::UserWithPubKey>& users, 
-    const std::vector<core::UserWithPubKey>&managers,
-    const core::Buffer& publicMeta, 
-    const core::Buffer& privateMeta, 
-    const int64_t version, 
-    const bool force, 
-    const bool forceGenerateNewKey, 
+    const std::string& streamRoomId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const int64_t version,
+    const bool force,
+    const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies
 ) {
     auto impl = getImpl();
@@ -103,14 +97,19 @@ void StreamApiLow::updateStreamRoom(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return impl->updateStreamRoom(streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+        return impl->updateStreamRoom(
+            streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        );
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-core::PagingList<StreamRoom> StreamApiLow::listStreamRooms(const std::string& contextId, const core::PagingQuery& query) {
+core::PagingList<StreamRoom> StreamApiLow::listStreamRooms(
+    const std::string& contextId,
+    const core::PagingQuery& query
+) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(query, {"createDate"}, "field:query ");
@@ -164,7 +163,11 @@ void StreamApiLow::unsubscribeFrom(const std::vector<std::string>& subscriptionI
     }
 }
 
-std::string StreamApiLow::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string StreamApiLow::buildSubscriptionQuery(
+    EventType eventType,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     auto impl = getImpl();
     try {
         return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
@@ -264,7 +267,10 @@ void StreamApiLow::unpublishStream(const StreamHandle& streamHandle) {
     }
 }
 
-void StreamApiLow::subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions) {
+void StreamApiLow::subscribeToRemoteStreams(
+    const std::string& streamRoomId,
+    const std::vector<StreamSubscription>& subscriptions
+) {
     auto impl = getImpl();
     try {
         return impl->subscribeToRemoteStreams(streamRoomId, subscriptions);
@@ -274,7 +280,11 @@ void StreamApiLow::subscribeToRemoteStreams(const std::string& streamRoomId, con
     }
 }
 
-void StreamApiLow::modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove) {
+void StreamApiLow::modifyRemoteStreamsSubscriptions(
+    const std::string& streamRoomId,
+    const std::vector<StreamSubscription>& subscriptionsToAdd,
+    const std::vector<StreamSubscription>& subscriptionsToRemove
+) {
     auto impl = getImpl();
     try {
         return impl->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
@@ -284,7 +294,10 @@ void StreamApiLow::modifyRemoteStreamsSubscriptions(const std::string& streamRoo
     }
 }
 
-void StreamApiLow::unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove) {
+void StreamApiLow::unsubscribeFromRemoteStreams(
+    const std::string& streamRoomId,
+    const std::vector<StreamSubscription>& subscriptionsToRemove
+) {
     auto impl = getImpl();
     try {
         return impl->unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
@@ -327,7 +340,10 @@ void StreamApiLow::setNewOfferOnReconfigure(const int64_t sessionId, const SdpWi
     }
 }
 
-core::Buffer StreamApiLow::encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage) {
+core::Buffer StreamApiLow::encryptDataChannelMessage(
+    const std::string& streamRoomId,
+    const DataChannelMessage& plainMessage
+) {
     auto impl = getImpl();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
@@ -349,7 +365,11 @@ void StreamApiLow::registerRemoteDataChannel(const std::string& streamRoomId, co
     }
 }
 
-DecryptedDataChannelMessage StreamApiLow::decryptDataChannelMessage(const std::string& streamRoomId, const std::string& remoteStreamId, const core::Buffer& encryptedMessage) {
+DecryptedDataChannelMessage StreamApiLow::decryptDataChannelMessage(
+    const std::string& streamRoomId,
+    const std::string& remoteStreamId,
+    const core::Buffer& encryptedMessage
+) {
     auto impl = getImpl();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {

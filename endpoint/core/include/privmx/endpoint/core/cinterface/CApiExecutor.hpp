@@ -12,10 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_UTILS_CAPIEXECUTOR_HPP_
 #define _PRIVMXLIB_UTILS_CAPIEXECUTOR_HPP_
 
-#include <functional>
-#include <Poco/Exception.h>
 #include <Poco/Dynamic/Var.h>
+#include <Poco/Exception.h>
 #include <Pson/pson.h>
+#include <functional>
 
 #include <privmx/utils/PrivmxException.hpp>
 
@@ -25,8 +25,7 @@ namespace privmx {
 namespace endpoint {
 namespace cinterface {
 
-class CApiExecutor
-{
+class CApiExecutor {
 public:
     static int execFunc(pson_value** result, const std::function<Poco::Dynamic::Var(void)>& func) noexcept;
 };
@@ -64,8 +63,8 @@ inline int CApiExecutor::execFunc(pson_value** result, const std::function<Poco:
     return res->getValue<bool>("status");
 }
 
-} // cinterface
-} // endpoint
-} // privmx
+} // namespace cinterface
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_UTILS_CAPIEXECUTOR_HPP_
