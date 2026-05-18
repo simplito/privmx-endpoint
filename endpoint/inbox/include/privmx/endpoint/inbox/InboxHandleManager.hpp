@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/endpoint/core/HandleManager.hpp>
 #include <privmx/endpoint/store/ChunkStreamer.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>
+#include <privmx/endpoint/store/cache/CacheInterface.hpp>
 #include "privmx/endpoint/inbox/InboxApi.hpp"
 
 
@@ -75,10 +76,11 @@ public:
         std::shared_ptr<store::RequestApi> requestApi
     );
     std::shared_ptr<store::FileWriteHandle> getFileWriteHandle(int64_t fileHandleId);
-    std::shared_ptr<store::FileReadHandle> createFileReadHandle( 
+    std::shared_ptr<store::FileReadHandle> createFileReadHandle(
         const store::FileDecryptionParams& decryptionParams,
         size_t serverChunkSize,
-        std::shared_ptr<store::ServerApi> server
+        std::shared_ptr<store::ServerApi> server,
+        std::shared_ptr<store::CacheInterface> cache
     );
     bool isFileReadHandle(int64_t fileHandleId);
     bool isFileWriteHandle(int64_t fileHandleId);

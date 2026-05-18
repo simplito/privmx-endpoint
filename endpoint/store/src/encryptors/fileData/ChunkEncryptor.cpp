@@ -33,6 +33,10 @@ IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const uint64_t index, const std::
     };
 }
 
+bool ChunkEncryptor::hasHash(const std::string& chunkData, const std::string& hash) const {
+    return chunkData.size() >= HMAC_SIZE && chunkData.substr(0, HMAC_SIZE) == hash;
+}
+
 std::string ChunkEncryptor::decrypt(const uint64_t index, const Chunk& chunk) {
     std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
     std::string hmac = chunk.data.substr(0, HMAC_SIZE);

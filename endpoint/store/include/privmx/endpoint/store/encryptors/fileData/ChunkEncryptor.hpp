@@ -27,6 +27,7 @@ public:
     ChunkEncryptor(std::string key, size_t chunkSize);
     IChunkEncryptor::Chunk encrypt(const uint64_t index, const std::string& data) override;
     std::string decrypt(const uint64_t index, const Chunk& chunk) override;
+    bool hasHash(const std::string& chunkData, const std::string& hash) const override;
     size_t getPlainChunkSize() override;
     size_t getEncryptedChunkSize() override;
     uint64_t getEncryptedFileSize(const uint64_t& fileSize) override;

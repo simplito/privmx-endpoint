@@ -18,8 +18,10 @@ limitations under the License.
 
 #include <Poco/Types.h>
 #include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/ServerTypes.hpp"
+#include "privmx/endpoint/store/cache/CacheInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -31,11 +33,13 @@ public:
     ChunkDataProvider() = default;
     ChunkDataProvider(
         std::shared_ptr<ServerApi> server,
+        std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         size_t encryptedChunkSize,
         size_t serverChunkSize,
         const std::string& fileId,
         uint64_t serverFileSize,
-        int64_t fileVersion
+        int64_t fileVersion,
+        std::shared_ptr<CacheInterface> cache
     );
     virtual void sync(
         int64_t newfileVersion, 
@@ -43,20 +47,23 @@ public:
         std::optional<size_t> encryptedChunkSize = std::nullopt, 
         std::optional<size_t> serverChunkSize = std::nullopt
     ) override;
-    virtual std::string getChunk(uint32_t chunkNumber) override;
-    virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion) override;
+    virtual std::string getChunk(uint32_t chunkNumber, const std::string& hash) override;
+    virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion, const std::string& hash) override;
     virtual void update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) override;
+    virtual void cacheChunk(uint32_t chunkNumber, const std::string& encryptedData) override;
     virtual std::string getCurrentChecksumsFromBridge() override;
 private:
     static int64_t getServerReadDataSize(int64_t encryptedChunkSize, int64_t severChunkSize);
     std::string requestServerChunk(uint32_t serverChunkNumber);
 
     std::shared_ptr<ServerApi> _server;
+    std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
     size_t _encryptedChunkSize;
     size_t _serverChunkSize;
     std::string _fileId;
     uint64_t _serverFileSize;
     int64_t _fileVersion;
+    std::shared_ptr<CacheInterface> _cache;
 
     std::string _lastServerChunk;
     std::optional<uint32_t> _lastServerChunkNumber = -1;

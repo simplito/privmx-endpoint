@@ -26,10 +26,11 @@ public:
         std::optional<size_t> encryptedChunkSize = std::nullopt, 
         std::optional<size_t> serverChunkSize = std::nullopt
     ) = 0;
-    virtual std::string getChunk(uint32_t chunkNumber) = 0;
-    virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion) = 0;
+    virtual std::string getChunk(uint32_t chunkNumber, const std::string& hash) = 0;
+    virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion, const std::string& hash) = 0;
     virtual void update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) = 0;
-    
+    virtual void cacheChunk(uint32_t chunkNumber, const std::string& encryptedData) = 0;
+
     virtual std::string getCurrentChecksumsFromBridge() = 0;
 };
 

@@ -35,6 +35,8 @@ limitations under the License.
 #include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
+#include "privmx/endpoint/store/cache/GlobalCache.hpp"
+#include "privmx/endpoint/store/cache/CacheScopedNamespace.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include "privmx/endpoint/core/Mapper.hpp"
@@ -67,6 +69,10 @@ StoreApiImpl::StoreApiImpl(
     _handleManager(handleManager),
     _connection(connection),
     _serverRequestChunkSize(serverRequestChunkSize),
+    _chunksCache(std::make_shared<CacheScopedNamespace>(
+        host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",
+        GlobalCache::getChunksCacheInstance()
+    )),
 
     _fileHandleManager(FileHandleManager(handleManager, "Store")),
     _dataEncryptorCompatV1(core::DataEncryptor<dynamic::compat_v1::StoreData>()),
@@ -434,7 +440,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     if (encryptionParams.fileMeta.internalFileMeta.randomWriteOpt(false)) {
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
-                .contextId = file_raw.file().contextId(), 
+                .contextId = file_raw.file().contextId(),
                 .storeId = file_raw.file().storeId(),
                 .storeResourceId = file_raw.store().resourceIdOpt(""),
                 .fileId = file_raw.file().id(),
@@ -444,7 +450,8 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
             _serverRequestChunkSize,
             _userPrivKey,
             _connection,
-            _serverApi
+            _serverApi,
+            _chunksCache
         );
         return handle->getId();
     }
@@ -480,7 +487,8 @@ int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFile
     std::shared_ptr<FileReadHandle> handle = _fileHandleManager.createFileReadHandle(
         storeFileDecryptionParams,
         _serverRequestChunkSize,
-        _serverApi
+        _serverApi,
+        _chunksCache
     );
     return handle->getId();
 }
@@ -541,6 +549,17 @@ void StoreApiImpl::syncFile(const int64_t handle) {
         _fileHandleManager.removeHandle(handle);
         throw FileSyncFailedHandleCloseException("in file read handle");
     }
+}
+
+void StoreApiImpl::flushFile(const int64_t handle) {
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
+    if (rw_handle) {
+        rw_handle->file->flush();
+    }
+}
+
+uint64_t StoreApiImpl::getFileSizeFromHandle(const int64_t handle) {
+    return _fileHandleManager.tryGetFileReadWriteHandle(handle)->file->size();
 }
 
 std::string StoreApiImpl::closeFile(const int64_t handle) {

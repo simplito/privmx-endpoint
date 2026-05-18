@@ -88,6 +88,7 @@ int privmxRead(sqlite3_file *pFile, void *zBuf, int iAmt, sqlite3_int64 iOfst) {
         std::memcpy(zBuf, data.data(), data.size());
         if (iAmt > data.size()) {
             std::memset(&((char*)zBuf)[data.size()], 0, iAmt - data.size());
+            return SQLITE_IOERR_SHORT_READ;
         }
     } catch (...) {
         std::memset(zBuf, 0, iAmt);

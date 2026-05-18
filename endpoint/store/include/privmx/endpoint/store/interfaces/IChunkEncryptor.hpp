@@ -30,6 +30,7 @@ public:
     virtual ~IChunkEncryptor() = default;
     virtual Chunk encrypt(const uint64_t index, const std::string& data) = 0;
     virtual std::string decrypt(const uint64_t index, const Chunk& chunk) = 0;
+    virtual bool hasHash(const std::string& chunkData, const std::string& hash) const = 0;
     virtual size_t getPlainChunkSize() = 0;
     virtual size_t getEncryptedChunkSize() = 0;
     virtual uint64_t getEncryptedFileSize(const uint64_t& fileSize) = 0;

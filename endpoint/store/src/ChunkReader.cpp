@@ -42,8 +42,9 @@ uint64_t ChunkReader::filePosToPosInFileChunk(uint64_t position) {
 
 std::string ChunkReader::getDecryptedChunk(uint64_t index) {
     if(!_lastChunk.has_value() || _lastChunk->index != index) {
-        std::string chunk = _chunkDataProvider->getChunk(index, _version);
-        std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
+        std::string hash = _hashList->getHash(index);
+        std::string chunk = _chunkDataProvider->getChunk(index, _version, hash);
+        std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = hash});
         _lastChunk = ChunkReader::DecryptedChunk{plain, index};
     }
     return _lastChunk->decryptedData;

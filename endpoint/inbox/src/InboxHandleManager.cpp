@@ -124,9 +124,10 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(i
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::createFileReadHandle(
     const store::FileDecryptionParams& decryptionParams,
     size_t serverChunkSize,
-    std::shared_ptr<store::ServerApi> server
+    std::shared_ptr<store::ServerApi> server,
+    std::shared_ptr<store::CacheInterface> cache
 ) {
-    return _fileHandleManager.createFileReadHandle(decryptionParams, serverChunkSize, server);
+    return _fileHandleManager.createFileReadHandle(decryptionParams, serverChunkSize, server, std::move(cache));
 }
 bool InboxHandleManager::isFileReadHandle(int64_t fileHandleId) {
     auto fileHandle = _fileHandleManager.getFileHandle(fileHandleId);

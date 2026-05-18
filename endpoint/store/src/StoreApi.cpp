@@ -253,10 +253,30 @@ void StoreApi::updateFileMeta(const std::string& fileId, const core::Buffer& pub
     }
 }
 
+uint64_t StoreApi::getFileSizeFromHandle(const int64_t handle) {
+    auto impl = getImpl();
+    try {
+        return impl->getFileSizeFromHandle(handle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void StoreApi::syncFile(const int64_t handle) {
     auto impl = getImpl();
     try {
         return impl->syncFile(handle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StoreApi::flushFile(const int64_t handle) {
+    auto impl = getImpl();
+    try {
+        return impl->flushFile(handle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

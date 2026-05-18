@@ -24,9 +24,9 @@ namespace store {
 class CacheNoOp : public CacheInterface
 {
 public:
-    std::optional<Pson::BinaryString> get(const std::string& key) override { return std::nullopt; }
-    void put(const std::string& key, Pson::BinaryString data) override {}
-    void del(const std::string& key) override {}
+    std::optional<Pson::BinaryString> get([[maybe_unused]] const std::string& key) override { return std::nullopt; }
+    void put([[maybe_unused]] const std::string& key, [[maybe_unused]] Pson::BinaryString data) override {}
+    void del([[maybe_unused]] const std::string& key) override {}
 };
 
 } // store

@@ -105,10 +105,11 @@ void PrivmxFile::sync() {
         session->storeApi.seekInFile(fh, of);
         session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
     }
+    session->storeApi.flushFile(fh);
 }
 
 int64_t PrivmxFile::getFileSize() {
-    return session->storeApi.getFile(fileId).size;
+    return session->storeApi.getFileSizeFromHandle(fh);
 }
 
 bool PrivmxFile::lock(LockLevel level) {

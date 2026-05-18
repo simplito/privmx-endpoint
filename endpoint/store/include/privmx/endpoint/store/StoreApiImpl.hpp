@@ -44,6 +44,7 @@ limitations under the License.
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include "privmx/endpoint/store/cache/CacheInterface.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -99,6 +100,8 @@ public:
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
     void syncFile(const int64_t handle);
+    void flushFile(const int64_t handle);
+    uint64_t getFileSizeFromHandle(const int64_t handle);
     std::string closeFile(const int64_t handle);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(server::File file, const core::DecryptedEncKey& encKey);
@@ -193,6 +196,7 @@ private:
     core::Connection _connection;
     size_t _serverRequestChunkSize;
     
+    std::shared_ptr<CacheInterface> _chunksCache;
     FileHandleManager _fileHandleManager;
     core::DataEncryptor<dynamic::compat_v1::StoreData> _dataEncryptorCompatV1;
     FileMetaEncryptorV1 _fileMetaEncryptorV1;

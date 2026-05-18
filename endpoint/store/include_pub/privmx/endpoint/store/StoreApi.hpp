@@ -228,6 +228,21 @@ public:
      */ 
     void syncFile(const int64_t fileHandle);
 
+    /**
+     * Gets the current file size from an open file handle.
+     *
+     * @param fileHandle handle to read/write file data
+     * @return current file size in bytes
+     */
+    uint64_t getFileSizeFromHandle(const int64_t fileHandle);
+
+    /**
+     * Flushes pending buffered writes to the server.
+     *
+     * @param fileHandle handle to read/write file data
+     */
+    void flushFile(const int64_t fileHandle);
+
 private:
     StoreApi(const std::shared_ptr<StoreApiImpl>& impl);
 };

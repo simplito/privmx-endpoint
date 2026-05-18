@@ -13,23 +13,29 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
+#include "privmx/endpoint/store/cache/CacheKey.hpp"
+#include <Pson/BinaryString.hpp>
 
 using namespace privmx::endpoint::store;
 
 ChunkDataProvider::ChunkDataProvider(
     std::shared_ptr<ServerApi> server,
+    std::shared_ptr<IChunkEncryptor> chunkEncryptor,
     size_t chunkSize,
     size_t severChunkSize,
     const std::string& fileId,
     uint64_t serverFileSize,
-    int64_t fileVersion
+    int64_t fileVersion,
+    std::shared_ptr<CacheInterface> cache
 )
     : _server(server),
+    _chunkEncryptor(chunkEncryptor),
     _encryptedChunkSize(chunkSize),
     _serverChunkSize(getServerReadDataSize(chunkSize, severChunkSize)),
     _fileId(fileId),
     _serverFileSize(serverFileSize),
-    _fileVersion(fileVersion)
+    _fileVersion(fileVersion),
+    _cache(std::move(cache))
 {}
 
 void ChunkDataProvider::sync(
@@ -52,11 +58,23 @@ void ChunkDataProvider::sync(
     }
 }
 
-std::string ChunkDataProvider::getChunk(uint32_t chunkNumber) {
-    return getChunk(chunkNumber, _fileVersion);
+std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, const std::string& hash) {
+    return getChunk(chunkNumber, _fileVersion, hash);
 }
 
-std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersion) {
+std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersion, const std::string& hash) {
+    auto cacheKey = CacheKey::chunk(_fileId, chunkNumber);
+    auto cached = _cache->get(cacheKey);
+    if (cached.has_value()) {
+        if (!_chunkEncryptor->hasHash(cached.value(), hash)) {
+            // TODO: Race condition: between get() and del() another thread may have replaced the entry
+            // with a valid chunk, but we delete it anyway — non-atomic, acceptable as best-effort eviction.
+            _cache->del(cacheKey);
+        } else {
+            return cached.value();
+        }
+    }
+
     if(fileVersion != _fileVersion) {
         _lastServerChunkNumber = std::nullopt;
         _fileVersion = fileVersion;
@@ -67,6 +85,14 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
     if(!_lastServerChunkNumber.has_value() || _lastServerChunkNumber.value() != serverChunkNumber) {
         _lastServerChunk = requestServerChunk(serverChunkNumber);
         _lastServerChunkNumber = serverChunkNumber;
+
+        uint64_t firstChunkNumber = serverChunkNumber * _serverChunkSize / _encryptedChunkSize;
+        uint64_t chunksInSegment = (_lastServerChunk.size() + _encryptedChunkSize - 1) / _encryptedChunkSize;
+        for (uint64_t i = 0; i < chunksInSegment; ++i) {
+            uint64_t pos = i * _encryptedChunkSize;
+            _cache->put(CacheKey::chunk(_fileId, firstChunkNumber + i),
+                             Pson::BinaryString(_lastServerChunk.substr(pos, _encryptedChunkSize)));
+        }
     }
     if(serverChunkPos > _lastServerChunk.size()) {
         return std::string();
@@ -97,6 +123,10 @@ void ChunkDataProvider::update(int64_t newfileVersion, uint32_t chunkNumber, con
     }
     _serverFileSize = encryptedFileSize;
     _fileVersion = newfileVersion;
+}
+
+void ChunkDataProvider::cacheChunk(uint32_t chunkNumber, const std::string& encryptedData) {
+    _cache->put(CacheKey::chunk(_fileId, chunkNumber), Pson::BinaryString(encryptedData));
 }
 
 std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {

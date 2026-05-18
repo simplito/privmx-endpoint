@@ -23,6 +23,8 @@ limitations under the License.
 #include <privmx/endpoint/store/FileHandle.hpp>
 #include <privmx/endpoint/store/ChunkBufferedStream.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
+#include <privmx/endpoint/store/cache/GlobalCache.hpp>
+#include <privmx/endpoint/store/cache/CacheScopedNamespace.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/endpoint/thread/ThreadApiImpl.hpp>
 
@@ -66,6 +68,10 @@ InboxApiImpl::InboxApiImpl(
     _userPrivKey(userPrivKey),
     _eventMiddleware(eventMiddleware),
     _handleManager(handleManager),
+    _chunksCache(std::make_shared<store::CacheScopedNamespace>(
+        host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",
+        store::GlobalCache::getChunksCacheInstance()
+    )),
     _inboxHandleManager(InboxHandleManager(handleManager)),
     _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
     _fileKeyIdFormatValidator(FileKeyIdFormatValidator()),
@@ -519,7 +525,8 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
         decryptionParams,
         _serverRequestChunkSize,
-        _serverApi
+        _serverApi,
+        _chunksCache
     );
     PRIVMX_DEBUG_TIME_STOP(InboxApi, createInboxFileHandleForRead, handle_created)
     return handle->getId();    

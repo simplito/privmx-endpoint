@@ -11,22 +11,31 @@ limitations under the License.
 
 #include <privmx/endpoint/store/cache/GlobalCache.hpp>
 #include <privmx/endpoint/store/cache/CacheInMemory.hpp>
-// #include <privmx/endpoint/store/cache/CacheNoOp.hpp>
+#include <privmx/endpoint/store/cache/CacheNoOp.hpp>
 
 using namespace privmx::endpoint::store;
 
-std::shared_ptr<CacheInterface> GlobalCache::impl = nullptr;
+bool GlobalCache::_isChunksCacheEnabled = true;
 
-std::shared_ptr<CacheInterface> GlobalCache::getInstance() {
-    if (impl == nullptr) {
-        impl = std::make_shared<CacheInMemory>();
-        // impl = std::make_shared<CacheNoOp>();
-    }
-    return impl;
+std::shared_ptr<CacheInterface> GlobalCache::_chunksCacheImpl = nullptr;
+std::once_flag GlobalCache::_chunksCacheInitFlag;
+
+void GlobalCache::setChunksCacheEnabled(bool enabled) {
+    _isChunksCacheEnabled = enabled;
 }
 
-void GlobalCache::freeInstance() {
-    if (impl) {
-        impl.reset();
-    }
+void GlobalCache::setChunksCache(std::shared_ptr<CacheInterface> cache) {
+    _chunksCacheImpl = std::move(cache);
+}
+
+std::shared_ptr<CacheInterface> GlobalCache::getChunksCacheInstance() {
+    std::call_once(_chunksCacheInitFlag, []() {
+        if (_chunksCacheImpl) return;
+        if (_isChunksCacheEnabled) {
+            _chunksCacheImpl = std::make_shared<CacheInMemory>();
+        } else {
+            _chunksCacheImpl = std::make_shared<CacheNoOp>();
+        }
+    });
+    return _chunksCacheImpl;
 }

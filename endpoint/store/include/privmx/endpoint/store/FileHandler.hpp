@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_FILE_HANDLER_HPP_
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
@@ -52,6 +53,7 @@ public:
     );
 
     void write(uint64_t offset, const core::Buffer& data, bool truncate = false);
+    void truncate(uint64_t length);
     core::Buffer read(uint64_t offset, uint64_t size);
     uint64_t getFileSize();
     void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey);
@@ -61,20 +63,12 @@ public:
 private:
     struct UpdateChunkData {
         store::IChunkEncryptor::Chunk chunk;
+        std::string plainData;
         uint64_t chunkIndex;
-        int64_t plainfileSizeChange;
-        int64_t encryptedFileSizeChange;
-    };
-    struct UpdateChanges {
-        std::string data;
-        uint64_t dataPos;
-        std::string checksum;
-        uint64_t checksumPos;
     };
 
-    UpdateChunkData createUpdateChunk(uint64_t index, uint64_t chunkOffset, const std::string& data, bool truncate = false);
-    void updateOnServer(const std::vector<UpdateChanges>& updatedChunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate);
-    std::vector<UpdateChanges> createListOfUpdateChangesFromUpdateChunkData(const std::vector<UpdateChunkData>& updatedChunks);
+    void loadChunkIntoDirty(uint64_t chunkIndex);
+    void updateOnServer(const std::vector<UpdateChunkData>& chunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate);
 
     std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
@@ -90,8 +84,9 @@ private:
     std::shared_ptr<ServerApi> _server;
     size_t _plainChunkSize;
     size_t _encryptedChunkSize;
-    static constexpr size_t SERVER_OPERATIONS_LIMIT = 4;
-    static constexpr size_t SERVER_OPERATION_SIZE_LIMIT = 512*1024; // 512KiB
+    uint64_t _pendingPlainfileSize = 0;
+    uint64_t _pendingTruncateBoundary = UINT64_MAX;
+    std::map<uint64_t, std::string> _dirtyChunks;
 };
 
 class FileHandlerImpl : public IFileHandler
@@ -105,11 +100,11 @@ public:
     core::Buffer read(const uint64_t length) override;
     void write(const core::Buffer& chunk, bool truncate = false) override;
 
-    inline void close() override {}
+    inline void close() override { _file->close(); }
     inline void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) override {
         return _file->sync(fileMeta, newParms, fileEncKey);
     }
-    inline void flush() override {throw NotImplementedException();}
+    inline void flush() override { _file->flush(); }
 
 private:
     std::shared_ptr<FileHandler> _file;
