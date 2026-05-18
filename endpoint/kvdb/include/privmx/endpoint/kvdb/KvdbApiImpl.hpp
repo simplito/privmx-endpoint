@@ -105,8 +105,6 @@ public:
         const std::string& kvdbId,
         const std::string& kvdbEntryKey
     );
-
-private:
     std::string createKvdbEx(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
