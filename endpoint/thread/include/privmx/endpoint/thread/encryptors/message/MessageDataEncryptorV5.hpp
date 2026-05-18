@@ -12,13 +12,14 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_
 
+#include "privmx/endpoint/thread/ServerTypes.hpp"
+#include "privmx/endpoint/thread/ThreadTypes.hpp"
+#include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include "privmx/endpoint/thread/ThreadTypes.hpp"
-#include "privmx/endpoint/thread/ServerTypes.hpp"
+#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -31,17 +32,21 @@ public:
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedMessageDataV5 decrypt(const server::EncryptedMessageDataV5& encryptedMessageData, const std::string& encryptionKey);
+    DecryptedMessageDataV5 decrypt(
+        const server::EncryptedMessageDataV5& encryptedMessageData,
+        const std::string& encryptionKey
+    );
     DecryptedMessageDataV5 extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encryptedMessageData);
+
 private:
     void assertDataFormat(const server::EncryptedMessageDataV5& encryptedThreadData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_
+#endif //_PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_

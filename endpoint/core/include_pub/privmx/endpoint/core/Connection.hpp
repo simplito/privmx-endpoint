@@ -2,13 +2,12 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_CONNECTION_HPP_
 
 #include <memory>
-#include <string>
 #include <optional>
+#include <string>
 
+#include "privmx/endpoint/core/ExtendedPointer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
-#include "privmx/endpoint/core/ExtendedPointer.hpp"
-
 
 namespace privmx {
 namespace endpoint {
@@ -31,8 +30,12 @@ public:
      * 
      * @return Connection object
      */
-    static Connection connect(const std::string& userPrivKey, const std::string& solutionId,
-                              const std::string& bridgeUrl, const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
+    static Connection connect(
+        const std::string& userPrivKey,
+        const std::string& solutionId,
+        const std::string& bridgeUrl,
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
+    );
 
     /**
      * Connects to the PrivMX Bridge Server as a guest user.
@@ -42,10 +45,13 @@ public:
      * @param verificationOptions PrivMX Bridge server instance verification options using a PKI server
      * 
      * @return Connection object
-     */                                     
-    static Connection connectPublic(const std::string& solutionId, const std::string& bridgeUrl, 
-                                    const PKIVerificationOptions& verificationOptions = PKIVerificationOptions());
-    
+     */
+    static Connection connectPublic(
+        const std::string& solutionId,
+        const std::string& bridgeUrl,
+        const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
+    );
+
     /**
      * //doc-gen:ignore
      */
@@ -59,7 +65,7 @@ public:
      * Gets the ID of the current connection.
      * 
      * @return ID of the connection
-     */ 
+     */
     int64_t getConnectionId();
 
     /**
@@ -100,7 +106,11 @@ public:
      * @param selectorType scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
     /**
      * Disconnects from the PrivMX Bridge server.
@@ -126,8 +136,8 @@ private:
     std::optional<int64_t> _connectionId;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_CONNECTION_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_CONNECTION_HPP_

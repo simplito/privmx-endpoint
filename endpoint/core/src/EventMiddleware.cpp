@@ -11,8 +11,9 @@ limitations under the License.
 
 #include "privmx/endpoint/core/EventMiddleware.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
-#include <privmx/utils/Logger.hpp>
 #include <algorithm>
+#include <privmx/utils/Logger.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -20,8 +21,8 @@ EventMiddleware::EventMiddleware(std::shared_ptr<EventQueueImpl> queue, const in
     : _queue(queue), _connectionId(connectionId) {}
 
 int EventMiddleware::addNotificationEventListener(
-    const std::function<void(const std::string& type, const NotificationEvent& notification)>& callback)
-{
+    const std::function<void(const std::string& type, const NotificationEvent& notification)>& callback
+) {
     int id = _id.fetch_add(1);
     _notificationsListeners.set(id, std::make_pair(callback, std::vector<std::string>()));
     return id;
@@ -39,10 +40,15 @@ int EventMiddleware::addDisconnectedEventListener(const std::function<void()>& c
     return id;
 }
 
-void EventMiddleware::notificationEventListenerAddSubscriptionIds(int id, const std::vector<std::string>& subscriptionIds) {
+void EventMiddleware::notificationEventListenerAddSubscriptionIds(
+    int id,
+    const std::vector<std::string>& subscriptionIds
+) {
     _notificationsListeners.updateValueIfExist(
-        id, 
-        [&](const std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>& listener) {
+        id,
+        [&](const std::pair<
+            std::function<void(const std::string& type, const NotificationEvent& notification)>,
+            std::vector<std::string>>& listener) {
             std::vector<std::string> newSubscriptionIds(listener.second);
             newSubscriptionIds.insert(newSubscriptionIds.end(), subscriptionIds.begin(), subscriptionIds.end());
             return std::make_pair(listener.first, newSubscriptionIds);
@@ -50,16 +56,21 @@ void EventMiddleware::notificationEventListenerAddSubscriptionIds(int id, const 
     );
 }
 
-void EventMiddleware::notificationEventListenerRemoveSubscriptionIds(int id, const std::vector<std::string>& subscriptionIds) {
+void EventMiddleware::notificationEventListenerRemoveSubscriptionIds(
+    int id,
+    const std::vector<std::string>& subscriptionIds
+) {
     _notificationsListeners.updateValueIfExist(
-        id, 
-        [&](const std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>& listener) {
+        id,
+        [&](const std::pair<
+            std::function<void(const std::string& type, const NotificationEvent& notification)>,
+            std::vector<std::string>>& listener) {
             std::vector<std::string> toRemove = subscriptionIds;
             std::vector<std::string> newSubscriptionIds;
-            for(size_t i = 0; i < listener.second.size(); i++) {
-                if(toRemove.size() > 0) {
+            for (size_t i = 0; i < listener.second.size(); i++) {
+                if (toRemove.size() > 0) {
                     auto it = std::find(toRemove.begin(), toRemove.end(), listener.second[i]);
-                    if(it != toRemove.end()) {
+                    if (it != toRemove.end()) {
                         toRemove.erase(std::remove(toRemove.begin(), toRemove.end(), listener.second[i]));
                     } else {
                         newSubscriptionIds.push_back(listener.second[i]);
@@ -67,7 +78,7 @@ void EventMiddleware::notificationEventListenerRemoveSubscriptionIds(int id, con
                 } else {
                     newSubscriptionIds.push_back(listener.second[i]);
                 }
-            } 
+            }
             return std::make_pair(listener.first, newSubscriptionIds);
         }
     );
@@ -77,64 +88,79 @@ void EventMiddleware::removeNotificationEventListener(int id) noexcept {
     try {
         _notificationsListeners.erase(id);
     } catch (const core::Exception& e) {
-        LOG_ERROR("Error on EventMiddleware::removeNotificationEventListener, recived privmx::core::Exception :\n", e.getFull() )
+        LOG_ERROR(
+            "Error on EventMiddleware::removeNotificationEventListener, recived privmx::core::Exception :\n",
+            e.getFull()
+        )
     } catch (const std::exception& e) {
-        LOG_FATAL("Error on EventMiddleware::removeNotificationEventListener, recived std::exception :\n", e.what() )
-    } catch (...) {
-        LOG_FATAL("Error on EventMiddleware::removeNotificationEventListener, recived unknown exception")
-    }
+        LOG_FATAL("Error on EventMiddleware::removeNotificationEventListener, recived std::exception :\n", e.what())
+    } catch (...) { LOG_FATAL("Error on EventMiddleware::removeNotificationEventListener, recived unknown exception") }
 }
 
 void EventMiddleware::removeConnectedEventListener(int id) noexcept {
     try {
         _connectedListeners.erase(id);
     } catch (const core::Exception& e) {
-        LOG_ERROR("Error on EventMiddleware::removeConnectedEventListener, recived privmx::core::Exception :\n", e.getFull() )
+        LOG_ERROR(
+            "Error on EventMiddleware::removeConnectedEventListener, recived privmx::core::Exception :\n", e.getFull()
+        )
     } catch (const std::exception& e) {
-        LOG_FATAL("Error on EventMiddleware::removeConnectedEventListener, recived std::exception :\n", e.what() )
-    } catch (...) {
-        LOG_FATAL("Error on EventMiddleware::removeConnectedEventListener, recived unknown exception")
-    }
+        LOG_FATAL("Error on EventMiddleware::removeConnectedEventListener, recived std::exception :\n", e.what())
+    } catch (...) { LOG_FATAL("Error on EventMiddleware::removeConnectedEventListener, recived unknown exception") }
 }
 
 void EventMiddleware::removeDisconnectedEventListener(int id) noexcept {
     try {
         _disconnectedListeners.erase(id);
     } catch (const core::Exception& e) {
-        LOG_ERROR("Error on EventMiddleware::removeDisconnectedEventListener, recived privmx::core::Exception :\n", e.getFull() )
+        LOG_ERROR(
+            "Error on EventMiddleware::removeDisconnectedEventListener, recived privmx::core::Exception :\n",
+            e.getFull()
+        )
     } catch (const std::exception& e) {
-        LOG_FATAL("Error on EventMiddleware::removeDisconnectedEventListener, recived std::exception :\n", e.what() )
-    } catch (...) {
-        LOG_FATAL("Error on EventMiddleware::removeDisconnectedEventListener, recived unknown exception")
-    }
+        LOG_FATAL("Error on EventMiddleware::removeDisconnectedEventListener, recived std::exception :\n", e.what())
+    } catch (...) { LOG_FATAL("Error on EventMiddleware::removeDisconnectedEventListener, recived unknown exception") }
 }
 
 void EventMiddleware::emitNotificationEvent(const std::string& type, const NotificationEvent& notification) {
-    
+
     _notificationsListeners.forAll(
-        [&](
-            [[maybe_unused]] const int& i, 
-            const std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>& listener
-        ) {
+        [&]([[maybe_unused]] const int& i,
+            const std::pair<
+                std::function<void(const std::string& type, const NotificationEvent& notification)>,
+                std::vector<std::string>>& listener) {
             try {
-                if(notification.subscriptions.size() == 0) {
+                if (notification.subscriptions.size() == 0) {
                     LOG_WARN("Recived event have no subscriptions eventType: ", type);
                 }
-                for(auto& s : notification.subscriptions) {
-                   if(std::find(listener.second.begin(), listener.second.end(), s) != listener.second.end()) {
-                        if(listener.first) {
+                for (auto& s : notification.subscriptions) {
+                    if (std::find(listener.second.begin(), listener.second.end(), s) != listener.second.end()) {
+                        if (listener.first) {
                             return listener.first(type, notification);
                         }
-                   }
+                    }
                 }
             } catch (const core::Exception& e) {
-                LOG_ERROR("Error on EventMiddleware::emitNotificationEvent, recived privmx::core::Exception :\n", e.getFull() , "\nNotification type: ", type,"\nPayload: ",privmx::utils::Utils::stringifyVar(notification.data, true))
+                LOG_ERROR(
+                    "Error on EventMiddleware::emitNotificationEvent, recived privmx::core::Exception :\n", e.getFull(),
+                    "\nNotification type: ", type,
+                    "\nPayload: ", privmx::utils::Utils::stringifyVar(notification.data, true)
+                )
             } catch (const std::exception& e) {
-                LOG_FATAL("Error on EventMiddleware::emitNotificationEvent, recived std::exception :\n", e.what() , "\nNotification type: ", type,"\nPayload: ",privmx::utils::Utils::stringifyVar(notification.data, true))
+                LOG_FATAL(
+                    "Error on EventMiddleware::emitNotificationEvent, recived std::exception :\n", e.what(),
+                    "\nNotification type: ", type,
+                    "\nPayload: ", privmx::utils::Utils::stringifyVar(notification.data, true)
+                )
             } catch (...) {
-                LOG_FATAL("Error on EventMiddleware::emitNotificationEvent, recived unknown exception" , "\nNotification type: ", type,"\nPayload: ",privmx::utils::Utils::stringifyVar(notification.data, true))
+                LOG_FATAL(
+                    "Error on EventMiddleware::emitNotificationEvent, recived unknown exception",
+                    "\nNotification type: ", type,
+                    "\nPayload: ", privmx::utils::Utils::stringifyVar(notification.data, true)
+                )
             }
-        });
+        }
+    );
 }
 
 void EventMiddleware::emitConnectedEvent() {
@@ -144,12 +170,10 @@ void EventMiddleware::emitConnectedEvent() {
                 listener();
             }
         } catch (const core::Exception& e) {
-            LOG_ERROR("Error on EventMiddleware::emitConnectedEvent, recived privmx::core::Exception :\n", e.getFull() )
+            LOG_ERROR("Error on EventMiddleware::emitConnectedEvent, recived privmx::core::Exception :\n", e.getFull())
         } catch (const std::exception& e) {
-            LOG_FATAL("Error on EventMiddleware::emitConnectedEvent, recived std::exception :\n", e.what() )
-        } catch (...) {
-            LOG_FATAL("Error on EventMiddleware::emitConnectedEvent, recived unknown exception")
-        }
+            LOG_FATAL("Error on EventMiddleware::emitConnectedEvent, recived std::exception :\n", e.what())
+        } catch (...) { LOG_FATAL("Error on EventMiddleware::emitConnectedEvent, recived unknown exception") }
     });
 }
 
@@ -160,11 +184,11 @@ void EventMiddleware::emitDisconnectedEvent() {
                 listener();
             }
         } catch (const core::Exception& e) {
-            LOG_ERROR("Error on EventMiddleware::emitDisconnectedEvent, recived privmx::core::Exception :\n", e.getFull() )
+            LOG_ERROR(
+                "Error on EventMiddleware::emitDisconnectedEvent, recived privmx::core::Exception :\n", e.getFull()
+            )
         } catch (const std::exception& e) {
-            LOG_FATAL("Error on EventMiddleware::emitDisconnectedEvent, recived std::exception :\n", e.what() )
-        } catch (...) {
-            LOG_FATAL("Error on EventMiddleware::emitDisconnectedEvent, recived unknown exception")
-        }
+            LOG_FATAL("Error on EventMiddleware::emitDisconnectedEvent, recived std::exception :\n", e.what())
+        } catch (...) { LOG_FATAL("Error on EventMiddleware::emitDisconnectedEvent, recived unknown exception") }
     });
 }

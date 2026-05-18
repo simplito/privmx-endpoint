@@ -18,34 +18,29 @@ namespace privmx {
 namespace endpoint {
 namespace thread {
 
-
 namespace ThreadDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1,
-      VERSION_4 = 4,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1,
+    VERSION_4 = 4,
+    VERSION_5 = 5
+};
+} // namespace ThreadDataSchema
 constexpr static ThreadDataSchema::Version CURRENT_THREAD_DATA_SCHEMA_VERSION = ThreadDataSchema::Version::VERSION_5;
 
-
 namespace MessageDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_2 = 2,
-      VERSION_3 = 3,
-      VERSION_4 = 4,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_2 = 2,
+    VERSION_3 = 3,
+    VERSION_4 = 4,
+    VERSION_5 = 5
+};
+} // namespace MessageDataSchema
 constexpr static MessageDataSchema::Version CURRENT_MESSAGE_DATA_SCHEMA_VERSION = MessageDataSchema::Version::VERSION_5;
 
-}  // namespace thread
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
-
-
-#endif  // #define _PRIVMXLIB_ENDPOINT_THREAD_CONSTANTS_HPP_
-
+#endif // #define _PRIVMXLIB_ENDPOINT_THREAD_CONSTANTS_HPP_

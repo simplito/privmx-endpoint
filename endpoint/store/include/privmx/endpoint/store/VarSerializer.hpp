@@ -36,15 +36,18 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreDeletedEventData>(const 
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreStatsChangedEventData>(
-    const store::StoreStatsChangedEventData& val);
+    const store::StoreStatsChangedEventData& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEventData>(
-    const store::StoreFileDeletedEventData& val);
+    const store::StoreFileDeletedEventData& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEventData>(
-    const store::StoreFileUpdatedEventData& val);
+    const store::StoreFileUpdatedEventData& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreCreatedEvent>(const store::StoreCreatedEvent& val);
@@ -79,10 +82,8 @@ Poco::Dynamic::Var VarSerializer::serialize<PagingList<store::File>>(const Pagin
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::ServerFileInfo>(const store::ServerFileInfo& val);
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_STORE_STOREVARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STORE_STOREVARSERIALIZER_HPP_

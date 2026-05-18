@@ -16,10 +16,9 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamVarSerializer.hpp"
+#include <mutex>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/stream/StreamVarDeserializer.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
-#include <mutex>
 #include <shared_mutex>
 namespace privmx {
 namespace endpoint {
@@ -60,8 +59,8 @@ public:
         JoinStreamRoomEx = 25,
     };
 
-    StreamApiLowVarInterface(core::Connection connection, event::EventApi eventApi, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _eventApi(std::move(eventApi)), _serializer(serializer) {}
+    StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
+        : _connection(std::move(connection)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getTurnCredentials(const Poco::Dynamic::Var& args);
@@ -94,18 +93,16 @@ public:
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var acceptOfferOnReconfigure(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setNewOfferOnReconfigure(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var keyManagement(const Poco::Dynamic::Var& args);
-
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
     std::shared_ptr<WebRTCInterface> getWebRtcInterface();
     void setWebRtcInterface(std::shared_ptr<WebRTCInterface> webRtcInterface);
     int64_t getWebRtcInterfaceRawPtr();
+
 private:
     static std::map<METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
-    event::EventApi _eventApi;
     StreamApiLow _streamApi;
     core::VarSerializer _serializer;
     core::VarDeserializer _deserializer;
@@ -113,8 +110,8 @@ private:
     std::shared_mutex _mutex;
 };
 
-}  // namespace event
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWVARINTERFACE_HPP_

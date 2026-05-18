@@ -12,25 +12,24 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKREADER_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKREADER_HPP_
 
-#include <cstdint>
-#include <string>
-#include <optional>
-#include <memory>
-#include <privmx/endpoint/core/Buffer.hpp>
 #include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <privmx/endpoint/core/Buffer.hpp>
+#include <string>
 
 #include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
-#include "privmx/endpoint/store/interfaces/IHashList.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkReader.hpp"
+#include "privmx/endpoint/store/interfaces/IHashList.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class ChunkReader : public IChunkReader
-{
+class ChunkReader : public IChunkReader {
 public:
     ChunkReader(
         std::shared_ptr<IChunkDataProvider> chunkDataProvider,
@@ -44,6 +43,7 @@ public:
     virtual std::string getDecryptedChunk(uint64_t index) override;
     virtual void sync(const store::FileDecryptionParams& newParms) override;
     virtual void update(int64_t newfileVersion, uint64_t index) override;
+
 private:
     struct DecryptedChunk {
         std::string decryptedData;
@@ -57,8 +57,8 @@ private:
     std::optional<DecryptedChunk> _lastChunk;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNKREADER_HPP_

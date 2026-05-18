@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 mkdir -p ./build
 BUILD_TYPE="Debug"
 conan install . --output-folder=build --build=missing -s build_type=$BUILD_TYPE
@@ -16,19 +17,10 @@ cmake .. -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$GENERATORS_DIR/conan_toolch
        -DPRIVMX_BUILD_DEBUG_APPS=OFF \
        -DPRIVMX_BUILD_ENDPOINT_INTERFACE=ON \
        -DPRIVMX_ENABLE_TESTS=ON \
+       -DPRIVMX_ENABLE_TESTS_E2E=ON \
        -DPRIVMX_BUILD_DEBUG=OFF \
-       -DPRIVMX_BUILD_STREAM_TESTING=ON \
        -DPRIVMX_BUILD_ENDPOINT_ENDPOINT=ON \
-       -DPRIVMX_BUILD_WITH_WEBRTC=ON \
-       -DPRIVMX_BUILD_LOGGER=ON \
-       -DPRIVMX_ENABLE_LOGGER_TIMER=ON \
-       -DPRIVMX_LOGGER_LEVEL=5 \
-       -DPRIVMX_LOGGER_OUTPUT_INCLUDE_TIMESTAMP=ON \
-       -DPRIVMX_LOGGER_OUTPUT_INCLUDE_THREADID=ON \
-       -DPRIVMX_LOGGER_OUTPUT_STDOUT=ON \
-       -DPRIVMX_LOGGER_OUTPUT_STDERR=OFF \
-       -DPRIVMX_LOGGER_OUTPUT_FILE=ON \
-       -DPRIVMX_LOGGER_OUTPUT_FILE_PATH=output.log
+       -DPRIVMX_BUILD_WITH_WEBRTC=ON
 cmake --build . -- -j20
 source $GENERATORS_DIR/deactivate_conanbuild.sh
 source $GENERATORS_DIR/conanrun.sh

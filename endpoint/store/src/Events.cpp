@@ -9,16 +9,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/store/StoreException.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
+#include <privmx/endpoint/store/StoreException.hpp>
 
+#include "privmx/endpoint/core/EventVarSerializer.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
-#include "privmx/endpoint/store/VarSerializer.hpp"
 #include "privmx/endpoint/store/StoreValidator.hpp"
-#include "privmx/endpoint/core/EventVarSerializer.hpp"
+#include "privmx/endpoint/store/VarSerializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -53,35 +53,48 @@ std::string StoreFileDeletedEvent::toJSON() const {
 
 //
 std::shared_ptr<core::SerializedEvent> StoreCreatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StoreUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StoreDeletedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StoreStatsChangedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StoreFileCreatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StoreFileUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StoreFileDeletedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 //
-
 
 bool Events::isStoreCreatedEvent(const core::EventHolder& handler) {
     return handler.type() == "storeCreated";

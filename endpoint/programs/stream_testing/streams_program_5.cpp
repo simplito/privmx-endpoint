@@ -24,8 +24,6 @@
 #include <privmx/endpoint/core/Events.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/event/Events.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/Events.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
@@ -446,7 +444,8 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
         } catch (const privmx::endpoint::core::Exception& e) {
             PRIVMX_DEBUG("StreamProgram wx", "Connect", "User not added to StreamRoom")
             auto admin_connection = std::make_shared<core::Connection>(core::Connection::connect(adminUserPrivKey, solutionId, bridgeUrl));
-            auto admin_streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*admin_connection, *eventApi));
+            auto admin_eventApi = event::EventApi::create(*admin_connection);
+            auto admin_streamApi = std::make_shared<stream::StreamApi>(stream::StreamApi::create(*admin_connection, admin_eventApi));
             bool stop = false;
             for (size_t i = 0;!stop;i++) {
                 PRIVMX_DEBUG("StreamProgram wx", "Connect", "Admin: Getting StreamRoomInfo")

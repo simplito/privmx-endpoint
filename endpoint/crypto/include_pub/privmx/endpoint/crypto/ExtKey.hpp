@@ -12,23 +12,21 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEY_HPP_
 #define _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEY_HPP_
 
-#include <string>
 #include <memory>
 #include <privmx/endpoint/core/Buffer.hpp>
-
+#include <string>
 
 namespace privmx {
 namespace crypto {
-    class ExtKey;
-} //crypto
+class ExtKey;
+} // namespace crypto
 
 namespace endpoint {
 namespace crypto {
 /**
  * 'ExtKey' is a class representing Extended keys and operations on it.
  */
-class ExtKey
-{
+class ExtKey {
 public:
     /**
      * Creates ExtKey from given seed.
@@ -144,8 +142,8 @@ private:
     std::shared_ptr<privmx::crypto::ExtKey> _impl;
 };
 
-} // crypto
-} // endpoint
-} // privmx
+} // namespace crypto
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEY_HPP_

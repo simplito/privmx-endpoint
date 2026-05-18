@@ -19,10 +19,8 @@ namespace store {
 #include <cstdint>
 #include <string>
 
-class IHashList
-{
+class IHashList {
 public:
-
     virtual ~IHashList() = default;
     virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) = 0;
     virtual void setAll(const std::string& hashes) = 0;
@@ -36,8 +34,8 @@ public:
     // virtual int64_t getAllSize() = 0;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_HASHLIST_INTERFACE_HPP_

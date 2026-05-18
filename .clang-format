@@ -1,4 +1,4 @@
-BasedOnStyle: Google
+BasedOnStyle: LLVM
 ColumnLimit: 120
 IndentWidth: 4
 DerivePointerAlignment: false
@@ -6,5 +6,15 @@ PointerAlignment: Left
 AccessModifierOffset: -4
 SpaceAfterTemplateKeyword: false
 AllowShortFunctionsOnASingleLine: Inline
-AllowShortBlocksOnASingleLine: Empty
+AlignAfterOpenBracket: BlockIndent
+AllowShortBlocksOnASingleLine: true
 ReflowComments: false
+BinPackParameters: false
+BreakBeforeTernaryOperators: false
+AlignOperands: DontAlign
+AllowAllParametersOfDeclarationOnNextLine: false
+BreakBinaryOperations: RespectPrecedence
+AlwaysBreakTemplateDeclarations: Yes
+AllowShortEnumsOnASingleLine: false
+PenaltyReturnTypeOnItsOwnLine: 10000
+PenaltyBreakAssignment: 1000

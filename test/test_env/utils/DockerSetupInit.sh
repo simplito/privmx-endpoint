@@ -31,6 +31,9 @@ user_2_privKey=L2KX5JrHkGBzGvMJ41bDhwgwN1JpqGKYk8feJEyri8bdqkqd84kt
 user_2_pubKey=86uPnTCSQ2WzEoM1EYGWt2dEc1jmR51HrVw5wTydxiDyuHDMty
 user_2_id=user_2
 
+user_3_privKey=KxViitzdcW4unZxZPEiTzU2mzAaEPipXyeS7j7jB2fDnHNKM2LJe
+user_3_pubKey=6KYkRBd2GxTFBKchyLmXVtGP88TSwGobZ9Y4Ve1fnhKauSk7x5
+user_3_id=user_3
 
 echo "Creating solution"
 method=solution/createSolution
@@ -55,6 +58,10 @@ echo "Adding user_1 to Context_2"
 addUserToContextData_1=$(server_curl "$method" "{\"contextId\": \"${contextId_2}\", \"userId\": \"${user_1_id}\", \"userPubKey\": \"${user_1_pubKey}\"}")
 echo "Adding user_2 to Context_2"
 addUserToContextData_1=$(server_curl "$method" "{\"contextId\": \"${contextId_2}\", \"userId\": \"${user_2_id}\", \"userPubKey\": \"${user_2_pubKey}\"}")
+echo "Adding user_3 to Context_1"
+addUserToContextData_1=$(server_curl "$method" "{\"contextId\": \"${contextId_1}\", \"userId\": \"${user_3_id}\", \"userPubKey\": \"${user_3_pubKey}\"}")
+echo "Adding user_3 to Context_2"
+addUserToContextData_1=$(server_curl "$method" "{\"contextId\": \"${contextId_2}\", \"userId\": \"${user_3_id}\", \"userPubKey\": \"${user_3_pubKey}\"}")
 cat << EOF > ServerData.ini
 [Login]
 user_1_privKey = $user_1_privKey
@@ -63,6 +70,9 @@ user_1_id = $user_1_id
 user_2_privKey = $user_2_privKey
 user_2_pubKey = $user_2_pubKey
 user_2_id = $user_2_id
+user_3_privKey = $user_3_privKey
+user_3_pubKey = $user_3_pubKey
+user_3_id = $user_3_id
 solutionId = $solutionId
 instanceUrl = http://localhost/
 [Context_1]

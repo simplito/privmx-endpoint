@@ -3,35 +3,36 @@
 
 #include "privmx/endpoint/core/Exception.hpp"
 
-#define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                            \
-    class NAME : public privmx::endpoint::core::Exception {                                                      \
-    public:                                                                                                      \
-        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                           \
-        NAME(const std::string& msg, const std::string& name, unsigned int code)                                 \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}         \
-        NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description) \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, description) {}           \
-        void rethrow() const override;                                                                           \
-    };                                                                                                           \
-    inline void NAME::rethrow() const {                                                                          \
-        throw *this;                                                                                             \
+#define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                                  \
+    class NAME : public privmx::endpoint::core::Exception {                                                            \
+    public:                                                                                                            \
+        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
+        NAME(const std::string& msg, const std::string& name, unsigned int code)                                       \
+            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}               \
+        NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description)       \
+            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, description) {}                 \
+        void rethrow() const override;                                                                                 \
+    };                                                                                                                 \
+    inline void NAME::rethrow() const {                                                                                \
+        throw *this;                                                                                                   \
     };
 
-#define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                            \
-    class NAME : public BASE_SCOPED {                                                                            \
-    public:                                                                                                      \
-        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                \
-        NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}       \
-        void rethrow() const override;                                                                           \
-    };                                                                                                           \
-    inline void NAME::rethrow() const {                                                                          \
-        throw *this;                                                                                             \
+#define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                                  \
+    class NAME : public BASE_SCOPED {                                                                                  \
+    public:                                                                                                            \
+        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
+        NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}             \
+        void rethrow() const override;                                                                                 \
+    };                                                                                                                 \
+    inline void NAME::rethrow() const {                                                                                \
+        throw *this;                                                                                                   \
     };
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
+// clang-format off
 #define ENDPOINT_STORE_EXCEPTION_CODE 0x00040000
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStoreException, "Unknown endpoint store exception", "Store", 0x0004)
@@ -81,11 +82,11 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileSyncFailedHandleCloseExce
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileRandomWriteInternalException, "File random write internal Exception ", 0x002C)
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x002D)
+// clang-format on
 
-
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #undef DECLARE_SCOPE_ENDPOINT_EXCEPTION
 #undef DECLARE_ENDPOINT_EXCEPTION

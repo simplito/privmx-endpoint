@@ -15,8 +15,8 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
-#include "privmx/endpoint/kvdb/VarSerializer.hpp"
 #include "privmx/endpoint/kvdb/VarDeserializer.hpp"
+#include "privmx/endpoint/kvdb/VarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -82,8 +82,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace kvdb
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace kvdb
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPIVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPIVARINTERFACE_HPP_

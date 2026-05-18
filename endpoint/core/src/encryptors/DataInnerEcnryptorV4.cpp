@@ -17,7 +17,9 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-std::string DataInnerEncryptorV4::encode(const core::Buffer& data) { return utils::Base64::from(data.stdString()); }
+std::string DataInnerEncryptorV4::encode(const core::Buffer& data) {
+    return utils::Base64::from(data.stdString());
+}
 
 core::Buffer DataInnerEncryptorV4::decode(const std::string& dataAsBase64) {
     auto decoded = utils::Base64::toString(dataAsBase64);
@@ -26,7 +28,8 @@ core::Buffer DataInnerEncryptorV4::decode(const std::string& dataAsBase64) {
 
 core::Buffer DataInnerEncryptorV4::encrypt(const core::Buffer& data, const std::string& encryptionKey) {
     auto encrypted = privmx::crypto::CryptoPrivmx::privmxEncrypt(
-        privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), data.stdString(), encryptionKey);
+        privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), data.stdString(), encryptionKey
+    );
     return core::Buffer::from(encrypted);
 }
 
@@ -35,14 +38,18 @@ core::Buffer DataInnerEncryptorV4::decrypt(const core::Buffer& privateData, cons
     return core::Buffer::from(decrypted);
 }
 
-core::Buffer DataInnerEncryptorV4::signAndPackDataWithSignature(const core::Buffer& data,
-                                                                const crypto::PrivateKey& authorPrivateKey) {
+core::Buffer DataInnerEncryptorV4::signAndPackDataWithSignature(
+    const core::Buffer& data,
+    const crypto::PrivateKey& authorPrivateKey
+) {
     auto dataWithSignature = sign(data, authorPrivateKey);
     return packDataWithSignature(dataWithSignature);
 }
 
-core::Buffer DataInnerEncryptorV4::verifyAndExtractData(const core::Buffer& signedData,
-                                                        const crypto::PublicKey& authorPublicKey) {
+core::Buffer DataInnerEncryptorV4::verifyAndExtractData(
+    const core::Buffer& signedData,
+    const crypto::PublicKey& authorPublicKey
+) {
     auto dataWithSignature = extractDataWithSignature(signedData);
     if (!verifySignature(dataWithSignature, authorPublicKey)) {
         throw InvalidDataSignatureException();
@@ -50,8 +57,10 @@ core::Buffer DataInnerEncryptorV4::verifyAndExtractData(const core::Buffer& sign
     return dataWithSignature.data;
 }
 
-DataInnerEncryptorV4::DataWithSignature DataInnerEncryptorV4::sign(const core::Buffer& data,
-                                                                   const crypto::PrivateKey& authorPrivateKey) {
+DataInnerEncryptorV4::DataWithSignature DataInnerEncryptorV4::sign(
+    const core::Buffer& data,
+    const crypto::PrivateKey& authorPrivateKey
+) {
     auto signature = authorPrivateKey.signToCompactSignatureWithHash(data.stdString());
     return DataWithSignature{.signature = core::Buffer::from(signature), .data = data};
 }
@@ -75,8 +84,11 @@ DataInnerEncryptorV4::DataWithSignature DataInnerEncryptorV4::extractDataWithSig
     throw UnsupportedTypeException();
 }
 
-bool DataInnerEncryptorV4::verifySignature(const DataWithSignature& dataWithSignature,
-                                           const crypto::PublicKey& authorPublicKey) {
-    return authorPublicKey.verifyCompactSignatureWithHash(dataWithSignature.data.stdString(),
-                                                          dataWithSignature.signature.stdString());
+bool DataInnerEncryptorV4::verifySignature(
+    const DataWithSignature& dataWithSignature,
+    const crypto::PublicKey& authorPublicKey
+) {
+    return authorPublicKey.verifyCompactSignatureWithHash(
+        dataWithSignature.data.stdString(), dataWithSignature.signature.stdString()
+    );
 }

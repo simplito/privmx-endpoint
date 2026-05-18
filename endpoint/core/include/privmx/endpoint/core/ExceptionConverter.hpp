@@ -15,7 +15,6 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/utils/PrivmxException.hpp"
 #include <optional>
-#include <optional>
 
 namespace privmx {
 namespace endpoint {
@@ -26,11 +25,10 @@ public:
     static privmx::endpoint::core::Exception convert(const privmx::utils::PrivmxException& e);
     static void rethrowAsCoreException(const privmx::utils::PrivmxException& e);
     static int64_t getCodeOfUserVerificationFailureException();
-    
 };
 
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CORE_EXCEPTION_CONVERTER_HPP_

@@ -40,8 +40,8 @@ inline T JsonSerializer<T>::deserialize(const std::string& val, bool pretty) {
     return VarDeserializer().deserialize<T>(privmx::utils::Utils::parseJson(val));
 }
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_JSONSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_JSONSERIALIZER_HPP_

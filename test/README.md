@@ -1,21 +1,40 @@
 # Creating dataset
-To create dataset required for testing you need run
-```./test_env/create_dataset/main.sh```
-, to list advanced options in creation tool
-```./test_env/create_dataset/main.sh --help```
-
-Dataset by default will be created in ```test_env/create_dataset``` with name ```Dataset_YYYY-mm-dd_HH-MM```
-# Running tests
-When you using conan remember to use ```conanrun.sh``` or all tests will fail
-## Setup mongo docker
+To create the dataset required for testing run:
+```bash
+./test_env/create_dataset/main.sh
 ```
+
+To list advanced options in the dataset creation tool run:
+```bash
+./test_env/create_dataset/main.sh --help
+```
+
+The dataset is created by default in `test_env/create_dataset` with a name like `Dataset_YYYY-mm-dd_HH-MM`.
+
+# Running tests
+When you use conan, remember to use `conanrun.sh` or all tests will fail.
+
+## Python setup
+The runner manages a local virtual environment in `test/.venv` and installs dependencies from `test/requirements.txt`.
+
+Initial setup only:
+```bash
+python3 e2e_runner.py --setup-python
+```
+
+On the first regular run, if Python dependencies are missing, `e2e_runner.py` will create `test/.venv`, install the required packages and restart itself automatically.
+
+## Setup mongo docker
+```bash
 docker compose up -d
 ```
-### Stream Api requirements
-Minimum one Video device, witch is streaming data
-### Example setup 
 
-```
+### Stream API requirements
+Minimum one video device that is streaming data.
+
+### Example setup
+
+```bash
 # Installing akvcam
 git clone https://github.com/webcamoid/akvcam.git
 cd akvcam/src/
@@ -57,23 +76,41 @@ connections/1/connection = 1:2
 EOF
 sudo chmod -vf 644 /etc/akvcam/config.ini
 ```
-```
+
+```bash
 # Running Camera
 sudo modprobe videodev
 sudo insmod akvcam.ko
 ```
 
+## Running all tests
+```bash
+python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM
+```
 
-## Running Tests
-```
-python3 e2e_runner.py "build" "test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini" "test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM"
+The first argument may point either directly to the directory with `test_e2e_*` binaries or to the CMake build root such as `build`. In the latter case, the runner will automatically use `build/test` when it exists.
+
+## Running a single GTest or a pattern
+All extra arguments after the required paths are forwarded to each test executable.
+
+```bash
+python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.listContextUsers
 ```
 
-## Stoping mongo docker after tests
+```bash
+python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.*
 ```
+
+## Passing other GTest flags
+You can also pass any other GTest arguments, for example:
+
+```bash
+python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM -- --gtest_repeat=2 --gtest_break_on_failure
+```
+
+`--gtest_filter` is handled specially by the runner to decide which tests should be scheduled.
+
+## Stopping mongo docker after tests
+```bash
 docker compose down
 ```
-## 
-
-
-

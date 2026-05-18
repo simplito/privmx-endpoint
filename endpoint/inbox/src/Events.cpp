@@ -9,9 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
 
 #include "privmx/endpoint/inbox/Events.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
@@ -20,43 +20,53 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
 std::string InboxCreatedEvent::toJSON() const {
-   return core::JsonSerializer<InboxCreatedEvent>::serialize(*this);
+    return core::JsonSerializer<InboxCreatedEvent>::serialize(*this);
 }
 
 std::string InboxUpdatedEvent::toJSON() const {
-   return core::JsonSerializer<InboxUpdatedEvent>::serialize(*this);
+    return core::JsonSerializer<InboxUpdatedEvent>::serialize(*this);
 }
 
 std::string InboxDeletedEvent::toJSON() const {
-   return core::JsonSerializer<InboxDeletedEvent>::serialize(*this);
+    return core::JsonSerializer<InboxDeletedEvent>::serialize(*this);
 }
 
 std::string InboxEntryCreatedEvent::toJSON() const {
-   return core::JsonSerializer<InboxEntryCreatedEvent>::serialize(*this);
+    return core::JsonSerializer<InboxEntryCreatedEvent>::serialize(*this);
 }
 
 std::string InboxEntryDeletedEvent::toJSON() const {
-   return core::JsonSerializer<InboxEntryDeletedEvent>::serialize(*this);
+    return core::JsonSerializer<InboxEntryDeletedEvent>::serialize(*this);
 }
 
 std::shared_ptr<core::SerializedEvent> InboxCreatedEvent::serialize() const {
-   return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> InboxUpdatedEvent::serialize() const {
-   return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> InboxDeletedEvent::serialize() const {
-   return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> InboxEntryCreatedEvent::serialize() const {
-   return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> InboxEntryDeletedEvent::serialize() const {
-   return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 bool Events::isInboxCreatedEvent(const privmx::endpoint::core::EventHolder& eventHolder) {
@@ -143,7 +153,3 @@ InboxEntryDeletedEvent Events::extractInboxEntryDeletedEvent(const core::EventHo
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-
-
-
-

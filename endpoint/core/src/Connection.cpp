@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include <cstdint>
 #include "privmx/endpoint/core/ConnectionImpl.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
@@ -18,22 +17,27 @@ limitations under the License.
 #include "privmx/endpoint/core/JsonSerializer.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
+#include <cstdint>
 #include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint::core;
 
 Connection::Connection() {};
-Connection::Connection(const Connection& obj): ExtendedPointer(obj), _connectionId(obj._connectionId) {};
+Connection::Connection(const Connection& obj) : ExtendedPointer(obj), _connectionId(obj._connectionId) {};
 Connection& Connection::operator=(const Connection& obj) {
     this->ExtendedPointer::operator=(obj);
     this->_connectionId = obj._connectionId;
     return *this;
 };
-Connection::Connection(Connection&& obj): ExtendedPointer(std::move(obj)), _connectionId(obj._connectionId) {};
+Connection::Connection(Connection&& obj) : ExtendedPointer(std::move(obj)), _connectionId(obj._connectionId) {};
 Connection::~Connection() {}
 
-Connection Connection::connect(const std::string& userPrivKey, const std::string& solutionId,
-                                const std::string& platformUrl, const PKIVerificationOptions& verificationOptions) {
+Connection Connection::connect(
+    const std::string& userPrivKey,
+    const std::string& solutionId,
+    const std::string& platformUrl,
+    const PKIVerificationOptions& verificationOptions
+) {
     Validator::validatePrivKeyWIF(userPrivKey, "field:userPrivKey ");
     Validator::validateId(solutionId, "field:solutionId ");
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
@@ -47,8 +51,11 @@ Connection Connection::connect(const std::string& userPrivKey, const std::string
     }
 }
 
-Connection Connection::connectPublic(const std::string& solutionId, const std::string& platformUrl, 
-                                        const PKIVerificationOptions& verificationOptions) {
+Connection Connection::connectPublic(
+    const std::string& solutionId,
+    const std::string& platformUrl,
+    const PKIVerificationOptions& verificationOptions
+) {
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
@@ -60,14 +67,16 @@ Connection Connection::connectPublic(const std::string& solutionId, const std::s
     }
 }
 
-Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl) : ExtendedPointer(impl), _connectionId(std::move(impl->getConnectionId())) {}
+Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl)
+    : ExtendedPointer(impl), _connectionId(std::move(impl->getConnectionId())) {}
 
 void Connection::assertConnection(const std::shared_ptr<ConnectionImpl>& impl) {
-    if(impl->getGateway().isNull()) throw core::NotInitializedException();
+    if (impl->getGateway().isNull())
+        throw core::NotInitializedException();
 }
 
 int64_t Connection::getConnectionId() {
-    if(_connectionId.has_value()) {
+    if (_connectionId.has_value()) {
         return _connectionId.value();
     } else {
         auto impl = getImpl();
@@ -133,7 +142,11 @@ void Connection::unsubscribeFrom(const std::vector<std::string>& subscriptionIds
     }
 }
 
-std::string Connection::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string Connection::buildSubscriptionQuery(
+    EventType eventType,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     auto impl = getImpl();
     assertConnection(impl);
     try {

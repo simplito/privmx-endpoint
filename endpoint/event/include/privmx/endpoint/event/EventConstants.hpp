@@ -18,20 +18,17 @@ namespace privmx {
 namespace endpoint {
 namespace event {
 
-
 namespace EncryptionEventKeyDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1
-   };
-}
-constexpr static EncryptionEventKeyDataSchema::Version CURRENT_ENCRYPTION_EVENT_KEY_DATA_SCHEMA_VERSION = EncryptionEventKeyDataSchema::Version::VERSION_1;
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1
+};
+} // namespace EncryptionEventKeyDataSchema
+constexpr static EncryptionEventKeyDataSchema::Version
+    CURRENT_ENCRYPTION_EVENT_KEY_DATA_SCHEMA_VERSION = EncryptionEventKeyDataSchema::Version::VERSION_1;
 
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-
-
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_EVENTCONSTANTS_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_EVENTCONSTANTS_HPP_

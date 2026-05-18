@@ -26,8 +26,8 @@ namespace core {
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<crypto::BIP39_t>(const crypto::BIP39_t& val);
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOVARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOVARSERIALIZER_HPP_

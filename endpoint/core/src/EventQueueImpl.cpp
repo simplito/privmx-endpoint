@@ -14,17 +14,17 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::shared_ptr<EventQueueImpl> EventQueueImpl::impl= nullptr;
+std::shared_ptr<EventQueueImpl> EventQueueImpl::impl = nullptr;
 
 std::shared_ptr<EventQueueImpl> EventQueueImpl::getInstance() {
-    if(impl == nullptr) {
+    if (impl == nullptr) {
         impl = std::shared_ptr<EventQueueImpl>(new EventQueueImpl());
     }
     return impl;
 }
 
 void EventQueueImpl::freeInstance() {
-    if(impl) {
+    if (impl) {
         impl.reset();
     }
 }
@@ -44,11 +44,10 @@ EventHolder EventQueueImpl::waitEvent() {
 
 std::optional<EventHolder> EventQueueImpl::getEvent() {
     Poco::AutoPtr<Poco::Notification> notification(_queue.dequeueNotification());
-    auto ret {dynamic_cast<Notification*>(notification.get())};
+    auto ret{dynamic_cast<Notification*>(notification.get())};
     if (ret) {
         return EventHolder(ret->data());
-    }
-    else {
+    } else {
         return std::nullopt;
     }
 }

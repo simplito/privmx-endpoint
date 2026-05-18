@@ -17,13 +17,14 @@ using namespace privmx::endpoint;
 ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
 void ServerApi::contextSendCustomEvent(server::ContextEmitCustomEventModel model) {
-    request("contextSendCustomEvent", model);
+    request("contextSendCustomEvent", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //only typed object
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<T>(_gateway->request("context." + method, params));
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+    return T::fromJSON(_gateway->request("context." + method, params));
 }
 
-Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {  //var
+Poco::Dynamic::Var ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) { //var
     return _gateway->request("context." + method, params);
 }

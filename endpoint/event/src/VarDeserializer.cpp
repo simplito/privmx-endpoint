@@ -20,12 +20,16 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 template<>
-event::EventSelectorType VarDeserializer::deserialize<event::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name) {
+event::EventSelectorType VarDeserializer::deserialize<event::EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
 
     switch (val.convert<int64_t>()) {
-        case event::EventSelectorType::CONTEXT_ID:
-            return event::EventSelectorType::CONTEXT_ID;
+    case event::EventSelectorType::CONTEXT_ID:
+        return event::EventSelectorType::CONTEXT_ID;
     }
-    throw InvalidParamsException(name + " | " + ("Unknown event::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
+    throw InvalidParamsException(
+        name + " | " + ("Unknown event::EventSelectorType value, received " + std::to_string(val.convert<int64_t>()))
+    );
 }
-

@@ -10,9 +10,13 @@ namespace core {
 
 class Exception : public std::exception {
 public:
-    Exception(const std::string& msg = std::string(), const std::string& name = std::string(),
-              const std::string& scope = std::string(), unsigned int code = 0,
-              const std::string& description = std::string())
+    Exception(
+        const std::string& msg = std::string(),
+        const std::string& name = std::string(),
+        const std::string& scope = std::string(),
+        unsigned int code = 0,
+        const std::string& description = std::string()
+    )
         : _msg(msg), _name(name), _scope(scope), _code(code), _description(description) {}
     virtual const char* what() const noexcept override { return _msg.c_str(); }
     std::string getName() const noexcept;
@@ -86,10 +90,10 @@ inline void Exception::rethrow() const {
 // 0x000B - Search
 // Form 0xE000 to 0xEFFF - Internal (PrivmxExtException)
 // Form 0xF000 to 0xFFFF - Server
-// 
+//
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_EXCEPTION_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_EXCEPTION_HPP_

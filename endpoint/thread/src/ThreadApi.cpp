@@ -10,38 +10,33 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
 
+#include "privmx/endpoint/core/EventVarSerializer.hpp"
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/thread/ThreadValidator.hpp"
-#include "privmx/endpoint/core/EventVarSerializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-
 ThreadApi::ThreadApi() {};
-ThreadApi::ThreadApi(const ThreadApi& obj): ExtendedPointer(obj) {};
+ThreadApi::ThreadApi(const ThreadApi& obj) : ExtendedPointer(obj) {};
 ThreadApi& ThreadApi::operator=(const ThreadApi& obj) {
     this->ExtendedPointer::operator=(obj);
     return *this;
 };
-ThreadApi::ThreadApi(ThreadApi&& obj): ExtendedPointer(std::move(obj)) {};
+ThreadApi::ThreadApi(ThreadApi&& obj) : ExtendedPointer(std::move(obj)) {};
 ThreadApi::~ThreadApi() {}
 
 ThreadApi ThreadApi::create(core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<ThreadApiImpl> impl(new ThreadApiImpl(
-            connectionImpl->getGateway(),
-            connectionImpl->getUserPrivKey(),
-            connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(),
-            connectionImpl->getEventMiddleware(),
-            connection
+            connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
+            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection
         ));
         impl->attach(impl);
         return ThreadApi(impl);
@@ -54,8 +49,8 @@ ThreadApi ThreadApi::create(core::Connection& connection) {
 ThreadApi::ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl) : ExtendedPointer(impl) {}
 
 std::string ThreadApi::createThread(
-    const std::string& contextId, 
-    const std::vector<core::UserWithPubKey>& users, 
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
@@ -76,11 +71,11 @@ std::string ThreadApi::createThread(
 void ThreadApi::updateThread(
     const std::string& threadId,
     const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers, 
+    const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta, 
-    const int64_t version, 
-    const bool force, 
+    const core::Buffer& privateMeta,
+    const int64_t version,
+    const bool force,
     const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies
 ) {
@@ -89,7 +84,9 @@ void ThreadApi::updateThread(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        impl->updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+        impl->updateThread(
+            threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        );
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -121,7 +118,9 @@ Thread ThreadApi::getThread(const std::string& threadId) {
 core::PagingList<Thread> ThreadApi::listThreads(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "lastModificationDate", "lastMsgDate"}, "field:pagingQuery ");
+    core::Validator::validatePagingQuery(
+        pagingQuery, {"createDate", "lastModificationDate", "lastMsgDate"}, "field:pagingQuery "
+    );
     try {
         return impl->listThreads(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -153,7 +152,12 @@ core::PagingList<Message> ThreadApi::listMessages(const std::string& threadId, c
     }
 }
 
-std::string ThreadApi::sendMessage(const std::string& threadId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data) {
+std::string ThreadApi::sendMessage(
+    const std::string& threadId,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const core::Buffer& data
+) {
     auto impl = getImpl();
     core::Validator::validateId(threadId, "field:threadId ");
     try {
@@ -175,7 +179,12 @@ void ThreadApi::deleteMessage(const std::string& messageId) {
     }
 }
 
-void ThreadApi::updateMessage(const std::string& messageId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data) {
+void ThreadApi::updateMessage(
+    const std::string& messageId,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const core::Buffer& data
+) {
     auto impl = getImpl();
     core::Validator::validateId(messageId, "field:messageId ");
     try {
@@ -206,7 +215,11 @@ void ThreadApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds)
     }
 }
 
-std::string ThreadApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string ThreadApi::buildSubscriptionQuery(
+    EventType eventType,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     auto impl = getImpl();
     try {
         return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
@@ -215,4 +228,3 @@ std::string ThreadApi::buildSubscriptionQuery(EventType eventType, EventSelector
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-

@@ -31,8 +31,8 @@ private:
     static void validateNotEmpty(const Poco::Dynamic::Var& val, const std::string& name, const std::string& expected);
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_TYPEVALIDATOR_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_TYPEVALIDATOR_HPP_

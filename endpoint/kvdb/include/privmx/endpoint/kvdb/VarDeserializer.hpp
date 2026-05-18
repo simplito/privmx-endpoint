@@ -27,10 +27,13 @@ template<>
 kvdb::EventType VarDeserializer::deserialize<kvdb::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
-kvdb::EventSelectorType VarDeserializer::deserialize<kvdb::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+kvdb::EventSelectorType VarDeserializer::deserialize<kvdb::EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_KVDB_VARDESERIALIZER_HPP_

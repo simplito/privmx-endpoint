@@ -13,7 +13,7 @@ template<typename T>
 /**
 * Contains results of listing methods.
 */
- struct PagingList {
+struct PagingList {
     /**
      * total items available to get
      */
@@ -182,7 +182,7 @@ struct ItemPolicy {
     /** 
      * Determine who can delete an item 
      */
-    std::optional<std::string> delete_;    
+    std::optional<std::string> delete_;
 };
 
 /**
@@ -227,18 +227,18 @@ struct BridgeIdentity {
     std::optional<std::string> instanceId;
 };
 
-enum EventType: int64_t {
+enum EventType : int64_t {
     USER_ADD = 0,
     USER_REMOVE = 1,
     USER_STATUS = 2
 };
 
-enum EventSelectorType: int64_t {
+enum EventSelectorType : int64_t {
     CONTEXT_ID = 0
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_TYPES_HPP_

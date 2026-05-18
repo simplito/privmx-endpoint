@@ -20,15 +20,11 @@ ChunkReader::ChunkReader(
     std::shared_ptr<IHashList> hashList,
     const store::FileDecryptionParams& decryptionParams
 )
-    : _chunkDataProvider(chunkDataProvider),
-    _chunkEncryptor(chunkEncryptor),
-    _hashList(hashList),
-    _chunkSize(chunkEncryptor->getPlainChunkSize()),
-    _version(decryptionParams.version),
-    _lastChunk(std::nullopt)
-{
-    if(decryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(decryptionParams.originalSize)) {
-        if (decryptionParams.originalSize != 0) throw FileCorruptedException();
+    : _chunkDataProvider(chunkDataProvider), _chunkEncryptor(chunkEncryptor), _hashList(hashList),
+      _chunkSize(chunkEncryptor->getPlainChunkSize()), _version(decryptionParams.version), _lastChunk(std::nullopt) {
+    if (decryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(decryptionParams.originalSize)) {
+        if (decryptionParams.originalSize != 0)
+            throw FileCorruptedException();
     }
 }
 
@@ -41,7 +37,7 @@ uint64_t ChunkReader::filePosToPosInFileChunk(uint64_t position) {
 }
 
 std::string ChunkReader::getDecryptedChunk(uint64_t index) {
-    if(!_lastChunk.has_value() || _lastChunk->index != index) {
+    if (!_lastChunk.has_value() || _lastChunk->index != index) {
         std::string chunk = _chunkDataProvider->getChunk(index, _version);
         std::string plain = _chunkEncryptor->decrypt(index, {.data = chunk, .hmac = _hashList->getHash(index)});
         _lastChunk = ChunkReader::DecryptedChunk{plain, index};
@@ -56,7 +52,7 @@ void ChunkReader::sync(const store::FileDecryptionParams& newParms) {
 
 void ChunkReader::update(int64_t newfileVersion, uint64_t index) {
     _version = newfileVersion;
-    if(_lastChunk.has_value() && _lastChunk->index == index) {
+    if (_lastChunk.has_value() && _lastChunk->index == index) {
         _lastChunk = std::nullopt;
     }
 }

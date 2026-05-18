@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyIdFormatValidator.hpp>
 #include <string>
 
-
 namespace privmx {
 namespace endpoint {
 namespace store {
@@ -26,8 +25,8 @@ public:
     bool isKeyIdFormatValid(const std::string& keyId) override;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_FILE_KEYID_FORMAT_VALIDATOR_HPP_

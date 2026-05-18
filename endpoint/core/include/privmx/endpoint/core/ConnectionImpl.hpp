@@ -15,28 +15,29 @@ limitations under the License.
 #include <exception>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <vector>
-#include <mutex>
-#include <shared_mutex>
 
-#include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/privfs/gateway/RpcGateway.hpp>
-#include <privmx/utils/NotificationQueue.hpp>
 #include "privmx/endpoint/core/Connection.hpp"
+#include "privmx/endpoint/core/ContextProvider.hpp"
+#include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
 #include "privmx/endpoint/core/EventMiddleware.hpp"
 #include "privmx/endpoint/core/HandleManager.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
-#include "privmx/endpoint/core/Types.hpp"
-#include "privmx/endpoint/core/UserVerifierInterface.hpp"
-#include "privmx/endpoint/core/UserVerifier.hpp"
-#include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
-#include "privmx/endpoint/core/ContextProvider.hpp"
+#include "privmx/endpoint/core/ServerApi.hpp"
 #include "privmx/endpoint/core/SubscriberImpl.hpp"
+#include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/UserVerifier.hpp"
+#include "privmx/endpoint/core/UserVerifierInterface.hpp"
+#include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/GuardedExecutor.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
+#include <privmx/utils/NotificationQueue.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -64,7 +65,11 @@ public:
     PagingList<UserInfo> listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
     void disconnect();
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
     const privmx::crypto::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
@@ -78,30 +83,31 @@ public:
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
     const std::shared_ptr<UserVerifier> getUserVerifier() {
         std::shared_lock lock(_mutex);
-        return _userVerifier;    
+        return _userVerifier;
     }
     std::string getMyUserId(const std::string& contextId);
     DataIntegrityObject createDIO(
-        const std::string& contextId, 
-        const std::string& resourceId, 
+        const std::string& contextId,
+        const std::string& resourceId,
         const std::optional<std::string>& containerId = std::nullopt,
         const std::optional<std::string>& containerResourceId = std::nullopt
     );
     DataIntegrityObject createPublicDIO(
-        const std::string& contextId, 
+        const std::string& contextId,
         const std::string& resourceId,
         const crypto::PublicKey& pubKey,
-        const std::optional<std::string>& containerId = std::nullopt, 
+        const std::optional<std::string>& containerId = std::nullopt,
         const std::optional<std::string>& containerResourceId = std::nullopt
     );
-    inline bool isConnected() {return _gateway->isConnected();};
+    inline bool isConnected() { return _gateway->isConnected(); };
+
 private:
     void assertServerVersion();
     std::string generateDIORandomId();
     DataIntegrityObject createDIOExt(
-        const std::string& contextId, 
-        const std::string& resourceId, 
-        const std::optional<std::string>& containerId, 
+        const std::string& contextId,
+        const std::string& resourceId,
+        const std::optional<std::string>& containerId,
         const std::optional<std::string>& containerResourceId,
         const std::optional<std::string>& creatorUserId = std::nullopt,
         const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
@@ -110,7 +116,7 @@ private:
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     NotificationEvent convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
-    
+
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -124,13 +130,15 @@ private:
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;
+    std::optional<ServerApi> _serverApi;
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
-    int _gatewayNotificationEventListener, _gatewayConnectedEventListener, _gatewayDisconnectedEventListener, _gatewaySessionLostEventListener;
+    int _gatewayNotificationEventListener, _gatewayConnectedEventListener, _gatewayDisconnectedEventListener,
+        _gatewaySessionLostEventListener;
     int _notificationListenerId;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONIMPL_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONIMPL_HPP_

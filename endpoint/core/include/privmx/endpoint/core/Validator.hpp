@@ -17,10 +17,10 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 #include <string>
 
-#include "privmx/endpoint/core/Events.hpp"
-#include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/Events.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -44,8 +44,10 @@ template<typename T>
 inline void StructValidator<std::vector<T>>::validate(const std::vector<T>& value, const std::string& stack_trace) {
     for (size_t i = 0; i < value.size(); i++) {
         StructValidator<T>::validate(
-            value[i], (stack_trace == "" ? stack_trace + "\n" : "") +
-                          (StructValidator<std::vector<T>>::getReadableType() + " element nr " + std::to_string(i)));
+            value[i],
+            (stack_trace == "" ? stack_trace + "\n" : "") +
+                (StructValidator<std::vector<T>>::getReadableType() + " element nr " + std::to_string(i))
+        );
     }
 }
 
@@ -58,8 +60,12 @@ class Validator {
 public:
     static void validateMaxLength(const std::string& value, size_t max_len, const std::string& stack_trace = "");
     static void validateLength(const std::string& value, size_t len, const std::string& stack_trace = "");
-    static void validateLengthSize(const std::string& value, size_t min_len, size_t max_len,
-                                   const std::string& stack_trace = "");
+    static void validateLengthSize(
+        const std::string& value,
+        size_t min_len,
+        size_t max_len,
+        const std::string& stack_trace = ""
+    );
     static void validateNumberPositive(int64_t value, const std::string& stack_trace = "");
     static void validateNumberPositive(uint64_t value, const std::string& stack_trace = "");
     static void validateNumberPositive(int32_t value, const std::string& stack_trace = "");
@@ -81,15 +87,24 @@ public:
     static void validateBase58(const std::string& value, const std::string& stack_trace = "");
     static void validateSortOrder(const std::string& value, const std::string& stack_trace = "");
     static void validateLastId(const std::string& value, const std::string& stack_trace = "");
-    static void validateEnumParamString(const std::string& value, const std::vector<std::string>& allowed_values, const std::string& param_string_name = "param string", const std::string& stack_trace = "");
+    static void validateEnumParamString(
+        const std::string& value,
+        const std::vector<std::string>& allowed_values,
+        const std::string& param_string_name = "param string",
+        const std::string& stack_trace = ""
+    );
     template<typename T>
-    static void validateEnum(const T& value, const std::vector<T>& allowed_values, const std::string& stack_trace = "") {
-        if(std::find(allowed_values.begin(), allowed_values.end(), value) == allowed_values.end()) {
+    static void validateEnum(
+        const T& value,
+        const std::vector<T>& allowed_values,
+        const std::string& stack_trace = ""
+    ) {
+        if (std::find(allowed_values.begin(), allowed_values.end(), value) == allowed_values.end()) {
             std::string error_message = "Invalid " + std::to_string((int64_t)value) + ", allowed values are:";
-            for(const T& a : allowed_values) {
+            for (const T& a : allowed_values) {
                 error_message += " " + std::to_string((int64_t)a);
-                }
-            error_message += ". Received " + std::to_string(value) +"'";
+            }
+            error_message += ". Received " + std::to_string(value) + "'";
             throw InvalidParamsException(stack_trace + " | " + error_message);
         }
     }
@@ -100,8 +115,17 @@ public:
     static void validateSignature(const std::string& value, const std::string& stack_trace = "");
     static void validateEventType(const Event& value, const std::string& type, const std::string& stack_trace = "");
     static void validateJSON(const std::string& value, const std::string& stack_trace = "");
-    static void validatePagingQuery(const PagingQuery& value,const std::vector<std::string>& sort_by_field, const std::string& stack_trace = "");
-    static void validateBufferSize(const core::Buffer& value,size_t min_len, size_t max_len,const std::string& stack_trace = "");
+    static void validatePagingQuery(
+        const PagingQuery& value,
+        const std::vector<std::string>& sort_by_field,
+        const std::string& stack_trace = ""
+    );
+    static void validateBufferSize(
+        const core::Buffer& value,
+        size_t min_len,
+        size_t max_len,
+        const std::string& stack_trace = ""
+    );
 
     template<typename T>
     static void validateClass(const T& value, const std::string& stack_trace = "") {
@@ -144,8 +168,8 @@ public:
     static std::string getReadableType() { return "PKIVerificationOptions"; }
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_VALIDATOR_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_VALIDATOR_HPP_

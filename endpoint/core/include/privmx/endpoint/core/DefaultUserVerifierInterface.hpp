@@ -3,15 +3,15 @@
 
 #include <atomic>
 #include <iostream>
-#include <string>
 #include <optional>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/utils/Debug.hpp>
+#include <string>
 namespace privmx {
 namespace endpoint {
 namespace core {
 
-class DefaultUserVerifierInterface: public virtual UserVerifierInterface {
+class DefaultUserVerifierInterface : public virtual UserVerifierInterface {
 public:
     std::vector<bool> verify(const std::vector<VerificationRequest>& request) override {
         PRIVMX_DEBUG("UserVerifierInterface", "VerificationRequest", "Default")
@@ -22,16 +22,19 @@ public:
 private:
     void printWarning() {
         if (!_isWarningPrinted.exchange(true)) {
-            std::cerr << "WARN: Using the default implementation of the UserVerifierInterface during connection initialization is highly discouraged, as it does not provide the protection intended by this mechanism. "
-                         "For more information, see https://docs.privmx.dev." << std::endl;
+            std::cerr << "WARN: Using the default implementation of the UserVerifierInterface during connection "
+                         "initialization is highly discouraged, as it does not provide the protection intended by this "
+                         "mechanism. "
+                         "For more information, see https://docs.privmx.dev."
+                      << std::endl;
         }
     }
 
     std::atomic_bool _isWarningPrinted = false;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_DEFAULTUSERVERIFIERINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_DEFAULTUSERVERIFIERINTERFACE_HPP_

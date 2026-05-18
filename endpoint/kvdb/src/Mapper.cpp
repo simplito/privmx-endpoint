@@ -14,13 +14,13 @@ limitations under the License.
 using namespace privmx::endpoint::kvdb;
 
 KvdbDeletedEventData Mapper::mapToKvdbDeletedEventData(const server::KvdbDeletedEventData& data) {
-    return {.kvdbId = data.kvdbId()};
+    return {.kvdbId = data.kvdbId};
 }
 
 KvdbDeletedEntryEventData Mapper::mapToKvdbDeletedEntryEventData(const server::KvdbDeletedEntryEventData& data) {
-    return {.kvdbId = data.kvdbId(), .kvdbEntryKey = data.kvdbEntryKey()};
+    return {.kvdbId = data.kvdbId, .kvdbEntryKey = data.kvdbEntryKey};
 }
 
 KvdbStatsEventData Mapper::mapToKvdbStatsEventData(const server::KvdbStatsEventData& data) {
-    return {.kvdbId = data.kvdbId(), .lastEntryDate = data.lastEntryDate(), .entries = data.entries()};
+    return {.kvdbId = data.kvdbId, .lastEntryDate = data.lastEntryDate, .entries = data.entries};
 }

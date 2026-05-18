@@ -11,13 +11,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_EVENT_DATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_EVENT_DATAENCRYPTORV5_HPP_
 
-#include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
-#include <privmx/endpoint/core/ServerTypes.hpp>
-#include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/event/EventTypes.hpp"
 #include "privmx/endpoint/event/ServerTypes.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -30,17 +30,24 @@ public:
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedEventDataV5 decrypt(const server::EncryptedContextEventDataV5& encryptedEventData, const crypto::PublicKey& authorPublicKey, const std::string& encryptionKey);
+    DecryptedEventDataV5 decrypt(
+        const server::EncryptedContextEventDataV5& encryptedEventData,
+        const crypto::PublicKey& authorPublicKey,
+        const std::string& encryptionKey
+    );
+
 private:
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedContextEventDataV5& encryptedEventData, const crypto::PublicKey& authorPublicKey);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(
+        const server::EncryptedContextEventDataV5& encryptedEventData,
+        const crypto::PublicKey& authorPublicKey
+    );
     void assertDataFormat(const server::EncryptedContextEventDataV5& encryptedEventData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };
 
-}  // namespace event
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_EVENT_DATAENCRYPTORV5_HPP_
-
+#endif //_PRIVMXLIB_ENDPOINT_EVENT_DATAENCRYPTORV5_HPP_

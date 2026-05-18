@@ -12,12 +12,12 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV4_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV4_HPP_
 
-#include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/ServerTypes.hpp>
-#include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -25,11 +25,15 @@ namespace store {
 
 class FileMetaEncryptorV4 {
 public:
-    store::server::EncryptedFileMetaV4 encrypt(const store::FileMetaToEncryptV4& fileMeta,
-                                              const crypto::PrivateKey& authorPrivateKey,
-                                              const std::string& encryptionKey);
-    store::DecryptedFileMetaV4 decrypt(const store::server::EncryptedFileMetaV4& encryptedFileMeta,
-                                    const std::string& encryptionKey);
+    store::server::EncryptedFileMetaV4 encrypt(
+        const store::FileMetaToEncryptV4& fileMeta,
+        const crypto::PrivateKey& authorPrivateKey,
+        const std::string& encryptionKey
+    );
+    store::DecryptedFileMetaV4 decrypt(
+        const store::server::EncryptedFileMetaV4& encryptedFileMeta,
+        const std::string& encryptionKey
+    );
 
 private:
     void validateVersion(const store::server::EncryptedFileMetaV4& encryptedFileMeta);
@@ -39,8 +43,8 @@ private:
     core::DataEncryptorV4 _dataEncryptor;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_CORE_FILEMETAENCRYPTORV4_HPP_
+#endif //_PRIVMXLIB_ENDPOINT_CORE_FILEMETAENCRYPTORV4_HPP_

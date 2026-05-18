@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_EVENT_EVENTS_HPP_
 #define _PRIVMXLIB_ENDPOINT_EVENT_EVENTS_HPP_
 
+#include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 
@@ -55,7 +56,7 @@ struct ContextCustomEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * Event's data
      */
@@ -67,7 +68,6 @@ struct ContextCustomEvent : public core::Event {
  */
 class Events {
 public:
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'ContextCustomEvent' 
      * 
@@ -83,11 +83,10 @@ public:
      * @return 'ContextCustomEvent' object
      */
     static ContextCustomEvent extractContextCustomEvent(const core::EventHolder& eventHolder);
-
 };
 
-}  // event
-}  // endpoint
-}  // privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_EVENT_EVENTS_HPP_
