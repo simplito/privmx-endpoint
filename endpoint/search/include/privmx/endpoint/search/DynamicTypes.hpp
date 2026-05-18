@@ -14,25 +14,26 @@ limitations under the License.
 
 #include <string>
 
-#include "privmx/endpoint/core/TypesMacros.hpp"
+#include <privmx/utils/TypedObject.hpp>
+#include <privmx/utils/TypesMacros.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace search {
 namespace dynamic {
 
-ENDPOINT_CLIENT_TYPE(IndexData)
+DECLARE_CORE_TYPE(IndexData)
     STRING_FIELD(storeId)
     INT64_FIELD(mode)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(Lock)
+DECLARE_CORE_TYPE(Lock)
     STRING_FIELD(lockId)
     INT64_FIELD(level)
     INT64_FIELD(timestamp)
 TYPE_END
 
-ENDPOINT_CLIENT_TYPE(LockSet)
+DECLARE_CORE_TYPE(LockSet)
     OBJECT_FIELD(writerLock, Lock)
     MAP_FIELD(readerLocks, Lock)
 TYPE_END

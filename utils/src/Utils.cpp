@@ -175,7 +175,7 @@ Poco::Dynamic::Var Utils::parseJson(const string& json) {
         Parser parser;
         return parser.parse(json);
     } catch (const std::exception& e) {
-        throw FailedToParseJSONString("Recived exception: " + (std::string)e.what());
+        throw JSONParseException("Recived exception: " + (std::string)e.what());
     }
 }
 
@@ -184,7 +184,7 @@ Object::Ptr Utils::parseJsonObject(const string& json) {
         Parser parser;
         return parser.parse(json).extract<Object::Ptr>();
     } catch (const std::exception& e) {
-        throw FailedToParseJSONString("Recived exception: " + (std::string)e.what());
+        throw JSONParseException("Recived exception: " + (std::string)e.what());
     }
 }
 
