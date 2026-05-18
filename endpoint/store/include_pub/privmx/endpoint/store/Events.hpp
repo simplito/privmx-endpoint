@@ -14,7 +14,7 @@ namespace store {
 struct StoreDeletedEventData {
     /**
      * Store ID
-     */ 
+     */
     std::string storeId;
 };
 
@@ -27,17 +27,17 @@ struct StoreStatsChangedEventData {
      * Context ID
      */
     std::string contextId;
-    
+
     /**
      * Store ID
      */
     std::string storeId;
-    
+
     /**
      * last uploaded file date timestamp
      */
     int64_t lastFileDate;
-    
+
     /**
      * total number of files
      */
@@ -48,17 +48,17 @@ struct StoreStatsChangedEventData {
  * Holds information of `StoreFileDeletedEvent`.
  */
 struct StoreFileDeletedEventData {
-    
+
     /**
      * Context ID
      */
     std::string contextId;
-    
+
     /**
      * Store ID
      */
     std::string storeId;
-    
+
     /**
      * file ID
      */
@@ -73,7 +73,7 @@ struct StoreFileUpdatedEventData {
      * File meta
      */
     File file;
-    
+
     /**
      * List of file changes
      */
@@ -101,7 +101,7 @@ struct StoreCreatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * Store detailed info
      */
@@ -210,7 +210,7 @@ struct StoreFileCreatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * detailed Store file info
      */
@@ -238,7 +238,7 @@ struct StoreFileUpdatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * detailed Store file info
      */
@@ -278,7 +278,6 @@ struct StoreFileDeletedEvent : public core::Event {
  */
 class Events {
 public:
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'StoreCreatedEvent' 
      * 
@@ -391,9 +390,8 @@ public:
     static StoreFileDeletedEvent extractStoreFileDeletedEvent(const core::EventHolder& eventHolder);
 };
 
-
-}
-}
-}
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif

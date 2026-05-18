@@ -14,13 +14,12 @@ limitations under the License.
 
 #include <string>
 
-#include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
+#include "privmx/endpoint/inbox/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
-
 
 struct InboxPublicViewData : public core::DecryptedVersionedData {
     std::string authorPubKey;
@@ -113,8 +112,8 @@ struct InboxDataResultV5 : public core::DecryptedVersionedData {
     InboxPrivateDataV5AsResult privateData;
 };
 
-} // inbox
-} // endpoint
-} // privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXTYPES_HPP_

@@ -11,34 +11,38 @@ limitations under the License.
 
 #include "privmx/endpoint/store/ChunkStreamer.hpp"
 
-#include <memory>
 #include <Poco/ByteOrder.h>
+#include <memory>
 
-#include <privmx/crypto/Crypto.hpp>
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/store/RequestApi.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
+#include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint::store;
 
-ChunkStreamer::ChunkStreamer(const std::shared_ptr<store::RequestApi>& requestApi, size_t chunkSize, uint64_t fileSize, size_t serverRequestChunkSize)
-            : _requestApi(requestApi), _chunkSize(chunkSize), _fileSize(fileSize), _chunkBufferedStream(serverRequestChunkSize) {}
+ChunkStreamer::ChunkStreamer(
+    const std::shared_ptr<store::RequestApi>& requestApi,
+    size_t chunkSize,
+    uint64_t fileSize,
+    size_t serverRequestChunkSize
+)
+    : _requestApi(requestApi), _chunkSize(chunkSize), _fileSize(fileSize),
+      _chunkBufferedStream(serverRequestChunkSize) {}
 
 void ChunkStreamer::createRequest(bool randomWriteSupport) {
     _key = privmx::crypto::Crypto::randomBytes(32);
     auto size = getFileSize();
-    auto createRequestModel = utils::TypedObjectFactory::createNewObject<server::CreateRequestModel>();
-    auto fileDefinitions = utils::TypedObjectFactory::createNewList<server::FileDefinition>();
-    auto fileDefinition = utils::TypedObjectFactory::createNewObject<server::FileDefinition>();
-    fileDefinition.size(size.size);
-    fileDefinition.checksumSize(size.checksumSize);
-    fileDefinition.randomWrite(randomWriteSupport);
-    fileDefinitions.add(fileDefinition);
-    createRequestModel.files(fileDefinitions);
+    server::FileDefinition fileDefinition{};
+    fileDefinition.size = size.size;
+    fileDefinition.checksumSize = size.checksumSize;
+    fileDefinition.randomWrite = randomWriteSupport;
+    server::CreateRequestModel createRequestModel{};
+    createRequestModel.files = {fileDefinition};
     _fileIndex = 0;
     auto createRequestResult = _requestApi->createRequest(createRequestModel);
-    _requestId = createRequestResult.id();
+    _requestId = createRequestResult.id;
 }
 
 void ChunkStreamer::setRequestData(const std::string& requestId, const std::string& key, const uint64_t& fileIndex) {
@@ -60,7 +64,7 @@ ChunksSentInfo ChunkStreamer::finalize(const std::string& data) {
     if (!data.empty()) {
         prepareAndSendChunk(data);
     }
-    if(_uploadedFileSize + data.length() < _fileSize) {
+    if (_uploadedFileSize + data.length() < _fileSize) {
         throw core::DataSmallerThanDeclaredException();
     }
     commitFile();
@@ -91,10 +95,7 @@ void ChunkStreamer::prepareAndSendChunk(const std::string& data) {
 
 FileSizeResult ChunkStreamer::getFileSize() const {
     if (_fileSize == 0) {
-        return {
-            .size = 0,
-            .checksumSize = 0
-        };
+        return {.size = 0, .checksumSize = 0};
     }
     uint64_t parts = (_fileSize + _chunkSize - 1) / _chunkSize;
     uint64_t lastChunkSize = _fileSize % _chunkSize;
@@ -103,11 +104,12 @@ FileSizeResult ChunkStreamer::getFileSize() const {
     }
     uint64_t fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
     uint64_t lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
-    uint64_t serverFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) + lastChunkSize + HMAC_SIZE + IV_SIZE + lastChunkPaddingSize;
-    return {
-        .size = serverFileSize,
-        .checksumSize = parts * HMAC_SIZE
-    };
+    uint64_t serverFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) +
+        lastChunkSize +
+        HMAC_SIZE +
+        IV_SIZE +
+        lastChunkPaddingSize;
+    return {.size = serverFileSize, .checksumSize = parts * HMAC_SIZE};
 }
 ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data) {
     std::string chunkKey = privmx::crypto::Crypto::sha256(_key + getSeqBE());
@@ -115,34 +117,31 @@ ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data
     std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
     std::string ivWithCipher = iv + cipher;
     std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);
-    return {
-        .data = hmac + ivWithCipher,
-        .hmac = hmac
-    };
+    return {.data = hmac + ivWithCipher, .hmac = hmac};
 }
 
 void ChunkStreamer::commitFile() {
     sendFullChunksWhileCollected();
     sendLastChunkIfNonEmpty();
-    server::CommitFileModel commitFileModel = utils::TypedObjectFactory::createNewObject<server::CommitFileModel>();
-    commitFileModel.requestId(_requestId);
-    commitFileModel.fileIndex(_fileIndex);
-    commitFileModel.seq(_serverSeq);
-    commitFileModel.checksum(_checksums);
+    server::CommitFileModel commitFileModel{};
+    commitFileModel.requestId = _requestId;
+    commitFileModel.fileIndex = _fileIndex;
+    commitFileModel.seq = _serverSeq;
+    commitFileModel.checksum = _checksums;
     _requestApi->commitFile(commitFileModel);
 }
 
 std::string ChunkStreamer::getSeqBE() {
     uint32_t seq_be = Poco::ByteOrder::toBigEndian(_seq);
-    return std::string((char *)&seq_be, 4);
+    return std::string((char*)&seq_be, 4);
 }
 
 void ChunkStreamer::sendFullChunksWhileCollected() {
     const uint64_t n = _chunkBufferedStream.getNumberOfFullChunks();
-    for(uint64_t i = 0; i < n; i++) {
+    for (uint64_t i = 0; i < n; i++) {
         sendChunkToServer(_chunkBufferedStream.getFullChunk(i));
     }
-    if(n > 0) {
+    if (n > 0) {
         _chunkBufferedStream.freeFullChunks();
     }
 }
@@ -154,11 +153,11 @@ void ChunkStreamer::sendLastChunkIfNonEmpty() {
 }
 
 void ChunkStreamer::sendChunkToServer(std::string&& data) {
-    server::ChunkModel chunkModel = utils::TypedObjectFactory::createNewObject<server::ChunkModel>();
-    chunkModel.requestId(_requestId);
-    chunkModel.fileIndex(_fileIndex);
-    chunkModel.seq(_serverSeq);
-    chunkModel.data(Pson::BinaryString(std::move(data)));
+    server::ChunkModel chunkModel{};
+    chunkModel.requestId = _requestId;
+    chunkModel.fileIndex = _fileIndex;
+    chunkModel.seq = _serverSeq;
+    chunkModel.data = Pson::BinaryString(std::move(data));
     _requestApi->sendChunk(chunkModel);
     ++_serverSeq;
 }

@@ -153,7 +153,7 @@ public:
      * @return BIP39_t object containing ECC Key and associated with it BIP-39 mnemonic and entropy
      */
     BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
-   
+
     /**
      * Converts BIP-39 entropy to mnemonic.
      * 
@@ -184,8 +184,8 @@ private:
     std::shared_ptr<CryptoApiImpl> _impl;
 };
 
-}  // namespace crypto
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace crypto
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOAPI_HPP_

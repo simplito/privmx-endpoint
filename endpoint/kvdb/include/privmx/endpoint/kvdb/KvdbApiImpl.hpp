@@ -12,35 +12,33 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPIIMPL_HPP_
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
-#include <atomic>
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/utils/ThreadSaveMap.hpp>
-#include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
-#include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/ContainerKeyCache.hpp>
+#include <privmx/endpoint/core/EventMiddleware.hpp>
+#include <privmx/endpoint/core/KeyProvider.hpp>
+#include <privmx/endpoint/core/ModuleBaseApi.hpp>
+#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
+#include <privmx/utils/ThreadSaveMap.hpp>
 
-#include "privmx/endpoint/kvdb/ServerApi.hpp"
-#include "privmx/endpoint/kvdb/KvdbApi.hpp"
-#include "privmx/endpoint/kvdb/encryptors/entry/EntryDataEncryptorV5.hpp"
-#include "privmx/endpoint/kvdb/Events.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/kvdb/Constants.hpp"
+#include "privmx/endpoint/kvdb/Events.hpp"
+#include "privmx/endpoint/kvdb/KvdbApi.hpp"
+#include "privmx/endpoint/kvdb/ServerApi.hpp"
 #include "privmx/endpoint/kvdb/SubscriberImpl.hpp"
+#include "privmx/endpoint/kvdb/encryptors/entry/EntryDataEncryptorV5.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
-
 
 namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected core::ModuleBaseApi
-{
+class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected core::ModuleBaseApi {
 public:
     KvdbApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
@@ -51,45 +49,67 @@ public:
         const core::Connection& connection
     );
     ~KvdbApiImpl();
-    std::string createKvdb(const std::string& contextId, 
+    std::string createKvdb(
+        const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers, 
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
-    void updateKvdb(const std::string& kvdbId, 
+    void updateKvdb(
+        const std::string& kvdbId,
         const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers, 
-        const core::Buffer& publicMeta, 
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const int64_t version, 
-        const bool force, 
-        const bool forceGenerateNewKey, 
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
     void deleteKvdb(const std::string& kvdbId);
     Kvdb getKvdb(const std::string& kvdbId);
     Kvdb getKvdbEx(const std::string& kvdbId, const std::string& type);
     core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery);
-    core::PagingList<Kvdb> listKvdbsEx(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type);
+    core::PagingList<Kvdb> listKvdbsEx(
+        const std::string& contextId,
+        const core::PagingQuery& pagingQuery,
+        const std::string& type
+    );
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
     bool hasEntry(const std::string& kvdbId, const std::string& key);
     core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
     core::PagingList<KvdbEntry> listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
-    void setEntry(const std::string& kvdbId, const std::string& key, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const core::Buffer& data, int64_t version);
+    void setEntry(
+        const std::string& kvdbId,
+        const std::string& key,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data,
+        int64_t version
+    );
     void deleteEntry(const std::string& kvdbId, const std::string& key);
     std::map<std::string, bool> deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
-    std::string buildSubscriptionQueryForSelectedEntry(EventType eventType, const std::string& kvdbId, const std::string& kvdbEntryKey);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
+    std::string buildSubscriptionQueryForSelectedEntry(
+        EventType eventType,
+        const std::string& kvdbId,
+        const std::string& kvdbEntryKey
+    );
 
+private:
     std::string createKvdbEx(
-        const std::string& contextId, 
-        const std::vector<core::UserWithPubKey>& users, 
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
@@ -101,7 +121,7 @@ private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    utils::List<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 
     Kvdb convertServerKvdbToLibKvdb(
         server::KvdbInfo kvdb,
@@ -112,17 +132,23 @@ private:
     );
     Kvdb convertDecryptedKvdbDataV5ToKvdb(server::KvdbInfo kvdbInfo, const core::DecryptedModuleDataV5& kvdbData);
     KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
-    std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb, server::KvdbDataEntry kvdbEntry, const core::DecryptedEncKey& encKey);
-    std::vector<Kvdb> validateDecryptAndConvertKvdbsDataToKvdbs(utils::List<server::KvdbInfo> kvdbs);
+    std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(
+        server::KvdbInfo kvdb,
+        server::KvdbDataEntry kvdbEntry,
+        const core::DecryptedEncKey& encKey
+    );
+    std::vector<Kvdb> validateDecryptAndConvertKvdbsDataToKvdbs(std::vector<server::KvdbInfo> kvdbs);
     Kvdb validateDecryptAndConvertKvdbDataToKvdb(server::KvdbInfo kvdb);
     void assertKvdbDataIntegrity(server::KvdbInfo kvdb);
     uint32_t validateKvdbDataIntegrity(server::KvdbInfo kvdb);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
 
-
     DecryptedKvdbEntryDataV5 decryptKvdbEntryDataV5(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
-    KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(server::KvdbEntryInfo entry, DecryptedKvdbEntryDataV5 entryData);
+    KvdbEntry convertDecryptedKvdbEntryDataV5ToKvdbEntry(
+        server::KvdbEntryInfo entry,
+        DecryptedKvdbEntryDataV5 entryData
+    );
     KvdbEntry convertServerKvdbEntryToLibKvdbEntry(
         server::KvdbEntryInfo entry,
         const core::Buffer& publicMeta = core::Buffer(),
@@ -133,25 +159,31 @@ private:
         const int64_t& schemaVersion = KvdbEntryDataSchema::Version::UNKNOWN
     );
     KvdbEntryDataSchema::Version getEntryDataStructureVersion(server::KvdbEntryInfo entry);
-    std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::DecryptedEncKey& encKey);
-    std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(utils::List<server::KvdbEntryInfo> entries, const core::ModuleKeys& kvdbKeys);
+    std::tuple<KvdbEntry, core::DataIntegrityObject> decryptAndConvertEntryDataToEntry(
+        server::KvdbEntryInfo entry,
+        const core::DecryptedEncKey& encKey
+    );
+    std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
+        std::vector<server::KvdbEntryInfo> entries,
+        const core::ModuleKeys& kvdbKeys
+    );
     KvdbEntry validateDecryptAndConvertEntryDataToEntry(server::KvdbEntryInfo entry, const core::ModuleKeys& kvdbKeys);
     core::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry);
     uint32_t validateEntryDataIntegrity(server::KvdbEntryInfo entry, const std::string& kvdbResourceId);
     Poco::Dynamic::Var encryptEntryData(
-        const std::string& kvdbId, 
-        const std::string& resourceId, 
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
-        const core::Buffer& data, 
+        const std::string& kvdbId,
+        const std::string& resourceId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data,
         const core::ModuleKeys& kvdbKeys
     );
     void setEntryRequest(
-        const std::string& kvdbId, 
-        const std::string& key, 
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
-        const core::Buffer& data, 
+        const std::string& kvdbId,
+        const std::string& key,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data,
         int64_t version,
         const core::ModuleKeys& keys
     );
@@ -171,8 +203,8 @@ private:
     inline static const std::string KVDB_TYPE_FILTER_FLAG = "kvdb";
 };
 
-} // kvdb
-} // endpoint
-} // privmx
+} // namespace kvdb
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPIIMPL_HPP_

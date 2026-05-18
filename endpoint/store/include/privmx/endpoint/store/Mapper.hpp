@@ -25,11 +25,15 @@ public:
     static StoreDeletedEventData mapToStoreDeletedEventData(const server::StoreDeletedEventData& data);
     static StoreFileDeletedEventData mapToStoreFileDeletedEventData(const server::StoreFileDeletedEventData& data);
     static StoreStatsChangedEventData mapToStoreStatsChangedEventData(const server::StoreStatsChangedEventData& data);
-    static StoreFileUpdatedEventData mapToStoreFileUpdatedEventData(const server::StoreFileUpdatedEventData& data, const File& file, const FileDecryptionParams& fileDecryptionParams);
+    static StoreFileUpdatedEventData mapToStoreFileUpdatedEventData(
+        const server::StoreFileUpdatedEventData& data,
+        const File& file,
+        const FileDecryptionParams& fileDecryptionParams
+    );
 };
 
-}  // namespace store
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STORE_MAPPER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STORE_MAPPER_HPP_

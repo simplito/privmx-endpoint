@@ -22,13 +22,15 @@ option(PRIVMX_BUILD_DEBUG "Enable extra debug data for lib" OFF)
 option(PRIVMX_EMSCRIPTEN "Enable emscripten build" OFF)
 message(STATUS "Enable emscripten build - PRIVMX_EMSCRIPTEN=${PRIVMX_EMSCRIPTEN}")
 
-option(PRIVMX_CONAN "Conan build" OFF)
+option(PRIVMX_CONAN "Conan build" ON)
 message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 
 option(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
 
+set(PRIVMX_DRIVER_NET ON)
+set(PRIVMX_DRIVER_CRYPTO ON)
 
 if(PRIVMX_EMSCRIPTEN)
     set(BUILD_SHARED_LIBS OFF)

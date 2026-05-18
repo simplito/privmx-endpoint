@@ -9,9 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
 
 #include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
@@ -60,47 +60,67 @@ std::string StreamsUpdatedEvent::toJSON() const {
 }
 
 std::shared_ptr<core::SerializedEvent> StreamRoomCreatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamRoomUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamRoomDeletedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamPublishedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamJoinedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamUnpublishedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamLeftEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> RemoteStreamsChangedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 std::shared_ptr<core::SerializedEvent> StreamsUpdatedEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 bool Events::isStreamRoomCreatedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamCreated";
+    return handler.type() == "streamRoomCreated";
 }
 
 StreamRoomCreatedEvent Events::extractStreamRoomCreatedEvent(const core::EventHolder& handler) {
@@ -117,7 +137,7 @@ StreamRoomCreatedEvent Events::extractStreamRoomCreatedEvent(const core::EventHo
 }
 
 bool Events::isStreamRoomUpdatedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamUpdated";
+    return handler.type() == "streamRoomUpdated";
 }
 
 StreamRoomUpdatedEvent Events::extractStreamRoomUpdatedEvent(const core::EventHolder& handler) {
@@ -134,7 +154,7 @@ StreamRoomUpdatedEvent Events::extractStreamRoomUpdatedEvent(const core::EventHo
 }
 
 bool Events::isStreamRoomDeletedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamDeleted";
+    return handler.type() == "streamRoomDeleted";
 }
 
 StreamRoomDeletedEvent Events::extractStreamRoomDeletedEvent(const core::EventHolder& handler) {
@@ -185,7 +205,7 @@ StreamUpdatedEvent Events::extractStreamUpdatedEvent(const core::EventHolder& ha
 }
 
 bool Events::isStreamJoinedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamUpdatedMessage";
+    return handler.type() == "streamJoined";
 }
 
 StreamJoinedEvent Events::extractStreamJoinedEvent(const core::EventHolder& handler) {
@@ -219,7 +239,7 @@ StreamUnpublishedEvent Events::extractStreamUnpublishedEvent(const core::EventHo
 }
 
 bool Events::isStreamLeftEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamCustom";
+    return handler.type() == "streamLeft";
 }
 
 StreamLeftEvent Events::extractStreamLeftEvent(const core::EventHolder& handler) {

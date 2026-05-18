@@ -51,7 +51,7 @@ future<string> HttpChannel::send(const string& data, const string& path, const s
     options.contentType = content_type.c_str();
     options.method = get ? "GET" : "POST";
     options.path = path.c_str();
-    std::vector<privmxDrvNet_HttpHeader > tmp;
+    std::vector<privmxDrvNet_HttpHeader> tmp(headers.size());
     for (unsigned long i = 0; i < headers.size(); ++i) {
         tmp[i].name = headers[i].first.c_str();
         tmp[i].value = headers[i].second.c_str();

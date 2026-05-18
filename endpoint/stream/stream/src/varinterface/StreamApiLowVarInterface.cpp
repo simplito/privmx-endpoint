@@ -14,7 +14,6 @@ limitations under the License.
 
 #include "../../include/privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/TypesMacros.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 #include "privmx/endpoint/stream/DynamicTypes.hpp"
 
@@ -23,39 +22,38 @@ using namespace privmx::endpoint::stream;
 
 std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)>
     StreamApiLowVarInterface::methodMap = {
-    {Create, &StreamApiLowVarInterface::create},
-    {GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
-    {CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
-    {UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
-    {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
-    {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
-    {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
+        {Create, &StreamApiLowVarInterface::create},
+        {GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
+        {CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
+        {UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
+        {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
+        {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
+        {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
 
-    {SubscribeFor, &StreamApiLowVarInterface::subscribeFor},
-    {UnsubscribeFrom, &StreamApiLowVarInterface::unsubscribeFrom},
-    {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery},
+        {SubscribeFor, &StreamApiLowVarInterface::subscribeFor},
+        {UnsubscribeFrom, &StreamApiLowVarInterface::unsubscribeFrom},
+        {BuildSubscriptionQuery, &StreamApiLowVarInterface::buildSubscriptionQuery},
 
-    {ListStreams, &StreamApiLowVarInterface::listStreams},
-    {JoinStreamRoom, &StreamApiLowVarInterface::joinStreamRoom},
-    {JoinStreamRoomEx, &StreamApiLowVarInterface::joinStreamRoomEx},
-    {LeaveStreamRoom, &StreamApiLowVarInterface::leaveStreamRoom},
-    {EnableStreamRoomRecording, &StreamApiLowVarInterface::enableStreamRoomRecording},
-    {GetStreamRoomRecordingKeys, &StreamApiLowVarInterface::getStreamRoomRecordingKeys},
+        {ListStreams, &StreamApiLowVarInterface::listStreams},
+        {JoinStreamRoom, &StreamApiLowVarInterface::joinStreamRoom},
+        {JoinStreamRoomEx, &StreamApiLowVarInterface::joinStreamRoomEx},
+        {LeaveStreamRoom, &StreamApiLowVarInterface::leaveStreamRoom},
+        {EnableStreamRoomRecording, &StreamApiLowVarInterface::enableStreamRoomRecording},
+        {GetStreamRoomRecordingKeys, &StreamApiLowVarInterface::getStreamRoomRecordingKeys},
 
-    {CreateStream, &StreamApiLowVarInterface::createStream},
-    {PublishStream, &StreamApiLowVarInterface::publishStream},
-    {UpdateStream, &StreamApiLowVarInterface::updateStream},
-    {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
+        {CreateStream, &StreamApiLowVarInterface::createStream},
+        {PublishStream, &StreamApiLowVarInterface::publishStream},
+        {UpdateStream, &StreamApiLowVarInterface::updateStream},
+        {UnpublishStream, &StreamApiLowVarInterface::unpublishStream},
 
-    {SubscribeToRemoteStreams, &StreamApiLowVarInterface::subscribeToRemoteStreams},
-    {ModifyRemoteStreamsSubscriptions, &StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions},
-    {UnsubscribeFromRemoteStreams, &StreamApiLowVarInterface::unsubscribeFromRemoteStreams},
-    {Trickle, &StreamApiLowVarInterface::keyManagement},
-    {KeyManagement, &StreamApiLowVarInterface::keyManagement}
+        {SubscribeToRemoteStreams, &StreamApiLowVarInterface::subscribeToRemoteStreams},
+        {ModifyRemoteStreamsSubscriptions, &StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions},
+        {UnsubscribeFromRemoteStreams, &StreamApiLowVarInterface::unsubscribeFromRemoteStreams},
+        {Trickle, &StreamApiLowVarInterface::trickle}
 };
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _streamApi = StreamApiLow::create(_connection, _eventApi);
+    _streamApi = StreamApiLow::create(_connection);
     return {};
 }
 
@@ -111,8 +109,9 @@ Poco::Dynamic::Var StreamApiLowVarInterface::updateStreamRoom(const Poco::Dynami
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
-    _streamApi.updateStreamRoom(inboxId, users, managers, publicMeta, privateMeta, version, force,
-                          forceGenerateNewKey, policies);
+    _streamApi.updateStreamRoom(
+        inboxId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+    );
     return {};
 }
 
@@ -137,7 +136,6 @@ Poco::Dynamic::Var StreamApiLowVarInterface::deleteStreamRoom(const Poco::Dynami
     _streamApi.deleteStreamRoom(streamRoomId);
     return {};
 }
-
 
 Poco::Dynamic::Var StreamApiLowVarInterface::listStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
@@ -215,15 +213,21 @@ Poco::Dynamic::Var StreamApiLowVarInterface::subscribeToRemoteStreams(const Poco
 Poco::Dynamic::Var StreamApiLowVarInterface::modifyRemoteStreamsSubscriptions(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto subscriptionsToAdd = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptionsToAdd");
-    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(2), "subscriptionsToRemove");
+    auto subscriptionsToAdd = _deserializer.deserializeVector<StreamSubscription>(
+        argsArr->get(1), "subscriptionsToAdd"
+    );
+    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(
+        argsArr->get(2), "subscriptionsToRemove"
+    );
     _streamApi.modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
     return {};
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptionsToRemove");
+    auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(
+        argsArr->get(1), "subscriptionsToRemove"
+    );
     _streamApi.unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
     return {};
 }
@@ -252,14 +256,6 @@ Poco::Dynamic::Var StreamApiLowVarInterface::setNewOfferOnReconfigure(const Poco
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::keyManagement(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto disable = _deserializer.deserialize<bool>(argsArr->get(1), "disable");
-    _streamApi.keyManagement(streamRoomId, disable);
-    return {};
-}
-
 Poco::Dynamic::Var StreamApiLowVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
@@ -268,8 +264,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::exec(METHOD method, const Poco::Dyn
     return (*this.*(it->second))(args);
 }
 
-
-std::shared_ptr<WebRTCInterface> StreamApiLowVarInterface:: getWebRtcInterface() {
+std::shared_ptr<WebRTCInterface> StreamApiLowVarInterface::getWebRtcInterface() {
     return _webRtcInterface;
 }
 

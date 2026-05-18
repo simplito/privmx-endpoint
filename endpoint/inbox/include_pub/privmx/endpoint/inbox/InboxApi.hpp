@@ -9,16 +9,14 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 
+#include "privmx/endpoint/inbox/Types.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/thread/ThreadApi.hpp"
-#include "privmx/endpoint/inbox/Types.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
-
-
 
 class InboxApiImpl;
 
@@ -60,12 +58,16 @@ public:
      * @param policies Inbox policies
      * @return ID of the created Inbox
      */
-    std::string createInbox(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                            const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                            const std::optional<inbox::FilesConfig>& filesConfig,
-                            const std::optional<core::ContainerPolicyWithoutItem>& policies = std::nullopt);
+    std::string createInbox(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<inbox::FilesConfig>& filesConfig,
+        const std::optional<core::ContainerPolicyWithoutItem>& policies = std::nullopt
+    );
 
-    
     /**
      * Updates an existing Inbox.
      *
@@ -81,12 +83,18 @@ public:
      * @param forceGenerateNewKey force to regenerate a key for the Inbox
      * @param policies Inbox policies
      */
-    void updateInbox(const std::string& inboxId, const std::vector<core::UserWithPubKey>& users,
-                     const std::vector<core::UserWithPubKey>& managers,
-                     const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                     const std::optional<inbox::FilesConfig>& filesConfig, const int64_t version, const bool force,
-                     const bool forceGenerateNewKey,
-                     const std::optional<core::ContainerPolicyWithoutItem>& policies = std::nullopt);
+    void updateInbox(
+        const std::string& inboxId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<inbox::FilesConfig>& filesConfig,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicyWithoutItem>& policies = std::nullopt
+    );
 
     /**
      * Gets a single Inbox by given Inbox ID.
@@ -102,9 +110,8 @@ public:
      * @param contextId ID of the Context to get Inboxes from
      * @param pagingQuery struct with list query parameters
      * @return struct containing list of Inboxes
-     */    
+     */
     core::PagingList<inbox::Inbox> listInboxes(const std::string& contextId, const core::PagingQuery& pagingQuery);
-
 
     /**
      * Gets public data of given Inbox.
@@ -112,14 +119,14 @@ public:
      *
      * @param inboxId ID of the Inbox to get
      * @return struct containing public accessible information about the Inbox
-     */    
+     */
     inbox::InboxPublicView getInboxPublicView(const std::string& inboxId);
 
     /**
      * Deletes an Inbox by given Inbox ID.
      *
      * @param inboxId ID of the Inbox to delete
-     */    
+     */
     void deleteInbox(const std::string& inboxId);
 
     /**
@@ -132,9 +139,12 @@ public:
      * @param userPrivKey sender can optionally provide a private key, which will be used: 1) to sign the sent data, 2) to derivation of the public key, which will then be transferred along with the sent data and can be used in the future for further secure communication with the sender
      * @return handle
      */
-    int64_t /*inboxHandle*/ prepareEntry(const std::string& inboxId, const core::Buffer& data,
-                                             const std::vector<int64_t>& inboxFileHandles = std::vector<int64_t>(),
-                                             const std::optional<std::string>& userPrivKey = std::nullopt);
+    int64_t /*inboxHandle*/ prepareEntry(
+        const std::string& inboxId,
+        const core::Buffer& data,
+        const std::vector<int64_t>& inboxFileHandles = std::vector<int64_t>(),
+        const std::optional<std::string>& userPrivKey = std::nullopt
+    );
 
     /**
      * Sends data to an Inbox.
@@ -177,7 +187,11 @@ public:
      * @param fileSize size of the file to send
      * @return file handle
      */
-    int64_t /*inboxFileHandle*/ createFileHandle(const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t& fileSize);
+    int64_t /*inboxFileHandle*/ createFileHandle(
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t& fileSize
+    );
 
     /**
      * Sends file's data chunk to an Inbox.
@@ -187,10 +201,8 @@ public:
      * @param inboxHandle Handle to the prepared Inbox entry
      * @param inboxFileHandle handle to the file where the uploaded chunk belongs
      * @param Buffer dataChunk - file chunk to send
-     */    
-    void writeToFile(const int64_t inboxHandle, const int64_t inboxFileHandle,
-                                const core::Buffer& dataChunk);
-
+     */
+    void writeToFile(const int64_t inboxHandle, const int64_t inboxFileHandle, const core::Buffer& dataChunk);
 
     /**
      * Opens a file to read.
@@ -215,7 +227,7 @@ public:
      *
      * @param fileHandle handle to the file
      * @param position sets new cursor position
-     */    
+     */
     void seekInFile(const int64_t fileHandle, const int64_t position);
 
     /**
@@ -246,14 +258,18 @@ public:
      * @param selectorType scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
 private:
     InboxApi(const std::shared_ptr<InboxApiImpl>& impl);
 };
 
-}  // namespace inbox
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPI_HPP_

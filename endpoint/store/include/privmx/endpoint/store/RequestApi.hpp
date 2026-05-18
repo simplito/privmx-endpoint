@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_REQUESTAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_REQUESTAPI_HPP_
 
-#include <string>
 #include <Poco/Dynamic/Var.h>
+#include <string>
 
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 
@@ -23,24 +23,23 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class RequestApi 
-{
-public:    
+class RequestApi {
+public:
     RequestApi(privmx::privfs::RpcGateway::Ptr gateway);
     server::CreateRequestResult createRequest(const server::CreateRequestModel& model);
     void sendChunk(const server::ChunkModel& model);
     void commitFile(const server::CommitFileModel& model);
-    
+
 private:
-    template<typename T> 
-    T request(const std::string& method, const Poco::JSON::Object::Ptr& params); //only typed object
-    Poco::Dynamic::Var request(const std::string& method, const Poco::JSON::Object::Ptr& params); //Var
+    template<typename T>
+    T request(const std::string& method, Poco::JSON::Object::Ptr params);
+    void requestVoid(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_REQUESTAPI_HPP_

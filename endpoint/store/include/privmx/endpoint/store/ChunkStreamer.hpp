@@ -14,51 +14,51 @@ limitations under the License.
 
 #include <string>
 
-#include <memory>
 #include <Poco/Types.h>
+#include <memory>
 
-#include "privmx/endpoint/store/RequestApi.hpp"
 #include "privmx/endpoint/store/ChunkBufferedStream.hpp"
+#include "privmx/endpoint/store/RequestApi.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-struct FileSizeResult
-{
+struct FileSizeResult {
     uint64_t size;
     uint64_t checksumSize;
 };
 
-struct ChunksSentInfo
-    {
-        int64_t cipherType;
-        std::string key;
-        std::string hmac;
-        size_t chunkSize;
-        std::string requestId;
-    };
+struct ChunksSentInfo {
+    int64_t cipherType;
+    std::string key;
+    std::string hmac;
+    size_t chunkSize;
+    std::string requestId;
+};
 
-class ChunkStreamer
-{
+class ChunkStreamer {
 public:
-    
-
     ChunkStreamer() = default;
-    ChunkStreamer(const std::shared_ptr<store::RequestApi>& requestApi, size_t chunkSize, uint64_t fileSize, size_t serverRequestChunkSize);
+    ChunkStreamer(
+        const std::shared_ptr<store::RequestApi>& requestApi,
+        size_t chunkSize,
+        uint64_t fileSize,
+        size_t serverRequestChunkSize
+    );
     void createRequest(bool enableRandomWrite = false);
     void setRequestData(const std::string& requestId, const std::string& key, const uint64_t& fileIndex);
     void sendChunk(const std::string& data);
-    ChunksSentInfo finalize(const std::string& data);    
+    ChunksSentInfo finalize(const std::string& data);
     FileSizeResult getFileSize() const;
     uint64_t getUploadedFileSize();
+
 private:
-    struct PreparedChunk
-    {
+    struct PreparedChunk {
         std::string data;
         std::string hmac;
     };
-    
+
     void prepareAndSendChunk(const std::string& data);
     PreparedChunk prepareChunk(const std::string& data);
     void commitFile();
@@ -81,8 +81,8 @@ private:
     uint64_t _serverSeq = 0;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNKSTREAMER_HPP_

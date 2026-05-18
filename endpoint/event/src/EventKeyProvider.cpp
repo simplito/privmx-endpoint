@@ -9,20 +9,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-
 #include "privmx/endpoint/event/EventKeyProvider.hpp"
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/crypto/CryptoException.hpp>
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 using namespace privmx::endpoint::event;
 
-EventKeyProvider::EventKeyProvider(const privmx::crypto::PrivateKey& key) :
-    _key(key) {}
+EventKeyProvider::EventKeyProvider(const privmx::crypto::PrivateKey& key) : _key(key) {}
 
 std::string EventKeyProvider::generateKey() {
     return privmx::crypto::Crypto::randomBytes(32);
 }
-DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(const std::string& encryptedKey, const privmx::crypto::PublicKey& authorPubKey) {
+DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(
+    const std::string& encryptedKey,
+    const privmx::crypto::PublicKey& authorPubKey
+) {
     std::string encKey;
     int64_t statusCode = 0;
     try {
@@ -31,28 +32,25 @@ DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(const std::string& encrypted
         statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return DecryptedEventEncKeyV1{
-        core::DecryptedVersionedData{
-            .dataStructureVersion=1,
-            .statusCode=statusCode
-        },
-        .key = encKey
+        core::DecryptedVersionedData{.dataStructureVersion = 1, .statusCode = statusCode}, .key = encKey
     };
 }
-privmx::utils::List<server::UserKey> EventKeyProvider::prepareKeysList(
-    const std::vector<core::UserWithPubKey>& users, 
+std::vector<server::UserKey> EventKeyProvider::prepareKeysList(
+    const std::vector<core::UserWithPubKey>& users,
     const std::string& key
 ) {
-    utils::List<server::UserKey> userKeys = utils::TypedObjectFactory::createNewList<server::UserKey>();
+    std::vector<server::UserKey> userKeys;
     for (auto& user : users) {
-        server::UserKey userKey = utils::TypedObjectFactory::createNewObject<server::UserKey>();
-        userKey.id(user.userId);
-        userKey.key(privmx::crypto::EciesEncryptor::encryptToBase64(crypto::PublicKey::fromBase58DER(user.pubKey), key, _key));
-        userKeys.add(userKey);
+        userKeys.push_back(
+            server::UserKey{
+                .id = user.userId,
+                .key = privmx::crypto::EciesEncryptor::encryptToBase64(
+                    crypto::PublicKey::fromBase58DER(user.pubKey), key, _key
+                )
+            }
+        );
     }
     return userKeys;
 }
-

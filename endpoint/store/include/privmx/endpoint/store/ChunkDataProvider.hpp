@@ -13,22 +13,21 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNK_DATA_PROVIDER_HPP_
 
 #include <memory>
-#include <string>
 #include <optional>
+#include <string>
 
-#include <Poco/Types.h>
-#include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
-#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/cache/CacheInterface.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
+#include <Poco/Types.h>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class ChunkDataProvider : public IChunkDataProvider
-{
+class ChunkDataProvider : public IChunkDataProvider {
 public:
     ChunkDataProvider() = default;
     ChunkDataProvider(
@@ -42,16 +41,23 @@ public:
         std::shared_ptr<CacheInterface> cache
     );
     virtual void sync(
-        int64_t newfileVersion, 
-        int64_t encryptedFileSize, 
-        std::optional<size_t> encryptedChunkSize = std::nullopt, 
+        int64_t newfileVersion,
+        int64_t encryptedFileSize,
+        std::optional<size_t> encryptedChunkSize = std::nullopt,
         std::optional<size_t> serverChunkSize = std::nullopt
     ) override;
     virtual std::string getChunk(uint32_t chunkNumber, const std::string& hash) override;
     virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion, const std::string& hash) override;
-    virtual void update(int64_t newfileVersion, uint32_t chunkNumber, const std::string newChunkEncryptedData, int64_t encryptedFileSize, bool truncate) override;
+    virtual void update(
+        int64_t newfileVersion,
+        uint32_t chunkNumber,
+        const std::string newChunkEncryptedData,
+        int64_t encryptedFileSize,
+        bool truncate
+    ) override;
     virtual void cacheChunk(uint32_t chunkNumber, const std::string& encryptedData) override;
     virtual std::string getCurrentChecksumsFromBridge() override;
+
 private:
     static int64_t getServerReadDataSize(int64_t encryptedChunkSize, int64_t severChunkSize);
     std::string requestServerChunk(uint32_t serverChunkNumber);
@@ -69,8 +75,8 @@ private:
     std::optional<uint32_t> _lastServerChunkNumber = -1;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CHUNK_DATA_PROVIDER_HPP_

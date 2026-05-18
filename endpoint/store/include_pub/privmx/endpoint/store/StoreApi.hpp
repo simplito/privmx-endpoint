@@ -14,7 +14,6 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-
 class StoreApiImpl;
 
 /**
@@ -52,9 +51,14 @@ public:
      * @param policies Store's policies
      * @return created Store ID
      */
-    std::string createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                            const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                            const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+    std::string createStore(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
 
     /**
      * Updates an existing Store.
@@ -70,10 +74,17 @@ public:
      * @param forceGenerateNewKey force to regenerate a key for the Store
      * @param policies Store's policies
     */
-    void updateStore(const std::string& storeId, const std::vector<core::UserWithPubKey>& users,
-                     const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t version,
-                     const bool force, const bool forceGenerateNewKey,
-                     const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+    void updateStore(
+        const std::string& storeId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
 
     /**
      * Deletes a Store by given Store ID.
@@ -89,7 +100,7 @@ public:
      * @return struct containing information about the Store
     */
     Store getStore(const std::string& storeId);
-    
+
     /**
      * Gets a list of Stores in given Context.
      *
@@ -109,8 +120,13 @@ public:
      * @param randomWriteSupport enable random write support for file
      * @return handle to write data
      */
-    int64_t createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                            const int64_t size, bool randomWriteSupport = false);
+    int64_t createFile(
+        const std::string& storeId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t size,
+        bool randomWriteSupport = false
+    );
 
     /**
      * Update an existing file in a Store.
@@ -121,8 +137,12 @@ public:
      * @param size size of the file
      * @return handle to write file data
      */
-    int64_t updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                            const int64_t size);
+    int64_t updateFile(
+        const std::string& fileId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t size
+    );
 
     /**
      * Update metadata of an existing file in a Store.
@@ -220,12 +240,16 @@ public:
      * @param selectorType scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
     /**
      * Synchronize file handle data with newest data on server
      * @param fileHandle handle to read/write file data
-     */ 
+     */
     void syncFile(const int64_t fileHandle);
 
     /**
@@ -247,8 +271,8 @@ private:
     StoreApi(const std::shared_ptr<StoreApiImpl>& impl);
 };
 
-}  // namespace store
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STORE_STOREAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STORE_STOREAPI_HPP_

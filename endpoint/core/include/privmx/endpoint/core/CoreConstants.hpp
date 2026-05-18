@@ -20,28 +20,26 @@ namespace endpoint {
 namespace core {
 
 namespace DataIntegrityObjectDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1
-   };
-}
-constexpr static DataIntegrityObjectDataSchema::Version CURRENT_DATA_INTEGRITY_OBJECT_DATA_SCHEMA_VERSION = DataIntegrityObjectDataSchema::Version::VERSION_1;
-
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1
+};
+} // namespace DataIntegrityObjectDataSchema
+constexpr static DataIntegrityObjectDataSchema::Version
+    CURRENT_DATA_INTEGRITY_OBJECT_DATA_SCHEMA_VERSION = DataIntegrityObjectDataSchema::Version::VERSION_1;
 
 namespace EncryptionKeyDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1,
-      VERSION_2 = 2
-   };
-}
-constexpr static EncryptionKeyDataSchema::Version CURRENT_ENCRYPTION_KEY_DATA_SCHEMA_VERSION = EncryptionKeyDataSchema::Version::VERSION_2;
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1,
+    VERSION_2 = 2
+};
+} // namespace EncryptionKeyDataSchema
+constexpr static EncryptionKeyDataSchema::Version
+    CURRENT_ENCRYPTION_KEY_DATA_SCHEMA_VERSION = EncryptionKeyDataSchema::Version::VERSION_2;
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-
-
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_CORECONSTANTS_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_CORECONSTANTS_HPP_

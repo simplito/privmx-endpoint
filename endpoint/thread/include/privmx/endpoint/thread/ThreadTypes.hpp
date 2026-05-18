@@ -14,8 +14,8 @@ limitations under the License.
 
 #include <string>
 
-#include "privmx/endpoint/thread/DynamicTypes.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
+#include "privmx/endpoint/thread/DynamicTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -53,8 +53,8 @@ struct DecryptedMessageDataV5 : public core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
-} // thread
-} // endpoint
-} // privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_THREAD_THREADTYPES_HPP_

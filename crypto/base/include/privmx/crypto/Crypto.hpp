@@ -39,6 +39,8 @@ public:
     static std::string aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv);
     static std::string aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv);
     static std::string aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv);
+    static std::string aes256GcmEncrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad = "");
+    static std::string aes256GcmDecrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad = "");
     static std::string prf_tls12(const std::string& key, const std::string& seed, size_t length);
     static std::string pbkdf2(const std::string& password, const std::string& salt, size_t rounds, size_t length, const std::string& algorithm);
     static std::string kdf(size_t length, const std::string& key, const std::string& label);
@@ -125,6 +127,16 @@ inline std::string Crypto::aes256CbcNoPadEncrypt(const std::string& data, const 
 inline std::string Crypto::aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256CbcNoPadDecrypt(data, key, iv);
+}
+
+inline std::string Crypto::aes256GcmEncrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) {
+    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
+    return crypto_service->aes256GcmEncrypt(data, key, iv, aad);
+}
+
+inline std::string Crypto::aes256GcmDecrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) {
+    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
+    return crypto_service->aes256GcmDecrypt(data, key, iv, aad);
 }
 
 inline std::string Crypto::prf_tls12(const std::string& key, const std::string& seed, size_t length) {

@@ -21,11 +21,8 @@ namespace core {
 constexpr char ENDPOINT_VERSION[] = "2.6.0";
 constexpr char MINIMUM_REQUIRED_BRIDGE_VERSION[] = "2.36.2";
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-
-
-#endif  // #define _PRIVMXLIB_ENDPOINT_CORE_CONSTANTS_HPP_
-
+#endif // #define _PRIVMXLIB_ENDPOINT_CORE_CONSTANTS_HPP_

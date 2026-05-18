@@ -21,7 +21,7 @@ std::string InboxDataHelper::serializeEncKey(const privmx::endpoint::core::EncKe
 }
 
 privmx::endpoint::core::EncKey InboxDataHelper::deserializeEncKey(const std::string& serializedKey) {
-    auto obj {utils::Utils::parseJsonObject(utils::Base64::toString(serializedKey))};
+    auto obj{utils::Utils::parseJsonObject(utils::Base64::toString(serializedKey))};
     return {.id = obj->get("id"), .key = obj->get("key")};
 }
 
@@ -30,27 +30,27 @@ std::string InboxDataHelper::getRandomName() {
 }
 
 server::FileConfig InboxDataHelper::fileConfigToTypedObject(const FilesConfig& fileConfig) {
-    auto result = Factory::createObject<server::FileConfig>();
-    result.minCount(fileConfig.minCount);
-    result.maxCount(fileConfig.maxCount);
-    result.maxFileSize(fileConfig.maxFileSize);
-    result.maxWholeUploadSize(fileConfig.maxWholeUploadSize);
+    server::FileConfig result;
+    result.minCount = fileConfig.minCount;
+    result.maxCount = fileConfig.maxCount;
+    result.maxFileSize = fileConfig.maxFileSize;
+    result.maxWholeUploadSize = fileConfig.maxWholeUploadSize;
     return result;
 }
 
 FilesConfig InboxDataHelper::fileConfigFromTypedObject(const server::FileConfig& fileConfig) {
     return {
-        .minCount = fileConfig.minCount(),
-        .maxCount = fileConfig.maxCount(),
-        .maxFileSize = fileConfig.maxFileSize(),
-        .maxWholeUploadSize = fileConfig.maxWholeUploadSize()
+        .minCount = fileConfig.minCount,
+        .maxCount = fileConfig.maxCount,
+        .maxFileSize = fileConfig.maxFileSize,
+        .maxWholeUploadSize = fileConfig.maxWholeUploadSize
     };
 }
 
-privmx::utils::List<std::string> InboxDataHelper::mapUsers(const std::vector<core::UserWithPubKey>& users) {
-    auto result = Factory::createList<std::string>();
+std::vector<std::string> InboxDataHelper::mapUsers(const std::vector<core::UserWithPubKey>& users) {
+    std::vector<std::string> result;
     for (auto user : users) {
-        result.add(user.userId);
+        result.push_back(user.userId);
     }
     return result;
 }

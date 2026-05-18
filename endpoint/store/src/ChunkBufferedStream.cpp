@@ -15,9 +15,9 @@ limitations under the License.
 
 using namespace privmx::endpoint::store;
 
-ChunkBufferedStream::ChunkBufferedStream(size_t chunkSize, std::optional<uint64_t> maxStreamLength) : 
-    _chunkSize(chunkSize), _sizeControl(maxStreamLength.has_value()),
-    _maxTotalDataSize(maxStreamLength.has_value() ? maxStreamLength.value() : 0), _totalDataSize(0) {}
+ChunkBufferedStream::ChunkBufferedStream(size_t chunkSize, std::optional<uint64_t> maxStreamLength)
+    : _chunkSize(chunkSize), _sizeControl(maxStreamLength.has_value()),
+      _maxTotalDataSize(maxStreamLength.has_value() ? maxStreamLength.value() : 0), _totalDataSize(0) {}
 
 std::string ChunkBufferedStream::readChunk() {
     size_t chunkSize = std::min(_bufSize, _chunkSize);
@@ -28,18 +28,18 @@ std::string ChunkBufferedStream::readChunk() {
 }
 
 void ChunkBufferedStream::write(const std::string& data) {
-    if(_sizeControl && _totalDataSize+data.length() > _maxTotalDataSize) {
+    if (_sizeControl && _totalDataSize + data.length() > _maxTotalDataSize) {
         throw core::DataBiggerThanDeclaredException();
     }
     _buf.append(data);
     _bufSize += data.size();
-    _totalDataSize+=data.length();
+    _totalDataSize += data.length();
 }
 
 std::string ChunkBufferedStream::getFullChunk(uint64_t pos) {
-    return _buf.substr(_chunkSize*pos, _chunkSize);
+    return _buf.substr(_chunkSize * pos, _chunkSize);
 }
 void ChunkBufferedStream::freeFullChunks() {
-    _buf = _buf.substr(_chunkSize*getNumberOfFullChunks());
-    _bufSize = _bufSize - (_chunkSize*getNumberOfFullChunks());
+    _buf = _buf.substr(_chunkSize * getNumberOfFullChunks());
+    _bufSize = _bufSize - (_chunkSize * getNumberOfFullChunks());
 }

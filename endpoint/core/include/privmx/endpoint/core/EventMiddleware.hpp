@@ -16,10 +16,10 @@ limitations under the License.
 
 #include <atomic>
 #include <functional>
+#include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/utils/NotificationQueue.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 #include <vector>
-#include <privmx/endpoint/core/CoreTypes.hpp>
 
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 
@@ -44,13 +44,16 @@ public:
     void emitConnectedEvent();
     void emitDisconnectedEvent();
     void emitApiEvent(const std::shared_ptr<Event>& event);
+
 private:
     std::shared_ptr<EventQueueImpl> _queue;
     int64_t _connectionId;
     utils::ThreadSaveMap<
-        int, 
-        std::pair<std::function<void(const std::string& type, const NotificationEvent& notification)>, std::vector<std::string>>
-    > _notificationsListeners;
+        int,
+        std::pair<
+            std::function<void(const std::string& type, const NotificationEvent& notification)>,
+            std::vector<std::string>>>
+        _notificationsListeners;
     utils::ThreadSaveMap<int, std::function<void()>> _connectedListeners;
     utils::ThreadSaveMap<int, std::function<void()>> _disconnectedListeners;
     std::atomic_int _id = 0;
@@ -61,8 +64,8 @@ inline void EventMiddleware::emitApiEvent(const std::shared_ptr<Event>& event) {
     _queue->emit(event);
 }
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_EVENTMIDDLEWARE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_EVENTMIDDLEWARE_HPP_

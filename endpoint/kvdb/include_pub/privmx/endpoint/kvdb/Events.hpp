@@ -13,7 +13,7 @@ namespace kvdb {
  * Holds information of `KvdbDeletedEvent`.
  */
 struct KvdbDeletedEventData {
-    
+
     /**
      * Kvdb ID
      */
@@ -23,7 +23,7 @@ struct KvdbDeletedEventData {
 /**
  * Holds Kvdb statistical data.
  */
-struct  KvdbStatsEventData {
+struct KvdbStatsEventData {
 
     /**
      * Kvdb ID
@@ -75,19 +75,18 @@ struct KvdbCreatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * all available Kvdb information
      */
     Kvdb data;
 };
 
-
 /**
  * Holds data of event that arrives when Kvdb is updated.
  */
 struct KvdbUpdatedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -104,7 +103,7 @@ struct KvdbUpdatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * all available Kvdb information
      */
@@ -115,7 +114,7 @@ struct KvdbUpdatedEvent : public core::Event {
  * Holds data of event that arrives when Kvdb is deleted.
  */
 struct KvdbDeletedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -132,7 +131,7 @@ struct KvdbDeletedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -143,7 +142,7 @@ struct KvdbDeletedEvent : public core::Event {
  * Holds data of event that arrives when Kvdb stats change.
  */
 struct KvdbStatsChangedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -160,19 +159,18 @@ struct KvdbStatsChangedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
     KvdbStatsEventData data;
 };
 
-
 /**
  * Holds data of event that arrives when Kvdb message is created.
  */
 struct KvdbNewEntryEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -189,7 +187,7 @@ struct KvdbNewEntryEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * detailed information about KvdbEntry
      */
@@ -200,7 +198,7 @@ struct KvdbNewEntryEvent : public core::Event {
  * Holds data of event that arrives when Kvdb message is updated.
  */
 struct KvdbEntryUpdatedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -217,7 +215,7 @@ struct KvdbEntryUpdatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * detailed information about KvdbEntry
      */
@@ -228,7 +226,7 @@ struct KvdbEntryUpdatedEvent : public core::Event {
  * Holds data of event that arrives when Kvdb message is deleted.
  */
 struct KvdbEntryDeletedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -245,7 +243,7 @@ struct KvdbEntryDeletedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -257,7 +255,6 @@ struct KvdbEntryDeletedEvent : public core::Event {
  */
 class Events {
 public:
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'KvdbCreatedEvent' 
      * 
@@ -371,8 +368,8 @@ public:
     static KvdbEntryDeletedEvent extractKvdbEntryDeletedEvent(const core::EventHolder& eventHolder);
 };
 
-}  // namespace kvdb
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace kvdb
+} // namespace endpoint
+} // namespace privmx
 
 #endif

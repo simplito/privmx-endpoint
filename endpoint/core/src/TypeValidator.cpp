@@ -63,8 +63,11 @@ void TypeValidator::validateObject(const Poco::Dynamic::Var& val, const std::str
     }
 }
 
-void TypeValidator::validateNotEmpty(const Poco::Dynamic::Var& val, const std::string& name,
-                                     const std::string& expected) {
+void TypeValidator::validateNotEmpty(
+    const Poco::Dynamic::Var& val,
+    const std::string& name,
+    const std::string& expected
+) {
     if (val.isEmpty()) {
         throw InvalidArgumentTypeException(name + " | Expected " + expected + ", value is empty");
     }

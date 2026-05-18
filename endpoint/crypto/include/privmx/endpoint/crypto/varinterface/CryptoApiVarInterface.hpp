@@ -19,7 +19,6 @@ limitations under the License.
 #include "privmx/endpoint/crypto/CryptoApi.hpp"
 #include "privmx/endpoint/crypto/CryptoVarSerializer.hpp"
 #include "privmx/endpoint/crypto/varinterface/ExtKeyVarInterface.hpp"
-#include "privmx/endpoint/core/VarSerializer.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -48,8 +47,7 @@ public:
         ConvertPGPAsn1KeyToBase58DERKey = 17
     };
 
-    CryptoApiVarInterface(const core::VarSerializer& serializer)
-        : _serializer(serializer) {}
+    CryptoApiVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var signData(const Poco::Dynamic::Var& args);
@@ -73,10 +71,7 @@ public:
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
-    const core::VarSerializer::Options& getSerializerOptions() const {
-        return _serializer.getOptions();
-    }
-
+    const core::VarSerializer::Options& getSerializerOptions() const { return _serializer.getOptions(); }
 
 private:
     static std::map<METHOD, Poco::Dynamic::Var (CryptoApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
@@ -86,8 +81,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace crypto
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace crypto
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOAPIVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CRYPTO_CRYPTOAPIVARINTERFACE_HPP_

@@ -7,12 +7,12 @@ namespace privmx {
 namespace endpoint {
 namespace event {
 
-enum EventSelectorType: int64_t {
+enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
 };
 
-}  // namespace event
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_TYPES_HPP_

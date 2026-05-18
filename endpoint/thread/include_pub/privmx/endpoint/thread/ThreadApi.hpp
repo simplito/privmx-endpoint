@@ -20,7 +20,7 @@ class ThreadApiImpl;
 /**
  * 'ThreadApi' is a class representing Endpoint's API for Threads and their messages.
  */
-class ThreadApi : public privmx::endpoint::core::ExtendedPointer<ThreadApiImpl>  {
+class ThreadApi : public privmx::endpoint::core::ExtendedPointer<ThreadApiImpl> {
 public:
     /**
      * Creates an instance of 'ThreadApi'.
@@ -52,10 +52,15 @@ public:
      * @param policies Thread's policies
      * @return ID of the created Thread
      */
-    std::string createThread(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                             const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, 
-                             const core::Buffer& privateMeta, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
-    
+    std::string createThread(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
+
     /**
      * Updates an existing Thread.
      *
@@ -70,9 +75,17 @@ public:
      * @param forceGenerateNewKey force to regenerate a key for the Thread
      * @param policies Thread's policies
      */
-    void updateThread(const std::string& threadId, const std::vector<core::UserWithPubKey>& users,
-                      const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                      const int64_t version, const bool force, const bool forceGenerateNewKey, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+    void updateThread(
+        const std::string& threadId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
 
     /**
      * Deletes a Thread by given Thread ID.
@@ -97,7 +110,7 @@ public:
      * @return struct containing a list of Threads
      */
     core::PagingList<Thread> listThreads(const std::string& contextId, const core::PagingQuery& pagingQuery);
-    
+
     /**
      * Gets a message by given message ID.
      *
@@ -105,7 +118,7 @@ public:
      * @return struct containing the message
      */
     Message getMessage(const std::string& messageId);
-    
+
     /**
      * Gets a list of messages from a Thread.
      *
@@ -114,7 +127,7 @@ public:
      * @return struct containing a list of messages
      */
     core::PagingList<Message> listMessages(const std::string& threadId, const core::PagingQuery& pagingQuery);
-    
+
     /**
      * Sends a message in a Thread.
      *
@@ -124,9 +137,13 @@ public:
      * @param data content of the message
      * @return ID of the new message
      */
-    std::string sendMessage(const std::string& threadId, const core::Buffer& publicMeta,
-                            const core::Buffer& privateMeta, const core::Buffer& data);
-    
+    std::string sendMessage(
+        const std::string& threadId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data
+    );
+
     /**
      * Deletes a message by given message ID.
      *
@@ -142,8 +159,12 @@ public:
      * @param privateMeta private message metadata
      * @param data content of the message
      */
-    void updateMessage(const std::string& messageId, const core::Buffer& publicMeta,
-                            const core::Buffer& privateMeta, const core::Buffer& data);
+    void updateMessage(
+        const std::string& messageId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data
+    );
 
     /**
      * Subscribe for the Thread events on the given subscription query.
@@ -165,14 +186,18 @@ public:
      * @param selectorType scope on which you listen for events  
      * @param selectorId ID of the selector
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
 private:
     ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl);
 };
 
-}  // namespace thread
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_THREAD_THREADAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_THREAD_THREADAPI_HPP_

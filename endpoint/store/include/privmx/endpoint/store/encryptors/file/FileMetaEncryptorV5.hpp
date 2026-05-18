@@ -12,13 +12,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV5_HPP_
 
-#include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
-#include <privmx/endpoint/core/ServerTypes.hpp>
-#include <privmx/endpoint/core/Types.hpp>
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -26,13 +26,18 @@ namespace store {
 
 class FileMetaEncryptorV5 {
 public:
-    store::server::EncryptedFileMetaV5 encrypt(const store::FileMetaToEncryptV5& fileMeta,
-                                              const crypto::PrivateKey& authorPrivateKey,
-                                              const std::string& encryptionKey);
-    store::DecryptedFileMetaV5 decrypt(const store::server::EncryptedFileMetaV5& encryptedFileMeta,
-                                    const std::string& encryptionKey);
+    store::server::EncryptedFileMetaV5 encrypt(
+        const store::FileMetaToEncryptV5& fileMeta,
+        const crypto::PrivateKey& authorPrivateKey,
+        const std::string& encryptionKey
+    );
+    store::DecryptedFileMetaV5 decrypt(
+        const store::server::EncryptedFileMetaV5& encryptedFileMeta,
+        const std::string& encryptionKey
+    );
     store::DecryptedFileMetaV5 extractPublic(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta);
+
 private:
     void assertDataFormat(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
     core::Buffer serializeNumber(const int64_t& number);
@@ -40,11 +45,10 @@ private:
 
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
-
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
-#endif  //_PRIVMXLIB_ENDPOINT_CORE_FILEMETAENCRYPTORV5_HPP_
+#endif //_PRIVMXLIB_ENDPOINT_CORE_FILEMETAENCRYPTORV5_HPP_

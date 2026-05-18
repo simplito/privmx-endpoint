@@ -10,8 +10,8 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/inbox/VarSerializer.hpp"
-#include <privmx/endpoint/thread/VarSerializer.hpp>
 #include <privmx/endpoint/store/VarSerializer.hpp>
+#include <privmx/endpoint/thread/VarSerializer.hpp>
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
@@ -97,7 +97,9 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntry>(const inbox::Inbo
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<inbox::InboxEntry>>(const core::PagingList<inbox::InboxEntry>& val) {
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<inbox::InboxEntry>>(
+    const core::PagingList<inbox::InboxEntry>& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "core$PagingList<inbox$InboxEntry>");
@@ -127,7 +129,6 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxDeletedEventData>(const 
     return obj;
 }
 
-
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxDeletedEvent>(const inbox::InboxDeletedEvent& val) {
     return serializeBaseWithData<Event>(val, "inbox$InboxDeletedEvent");
@@ -138,9 +139,10 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryCreatedEvent>(const
     return serializeBaseWithData<Event>(val, "inbox$InboxEntryCreatedEvent");
 }
 
-
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEventData>(const inbox::InboxEntryDeletedEventData& val) {
+Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEventData>(
+    const inbox::InboxEntryDeletedEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "inbox$InboxEntryDeletedEventData");

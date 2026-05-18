@@ -10,14 +10,14 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/store/FileHandler.hpp"
+#include <Pson/BinaryString.hpp>
 #include <map>
 #include <privmx/utils/Debug.hpp>
-#include <Pson/BinaryString.hpp>
 
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
 
-FileHandler::FileHandler (
+FileHandler::FileHandler(
     std::shared_ptr<IChunkDataProvider> chunkDataProvider,
     std::shared_ptr<IChunkEncryptor> chunkEncryptor,
     std::shared_ptr<IHashList> hashList,
@@ -30,31 +30,19 @@ FileHandler::FileHandler (
     FileMeta fileMeta,
     core::DecryptedEncKey fileEncKey,
     std::shared_ptr<ServerApi> server
-) : 
-    _chunkDataProvider(chunkDataProvider),
-    _chunkEncryptor(chunkEncryptor),
-    _hashList(hashList),
-    _chunkReader(chunkReader),
-    _fileMetaEncryptor(metaEncryptor),
-    _plainfileSize(plainfileSize),
-    _encryptedFileSize(encryptedFileSize),
-    _version(version),
-    _fileInfo(fileInfo),
-    _fileMeta(fileMeta),
-    _fileEncKey(fileEncKey),
-    _server(server),
-    _plainChunkSize(chunkEncryptor->getPlainChunkSize()),
-    _encryptedChunkSize(chunkEncryptor->getEncryptedChunkSize()),
-    _pendingPlainfileSize(plainfileSize)
-{}
+)
+    : _chunkDataProvider(chunkDataProvider), _chunkEncryptor(chunkEncryptor), _hashList(hashList),
+      _chunkReader(chunkReader), _fileMetaEncryptor(metaEncryptor), _plainfileSize(plainfileSize),
+      _encryptedFileSize(encryptedFileSize), _version(version), _fileInfo(fileInfo), _fileMeta(fileMeta),
+      _fileEncKey(fileEncKey), _server(server), _plainChunkSize(chunkEncryptor->getPlainChunkSize()),
+      _encryptedChunkSize(chunkEncryptor->getEncryptedChunkSize()), _pendingPlainfileSize(plainfileSize) {}
 
 void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
     uint64_t numCommitted = _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
     // hasMidTruncate: truncate happened during the session but the file was later extended beyond it
     bool hasMidTruncate = _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
-    uint64_t clearStart = hasMidTruncate
-        ? (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize
-        : numCommitted;
+    uint64_t clearStart = hasMidTruncate ? (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize :
+                                           numCommitted;
 
     if (chunkIndex >= numCommitted || chunkIndex >= clearStart) {
         // Gap or cleared chunk — start with zeros
@@ -69,7 +57,8 @@ void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
             uint64_t offsetInChunk = _pendingTruncateBoundary % _plainChunkSize;
             if (chunkIndex == boundaryChunk && offsetInChunk > 0) {
                 auto& data = _dirtyChunks[chunkIndex];
-                if (data.size() > offsetInChunk) data.resize(offsetInChunk);
+                if (data.size() > offsetInChunk)
+                    data.resize(offsetInChunk);
                 data.resize(_plainChunkSize, '\0');
             }
         }
@@ -124,17 +113,19 @@ void FileHandler::truncate(uint64_t length) {
 }
 
 core::Buffer FileHandler::read(uint64_t offset, uint64_t size) {
-    if (offset >= _pendingPlainfileSize) return core::Buffer();
-    if (offset + size > _pendingPlainfileSize) size = _pendingPlainfileSize - offset;
-    if (size == 0) return core::Buffer();
+    if (offset >= _pendingPlainfileSize)
+        return core::Buffer();
+    if (offset + size > _pendingPlainfileSize)
+        size = _pendingPlainfileSize - offset;
+    if (size == 0)
+        return core::Buffer();
 
     std::string result(size, '\0');
     uint64_t numCommitted = _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
     // Chunks in [clearStart, numCommitted) were truncated away mid-session and must appear as zeros
     bool hasMidTruncate = _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
-    uint64_t clearStart = hasMidTruncate
-        ? (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize
-        : numCommitted;
+    uint64_t clearStart = hasMidTruncate ? (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize :
+                                           numCommitted;
     uint64_t startChunk = offset / _plainChunkSize;
     uint64_t endChunk = (offset + size - 1) / _plainChunkSize;
 
@@ -171,11 +162,15 @@ uint64_t FileHandler::getFileSize() {
     return _pendingPlainfileSize;
 }
 
-void FileHandler::updateOnServer(const std::vector<UpdateChunkData>& chunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate) {
-    auto operations = utils::TypedObjectFactory::createNewList<server::StoreFileRandomWriteOperation>();
+void FileHandler::updateOnServer(
+    const std::vector<UpdateChunkData>& chunks,
+    Poco::Dynamic::Var updatedMeta,
+    const std::string& encKeyId,
+    bool truncate
+) {
+    std::vector<server::StoreFileRandomWriteOperation> operations;
 
-    for (size_t i = 0; i < chunks.size(); ) {
-        // Merge consecutive chunks into a single contiguous operation
+    for (size_t i = 0; i < chunks.size();) {
         size_t j = i;
         std::string fileData = chunks[j].chunk.data;
         std::string checksumData = chunks[j].chunk.hmac;
@@ -190,31 +185,31 @@ void FileHandler::updateOnServer(const std::vector<UpdateChunkData>& chunks, Poc
 
         bool isLast = (j == chunks.size() - 1);
 
-        auto fileOp = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-        fileOp.type("file");
-        fileOp.pos(filePos);
-        fileOp.data(fileData);
-        fileOp.truncate(isLast ? truncate : false);
+        server::StoreFileRandomWriteOperation fileOp;
+        fileOp.type = "file";
+        fileOp.pos = static_cast<int64_t>(filePos);
+        fileOp.data = Pson::BinaryString(fileData);
+        fileOp.truncate = isLast ? truncate : false;
 
-        auto checksumOp = utils::TypedObjectFactory::createNewObject<server::StoreFileRandomWriteOperation>();
-        checksumOp.type("checksum");
-        checksumOp.pos(checksumPos);
-        checksumOp.data(checksumData);
-        checksumOp.truncate(isLast ? truncate : false);
+        server::StoreFileRandomWriteOperation checksumOp;
+        checksumOp.type = "checksum";
+        checksumOp.pos = static_cast<int64_t>(checksumPos);
+        checksumOp.data = Pson::BinaryString(checksumData);
+        checksumOp.truncate = isLast ? truncate : false;
 
-        operations.add(fileOp);
-        operations.add(checksumOp);
+        operations.push_back(std::move(fileOp));
+        operations.push_back(std::move(checksumOp));
 
         i = j + 1;
     }
 
-    auto writeRequest = utils::TypedObjectFactory::createNewObject<server::StoreFileWriteModelByOperations>();
-    writeRequest.fileId(_fileInfo.fileId);
-    writeRequest.operations(operations);
-    writeRequest.meta(updatedMeta);
-    writeRequest.keyId(encKeyId);
-    writeRequest.version(_version);
-    writeRequest.force(false);
+    server::StoreFileWriteModelByOperations writeRequest;
+    writeRequest.fileId = _fileInfo.fileId;
+    writeRequest.operations = std::move(operations);
+    writeRequest.meta = updatedMeta;
+    writeRequest.keyId = encKeyId;
+    writeRequest.version = _version;
+    writeRequest.force = false;
     _server->storeFileWrite(writeRequest);
     _version += 1;
 }
@@ -244,10 +239,12 @@ void FileHandler::flush() {
         }
     }
 
-    if (_dirtyChunks.empty() && _pendingPlainfileSize == _plainfileSize && !hasMidTruncate) return;
+    if (_dirtyChunks.empty() && _pendingPlainfileSize == _plainfileSize && !hasMidTruncate)
+        return;
 
     uint64_t numCommitted = _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
-    uint64_t numPending = _pendingPlainfileSize == 0 ? 0 : (_pendingPlainfileSize + _plainChunkSize - 1) / _plainChunkSize;
+    uint64_t numPending = _pendingPlainfileSize == 0 ? 0 :
+                                                       (_pendingPlainfileSize + _plainChunkSize - 1) / _plainChunkSize;
     uint64_t newEncryptedFileSize = _chunkEncryptor->getEncryptedFileSize(_pendingPlainfileSize);
 
     // Extension: when the file grows but the last committed chunk is partial, load it into
@@ -285,9 +282,9 @@ void FileHandler::flush() {
     std::vector<UpdateChunkData> chunksToUpdate;
     chunksToUpdate.reserve(toUpload.size());
     for (auto& [ci, plain] : toUpload) {
-        uint64_t expectedSize = (ci + 1) * _plainChunkSize <= _pendingPlainfileSize
-            ? _plainChunkSize
-            : (_pendingPlainfileSize > ci * _plainChunkSize ? _pendingPlainfileSize - ci * _plainChunkSize : 0);
+        uint64_t expectedSize = (ci + 1) * _plainChunkSize <= _pendingPlainfileSize ?
+            _plainChunkSize :
+            (_pendingPlainfileSize > ci * _plainChunkSize ? _pendingPlainfileSize - ci * _plainChunkSize : 0);
         std::string plainData = plain;
         plainData.resize(expectedSize, '\0');
 
@@ -297,14 +294,9 @@ void FileHandler::flush() {
         chunksToUpdate.push_back(UpdateChunkData{chunk, plainData, ci});
     }
 
-    store::FileMeta newFileMeta = {
-        _fileMeta.publicMeta,
-        _fileMeta.privateMeta,
-        privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::InternalStoreFileMeta>(
-            privmx::utils::Utils::jsonObjectDeepCopy(_fileMeta.internalFileMeta))
-    };
-    newFileMeta.internalFileMeta.hmac(utils::Base64::from(_hashList->getTopHash()));
-    newFileMeta.internalFileMeta.size(_pendingPlainfileSize);
+    store::FileMeta newFileMeta = _fileMeta;
+    newFileMeta.internalFileMeta.hmac = utils::Base64::from(_hashList->getTopHash());
+    newFileMeta.internalFileMeta.size = static_cast<int64_t>(_pendingPlainfileSize);
     auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, newFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
     try {
         updateOnServer(chunksToUpdate, newMeta, _fileEncKey.id, isTruncate);
@@ -327,15 +319,24 @@ void FileHandler::flush() {
     }
     _pendingTruncateBoundary = UINT64_MAX;
     _dirtyChunks.clear();
-    PRIVMX_DEBUG("FileHandler", "flush", "_plainfileSize: " + std::to_string(_plainfileSize) +
-        " | _encryptedFileSize: " + std::to_string(_encryptedFileSize));
+    PRIVMX_DEBUG(
+        "FileHandler", "flush",
+        "_plainfileSize: " +
+            std::to_string(_plainfileSize) +
+            " | _encryptedFileSize: " +
+            std::to_string(_encryptedFileSize)
+    );
 }
 
 void FileHandler::close() {
     flush();
 }
 
-void FileHandler::sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) {
+void FileHandler::sync(
+    const FileMeta& fileMeta,
+    const store::FileDecryptionParams& newParms,
+    const core::DecryptedEncKey& fileEncKey
+) {
     _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
     _chunkDataProvider->sync(_version, _encryptedFileSize);
     _chunkReader->sync(newParms);
@@ -348,7 +349,6 @@ void FileHandler::sync(const FileMeta& fileMeta, const store::FileDecryptionPara
     _dirtyChunks.clear();
     _pendingTruncateBoundary = UINT64_MAX;
 }
-
 
 FileHandlerImpl::FileHandlerImpl(std::shared_ptr<FileHandler> file) : _file(file) {}
 

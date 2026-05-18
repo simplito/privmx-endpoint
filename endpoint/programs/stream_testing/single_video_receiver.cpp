@@ -11,7 +11,6 @@
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/stream/StreamApi.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/Types.hpp>
@@ -150,6 +149,7 @@ public:
         }
     }
     virtual void OnData(std::shared_ptr<stream::Data> data) override {
+        
         if(data->type == stream::DataType::VIDEO) {
             auto videoData = std::dynamic_pointer_cast<stream::VideoData>(data);
             // selecting most active video track to render
@@ -162,9 +162,13 @@ public:
                 _renderer.OnFrame(videoData->w, videoData->h, videoData->frameData);
             }
             --_videoTrackC;
-        }
-        if(data->type == stream::DataType::AUDIO) {
+        } else if(data->type == stream::DataType::AUDIO) {
             auto audioData = std::dynamic_pointer_cast<stream::AudioData>(data);
+        } else if(data->type == stream::DataType::PLAIN) {
+            auto plainData = std::dynamic_pointer_cast<stream::PlainData>(data);
+            LOG_INFO("Recived plain data: ", plainData->data.stdString());
+        } else {
+            LOG_FATAL("DataType::UNKNOWN")
         }
     }
 private:
@@ -193,8 +197,8 @@ int main(int argc, char** argv) {
             privKey, 
             solutionId, 
             bridgeUrl
-        );    
-        event::EventApi eventApi = event::EventApi::create(connection);
+        );
+        auto eventApi = event::EventApi::create(connection);
         stream::StreamApi streamApi = stream::StreamApi::create(connection, eventApi);
         std::string streamRoomId;
         if(streamRoomIdOpt.has_value()) {
@@ -231,6 +235,7 @@ int main(int argc, char** argv) {
                 std::cout << "stream.metadata:" << (stream.metadata.has_value() ? stream.metadata.value() : "") << std::endl;
                 for(auto track : stream.tracks) {
                     std::cout << "stream.track[].mid:" << track.mid << std::endl;
+                    std::cout << "stream.track[].type:" << track.type << std::endl;
                     streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
                 }
                 break;
@@ -288,5 +293,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
 

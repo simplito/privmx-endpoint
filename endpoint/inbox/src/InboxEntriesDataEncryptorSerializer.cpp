@@ -11,30 +11,33 @@ limitations under the License.
 
 #include <string>
 
-#include <privmx/crypto/ecc/PublicKey.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/endpoint/inbox/InboxEntriesDataEncryptorSerializer.hpp>
 #include <privmx/crypto/CryptoPrivmx.hpp>
-#include <privmx/utils/BinaryBufferBE.hpp>
-#include <privmx/crypto/ecc/ECIES.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/crypto/ecc/ECIES.hpp>
+#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/inbox/InboxEntriesDataEncryptorSerializer.hpp>
+#include <privmx/utils/BinaryBufferBE.hpp>
 
 using namespace privmx;
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 inbox::InboxEntriesDataEncryptorSerializer::InboxEntriesDataEncryptorSerializer() {}
 
-std::string InboxEntriesDataEncryptorSerializer::packMessage(InboxEntrySendModel data, privmx::crypto::PrivateKey &userPriv, privmx::crypto::PublicKey &inboxPub) {
+std::string InboxEntriesDataEncryptorSerializer::packMessage(
+    InboxEntrySendModel data,
+    privmx::crypto::PrivateKey& userPriv,
+    privmx::crypto::PublicKey& inboxPub
+) {
     utils::BinaryBufferBE sendDataBuffer;
     sendDataBuffer.writeOneOctetLengthBuffer(data.publicData.userPubKey);
     sendDataBuffer.writeBool(data.publicData.keyPreset);
     sendDataBuffer.writeOneOctetLengthBuffer(data.publicData.usedInboxKeyId);
 
     utils::BinaryBufferBE dataSecuredBuffer;
-    auto filesMetaKeyBase64 {utils::Base64::from(data.privateData.filesMetaKey)};
+    auto filesMetaKeyBase64{utils::Base64::from(data.privateData.filesMetaKey)};
     dataSecuredBuffer.writeOneOctetLengthBuffer(filesMetaKeyBase64);
     dataSecuredBuffer.writeRaw(data.privateData.text);
 
@@ -42,9 +45,9 @@ std::string InboxEntriesDataEncryptorSerializer::packMessage(InboxEntrySendModel
     privmx::crypto::ECIES ecies(userPriv, inboxPub);
     auto cipher = ecies.encrypt(dataSecuredBuffer.str());
     auto cipherWithKey = std::string("e")
-            .append(userPriv.getPublicKey().toDER())
-            .append(inboxPub.toDER())
-            .append(cipher);
+                             .append(userPriv.getPublicKey().toDER())
+                             .append(inboxPub.toDER())
+                             .append(cipher);
 
     utils::BinaryBufferBE concatBuffer;
     concatBuffer.writeOneOctetLengthBuffer(sendDataBuffer.str());
@@ -52,7 +55,10 @@ std::string InboxEntriesDataEncryptorSerializer::packMessage(InboxEntrySendModel
     return utils::Base64::from(concatBuffer.str());
 }
 
-InboxEntryDataResult InboxEntriesDataEncryptorSerializer::unpackMessage(std::string &serializedBase64, privmx::crypto::PrivateKey &inboxPriv) {
+InboxEntryDataResult InboxEntriesDataEncryptorSerializer::unpackMessage(
+    std::string& serializedBase64,
+    privmx::crypto::PrivateKey& inboxPriv
+) {
     InboxEntryDataResult result;
     try {
         result.statusCode = 0;
@@ -79,17 +85,15 @@ InboxEntryDataResult InboxEntriesDataEncryptorSerializer::unpackMessage(std::str
 
         result.privateData = privateData;
         result.publicData = publicData;
-    }  catch (const privmx::endpoint::core::Exception& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
-    return result;   
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    return result;
 }
 
-InboxEntryPublicDataResult InboxEntriesDataEncryptorSerializer::unpackMessagePublicOnly(std::string &serializedBase64) {
+InboxEntryPublicDataResult InboxEntriesDataEncryptorSerializer::unpackMessagePublicOnly(std::string& serializedBase64) {
     InboxEntryPublicDataResult result;
     try {
         result.statusCode = 0;
@@ -102,12 +106,10 @@ InboxEntryPublicDataResult InboxEntriesDataEncryptorSerializer::unpackMessagePub
         publicDataBuffer.readBool(result.keyPreset);
         publicDataBuffer.readOneOctetLengthBuffer(result.usedInboxKeyId);
 
-    }  catch (const privmx::endpoint::core::Exception& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
-    return result;   
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    return result;
 }

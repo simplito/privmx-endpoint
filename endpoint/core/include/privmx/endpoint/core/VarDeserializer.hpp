@@ -19,10 +19,10 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/BufferVarHolderImpl.hpp"
+#include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/TypeValidator.hpp"
 #include "privmx/endpoint/core/Types.hpp"
-#include "privmx/endpoint/core/CoreException.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -63,7 +63,10 @@ inline std::optional<T> VarDeserializer::deserializeOptional(const Poco::Dynamic
 }
 
 template<typename T>
-inline std::optional<std::vector<T>> VarDeserializer::deserializeOptionalVector(const Poco::Dynamic::Var& val, const std::string& name) {
+inline std::optional<std::vector<T>> VarDeserializer::deserializeOptionalVector(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
     if (val.isEmpty()) {
         return std::nullopt;
     }
@@ -94,7 +97,10 @@ template<>
 bool VarDeserializer::deserialize<bool>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
-Poco::JSON::Object::Ptr VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& val, const std::string& name);
+Poco::JSON::Object::Ptr VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
 template<>
 UserWithPubKey VarDeserializer::deserialize<UserWithPubKey>(const Poco::Dynamic::Var& val, const std::string& name);
@@ -103,22 +109,31 @@ template<>
 PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
-ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutItem>(const Poco::Dynamic::Var& val, const std::string& name);
+ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutItem>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
 template<>
 ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
-PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name);
+PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
 template<>
 core::EventType VarDeserializer::deserialize<core::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
-core::EventSelectorType VarDeserializer::deserialize<core::EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name);
+core::EventSelectorType VarDeserializer::deserialize<core::EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_VARDESERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_VARDESERIALIZER_HPP_

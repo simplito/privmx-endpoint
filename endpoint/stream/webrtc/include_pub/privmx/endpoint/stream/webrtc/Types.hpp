@@ -14,6 +14,7 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
+#include <functional>
 
 namespace privmx {
 namespace endpoint {
@@ -24,7 +25,7 @@ enum DeviceType {
     Video = 1,
     Desktop_Screen = 2,
     Desktop_Window = 3,
-    Raw = 4
+    Plain = 4
 };
 
 enum DesktopType {
@@ -42,7 +43,6 @@ struct AudioDevice : public MediaDevice {};
 struct VideoDevice : public MediaDevice {};
 struct DesktopDevice : public MediaDevice {
     std::vector<unsigned char> thumbnail;
-    
 };
 
 struct MediaTrackConstrains {
@@ -57,10 +57,8 @@ struct MediaTrack {
     std::function<void(bool)> setEnabled;
 };
 
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_WEBRTC_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_WEBRTC_TYPES_HPP_

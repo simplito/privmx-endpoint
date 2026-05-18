@@ -23,8 +23,6 @@
 #include <privmx/endpoint/core/Events.hpp>
 #include <privmx/endpoint/core/EventQueue.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
-#include <privmx/endpoint/event/EventApi.hpp>
-#include <privmx/endpoint/event/Events.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/Events.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>

@@ -9,28 +9,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/core/varinterface/UtilsVarInterface.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/varinterface/UtilsVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 std::map<UtilsVarInterface::METHOD, Poco::Dynamic::Var (UtilsVarInterface::*)(const Poco::Dynamic::Var&)>
-    UtilsVarInterface::methodMap = {{EncodeHex, &UtilsVarInterface::encodeHex},
-                                    {DecodeHex, &UtilsVarInterface::decodeHex},
-                                    {IsHex, &UtilsVarInterface::isHex},
-                                    {EncodeBase32, &UtilsVarInterface::encodeBase32},
-                                    {DecodeBase32, &UtilsVarInterface::decodeBase32},
-                                    {IsBase32, &UtilsVarInterface::isBase32},
-                                    {EncodeBase64, &UtilsVarInterface::encodeBase64},
-                                    {DecodeBase64, &UtilsVarInterface::decodeBase64},
-                                    {IsBase64, &UtilsVarInterface::isBase64},
-                                    {Trim, &UtilsVarInterface::trim},
-                                    {Split, &UtilsVarInterface::split},
-                                    {Ltrim, &UtilsVarInterface::ltrim},
-                                    {Rtrim, &UtilsVarInterface::rtrim}};
-
+    UtilsVarInterface::methodMap = {
+        {EncodeHex, &UtilsVarInterface::encodeHex},
+        {DecodeHex, &UtilsVarInterface::decodeHex},
+        {IsHex, &UtilsVarInterface::isHex},
+        {EncodeBase32, &UtilsVarInterface::encodeBase32},
+        {DecodeBase32, &UtilsVarInterface::decodeBase32},
+        {IsBase32, &UtilsVarInterface::isBase32},
+        {EncodeBase64, &UtilsVarInterface::encodeBase64},
+        {DecodeBase64, &UtilsVarInterface::decodeBase64},
+        {IsBase64, &UtilsVarInterface::isBase64},
+        {Trim, &UtilsVarInterface::trim},
+        {Split, &UtilsVarInterface::split},
+        {Ltrim, &UtilsVarInterface::ltrim},
+        {Rtrim, &UtilsVarInterface::rtrim}
+};
 
 Poco::Dynamic::Var UtilsVarInterface::encodeHex(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);

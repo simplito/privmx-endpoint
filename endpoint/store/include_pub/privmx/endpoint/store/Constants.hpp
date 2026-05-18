@@ -12,7 +12,6 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CONSTANTS_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CONSTANTS_HPP_
 
-
 #include <cstdint>
 
 namespace privmx {
@@ -20,30 +19,27 @@ namespace endpoint {
 namespace store {
 
 namespace StoreDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1,
-      VERSION_4 = 4,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1,
+    VERSION_4 = 4,
+    VERSION_5 = 5
+};
+} // namespace StoreDataSchema
 constexpr static StoreDataSchema::Version CURRENT_STORE_DATA_SCHEMA_VERSION = StoreDataSchema::Version::VERSION_5;
 
 namespace FileDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1,
-      VERSION_4 = 4,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1,
+    VERSION_4 = 4,
+    VERSION_5 = 5
+};
+} // namespace FileDataSchema
 constexpr static FileDataSchema::Version CURRENT_FILE_DATA_SCHEMA_VERSION = FileDataSchema::Version::VERSION_5;
 
-}  // namespace store
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
-
-
-#endif  // #define _PRIVMXLIB_ENDPOINT_STORE_CONSTANTS_HPP_
-
+#endif // #define _PRIVMXLIB_ENDPOINT_STORE_CONSTANTS_HPP_

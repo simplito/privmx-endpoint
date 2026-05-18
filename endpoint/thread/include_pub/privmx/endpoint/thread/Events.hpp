@@ -10,7 +10,7 @@ namespace endpoint {
 namespace thread {
 
 struct ThreadDeletedEventData {
-    
+
     /**
      * Thread ID
      */
@@ -36,7 +36,7 @@ struct ThreadDeletedMessageEventData {
 /**
  * Holds Thread statistical data.
  */
-struct  ThreadStatsEventData {
+struct ThreadStatsEventData {
 
     /**
      * Thread ID
@@ -75,7 +75,7 @@ struct ThreadCreatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * all available Thread information
      */
@@ -86,7 +86,7 @@ struct ThreadCreatedEvent : public core::Event {
  * Holds data of event that arrives when Thread is updated.
  */
 struct ThreadUpdatedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -103,7 +103,7 @@ struct ThreadUpdatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * all available Thread information
      */
@@ -114,7 +114,7 @@ struct ThreadUpdatedEvent : public core::Event {
  * Holds data of event that arrives when Thread is deleted.
  */
 struct ThreadDeletedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -131,7 +131,7 @@ struct ThreadDeletedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -142,7 +142,7 @@ struct ThreadDeletedEvent : public core::Event {
  * Holds data of event that arrives when Thread message is created.
  */
 struct ThreadNewMessageEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -159,7 +159,7 @@ struct ThreadNewMessageEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * detailed information about Message
      */
@@ -170,7 +170,7 @@ struct ThreadNewMessageEvent : public core::Event {
  * Holds data of event that arrives when Thread message is updated.
  */
 struct ThreadMessageUpdatedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -187,7 +187,7 @@ struct ThreadMessageUpdatedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * detailed information about Message
      */
@@ -198,7 +198,7 @@ struct ThreadMessageUpdatedEvent : public core::Event {
  * Holds data of event that arrives when Thread message is deleted.
  */
 struct ThreadMessageDeletedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -215,7 +215,7 @@ struct ThreadMessageDeletedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -226,7 +226,7 @@ struct ThreadMessageDeletedEvent : public core::Event {
  * Holds data of event that arrives when Thread stats change.
  */
 struct ThreadStatsChangedEvent : public core::Event {
-    
+
     /**
      * Event constructor
      */
@@ -243,7 +243,7 @@ struct ThreadStatsChangedEvent : public core::Event {
      * //doc-gen:ignore
      */
     std::shared_ptr<core::SerializedEvent> serialize() const override;
-    
+
     /**
      * event data
      */
@@ -255,7 +255,6 @@ struct ThreadStatsChangedEvent : public core::Event {
  */
 class Events {
 public:
-
     /**
      * Checks whether event held in the 'EventHolder' is an 'ThreadCreatedEvent' 
      * 
@@ -380,8 +379,8 @@ public:
     static ThreadMessageDeletedEvent extractThreadMessageDeletedEvent(const core::EventHolder& eventHolder);
 };
 
-}  // namespace thread
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
 #endif

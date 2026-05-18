@@ -12,7 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
 
-#include <functional>
+#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
+#include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include <memory>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -20,8 +21,6 @@ limitations under the License.
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <string>
 #include <vector>
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
-#include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -34,12 +33,11 @@ class StreamApiImpl;
  */
 class StreamApi {
 public:
-
     /**
      * Creates an instance of 'StreamApi'.
      *
      * @param connection instance of 'Connection'
-     * @param eventApi instance of 'EventApi'
+     * @param eventApi (deprecated) instance of 'EventApi'
      *
      * @return StreamApi object
      */
@@ -64,10 +62,10 @@ public:
      * @return created Stream Room ID
      */
     std::string createStreamRoom(
-        const std::string& contextId, 
-        const std::vector<core::UserWithPubKey>& users, 
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta, 
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies
     );
@@ -87,14 +85,14 @@ public:
      * @param policies Stream Room's policies (pass std::nullopt to keep current/defaults)
      */
     void updateStreamRoom(
-        const std::string& streamRoomId, 
-        const std::vector<core::UserWithPubKey>& users, 
-        const std::vector<core::UserWithPubKey>&managers,
-        const core::Buffer& publicMeta, 
-        const core::Buffer& privateMeta, 
-        const int64_t version, 
-        const bool force, 
-        const bool forceGenerateNewKey, 
+        const std::string& streamRoomId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies
     );
 
@@ -148,7 +146,11 @@ public:
      *
      * @return subscription query string
      */
-    std::string buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
 
     /**
      * Gets a list of currently published streams in given Stream Room.
@@ -228,7 +230,11 @@ public:
      * @param mediaTrackConstrains capture constraints (resolution/fps)
      * @return MediaTrack helper allowing to enable/disable the track
      */
-    MediaTrack addTrack(const StreamHandle& streamHandle, const MediaDevice& track, const MediaTrackConstrains& mediaTrackConstrains);
+    MediaTrack addTrack(
+        const StreamHandle& streamHandle,
+        const MediaDevice& track,
+        const MediaTrackConstrains& mediaTrackConstrains
+    );
 
     /**
      * Removes a previously added media track from a Stream handle.
@@ -268,7 +274,10 @@ public:
      * @param streamRoomId ID of the Stream Room
      * @param subscriptions list of remote streams/tracks to subscribe to
      */
-    void subscribeToRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptions);
+    void subscribeToRemoteStreams(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptions
+    );
 
     /**
      * Modifies current remote streams subscriptions.
@@ -277,7 +286,11 @@ public:
      * @param subscriptionsToAdd list of subscriptions to add
      * @param subscriptionsToRemove list of subscriptions to remove
      */
-    void modifyRemoteStreamsSubscriptions(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToAdd, const std::vector<StreamSubscription>& subscriptionsToRemove);
+    void modifyRemoteStreamsSubscriptions(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptionsToAdd,
+        const std::vector<StreamSubscription>& subscriptionsToRemove
+    );
 
     /**
      * Unsubscribes from selected remote streams (and optionally specific tracks) in the Stream Room.
@@ -285,7 +298,10 @@ public:
      * @param streamRoomId ID of the Stream Room
      * @param subscriptionsToRemove list of subscriptions to remove
      */
-    void unsubscribeFromRemoteStreams(const std::string& streamRoomId, const std::vector<StreamSubscription>& subscriptionsToRemove);
+    void unsubscribeFromRemoteStreams(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptionsToRemove
+    );
 
     /**
      * Configures whether to drop encrypted frames that cannot be decrypted.
@@ -302,7 +318,19 @@ public:
      * @param streamId optional remote stream ID to filter events (std::nullopt for all streams)
      * @param onTrack listener implementation
      */
-    void addRemoteStreamListener(const std::string& streamRoomId, std::optional<int64_t> streamId, std::shared_ptr<OnTrackInterface> onTrack);
+    void addRemoteStreamListener(
+        const std::string& streamRoomId,
+        std::optional<int64_t> streamId,
+        std::shared_ptr<OnTrackInterface> onTrack
+    );
+
+    /**
+     * Send binary data by Track::Raw
+     *
+     * @param streamHandle handle returned by createStream
+     * @param data data to send
+     */
+    void sendData(const StreamHandle& streamHandle, core::Buffer data);
 
     /**
      * //doc-gen:ignore
@@ -315,8 +343,8 @@ private:
     std::shared_ptr<StreamApiImpl> _impl;
 };
 
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_HPP_

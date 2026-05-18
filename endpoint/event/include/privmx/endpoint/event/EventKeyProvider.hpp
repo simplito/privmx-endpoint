@@ -12,16 +12,16 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_EVENT_EVENTKEYPROVIDER_HPP_
 #define _PRIVMXLIB_ENDPOINT_EVENT_EVENTKEYPROVIDER_HPP_
 
+#include "privmx/endpoint/event/EventTypes.hpp"
+#include "privmx/endpoint/event/ServerTypes.hpp"
+#include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
-#include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/endpoint/core/Connection.hpp>
-#include "privmx/endpoint/event/ServerTypes.hpp"
-#include "privmx/endpoint/event/EventTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -32,16 +32,17 @@ public:
     EventKeyProvider(const privmx::crypto::PrivateKey& key);
     std::string generateKey();
     DecryptedEventEncKeyV1 decryptKey(const std::string& encryptedKey, const privmx::crypto::PublicKey& authorPubKey);
-    utils::List<server::UserKey> prepareKeysList(
-        const std::vector<core::UserWithPubKey>& users, 
+    std::vector<server::UserKey> prepareKeysList(
+        const std::vector<core::UserWithPubKey>& users,
         const std::string& key
     );
+
 private:
     privmx::crypto::PrivateKey _key;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_EVENTKEYPROVIDER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_EVENTKEYPROVIDER_HPP_

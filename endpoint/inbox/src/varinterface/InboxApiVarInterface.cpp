@@ -18,27 +18,29 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
 std::map<InboxApiVarInterface::METHOD, Poco::Dynamic::Var (InboxApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    InboxApiVarInterface::methodMap = {{Create, &InboxApiVarInterface::create},
-                                       {CreateInbox, &InboxApiVarInterface::createInbox},
-                                       {UpdateInbox, &InboxApiVarInterface::updateInbox},
-                                       {GetInbox, &InboxApiVarInterface::getInbox},
-                                       {ListInboxes, &InboxApiVarInterface::listInboxes},
-                                       {GetInboxPublicView, &InboxApiVarInterface::getInboxPublicView},
-                                       {DeleteInbox, &InboxApiVarInterface::deleteInbox},
-                                       {PrepareEntry, &InboxApiVarInterface::prepareEntry},
-                                       {SendEntry, &InboxApiVarInterface::sendEntry},
-                                       {ReadEntry, &InboxApiVarInterface::readEntry},
-                                       {ListEntries, &InboxApiVarInterface::listEntries},
-                                       {DeleteEntry, &InboxApiVarInterface::deleteEntry},
-                                       {CreateFileHandle, &InboxApiVarInterface::createFileHandle},
-                                       {WriteToFile, &InboxApiVarInterface::writeToFile},
-                                       {OpenFile, &InboxApiVarInterface::openFile},
-                                       {ReadFromFile, &InboxApiVarInterface::readFromFile},
-                                       {SeekInFile, &InboxApiVarInterface::seekInFile},
-                                       {CloseFile, &InboxApiVarInterface::closeFile},
-                                       {SubscribeFor, &InboxApiVarInterface::subscribeFor},
-                                       {UnsubscribeFrom, &InboxApiVarInterface::unsubscribeFrom},
-                                       {BuildSubscriptionQuery, &InboxApiVarInterface::buildSubscriptionQuery}};
+    InboxApiVarInterface::methodMap = {
+        {Create, &InboxApiVarInterface::create},
+        {CreateInbox, &InboxApiVarInterface::createInbox},
+        {UpdateInbox, &InboxApiVarInterface::updateInbox},
+        {GetInbox, &InboxApiVarInterface::getInbox},
+        {ListInboxes, &InboxApiVarInterface::listInboxes},
+        {GetInboxPublicView, &InboxApiVarInterface::getInboxPublicView},
+        {DeleteInbox, &InboxApiVarInterface::deleteInbox},
+        {PrepareEntry, &InboxApiVarInterface::prepareEntry},
+        {SendEntry, &InboxApiVarInterface::sendEntry},
+        {ReadEntry, &InboxApiVarInterface::readEntry},
+        {ListEntries, &InboxApiVarInterface::listEntries},
+        {DeleteEntry, &InboxApiVarInterface::deleteEntry},
+        {CreateFileHandle, &InboxApiVarInterface::createFileHandle},
+        {WriteToFile, &InboxApiVarInterface::writeToFile},
+        {OpenFile, &InboxApiVarInterface::openFile},
+        {ReadFromFile, &InboxApiVarInterface::readFromFile},
+        {SeekInFile, &InboxApiVarInterface::seekInFile},
+        {CloseFile, &InboxApiVarInterface::closeFile},
+        {SubscribeFor, &InboxApiVarInterface::subscribeFor},
+        {UnsubscribeFrom, &InboxApiVarInterface::unsubscribeFrom},
+        {BuildSubscriptionQuery, &InboxApiVarInterface::buildSubscriptionQuery}
+};
 
 Poco::Dynamic::Var InboxApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -71,8 +73,9 @@ Poco::Dynamic::Var InboxApiVarInterface::updateInbox(const Poco::Dynamic::Var& a
     auto force = _deserializer.deserialize<bool>(argsArr->get(7), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(8), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(9), "policies");
-    _inboxApi.updateInbox(inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force,
-                          forceGenerateNewKey, policies);
+    _inboxApi.updateInbox(
+        inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force, forceGenerateNewKey, policies
+    );
     return {};
 }
 

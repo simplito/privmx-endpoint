@@ -15,7 +15,6 @@ limitations under the License.
 
 using namespace privmx::endpoint::crypto;
 
-
 ExtKey ExtKey::fromSeed(const core::Buffer& seed) {
     try {
         return ExtKey(privmx::crypto::ExtKey::fromSeed(seed.stdString()));
@@ -47,7 +46,7 @@ ExtKey::ExtKey() {}
 
 ExtKey::ExtKey(const privmx::crypto::ExtKey& impl) : _impl(std::make_shared<privmx::crypto::ExtKey>(impl)) {}
 
-// ExtKey::ExtKey(const std::string& key, const std::string& chain_code, bool private_key) 
+// ExtKey::ExtKey(const std::string& key, const std::string& chain_code, bool private_key)
 //     : _impl(std::make_shared<privmx::crypto::ExtKey>(key, chain_code, private_key)) {}
 
 // ExtKey::ExtKey(const std::string& key, const std::string& chain_code, bool private_key, uint8_t depth, uint32_t parent_fingerprint, uint32_t index)
@@ -134,7 +133,10 @@ privmx::endpoint::core::Buffer ExtKey::getChainCode() const {
     }
 }
 
-bool ExtKey::verifyCompactSignatureWithHash(const privmx::endpoint::core::Buffer& message, const privmx::endpoint::core::Buffer& signature) const {
+bool ExtKey::verifyCompactSignatureWithHash(
+    const privmx::endpoint::core::Buffer& message,
+    const privmx::endpoint::core::Buffer& signature
+) const {
     try {
         return _impl->verifyCompactSignatureWithHash(message.stdString(), signature.stdString());
     } catch (const privmx::utils::PrivmxException& e) {
@@ -151,4 +153,3 @@ bool ExtKey::isPrivate() const {
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-

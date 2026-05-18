@@ -12,32 +12,31 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_EXT_EXCEPTION_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_EXT_EXCEPTION_HPP_
 
-
 #include "privmx/endpoint/core/Exception.hpp"
 
-#define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                            \
-    class NAME : public privmx::endpoint::core::Exception {                                                      \
-    public:                                                                                                      \
-        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                           \
-        NAME(const std::string& msg, const std::string& name, unsigned int code)                                 \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}         \
-        NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description) \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, description) {}           \
-        void rethrow() const override;                                                                           \
-    };                                                                                                           \
-    inline void NAME::rethrow() const {                                                                          \
-        throw *this;                                                                                             \
+#define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                                  \
+    class NAME : public privmx::endpoint::core::Exception {                                                            \
+    public:                                                                                                            \
+        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
+        NAME(const std::string& msg, const std::string& name, unsigned int code)                                       \
+            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}               \
+        NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description)       \
+            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, description) {}                 \
+        void rethrow() const override;                                                                                 \
+    };                                                                                                                 \
+    inline void NAME::rethrow() const {                                                                                \
+        throw *this;                                                                                                   \
     };
 
-#define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                            \
-    class NAME : public BASE_SCOPED {                                                                            \
-    public:                                                                                                      \
-        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                \
-        NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}       \
-        void rethrow() const override;                                                                           \
-    };                                                                                                           \
-    inline void NAME::rethrow() const {                                                                          \
-        throw *this;                                                                                             \
+#define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                                  \
+    class NAME : public BASE_SCOPED {                                                                                  \
+    public:                                                                                                            \
+        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
+        NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}             \
+        void rethrow() const override;                                                                                 \
+    };                                                                                                                 \
+    inline void NAME::rethrow() const {                                                                                \
+        throw *this;                                                                                                   \
     };
 
 namespace privmx {
@@ -45,7 +44,7 @@ namespace endpoint {
 namespace stream {
 
 #define ENDPOINT_STREAM_EXCEPTION_CODE 0x00080000
-
+// clang-format off
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStreamException, "Unknown endpoint stream exception", "StreamRoom", 0x0008)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotImplementedException, "Not Implemented", 0x0002)
@@ -81,13 +80,24 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionNotInitialized
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomConnectionNotInitialized, "StreamRoom connection not initialized", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotInitialized, "StreamHandle not initialized", 0x0021)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamIsPublished, "Stream is published", 0x0022)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamAlreadyPublishedException, "Stream is already published", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUpdatedEventException, "Cannot extract StreamUpdatedEvent", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NullCallbackException, "Callback must not be null", 0x0024)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownTypeException, "Unknown type encountered", 0x0025)
-} // stream
-} // endpoint
-} // privmx
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, ThereCanBeOnlyOneDataTrackException, "There can be only one dataTrack per user in StreamRoom", 0x0026)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, DataTrackNotInitializedException, "Data track not initialized", 0x0027);
+
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NoStreamEncryptionKeyException, "No stream encryption key", 0x0028);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NoStreamDecryptionKeyException, "No stream decryption key", 0x0029);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidEncryptionKeyIdLengthException, "Invalid encryption key id length", 0x002A);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidMessageHeaderLengthException, "Invalid message header length", 0x002B);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnsupportedMessageFormatVersionException, "Unsupported message format version length", 0x002C);
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadyJoinedStreamRoomException, "StreamRoom already joined", 0x002D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E)
+// clang-format on
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #undef DECLARE_SCOPE_ENDPOINT_EXCEPTION
 #undef DECLARE_ENDPOINT_EXCEPTION

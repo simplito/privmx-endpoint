@@ -14,13 +14,10 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <functional>
-#include <memory>
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
-
 
 using StreamHandle = int64_t; // can be everything that is DTO
 using RemoteStreamId = int64_t;
@@ -67,28 +64,12 @@ struct SdpWithTypeModel {
     std::string type;
 };
 
-struct SdpWithRoomModel {
-    std::string roomId;
-    std::string sdp;
-    std::string type;
-};
-
-struct UpdateSessionIdModel {
-    std::string streamRoomId;
-    std::string connectionType;
-    int64_t sessionId;
-};
-
-struct RoomModel {
-    std::string roomId;
-};
-
 struct StreamSubscription {
     int64_t streamId;
     std::optional<std::string> streamTrackId;
 };
 
-enum EventType: int64_t {
+enum EventType : int64_t {
     STREAMROOM_CREATE = 0,
     STREAMROOM_UPDATE = 1,
     STREAMROOM_DELETE = 2,
@@ -98,18 +79,11 @@ enum EventType: int64_t {
     STREAM_UNPUBLISH = 7,
 };
 
-enum EventSelectorType: int64_t {
+enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
     STREAMROOM_ID = 1,
     STREAM_ID = 2,
 };
-
-// struct VideoRoomStreamTrack {
-//     std::string type;
-//     std::string codec;
-//     std::string mid;
-//     int64_t mindex;
-// };
 
 struct StreamTrackInfo {
     std::string type;                       // "audio" | "video" | "data"
@@ -124,12 +98,12 @@ struct StreamTrackInfo {
 };
 
 struct StreamInfo {
-    int64_t id;                             // unikalny ID wydawcy
-    std::string userId;                     // nazwa użytkownika
-    std::optional<std::string> metadata;    // metadane jako tekst JSON
-    std::optional<bool> dummy;              // czy to publisher-dummy
-    std::vector<StreamTrackInfo> tracks;    // lista trackow
-    std::optional<bool> talking;            // deprecated
+    int64_t id;                          // unikalny ID wydawcy
+    std::string userId;                  // nazwa użytkownika
+    std::optional<std::string> metadata; // metadane jako tekst JSON
+    std::optional<bool> dummy;           // czy to publisher-dummy
+    std::vector<StreamTrackInfo> tracks; // lista trackow
+    std::optional<bool> talking;         // deprecated
 };
 
 struct StreamTrackModificationPair {
@@ -183,8 +157,8 @@ struct UpdatedStreamData {
     bool active;
     std::string type;
     std::optional<std::string> codec;
-    std::optional<int64_t> streamId; // feed_id
-    std::optional<std::string> streamMid; // feed_mid
+    std::optional<int64_t> streamId;           // feed_id
+    std::optional<std::string> streamMid;      // feed_mid
     std::optional<std::string> stream_display; // feed_display
     int64_t mindex;
     std::string mid;
@@ -203,18 +177,22 @@ struct StreamsUpdatedData {
     std::vector<UpdatedStreamData> streams;
 };
 
-enum struct StreamEncryptionMode {
-    SINGLE_KEY,
-    MULTIPLE_KEY,
-};
-
 struct RecordingEncKey {
     core::Buffer id;
     core::Buffer key;
 };
 
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
+struct DataChannelMessage {
+    core::Buffer data;
+    int64_t seq;
+};
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_TYPES_HPP_
+struct DecryptedDataChannelMessage : public DataChannelMessage {
+    int64_t statusCode;
+};
+
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
+
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_TYPES_HPP_

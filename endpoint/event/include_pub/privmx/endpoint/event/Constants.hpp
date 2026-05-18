@@ -19,17 +19,16 @@ namespace endpoint {
 namespace event {
 
 namespace EventDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1,
+    VERSION_5 = 5
+};
+} // namespace EventDataSchema
 constexpr static EventDataSchema::Version CURRENT_EVENT_DATA_SCHEMA_VERSION = EventDataSchema::Version::VERSION_5;
 
-}  // namespace kvdb
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // #define _PRIVMXLIB_ENDPOINT_EVENT_CONSTANTS_HPP_
-
+#endif // #define _PRIVMXLIB_ENDPOINT_EVENT_CONSTANTS_HPP_

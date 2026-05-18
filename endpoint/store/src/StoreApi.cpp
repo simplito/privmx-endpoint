@@ -9,10 +9,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/store/StoreException.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
+#include <privmx/endpoint/store/StoreException.hpp>
 
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
@@ -22,12 +22,12 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
 StoreApi::StoreApi() {};
-StoreApi::StoreApi(const StoreApi& obj): ExtendedPointer(obj) {};
+StoreApi::StoreApi(const StoreApi& obj) : ExtendedPointer(obj) {};
 StoreApi& StoreApi::operator=(const StoreApi& obj) {
     this->ExtendedPointer::operator=(obj);
     return *this;
 };
-StoreApi::StoreApi(StoreApi&& obj): ExtendedPointer(std::move(obj)) {};
+StoreApi::StoreApi(StoreApi&& obj) : ExtendedPointer(std::move(obj)) {};
 StoreApi::~StoreApi() {}
 
 StoreApi StoreApi::create(core::Connection& connection) {
@@ -36,15 +36,9 @@ StoreApi StoreApi::create(core::Connection& connection) {
         std::shared_ptr<ServerApi> serverApi(new ServerApi(connectionImpl->getGateway()));
         std::shared_ptr<RequestApi> requestApi(new RequestApi(connectionImpl->getGateway()));
         std::shared_ptr<StoreApiImpl> impl(new StoreApiImpl(
-            connectionImpl->getKeyProvider(),
-            serverApi,
-            connectionImpl->getHost(),
-            connectionImpl->getUserPrivKey(),
-            requestApi,
-            std::shared_ptr<FileDataProvider>(new FileDataProvider(serverApi)),
-            connectionImpl->getEventMiddleware(),
-            connectionImpl->getHandleManager(),
-            connection,
+            connectionImpl->getKeyProvider(), serverApi, connectionImpl->getHost(), connectionImpl->getUserPrivKey(),
+            requestApi, std::shared_ptr<FileDataProvider>(new FileDataProvider(serverApi)),
+            connectionImpl->getEventMiddleware(), connectionImpl->getHandleManager(), connection,
             connectionImpl->getServerConfig().requestChunkSize
         ));
         impl->attach(impl);
@@ -57,9 +51,14 @@ StoreApi StoreApi::create(core::Connection& connection) {
 
 StoreApi::StoreApi(const std::shared_ptr<StoreApiImpl>& impl) : ExtendedPointer(impl) {}
 
-std::string StoreApi::createStore(const std::string& contextId, const std::vector<core::UserWithPubKey>& users, const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies) {
+std::string StoreApi::createStore(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
+) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
@@ -73,29 +72,29 @@ std::string StoreApi::createStore(const std::string& contextId, const std::vecto
 }
 
 void StoreApi::updateStore(
-    const std::string& storeId, 
-    const std::vector<core::UserWithPubKey>& users, 
-    const std::vector<core::UserWithPubKey>& managers, 
+    const std::string& storeId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const int64_t version, 
-    const bool force, 
+    const int64_t version,
+    const bool force,
     const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies
-)
-{
+) {
     auto impl = getImpl();
     core::Validator::validateId(storeId, "field:storeId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        impl->updateStore(storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+        impl->updateStore(
+            storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        );
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-
 
 void StoreApi::deleteStore(const std::string& storeId) {
     auto impl = getImpl();
@@ -142,7 +141,13 @@ void StoreApi::deleteFile(const std::string& fileId) {
     }
 }
 
-int64_t StoreApi::createFile(const std::string& storeId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size, bool randomWriteSupport) {
+int64_t StoreApi::createFile(
+    const std::string& storeId,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const int64_t size,
+    bool randomWriteSupport
+) {
     auto impl = getImpl();
     core::Validator::validateId(storeId, "field:storeId ");
     core::Validator::validateNumberNonNegative(size, "field:size ");
@@ -154,7 +159,12 @@ int64_t StoreApi::createFile(const std::string& storeId, const core::Buffer& pub
     }
 }
 
-int64_t StoreApi::updateFile(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta, const int64_t size) {
+int64_t StoreApi::updateFile(
+    const std::string& fileId,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const int64_t size
+) {
     auto impl = getImpl();
     core::Validator::validateId(fileId, "field:fileId ");
     core::Validator::validateNumberNonNegative(size, "field:size ");
@@ -242,7 +252,11 @@ core::PagingList<File> StoreApi::listFiles(const std::string& storeId, const cor
     }
 }
 
-void StoreApi::updateFileMeta(const std::string& fileId, const core::Buffer& publicMeta, const core::Buffer& privateMeta) {
+void StoreApi::updateFileMeta(
+    const std::string& fileId,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta
+) {
     auto impl = getImpl();
     core::Validator::validateId(fileId, "field:fileId ");
     try {
@@ -303,7 +317,11 @@ void StoreApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) 
     }
 }
 
-std::string StoreApi::buildSubscriptionQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId) {
+std::string StoreApi::buildSubscriptionQuery(
+    EventType eventType,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
     auto impl = getImpl();
     try {
         return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);

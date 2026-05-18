@@ -12,14 +12,14 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_
 
+#include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Types.hpp"
+#include <Poco/Dynamic/Var.h>
 #include <optional>
+#include <privmx/crypto/ecc/PublicKey.hpp>
 #include <string>
 #include <unordered_map>
-#include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PublicKey.hpp>
-#include "privmx/endpoint/core/Buffer.hpp"
-#include "privmx/endpoint/core/Types.hpp"
-#include "privmx/endpoint/core/ServerTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -57,7 +57,7 @@ struct ExpandedDataIntegrityObject : public DataIntegrityObject {
 struct EncKeyLocation {
     std::string contextId;
     std::string resourceId;
-    bool operator==(const EncKeyLocation &other) const {
+    bool operator==(const EncKeyLocation& other) const {
         return (contextId == other.contextId && resourceId == other.resourceId);
     }
 };
@@ -89,25 +89,24 @@ struct NotificationEvent {
 };
 
 struct ModuleKeys {
-        privmx::utils::List<server::KeyEntry> keys;
-        std::string currentKeyId;
-        int64_t moduleSchemaVersion;
-        std::string moduleResourceId;
-        std::string contextId;
-    };
+    std::vector<server::KeyEntry> keys;
+    std::string currentKeyId;
+    int64_t moduleSchemaVersion;
+    std::string moduleResourceId;
+    std::string contextId;
+};
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 template<>
 struct std::hash<privmx::endpoint::core::EncKeyLocation> {
-    std::size_t operator()(const privmx::endpoint::core::EncKeyLocation& encKeyLocation) const noexcept
-    {
+    std::size_t operator()(const privmx::endpoint::core::EncKeyLocation& encKeyLocation) const noexcept {
         std::size_t h1 = std::hash<std::string>{}(encKeyLocation.contextId);
         std::size_t h2 = std::hash<std::string>{}(encKeyLocation.resourceId);
         return h1 ^ (h2 << 1);
     }
 };
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_

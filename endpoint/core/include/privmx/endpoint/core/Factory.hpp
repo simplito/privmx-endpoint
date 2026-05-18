@@ -12,11 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_FACTORY_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_FACTORY_HPP_
 
-#include <string>
-#include "privmx/utils/Utils.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/utils/Utils.hpp"
 #include <Poco/JSON/Object.h>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -28,24 +28,29 @@ public:
     static Poco::Dynamic::Var createPolicyServerObject(const ContainerPolicyWithoutItem& policy);
     static ContainerPolicy parsePolicyServerObject(const Poco::Dynamic::Var& serverPolicyObject);
     static ContainerPolicyWithoutItem parsePolicyServerObjectWithoutItem(const Poco::Dynamic::Var& serverPolicyObject);
+
 private:
     template<typename T>
-    inline static std::optional<T> getValueOrNullopt(const Poco::JSON::Object::Ptr policyJsonObj, const std::string& key);
+    inline static std::optional<T> getValueOrNullopt(
+        const Poco::JSON::Object::Ptr policyJsonObj,
+        const std::string& key
+    );
 };
 
-
 template<typename T>
-inline std::optional<T> Factory::getValueOrNullopt(const Poco::JSON::Object::Ptr policyJsonObj, const std::string& key) {
+inline std::optional<T> Factory::getValueOrNullopt(
+    const Poco::JSON::Object::Ptr policyJsonObj,
+    const std::string& key
+) {
     Poco::Dynamic::Var valueFromKey = policyJsonObj->get(key);
     if (valueFromKey.isEmpty()) {
         return std::nullopt;
-    } 
+    }
     return policyJsonObj->getValue<T>(key);
 }
 
-
-}
-}
-}
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CORE_FACTORY_HPP_

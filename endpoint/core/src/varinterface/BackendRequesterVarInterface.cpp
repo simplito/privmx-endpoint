@@ -17,7 +17,9 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::map<BackendRequesterVarInterface::METHOD, Poco::Dynamic::Var (BackendRequesterVarInterface::*)(const Poco::Dynamic::Var&)>
+std::map<
+    BackendRequesterVarInterface::METHOD,
+    Poco::Dynamic::Var (BackendRequesterVarInterface::*)(const Poco::Dynamic::Var&)>
     BackendRequesterVarInterface::methodMap = {{BackendRequest, &BackendRequesterVarInterface::backendRequest}};
 
 Poco::Dynamic::Var BackendRequesterVarInterface::backendRequest(const Poco::Dynamic::Var& args) {

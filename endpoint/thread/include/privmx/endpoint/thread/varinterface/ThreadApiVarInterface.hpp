@@ -63,7 +63,6 @@ public:
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
 
-
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
     ThreadApi getApi() const { return _threadApi; }
@@ -77,8 +76,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace thread
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_THREAD_THREADAPIVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_THREAD_THREADAPIVARINTERFACE_HPP_

@@ -17,8 +17,8 @@ limitations under the License.
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <string>
 
-#include "privmx/endpoint/inbox/InboxApi.hpp"
 #include "privmx/endpoint/inbox/Events.hpp"
+#include "privmx/endpoint/inbox/InboxApi.hpp"
 #include "privmx/endpoint/inbox/Types.hpp"
 
 namespace privmx {
@@ -41,7 +41,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntry>(const inbox::InboxEntry& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<inbox::InboxEntry>>(const core::PagingList<inbox::InboxEntry>& val);
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<inbox::InboxEntry>>(
+    const core::PagingList<inbox::InboxEntry>& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxCreatedEvent>(const inbox::InboxCreatedEvent& val);
@@ -59,14 +61,15 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryCreatedEvent>(const inbox::InboxEntryCreatedEvent& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEventData>(const inbox::InboxEntryDeletedEventData& val);
+Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEventData>(
+    const inbox::InboxEntryDeletedEventData& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<inbox::InboxEntryDeletedEvent>(const inbox::InboxEntryDeletedEvent& val);
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_INBOX_VARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_INBOX_VARSERIALIZER_HPP_

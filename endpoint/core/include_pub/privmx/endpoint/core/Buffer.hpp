@@ -12,7 +12,6 @@ namespace core {
  */
 class Buffer {
 public:
-
     /**
      * Creates Buffer from `std::string`.
      * 
@@ -31,7 +30,7 @@ public:
      * @return Buffer object
      */
     static Buffer from(const char* data, std::size_t size) { return Buffer({data, size}); }
-    
+
     /**
      * //doc-gen:ignore
      */
@@ -60,7 +59,6 @@ public:
      */
     std::size_t size() const { return _data.size(); }
 
-
     /**
      * Gets data as char* from Buffer.
      * 
@@ -69,7 +67,7 @@ public:
      */
     const char* data() const { return _data.data(); }
 
-    bool operator==(const Buffer& obj) const {return this->_data == obj._data;}
+    bool operator==(const Buffer& obj) const { return this->_data == obj._data; }
 
 private:
     Buffer(const std::string& str) : _data(str) {}
@@ -77,8 +75,8 @@ private:
     std::string _data;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_BUFFER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_BUFFER_HPP_

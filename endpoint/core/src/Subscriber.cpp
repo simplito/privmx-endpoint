@@ -14,30 +14,32 @@ limitations under the License.
 #include <privmx/utils/Logger.hpp>
 using namespace privmx::endpoint::core;
 
-
-SubscriptionQueryObj::SubscriptionQueryObj(const std::vector<std::string>& channelPath, const std::vector<SubscriptionQueryObj::QuerySelector>& selectors) : 
-    _channelPath(channelPath), _selectors(selectors) {}
+SubscriptionQueryObj::SubscriptionQueryObj(
+    const std::vector<std::string>& channelPath,
+    const std::vector<SubscriptionQueryObj::QuerySelector>& selectors
+)
+    : _channelPath(channelPath), _selectors(selectors) {}
 
 SubscriptionQueryObj::SubscriptionQueryObj(const std::string& subscriptionQueryString) {
     auto splittedQuery = privmx::utils::Utils::split(subscriptionQueryString, QUERY_MAIN_SEPARATOR);
-    if(splittedQuery.size() > QUERY_MAIN_MAX_SIZE) {
+    if (splittedQuery.size() > QUERY_MAIN_MAX_SIZE) {
         throw core::InvalidSubscriptionQueryException("Only one separator '|' allowed in the query");
     }
     // extracting query path
-    if(splittedQuery.size() > QUERY_PATH_POS) {
+    if (splittedQuery.size() > QUERY_PATH_POS) {
         _channelPath = privmx::utils::Utils::split(splittedQuery[QUERY_PATH_POS], QUERY_PATH_SEPARATOR);
     }
     // extracting selectors
-    if(splittedQuery.size() > SELECTOR_POS) {
+    if (splittedQuery.size() > SELECTOR_POS) {
         auto selectors = privmx::utils::Utils::split(splittedQuery[SELECTOR_POS], SELECTORS_SEPARATOR);
-        for(const auto& selector: selectors) {
+        for (const auto& selector : selectors) {
             auto splittedSelector = privmx::utils::Utils::split(selector, SELECTOR_SEPARATOR);
-            if(splittedSelector.size() != SELECTOR_SIZE) {
+            if (splittedSelector.size() != SELECTOR_SIZE) {
                 throw core::InvalidSubscriptionQueryException("Invalid query selector format. Expected: <key>=<value>");
             }
             _selectors.push_back(
                 SubscriptionQueryObj::QuerySelector{
-                    .selectorKey = splittedSelector[SELECTOR_TYPE_POS], 
+                    .selectorKey = splittedSelector[SELECTOR_TYPE_POS],
                     .selectorValue = splittedSelector[SELECTOR_ID_POS]
                 }
             );
@@ -47,79 +49,81 @@ SubscriptionQueryObj::SubscriptionQueryObj(const std::string& subscriptionQueryS
 
 std::string SubscriptionQueryObj::toSubscriptionQueryString() const {
     std::string result;
-    for(const auto& p: _channelPath) {
+    for (const auto& p : _channelPath) {
         result += p + QUERY_PATH_SEPARATOR;
     }
     result.pop_back();
     result += QUERY_MAIN_SEPARATOR;
-    for(const auto& s: _selectors) {
+    for (const auto& s : _selectors) {
         result += s.selectorKey + SELECTOR_SEPARATOR + s.selectorValue + SELECTORS_SEPARATOR;
     }
     result.pop_back();
     return result;
 }
 
-
 Subscriber::Subscriber(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway) {}
 
 std::vector<std::string> Subscriber::subscribeFor(const std::vector<std::string>& subscriptionQueries, bool force) {
-    LOG_TIME_DEBUG_START(Subscriber:subscribeFor, "")
-    auto model = utils::TypedObjectFactory::createNewObject<server::SubscribeToChannelsModel>();
+    LOG_TIME_DEBUG_START(Subscriber : subscribeFor, "")
+    server::SubscribeToChannelsModel model;
     std::vector<SubscriptionQueryObj> parsedSubscriptionQueries;
-    for(const auto& subscriptionQueryString : subscriptionQueries) {
+    for (const auto& subscriptionQueryString : subscriptionQueries) {
         parsedSubscriptionQueries.push_back(SubscriptionQueryObj(subscriptionQueryString));
     }
-    privmx::utils::List<std::string> modelChannels = privmx::utils::TypedObjectFactory::createNewList<std::string>();
-    if(!force) {
+    if (!force) {
         assertQuery(parsedSubscriptionQueries);
-        modelChannels = transform(parsedSubscriptionQueries);
+        model.channels = transform(parsedSubscriptionQueries);
     } else {
-        for(const auto& subscriptionQueryString : subscriptionQueries) {
-            modelChannels.add(subscriptionQueryString);
+        for (const auto& subscriptionQueryString : subscriptionQueries) {
+            model.channels.push_back(subscriptionQueryString);
         }
     }
-    LOG_INFO("Subscriber:subscribeFor channels:" + privmx::utils::Utils::stringifyVar(modelChannels));
-    model.channels(modelChannels);
-    auto value = privmx::utils::TypedObjectFactory::createObjectFromVar<server::SubscribeToChannelsResult>(
-        _gateway->request("subscribeToChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET})
+    LOG_INFO("Subscriber:subscribeFor channels:" + model.serialize());
+    auto requestResult = _gateway->request(
+        "subscribeToChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET}
     );
-    LOG_TIME_DEBUG_CHECKPOINT(Subscriber:subscribeFor, "dataRecived")
+    server::SubscribeToChannelsResult value = privmx::endpoint::core::server::SubscribeToChannelsResult::fromJSON(
+        requestResult
+    );
+    LOG_TIME_DEBUG_CHECKPOINT(Subscriber : subscribeFor, "dataRecived")
     std::vector<std::string> result;
     {
         std::unique_lock<std::shared_mutex> lock(_map_mutex);
-        for(auto channel : modelChannels) {
+        for (const auto& channel : model.channels) {
             bool found = false;
-            for(size_t i = 0; i < value.subscriptions().size(); i++) {
-                auto subscription = value.subscriptions().get(i);
-                if(channel == subscription.channel()) {
-                    result.push_back(subscription.subscriptionId());
-                    _subscriptionIdToSubscriptionQuery.insert_or_assign(subscription.subscriptionId(), subscription.channel());
+            for (size_t i = 0; i < value.subscriptions.size(); i++) {
+                auto subscription = value.subscriptions[i];
+                if (channel == subscription.channel) {
+                    result.push_back(subscription.subscriptionId);
+                    _subscriptionIdToSubscriptionQuery.insert_or_assign(
+                        subscription.subscriptionId, subscription.channel
+                    );
                     found = true;
-                    value.subscriptions().remove(i);
+                    value.subscriptions.erase(value.subscriptions.begin() + i);
                     break;
                 }
             }
-            if(!found) {
+            if (!found) {
                 result.push_back("");
             }
         }
     }
-    LOG_TIME_DEBUG_STOP(Subscriber:subscribeFor, "")
+    LOG_TIME_DEBUG_STOP(Subscriber : subscribeFor, "")
     return result;
 }
 
 void Subscriber::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    auto model = utils::TypedObjectFactory::createNewObject<server::UnsubscribeFromChannelsModel>();
-    auto subscriptionsIds = utils::TypedObjectFactory::createNewList<std::string>();
-    for(auto subscriptionId: subscriptionIds) {
-        subscriptionsIds.add(subscriptionId);
+    server::UnsubscribeFromChannelsModel model;
+    std::vector<std::string> subscriptionsIds;
+    for (auto subscriptionId : subscriptionIds) {
+        subscriptionsIds.push_back(subscriptionId);
     }
     LOG_INFO("Subscriber:unsubscribeFrom subscriptionsIds:" + privmx::utils::Utils::stringifyVar(subscriptionsIds));
-    model.subscriptionsIds(subscriptionsIds);
-    _gateway->request("unsubscribeFromChannels", model, {.channel_type = rpc::ChannelType::WEBSOCKET});
+    model.subscriptionsIds = subscriptionsIds;
+    _gateway->request("unsubscribeFromChannels", model.toJSON(), {.channel_type = rpc::ChannelType::WEBSOCKET});
     {
         std::unique_lock<std::shared_mutex> lock(_map_mutex);
-        for(auto subscriptionId: subscriptionIds) {
+        for (auto subscriptionId : subscriptionIds) {
             _subscriptionIdToSubscriptionQuery.erase(subscriptionId);
         }
     }
@@ -129,11 +133,11 @@ void Subscriber::unsubscribeFromCurrentlySubscribed() {
     std::vector<std::string> subscriptionIds;
     {
         std::shared_lock<std::shared_mutex> lock(_map_mutex);
-        for(auto& s: _subscriptionIdToSubscriptionQuery) {
+        for (auto& s : _subscriptionIdToSubscriptionQuery) {
             subscriptionIds.push_back(s.first);
         }
     }
-    if(subscriptionIds.size() > 0) {
+    if (subscriptionIds.size() > 0) {
         unsubscribeFrom(subscriptionIds);
     }
 }
@@ -149,7 +153,7 @@ std::optional<std::string> Subscriber::getSubscriptionQuery(const std::string& s
 
 std::optional<std::string> Subscriber::getSubscriptionQuery(const std::vector<std::string>& subscriptionIds) {
     std::shared_lock<std::shared_mutex> lock(_map_mutex);
-    for(auto& subscriptionId : subscriptionIds) {
+    for (auto& subscriptionId : subscriptionIds) {
         auto search = Subscriber::_subscriptionIdToSubscriptionQuery.find(subscriptionId);
         if (search != _subscriptionIdToSubscriptionQuery.end()) {
             return search->second;

@@ -24,12 +24,13 @@ public:
     FileDataProvider(const std::shared_ptr<ServerApi>& serverApi) : _server(serverApi) {}
     virtual ~FileDataProvider() = default;
     virtual server::StoreFileReadResult getFileData(const server::StoreFileReadModel& model);
+
 private:
     std::shared_ptr<ServerApi> _server;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_FILEDATAPROVIDER_HPP_

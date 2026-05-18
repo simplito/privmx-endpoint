@@ -12,20 +12,19 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMTYPES_HPP_
 
+#include <optional>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <string>
 #include <vector>
-#include <optional>
-
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
 
-enum RTCIceTransportPolicy { 
+enum RTCIceTransportPolicy {
     all,
-    relay 
+    relay
 };
 
 struct EncKey {
@@ -45,14 +44,11 @@ struct InitOptions {
 struct VideoStream {
     std::string stream;
     bool isLocal;
-    std::string id;  // Assuming the 'id' might be optional in your context, using int64_t
+    std::string id; // Assuming the 'id' might be optional in your context, using int64_t
 };
 
-
-
-
-} // stream
-} // endpoint
-} // privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STREAM_STREAMTYPES_HPP_

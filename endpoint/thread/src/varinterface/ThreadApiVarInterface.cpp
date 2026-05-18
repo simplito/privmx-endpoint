@@ -18,20 +18,22 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
 std::map<ThreadApiVarInterface::METHOD, Poco::Dynamic::Var (ThreadApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    ThreadApiVarInterface::methodMap = {{Create, &ThreadApiVarInterface::create},
-                                        {CreateThread, &ThreadApiVarInterface::createThread},
-                                        {UpdateThread, &ThreadApiVarInterface::updateThread},
-                                        {DeleteThread, &ThreadApiVarInterface::deleteThread},
-                                        {GetThread, &ThreadApiVarInterface::getThread},
-                                        {ListThreads, &ThreadApiVarInterface::listThreads},
-                                        {GetMessage, &ThreadApiVarInterface::getMessage},
-                                        {ListMessages, &ThreadApiVarInterface::listMessages},
-                                        {SendMessage, &ThreadApiVarInterface::sendMessage},
-                                        {DeleteMessage, &ThreadApiVarInterface::deleteMessage},
-                                        {UpdateMessage, &ThreadApiVarInterface::updateMessage},
-                                        {SubscribeFor, &ThreadApiVarInterface::subscribeFor},
-                                        {UnsubscribeFrom, &ThreadApiVarInterface::unsubscribeFrom},
-                                        {BuildSubscriptionQuery, &ThreadApiVarInterface::buildSubscriptionQuery}};
+    ThreadApiVarInterface::methodMap = {
+        {Create, &ThreadApiVarInterface::create},
+        {CreateThread, &ThreadApiVarInterface::createThread},
+        {UpdateThread, &ThreadApiVarInterface::updateThread},
+        {DeleteThread, &ThreadApiVarInterface::deleteThread},
+        {GetThread, &ThreadApiVarInterface::getThread},
+        {ListThreads, &ThreadApiVarInterface::listThreads},
+        {GetMessage, &ThreadApiVarInterface::getMessage},
+        {ListMessages, &ThreadApiVarInterface::listMessages},
+        {SendMessage, &ThreadApiVarInterface::sendMessage},
+        {DeleteMessage, &ThreadApiVarInterface::deleteMessage},
+        {UpdateMessage, &ThreadApiVarInterface::updateMessage},
+        {SubscribeFor, &ThreadApiVarInterface::subscribeFor},
+        {UnsubscribeFrom, &ThreadApiVarInterface::unsubscribeFrom},
+        {BuildSubscriptionQuery, &ThreadApiVarInterface::buildSubscriptionQuery}
+};
 
 Poco::Dynamic::Var ThreadApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -62,7 +64,9 @@ Poco::Dynamic::Var ThreadApiVarInterface::updateThread(const Poco::Dynamic::Var&
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
-    _threadApi.updateThread(threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+    _threadApi.updateThread(
+        threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+    );
     return {};
 }
 

@@ -12,32 +12,30 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_FILE_HANDLER_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_FILE_HANDLER_HPP_
 
+#include "privmx/endpoint/store/DynamicTypes.hpp"
+#include "privmx/endpoint/store/ServerApi.hpp"
+#include "privmx/endpoint/store/StoreException.hpp"
+#include "privmx/endpoint/store/StoreTypes.hpp"
 #include <cstdint>
 #include <map>
-#include <string>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include "privmx/endpoint/store/StoreException.hpp"
-#include "privmx/endpoint/store/DynamicTypes.hpp"
-#include "privmx/endpoint/store/StoreTypes.hpp"
-#include "privmx/endpoint/store/ServerApi.hpp"
+#include <string>
 
-#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
-#include "privmx/endpoint/store/interfaces/IHashList.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptor.hpp"
-#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
+#include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkReader.hpp"
-
+#include "privmx/endpoint/store/interfaces/IFileHandler.hpp"
+#include "privmx/endpoint/store/interfaces/IHashList.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class FileHandler
-{
+class FileHandler {
 public:
-    FileHandler (
+    FileHandler(
         std::shared_ptr<IChunkDataProvider> chunkDataProvider,
         std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         std::shared_ptr<IHashList> hashList,
@@ -56,7 +54,11 @@ public:
     void truncate(uint64_t length);
     core::Buffer read(uint64_t offset, uint64_t size);
     uint64_t getFileSize();
-    void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey);
+    void sync(
+        const FileMeta& fileMeta,
+        const store::FileDecryptionParams& newParms,
+        const core::DecryptedEncKey& fileEncKey
+    );
     void close();
     void flush();
 
@@ -68,7 +70,12 @@ private:
     };
 
     void loadChunkIntoDirty(uint64_t chunkIndex);
-    void updateOnServer(const std::vector<UpdateChunkData>& chunks, Poco::Dynamic::Var updatedMeta, const std::string& encKeyId, bool truncate);
+    void updateOnServer(
+        const std::vector<UpdateChunkData>& chunks,
+        Poco::Dynamic::Var updatedMeta,
+        const std::string& encKeyId,
+        bool truncate
+    );
 
     std::shared_ptr<IChunkDataProvider> _chunkDataProvider;
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
@@ -89,8 +96,7 @@ private:
     std::map<uint64_t, std::string> _dirtyChunks;
 };
 
-class FileHandlerImpl : public IFileHandler
-{
+class FileHandlerImpl : public IFileHandler {
 public:
     FileHandlerImpl(std::shared_ptr<FileHandler> file);
 
@@ -101,7 +107,11 @@ public:
     void write(const core::Buffer& chunk, bool truncate = false) override;
 
     inline void close() override { _file->close(); }
-    inline void sync(const FileMeta& fileMeta, const store::FileDecryptionParams& newParms, const core::DecryptedEncKey& fileEncKey) override {
+    inline void sync(
+        const FileMeta& fileMeta,
+        const store::FileDecryptionParams& newParms,
+        const core::DecryptedEncKey& fileEncKey
+    ) override {
         return _file->sync(fileMeta, newParms, fileEncKey);
     }
     inline void flush() override { _file->flush(); }
@@ -112,8 +122,8 @@ private:
     uint64_t _writePos = 0;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_FILE_HANDLER_HPP_

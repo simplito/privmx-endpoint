@@ -17,7 +17,6 @@ class EventQueueImpl;
  */
 class EventQueue {
 public:
-
     /**
      * Gets the EventQueue instance.
      *
@@ -52,8 +51,8 @@ private:
     std::shared_ptr<EventQueueImpl> _impl;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_EVENTQUEUE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_EVENTQUEUE_HPP_

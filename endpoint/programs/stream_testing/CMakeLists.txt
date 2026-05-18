@@ -4,11 +4,18 @@ target_include_directories(privmxendpointevent PRIVATE ${INCLUDE_DIRS})
 target_include_directories(privmxendpointthread PRIVATE ${INCLUDE_DIRS})
 target_include_directories(privmxendpointstore PRIVATE ${INCLUDE_DIRS})
 target_include_directories(privmxendpointinbox PRIVATE ${INCLUDE_DIRS})
-add_library(libwebrtc SHARED IMPORTED) # or STATIC instead of SHARED
-set_target_properties(libwebrtc PROPERTIES
-    IMPORTED_LOCATION "<path_to_libwebrtc>"
-    INTERFACE_INCLUDE_DIRECTORIES "<path_to_libwebrtc>"
-)
+if(PRIVMX_IMPORT_LIBWEBRTC)
+    add_library(libwebrtc SHARED IMPORTED)
+    set_target_properties(libwebrtc PROPERTIES
+        IMPORTED_LOCATION ${PRIVMX_LIBWEBRTC}
+        INTERFACE_INCLUDE_DIRECTORIES ${PRIVMX_LIBWEBRTC_INCLUDE}
+    )
+else()
+    find_package(libwebrtc REQUIRED CONFIG)
+    if(PRIVMX_CONAN)
+        add_library(libwebrtc ALIAS libwebrtc::libwebrtc)
+    endif()
+endif()
 target_include_directories(privmxendpointstream PRIVATE ${INCLUDE_DIRS})
 
 # privmxendpointstream

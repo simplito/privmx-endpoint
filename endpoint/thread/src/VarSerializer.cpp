@@ -43,7 +43,9 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::Thread>(const thread::Thread
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<thread::Thread>>(const core::PagingList<thread::Thread>& val) {
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<thread::Thread>>(
+    const core::PagingList<thread::Thread>& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "core$PagingList<thread$Tread>");
@@ -65,7 +67,8 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadDeletedEventData>(cons
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadDeletedMessageEventData>(
-    const thread::ThreadDeletedMessageEventData& val) {
+    const thread::ThreadDeletedMessageEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "thread$ThreadDeletedMessageEventData");
@@ -108,18 +111,23 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadNewMessageEvent>(const
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageUpdatedEvent>(const thread::ThreadMessageUpdatedEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageUpdatedEvent>(
+    const thread::ThreadMessageUpdatedEvent& val
+) {
     return serializeBaseWithData<Event>(val, "thread$ThreadMessageUpdatedEvent");
 }
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadMessageDeletedEvent>(
-    const thread::ThreadMessageDeletedEvent& val) {
+    const thread::ThreadMessageDeletedEvent& val
+) {
     return serializeBaseWithData<Event>(val, "thread$ThreadMessageDeletedEvent");
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsChangedEvent>(const thread::ThreadStatsChangedEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<thread::ThreadStatsChangedEvent>(
+    const thread::ThreadStatsChangedEvent& val
+) {
     return serializeBaseWithData<Event>(val, "thread$ThreadStatsChangedEvent");
 }
 
