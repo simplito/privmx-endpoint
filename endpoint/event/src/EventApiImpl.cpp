@@ -35,7 +35,8 @@ EventApiImpl::EventApiImpl(
     : _connection(connection), _userPrivKey(userPrivKey), _gateway(gateway), _serverApi(ServerApi(gateway)),
       _eventMiddleware(eventMiddleware), _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME}),
       _eventKeyProvider(EventKeyProvider(userPrivKey)), _subscriber(SubscriberImpl(gateway)),
-      _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()) {
+      _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()),
+      _eventDataSchemaMapper(userPrivKey, connection) {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&EventApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -66,11 +67,8 @@ void EventApiImpl::emitEvent(
 ) {
     validateChannelName(channelName);
     auto key = _eventKeyProvider.generateKey();
-    auto toEncrypt = ContextEventDataToEncryptV5{ContextEventDataV5{
-        .data = eventData, .type = std::nullopt, .dio = _connection.getImpl()->createDIO(contextId, "")
-    }};
     emitEventEx(
-        contextId, users, channelName, _eventDataEncryptorV5.encrypt(toEncrypt, _userPrivKey, key).toJSON(), key
+        contextId, users, channelName, _eventDataSchemaMapper.encrypt(contextId, eventData, std::nullopt, key), key
     );
 }
 
@@ -80,12 +78,9 @@ void EventApiImpl::emitEventInternal(
     const std::vector<core::UserWithPubKey>& users
 ) {
     auto key = _eventKeyProvider.generateKey();
-    auto toEncrypt = ContextEventDataToEncryptV5{ContextEventDataV5{
-        .data = event.data, .type = event.type, .dio = _connection.getImpl()->createDIO(contextId, "")
-    }};
     emitEventEx(
         contextId, users, INTERNAL_EVENT_CHANNEL_NAME,
-        _eventDataEncryptorV5.encrypt(toEncrypt, _userPrivKey, key).toJSON(), key
+        _eventDataSchemaMapper.encrypt(contextId, event.data, event.type, key), key
     );
 }
 
@@ -123,27 +118,7 @@ bool EventApiImpl::isInternalContextEvent(
 
 DecryptedInternalContextEventDataV1 EventApiImpl::extractInternalEventData(const Poco::JSON::Object::Ptr& eventData) {
     auto rawEvent = server::ContextCustomEventData::fromJSON(eventData);
-    DecryptedInternalContextEventDataV1 result;
-    result.dataStructureVersion = EventDataSchema::Version::VERSION_5;
-    auto decryptedKey = _eventKeyProvider.decryptKey(
-        rawEvent.key, crypto::PublicKey::fromBase58DER(rawEvent.author.pub)
-    );
-    result.statusCode = decryptedKey.statusCode;
-    if (result.statusCode == 0) {
-        auto tmp = _eventDataEncryptorV5.decrypt(
-            server::EncryptedContextEventDataV5::fromJSON(rawEvent.eventData),
-            crypto::PublicKey::fromBase58DER(rawEvent.author.pub), decryptedKey.key
-        );
-        result.statusCode = tmp.statusCode;
-        result.data = tmp.data;
-        result.type = tmp.type.has_value() ? tmp.type.value() : "";
-        if (result.statusCode == 0) {
-            result.statusCode = verifyDecryptedEventDataV5(tmp) ?
-                0 :
-                core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-        }
-    }
-    return result;
+    return _eventDataSchemaMapper.decryptInternal(rawEvent);
 }
 
 void EventApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
@@ -160,41 +135,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
         // fix if not internal check
         if (channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id)
             return;
-        auto resultEventData = ContextCustomEventData{
-            .contextId = rawEvent.id,
-            .userId = rawEvent.author.id,
-            .payload = core::Buffer(),
-            .statusCode = 0,
-            .schemaVersion = EventDataSchema::Version::UNKNOWN
-        };
-        if (rawEvent.eventData.type() == typeid(Poco::JSON::Object::Ptr)) {
-            auto decryptedKey = _eventKeyProvider.decryptKey(
-                rawEvent.key, crypto::PublicKey::fromBase58DER(rawEvent.author.pub)
-            );
-            resultEventData.statusCode = decryptedKey.statusCode;
-            resultEventData.schemaVersion = EventDataSchema::Version::VERSION_5;
-            if (decryptedKey.statusCode == 0) {
-                auto tmp = _eventDataEncryptorV5.decrypt(
-                    server::EncryptedContextEventDataV5::fromJSON(rawEvent.eventData),
-                    crypto::PublicKey::fromBase58DER(rawEvent.author.pub), decryptedKey.key
-                );
-                resultEventData.payload = tmp.data;
-                resultEventData.statusCode = tmp.statusCode;
-                if (resultEventData.statusCode == 0) {
-                    resultEventData.statusCode = verifyDecryptedEventDataV5(tmp) ?
-                        0 :
-                        core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-                }
-            }
-        } else if (rawEvent.eventData.isString()) {
-            resultEventData.schemaVersion = EventDataSchema::Version::VERSION_1;
-            auto tmp = _oldEventDataDecryptor.decryptV1(
-                rawEvent.eventData.convert<std::string>(), crypto::PublicKey::fromBase58DER(rawEvent.author.pub),
-                rawEvent.key, _userPrivKey
-            );
-            resultEventData.payload = tmp.data;
-            resultEventData.statusCode = tmp.statusCode;
-        }
+        auto resultEventData = _eventDataSchemaMapper.decrypt(rawEvent);
         auto customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
         auto event = core::EventBuilder::buildEvent<privmx::endpoint::event::ContextCustomEvent>(
             "context/" + rawEvent.id + "/" + customChannelName, resultEventData, notification
@@ -233,21 +174,6 @@ void EventApiImpl::validateChannelName(const std::string& channelName) {
     }
 }
 
-bool EventApiImpl::verifyDecryptedEventDataV5(const DecryptedEventDataV5& data) {
-    std::vector<core::VerificationRequest> verifierInput{};
-    verifierInput.push_back(
-        core::VerificationRequest{
-            .contextId = data.dio.contextId,
-            .senderId = data.dio.creatorUserId,
-            .senderPubKey = data.dio.creatorPubKey,
-            .date = data.dio.timestamp,
-            .bridgeIdentity = data.dio.bridgeIdentity
-        }
-    );
-    std::vector<bool> verified;
-    verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
-    return verified[0];
-}
 
 std::vector<std::string> EventApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto result = _subscriber.subscribeFor(subscriptionQueries);
