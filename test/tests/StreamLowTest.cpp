@@ -141,7 +141,14 @@ TEST_F(StreamLowTest, createStream) {
             }},
             core::Buffer::from("public"),
             core::Buffer::from("private"),
-            std::nullopt
+            core::ContainerPolicyWithoutItem{
+                .get="all",
+                .update="all",
+                .delete_="all",
+                .updatePolicy="all",
+                .updaterCanBeRemovedFromManagers="yes",
+                .ownerCanBeRemovedFromManagers="yes"
+            }
         );
     });
     if(streamRoomId.empty()) {
@@ -164,6 +171,12 @@ TEST_F(StreamLowTest, createStream) {
     if(streamRoom.managers.size() == 1) {
         EXPECT_EQ(streamRoom.managers[0], reader->getString("Login.user_1_id"));
     }
+    EXPECT_EQ(streamRoom.policy.get, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.update, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.delete_, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updatePolicy, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updaterCanBeRemovedFromManagers, std::optional<std::string>("yes"));
+    EXPECT_EQ(streamRoom.policy.ownerCanBeRemovedFromManagers, std::optional<std::string>("yes"));
     // same users and managers
     EXPECT_NO_THROW({
         streamRoomId = streamApiLow->createStreamRoom(
@@ -482,7 +495,14 @@ TEST_F(StreamLowTest, updateStreamRoom_correct_data) {
             1,
             false,
             false,
-            std::nullopt
+            core::ContainerPolicyWithoutItem{
+                .get="all",
+                .update="all",
+                .delete_="all",
+                .updatePolicy="all",
+                .updaterCanBeRemovedFromManagers="yes",
+                .ownerCanBeRemovedFromManagers="yes"
+            }
         );
     });
     EXPECT_NO_THROW({
@@ -504,6 +524,12 @@ TEST_F(StreamLowTest, updateStreamRoom_correct_data) {
         EXPECT_EQ(streamRoom.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(streamRoom.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(streamRoom.policy.get, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.update, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.delete_, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updatePolicy, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updaterCanBeRemovedFromManagers, std::optional<std::string>("yes"));
+    EXPECT_EQ(streamRoom.policy.ownerCanBeRemovedFromManagers, std::optional<std::string>("yes"));
     // less managers
     EXPECT_NO_THROW({
         streamApiLow->updateStreamRoom(
