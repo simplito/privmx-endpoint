@@ -63,14 +63,7 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(
     Poco::Dynamic::Var encryptedFileMeta,
     core::EncKey encKey
 ) {
-    switch (getFileDataStructureVersion(encryptedFileMeta)) {
-    case FileDataSchema::Version::UNKNOWN:
-        return FileMetaEncryptor::DecryptedFileMeta();
-    case FileDataSchema::Version::VERSION_1: {
-        // this can throw TODO
-        auto encryptedFileMetaV1 = encryptedFileMeta.convert<std::string>();
-        return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV1.decrypt(encryptedFileMetaV1, encKey.key));
-    }
+    switch (getFileDataStructureVersion(encryptedFileMeta)) {        
     case FileDataSchema::Version::VERSION_4: {
         auto encryptedFileMetaV4 = server::EncryptedFileMetaV4::fromJSON(encryptedFileMeta);
         return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV4.decrypt(encryptedFileMetaV4, encKey.key));
@@ -79,19 +72,14 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(
         auto encryptedFileMetaV5 = server::EncryptedFileMetaV5::fromJSON(encryptedFileMeta);
         return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV5.decrypt(encryptedFileMetaV5, encKey.key));
     }
+    default:
+        return FileMetaEncryptor::DecryptedFileMeta();
     }
     return FileMetaEncryptor::DecryptedFileMeta();
 }
 
 FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(Poco::Dynamic::Var encryptedFileMeta) {
     switch (getFileDataStructureVersion(encryptedFileMeta)) {
-    case FileDataSchema::Version::UNKNOWN:
-        return FileMetaEncryptor::DecryptedFileMeta();
-    case FileDataSchema::Version::VERSION_1: {
-        // this can throw TODO
-        auto encryptedFileMetaV1 = encryptedFileMeta.convert<std::string>();
-        return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV1.decrypt(encryptedFileMetaV1, ""));
-    }
     case FileDataSchema::Version::VERSION_4: {
         auto encryptedFileMetaV4 = server::EncryptedFileMetaV4::fromJSON(encryptedFileMeta);
         return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV4.decrypt(encryptedFileMetaV4, ""));
@@ -100,6 +88,8 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::extractPublic(Poco::Dyna
         auto encryptedFileMetaV5 = server::EncryptedFileMetaV5::fromJSON(encryptedFileMeta);
         return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV5.extractPublic(encryptedFileMetaV5));
     }
+    default:
+        return FileMetaEncryptor::DecryptedFileMeta();
     }
     return FileMetaEncryptor::DecryptedFileMeta();
 }
@@ -115,8 +105,6 @@ FileDataSchema::Version FileMetaEncryptor::getFileDataStructureVersion(Poco::Dyn
         default:
             return FileDataSchema::Version::UNKNOWN;
         }
-    } else if (encryptedFileMeta.isString()) {
-        return FileDataSchema::Version::VERSION_1;
     }
     return FileDataSchema::Version::UNKNOWN;
 }
