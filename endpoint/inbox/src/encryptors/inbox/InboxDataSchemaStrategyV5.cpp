@@ -90,9 +90,7 @@ InboxInternalMetaV5 InboxDataSchemaStrategyV5::decryptInternalMeta(
     return _processor.unpackAll(entry.data, encKey.key).privateData.internalMeta;
 }
 
-core::DataIntegrityObject InboxDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const server::InboxData& data
-) const {
+core::DataIntegrityObject InboxDataSchemaStrategyV5::getDIOAndAssertIntegrity(const server::InboxData& data) const {
     return _processor.getDIOAndAssertIntegrity(data);
 }
 

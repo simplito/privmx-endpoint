@@ -174,7 +174,6 @@ void EventApiImpl::validateChannelName(const std::string& channelName) {
     }
 }
 
-
 std::vector<std::string> EventApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto result = _subscriber.subscribeFor(subscriptionQueries);
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);

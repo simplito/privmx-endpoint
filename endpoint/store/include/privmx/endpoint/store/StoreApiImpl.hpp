@@ -20,11 +20,6 @@ limitations under the License.
 
 #include <privmx/utils/ThreadSaveMap.hpp>
 
-#include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
@@ -38,6 +33,11 @@ limitations under the License.
 #include "privmx/endpoint/store/SubscriberImpl.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp"
 #include "privmx/endpoint/store/encryptors/store/StoreDataSchemaMapper.hpp"
+#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/EventMiddleware.hpp>
+#include <privmx/endpoint/core/KeyProvider.hpp>
+#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -127,9 +127,8 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    inline FileMetaDataSchemaMapper& getFileMetaDataSchemaMapper() {
-        return _fileMetaDataSchemaMapper;
-    }
+    inline FileMetaDataSchemaMapper& getFileMetaDataSchemaMapper() { return _fileMetaDataSchemaMapper; }
+
 private:
     std::string _storeCreateEx(
         const std::string& contextId,

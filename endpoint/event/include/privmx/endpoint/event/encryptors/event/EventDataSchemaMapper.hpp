@@ -38,10 +38,7 @@ namespace event {
 
 class EventDataSchemaMapper {
 public:
-    EventDataSchemaMapper(
-        const privmx::crypto::PrivateKey& userPrivKey,
-        const core::Connection& connection
-    );
+    EventDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(
         const std::string& contextId,
@@ -56,10 +53,7 @@ public:
     EventDataSchema::Version getDataStructureVersion(const server::ContextCustomEventData& rawEvent);
 
 private:
-    static ContextCustomEventData makeErrorResult(
-        const server::ContextCustomEventData& rawEvent,
-        int64_t errorCode
-    );
+    static ContextCustomEventData makeErrorResult(const server::ContextCustomEventData& rawEvent, int64_t errorCode);
     bool verifyDecryptedEventData(const DecryptedEventDataV5& data);
 
     privmx::crypto::PrivateKey _userPrivKey;

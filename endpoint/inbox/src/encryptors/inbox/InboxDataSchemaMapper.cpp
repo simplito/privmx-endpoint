@@ -37,10 +37,7 @@ InboxDataSchemaMapper::InboxDataSchemaMapper(
     _strategyMapper.registerStrategy(InboxDataSchema::Version::VERSION_5, _strategyV5);
 }
 
-server::InboxData InboxDataSchemaMapper::encrypt(
-    const InboxDataProcessorModelV5& data,
-    const std::string& key
-) {
+server::InboxData InboxDataSchemaMapper::encrypt(const InboxDataProcessorModelV5& data, const std::string& key) {
     return _strategyV5->packForServer(data, _userPrivKey, key);
 }
 
@@ -52,15 +49,14 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaMapper::decrypt(
     auto strategy = _strategyMapper.getStrategy(static_cast<int64_t>(version));
     if (!strategy) {
         auto e = UnknownInboxFormatException();
-        return {toLibInbox(inbox, {}, {}, {}, e.getCode(), InboxDataSchema::Version::UNKNOWN),
-                core::DataIntegrityObject{}};
+        return {
+            toLibInbox(inbox, {}, {}, {}, e.getCode(), InboxDataSchema::Version::UNKNOWN), core::DataIntegrityObject{}
+        };
     }
     return strategy->decryptAndConvert(inbox, encKey);
 }
 
-InboxDataSchema::Version InboxDataSchemaMapper::getDataStructureVersion(
-    const server::InboxDataEntry& entry
-) {
+InboxDataSchema::Version InboxDataSchemaMapper::getDataStructureVersion(const server::InboxDataEntry& entry) {
     if (entry.data.meta.type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = core::dynamic::VersionedData::fromJSON(entry.data.meta);
         switch (versioned.version) {
@@ -179,7 +175,9 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
     // batch key fetch
     core::KeyDecryptionAndVerificationRequest keyRequest;
     for (size_t i = 0; i < inboxes.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         auto& inbox = inboxes[i];
         core::EncKeyLocation location{.contextId = inbox.contextId, .resourceId = inbox.resourceId.value_or("")};
         keyRequest.addOne(inbox.keys, inbox.data.back().keyId, location);
@@ -188,7 +186,9 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
     std::set<std::string> seenRandomIds;
     // decrypt + deduplication
     for (size_t i = 0; i < inboxes.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         auto& inbox = inboxes[i];
         try {
             auto inboxKeysIt = inboxesKeys.find(
@@ -211,20 +211,23 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
     std::vector<core::VerificationRequest> verifyRequests;
     std::vector<size_t> verifyIndices;
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) continue;
-        verifyRequests.push_back({
-            .contextId = result[i].contextId,
-            .senderId = result[i].lastModifier,
-            .senderPubKey = inboxesDIO[i].creatorPubKey,
-            .date = result[i].lastModificationDate,
-            .bridgeIdentity = inboxesDIO[i].bridgeIdentity
-        });
+        if (result[i].statusCode != 0) {
+            continue;
+        }
+        verifyRequests.push_back(
+            {.contextId = result[i].contextId,
+             .senderId = result[i].lastModifier,
+             .senderPubKey = inboxesDIO[i].creatorPubKey,
+             .date = result[i].lastModificationDate,
+             .bridgeIdentity = inboxesDIO[i].bridgeIdentity}
+        );
         verifyIndices.push_back(i);
     }
     auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
     for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode =
-            verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        result[verifyIndices[j]].statusCode = verified[j] ?
+            0 :
+            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     }
     return result;
 }

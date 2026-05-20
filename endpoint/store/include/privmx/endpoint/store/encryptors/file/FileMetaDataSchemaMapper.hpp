@@ -39,10 +39,7 @@ namespace store {
 
 class FileMetaDataSchemaMapper {
 public:
-    FileMetaDataSchemaMapper(
-        const privmx::crypto::PrivateKey& userPrivKey,
-        const core::Connection& connection
-    );
+    FileMetaDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(
         const std::string& storeId,
@@ -55,10 +52,7 @@ public:
         const core::DecryptedEncKeyV2& fileKey
     );
 
-    std::tuple<File, core::DataIntegrityObject> decrypt(
-        const server::File& file,
-        const core::DecryptedEncKey& encKey
-    );
+    std::tuple<File, core::DataIntegrityObject> decrypt(const server::File& file, const core::DecryptedEncKey& encKey);
 
     FileDataSchema::Version getDataStructureVersion(const server::File& file);
     StoreDataSchema::Version getMinimumStoreSchemaVersion(const server::File& file);

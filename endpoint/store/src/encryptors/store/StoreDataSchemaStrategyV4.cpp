@@ -34,7 +34,9 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV4::convert(
     const core::DecryptedModuleDataV4& raw
 ) const {
     return {
-        StoreDataSchemaMapper::toLibStore(store, raw.publicMeta, raw.privateMeta, raw.statusCode, StoreDataSchema::Version::VERSION_4),
+        StoreDataSchemaMapper::toLibStore(
+            store, raw.publicMeta, raw.privateMeta, raw.statusCode, StoreDataSchema::Version::VERSION_4
+        ),
         core::DataIntegrityObject{
             .creatorUserId = store.lastModifier,
             .creatorPubKey = raw.authorPubKey,
@@ -53,5 +55,8 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV4::makeErro
     const server::Store& store,
     int64_t errorCode
 ) const {
-    return {StoreDataSchemaMapper::toLibStore(store, {}, {}, errorCode, StoreDataSchema::Version::VERSION_4), core::DataIntegrityObject{}};
+    return {
+        StoreDataSchemaMapper::toLibStore(store, {}, {}, errorCode, StoreDataSchema::Version::VERSION_4),
+        core::DataIntegrityObject{}
+    };
 }

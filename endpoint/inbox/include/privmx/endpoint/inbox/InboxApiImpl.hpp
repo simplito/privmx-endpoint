@@ -26,12 +26,12 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Events.hpp"
 #include "privmx/endpoint/inbox/FileKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/inbox/InboxApi.hpp"
-#include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaMapper.hpp"
 #include "privmx/endpoint/inbox/InboxHandleManager.hpp"
 #include "privmx/endpoint/inbox/MessageKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/inbox/ServerApi.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/SubscriberImpl.hpp"
+#include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaMapper.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataSchemaMapper.hpp"
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -138,7 +138,7 @@ private:
     inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
-inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
+    inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys inboxToModuleKeys(inbox::server::InboxInfo inbox);
 

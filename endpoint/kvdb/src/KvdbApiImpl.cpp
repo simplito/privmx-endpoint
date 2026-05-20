@@ -273,7 +273,9 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, data recived);
     KvdbEntry result;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getEntry, getting kvdb)
-    result = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(entry, getEntryDecryptionKeys(entry), _keyProvider);
+    result = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
+        entry, getEntryDecryptionKeys(entry), _keyProvider
+    );
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, getEntry, data decrypted)
     return result;
 }
@@ -413,7 +415,9 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             auto raw = server::KvdbInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
-                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdb(raw, _keyProvider);
+                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdb(
+                    raw, _keyProvider
+                );
                 auto event = core::EventBuilder::buildEvent<KvdbCreatedEvent>("kvdb", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -421,7 +425,9 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             auto raw = server::KvdbInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
-                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdb(raw, _keyProvider);
+                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdb(
+                    raw, _keyProvider
+                );
                 auto event = core::EventBuilder::buildEvent<KvdbUpdatedEvent>("kvdb", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -443,7 +449,9 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
         } else if (type == "kvdbNewEntry") {
             auto raw = server::KvdbEntryEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-                auto data = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw), _keyProvider);
+                auto data = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
+                    raw, getEntryDecryptionKeys(raw), _keyProvider
+                );
                 auto event = core::EventBuilder::buildEvent<KvdbNewEntryEvent>(
                     "kvdb/" + raw.kvdbId + "/entries", data, notification
                 );
@@ -452,7 +460,9 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
         } else if (type == "kvdbUpdatedEntry") {
             auto raw = server::KvdbEntryEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
-                auto data = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(raw, getEntryDecryptionKeys(raw), _keyProvider);
+                auto data = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
+                    raw, getEntryDecryptionKeys(raw), _keyProvider
+                );
                 auto event = core::EventBuilder::buildEvent<KvdbEntryUpdatedEvent>(
                     "kvdb/" + raw.kvdbId + "/entries", data, notification
                 );

@@ -58,10 +58,7 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 
-    Store validateDecryptAndConvertStore(
-        server::Store store,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
-    );
+    Store validateDecryptAndConvertStore(server::Store store, const std::shared_ptr<core::KeyProvider>& keyProvider);
 
     static Store toLibStore(
         const server::Store& store,

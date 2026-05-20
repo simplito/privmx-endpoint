@@ -29,8 +29,7 @@ class FileMetaEncryptor {
 public:
     struct DecryptedFileMeta {
     public:
-        DecryptedFileMeta()
-            : version(FileDataSchema::Version::UNKNOWN), v4(std::nullopt), v5(std::nullopt) {};
+        DecryptedFileMeta() : version(FileDataSchema::Version::UNKNOWN), v4(std::nullopt), v5(std::nullopt) {};
         DecryptedFileMeta(const DecryptedFileMetaV4& v4)
             : version(FileDataSchema::Version::VERSION_4), v4(v4), v5(std::nullopt) {};
         DecryptedFileMeta(const DecryptedFileMetaV5& v5)

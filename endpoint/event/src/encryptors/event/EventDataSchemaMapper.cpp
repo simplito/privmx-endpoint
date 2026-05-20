@@ -25,7 +25,8 @@ using namespace privmx::endpoint::event;
 EventDataSchemaMapper::EventDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
-) : _userPrivKey(userPrivKey), _connection(connection), _eventKeyProvider(userPrivKey) {
+)
+    : _userPrivKey(userPrivKey), _connection(connection), _eventKeyProvider(userPrivKey) {
     _strategyV5 = std::make_shared<EventDataSchemaStrategyV5>();
     _strategyMapper.registerStrategy(EventDataSchema::Version::VERSION_5, _strategyV5);
 }
@@ -36,9 +37,9 @@ Poco::Dynamic::Var EventDataSchemaMapper::encrypt(
     const std::optional<std::string>& type,
     const std::string& key
 ) {
-    auto toEncrypt = ContextEventDataToEncryptV5{ContextEventDataV5{
-        .data = data, .type = type, .dio = _connection.getImpl()->createDIO(contextId, "")
-    }};
+    auto toEncrypt = ContextEventDataToEncryptV5{
+        ContextEventDataV5{.data = data, .type = type, .dio = _connection.getImpl()->createDIO(contextId, "")}
+    };
     return _encryptorV5.encrypt(toEncrypt, _userPrivKey, key).toJSON();
 }
 
@@ -64,9 +65,7 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
         return makeErrorResult(rawEvent, e.getCode());
     } catch (const privmx::utils::PrivmxException& e) {
         return makeErrorResult(rawEvent, core::ExceptionConverter::convert(e).getCode());
-    } catch (...) {
-        return makeErrorResult(rawEvent, ENDPOINT_CORE_EXCEPTION_CODE);
-    }
+    } catch (...) { return makeErrorResult(rawEvent, ENDPOINT_CORE_EXCEPTION_CODE); }
 }
 
 DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
@@ -81,7 +80,8 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
     auto authorPubKey = privmx::crypto::PublicKey::fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
     result.statusCode = decryptedKey.statusCode;
-    if (result.statusCode != 0) return result;
+    if (result.statusCode != 0)
+        return result;
     core::DecryptedEncKey encKey;
     encKey.key = decryptedKey.key;
     encKey.statusCode = 0;
@@ -97,21 +97,21 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 
 bool EventDataSchemaMapper::verifyDecryptedEventData(const DecryptedEventDataV5& data) {
     std::vector<core::VerificationRequest> verifierInput{};
-    verifierInput.push_back(core::VerificationRequest{
-        .contextId = data.dio.contextId,
-        .senderId = data.dio.creatorUserId,
-        .senderPubKey = data.dio.creatorPubKey,
-        .date = data.dio.timestamp,
-        .bridgeIdentity = data.dio.bridgeIdentity
-    });
+    verifierInput.push_back(
+        core::VerificationRequest{
+            .contextId = data.dio.contextId,
+            .senderId = data.dio.creatorUserId,
+            .senderPubKey = data.dio.creatorPubKey,
+            .date = data.dio.timestamp,
+            .bridgeIdentity = data.dio.bridgeIdentity
+        }
+    );
     auto verified = _connection.getImpl()->getUserVerifier()->verify(verifierInput);
     return verified[0];
 }
@@ -119,7 +119,8 @@ bool EventDataSchemaMapper::verifyDecryptedEventData(const DecryptedEventDataV5&
 EventDataSchema::Version EventDataSchemaMapper::getDataStructureVersion(
     const server::ContextCustomEventData& rawEvent
 ) {
-    if (rawEvent.eventData.type() == typeid(Poco::JSON::Object::Ptr)) return EventDataSchema::Version::VERSION_5;
+    if (rawEvent.eventData.type() == typeid(Poco::JSON::Object::Ptr))
+        return EventDataSchema::Version::VERSION_5;
     return EventDataSchema::Version::UNKNOWN;
 }
 

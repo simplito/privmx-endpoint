@@ -34,10 +34,7 @@ namespace inbox {
 
 class InboxEntryDataSchemaStrategyV1 {
 public:
-    InboxEntryDataSchemaStrategyV1(
-        const std::shared_ptr<ServerApi>& serverApi,
-        const store::StoreApi& storeApi
-    );
+    InboxEntryDataSchemaStrategyV1(const std::shared_ptr<ServerApi>& serverApi, const store::StoreApi& storeApi);
     std::string encrypt(
         const InboxEntrySendModel& data,
         privmx::crypto::PrivateKey& userPriv,

@@ -63,8 +63,7 @@ StoreApiImpl::StoreApiImpl(
 
       _fileHandleManager(FileHandleManager(handleManager, "Store")),
       _subscriber(connection.getImpl()->getGateway(), STORE_TYPE_FILTER_FLAG),
-      _storeDataSchemaMapper(userPrivKey, connection),
-      _fileMetaDataSchemaMapper(userPrivKey, connection) {
+      _storeDataSchemaMapper(userPrivKey, connection), _fileMetaDataSchemaMapper(userPrivKey, connection) {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -335,14 +334,18 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto store = serverFileResult.store;
     _storeDataSchemaMapper.assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
-    auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""));
+    auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(
+        serverFileResult.file, store.resourceId.value_or("")
+    );
     if (statusCode != 0) {
         PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data integrity validation failed)
         File result;
         result.statusCode = statusCode;
         return result;
     }
-    auto ret{_fileMetaDataSchemaMapper.validateDecryptAndConvertFile(serverFileResult.file, storeToModuleKeys(store), _keyProvider)};
+    auto ret{_fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
+        serverFileResult.file, storeToModuleKeys(store), _keyProvider
+    )};
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data decrypted)
     return ret;
 }
@@ -359,7 +362,9 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
     auto store = serverFilesResult.store;
     _storeDataSchemaMapper.assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
-    auto files = _fileMetaDataSchemaMapper.validateDecryptAndConvertFiles(serverFilesResult.files, storeToModuleKeys(store), _keyProvider);
+    auto files = _fileMetaDataSchemaMapper.validateDecryptAndConvertFiles(
+        serverFilesResult.files, storeToModuleKeys(store), _keyProvider
+    );
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileList, data decrypted)
     return core::PagingList<File>({.totalAvailable = serverFilesResult.count, .readItems = files});
 }
@@ -398,7 +403,9 @@ int64_t StoreApiImpl::updateFile(
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = fileId;
     auto result = _serverApi->storeFileGet(storeFileGetModel);
-    auto internalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(result.file, storeToModuleKeys(result.store), _keyProvider);
+    auto internalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
+        result.file, storeToModuleKeys(result.store), _keyProvider
+    );
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         result.store.id, fileId, result.file.resourceId, (uint64_t)size, publicMeta, privateMeta, _CHUNK_SIZE,
         _serverRequestChunkSize, _requestApi, internalMeta.randomWrite.value_or(false)
@@ -591,14 +598,8 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
     internalFileMeta.hmac = utils::Base64::from(data.hmac);
     internalFileMeta.randomWrite = handle->getRandomWriteSupport();
     auto encryptedMetaVar = _fileMetaDataSchemaMapper.encrypt(
-        handle->getStoreId(),
-        handle->getResourceId(),
-        storeKey.contextId,
-        storeKey.moduleResourceId,
-        handle->getPublicMeta(),
-        handle->getPrivateMeta(),
-        core::Buffer::from(internalFileMeta.serialize()),
-        key
+        handle->getStoreId(), handle->getResourceId(), storeKey.contextId, storeKey.moduleResourceId,
+        handle->getPublicMeta(), handle->getPrivateMeta(), core::Buffer::from(internalFileMeta.serialize()), key
     );
     if (handle->getFileId().empty()) {
         server::StoreFileCreateModel storeFileCreateModel;
@@ -661,7 +662,9 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
         } else if (type == "storeFileCreated") {
             auto raw = server::StoreFileEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
-                auto file = _fileMetaDataSchemaMapper.validateDecryptAndConvertFile(raw, getFileDecryptionKeys(raw), _keyProvider);
+                auto file = _fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
+                    raw, getFileDecryptionKeys(raw), _keyProvider
+                );
                 auto event = core::EventBuilder::buildEvent<StoreFileCreatedEvent>(
                     "store/" + raw.storeId + "/files", file, notification
                 );
@@ -672,7 +675,9 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             if (raw.containerType.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 auto storeKeys = getFileDecryptionKeys(raw);
                 auto file = _fileMetaDataSchemaMapper.validateDecryptAndConvertFile(raw, storeKeys, _keyProvider);
-                auto internalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(raw, storeKeys, _keyProvider);
+                auto internalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
+                    raw, storeKeys, _keyProvider
+                );
                 auto fileDecryptionParams = getFileDecryptionParams(raw, internalMeta);
                 auto data = Mapper::mapToStoreFileUpdatedEventData(raw, file, fileDecryptionParams);
                 auto event = core::EventBuilder::buildEvent<StoreFileUpdatedEvent>(
@@ -737,12 +742,9 @@ FileEncryptionParams StoreApiImpl::getFileEncryptionParams(server::File file, se
     return getFileEncryptionParams(file, key);
 }
 
-
 core::ModuleKeys StoreApiImpl::getFileDecryptionKeys(server::File file) {
     return getModuleKeys(
-        file.storeId,
-        std::set<std::string>{file.keyId},
-        _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file)
+        file.storeId, std::set<std::string>{file.keyId}, _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file)
     );
 }
 
@@ -768,17 +770,13 @@ void StoreApiImpl::updateFileMeta(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
         );
     }
-    auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(file, storeToModuleKeys(store), _keyProvider);
+    auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
+        file, storeToModuleKeys(store), _keyProvider
+    );
     auto internalMeta = core::Buffer::from(fileInternalMeta.serialize());
     auto encryptedMetaVar = _fileMetaDataSchemaMapper.encrypt(
-        file.storeId,
-        file.resourceId.empty() ? core::EndpointUtils::generateId() : file.resourceId,
-        file.contextId,
-        store.resourceId.value_or(""),
-        publicMeta,
-        privateMeta,
-        internalMeta,
-        key
+        file.storeId, file.resourceId.empty() ? core::EndpointUtils::generateId() : file.resourceId, file.contextId,
+        store.resourceId.value_or(""), publicMeta, privateMeta, internalMeta, key
     );
     server::StoreFileUpdateModel storeFileUpdateModel;
     storeFileUpdateModel.fileId = fileId;

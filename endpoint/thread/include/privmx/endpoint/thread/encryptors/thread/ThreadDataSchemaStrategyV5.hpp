@@ -34,7 +34,7 @@ class ThreadDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
     core::DecryptedModuleDataV5, 
     std::tuple<Thread, core::DataIntegrityObject>
 > {
-// clang-format on
+    // clang-format on
 public:
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,
@@ -43,15 +43,18 @@ public:
     ) const;
     core::DecryptedModuleDataV5 decrypt(
         const server::ThreadInfo& thread,
-        const core::DecryptedEncKey& encKey) const override;
+        const core::DecryptedEncKey& encKey
+    ) const override;
     std::tuple<Thread, core::DataIntegrityObject> convert(
         const server::ThreadInfo& thread,
-        const core::DecryptedModuleDataV5& raw) const override;
+        const core::DecryptedModuleDataV5& raw
+    ) const override;
     std::tuple<Thread, core::DataIntegrityObject> makeErrorResult(
         const server::ThreadInfo& thread,
-        int64_t errorCode) const override;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(
-        const core::dynamic::EncryptedModuleDataV5& encData) const;
+        int64_t errorCode
+    ) const override;
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
+
 private:
     mutable core::ModuleDataEncryptorV5 _encryptor;
 };

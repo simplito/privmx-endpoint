@@ -34,10 +34,7 @@ class StoreDataSchemaStrategyV4 : public core::TypedDataSchemaStrategy<
 > {
     // clang-format on
 public:
-    core::DecryptedModuleDataV4 decrypt(
-        const server::Store& store,
-        const core::DecryptedEncKey& encKey
-    ) const override;
+    core::DecryptedModuleDataV4 decrypt(const server::Store& store, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Store, core::DataIntegrityObject> convert(
         const server::Store& store,
         const core::DecryptedModuleDataV4& raw

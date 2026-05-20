@@ -48,9 +48,7 @@ public:
         const server::KvdbInfo& kvdb,
         int64_t errorCode
     ) const override;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(
-        const core::dynamic::EncryptedModuleDataV5& encData
-    ) const;
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
 
     static Kvdb toLibKvdb(
         const server::KvdbInfo& info,

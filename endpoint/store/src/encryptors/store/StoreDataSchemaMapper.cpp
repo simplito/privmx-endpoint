@@ -122,7 +122,9 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
     // batch key fetch
     core::KeyDecryptionAndVerificationRequest keyRequest;
     for (size_t i = 0; i < stores.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         auto& store = stores[i];
         core::EncKeyLocation location{.contextId = store.contextId, .resourceId = store.resourceId.value_or("")};
         keyRequest.addOne(store.keys, store.data.back().keyId, location);
@@ -131,7 +133,9 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
     std::set<std::string> seenRandomIds;
     // decrypt + deduplication
     for (size_t i = 0; i < stores.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         auto& store = stores[i];
         try {
             auto storeKeysIt = storesKeys.find(
@@ -154,20 +158,23 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
     std::vector<core::VerificationRequest> verifyRequests;
     std::vector<size_t> verifyIndices;
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) continue;
-        verifyRequests.push_back({
-            .contextId = result[i].contextId,
-            .senderId = result[i].lastModifier,
-            .senderPubKey = storesDIO[i].creatorPubKey,
-            .date = result[i].lastModificationDate,
-            .bridgeIdentity = storesDIO[i].bridgeIdentity
-        });
+        if (result[i].statusCode != 0) {
+            continue;
+        }
+        verifyRequests.push_back(
+            {.contextId = result[i].contextId,
+             .senderId = result[i].lastModifier,
+             .senderPubKey = storesDIO[i].creatorPubKey,
+             .date = result[i].lastModificationDate,
+             .bridgeIdentity = storesDIO[i].bridgeIdentity}
+        );
         verifyIndices.push_back(i);
     }
     auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
     for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode =
-            verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        result[verifyIndices[j]].statusCode = verified[j] ?
+            0 :
+            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     }
     return result;
 }

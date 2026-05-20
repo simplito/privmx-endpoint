@@ -63,7 +63,7 @@ FileMetaEncryptor::DecryptedFileMeta FileMetaEncryptor::decrypt(
     Poco::Dynamic::Var encryptedFileMeta,
     core::EncKey encKey
 ) {
-    switch (getFileDataStructureVersion(encryptedFileMeta)) {        
+    switch (getFileDataStructureVersion(encryptedFileMeta)) {
     case FileDataSchema::Version::VERSION_4: {
         auto encryptedFileMetaV4 = server::EncryptedFileMetaV4::fromJSON(encryptedFileMeta);
         return FileMetaEncryptor::DecryptedFileMeta(_fileMetaEncryptorV4.decrypt(encryptedFileMetaV4, encKey.key));

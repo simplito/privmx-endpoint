@@ -35,14 +35,8 @@ class FileDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
 > {
     // clang-format on
 public:
-    DecryptedFileMetaV5 decrypt(
-        const server::File& file,
-        const core::DecryptedEncKey& encKey
-    ) const override;
-    DecryptedFileMetaV5 decryptFileMeta(
-        const server::File& file,
-        const core::DecryptedEncKey& encKey
-    ) const;
+    DecryptedFileMetaV5 decrypt(const server::File& file, const core::DecryptedEncKey& encKey) const override;
+    DecryptedFileMetaV5 decryptFileMeta(const server::File& file, const core::DecryptedEncKey& encKey) const;
     std::tuple<File, core::DataIntegrityObject> convert(
         const server::File& file,
         const DecryptedFileMetaV5& raw
@@ -59,9 +53,7 @@ public:
         const std::string& key,
         const core::DataIntegrityObject& dio
     ) const;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(
-        const server::EncryptedFileMetaV5& encData
-    ) const;
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encData) const;
 
 private:
     mutable FileMetaEncryptorV5 _encryptor;

@@ -40,10 +40,7 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
-    DecryptedMessageDataV4 decrypt(
-        const server::Message& message,
-        const core::DecryptedEncKey& encKey
-    ) const override;
+    DecryptedMessageDataV4 decrypt(const server::Message& message, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Message, core::DataIntegrityObject> convert(
         const server::Message& message,
         const DecryptedMessageDataV4& raw

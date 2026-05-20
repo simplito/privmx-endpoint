@@ -148,16 +148,18 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
     const core::EncKeyLocation location{.contextId = kvdbKeys.contextId, .resourceId = kvdbKeys.moduleResourceId};
     core::KeyDecryptionAndVerificationRequest keyRequest;
     for (size_t i = 0; i < entries.size(); i++) {
-        if (result[i].statusCode != 0)
+        if (result[i].statusCode != 0) {
             continue;
+        }
         keyRequest.addOne(kvdbKeys.keys, entries[i].keyId, location);
     }
     auto keysResult = keyProvider->getKeysAndVerify(keyRequest);
     auto keyMapIt = keysResult.find(location);
 
     for (size_t i = 0; i < entries.size(); i++) {
-        if (result[i].statusCode != 0)
+        if (result[i].statusCode != 0) {
             continue;
+        }
         try {
             auto [decryptedEntry, dio] = decrypt(entries[i], keyMapIt->second.at(entries[i].keyId));
             result[i] = decryptedEntry;
@@ -175,8 +177,9 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
     std::vector<core::VerificationRequest> verifyRequests;
     std::vector<size_t> verifyIndices;
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0)
+        if (result[i].statusCode != 0) {
             continue;
+        }
         verifyRequests.push_back(
             {.contextId = kvdbKeys.contextId,
              .senderId = result[i].info.author,

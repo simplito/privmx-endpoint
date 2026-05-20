@@ -37,7 +37,9 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::convert(
     const server::KvdbInfo& kvdb,
     const core::DecryptedModuleDataV5& raw
 ) const {
-    return {toLibKvdb(kvdb, raw.publicMeta, raw.privateMeta, raw.statusCode, KvdbDataSchema::Version::VERSION_5), raw.dio};
+    return {
+        toLibKvdb(kvdb, raw.publicMeta, raw.privateMeta, raw.statusCode, KvdbDataSchema::Version::VERSION_5), raw.dio
+    };
 }
 
 std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::makeErrorResult(

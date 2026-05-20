@@ -36,7 +36,9 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
     const core::DecryptedModuleDataV5& raw
 ) const {
     return {
-        toLibStreamRoom(streamRoom, raw.publicMeta, raw.privateMeta, raw.statusCode, StreamRoomDataSchema::Version::VERSION_5),
+        toLibStreamRoom(
+            streamRoom, raw.publicMeta, raw.privateMeta, raw.statusCode, StreamRoomDataSchema::Version::VERSION_5
+        ),
         raw.dio
     };
 }

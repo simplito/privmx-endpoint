@@ -57,10 +57,7 @@ public:
     uint32_t validateDataIntegrity(const server::InboxInfo& inbox);
 
     InboxPublicViewData getPublicViewData(const server::InboxGetPublicViewResult& publicView);
-    InboxInternalMetaV5 decryptInternalMeta(
-        const server::InboxDataEntry& entry,
-        const core::DecryptedEncKey& encKey
-    );
+    InboxInternalMetaV5 decryptInternalMeta(const server::InboxDataEntry& entry, const core::DecryptedEncKey& encKey);
 
     std::vector<Inbox> validateDecryptAndConvertInboxes(
         std::vector<server::InboxInfo> inboxes,

@@ -36,10 +36,7 @@ class StoreDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
 > {
     // clang-format on
 public:
-    core::DecryptedModuleDataV5 decrypt(
-        const server::Store& store,
-        const core::DecryptedEncKey& encKey
-    ) const override;
+    core::DecryptedModuleDataV5 decrypt(const server::Store& store, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Store, core::DataIntegrityObject> convert(
         const server::Store& store,
         const core::DecryptedModuleDataV5& raw
@@ -53,9 +50,7 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(
-        const core::dynamic::EncryptedModuleDataV5& encData
-    ) const;
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
 
 private:
     mutable core::ModuleDataEncryptorV5 _encryptor;

@@ -12,11 +12,11 @@ limitations under the License.
 #include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp"
 
 #include <Poco/JSON/Object.h>
-#include <set>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <set>
 
 #include "privmx/endpoint/stream/StreamException.hpp"
 
@@ -48,7 +48,9 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
     if (!strategy) {
         auto e = UnknowStreamRoomFormatException();
         return {
-            StreamRoomDataSchemaStrategyV5::toLibStreamRoom(streamRoom, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN),
+            StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
+                streamRoom, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN
+            ),
             core::DataIntegrityObject{}
         };
     }
@@ -103,7 +105,9 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
     const std::vector<server::StreamRoomInfo>& streamRooms,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    if (streamRooms.empty()) return {};
+    if (streamRooms.empty()) {
+        return {};
+    }
 
     std::vector<StreamRoom> result(streamRooms.size());
     std::vector<core::DataIntegrityObject> result_dio(streamRooms.size());
@@ -112,13 +116,17 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
     for (size_t i = 0; i < streamRooms.size(); i++) {
         auto code = validateDataIntegrity(streamRooms[i]);
         if (code != 0) {
-            result[i] = StreamRoomDataSchemaStrategyV5::toLibStreamRoom(streamRooms[i], {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
+            result[i] = StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
+                streamRooms[i], {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN
+            );
         }
     }
 
     core::KeyDecryptionAndVerificationRequest keyRequest;
     for (size_t i = 0; i < streamRooms.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         const auto& room = streamRooms[i];
         core::EncKeyLocation loc{.contextId = room.contextId, .resourceId = room.resourceId.value_or("")};
         keyRequest.addOne(room.keys, room.data.back().keyId, loc);
@@ -126,12 +134,16 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
     auto roomKeys = keyProvider->getKeysAndVerify(keyRequest);
 
     for (size_t i = 0; i < streamRooms.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         const auto& room = streamRooms[i];
         core::EncKeyLocation loc{.contextId = room.contextId, .resourceId = room.resourceId.value_or("")};
         try {
             auto it = roomKeys.find(loc);
-            if (it == roomKeys.end()) throw UnknowStreamRoomFormatException();
+            if (it == roomKeys.end()) {
+                throw UnknowStreamRoomFormatException();
+            }
             auto [decryptedRoom, dio] = decrypt(room, it->second.at(room.data.back().keyId));
             result[i] = decryptedRoom;
             result_dio[i] = dio;
@@ -139,14 +151,18 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
                 result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result[i] = StreamRoomDataSchemaStrategyV5::toLibStreamRoom(room, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN);
+            result[i] = StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
+                room, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN
+            );
         }
     }
 
     std::vector<core::VerificationRequest> verifyRequests;
     std::vector<size_t> verifyIndices;
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         verifyRequests.push_back(
             {.contextId = result[i].contextId,
              .senderId = result[i].lastModifier,
@@ -158,8 +174,9 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
     }
     auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
     for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode =
-            verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        result[verifyIndices[j]].statusCode = verified[j] ?
+            0 :
+            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     }
     return result;
 }

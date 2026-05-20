@@ -24,11 +24,10 @@ InboxEntryDataSchemaMapper::InboxEntryDataSchemaMapper(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::shared_ptr<ServerApi>& serverApi,
     const store::StoreApi& storeApi
-) : _keyProvider(keyProvider), _strategyV1(serverApi, storeApi) {}
+)
+    : _keyProvider(keyProvider), _strategyV1(serverApi, storeApi) {}
 
-inbox::server::InboxMessageServer InboxEntryDataSchemaMapper::unpackInboxOrigMessage(
-    const std::string& serialized
-) {
+inbox::server::InboxMessageServer InboxEntryDataSchemaMapper::unpackInboxOrigMessage(const std::string& serialized) {
     try {
         auto json = utils::Base64::toString(serialized);
         return inbox::server::InboxMessageServer::deserialize(json);
@@ -43,10 +42,7 @@ std::string InboxEntryDataSchemaMapper::encrypt(
     return _strategyV1.encrypt(data, userPriv, inboxPub);
 }
 
-InboxEntryDataResult InboxEntryDataSchemaMapper::decrypt(
-    std::string& data,
-    privmx::crypto::PrivateKey& inboxPriv
-) {
+InboxEntryDataResult InboxEntryDataSchemaMapper::decrypt(std::string& data, privmx::crypto::PrivateKey& inboxPriv) {
     return _strategyV1.decrypt(data, inboxPriv);
 }
 

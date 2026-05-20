@@ -41,10 +41,7 @@ public:
         const std::string& key,
         const core::DataIntegrityObject& dio
     ) const;
-    DecryptedMessageDataV5 decrypt(
-        const server::Message& message,
-        const core::DecryptedEncKey& encKey
-    ) const override;
+    DecryptedMessageDataV5 decrypt(const server::Message& message, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Message, core::DataIntegrityObject> convert(
         const server::Message& message,
         const DecryptedMessageDataV5& raw

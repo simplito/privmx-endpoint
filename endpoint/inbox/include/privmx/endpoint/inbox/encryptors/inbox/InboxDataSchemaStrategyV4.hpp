@@ -18,9 +18,9 @@ limitations under the License.
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
 
+#include "privmx/endpoint/inbox/InboxTypes.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/inbox/Types.hpp"
-#include "privmx/endpoint/inbox/InboxTypes.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV4.hpp"
 
 namespace privmx {
@@ -35,10 +35,7 @@ class InboxDataSchemaStrategyV4 : public core::TypedDataSchemaStrategy<
 > {
     // clang-format on
 public:
-    InboxDataResultV4 decrypt(
-        const server::InboxInfo& inbox,
-        const core::DecryptedEncKey& encKey
-    ) const override;
+    InboxDataResultV4 decrypt(const server::InboxInfo& inbox, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Inbox, core::DataIntegrityObject> convert(
         const server::InboxInfo& inbox,
         const InboxDataResultV4& raw

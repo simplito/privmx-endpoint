@@ -169,7 +169,7 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
     const core::ModuleKeys& storeKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    if(files.size() == 0) {
+    if (files.size() == 0) {
         return std::vector<File>{};
     }
     std::vector<File> result(files.size());
@@ -179,7 +179,7 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
     // integrity validation
     for (size_t i = 0; i < files.size(); i++) {
         auto code = validateDataIntegrity(files[i], storeKeys.moduleResourceId);
-        
+
         if (code != 0) {
             result[i] = toLibFile(files[i], {}, {}, 0, {}, code, FileDataSchema::Version::UNKNOWN, false);
         } else {
@@ -191,7 +191,9 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
     const core::EncKeyLocation location{.contextId = storeKeys.contextId, .resourceId = storeKeys.moduleResourceId};
     core::KeyDecryptionAndVerificationRequest keyRequest;
     for (size_t i = 0; i < files.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         try {
             _fileKeyIdFormatValidator.assertKeyIdFormat(files[i].keyId);
         } catch (const core::Exception& e) {
@@ -205,7 +207,9 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
 
     // decrypt + deduplication
     for (size_t i = 0; i < files.size(); i++) {
-        if (result[i].statusCode != 0) continue;
+        if (result[i].statusCode != 0) {
+            continue;
+        }
         try {
             if (keyMapIt == keysResult.end()) {
                 throw UnknowFileFormatException();
@@ -225,20 +229,23 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
     std::vector<core::VerificationRequest> verifyRequests;
     std::vector<size_t> verifyIndices;
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) continue;
-        verifyRequests.push_back({
-            .contextId = storeKeys.contextId,
-            .senderId = result[i].info.author,
-            .senderPubKey = result[i].authorPubKey,
-            .date = result[i].info.createDate,
-            .bridgeIdentity = filesDIO[i].bridgeIdentity
-        });
+        if (result[i].statusCode != 0) {
+            continue;
+        }
+        verifyRequests.push_back(
+            {.contextId = storeKeys.contextId,
+             .senderId = result[i].info.author,
+             .senderPubKey = result[i].authorPubKey,
+             .date = result[i].info.createDate,
+             .bridgeIdentity = filesDIO[i].bridgeIdentity}
+        );
         verifyIndices.push_back(i);
     }
     auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
     for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode =
-            verified[j] ? 0 : core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+        result[verifyIndices[j]].statusCode = verified[j] ?
+            0 :
+            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
     }
     return result;
 }

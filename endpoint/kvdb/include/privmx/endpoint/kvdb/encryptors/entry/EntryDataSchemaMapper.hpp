@@ -61,10 +61,7 @@ public:
 
     KvdbEntryDataSchema::Version getDataStructureVersion(const server::KvdbEntryInfo& entry);
 
-    uint32_t validateEntryDataIntegrity(
-        const server::KvdbEntryInfo& entry,
-        const std::string& kvdbResourceId
-    );
+    uint32_t validateEntryDataIntegrity(const server::KvdbEntryInfo& entry, const std::string& kvdbResourceId);
 
     KvdbEntry validateDecryptAndConvertEntryDataToEntry(
         server::KvdbEntryInfo entry,
@@ -81,7 +78,8 @@ public:
 private:
     privmx::crypto::PrivateKey _userPrivKey;
     core::Connection _connection;
-    core::VersionStrategyMapper<server::KvdbEntryInfo, std::tuple<KvdbEntry, core::DataIntegrityObject>> _strategyMapper;
+    core::VersionStrategyMapper<server::KvdbEntryInfo, std::tuple<KvdbEntry, core::DataIntegrityObject>>
+        _strategyMapper;
     std::shared_ptr<EntryDataSchemaStrategyV5> _strategyV5;
     EntryDataEncryptorV5 _encryptorV5;
 };

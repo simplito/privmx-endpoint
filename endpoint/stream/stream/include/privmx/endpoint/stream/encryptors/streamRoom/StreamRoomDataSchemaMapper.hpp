@@ -68,7 +68,8 @@ public:
 private:
     privmx::crypto::PrivateKey _userPrivKey;
     core::Connection _connection;
-    core::VersionStrategyMapper<server::StreamRoomInfo, std::tuple<StreamRoom, core::DataIntegrityObject>> _strategyMapper;
+    core::VersionStrategyMapper<server::StreamRoomInfo, std::tuple<StreamRoom, core::DataIntegrityObject>>
+        _strategyMapper;
     std::shared_ptr<StreamRoomDataSchemaStrategyV5> _strategyV5;
     core::ModuleDataEncryptorV5 _encryptorV5;
 };

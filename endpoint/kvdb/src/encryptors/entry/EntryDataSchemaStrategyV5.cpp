@@ -34,7 +34,10 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::conv
     const DecryptedKvdbEntryDataV5& raw
 ) const {
     return {
-        toLibKvdbEntry(entry, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode, KvdbEntryDataSchema::Version::VERSION_5),
+        toLibKvdbEntry(
+            entry, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode,
+            KvdbEntryDataSchema::Version::VERSION_5
+        ),
         raw.dio
     };
 }

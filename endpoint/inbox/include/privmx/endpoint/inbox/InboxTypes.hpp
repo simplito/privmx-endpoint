@@ -16,8 +16,8 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
-#include "privmx/endpoint/inbox/Types.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
+#include "privmx/endpoint/inbox/Types.hpp"
 
 namespace privmx {
 namespace endpoint {

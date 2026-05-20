@@ -46,8 +46,7 @@ ThreadApiImpl::ThreadApiImpl(
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
-      _connection(connection), _serverApi(ServerApi(gateway)),
-      _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
+      _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
       _messageDataSchemaMapper(userPrivKey, connection), _threadDataSchemaMapper(userPrivKey, connection),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
@@ -288,7 +287,9 @@ core::PagingList<Thread> ThreadApiImpl::_listThreadsEx(
     for (const auto& thread : threadsList.threads) {
         setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     }
-    std::vector<Thread> threads = _threadDataSchemaMapper.validateDecryptAndConvertThreads(threadsList.threads, _keyProvider);
+    std::vector<Thread> threads = _threadDataSchemaMapper.validateDecryptAndConvertThreads(
+        threadsList.threads, _keyProvider
+    );
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, _listThreadsEx, data decrypted)
     return core::PagingList<Thread>({.totalAvailable = threadsList.count, .readItems = threads});
 }
@@ -301,7 +302,9 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data recived);
     Message result;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, decrypting message)
-    result = _messageDataSchemaMapper.validateDecryptAndConvertMessage(message, getMessageDecryptionKeys(message), _keyProvider);
+    result = _messageDataSchemaMapper.validateDecryptAndConvertMessage(
+        message, getMessageDecryptionKeys(message), _keyProvider
+    );
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
     return result;
 }
@@ -321,7 +324,9 @@ core::PagingList<Message> ThreadApiImpl::listMessages(
     _threadDataSchemaMapper.assertDataIntegrity(thread);
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
-    auto messages = _messageDataSchemaMapper.validateDecryptAndConvertMessages(messagesList.messages, threadToModuleKeys(thread), _keyProvider);
+    auto messages = _messageDataSchemaMapper.validateDecryptAndConvertMessages(
+        messagesList.messages, threadToModuleKeys(thread), _keyProvider
+    );
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, listMessages, data decrypted)
     return core::PagingList<Message>({.totalAvailable = messagesList.count, .readItems = messages});
 }
@@ -469,7 +474,9 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         } else if (type == "threadNewMessage") {
             auto raw = server::ThreadMessageEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                auto data = _messageDataSchemaMapper.validateDecryptAndConvertMessage(raw, getMessageDecryptionKeys(raw), _keyProvider);
+                auto data = _messageDataSchemaMapper.validateDecryptAndConvertMessage(
+                    raw, getMessageDecryptionKeys(raw), _keyProvider
+                );
                 auto event = core::EventBuilder::buildEvent<ThreadNewMessageEvent>(
                     "thread/" + raw.threadId + "/messages", data, notification
                 );
@@ -478,7 +485,9 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         } else if (type == "threadUpdatedMessage") {
             auto raw = server::ThreadMessageEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
-                auto data = _messageDataSchemaMapper.validateDecryptAndConvertMessage(raw, getMessageDecryptionKeys(raw), _keyProvider);
+                auto data = _messageDataSchemaMapper.validateDecryptAndConvertMessage(
+                    raw, getMessageDecryptionKeys(raw), _keyProvider
+                );
                 auto event = core::EventBuilder::buildEvent<ThreadMessageUpdatedEvent>(
                     "thread/" + raw.threadId + "/messages", data, notification
                 );
