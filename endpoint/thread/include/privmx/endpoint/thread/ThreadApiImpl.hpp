@@ -19,25 +19,17 @@ limitations under the License.
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
-#include <privmx/utils/ThreadSaveMap.hpp>
 
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
-#include "privmx/endpoint/thread/DynamicTypes.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
-#include "privmx/endpoint/thread/MessageKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/thread/ServerApi.hpp"
 #include "privmx/endpoint/thread/SubscriberImpl.hpp"
 #include "privmx/endpoint/thread/ThreadApi.hpp"
-#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptor.hpp"
-#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV4.hpp"
-#include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV5.hpp"
+#include "privmx/endpoint/thread/encryptors/message/MessageDataSchemaMapper.hpp"
+#include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -141,65 +133,10 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    dynamic::ThreadDataV1 decryptThreadV1(server::Thread2DataEntry threadEntry, const core::DecryptedEncKey& encKey);
-    Thread convertServerThreadToLibThread(
-        server::ThreadInfo threadInfo,
-        const core::Buffer& publicMeta = core::Buffer(),
-        const core::Buffer& privateMeta = core::Buffer(),
-        const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = ThreadDataSchema::Version::UNKNOWN
-    );
-    Thread convertThreadDataV1ToThread(server::ThreadInfo threadInfo, dynamic::ThreadDataV1 threadData);
-    Thread convertDecryptedThreadDataV4ToThread(
-        server::ThreadInfo threadInfo,
-        const core::DecryptedModuleDataV4& threadData
-    );
-    Thread convertDecryptedThreadDataV5ToThread(
-        server::ThreadInfo threadInfo,
-        const core::DecryptedModuleDataV5& threadData
-    );
-    ThreadDataSchema::Version getThreadEntryDataStructureVersion(server::Thread2DataEntry threadEntry);
-    std::tuple<Thread, core::DataIntegrityObject> decryptAndConvertThreadDataToThread(
-        server::ThreadInfo thread,
-        server::Thread2DataEntry threadEntry,
-        const core::DecryptedEncKey& encKey
-    );
-    std::vector<Thread> validateDecryptAndConvertThreadsDataToThreads(std::vector<server::ThreadInfo> threads);
-    Thread validateDecryptAndConvertThreadDataToThread(server::ThreadInfo thread);
-    void assertThreadDataIntegrity(server::ThreadInfo thread);
-    uint32_t validateThreadDataIntegrity(server::ThreadInfo thread);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
 
-    dynamic::MessageDataV2 decryptMessageDataV2(server::Message message, const core::DecryptedEncKey& encKey);
-    dynamic::MessageDataV3 decryptMessageDataV3(server::Message message, const core::DecryptedEncKey& encKey);
-    DecryptedMessageDataV4 decryptMessageDataV4(server::Message message, const core::DecryptedEncKey& encKey);
-    DecryptedMessageDataV5 decryptMessageDataV5(server::Message message, const core::DecryptedEncKey& encKey);
-    Message convertServerMessageToLibMessage(
-        server::Message message,
-        const core::Buffer& publicMeta = core::Buffer(),
-        const core::Buffer& privateMeta = core::Buffer(),
-        const core::Buffer& data = core::Buffer(),
-        const std::string& authorPubKey = std::string(),
-        const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = MessageDataSchema::Version::UNKNOWN
-    );
-    Message convertMessageDataV2ToMessage(server::Message message, dynamic::MessageDataV2 messageData);
-    Message convertMessageDataV3ToMessage(server::Message message, dynamic::MessageDataV3 messageData);
-    Message convertDecryptedMessageDataV4ToMessage(server::Message message, DecryptedMessageDataV4 messageData);
-    Message convertDecryptedMessageDataV5ToMessage(server::Message message, DecryptedMessageDataV5 messageData);
-    MessageDataSchema::Version getMessagesDataStructureVersion(server::Message message);
-    std::tuple<Message, core::DataIntegrityObject> decryptAndConvertMessageDataToMessage(
-        server::Message message,
-        const core::DecryptedEncKey& encKey
-    );
-    std::vector<Message> validateDecryptAndConvertMessagesDataToMessages(
-        std::vector<server::Message> messages,
-        const core::ModuleKeys& threadKeys
-    );
-    Message validateDecryptAndConvertMessageDataToMessage(server::Message message, const core::ModuleKeys& threadKeys);
     core::ModuleKeys getMessageDecryptionKeys(server::Message message);
-    uint32_t validateMessageDataIntegrity(server::Message message, const std::string& threadResourceId);
     Poco::Dynamic::Var encryptMessageData(
         const std::string& threadId,
         const std::string& resourceId,
@@ -234,18 +171,12 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     ServerApi _serverApi;
-    core::DataEncryptor<dynamic::ThreadDataV1> _dataEncryptorThread;
-    MessageDataV2Encryptor _messageDataV2Encryptor;
-    MessageDataV3Encryptor _messageDataV3Encryptor;
-    MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     SubscriberImpl _subscriber;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _messageDeleterId;
-    MessageDataEncryptorV4 _messageDataEncryptorV4;
-    core::ModuleDataEncryptorV4 _threadDataEncryptorV4;
-    MessageDataEncryptorV5 _messageDataEncryptorV5;
-    core::ModuleDataEncryptorV5 _threadDataEncryptorV5;
+    MessageDataSchemaMapper _messageDataSchemaMapper;
+    ThreadDataSchemaMapper _threadDataSchemaMapper;
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
 
