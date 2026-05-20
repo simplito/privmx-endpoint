@@ -560,7 +560,7 @@ std::string StreamApiImpl::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
     return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
 }
@@ -574,7 +574,7 @@ void StreamApiImpl::updateStreamRoom(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
     _api->updateStreamRoom(
         streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
