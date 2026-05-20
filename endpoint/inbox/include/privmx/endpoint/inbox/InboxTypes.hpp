@@ -13,8 +13,10 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXTYPES_HPP_
 
 #include <string>
+#include <vector>
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
+#include "privmx/endpoint/inbox/Types.hpp"
 #include "privmx/endpoint/inbox/ServerTypes.hpp"
 
 namespace privmx {
@@ -110,6 +112,39 @@ struct InboxDataResultV5 : public core::DecryptedVersionedData {
     FilesConfig filesConfig;
     InboxPublicDataV5AsResult publicData;
     InboxPrivateDataV5AsResult privateData;
+};
+
+// Entry
+
+struct InboxEntryPublicData {
+    std::string userPubKey;
+    bool keyPreset;
+    std::string usedInboxKeyId;
+};
+
+struct InboxEntryPrivateData {
+    std::string filesMetaKey;
+    std::string text;
+};
+
+struct InboxEntrySendModel {
+    InboxEntryPublicData publicData;
+    InboxEntryPrivateData privateData;
+};
+
+struct InboxEntryPublicDataResult : public InboxEntryPublicData {
+    int64_t statusCode;
+};
+
+struct InboxEntryDataResult {
+    InboxEntryPublicData publicData;
+    InboxEntryPrivateData privateData;
+    int64_t statusCode;
+};
+
+struct InboxEntryResult : public InboxEntryDataResult {
+    std::string storeId;
+    std::vector<std::string> filesIds;
 };
 
 } // namespace inbox
