@@ -13,7 +13,6 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTOR_HPP_
 
 #include "privmx/endpoint/store/Constants.hpp"
-#include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV1.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
 #include <optional>
@@ -30,16 +29,12 @@ class FileMetaEncryptor {
 public:
     struct DecryptedFileMeta {
     public:
-        DecryptedFileMeta()
-            : version(FileDataSchema::Version::UNKNOWN), v1(std::nullopt), v4(std::nullopt), v5(std::nullopt) {};
-        DecryptedFileMeta(const FileMetaSigned& v1)
-            : version(FileDataSchema::Version::VERSION_1), v1(v1), v4(std::nullopt), v5(std::nullopt) {};
+        DecryptedFileMeta() : version(FileDataSchema::Version::UNKNOWN), v4(std::nullopt), v5(std::nullopt) {};
         DecryptedFileMeta(const DecryptedFileMetaV4& v4)
-            : version(FileDataSchema::Version::VERSION_4), v1(std::nullopt), v4(v4), v5(std::nullopt) {};
+            : version(FileDataSchema::Version::VERSION_4), v4(v4), v5(std::nullopt) {};
         DecryptedFileMeta(const DecryptedFileMetaV5& v5)
-            : version(FileDataSchema::Version::VERSION_5), v1(std::nullopt), v4(std::nullopt), v5(v5) {};
+            : version(FileDataSchema::Version::VERSION_5), v4(std::nullopt), v5(v5) {};
         FileDataSchema::Version version;
-        std::optional<FileMetaSigned> v1;
         std::optional<DecryptedFileMetaV4> v4;
         std::optional<DecryptedFileMetaV5> v5;
     };
@@ -60,7 +55,6 @@ private:
     privmx::endpoint::core::DataIntegrityObject createDIO(const FileInfo& fileInfo);
     privmx::crypto::PrivateKey _userPrivKey;
     core::Connection _connection;
-    FileMetaEncryptorV1 _fileMetaEncryptorV1;
     FileMetaEncryptorV4 _fileMetaEncryptorV4;
     FileMetaEncryptorV5 _fileMetaEncryptorV5;
 };

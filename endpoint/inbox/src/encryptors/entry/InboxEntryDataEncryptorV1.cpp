@@ -9,8 +9,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <string>
-
 #include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/ECIES.hpp>
@@ -18,15 +16,15 @@ limitations under the License.
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/inbox/InboxEntriesDataEncryptorSerializer.hpp>
 #include <privmx/utils/BinaryBufferBE.hpp>
+
+#include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataEncryptorV1.hpp"
 
 using namespace privmx;
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
-inbox::InboxEntriesDataEncryptorSerializer::InboxEntriesDataEncryptorSerializer() {}
 
-std::string InboxEntriesDataEncryptorSerializer::packMessage(
+std::string InboxEntryDataEncryptorV1::encrypt(
     InboxEntrySendModel data,
     privmx::crypto::PrivateKey& userPriv,
     privmx::crypto::PublicKey& inboxPub
@@ -55,7 +53,7 @@ std::string InboxEntriesDataEncryptorSerializer::packMessage(
     return utils::Base64::from(concatBuffer.str());
 }
 
-InboxEntryDataResult InboxEntriesDataEncryptorSerializer::unpackMessage(
+InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
     std::string& serializedBase64,
     privmx::crypto::PrivateKey& inboxPriv
 ) {
@@ -93,7 +91,7 @@ InboxEntryDataResult InboxEntriesDataEncryptorSerializer::unpackMessage(
     return result;
 }
 
-InboxEntryPublicDataResult InboxEntriesDataEncryptorSerializer::unpackMessagePublicOnly(std::string& serializedBase64) {
+InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::string& serializedBase64) {
     InboxEntryPublicDataResult result;
     try {
         result.statusCode = 0;

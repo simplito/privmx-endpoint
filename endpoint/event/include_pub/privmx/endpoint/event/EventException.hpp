@@ -42,6 +42,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, NotSubscribedException, "Not 
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, AlreadySubscribedException, "Already subscribed", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, InvalidEncryptedEventDataVersionException, "Invalid version of encrypted event data", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0006)
+DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, UnknownEventFormatException, "Unknown event format", 0x0007)
+
 // clang-format on
 } // namespace event
 } // namespace endpoint
