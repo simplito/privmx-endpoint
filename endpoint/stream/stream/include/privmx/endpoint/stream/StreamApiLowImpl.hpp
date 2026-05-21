@@ -19,7 +19,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -30,6 +29,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
+#include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 namespace privmx {
 namespace endpoint {
@@ -160,30 +160,6 @@ private:
     void processDisconnectedEvent();
 
     std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    StreamRoom convertServerStreamRoomToLibStreamRoom(
-        server::StreamRoomInfo streamRoomInfo,
-        const core::Buffer& publicMeta = core::Buffer(),
-        const core::Buffer& privateMeta = core::Buffer(),
-        const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = StreamRoomDataSchema::Version::UNKNOWN
-    );
-
-    StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(
-        server::StreamRoomInfo streamRoomInfo,
-        const core::DecryptedModuleDataV5& streamRoomData
-    );
-    StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
-    std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(
-        server::StreamRoomInfo streamRoom,
-        server::StreamRoomDataEntry streamRoomEntry,
-        const core::DecryptedEncKey& encKey
-    );
-    std::vector<StreamRoom> decryptAndConvertStreamRoomsDataToStreamRooms(
-        std::vector<server::StreamRoomInfo> streamRooms
-    );
-    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom);
-    void assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
-    uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc
@@ -214,7 +190,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
-    core::ModuleDataEncryptorV5 _streamRoomDataEncryptorV5;
+    StreamRoomDataSchemaMapper _streamRoomDataSchemaMapper;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
