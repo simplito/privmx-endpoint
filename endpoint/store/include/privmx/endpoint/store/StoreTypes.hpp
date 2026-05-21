@@ -39,18 +39,6 @@ struct FileDecryptionParams {
     int64_t version;
 };
 
-struct FileMetaSigned {
-    dynamic::compat_v1::StoreFileMeta meta;
-    std::string metaBuf;
-    std::string signature;
-};
-
-struct StoreFile {
-    server::File raw;
-    dynamic::compat_v1::StoreFileMeta meta;
-    std::string verified;
-};
-
 struct FileMetaToEncryptV4 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
