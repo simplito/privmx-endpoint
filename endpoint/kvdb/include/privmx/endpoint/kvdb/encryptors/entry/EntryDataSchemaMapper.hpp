@@ -64,15 +64,25 @@ public:
     uint32_t validateEntryDataIntegrity(const server::KvdbEntryInfo& entry, const std::string& kvdbResourceId);
 
     KvdbEntry validateDecryptAndConvertEntryDataToEntry(
-        server::KvdbEntryInfo entry,
+        const server::KvdbEntryInfo& entry,
         const core::ModuleKeys& kvdbKeys,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 
     std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
-        std::vector<server::KvdbEntryInfo> entries,
+        const std::vector<server::KvdbEntryInfo>& entries,
         const core::ModuleKeys& kvdbKeys,
         const std::shared_ptr<core::KeyProvider>& keyProvider
+    );
+
+    static KvdbEntry toLibKvdbEntry(
+        const server::KvdbEntryInfo& entry,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::Buffer& data,
+        const std::string& authorPubKey,
+        int64_t statusCode,
+        int64_t schemaVersion
     );
 
 private:

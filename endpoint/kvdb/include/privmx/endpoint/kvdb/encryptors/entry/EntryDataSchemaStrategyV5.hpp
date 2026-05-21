@@ -49,16 +49,6 @@ public:
     ) const override;
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encData) const;
 
-    static KvdbEntry toLibKvdbEntry(
-        const server::KvdbEntryInfo& entry,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const core::Buffer& data,
-        const std::string& authorPubKey,
-        int64_t statusCode,
-        int64_t schemaVersion
-    );
-
 private:
     mutable EntryDataEncryptorV5 _encryptor;
 };

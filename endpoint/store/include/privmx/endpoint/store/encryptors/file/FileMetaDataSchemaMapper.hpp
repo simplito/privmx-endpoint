@@ -67,19 +67,19 @@ public:
     );
 
     std::vector<File> validateDecryptAndConvertFiles(
-        std::vector<server::File> files,
+        const std::vector<server::File>& files,
         const core::ModuleKeys& storeKeys,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 
     File validateDecryptAndConvertFile(
-        server::File file,
+        const server::File& file,
         const core::ModuleKeys& storeKeys,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 
     dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(
-        server::File file,
+        const server::File& file,
         const core::ModuleKeys& storeKeys,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );

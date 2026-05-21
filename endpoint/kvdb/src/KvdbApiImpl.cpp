@@ -508,16 +508,6 @@ std::vector<std::string> KvdbApiImpl::mapUsers(const std::vector<core::UserWithP
     return result;
 }
 
-Kvdb KvdbApiImpl::convertServerKvdbToLibKvdb(
-    server::KvdbInfo kvdb,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const int64_t& statusCode,
-    const int64_t& schemaVersion
-) {
-    return KvdbDataSchemaStrategyV5::toLibKvdb(kvdb, publicMeta, privateMeta, statusCode, schemaVersion);
-}
-
 KvdbDataSchema::Version KvdbApiImpl::getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry) {
     return _kvdbDataSchemaMapper.getDataStructureVersion(kvdbEntry);
 }

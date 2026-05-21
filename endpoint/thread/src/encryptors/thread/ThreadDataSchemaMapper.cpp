@@ -16,10 +16,10 @@ limitations under the License.
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/Factory.hpp>
 #include <set>
 
 #include "privmx/endpoint/thread/ThreadException.hpp"
-#include <privmx/endpoint/core/Factory.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
@@ -89,7 +89,6 @@ void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& threa
     default:
         throw UnknowThreadFormatException();
     }
-    throw UnknowThreadFormatException();
 }
 
 uint32_t ThreadDataSchemaMapper::validateDataIntegrity(const server::ThreadInfo& thread) {
@@ -138,9 +137,9 @@ std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
 
     // integrity validation
     for (size_t i = 0; i < threads.size(); i++) {
-        auto code = validateDataIntegrity(threads[i]);
-        if (code != 0) {
-            result[i] = toLibThread(threads[i], {}, {}, code, ThreadDataSchema::Version::UNKNOWN);
+        result[i].statusCode = validateDataIntegrity(threads[i]);
+        if (result[i].statusCode != 0) {
+            result[i] = toLibThread(threads[i], {}, {}, result[i].statusCode, ThreadDataSchema::Version::UNKNOWN);
         }
     }
 
@@ -179,6 +178,12 @@ std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
             }
         } catch (const core::Exception& e) {
             result[i] = toLibThread(thread, {}, {}, e.getCode(), ThreadDataSchema::Version::UNKNOWN);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibThread(
+                thread, {}, {}, core::ExceptionConverter::convert(e).getCode(), ThreadDataSchema::Version::UNKNOWN
+            );
+        } catch (...) {
+            result[i] = toLibThread(thread, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, ThreadDataSchema::Version::UNKNOWN);
         }
     }
 

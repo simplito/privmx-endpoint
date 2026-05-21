@@ -122,13 +122,6 @@ private:
     void processDisconnectedEvent();
     std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 
-    Kvdb convertServerKvdbToLibKvdb(
-        server::KvdbInfo kvdb,
-        const core::Buffer& publicMeta = core::Buffer(),
-        const core::Buffer& privateMeta = core::Buffer(),
-        const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = KvdbDataSchema::Version::UNKNOWN
-    );
     KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(
         server::KvdbInfo kvdb,

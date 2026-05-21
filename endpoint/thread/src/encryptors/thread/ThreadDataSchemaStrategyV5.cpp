@@ -33,7 +33,6 @@ core::DecryptedModuleDataV5 ThreadDataSchemaStrategyV5::decrypt(
     const core::DecryptedEncKey& encKey
 ) const {
     auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(thread.data.back().data);
-    privmx::endpoint::core::DecryptedModuleDataV5 result;
     if (encKey.statusCode == 0) {
         return _encryptor.decrypt(encryptedData, encKey.key);
     } else {

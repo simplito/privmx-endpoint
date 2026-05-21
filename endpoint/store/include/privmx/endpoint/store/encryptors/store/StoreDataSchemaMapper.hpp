@@ -54,11 +54,14 @@ public:
     uint32_t validateDataIntegrity(const server::Store& store);
 
     std::vector<Store> validateDecryptAndConvertStores(
-        std::vector<server::Store> stores,
+        const std::vector<server::Store>& stores,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 
-    Store validateDecryptAndConvertStore(server::Store store, const std::shared_ptr<core::KeyProvider>& keyProvider);
+    Store validateDecryptAndConvertStore(
+        const server::Store& store,
+        const std::shared_ptr<core::KeyProvider>& keyProvider
+    );
 
     static Store toLibStore(
         const server::Store& store,

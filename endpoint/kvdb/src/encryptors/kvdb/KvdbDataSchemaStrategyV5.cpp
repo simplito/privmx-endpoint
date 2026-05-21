@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataSchemaStrategyV5.hpp"
+#include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/Factory.hpp>
 
@@ -38,7 +39,10 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::convert(
     const core::DecryptedModuleDataV5& raw
 ) const {
     return {
-        toLibKvdb(kvdb, raw.publicMeta, raw.privateMeta, raw.statusCode, KvdbDataSchema::Version::VERSION_5), raw.dio
+        KvdbDataSchemaMapper::toLibKvdb(
+            kvdb, raw.publicMeta, raw.privateMeta, raw.statusCode, KvdbDataSchema::Version::VERSION_5
+        ),
+        raw.dio
     };
 }
 
@@ -46,38 +50,14 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::makeErrorR
     const server::KvdbInfo& kvdb,
     int64_t errorCode
 ) const {
-    return {toLibKvdb(kvdb, {}, {}, errorCode, KvdbDataSchema::Version::VERSION_5), core::DataIntegrityObject{}};
+    return {
+        KvdbDataSchemaMapper::toLibKvdb(kvdb, {}, {}, errorCode, KvdbDataSchema::Version::VERSION_5),
+        core::DataIntegrityObject{}
+    };
 }
 
 core::DataIntegrityObject KvdbDataSchemaStrategyV5::getDIOAndAssertIntegrity(
     const core::dynamic::EncryptedModuleDataV5& encData
 ) const {
     return _encryptor.getDIOAndAssertIntegrity(encData);
-}
-
-Kvdb KvdbDataSchemaStrategyV5::toLibKvdb(
-    const server::KvdbInfo& info,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    int64_t statusCode,
-    int64_t schemaVersion
-) {
-    return Kvdb{
-        .contextId = info.contextId,
-        .kvdbId = info.id,
-        .createDate = info.createDate,
-        .creator = info.creator,
-        .lastModificationDate = info.lastModificationDate,
-        .lastModifier = info.lastModifier,
-        .users = info.users,
-        .managers = info.managers,
-        .version = info.version,
-        .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .entries = info.entries,
-        .lastEntryDate = info.lastEntryDate,
-        .policy = core::Factory::parsePolicyServerObject(info.policy),
-        .statusCode = statusCode,
-        .schemaVersion = schemaVersion
-    };
 }

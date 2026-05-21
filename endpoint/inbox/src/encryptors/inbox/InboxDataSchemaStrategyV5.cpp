@@ -83,6 +83,23 @@ InboxPublicDataV5AsResult InboxDataSchemaStrategyV5::unpackPublicOnly(const Poco
     return _processor.unpackPublicOnly(publicData);
 }
 
+InboxPublicViewData InboxDataSchemaStrategyV5::getPublicViewData(
+    const server::InboxGetPublicViewResult& publicView
+) const {
+    auto publicData = unpackPublicOnly(publicView.publicData);
+    InboxPublicViewData result;
+    result.authorPubKey = publicData.authorPubKey;
+    result.publicMeta = publicData.publicMeta;
+    result.inboxEntriesPubKeyBase58DER = publicData.inboxEntriesPubKeyBase58DER;
+    result.inboxEntriesKeyId = publicData.inboxEntriesKeyId;
+    result.inboxId = publicView.inboxId;
+    result.resourceId = "";
+    result.version = publicView.version;
+    result.dataStructureVersion = publicData.dataStructureVersion;
+    result.statusCode = publicData.statusCode;
+    return result;
+}
+
 InboxInternalMetaV5 InboxDataSchemaStrategyV5::decryptInternalMeta(
     const server::InboxDataEntry& entry,
     const core::DecryptedEncKey& encKey

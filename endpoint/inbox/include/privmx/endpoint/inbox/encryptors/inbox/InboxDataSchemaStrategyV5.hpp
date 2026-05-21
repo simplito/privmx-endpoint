@@ -47,6 +47,7 @@ public:
     ) const override;
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::InboxData& data) const;
     InboxPublicDataV5AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData) const;
+    InboxPublicViewData getPublicViewData(const server::InboxGetPublicViewResult& publicView) const;
     InboxInternalMetaV5 decryptInternalMeta(
         const server::InboxDataEntry& entry,
         const core::DecryptedEncKey& encKey

@@ -50,14 +50,6 @@ public:
     ) const override;
     core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
 
-    static StreamRoom toLibStreamRoom(
-        const server::StreamRoomInfo& info,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        int64_t statusCode,
-        int64_t schemaVersion
-    );
-
 private:
     mutable core::ModuleDataEncryptorV5 _encryptor;
 };

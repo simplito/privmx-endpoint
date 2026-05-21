@@ -45,6 +45,7 @@ public:
         int64_t errorCode
     ) const override;
     InboxPublicDataV4AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData) const;
+    InboxPublicViewData getPublicViewData(const server::InboxGetPublicViewResult& publicView) const;
     InboxInternalMetaV5 decryptInternalMeta(
         const server::InboxDataEntry& entry,
         const core::DecryptedEncKey& encKey

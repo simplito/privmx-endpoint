@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/kvdb/encryptors/entry/EntryDataSchemaStrategyV5.hpp"
+#include "privmx/endpoint/kvdb/encryptors/entry/EntryDataSchemaMapper.hpp"
 
 #include "privmx/endpoint/kvdb/Constants.hpp"
 
@@ -34,7 +35,7 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::conv
     const DecryptedKvdbEntryDataV5& raw
 ) const {
     return {
-        toLibKvdbEntry(
+        EntryDataSchemaMapper::toLibKvdbEntry(
             entry, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode,
             KvdbEntryDataSchema::Version::VERSION_5
         ),
@@ -47,7 +48,9 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::make
     int64_t errorCode
 ) const {
     return {
-        toLibKvdbEntry(entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5),
+        EntryDataSchemaMapper::toLibKvdbEntry(
+            entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5
+        ),
         core::DataIntegrityObject{}
     };
 }
@@ -56,31 +59,4 @@ core::DataIntegrityObject EntryDataSchemaStrategyV5::getDIOAndAssertIntegrity(
     const server::EncryptedKvdbEntryDataV5& encData
 ) const {
     return _encryptor.getDIOAndAssertIntegrity(encData);
-}
-
-KvdbEntry EntryDataSchemaStrategyV5::toLibKvdbEntry(
-    const server::KvdbEntryInfo& entry,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const core::Buffer& data,
-    const std::string& authorPubKey,
-    int64_t statusCode,
-    int64_t schemaVersion
-) {
-    return KvdbEntry{
-        .info =
-            {
-                .kvdbId = entry.kvdbId,
-                .key = entry.kvdbEntryKey,
-                .createDate = entry.createDate,
-                .author = entry.author,
-            },
-        .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .data = data,
-        .authorPubKey = authorPubKey,
-        .version = entry.version,
-        .statusCode = statusCode,
-        .schemaVersion = schemaVersion
-    };
 }

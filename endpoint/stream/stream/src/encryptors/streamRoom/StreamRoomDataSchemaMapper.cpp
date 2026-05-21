@@ -16,6 +16,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/Factory.hpp>
 #include <set>
 
 #include "privmx/endpoint/stream/StreamException.hpp"
@@ -48,9 +49,7 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
     if (!strategy) {
         auto e = UnknowStreamRoomFormatException();
         return {
-            StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
-                streamRoom, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN
-            ),
+            toLibStreamRoom(streamRoom, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN),
             core::DataIntegrityObject{}
         };
     }
@@ -116,9 +115,7 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
     for (size_t i = 0; i < streamRooms.size(); i++) {
         auto code = validateDataIntegrity(streamRooms[i]);
         if (code != 0) {
-            result[i] = StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
-                streamRooms[i], {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN
-            );
+            result[i] = toLibStreamRoom(streamRooms[i], {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
         }
     }
 
@@ -151,8 +148,14 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
                 result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result[i] = StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
-                room, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN
+            result[i] = toLibStreamRoom(room, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibStreamRoom(
+                room, {}, {}, core::ExceptionConverter::convert(e).getCode(), StreamRoomDataSchema::Version::UNKNOWN
+            );
+        } catch (...) {
+            result[i] = toLibStreamRoom(
+                room, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, StreamRoomDataSchema::Version::UNKNOWN
             );
         }
     }
@@ -186,4 +189,30 @@ StreamRoom StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRoom(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return validateDecryptAndConvertStreamRooms({streamRoom}, keyProvider)[0];
+}
+
+StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
+    const server::StreamRoomInfo& info,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    int64_t statusCode,
+    int64_t schemaVersion
+) {
+    return StreamRoom{
+        .contextId = info.contextId,
+        .streamRoomId = info.id,
+        .createDate = info.createDate,
+        .creator = info.creator,
+        .lastModificationDate = info.lastModificationDate,
+        .lastModifier = info.lastModifier,
+        .users = info.users,
+        .managers = info.managers,
+        .version = info.version,
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .policy = core::Factory::parsePolicyServerObject(info.policy),
+        .statusCode = statusCode,
+        .schemaVersion = schemaVersion,
+        .closed = info.closed.value_or(true)
+    };
 }

@@ -120,7 +120,6 @@ uint32_t MessageDataSchemaMapper::validateMessageDataIntegrity(
     } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
         return core::ExceptionConverter::convert(e).getCode();
     } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
-    return UnknowMessageFormatException().getCode();
 }
 
 ThreadDataSchema::Version MessageDataSchemaMapper::getMinimumContainerSchemaVersionForMessage(
@@ -162,7 +161,7 @@ Message MessageDataSchemaMapper::toLibMessage(
 }
 
 std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
-    std::vector<server::Message> messages,
+    const std::vector<server::Message>& messages,
     const core::ModuleKeys& threadKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
@@ -175,9 +174,11 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
 
     // integrity validation
     for (size_t i = 0; i < messages.size(); i++) {
-        auto code = validateMessageDataIntegrity(messages[i], threadKeys.moduleResourceId);
-        if (code != 0) {
-            result[i] = toLibMessage(messages[i], {}, {}, {}, {}, code, MessageDataSchema::Version::UNKNOWN);
+        result[i].statusCode = validateMessageDataIntegrity(messages[i], threadKeys.moduleResourceId);
+        if (result[i].statusCode != 0) {
+            result[i] = toLibMessage(
+                messages[i], {}, {}, {}, {}, result[i].statusCode, MessageDataSchema::Version::UNKNOWN
+            );
         }
     }
 
@@ -213,6 +214,15 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
             }
         } catch (const core::Exception& e) {
             result[i] = toLibMessage(messages[i], {}, {}, {}, {}, e.getCode(), MessageDataSchema::Version::UNKNOWN);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibMessage(
+                messages[i], {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode(),
+                MessageDataSchema::Version::UNKNOWN
+            );
+        } catch (...) {
+            result[i] = toLibMessage(
+                messages[i], {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, MessageDataSchema::Version::UNKNOWN
+            );
         }
     }
 
@@ -241,9 +251,9 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
 }
 
 Message MessageDataSchemaMapper::validateDecryptAndConvertMessage(
-    server::Message message,
+    const server::Message& message,
     const core::ModuleKeys& threadKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    return validateDecryptAndConvertMessages({std::move(message)}, threadKeys, keyProvider)[0];
+    return validateDecryptAndConvertMessages({message}, threadKeys, keyProvider)[0];
 }

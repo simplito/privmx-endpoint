@@ -88,8 +88,9 @@ void InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) 
         }
         return;
     }
+    default:
+        throw UnknownInboxFormatException();
     }
-    throw UnknownInboxFormatException();
 }
 
 uint32_t InboxDataSchemaMapper::validateDataIntegrity(const server::InboxInfo& inbox) {
@@ -106,32 +107,10 @@ InboxPublicViewData InboxDataSchemaMapper::getPublicViewData(const server::Inbox
     if (publicView.publicData.type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = core::dynamic::VersionedData::fromJSON(publicView.publicData);
         switch (versioned.version) {
-        case InboxDataSchema::Version::VERSION_4: {
-            auto publicData = _strategyV4->unpackPublicOnly(publicView.publicData);
-            result.inboxId = publicView.inboxId;
-            result.resourceId = "";
-            result.version = publicView.version;
-            result.dataStructureVersion = publicData.dataStructureVersion;
-            result.authorPubKey = publicData.authorPubKey;
-            result.inboxEntriesPubKeyBase58DER = publicData.inboxEntriesPubKeyBase58DER;
-            result.inboxEntriesKeyId = publicData.inboxEntriesKeyId;
-            result.publicMeta = publicData.publicMeta;
-            result.statusCode = publicData.statusCode;
-            return result;
-        }
-        case InboxDataSchema::Version::VERSION_5: {
-            auto publicData = _strategyV5->unpackPublicOnly(publicView.publicData);
-            result.inboxId = publicView.inboxId;
-            result.resourceId = "";
-            result.version = publicView.version;
-            result.dataStructureVersion = publicData.dataStructureVersion;
-            result.authorPubKey = publicData.authorPubKey;
-            result.inboxEntriesPubKeyBase58DER = publicData.inboxEntriesPubKeyBase58DER;
-            result.inboxEntriesKeyId = publicData.inboxEntriesKeyId;
-            result.publicMeta = publicData.publicMeta;
-            result.statusCode = publicData.statusCode;
-            return result;
-        }
+        case InboxDataSchema::Version::VERSION_4:
+            return _strategyV4->getPublicViewData(publicView);
+        case InboxDataSchema::Version::VERSION_5:
+            return _strategyV5->getPublicViewData(publicView);
         }
     }
     auto e = UnknownInboxFormatException();
@@ -150,12 +129,13 @@ InboxInternalMetaV5 InboxDataSchemaMapper::decryptInternalMeta(
         return _strategyV4->decryptInternalMeta(entry, encKey);
     case InboxDataSchema::Version::VERSION_5:
         return _strategyV5->decryptInternalMeta(entry, encKey);
+    default:
+        throw UnknownInboxFormatException();
     }
-    throw UnknownInboxFormatException();
 }
 
 std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
-    std::vector<server::InboxInfo> inboxes,
+    const std::vector<server::InboxInfo>& inboxes,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     if (inboxes.size() == 0) {
@@ -205,6 +185,12 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
             }
         } catch (const core::Exception& e) {
             result[i] = toLibInbox(inbox, {}, {}, {}, e.getCode(), InboxDataSchema::Version::UNKNOWN);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibInbox(
+                inbox, {}, {}, {}, core::ExceptionConverter::convert(e).getCode(), InboxDataSchema::Version::UNKNOWN
+            );
+        } catch (...) {
+            result[i] = toLibInbox(inbox, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, InboxDataSchema::Version::UNKNOWN);
         }
     }
     // batch identity verification
@@ -233,10 +219,10 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
 }
 
 Inbox InboxDataSchemaMapper::validateDecryptAndConvertInbox(
-    server::InboxInfo inbox,
+    const server::InboxInfo& inbox,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    return validateDecryptAndConvertInboxes({std::move(inbox)}, keyProvider)[0];
+    return validateDecryptAndConvertInboxes({inbox}, keyProvider)[0];
 }
 
 Inbox InboxDataSchemaMapper::toLibInbox(

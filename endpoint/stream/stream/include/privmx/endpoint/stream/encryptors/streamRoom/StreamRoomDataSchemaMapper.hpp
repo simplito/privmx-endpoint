@@ -64,6 +64,13 @@ public:
         const server::StreamRoomInfo& streamRoom,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
+    static StreamRoom toLibStreamRoom(
+        const server::StreamRoomInfo& info,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        int64_t statusCode,
+        int64_t schemaVersion
+    );
 
 private:
     privmx::crypto::PrivateKey _userPrivKey;

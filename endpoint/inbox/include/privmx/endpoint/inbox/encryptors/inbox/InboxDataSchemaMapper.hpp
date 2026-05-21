@@ -60,12 +60,12 @@ public:
     InboxInternalMetaV5 decryptInternalMeta(const server::InboxDataEntry& entry, const core::DecryptedEncKey& encKey);
 
     std::vector<Inbox> validateDecryptAndConvertInboxes(
-        std::vector<server::InboxInfo> inboxes,
+        const std::vector<server::InboxInfo>& inboxes,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 
     Inbox validateDecryptAndConvertInbox(
-        server::InboxInfo inbox,
+        const server::InboxInfo& inbox,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 

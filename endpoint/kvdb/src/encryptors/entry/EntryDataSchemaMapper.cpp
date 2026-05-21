@@ -71,9 +71,7 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaMapper::decrypt(
     if (!strategy) {
         auto e = UnknownKvdbEntryFormatException();
         return {
-            EntryDataSchemaStrategyV5::toLibKvdbEntry(
-                entry, {}, {}, {}, {}, e.getCode(), KvdbEntryDataSchema::Version::UNKNOWN
-            ),
+            toLibKvdbEntry(entry, {}, {}, {}, {}, e.getCode(), KvdbEntryDataSchema::Version::UNKNOWN),
             core::DataIntegrityObject{}
         };
     }
@@ -116,15 +114,16 @@ uint32_t EntryDataSchemaMapper::validateEntryDataIntegrity(
             }
             return 0;
         }
+        default:
+            return UnknownKvdbEntryFormatException().getCode();
         }
     } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
         return core::ExceptionConverter::convert(e).getCode();
     } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
-    return UnknownKvdbEntryFormatException().getCode();
 }
 
 std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
-    std::vector<server::KvdbEntryInfo> entries,
+    const std::vector<server::KvdbEntryInfo>& entries,
     const core::ModuleKeys& kvdbKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
@@ -139,9 +138,7 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
     for (size_t i = 0; i < entries.size(); i++) {
         auto code = validateEntryDataIntegrity(entries[i], kvdbKeys.moduleResourceId);
         if (code != 0) {
-            result[i] = EntryDataSchemaStrategyV5::toLibKvdbEntry(
-                entries[i], {}, {}, {}, {}, code, KvdbEntryDataSchema::Version::UNKNOWN
-            );
+            result[i] = toLibKvdbEntry(entries[i], {}, {}, {}, {}, code, KvdbEntryDataSchema::Version::UNKNOWN);
         }
     }
 
@@ -168,8 +165,15 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
                 result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result[i] = EntryDataSchemaStrategyV5::toLibKvdbEntry(
-                entries[i], {}, {}, {}, {}, e.getCode(), KvdbEntryDataSchema::Version::UNKNOWN
+            result[i] = toLibKvdbEntry(entries[i], {}, {}, {}, {}, e.getCode(), KvdbEntryDataSchema::Version::UNKNOWN);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibKvdbEntry(
+                entries[i], {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode(),
+                KvdbEntryDataSchema::Version::UNKNOWN
+            );
+        } catch (...) {
+            result[i] = toLibKvdbEntry(
+                entries[i], {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, KvdbEntryDataSchema::Version::UNKNOWN
             );
         }
     }
@@ -199,9 +203,36 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
 }
 
 KvdbEntry EntryDataSchemaMapper::validateDecryptAndConvertEntryDataToEntry(
-    server::KvdbEntryInfo entry,
+    const server::KvdbEntryInfo& entry,
     const core::ModuleKeys& kvdbKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    return validateDecryptAndConvertKvdbEntriesDataToKvdbEntries({std::move(entry)}, kvdbKeys, keyProvider)[0];
+    return validateDecryptAndConvertKvdbEntriesDataToKvdbEntries({entry}, kvdbKeys, keyProvider)[0];
+}
+
+KvdbEntry EntryDataSchemaMapper::toLibKvdbEntry(
+    const server::KvdbEntryInfo& entry,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const core::Buffer& data,
+    const std::string& authorPubKey,
+    int64_t statusCode,
+    int64_t schemaVersion
+) {
+    return KvdbEntry{
+        .info =
+            {
+                .kvdbId = entry.kvdbId,
+                .key = entry.kvdbEntryKey,
+                .createDate = entry.createDate,
+                .author = entry.author,
+            },
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .data = data,
+        .authorPubKey = authorPubKey,
+        .version = entry.version,
+        .statusCode = statusCode,
+        .schemaVersion = schemaVersion
+    };
 }

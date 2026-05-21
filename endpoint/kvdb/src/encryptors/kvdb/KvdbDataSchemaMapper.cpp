@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <set>
 
@@ -47,10 +48,7 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaMapper::decrypt(
     auto strategy = _strategyMapper.getStrategy(static_cast<int64_t>(version));
     if (!strategy) {
         auto e = UnknownKvdbFormatException();
-        return {
-            KvdbDataSchemaStrategyV5::toLibKvdb(kvdb, {}, {}, e.getCode(), KvdbDataSchema::Version::UNKNOWN),
-            core::DataIntegrityObject{}
-        };
+        return {toLibKvdb(kvdb, {}, {}, e.getCode(), KvdbDataSchema::Version::UNKNOWN), core::DataIntegrityObject{}};
     }
     return strategy->decryptAndConvert(kvdb, encKey);
 }
@@ -84,8 +82,9 @@ void KvdbDataSchemaMapper::assertDataIntegrity(const server::KvdbInfo& kvdb) {
         }
         return;
     }
+    default:
+        throw UnknownKvdbFormatException();
     }
-    throw UnknownKvdbFormatException();
 }
 
 uint32_t KvdbDataSchemaMapper::validateDataIntegrity(const server::KvdbInfo& kvdb) {
@@ -107,7 +106,7 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
     for (size_t i = 0; i < kvdbs.size(); i++) {
         auto code = validateDataIntegrity(kvdbs[i]);
         if (code != 0) {
-            result[i] = KvdbDataSchemaStrategyV5::toLibKvdb(kvdbs[i], {}, {}, code, KvdbDataSchema::Version::UNKNOWN);
+            result[i] = toLibKvdb(kvdbs[i], {}, {}, code, KvdbDataSchema::Version::UNKNOWN);
         }
     }
 
@@ -141,9 +140,13 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
                 result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
         } catch (const core::Exception& e) {
-            result[i] = KvdbDataSchemaStrategyV5::toLibKvdb(
-                kvdb, {}, {}, e.getCode(), KvdbDataSchema::Version::UNKNOWN
+            result[i] = toLibKvdb(kvdb, {}, {}, e.getCode(), KvdbDataSchema::Version::UNKNOWN);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibKvdb(
+                kvdb, {}, {}, core::ExceptionConverter::convert(e).getCode(), KvdbDataSchema::Version::UNKNOWN
             );
+        } catch (...) {
+            result[i] = toLibKvdb(kvdb, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, KvdbDataSchema::Version::UNKNOWN);
         }
     }
 
@@ -176,4 +179,31 @@ Kvdb KvdbDataSchemaMapper::validateDecryptAndConvertKvdb(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return validateDecryptAndConvertKvdbs({kvdb}, keyProvider)[0];
+}
+
+Kvdb KvdbDataSchemaMapper::toLibKvdb(
+    const server::KvdbInfo& info,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    int64_t statusCode,
+    int64_t schemaVersion
+) {
+    return Kvdb{
+        .contextId = info.contextId,
+        .kvdbId = info.id,
+        .createDate = info.createDate,
+        .creator = info.creator,
+        .lastModificationDate = info.lastModificationDate,
+        .lastModifier = info.lastModifier,
+        .users = info.users,
+        .managers = info.managers,
+        .version = info.version,
+        .publicMeta = publicMeta,
+        .privateMeta = privateMeta,
+        .entries = info.entries,
+        .lastEntryDate = info.lastEntryDate,
+        .policy = core::Factory::parsePolicyServerObject(info.policy),
+        .statusCode = statusCode,
+        .schemaVersion = schemaVersion
+    };
 }

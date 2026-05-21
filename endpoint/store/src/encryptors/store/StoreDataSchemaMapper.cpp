@@ -102,7 +102,7 @@ uint32_t StoreDataSchemaMapper::validateDataIntegrity(const server::Store& store
 }
 
 std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
-    std::vector<server::Store> stores,
+    const std::vector<server::Store>& stores,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     if (stores.size() == 0) {
@@ -115,8 +115,6 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
         result[i].statusCode = validateDataIntegrity(stores[i]);
         if (result[i].statusCode != 0) {
             result[i] = toLibStore(stores[i], {}, {}, result[i].statusCode, StoreDataSchema::Version::UNKNOWN);
-        } else {
-            result[i].statusCode = 0;
         }
     }
     // batch key fetch
@@ -152,6 +150,12 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
             }
         } catch (const core::Exception& e) {
             result[i] = toLibStore(store, {}, {}, e.getCode(), StoreDataSchema::Version::UNKNOWN);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibStore(
+                store, {}, {}, core::ExceptionConverter::convert(e).getCode(), StoreDataSchema::Version::UNKNOWN
+            );
+        } catch (...) {
+            result[i] = toLibStore(store, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, StoreDataSchema::Version::UNKNOWN);
         }
     }
     // batch identity verification
@@ -180,10 +184,10 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
 }
 
 Store StoreDataSchemaMapper::validateDecryptAndConvertStore(
-    server::Store store,
+    const server::Store& store,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    return validateDecryptAndConvertStores({std::move(store)}, keyProvider)[0];
+    return validateDecryptAndConvertStores({store}, keyProvider)[0];
 }
 
 Store StoreDataSchemaMapper::toLibStore(

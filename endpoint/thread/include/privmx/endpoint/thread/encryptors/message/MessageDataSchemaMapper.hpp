@@ -64,13 +64,13 @@ public:
     ThreadDataSchema::Version getMinimumContainerSchemaVersionForMessage(const server::Message& message);
 
     std::vector<Message> validateDecryptAndConvertMessages(
-        std::vector<server::Message> messages,
+        const std::vector<server::Message>& messages,
         const core::ModuleKeys& threadKeys,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );
 
     Message validateDecryptAndConvertMessage(
-        server::Message message,
+        const server::Message& message,
         const core::ModuleKeys& threadKeys,
         const std::shared_ptr<core::KeyProvider>& keyProvider
     );

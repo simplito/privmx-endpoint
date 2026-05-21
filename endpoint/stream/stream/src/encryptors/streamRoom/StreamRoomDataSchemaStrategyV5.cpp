@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaStrategyV5.hpp"
+#include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/Factory.hpp>
 
@@ -36,7 +37,7 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
     const core::DecryptedModuleDataV5& raw
 ) const {
     return {
-        toLibStreamRoom(
+        StreamRoomDataSchemaMapper::toLibStreamRoom(
             streamRoom, raw.publicMeta, raw.privateMeta, raw.statusCode, StreamRoomDataSchema::Version::VERSION_5
         ),
         raw.dio
@@ -48,7 +49,9 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
     int64_t errorCode
 ) const {
     return {
-        toLibStreamRoom(streamRoom, {}, {}, errorCode, StreamRoomDataSchema::Version::VERSION_5),
+        StreamRoomDataSchemaMapper::toLibStreamRoom(
+            streamRoom, {}, {}, errorCode, StreamRoomDataSchema::Version::VERSION_5
+        ),
         core::DataIntegrityObject{}
     };
 }
@@ -57,30 +60,4 @@ core::DataIntegrityObject StreamRoomDataSchemaStrategyV5::getDIOAndAssertIntegri
     const core::dynamic::EncryptedModuleDataV5& encData
 ) const {
     return _encryptor.getDIOAndAssertIntegrity(encData);
-}
-
-StreamRoom StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
-    const server::StreamRoomInfo& info,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    int64_t statusCode,
-    int64_t schemaVersion
-) {
-    return StreamRoom{
-        .contextId = info.contextId,
-        .streamRoomId = info.id,
-        .createDate = info.createDate,
-        .creator = info.creator,
-        .lastModificationDate = info.lastModificationDate,
-        .lastModifier = info.lastModifier,
-        .users = info.users,
-        .managers = info.managers,
-        .version = info.version,
-        .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .policy = core::Factory::parsePolicyServerObject(info.policy),
-        .statusCode = statusCode,
-        .schemaVersion = schemaVersion,
-        .closed = info.closed.value_or(true)
-    };
 }

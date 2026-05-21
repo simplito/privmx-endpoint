@@ -697,27 +697,9 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     model.type = type;
     core::ListQueryMapper::map(model, query);
     auto streamRoomsList = _serverApi->streamRoomList(model);
-    std::vector<StreamRoom> streamRooms;
-    for (size_t i = 0; i < streamRoomsList.list.size(); i++) {
-        auto streamRoom = streamRoomsList.list[i];
-        auto statusCode = _streamRoomDataSchemaMapper.validateDataIntegrity(streamRoom);
-        streamRooms.push_back(
-            StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
-                streamRoom, {}, {}, statusCode, StreamRoomDataSchema::Version::UNKNOWN
-            )
-        );
-        if (statusCode != 0) {
-            streamRoomsList.list.erase(streamRoomsList.list.begin() + i);
-            i--;
-        }
-    }
-    auto tmp = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRooms(streamRoomsList.list, _keyProvider);
-    for (size_t j = 0, i = 0; i < streamRooms.size(); i++) {
-        if (streamRooms[i].statusCode == 0) {
-            streamRooms[i] = tmp[j];
-            j++;
-        }
-    }
+    auto streamRooms = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRooms(
+        streamRoomsList.list, _keyProvider
+    );
     return core::PagingList<StreamRoom>({.totalAvailable = streamRoomsList.count, .readItems = streamRooms});
 }
 
@@ -726,12 +708,6 @@ StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId, cons
     params.id = streamRoomId;
     params.type = type;
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto statusCode = _streamRoomDataSchemaMapper.validateDataIntegrity(streamRoom);
-    if (statusCode != 0) {
-        return StreamRoomDataSchemaStrategyV5::toLibStreamRoom(
-            streamRoom, {}, {}, statusCode, StreamRoomDataSchema::Version::UNKNOWN
-        );
-    }
     auto result = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRoom(streamRoom, _keyProvider);
     return result;
 }

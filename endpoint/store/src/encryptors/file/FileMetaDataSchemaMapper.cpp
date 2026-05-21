@@ -165,7 +165,7 @@ dynamic::InternalStoreFileMeta FileMetaDataSchemaMapper::decryptFileInternalMeta
 }
 
 std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
-    std::vector<server::File> files,
+    const std::vector<server::File>& files,
     const core::ModuleKeys& storeKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
@@ -222,6 +222,15 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
             }
         } catch (const core::Exception& e) {
             result[i] = toLibFile(files[i], {}, {}, 0, {}, e.getCode(), FileDataSchema::Version::UNKNOWN, false);
+        } catch (const privmx::utils::PrivmxException& e) {
+            result[i] = toLibFile(
+                files[i], {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode(),
+                FileDataSchema::Version::UNKNOWN
+            );
+        } catch (...) {
+            result[i] = toLibFile(
+                files[i], {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, FileDataSchema::Version::UNKNOWN
+            );
         }
     }
 
@@ -251,15 +260,15 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
 }
 
 File FileMetaDataSchemaMapper::validateDecryptAndConvertFile(
-    server::File file,
+    const server::File& file,
     const core::ModuleKeys& storeKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    return validateDecryptAndConvertFiles({std::move(file)}, storeKeys, keyProvider)[0];
+    return validateDecryptAndConvertFiles({file}, storeKeys, keyProvider)[0];
 }
 
 dynamic::InternalStoreFileMeta FileMetaDataSchemaMapper::validateDecryptFileInternalMeta(
-    server::File file,
+    const server::File& file,
     const core::ModuleKeys& storeKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
