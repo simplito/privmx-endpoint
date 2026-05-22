@@ -34,18 +34,10 @@ server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::encrypt(
     return _encryptor.encrypt(messageData, userPrivKey, key);
 }
 
-DecryptedMessageDataV5 MessageDataSchemaStrategyV5::decrypt(
-    const server::Message& message,
-    const core::DecryptedEncKey& encKey
+server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::getEncryptedData(
+    const server::Message& model
 ) const {
-    auto encryptedMessageData = server::EncryptedMessageDataV5::fromJSON(message.data);
-    if (encKey.statusCode == 0) {
-        return _encryptor.decrypt(encryptedMessageData, encKey.key);
-    } else {
-        auto result = _encryptor.extractPublic(encryptedMessageData);
-        result.statusCode = encKey.statusCode;
-        return result;
-    }
+    return server::EncryptedMessageDataV5::fromJSON(model.data);
 }
 
 std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::convert(
@@ -71,10 +63,4 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::make
         ),
         core::DataIntegrityObject{}
     };
-}
-
-core::DataIntegrityObject MessageDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const server::EncryptedMessageDataV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
 }

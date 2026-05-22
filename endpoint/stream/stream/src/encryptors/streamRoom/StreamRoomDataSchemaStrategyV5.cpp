@@ -17,19 +17,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-core::DecryptedModuleDataV5 StreamRoomDataSchemaStrategyV5::decrypt(
-    const server::StreamRoomInfo& streamRoom,
-    const core::DecryptedEncKey& encKey
+core::dynamic::EncryptedModuleDataV5 StreamRoomDataSchemaStrategyV5::getEncryptedData(
+    const server::StreamRoomInfo& model
 ) const {
-    auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(streamRoom.data.back().data);
-    core::DecryptedModuleDataV5 result;
-    if (encKey.statusCode != 0) {
-        result = _encryptor.extractPublic(encryptedData);
-        result.statusCode = encKey.statusCode;
-    } else {
-        result = _encryptor.decrypt(encryptedData, encKey.key);
-    }
-    return result;
+    return core::dynamic::EncryptedModuleDataV5::fromJSON(model.data.back().data);
 }
 
 std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5::convert(
@@ -54,10 +45,4 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
         ),
         core::DataIntegrityObject{}
     };
-}
-
-core::DataIntegrityObject StreamRoomDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const core::dynamic::EncryptedModuleDataV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
 }

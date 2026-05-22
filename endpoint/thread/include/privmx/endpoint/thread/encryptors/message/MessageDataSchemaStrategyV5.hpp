@@ -15,7 +15,7 @@ limitations under the License.
 #include <tuple>
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
 
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 #include "privmx/endpoint/thread/ThreadTypes.hpp"
@@ -26,9 +26,11 @@ namespace privmx {
 namespace endpoint {
 namespace thread {
 // clang-format off
-class MessageDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
-    server::Message, 
-    DecryptedMessageDataV5, 
+class MessageDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
+    MessageDataEncryptorV5,
+    server::EncryptedMessageDataV5,
+    DecryptedMessageDataV5,
+    server::Message,
     std::tuple<Message, core::DataIntegrityObject>
 > {
     // clang-format on
@@ -41,7 +43,6 @@ public:
         const std::string& key,
         const core::DataIntegrityObject& dio
     ) const;
-    DecryptedMessageDataV5 decrypt(const server::Message& message, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Message, core::DataIntegrityObject> convert(
         const server::Message& message,
         const DecryptedMessageDataV5& raw
@@ -50,10 +51,9 @@ public:
         const server::Message& message,
         int64_t errorCode
     ) const override;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encData) const;
 
-private:
-    mutable MessageDataEncryptorV5 _encryptor;
+protected:
+    server::EncryptedMessageDataV5 getEncryptedData(const server::Message& model) const override;
 };
 
 } // namespace thread

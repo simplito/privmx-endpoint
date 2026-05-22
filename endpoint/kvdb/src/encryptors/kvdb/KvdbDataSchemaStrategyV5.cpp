@@ -19,19 +19,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-core::DecryptedModuleDataV5 KvdbDataSchemaStrategyV5::decrypt(
-    const server::KvdbInfo& kvdb,
-    const core::DecryptedEncKey& encKey
+core::dynamic::EncryptedModuleDataV5 KvdbDataSchemaStrategyV5::getEncryptedData(
+    const server::KvdbInfo& model
 ) const {
-    auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(kvdb.data.back().data);
-    core::DecryptedModuleDataV5 result;
-    if (encKey.statusCode != 0) {
-        result = _encryptor.extractPublic(encryptedData);
-        result.statusCode = encKey.statusCode;
-    } else {
-        result = _encryptor.decrypt(encryptedData, encKey.key);
-    }
-    return result;
+    return core::dynamic::EncryptedModuleDataV5::fromJSON(model.data.back().data);
 }
 
 std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::convert(
@@ -54,10 +45,4 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::makeErrorR
         KvdbDataSchemaMapper::toLibKvdb(kvdb, {}, {}, errorCode, KvdbDataSchema::Version::VERSION_5),
         core::DataIntegrityObject{}
     };
-}
-
-core::DataIntegrityObject KvdbDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const core::dynamic::EncryptedModuleDataV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
 }

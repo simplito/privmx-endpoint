@@ -16,7 +16,7 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
 
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
@@ -28,14 +28,15 @@ namespace endpoint {
 namespace store {
 
 // clang-format off
-class FileDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
-    server::File,
+class FileDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
+    FileMetaEncryptorV5,
+    server::EncryptedFileMetaV5,
     DecryptedFileMetaV5,
+    server::File,
     std::tuple<File, core::DataIntegrityObject>
 > {
     // clang-format on
 public:
-    DecryptedFileMetaV5 decrypt(const server::File& file, const core::DecryptedEncKey& encKey) const override;
     DecryptedFileMetaV5 decryptFileMeta(const server::File& file, const core::DecryptedEncKey& encKey) const;
     std::tuple<File, core::DataIntegrityObject> convert(
         const server::File& file,
@@ -53,10 +54,9 @@ public:
         const std::string& key,
         const core::DataIntegrityObject& dio
     ) const;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encData) const;
 
-private:
-    mutable FileMetaEncryptorV5 _encryptor;
+protected:
+    server::EncryptedFileMetaV5 getEncryptedData(const server::File& model) const override;
 };
 
 } // namespace store
