@@ -399,6 +399,9 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
     if (!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
         throw StreamHandleNotInitialized();
     }
+    if (!room->publisherStream->sessionId.has_value()) {
+        throw StreamRoomNotPublishedException();
+    }
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
     server::SessionDescription sessionDescription;

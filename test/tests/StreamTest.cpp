@@ -1072,6 +1072,24 @@ TEST_F(StreamTest, unsubscribeFromRemoteStreams) {
     });
 }
 
+TEST_F(StreamTest, updateStream_no_publish) {
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+    });
+    stream::StreamHandle handle;
+    EXPECT_NO_THROW({
+        handle = streamApi->createStream(streamRoomId_1);
+    });
+    // Load Fake video track
+    EXPECT_NO_THROW({
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+    });
+    EXPECT_THROW({
+        streamApi->updateStream(handle);
+    }, core::Exception);
+}
+
 TEST_F(StreamTest, updateStream_remove_all_tracks) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
