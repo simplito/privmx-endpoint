@@ -94,6 +94,10 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
     if (truncate) {
         this->truncate(writeEnd);
     }
+
+    if (_dirtyChunks.size() >= FLUSH_DIRTY_CHUNK_THRESHOLD) {
+        flush();
+    }
 }
 
 void FileHandler::truncate(uint64_t length) {
@@ -277,45 +281,78 @@ void FileHandler::flush() {
         toUpload[0] = std::string();
     }
 
-    auto savedHashList = _hashList->getAll();
-
-    std::vector<UpdateChunkData> chunksToUpdate;
-    chunksToUpdate.reserve(toUpload.size());
+    // Collect chunks to process without allocating plaintext for gap chunks yet;
+    // large zero fills (e.g. sparse writes) are deferred to batch time to avoid
+    // a memory spike of N * _plainChunkSize for all gap chunks at once.
+    struct PendingChunk {
+        std::string rawPlain;
+        uint64_t chunkIndex;
+        uint64_t expectedSize;
+    };
+    std::vector<PendingChunk> pendingChunks;
+    pendingChunks.reserve(toUpload.size());
     for (auto& [ci, plain] : toUpload) {
         uint64_t expectedSize = (ci + 1) * _plainChunkSize <= _pendingPlainfileSize ?
             _plainChunkSize :
             (_pendingPlainfileSize > ci * _plainChunkSize ? _pendingPlainfileSize - ci * _plainChunkSize : 0);
-        std::string plainData = plain;
-        plainData.resize(expectedSize, '\0');
-
-        auto chunk = _chunkEncryptor->encrypt(ci, plainData);
-        bool isLast = (ci == toUpload.rbegin()->first);
-        _hashList->set(ci, chunk.hmac, isTruncate && isLast);
-        chunksToUpdate.push_back(UpdateChunkData{chunk, plainData, ci});
+        pendingChunks.push_back({std::move(plain), ci, expectedSize});
     }
+    toUpload.clear();
 
-    store::FileMeta newFileMeta = _fileMeta;
-    newFileMeta.internalFileMeta.hmac = utils::Base64::from(_hashList->getTopHash());
-    newFileMeta.internalFileMeta.size = static_cast<int64_t>(_pendingPlainfileSize);
-    auto newMeta = _fileMetaEncryptor->encrypt(_fileInfo, newFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
-    try {
-        updateOnServer(chunksToUpdate, newMeta, _fileEncKey.id, isTruncate);
-    } catch (const core::Exception& e) {
-        _hashList->setAll(savedHashList);
-        e.rethrow();
-    } catch (const privmx::utils::PrivmxException& e) {
-        _hashList->setAll(savedHashList);
-        e.rethrow();
-    }
+    // Batch boundaries are determined up front: encrypted chunk size is fixed, so
+    // chunksPerBatch is computable without actually encrypting anything.
+    const size_t chunkBatchBytes = _encryptedChunkSize + _hashList->getHashSize();
+    const size_t chunksPerBatch = std::max<size_t>(1, MAX_UPDATE_SERVER_BYTES / chunkBatchBytes);
 
-    _plainfileSize = _pendingPlainfileSize;
-    _encryptedFileSize = newEncryptedFileSize;
-    _fileMeta = newFileMeta;
-    for (auto& upd : chunksToUpdate) {
-        bool isLast = (&upd == &chunksToUpdate.back());
-        _chunkDataProvider->update(_version, upd.chunkIndex, upd.chunk.data, _encryptedFileSize, isTruncate && isLast);
-        _chunkDataProvider->cacheChunk(upd.chunkIndex, upd.chunk.data);
-        _chunkReader->update(_version, upd.chunkIndex);
+    size_t batchStart = 0;
+    while (batchStart < pendingChunks.size()) {
+        auto savedHashList = _hashList->getAll();
+        size_t batchEnd = std::min(batchStart + chunksPerBatch, pendingChunks.size());
+        bool isLastBatch = (batchEnd == pendingChunks.size());
+
+        std::vector<UpdateChunkData> batch;
+        batch.reserve(batchEnd - batchStart);
+        for (size_t k = batchStart; k < batchEnd; k++) {
+            auto& pc = pendingChunks[k];
+            std::string plainData = std::move(pc.rawPlain);
+            plainData.resize(pc.expectedSize, '\0');
+            auto chunk = _chunkEncryptor->encrypt(pc.chunkIndex, plainData);
+
+            bool isLastChunkOfAll = isLastBatch && (k == batchEnd - 1);
+            _hashList->set(pc.chunkIndex, chunk.hmac, isTruncate && isLastChunkOfAll);
+
+            batch.push_back({chunk, pc.chunkIndex});
+        }
+
+        store::FileMeta batchFileMeta = _fileMeta;
+        batchFileMeta.internalFileMeta.hmac = utils::Base64::from(_hashList->getTopHash());
+        batchFileMeta.internalFileMeta.size = static_cast<int64_t>(_pendingPlainfileSize);
+        auto batchMeta = _fileMetaEncryptor->encrypt(
+            _fileInfo, batchFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
+
+        try {
+            updateOnServer(batch, batchMeta, _fileEncKey.id, isLastBatch && isTruncate);
+        } catch (const core::Exception& e) {
+            _hashList->setAll(savedHashList);
+            e.rethrow();
+        } catch (const privmx::utils::PrivmxException& e) {
+            _hashList->setAll(savedHashList);
+            e.rethrow();
+        }
+
+        for (size_t k = 0; k < batch.size(); k++) {
+            bool isLastChunkOfAll = isLastBatch && (k == batch.size() - 1);
+            _chunkDataProvider->update(_version, batch[k].chunkIndex, batch[k].chunk.data,
+                                       newEncryptedFileSize, isTruncate && isLastChunkOfAll);
+            _chunkDataProvider->cacheChunk(batch[k].chunkIndex, batch[k].chunk.data);
+            _chunkReader->update(_version, batch[k].chunkIndex);
+        }
+
+        _fileMeta = batchFileMeta;
+        _plainfileSize = _pendingPlainfileSize;
+        _encryptedFileSize = newEncryptedFileSize;
+
+        batchStart = batchEnd;
     }
     _pendingTruncateBoundary = UINT64_MAX;
     _dirtyChunks.clear();

@@ -65,9 +65,11 @@ public:
 private:
     struct UpdateChunkData {
         store::IChunkEncryptor::Chunk chunk;
-        std::string plainData;
         uint64_t chunkIndex;
     };
+
+    static constexpr size_t FLUSH_DIRTY_CHUNK_THRESHOLD = 35;
+    static constexpr uint64_t MAX_UPDATE_SERVER_BYTES = 5ULL * 1024 * 1024;
 
     void loadChunkIntoDirty(uint64_t chunkIndex);
     void updateOnServer(
