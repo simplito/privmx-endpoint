@@ -13,12 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include <Poco/JSON/Object.h>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/TimestampValidator.hpp>
-#include <set>
+#include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
@@ -62,64 +57,49 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaMapper::decrypt(
     const server::Message& message,
     const core::DecryptedEncKey& encKey
 ) {
-    auto version = getMessagesDataStructureVersion(message);
-    auto strategy = _strategyMapper.getStrategy(static_cast<int64_t>(version));
-    if (!strategy) {
-        auto e = UnknowMessageFormatException();
-        return {
-            toLibMessage(message, {}, {}, {}, {}, e.getCode(), MessageDataSchema::Version::UNKNOWN),
-            core::DataIntegrityObject{}
-        };
-    }
-    return strategy->decryptAndConvert(message, encKey);
+    return _strategyMapper.dispatch(
+        static_cast<int64_t>(getMessagesDataStructureVersion(message)), message, encKey,
+        [&]() -> std::tuple<Message, core::DataIntegrityObject> {
+            return {toLibMessage(message, {}, {}, {}, {}, UnknowMessageFormatException().getCode(), MessageDataSchema::Version::UNKNOWN), {}};
+        }
+    );
 }
 
 MessageDataSchema::Version MessageDataSchemaMapper::getMessagesDataStructureVersion(const server::Message& message) {
-    if (message.data.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = core::dynamic::VersionedData::fromJSON(message.data);
-        switch (versioned.version) {
-        case MessageDataSchema::Version::VERSION_4:
-            return MessageDataSchema::Version::VERSION_4;
-        case MessageDataSchema::Version::VERSION_5:
-            return MessageDataSchema::Version::VERSION_5;
-        default:
-            return MessageDataSchema::Version::UNKNOWN;
+    return core::DataSchemaMapperUtils::mapVersionedData(message.data, MessageDataSchema::Version::UNKNOWN, [](int64_t v) {
+        switch (v) {
+        case MessageDataSchema::Version::VERSION_4: return MessageDataSchema::Version::VERSION_4;
+        case MessageDataSchema::Version::VERSION_5: return MessageDataSchema::Version::VERSION_5;
+        default:                                    return MessageDataSchema::Version::UNKNOWN;
         }
-    }
-    return MessageDataSchema::Version::UNKNOWN;
+    });
 }
 
 uint32_t MessageDataSchemaMapper::validateMessageDataIntegrity(
     const server::Message& message,
     const std::string& threadResourceId
 ) {
-    try {
+    return core::DataSchemaMapperUtils::toStatusCode([&] {
         switch (getMessagesDataStructureVersion(message)) {
         case MessageDataSchema::Version::VERSION_4:
-            return 0;
+            return;
         case MessageDataSchema::Version::VERSION_5: {
             auto encData = server::EncryptedMessageDataV5::fromJSON(message.data);
             auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
-            if (dio.contextId != message.contextId ||
-                dio.resourceId != message.resourceId ||
-                !dio.containerId.has_value() ||
-                dio.containerId.value() != message.threadId ||
-                !dio.containerResourceId.has_value() ||
-                dio.containerResourceId.value() != threadResourceId ||
-                dio.creatorUserId != (message.updates.empty() ? message.author : message.updates.back().author) ||
-                !core::TimestampValidator::validate(
-                    dio.timestamp, (message.updates.empty() ? message.createDate : message.updates.back().createDate)
-                )) {
-                return MessageDataIntegrityException().getCode();
-            }
-            return 0;
+            const auto& lastModifier = message.updates.empty() ? message.author : message.updates.back().author;
+            const auto lastDate = message.updates.empty() ? message.createDate : message.updates.back().createDate;
+            core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
+                dio, message.contextId, message.resourceId,
+                message.threadId, threadResourceId,
+                lastModifier, lastDate,
+                []{ throw MessageDataIntegrityException(); }
+            );
+            return;
         }
         default:
-            return UnknowMessageFormatException().getCode();
+            throw UnknowMessageFormatException();
         }
-    } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
-        return core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
+    });
 }
 
 ThreadDataSchema::Version MessageDataSchemaMapper::getMinimumContainerSchemaVersionForMessage(
@@ -133,7 +113,6 @@ ThreadDataSchema::Version MessageDataSchemaMapper::getMinimumContainerSchemaVers
     default:
         return ThreadDataSchema::UNKNOWN;
     }
-    return ThreadDataSchema::UNKNOWN;
 }
 
 Message MessageDataSchemaMapper::toLibMessage(
@@ -165,89 +144,20 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
     const core::ModuleKeys& threadKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    if (messages.size() == 0) {
-        return std::vector<Message>{};
-    }
-    std::vector<Message> result(messages.size());
-    std::vector<core::DataIntegrityObject> messagesDIO(messages.size());
-    std::set<std::string> seenRandomIds;
-
-    // integrity validation
-    for (size_t i = 0; i < messages.size(); i++) {
-        result[i].statusCode = validateMessageDataIntegrity(messages[i], threadKeys.moduleResourceId);
-        if (result[i].statusCode != 0) {
-            result[i] = toLibMessage(
-                messages[i], {}, {}, {}, {}, result[i].statusCode, MessageDataSchema::Version::UNKNOWN
-            );
+    return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<Message>(
+        messages,
+        threadKeys,
+        keyProvider,
+        _connection,
+        [&](const server::Message& msg) {
+            return validateMessageDataIntegrity(msg, threadKeys.moduleResourceId);
+        },
+        [&](const server::Message& msg) { return core::DataSchemaMapperUtils::toStatusCode([&]{ _messageKeyIdFormatValidator.assertKeyIdFormat(msg.keyId); }); },
+        [&](const server::Message& msg, const core::DecryptedEncKey& key) { return decrypt(msg, key); },
+        [](const server::Message& msg, uint32_t code) {
+            return toLibMessage(msg, {}, {}, {}, {}, code, MessageDataSchema::Version::UNKNOWN);
         }
-    }
-
-    // single batch key fetch
-    const core::EncKeyLocation location{.contextId = threadKeys.contextId, .resourceId = threadKeys.moduleResourceId};
-    core::KeyDecryptionAndVerificationRequest keyRequest;
-    for (size_t i = 0; i < messages.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        try {
-            _messageKeyIdFormatValidator.assertKeyIdFormat(messages[i].keyId);
-        } catch (const core::Exception& e) {
-            result[i] = toLibMessage(messages[i], {}, {}, {}, {}, e.getCode(), MessageDataSchema::Version::UNKNOWN);
-            continue;
-        }
-        keyRequest.addOne(threadKeys.keys, messages[i].keyId, location);
-    }
-    auto keysResult = keyProvider->getKeysAndVerify(keyRequest);
-    auto keyMapIt = keysResult.find(location);
-
-    // decrypt, deduplication check
-    for (size_t i = 0; i < messages.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        try {
-            auto [decryptedMessage, dio] = decrypt(messages[i], keyMapIt->second.at(messages[i].keyId));
-            result[i] = decryptedMessage;
-            messagesDIO[i] = dio;
-            if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
-                result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
-            }
-        } catch (const core::Exception& e) {
-            result[i] = toLibMessage(messages[i], {}, {}, {}, {}, e.getCode(), MessageDataSchema::Version::UNKNOWN);
-        } catch (const privmx::utils::PrivmxException& e) {
-            result[i] = toLibMessage(
-                messages[i], {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode(),
-                MessageDataSchema::Version::UNKNOWN
-            );
-        } catch (...) {
-            result[i] = toLibMessage(
-                messages[i], {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, MessageDataSchema::Version::UNKNOWN
-            );
-        }
-    }
-
-    // single batch identity verification
-    std::vector<core::VerificationRequest> verifyRequests;
-    std::vector<size_t> verifyIndices;
-    for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        verifyRequests.push_back(
-            {.contextId = threadKeys.contextId,
-             .senderId = result[i].info.author,
-             .senderPubKey = result[i].authorPubKey,
-             .date = result[i].info.createDate,
-             .bridgeIdentity = messagesDIO[i].bridgeIdentity}
-        );
-        verifyIndices.push_back(i);
-    }
-    auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
-    for (size_t j = 0; j < verifyIndices.size(); j++)
-        result[verifyIndices[j]].statusCode = verified[j] ?
-            0 :
-            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-    return result;
+    );
 }
 
 Message MessageDataSchemaMapper::validateDecryptAndConvertMessage(

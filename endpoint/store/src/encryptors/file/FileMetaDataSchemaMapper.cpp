@@ -12,13 +12,8 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp"
 
 #include <Poco/JSON/Object.h>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 #include <privmx/utils/Utils.hpp>
-#include <set>
 
 #include "privmx/endpoint/store/StoreException.hpp"
 
@@ -63,16 +58,12 @@ std::tuple<File, core::DataIntegrityObject> FileMetaDataSchemaMapper::decrypt(
     const server::File& file,
     const core::DecryptedEncKey& encKey
 ) {
-    auto version = getDataStructureVersion(file);
-    auto strategy = _strategyMapper.getStrategy(static_cast<int64_t>(version));
-    if (!strategy) {
-        auto e = UnknowFileFormatException();
-        return {
-            toLibFile(file, {}, {}, 0, {}, e.getCode(), FileDataSchema::Version::UNKNOWN, false),
-            core::DataIntegrityObject{}
-        };
-    }
-    return strategy->decryptAndConvert(file, encKey);
+    return _strategyMapper.dispatch(
+        static_cast<int64_t>(getDataStructureVersion(file)), file, encKey,
+        [&]() -> std::tuple<File, core::DataIntegrityObject> {
+            return {toLibFile(file, {}, {}, 0, {}, UnknowFileFormatException().getCode(), FileDataSchema::Version::UNKNOWN, false), {}};
+        }
+    );
 }
 
 StoreDataSchema::Version FileMetaDataSchemaMapper::getMinimumStoreSchemaVersion(const server::File& file) {
@@ -87,46 +78,35 @@ StoreDataSchema::Version FileMetaDataSchemaMapper::getMinimumStoreSchemaVersion(
 }
 
 FileDataSchema::Version FileMetaDataSchemaMapper::getDataStructureVersion(const server::File& file) {
-    if (file.meta.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = core::dynamic::VersionedData::fromJSON(file.meta);
-        switch (versioned.version) {
-        case FileDataSchema::Version::VERSION_4:
-            return FileDataSchema::Version::VERSION_4;
-        case FileDataSchema::Version::VERSION_5:
-            return FileDataSchema::Version::VERSION_5;
-        default:
-            return FileDataSchema::Version::UNKNOWN;
+    return core::DataSchemaMapperUtils::mapVersionedData(file.meta, FileDataSchema::Version::UNKNOWN, [](int64_t v) {
+        switch (v) {
+        case FileDataSchema::Version::VERSION_4: return FileDataSchema::Version::VERSION_4;
+        case FileDataSchema::Version::VERSION_5: return FileDataSchema::Version::VERSION_5;
+        default:                                 return FileDataSchema::Version::UNKNOWN;
         }
-    }
-    return FileDataSchema::Version::UNKNOWN;
+    });
 }
 
 uint32_t FileMetaDataSchemaMapper::validateDataIntegrity(const server::File& file, const std::string& storeResourceId) {
-    try {
+    return core::DataSchemaMapperUtils::toStatusCode([&] {
         switch (getDataStructureVersion(file)) {
         case FileDataSchema::Version::VERSION_4:
-            return 0;
+            return;
         case FileDataSchema::Version::VERSION_5: {
             auto fileMeta = server::EncryptedFileMetaV5::fromJSON(file.meta);
             auto dio = _strategyV5->getDIOAndAssertIntegrity(fileMeta);
-            if (dio.contextId != file.contextId ||
-                dio.resourceId != file.resourceId ||
-                !dio.containerId.has_value() ||
-                dio.containerId.value() != file.storeId ||
-                !dio.containerResourceId.has_value() ||
-                dio.containerResourceId.value() != storeResourceId ||
-                dio.creatorUserId != file.lastModifier ||
-                !core::TimestampValidator::validate(dio.timestamp, file.lastModificationDate)) {
-                return FileDataIntegrityException().getCode();
-            }
-            return 0;
+            core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
+                dio, file.contextId, file.resourceId,
+                file.storeId, storeResourceId,
+                file.lastModifier, file.lastModificationDate,
+                []{ throw FileDataIntegrityException(); }
+            );
+            return;
         }
         default:
-            return UnknowFileFormatException().getCode();
+            throw UnknowFileFormatException();
         }
-    } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
-        return core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
+    });
 }
 
 DecryptedFileMetaV5 FileMetaDataSchemaMapper::decryptFileMetaV5(
@@ -169,94 +149,18 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
     const core::ModuleKeys& storeKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    if (files.size() == 0) {
-        return std::vector<File>{};
-    }
-    std::vector<File> result(files.size());
-    std::vector<core::DataIntegrityObject> filesDIO(files.size());
-    std::set<std::string> seenRandomIds;
-
-    // integrity validation
-    for (size_t i = 0; i < files.size(); i++) {
-        auto code = validateDataIntegrity(files[i], storeKeys.moduleResourceId);
-
-        if (code != 0) {
-            result[i] = toLibFile(files[i], {}, {}, 0, {}, code, FileDataSchema::Version::UNKNOWN, false);
-        } else {
-            result[i].statusCode = 0;
+    return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<File>(
+        files,
+        storeKeys,
+        keyProvider,
+        _connection,
+        [&](const server::File& f) { return validateDataIntegrity(f, storeKeys.moduleResourceId); },
+        [&](const server::File& f) { return core::DataSchemaMapperUtils::toStatusCode([&]{ _fileKeyIdFormatValidator.assertKeyIdFormat(f.keyId); }); },
+        [&](const server::File& f, const core::DecryptedEncKey& key) { return decrypt(f, key); },
+        [](const server::File& f, uint32_t code) {
+            return toLibFile(f, {}, {}, 0, {}, code, FileDataSchema::Version::UNKNOWN, false);
         }
-    }
-
-    // batch key fetch with per-file key ID format validation
-    const core::EncKeyLocation location{.contextId = storeKeys.contextId, .resourceId = storeKeys.moduleResourceId};
-    core::KeyDecryptionAndVerificationRequest keyRequest;
-    for (size_t i = 0; i < files.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        try {
-            _fileKeyIdFormatValidator.assertKeyIdFormat(files[i].keyId);
-        } catch (const core::Exception& e) {
-            result[i] = toLibFile(files[i], {}, {}, 0, {}, e.getCode(), FileDataSchema::Version::UNKNOWN, false);
-            continue;
-        }
-        keyRequest.addOne(storeKeys.keys, files[i].keyId, location);
-    }
-    auto keysResult = keyProvider->getKeysAndVerify(keyRequest);
-    auto keyMapIt = keysResult.find(location);
-
-    // decrypt + deduplication
-    for (size_t i = 0; i < files.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        try {
-            if (keyMapIt == keysResult.end()) {
-                throw UnknowFileFormatException();
-            }
-            auto [file, dio] = decrypt(files[i], keyMapIt->second.at(files[i].keyId));
-            result[i] = file;
-            filesDIO[i] = dio;
-            if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
-                result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
-            }
-        } catch (const core::Exception& e) {
-            result[i] = toLibFile(files[i], {}, {}, 0, {}, e.getCode(), FileDataSchema::Version::UNKNOWN, false);
-        } catch (const privmx::utils::PrivmxException& e) {
-            result[i] = toLibFile(
-                files[i], {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode(),
-                FileDataSchema::Version::UNKNOWN
-            );
-        } catch (...) {
-            result[i] = toLibFile(
-                files[i], {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, FileDataSchema::Version::UNKNOWN
-            );
-        }
-    }
-
-    // batch identity verification
-    std::vector<core::VerificationRequest> verifyRequests;
-    std::vector<size_t> verifyIndices;
-    for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        verifyRequests.push_back(
-            {.contextId = storeKeys.contextId,
-             .senderId = result[i].info.author,
-             .senderPubKey = result[i].authorPubKey,
-             .date = result[i].info.createDate,
-             .bridgeIdentity = filesDIO[i].bridgeIdentity}
-        );
-        verifyIndices.push_back(i);
-    }
-    auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
-    for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode = verified[j] ?
-            0 :
-            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-    }
-    return result;
+    );
 }
 
 File FileMetaDataSchemaMapper::validateDecryptAndConvertFile(

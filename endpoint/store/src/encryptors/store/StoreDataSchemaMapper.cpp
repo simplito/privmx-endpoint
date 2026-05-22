@@ -11,15 +11,9 @@ limitations under the License.
 
 #include "privmx/endpoint/store/encryptors/store/StoreDataSchemaMapper.hpp"
 
-#include <set>
-
 #include <Poco/JSON/Object.h>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
-#include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/store/StoreException.hpp"
 
@@ -45,28 +39,22 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
     const server::Store& store,
     const core::DecryptedEncKey& encKey
 ) {
-    auto version = getDataStructureVersion(store.data.back());
-    auto strategy = _strategyMapper.getStrategy(static_cast<int64_t>(version));
-    if (!strategy) {
-        auto e = UnknowStoreFormatException();
-        return {toLibStore(store, {}, {}, e.getCode(), StoreDataSchema::Version::UNKNOWN), core::DataIntegrityObject{}};
-    }
-    return strategy->decryptAndConvert(store, encKey);
+    return _strategyMapper.dispatch(
+        static_cast<int64_t>(getDataStructureVersion(store.data.back())), store, encKey,
+        [&]() -> std::tuple<Store, core::DataIntegrityObject> {
+            return {toLibStore(store, {}, {}, UnknowStoreFormatException().getCode(), StoreDataSchema::Version::UNKNOWN), {}};
+        }
+    );
 }
 
 StoreDataSchema::Version StoreDataSchemaMapper::getDataStructureVersion(const server::StoreDataEntry& entry) {
-    if (entry.data.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = core::dynamic::VersionedData::fromJSON(entry.data);
-        switch (versioned.version) {
-        case core::ModuleDataSchema::Version::VERSION_4:
-            return StoreDataSchema::Version::VERSION_4;
-        case core::ModuleDataSchema::Version::VERSION_5:
-            return StoreDataSchema::Version::VERSION_5;
-        default:
-            return StoreDataSchema::Version::UNKNOWN;
+    return core::DataSchemaMapperUtils::mapVersionedData(entry.data, StoreDataSchema::Version::UNKNOWN, [](int64_t v) {
+        switch (v) {
+        case core::ModuleDataSchema::Version::VERSION_4: return StoreDataSchema::Version::VERSION_4;
+        case core::ModuleDataSchema::Version::VERSION_5: return StoreDataSchema::Version::VERSION_5;
+        default:                                         return StoreDataSchema::Version::UNKNOWN;
         }
-    }
-    return StoreDataSchema::Version::UNKNOWN;
+    });
 }
 
 void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
@@ -77,14 +65,7 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
     case StoreDataSchema::Version::VERSION_4:
         return;
     case StoreDataSchema::Version::VERSION_5: {
-        auto encData = core::dynamic::EncryptedModuleDataV5::fromJSON(entry.data);
-        auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
-        if (dio.contextId != store.contextId ||
-            dio.resourceId != store.resourceId ||
-            dio.creatorUserId != store.lastModifier ||
-            !core::TimestampValidator::validate(dio.timestamp, store.lastModificationDate)) {
-            throw StoreDataIntegrityException();
-        }
+        core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, store, _strategyV5, []{ throw StoreDataIntegrityException(); });
         return;
     }
     default:
@@ -93,94 +74,26 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
 }
 
 uint32_t StoreDataSchemaMapper::validateDataIntegrity(const server::Store& store) {
-    try {
-        assertDataIntegrity(store);
-        return 0;
-    } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
-        return core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
+    return core::DataSchemaMapperUtils::toStatusCode([&]{ assertDataIntegrity(store); });
 }
 
 std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
     const std::vector<server::Store>& stores,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    if (stores.size() == 0) {
-        return std::vector<Store>{};
-    }
-    std::vector<Store> result(stores.size());
-    std::vector<core::DataIntegrityObject> storesDIO(stores.size());
-    // integrity validation
-    for (size_t i = 0; i < stores.size(); i++) {
-        result[i].statusCode = validateDataIntegrity(stores[i]);
-        if (result[i].statusCode != 0) {
-            result[i] = toLibStore(stores[i], {}, {}, result[i].statusCode, StoreDataSchema::Version::UNKNOWN);
+    return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Store>(
+        stores,
+        keyProvider,
+        _connection,
+        [&](const server::Store& s) { return validateDataIntegrity(s); },
+        [](const server::Store& s) -> core::EncKeyLocation {
+            return {.contextId = s.contextId, .resourceId = s.resourceId.value_or("")};
+        },
+        [&](const server::Store& s, const core::DecryptedEncKey& key) { return decrypt(s, key); },
+        [](const server::Store& s, uint32_t code) {
+            return toLibStore(s, {}, {}, code, StoreDataSchema::Version::UNKNOWN);
         }
-    }
-    // batch key fetch
-    core::KeyDecryptionAndVerificationRequest keyRequest;
-    for (size_t i = 0; i < stores.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        auto& store = stores[i];
-        core::EncKeyLocation location{.contextId = store.contextId, .resourceId = store.resourceId.value_or("")};
-        keyRequest.addOne(store.keys, store.data.back().keyId, location);
-    }
-    auto storesKeys = keyProvider->getKeysAndVerify(keyRequest);
-    std::set<std::string> seenRandomIds;
-    // decrypt + deduplication
-    for (size_t i = 0; i < stores.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        auto& store = stores[i];
-        try {
-            auto storeKeysIt = storesKeys.find(
-                core::EncKeyLocation{.contextId = store.contextId, .resourceId = store.resourceId.value_or("")}
-            );
-            if (storeKeysIt == storesKeys.end()) {
-                throw UnknowStoreFormatException();
-            }
-            auto [decryptedStore, dio] = decrypt(store, storeKeysIt->second.at(store.data.back().keyId));
-            result[i] = decryptedStore;
-            storesDIO[i] = dio;
-            if (!seenRandomIds.insert(storesDIO[i].randomId + "-" + std::to_string(storesDIO[i].timestamp)).second) {
-                result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
-            }
-        } catch (const core::Exception& e) {
-            result[i] = toLibStore(store, {}, {}, e.getCode(), StoreDataSchema::Version::UNKNOWN);
-        } catch (const privmx::utils::PrivmxException& e) {
-            result[i] = toLibStore(
-                store, {}, {}, core::ExceptionConverter::convert(e).getCode(), StoreDataSchema::Version::UNKNOWN
-            );
-        } catch (...) {
-            result[i] = toLibStore(store, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, StoreDataSchema::Version::UNKNOWN);
-        }
-    }
-    // batch identity verification
-    std::vector<core::VerificationRequest> verifyRequests;
-    std::vector<size_t> verifyIndices;
-    for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        verifyRequests.push_back(
-            {.contextId = result[i].contextId,
-             .senderId = result[i].lastModifier,
-             .senderPubKey = storesDIO[i].creatorPubKey,
-             .date = result[i].lastModificationDate,
-             .bridgeIdentity = storesDIO[i].bridgeIdentity}
-        );
-        verifyIndices.push_back(i);
-    }
-    auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
-    for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode = verified[j] ?
-            0 :
-            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-    }
-    return result;
+    );
 }
 
 Store StoreDataSchemaMapper::validateDecryptAndConvertStore(
