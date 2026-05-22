@@ -531,13 +531,18 @@ void StoreApiImpl::syncFile(const int64_t handle) {
 
 void StoreApiImpl::flushFile(const int64_t handle) {
     std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
-    if (rw_handle) {
-        rw_handle->file->flush();
+    if (!rw_handle) {
+        throw InvalidFileReadWriteHandleException();
     }
+    rw_handle->file->flush();
 }
 
-uint64_t StoreApiImpl::getFileSizeFromHandle(const int64_t handle) {
-    return _fileHandleManager.tryGetFileReadWriteHandle(handle)->file->size();
+uint64_t StoreApiImpl::getFileSize(const int64_t handle) {
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
+    if (!rw_handle) {
+        throw InvalidFileReadWriteHandleException();
+    }
+    return rw_handle->file->size();
 }
 
 std::string StoreApiImpl::closeFile(const int64_t handle) {

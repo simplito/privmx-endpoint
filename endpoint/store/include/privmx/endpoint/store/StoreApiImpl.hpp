@@ -126,7 +126,7 @@ public:
     void seekInFile(const int64_t handle, const int64_t pos);
     void syncFile(const int64_t handle);
     void flushFile(const int64_t handle);
-    uint64_t getFileSizeFromHandle(const int64_t handle);
+    uint64_t getFileSize(const int64_t handle);
     std::string closeFile(const int64_t handle);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::tuple<File, core::DataIntegrityObject> decryptAndConvertFileDataToFileInfo(

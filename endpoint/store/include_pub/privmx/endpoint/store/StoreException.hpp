@@ -82,6 +82,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileSyncFailedHandleCloseExce
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileRandomWriteInternalException, "File random write internal Exception ", 0x002C)
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x002D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileReadWriteHandleException, "Invalid file handle: handle is not FILE_READ_WRITE_HANDLE", 0x002E)
 // clang-format on
 
 } // namespace store
