@@ -81,13 +81,14 @@ int privmxClose(sqlite3_file *pFile) {
 int privmxRead(sqlite3_file *pFile, void *zBuf, int iAmt, sqlite3_int64 iOfst) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
     try {
+        std::size_t expectedSize = static_cast<std::size_t>(iAmt);
         auto data = file->read(iAmt, iOfst);
-        if (data.size() > iAmt) {
+        if (data.size() > expectedSize) {
             return SQLITE_IOERR_READ;
         }
         std::memcpy(zBuf, data.data(), data.size());
-        if (iAmt > data.size()) {
-            std::memset(&((char*)zBuf)[data.size()], 0, iAmt - data.size());
+        if (data.size() < expectedSize) {
+            std::memset(static_cast<char*>(zBuf) + data.size(), 0, expectedSize - data.size());
             return SQLITE_IOERR_SHORT_READ;
         }
     } catch (...) {
@@ -117,7 +118,7 @@ int privmxTruncate(sqlite3_file *pFile, sqlite3_int64 size) {
     return SQLITE_OK;
 }
 
-int privmxSync(sqlite3_file *pFile, int flags) {
+int privmxSync(sqlite3_file *pFile, int /*flags*/) {
     std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
     try {
         file->sync();
@@ -174,16 +175,15 @@ int privmxCheckReservedLock(sqlite3_file *pFile, int *pResOut) {
     }
 }
 
-int privmxFileControl(sqlite3_file *pFile, int op, void *pArg) {
-    std::shared_ptr<PrivmxFile> file = extractPrivmxFile(pFile);
+int privmxFileControl(sqlite3_file* /*pFile*/, int /*op*/, void* /*pArg*/) {
     return SQLITE_NOTFOUND;
 }
 
-int privmxSectorSize(sqlite3_file *pFile) {
+int privmxSectorSize(sqlite3_file* /*pFile*/) {
     return 512;
 }
 
-int privmxDeviceCharacteristics(sqlite3_file *pFile) {
+int privmxDeviceCharacteristics(sqlite3_file* /*pFile*/) {
     return 0;
 }
 
@@ -200,7 +200,13 @@ const sqlite3_io_methods PrivmxIoMethods = {
     privmxCheckReservedLock,
     privmxFileControl,
     privmxSectorSize,
-    privmxDeviceCharacteristics
+    privmxDeviceCharacteristics,
+    nullptr,  // xShmMap    (version 2+)
+    nullptr,  // xShmLock   (version 2+)
+    nullptr,  // xShmBarrier(version 2+)
+    nullptr,  // xShmUnmap  (version 2+)
+    nullptr,  // xFetch     (version 3+)
+    nullptr,  // xUnfetch   (version 3+)
 };
 
 
@@ -219,7 +225,7 @@ int privmxOpen(sqlite3_vfs *pVfs, const char *zName, sqlite3_file *pFile, int fl
 }
 
 
-int privmxDelete(sqlite3_vfs *pVfs, const char *zName, int syncDir) {
+int privmxDelete(sqlite3_vfs *pVfs, const char *zName, int /*syncDir*/) {
     std::shared_ptr<PrivmxExtFS> fs = extractPrivmxExtFS(pVfs);
     try {
         fs->deleteFile(zName);
@@ -229,7 +235,7 @@ int privmxDelete(sqlite3_vfs *pVfs, const char *zName, int syncDir) {
     return SQLITE_OK;
 }
 
-int privmxAccess(sqlite3_vfs *pVfs, const char *zName, int flags, int *pResOut) {
+int privmxAccess(sqlite3_vfs *pVfs, const char *zName, int /*flags*/, int *pResOut) {
     std::shared_ptr<PrivmxExtFS> fs = extractPrivmxExtFS(pVfs);
     try {
         *pResOut = fs->access(zName);
@@ -249,33 +255,32 @@ int privmxFullPathname(sqlite3_vfs *pVfs, const char *zName, int nOut, char *zOu
     return SQLITE_OK;
 }
 
-void *privmxDlOpen(sqlite3_vfs *pVfs, const char *zFilename) {
-    return 0;
+void *privmxDlOpen(sqlite3_vfs* /*pVfs*/, const char* /*zFilename*/) {
+    return nullptr;
 }
 
-void privmxDlError(sqlite3_vfs *pVfs, int nByte, char *zErrMsg) {
-
+void privmxDlError(sqlite3_vfs* /*pVfs*/, int /*nByte*/, char* /*zErrMsg*/) {
 }
 
-void (*privmxDlSym(sqlite3_vfs *pVfs, void *p, const char *zSymbol))(void) {
-    return 0;
+void (*privmxDlSym(sqlite3_vfs* /*pVfs*/, void* /*p*/, const char* /*zSymbol*/))(void) {
+    return nullptr;
 }
 
-void privmxDlClose(sqlite3_vfs *pVfs, void *p) {
+void privmxDlClose(sqlite3_vfs* /*pVfs*/, void* /*p*/) {
 }
 
-int privmxRandomness(sqlite3_vfs *pVfs, int nByte, char *zOut) {
+int privmxRandomness(sqlite3_vfs* /*pVfs*/, int nByte, char *zOut) {
     memset(zOut, 0, nByte);
     return SQLITE_OK;
 }
 
-int privmxSleep(sqlite3_vfs *pVfs, int microseconds) {
+int privmxSleep(sqlite3_vfs* /*pVfs*/, int microseconds) {
     sleep(microseconds / 1000000);
     usleep(microseconds % 1000000);
     return microseconds;
 }
 
-int privmxCurrentTime(sqlite3_vfs *pVfs, double *pTime) {
+int privmxCurrentTime(sqlite3_vfs* /*pVfs*/, double *pTime) {
     time_t t = time(0);
     *pTime = t/86400.0 + 2440587.5;
     return SQLITE_OK;
@@ -300,6 +305,11 @@ sqlite3_vfs* sqlite3_privmxvfs() {
         privmxRandomness,
         privmxSleep,
         privmxCurrentTime,
+        nullptr,  // xGetLastError      (version 2+)
+        nullptr,  // xCurrentTimeInt64  (version 2+)
+        nullptr,  // xSetSystemCall     (version 3+)
+        nullptr,  // xGetSystemCall     (version 3+)
+        nullptr,  // xNextSystemCall    (version 3+)
     };
     return &privmxvfs;
 }

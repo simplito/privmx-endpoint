@@ -39,27 +39,6 @@ std::string SessionManager::generateId() {
     return std::to_string(_lastId++);
 }
 
-Writer::Writer() : _buf(std::stringstream(std::ios::out | std::ios::binary)) {}
-
-std::tuple<int64_t, std::string> Writer::write(int64_t offset, const std::string& data) {
-    if (_offset == -1) {
-        _offset = offset;
-    }
-    if (_offset + size() != offset || size() > 128*1024*2) {
-        auto result = _buf.str();
-        auto resultOffset = _offset;
-        _buf.str(data);
-        _offset = offset;
-        return {resultOffset, result};
-    }
-    _buf.seekp(0, std::ios::end);
-    _buf.write(data.data(), data.size());
-    return {-1, {}};
-}
-
-int64_t Writer::size() {
-    return _buf.str().length();
-}
 
 PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
         : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
@@ -83,13 +62,8 @@ privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
 }
 
 void PrivmxFile::write(const privmx::endpoint::core::Buffer& data, int64_t offset) {
-    int64_t of;
-    std::string res;
-    tie(of, res) = writer.write(offset, data.stdString());
-    if (of != -1) {
-        session->storeApi.seekInFile(fh, of);
-        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
-    }
+    session->storeApi.seekInFile(fh, offset);
+    session->storeApi.writeToFile(fh, data);
 }
 
 void PrivmxFile::truncate(int64_t size) {
@@ -98,13 +72,6 @@ void PrivmxFile::truncate(int64_t size) {
 }
 
 void PrivmxFile::sync() {
-    int64_t of;
-    std::string res;
-    tie(of, res) = writer.write(-1, "");
-    if (of != -1) {
-        session->storeApi.seekInFile(fh, of);
-        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
-    }
     session->storeApi.flushFile(fh);
 }
 
@@ -194,13 +161,10 @@ PrivmxExtFS::ParsedPath PrivmxExtFS::parsePath(const std::string& path2) {
     Poco::Path path;
     path.parse(path2);
     if (path[0] == "pmx") {
-        ParsedPath parsed = ParsedPath {
-            .sessionId = path[1]
-        };
+        std::string sessionId = path[1];
         path.popFrontDirectory();
         path.popFrontDirectory();
-        parsed.path = path.toString();
-        return parsed;
+        return ParsedPath { .sessionId = sessionId, .path = path.toString() };
     }
     throw 0;
 }

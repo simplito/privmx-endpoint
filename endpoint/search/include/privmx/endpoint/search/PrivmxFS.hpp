@@ -61,17 +61,6 @@ private:
     std::unordered_map<std::string, std::shared_ptr<PrivmxSession>> _sessions;
 };
 
-class Writer
-{
-public:
-    Writer();
-    std::tuple<int64_t, std::string> write(int64_t offset, const std::string& data);
-    int64_t size();
-
-    std::stringstream _buf;
-    int64_t _offset = -1;
-};
-
 class PrivmxFile
 {
 public:
@@ -91,7 +80,6 @@ public:
     std::string fileId = "";
     std::string path;
     int64_t fh = -1;
-    Writer writer;
     LockSession lockSession;
 };
 
