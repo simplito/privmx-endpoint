@@ -76,7 +76,7 @@ void PrivmxFile::sync() {
 }
 
 int64_t PrivmxFile::getFileSize() {
-    return session->storeApi.getFileSizeFromHandle(fh);
+    return session->storeApi.getFileSize(fh);
 }
 
 bool PrivmxFile::lock(LockLevel level) {
