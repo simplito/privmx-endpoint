@@ -166,7 +166,7 @@ SearchIndex SearchApiImpl::mapSearchIndex(const kvdb::Kvdb& kvdb) {
         .publicMeta = kvdb.publicMeta,
         .privateMeta = kvdb.privateMeta,
         .policy = kvdb.policy,
-        .mode = (IndexMode)getIndexData(kvdb.kvdbId).mode(),
+        .mode = (kvdb.statusCode == 0) ? (IndexMode)getIndexData(kvdb.kvdbId).mode() : IndexMode::UNKNOWN,
         .statusCode = kvdb.statusCode,
         .schemaVersion = kvdb.schemaVersion
     };

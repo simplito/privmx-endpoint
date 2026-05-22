@@ -39,6 +39,9 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointSearchException, "Unknown endpoint sear
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InvalidIndexHandleException, "Invalid Index handle", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InvalidDocumentIdException, "Invalid document ID", 0x0003)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, MalformedInternalFileIdException, "Malformed internal file Id", 0x0004)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, MalformedInternalFileException, "Malformed internal file", 0x0005)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, MalformedFileLockException, "Malformed file lock", 0x0006)
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, DatabaseVFSRegisterException, "Can't register VFS", 0x0101)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, DatabaseOpenException, "Can't open database", 0x0102)

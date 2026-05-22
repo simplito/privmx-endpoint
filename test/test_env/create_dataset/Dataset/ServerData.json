@@ -416,6 +416,115 @@
         "uploaded_privateMeta_inBase64": "dGVzdF9tZXNzYWdlXzJfcHJpdmF0ZU1ldGE=",
         "uploaded_publicMeta_inBase64": "dGVzdF9tZXNzYWdlXzJfcHVibGljTWV0YQ=="
     },
+    "SearchIndex_1": {
+        "doc_1_content": "Ala ma kota",
+        "doc_1_id": 1,
+        "doc_1_name": "doc-1",
+        "doc_2_content": "Ola ma kota",
+        "doc_2_id": 2,
+        "doc_2_name": "doc-2",
+        "docs_common_content_part": "ma kota",
+        "server_data": {
+            "contextId": "65a5f73e-95c9-458e-b2db-12d19341e0e1",
+            "createDate": 1773240266426,
+            "creator": "user_1",
+            "indexId": "69b17fcab7fee8774ce9b567",
+            "lastModificationDate": 1773240266426,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "mode": 1,
+            "policy": {
+                "delete_": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMV9wcml2YXRlTWV0YQ==",
+            "publicMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMV9wdWJsaWNNZXRh",
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "users": [
+                "user_1"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9zZWFyY2hfaW5kZXhfMV9wcml2YXRlTWV0YQ==",
+        "uploaded_publicMeta_inBase64": "dGVzdF9zZWFyY2hfaW5kZXhfMV9wdWJsaWNNZXRh"
+    },
+    "SearchIndex_2": {
+        "server_data": {
+            "contextId": "65a5f73e-95c9-458e-b2db-12d19341e0e1",
+            "createDate": 1773240267683,
+            "creator": "user_1",
+            "indexId": "69b17fcbb7fee8774ce9b575",
+            "lastModificationDate": 1773240267683,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1",
+                "user_2"
+            ],
+            "mode": 2,
+            "policy": {
+                "delete_": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMl9wcml2YXRlTWV0YQ==",
+            "publicMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMl9wdWJsaWNNZXRh",
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "users": [
+                "user_1",
+                "user_2"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9zZWFyY2hfaW5kZXhfMl9wcml2YXRlTWV0YQ==",
+        "uploaded_publicMeta_inBase64": "dGVzdF9zZWFyY2hfaW5kZXhfMl9wdWJsaWNNZXRh"
+    },
+    "SearchIndex_3": {
+        "server_data": {
+            "contextId": "65a5f73e-95c9-458e-b2db-12d19341e0e1",
+            "createDate": 1773240267726,
+            "creator": "user_1",
+            "indexId": "69b17fcbb7fee8774ce9b577",
+            "lastModificationDate": 1773240267726,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "mode": 1,
+            "policy": {
+                "delete_": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9zZWFyY2hfaW5kZXhfM19wcml2YXRlTWV0YQ==",
+            "publicMeta": "dGVzdF9zZWFyY2hfaW5kZXhfM19wdWJsaWNNZXRh",
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "users": [
+                "user_1",
+                "user_2"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9zZWFyY2hfaW5kZXhfM19wcml2YXRlTWV0YQ==",
+        "uploaded_publicMeta_inBase64": "dGVzdF9zZWFyY2hfaW5kZXhfM19wdWJsaWNNZXRh"
+    },
     "Store_1": {
         "server_data": {
             "contextId": "a7255985-a64f-4652-a8f5-4ede8670713b",
