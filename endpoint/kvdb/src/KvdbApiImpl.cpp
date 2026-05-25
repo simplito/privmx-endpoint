@@ -277,6 +277,18 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
     return result;
 }
 
+std::optional<KvdbEntry> KvdbApiImpl::findEntry(const std::string& kvdbId, const std::string& key) {
+    PRIVMX_DEBUG_TIME_START(PlatformKvdb, findEntry)
+    server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, findEntry, getting entry)
+    auto entryOpt = _serverApi.kvdbEntryFind(model).kvdbEntry;
+    PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, findEntry, data received)
+    if (!entryOpt.has_value()) {
+        return std::nullopt;
+    }
+    return validateDecryptAndConvertEntryDataToEntry(entryOpt.value(), getEntryDecryptionKeys(entryOpt.value()));
+}
+
 bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
     try {
         server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
