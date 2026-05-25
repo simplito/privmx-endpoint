@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <memory>
 #include <mutex>
+
 #include <privmx/endpoint/store/cache/CacheInterface.hpp>
 
 namespace privmx {
@@ -33,8 +34,7 @@ namespace store {
  * After the first connect(), the cache instance is frozen and further calls
  * to either method have no effect.
  */
-class GlobalCache
-{
+class GlobalCache {
 public:
     /**
      * Enables or disables the built-in in-memory cache.
@@ -58,7 +58,7 @@ public:
      * and setChunksCacheEnabled() calls have no effect.
      */
     static std::shared_ptr<CacheInterface> getChunksCacheInstance();
-    
+
     GlobalCache() = delete;
 
 private:
@@ -67,8 +67,8 @@ private:
     static std::once_flag _chunksCacheInitFlag;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_GLOBAL_CACHE_HPP_

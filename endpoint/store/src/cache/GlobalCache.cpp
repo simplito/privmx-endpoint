@@ -9,9 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/store/cache/GlobalCache.hpp>
 #include <privmx/endpoint/store/cache/CacheInMemory.hpp>
 #include <privmx/endpoint/store/cache/CacheNoOp.hpp>
+#include <privmx/endpoint/store/cache/GlobalCache.hpp>
 
 using namespace privmx::endpoint::store;
 
@@ -30,7 +30,8 @@ void GlobalCache::setChunksCache(std::shared_ptr<CacheInterface> cache) {
 
 std::shared_ptr<CacheInterface> GlobalCache::getChunksCacheInstance() {
     std::call_once(_chunksCacheInitFlag, []() {
-        if (_chunksCacheImpl) return;
+        if (_chunksCacheImpl)
+            return;
         if (_isChunksCacheEnabled) {
             _chunksCacheImpl = std::make_shared<CacheInMemory>();
         } else {

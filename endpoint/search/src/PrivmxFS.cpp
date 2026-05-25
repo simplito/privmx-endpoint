@@ -1,8 +1,8 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
+#include "privmx/endpoint/core/ConvertedExceptions.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
-#include "privmx/endpoint/core/ConvertedExceptions.hpp"
 #include <privmx/utils/Logger.hpp>
 
 static const privmx::endpoint::core::Buffer META = privmx::endpoint::core::Buffer::from("{}");
@@ -24,7 +24,7 @@ std::shared_ptr<PrivmxSession> SessionManager::addSession(
     const std::string& kvdbId,
     const std::string& storeId
 ) {
-    std::shared_ptr<PrivmxSession> session = std::make_shared<PrivmxSession>(PrivmxSession {
+    std::shared_ptr<PrivmxSession> session = std::make_shared<PrivmxSession>(PrivmxSession{
         .id = generateId(),
         .connection = connection,
         .storeApi = storeApi,
@@ -43,9 +43,8 @@ std::string SessionManager::generateId() {
     return std::to_string(_lastId++);
 }
 
-
 PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
-        : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
+    : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
 
 void PrivmxFile::open() {
     LOG_TRACE("PrivmxFile::open - ", fileId)
@@ -100,9 +99,7 @@ bool PrivmxFile::checkReservedLock() {
     return lockSession.checkReservedLock();
 }
 
-std::shared_ptr<PrivmxFS> PrivmxFS::create(
-    std::shared_ptr<PrivmxSession> session
-) {
+std::shared_ptr<PrivmxFS> PrivmxFS::create(std::shared_ptr<PrivmxSession> session) {
     std::shared_ptr<PrivmxFS> res = std::make_shared<PrivmxFS>(session);
     return res;
 }
@@ -115,31 +112,29 @@ std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
 }
 
 bool PrivmxFS::access(const std::string& path) {
-    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
+    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ", _session->kvdbId)
     return _session->kvdbApi.hasEntry(_session->kvdbId, path);
 }
 
 void PrivmxFS::deleteFile(const std::string& path) {
-    LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ",_session->kvdbId)
+    LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ", _session->kvdbId)
     privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, path);
     std::string fileId = "";
-    if(kvdbEntry.statusCode == 0) {
+    if (kvdbEntry.statusCode == 0) {
         fileId = kvdbEntry.data.stdString();
     }
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
     LockSession::destroyLock(_session->kvdbApi, _session->kvdbId, path);
 }
-PrivmxFS::PrivmxFS(
-    const std::shared_ptr<PrivmxSession>& session
-) : _session(session) {}
+PrivmxFS::PrivmxFS(const std::shared_ptr<PrivmxSession>& session) : _session(session) {}
 
 std::string PrivmxFS::getFileId(const std::string& name) {
-    LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
+    LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ", _session->kvdbId)
     try {
         privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
-        if(kvdbEntry.statusCode != 0) {
-           throw MalformedInternalFileIdException(); 
+        if (kvdbEntry.statusCode != 0) {
+            throw MalformedInternalFileIdException();
         }
         std::string fileId = kvdbEntry.data.stdString();
         return fileId;
@@ -182,7 +177,7 @@ PrivmxExtFS::ParsedPath PrivmxExtFS::parsePath(const std::string& path2) {
         std::string sessionId = path[1];
         path.popFrontDirectory();
         path.popFrontDirectory();
-        return ParsedPath { .sessionId = sessionId, .path = path.toString() };
+        return ParsedPath{.sessionId = sessionId, .path = path.toString()};
     }
     throw 0;
 }

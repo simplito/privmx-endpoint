@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CACHE_KEY_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CACHE_KEY_HPP_
 
-#include <string>
 #include <cstdint>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -28,19 +28,17 @@ namespace store {
  * Extend this class with new static methods as the cache grows
  * to cover additional entity types (files, messages, keys, etc.).
  */
-class CacheKey
-{
+class CacheKey {
 public:
     CacheKey() = delete;
 
     static std::string chunk(const std::string& fileId, uint32_t chunkNumber) {
         return "chunk;" + fileId + ";" + std::to_string(chunkNumber);
     }
-
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CACHE_KEY_HPP_

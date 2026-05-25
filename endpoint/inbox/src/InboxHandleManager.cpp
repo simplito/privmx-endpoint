@@ -155,8 +155,10 @@ void InboxHandleManager::removeFileHandle(int64_t fileHandleId, bool force) {
         _fileHandlesUsedByInboxHandles.erase(
             std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId)
         );
-    } else if (std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) !=
-               _fileHandlesUsedByInboxHandles.end()) {
+    } else if (
+        std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) !=
+        _fileHandlesUsedByInboxHandles.end()
+    ) {
         throw HandleIsUsedInInboxHandleException();
     }
     return _fileHandleManager.removeHandle(fileHandleId);

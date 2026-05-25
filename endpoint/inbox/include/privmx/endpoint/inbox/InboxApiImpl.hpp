@@ -34,6 +34,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/SubscriberImpl.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV4.hpp"
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV5.hpp"
+#include "privmx/endpoint/store/cache/CacheInterface.hpp"
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -48,7 +49,6 @@ limitations under the License.
 #include <privmx/endpoint/thread/ServerTypes.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
-#include "privmx/endpoint/store/cache/CacheInterface.hpp"
 
 namespace privmx {
 namespace endpoint {

@@ -12,9 +12,9 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CACHE_INTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CACHE_INTERFACE_HPP_
 
-#include <string>
-#include <optional>
 #include <Pson/BinaryString.hpp>
+#include <optional>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -30,8 +30,7 @@ namespace store {
  * Implementations are responsible for enforcing a maximum size limit and an eviction policy
  * (e.g. LRU) to prevent unbounded memory growth.
  */
-class CacheInterface
-{
+class CacheInterface {
 public:
     virtual ~CacheInterface() = default;
 
@@ -51,8 +50,8 @@ public:
     virtual void del(const std::string& key) = 0;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CACHE_INTERFACE_HPP_

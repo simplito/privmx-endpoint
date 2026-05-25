@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <memory>
 #include <string>
+
 #include <privmx/endpoint/store/cache/CacheInterface.hpp>
 
 namespace privmx {
@@ -25,31 +26,24 @@ namespace store {
  * providing namespace isolation between different Bridge URLs and users
  * without requiring separate cache instances.
  */
-class CacheScopedNamespace : public CacheInterface
-{
+class CacheScopedNamespace : public CacheInterface {
 public:
     CacheScopedNamespace(std::string prefix, std::shared_ptr<CacheInterface> inner)
         : _prefix(std::move(prefix)), _inner(std::move(inner)) {}
 
-    std::optional<Pson::BinaryString> get(const std::string& key) override {
-        return _inner->get(_prefix + key);
-    }
+    std::optional<Pson::BinaryString> get(const std::string& key) override { return _inner->get(_prefix + key); }
 
-    void put(const std::string& key, Pson::BinaryString data) override {
-        _inner->put(_prefix + key, std::move(data));
-    }
+    void put(const std::string& key, Pson::BinaryString data) override { _inner->put(_prefix + key, std::move(data)); }
 
-    void del(const std::string& key) override {
-        _inner->del(_prefix + key);
-    }
+    void del(const std::string& key) override { _inner->del(_prefix + key); }
 
 private:
     std::string _prefix;
     std::shared_ptr<CacheInterface> _inner;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_CACHE_SCOPED_NAMESPACE_HPP_

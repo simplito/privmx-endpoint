@@ -31,6 +31,6 @@ void CacheInMemory::del(const std::string& key) {
     _store.erase(key);
 }
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx

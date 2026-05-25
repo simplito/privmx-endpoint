@@ -328,7 +328,8 @@ void FileHandler::flush() {
         batchFileMeta.internalFileMeta.hmac = utils::Base64::from(_hashList->getTopHash());
         batchFileMeta.internalFileMeta.size = static_cast<int64_t>(_pendingPlainfileSize);
         auto batchMeta = _fileMetaEncryptor->encrypt(
-            _fileInfo, batchFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion);
+            _fileInfo, batchFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion
+        );
 
         try {
             updateOnServer(batch, batchMeta, _fileEncKey.id, isLastBatch && isTruncate);
@@ -342,8 +343,9 @@ void FileHandler::flush() {
 
         for (size_t k = 0; k < batch.size(); k++) {
             bool isLastChunkOfAll = isLastBatch && (k == batch.size() - 1);
-            _chunkDataProvider->update(_version, batch[k].chunkIndex, batch[k].chunk.data,
-                                       newEncryptedFileSize, isTruncate && isLastChunkOfAll);
+            _chunkDataProvider->update(
+                _version, batch[k].chunkIndex, batch[k].chunk.data, newEncryptedFileSize, isTruncate && isLastChunkOfAll
+            );
             _chunkDataProvider->cacheChunk(batch[k].chunkIndex, batch[k].chunk.data);
             _chunkReader->update(_version, batch[k].chunkIndex);
         }
