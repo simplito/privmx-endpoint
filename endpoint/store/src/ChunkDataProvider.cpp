@@ -56,13 +56,15 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, const std::string&
     return getChunk(chunkNumber, _fileVersion, hash);
 }
 
+// NOTE: Concurrent calls to getChunk() are not intended. Two races are present:
+//   1. get() + del() are non-atomic — another thread may write a valid chunk between them, which we then delete.
+//   2. On a cache miss, concurrent callers will each issue a separate server request for the same chunk part.
+// Fix: synchronize getChunk().
 std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersion, const std::string& hash) {
     auto cacheKey = CacheKey::chunk(_fileId, chunkNumber);
     auto cached = _cache->get(cacheKey);
     if (cached.has_value()) {
         if (!_chunkEncryptor->hasHash(cached.value(), hash)) {
-            // TODO: Race condition: between get() and del() another thread may have replaced the entry
-            // with a valid chunk, but we delete it anyway — non-atomic, acceptable as best-effort eviction.
             _cache->del(cacheKey);
         } else {
             return cached.value();
