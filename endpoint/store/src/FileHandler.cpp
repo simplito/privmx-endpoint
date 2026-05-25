@@ -37,45 +37,6 @@ FileHandler::FileHandler(
       _fileEncKey(fileEncKey), _server(server), _plainChunkSize(chunkEncryptor->getPlainChunkSize()),
       _encryptedChunkSize(chunkEncryptor->getEncryptedChunkSize()), _pendingPlainfileSize(plainfileSize) {}
 
-bool FileHandler::isMidTruncateActive() const {
-    return _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
-}
-
-uint64_t FileHandler::midTruncateClearStart() const {
-    return (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize;
-}
-
-uint64_t FileHandler::committedChunkCount() const {
-    return _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
-}
-
-void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
-    uint64_t numCommitted = committedChunkCount();
-    // hasMidTruncate: truncate happened during the session but the file was later extended beyond it
-    bool hasMidTruncate = isMidTruncateActive();
-    uint64_t clearStart = hasMidTruncate ? midTruncateClearStart() : numCommitted;
-
-    if (chunkIndex >= numCommitted || chunkIndex >= clearStart) {
-        // Gap or cleared chunk — start with zeros
-        _dirtyChunks[chunkIndex] = std::string(_plainChunkSize, '\0');
-    } else {
-        std::string hash = _hashList->getHash(chunkIndex);
-        std::string enc = _chunkDataProvider->getChunk(chunkIndex, _version, hash);
-        _dirtyChunks[chunkIndex] = _chunkEncryptor->decrypt(chunkIndex, {.data = enc, .hmac = hash});
-        // If this is the mid-truncate boundary chunk, zero out data beyond the truncate point
-        if (hasMidTruncate) {
-            uint64_t boundaryChunk = _pendingTruncateBoundary / _plainChunkSize;
-            uint64_t offsetInChunk = _pendingTruncateBoundary % _plainChunkSize;
-            if (chunkIndex == boundaryChunk && offsetInChunk > 0) {
-                auto& data = _dirtyChunks[chunkIndex];
-                if (data.size() > offsetInChunk)
-                    data.resize(offsetInChunk);
-                data.resize(_plainChunkSize, '\0');
-            }
-        }
-    }
-}
-
 void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate) {
     auto dataStr = data.stdString();
     uint64_t writeEnd = offset + static_cast<uint64_t>(dataStr.size());
@@ -108,22 +69,6 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
 
     if (_dirtyChunks.size() >= FLUSH_DIRTY_CHUNK_THRESHOLD) {
         flush();
-    }
-}
-
-void FileHandler::truncate(uint64_t length) {
-    _pendingPlainfileSize = length;
-    _pendingTruncateBoundary = std::min(_pendingTruncateBoundary, length);
-    uint64_t boundaryChunk = length / _plainChunkSize;
-    uint64_t offsetInChunk = length % _plainChunkSize;
-    _dirtyChunks.erase(_dirtyChunks.upper_bound(boundaryChunk), _dirtyChunks.end());
-    if (offsetInChunk == 0) {
-        _dirtyChunks.erase(boundaryChunk);
-    } else {
-        auto it = _dirtyChunks.find(boundaryChunk);
-        if (it != _dirtyChunks.end() && it->second.size() > offsetInChunk) {
-            it->second.resize(offsetInChunk);
-        }
     }
 }
 
@@ -172,60 +117,24 @@ core::Buffer FileHandler::read(uint64_t offset, uint64_t size) {
     return core::Buffer::from(result);
 }
 
-uint64_t FileHandler::getFileSize() {
-    return _pendingPlainfileSize;
+void FileHandler::truncate(uint64_t length) {
+    _pendingPlainfileSize = length;
+    _pendingTruncateBoundary = std::min(_pendingTruncateBoundary, length);
+    uint64_t boundaryChunk = length / _plainChunkSize;
+    uint64_t offsetInChunk = length % _plainChunkSize;
+    _dirtyChunks.erase(_dirtyChunks.upper_bound(boundaryChunk), _dirtyChunks.end());
+    if (offsetInChunk == 0) {
+        _dirtyChunks.erase(boundaryChunk);
+    } else {
+        auto it = _dirtyChunks.find(boundaryChunk);
+        if (it != _dirtyChunks.end() && it->second.size() > offsetInChunk) {
+            it->second.resize(offsetInChunk);
+        }
+    }
 }
 
-void FileHandler::updateOnServer(
-    const std::vector<UpdateChunkData>& chunks,
-    Poco::Dynamic::Var updatedMeta,
-    const std::string& encKeyId,
-    bool truncate
-) {
-    std::vector<server::StoreFileRandomWriteOperation> operations;
-
-    for (size_t i = 0; i < chunks.size();) {
-        size_t j = i;
-        std::string fileData = chunks[j].chunk.data;
-        std::string checksumData = chunks[j].chunk.hmac;
-        uint64_t filePos = chunks[j].chunkIndex * _encryptedChunkSize;
-        uint64_t checksumPos = chunks[j].chunkIndex * _hashList->getHashSize();
-
-        while (j + 1 < chunks.size() && chunks[j + 1].chunkIndex == chunks[j].chunkIndex + 1) {
-            ++j;
-            fileData += chunks[j].chunk.data;
-            checksumData += chunks[j].chunk.hmac;
-        }
-
-        bool isLast = (j == chunks.size() - 1);
-
-        server::StoreFileRandomWriteOperation fileOp;
-        fileOp.type = "file";
-        fileOp.pos = static_cast<int64_t>(filePos);
-        fileOp.data = Pson::BinaryString(fileData);
-        fileOp.truncate = isLast ? truncate : false;
-
-        server::StoreFileRandomWriteOperation checksumOp;
-        checksumOp.type = "checksum";
-        checksumOp.pos = static_cast<int64_t>(checksumPos);
-        checksumOp.data = Pson::BinaryString(checksumData);
-        checksumOp.truncate = isLast ? truncate : false;
-
-        operations.push_back(std::move(fileOp));
-        operations.push_back(std::move(checksumOp));
-
-        i = j + 1;
-    }
-
-    server::StoreFileWriteModelByOperations writeRequest;
-    writeRequest.fileId = _fileInfo.fileId;
-    writeRequest.operations = std::move(operations);
-    writeRequest.meta = updatedMeta;
-    writeRequest.keyId = encKeyId;
-    writeRequest.version = _version;
-    writeRequest.force = false;
-    _server->storeFileWrite(writeRequest);
-    _version += 1;
+uint64_t FileHandler::getFileSize() {
+    return _pendingPlainfileSize;
 }
 
 void FileHandler::flush() {
@@ -392,6 +301,97 @@ void FileHandler::sync(
     _fileEncKey = fileEncKey;
     _dirtyChunks.clear();
     _pendingTruncateBoundary = UINT64_MAX;
+}
+
+void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
+    uint64_t numCommitted = committedChunkCount();
+    // hasMidTruncate: truncate happened during the session but the file was later extended beyond it
+    bool hasMidTruncate = isMidTruncateActive();
+    uint64_t clearStart = hasMidTruncate ? midTruncateClearStart() : numCommitted;
+
+    if (chunkIndex >= numCommitted || chunkIndex >= clearStart) {
+        // Gap or cleared chunk — start with zeros
+        _dirtyChunks[chunkIndex] = std::string(_plainChunkSize, '\0');
+    } else {
+        std::string hash = _hashList->getHash(chunkIndex);
+        std::string enc = _chunkDataProvider->getChunk(chunkIndex, _version, hash);
+        _dirtyChunks[chunkIndex] = _chunkEncryptor->decrypt(chunkIndex, {.data = enc, .hmac = hash});
+        // If this is the mid-truncate boundary chunk, zero out data beyond the truncate point
+        if (hasMidTruncate) {
+            uint64_t boundaryChunk = _pendingTruncateBoundary / _plainChunkSize;
+            uint64_t offsetInChunk = _pendingTruncateBoundary % _plainChunkSize;
+            if (chunkIndex == boundaryChunk && offsetInChunk > 0) {
+                auto& data = _dirtyChunks[chunkIndex];
+                if (data.size() > offsetInChunk)
+                    data.resize(offsetInChunk);
+                data.resize(_plainChunkSize, '\0');
+            }
+        }
+    }
+}
+
+void FileHandler::updateOnServer(
+    const std::vector<UpdateChunkData>& chunks,
+    Poco::Dynamic::Var updatedMeta,
+    const std::string& encKeyId,
+    bool truncate
+) {
+    std::vector<server::StoreFileRandomWriteOperation> operations;
+
+    for (size_t i = 0; i < chunks.size();) {
+        size_t j = i;
+        std::string fileData = chunks[j].chunk.data;
+        std::string checksumData = chunks[j].chunk.hmac;
+        uint64_t filePos = chunks[j].chunkIndex * _encryptedChunkSize;
+        uint64_t checksumPos = chunks[j].chunkIndex * _hashList->getHashSize();
+
+        while (j + 1 < chunks.size() && chunks[j + 1].chunkIndex == chunks[j].chunkIndex + 1) {
+            ++j;
+            fileData += chunks[j].chunk.data;
+            checksumData += chunks[j].chunk.hmac;
+        }
+
+        bool isLast = (j == chunks.size() - 1);
+
+        server::StoreFileRandomWriteOperation fileOp;
+        fileOp.type = "file";
+        fileOp.pos = static_cast<int64_t>(filePos);
+        fileOp.data = Pson::BinaryString(fileData);
+        fileOp.truncate = isLast ? truncate : false;
+
+        server::StoreFileRandomWriteOperation checksumOp;
+        checksumOp.type = "checksum";
+        checksumOp.pos = static_cast<int64_t>(checksumPos);
+        checksumOp.data = Pson::BinaryString(checksumData);
+        checksumOp.truncate = isLast ? truncate : false;
+
+        operations.push_back(std::move(fileOp));
+        operations.push_back(std::move(checksumOp));
+
+        i = j + 1;
+    }
+
+    server::StoreFileWriteModelByOperations writeRequest;
+    writeRequest.fileId = _fileInfo.fileId;
+    writeRequest.operations = std::move(operations);
+    writeRequest.meta = updatedMeta;
+    writeRequest.keyId = encKeyId;
+    writeRequest.version = _version;
+    writeRequest.force = false;
+    _server->storeFileWrite(writeRequest);
+    _version += 1;
+}
+
+uint64_t FileHandler::committedChunkCount() const {
+    return _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
+}
+
+bool FileHandler::isMidTruncateActive() const {
+    return _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
+}
+
+uint64_t FileHandler::midTruncateClearStart() const {
+    return (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize;
 }
 
 FileHandlerImpl::FileHandlerImpl(std::shared_ptr<FileHandler> file) : _file(file) {}
