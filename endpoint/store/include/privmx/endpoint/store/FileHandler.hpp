@@ -68,10 +68,19 @@ private:
         uint64_t chunkIndex;
     };
 
+    struct PendingChunk {
+        std::string rawPlain;
+        uint64_t chunkIndex;
+        uint64_t expectedSize;
+    };
+
     static constexpr size_t FLUSH_DIRTY_CHUNK_THRESHOLD = 35;
     static constexpr uint64_t MAX_UPDATE_SERVER_BYTES = 5ULL * 1024 * 1024;
 
     void loadChunkIntoDirty(uint64_t chunkIndex);
+    bool isMidTruncateActive() const;
+    uint64_t midTruncateClearStart() const;
+    uint64_t committedChunkCount() const;
     void updateOnServer(
         const std::vector<UpdateChunkData>& chunks,
         Poco::Dynamic::Var updatedMeta,

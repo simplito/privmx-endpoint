@@ -37,12 +37,23 @@ FileHandler::FileHandler(
       _fileEncKey(fileEncKey), _server(server), _plainChunkSize(chunkEncryptor->getPlainChunkSize()),
       _encryptedChunkSize(chunkEncryptor->getEncryptedChunkSize()), _pendingPlainfileSize(plainfileSize) {}
 
+bool FileHandler::isMidTruncateActive() const {
+    return _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
+}
+
+uint64_t FileHandler::midTruncateClearStart() const {
+    return (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize;
+}
+
+uint64_t FileHandler::committedChunkCount() const {
+    return _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
+}
+
 void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
-    uint64_t numCommitted = _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
+    uint64_t numCommitted = committedChunkCount();
     // hasMidTruncate: truncate happened during the session but the file was later extended beyond it
-    bool hasMidTruncate = _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
-    uint64_t clearStart = hasMidTruncate ? (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize :
-                                           numCommitted;
+    bool hasMidTruncate = isMidTruncateActive();
+    uint64_t clearStart = hasMidTruncate ? midTruncateClearStart() : numCommitted;
 
     if (chunkIndex >= numCommitted || chunkIndex >= clearStart) {
         // Gap or cleared chunk — start with zeros
@@ -125,11 +136,10 @@ core::Buffer FileHandler::read(uint64_t offset, uint64_t size) {
         return core::Buffer();
 
     std::string result(size, '\0');
-    uint64_t numCommitted = _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
+    uint64_t numCommitted = committedChunkCount();
     // Chunks in [clearStart, numCommitted) were truncated away mid-session and must appear as zeros
-    bool hasMidTruncate = _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
-    uint64_t clearStart = hasMidTruncate ? (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize :
-                                           numCommitted;
+    bool hasMidTruncate = isMidTruncateActive();
+    uint64_t clearStart = hasMidTruncate ? midTruncateClearStart() : numCommitted;
     uint64_t startChunk = offset / _plainChunkSize;
     uint64_t endChunk = (offset + size - 1) / _plainChunkSize;
 
@@ -222,7 +232,7 @@ void FileHandler::flush() {
     bool isTruncate = _pendingPlainfileSize < _plainfileSize;
     // hasMidTruncate: truncate happened mid-session but file was later extended beyond the truncate point;
     // chunks in [clearStart, numCommitted) are logically zero on the client but still have old data on the server
-    bool hasMidTruncate = _pendingTruncateBoundary < _pendingPlainfileSize && _pendingTruncateBoundary < _plainfileSize;
+    bool hasMidTruncate = isMidTruncateActive();
 
     // For pure truncate: load and trim the boundary chunk if it's not already dirty
     if (isTruncate) {
@@ -246,7 +256,7 @@ void FileHandler::flush() {
     if (_dirtyChunks.empty() && _pendingPlainfileSize == _plainfileSize && !hasMidTruncate)
         return;
 
-    uint64_t numCommitted = _plainfileSize == 0 ? 0 : (_plainfileSize + _plainChunkSize - 1) / _plainChunkSize;
+    uint64_t numCommitted = committedChunkCount();
     uint64_t numPending = _pendingPlainfileSize == 0 ? 0 :
                                                        (_pendingPlainfileSize + _plainChunkSize - 1) / _plainChunkSize;
     uint64_t newEncryptedFileSize = _chunkEncryptor->getEncryptedFileSize(_pendingPlainfileSize);
@@ -269,7 +279,7 @@ void FileHandler::flush() {
     }
     // For mid-truncate: add chunks that the server still has but are now logically zero
     if (hasMidTruncate) {
-        uint64_t clearStart = (_pendingTruncateBoundary + _plainChunkSize - 1) / _plainChunkSize;
+        uint64_t clearStart = midTruncateClearStart();
         for (uint64_t ci = clearStart; ci < numCommitted; ci++) {
             if (toUpload.find(ci) == toUpload.end()) {
                 toUpload[ci] = std::string(); // zero placeholder
@@ -284,11 +294,6 @@ void FileHandler::flush() {
     // Collect chunks to process without allocating plaintext for gap chunks yet;
     // large zero fills (e.g. sparse writes) are deferred to batch time to avoid
     // a memory spike of N * _plainChunkSize for all gap chunks at once.
-    struct PendingChunk {
-        std::string rawPlain;
-        uint64_t chunkIndex;
-        uint64_t expectedSize;
-    };
     std::vector<PendingChunk> pendingChunks;
     pendingChunks.reserve(toUpload.size());
     for (auto& [ci, plain] : toUpload) {
