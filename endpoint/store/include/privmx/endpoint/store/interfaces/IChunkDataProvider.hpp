@@ -19,12 +19,7 @@ namespace store {
 class IChunkDataProvider {
 public:
     virtual ~IChunkDataProvider() = default;
-    virtual void sync(
-        int64_t newfileVersion,
-        int64_t encryptedFileSize,
-        std::optional<size_t> encryptedChunkSize = std::nullopt,
-        std::optional<size_t> serverChunkSize = std::nullopt
-    ) = 0;
+    virtual void sync(int64_t newfileVersion, int64_t encryptedFileSize) = 0;
     virtual std::string getChunk(uint32_t chunkNumber, const std::string& hash) = 0;
     virtual std::string getChunk(uint32_t chunkNumber, int64_t fileVersion, const std::string& hash) = 0;
     virtual void update(

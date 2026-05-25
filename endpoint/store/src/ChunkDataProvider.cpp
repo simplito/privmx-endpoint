@@ -29,27 +29,16 @@ ChunkDataProvider::ChunkDataProvider(
     std::shared_ptr<CacheInterface> cache
 )
     : _server(server), _chunkEncryptor(chunkEncryptor), _encryptedChunkSize(chunkSize),
-      _serverChunkSize(getServerReadDataSize(chunkSize, severChunkSize)), _fileId(fileId),
-      _serverFileSize(serverFileSize), _fileVersion(fileVersion), _cache(std::move(cache)) {}
+      _segmentSize(getSegmentSize(chunkSize, severChunkSize)), _fileId(fileId), _serverFileSize(serverFileSize),
+      _fileVersion(fileVersion), _cache(std::move(cache)) {}
 
-void ChunkDataProvider::sync(
-    int64_t newfileVersion,
-    int64_t encryptedFileSize,
-    std::optional<size_t> encryptedChunkSize,
-    std::optional<size_t> serverChunkSize
-) {
+void ChunkDataProvider::sync(int64_t newfileVersion, int64_t encryptedFileSize) {
     if (_fileVersion < newfileVersion) {
-        _lastServerChunkNumber = std::nullopt;
-        _lastServerChunk = "";
+        _lastSegmentNumber = std::nullopt;
+        _lastSegment = "";
     }
     _serverFileSize = encryptedFileSize;
     _fileVersion = newfileVersion;
-    if (encryptedChunkSize.has_value()) {
-        _encryptedChunkSize = encryptedChunkSize.value();
-    }
-    if (serverChunkSize.has_value()) {
-        _serverChunkSize = serverChunkSize.value();
-    }
 }
 
 std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, const std::string& hash) {
@@ -72,30 +61,30 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
     }
 
     if (fileVersion != _fileVersion) {
-        _lastServerChunkNumber = std::nullopt;
+        _lastSegmentNumber = std::nullopt;
         _fileVersion = fileVersion;
     }
     uint64_t from = _encryptedChunkSize * chunkNumber;
-    uint64_t serverChunkNumber = from / _serverChunkSize;
-    uint64_t serverChunkPos = from % _serverChunkSize;
-    if (!_lastServerChunkNumber.has_value() || _lastServerChunkNumber.value() != serverChunkNumber) {
-        _lastServerChunk = requestServerChunk(serverChunkNumber);
-        _lastServerChunkNumber = serverChunkNumber;
+    uint64_t segmentNumber = from / _segmentSize;
+    uint64_t segmentPos = from % _segmentSize;
+    if (!_lastSegmentNumber.has_value() || _lastSegmentNumber.value() != segmentNumber) {
+        _lastSegment = requestSegment(segmentNumber);
+        _lastSegmentNumber = segmentNumber;
 
-        uint64_t firstChunkNumber = serverChunkNumber * _serverChunkSize / _encryptedChunkSize;
-        uint64_t chunksInSegment = (_lastServerChunk.size() + _encryptedChunkSize - 1) / _encryptedChunkSize;
+        uint64_t firstChunkNumber = segmentNumber * _segmentSize / _encryptedChunkSize;
+        uint64_t chunksInSegment = (_lastSegment.size() + _encryptedChunkSize - 1) / _encryptedChunkSize;
         for (uint64_t i = 0; i < chunksInSegment; ++i) {
             uint64_t pos = i * _encryptedChunkSize;
             _cache->put(
                 CacheKey::chunk(_fileId, firstChunkNumber + i),
-                Pson::BinaryString(_lastServerChunk.substr(pos, _encryptedChunkSize))
+                Pson::BinaryString(_lastSegment.substr(pos, _encryptedChunkSize))
             );
         }
     }
-    if (serverChunkPos > _lastServerChunk.size()) {
+    if (segmentPos > _lastSegment.size()) {
         return std::string();
     }
-    return _lastServerChunk.substr(serverChunkPos, _encryptedChunkSize);
+    return _lastSegment.substr(segmentPos, _encryptedChunkSize);
 }
 
 std::string ChunkDataProvider::getCurrentChecksumsFromBridge() {
@@ -114,15 +103,15 @@ void ChunkDataProvider::update(
     bool truncate
 ) {
     uint64_t from = _encryptedChunkSize * chunkNumber;
-    uint64_t serverChunkNumber = from / _serverChunkSize;
-    uint64_t serverChunkPos = from % _serverChunkSize;
-    if (_lastServerChunkNumber.has_value() && _lastServerChunkNumber.value() == serverChunkNumber) {
-        std::string oldServerChunkDataBefore = _lastServerChunk.substr(0, serverChunkPos);
-        std::string oldServerChunkDataAfter = "";
-        if (!truncate && _lastServerChunk.size() > serverChunkPos + newChunkEncryptedData.size()) {
-            oldServerChunkDataAfter = _lastServerChunk.substr(serverChunkPos + newChunkEncryptedData.size());
+    uint64_t segmentNumber = from / _segmentSize;
+    uint64_t segmentPos = from % _segmentSize;
+    if (_lastSegmentNumber.has_value() && _lastSegmentNumber.value() == segmentNumber) {
+        std::string segmentDataBefore = _lastSegment.substr(0, segmentPos);
+        std::string segmentDataAfter = "";
+        if (!truncate && _lastSegment.size() > segmentPos + newChunkEncryptedData.size()) {
+            segmentDataAfter = _lastSegment.substr(segmentPos + newChunkEncryptedData.size());
         }
-        _lastServerChunk = oldServerChunkDataBefore + newChunkEncryptedData + oldServerChunkDataAfter;
+        _lastSegment = segmentDataBefore + newChunkEncryptedData + segmentDataAfter;
     }
     _serverFileSize = encryptedFileSize;
     _fileVersion = newfileVersion;
@@ -132,10 +121,10 @@ void ChunkDataProvider::cacheChunk(uint32_t chunkNumber, const std::string& encr
     _cache->put(CacheKey::chunk(_fileId, chunkNumber), Pson::BinaryString(encryptedData));
 }
 
-std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
+std::string ChunkDataProvider::requestSegment(uint32_t segmentNumber) {
     server::BufferReadRangeSlice range{
-        server::BufferReadRange{.type = "slice"}, .from = _serverChunkSize * serverChunkNumber,
-        .to = _serverChunkSize * (serverChunkNumber + 1)
+        server::BufferReadRange{.type = "slice"}, .from = _segmentSize * segmentNumber,
+        .to = _segmentSize * (segmentNumber + 1)
     };
     server::StoreFileReadModel fileDataModel{};
     fileDataModel.fileId = _fileId;
@@ -157,6 +146,6 @@ std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
     return fileData.data;
 }
 
-int64_t ChunkDataProvider::getServerReadDataSize(int64_t encryptedChunkSize, int64_t severChunkSize) {
+int64_t ChunkDataProvider::getSegmentSize(int64_t encryptedChunkSize, int64_t severChunkSize) {
     return ((severChunkSize + encryptedChunkSize - 1) / encryptedChunkSize) * encryptedChunkSize;
 }
