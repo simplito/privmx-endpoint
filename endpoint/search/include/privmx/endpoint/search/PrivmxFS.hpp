@@ -48,6 +48,7 @@ public:
         const privmx::endpoint::core::Connection& connection,
         const privmx::endpoint::store::StoreApi& storeApi,
         const privmx::endpoint::kvdb::KvdbApi& kvdbApi,
+        const privmx::endpoint::lock::LockApi& lockApi,
         const std::string& kvdbId,
         const std::string& storeId
     );
@@ -92,7 +93,7 @@ public:
     std::string path;
     int64_t fh = -1;
     Writer writer;
-    LockSession lockSession;
+    std::string _uuid;
 };
 
 class PrivmxFS

@@ -41,8 +41,8 @@ public:
         SearchDocuments = 13,
     };
 
-    SearchApiVarInterface(core::Connection connection, store::StoreApi storeApi, kvdb::KvdbApi kvdbApi, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _storeApi(std::move(storeApi)), _kvdbApi(std::move(kvdbApi)), _serializer(serializer) {}
+    SearchApiVarInterface(core::Connection connection, store::StoreApi storeApi, kvdb::KvdbApi kvdbApi, lock::LockApi lockApi, const core::VarSerializer& serializer)
+        : _connection(std::move(connection)), _storeApi(std::move(storeApi)), _kvdbApi(std::move(kvdbApi)), _lockApi(std::move(lockApi)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createSearchIndex(const Poco::Dynamic::Var& args);
@@ -70,6 +70,7 @@ private:
     core::Connection _connection;
     store::StoreApi _storeApi;
     kvdb::KvdbApi _kvdbApi;
+    lock::LockApi _lockApi;
     SearchApi _searchApi;
     core::VarDeserializer _deserializer;
     core::VarSerializer _serializer;

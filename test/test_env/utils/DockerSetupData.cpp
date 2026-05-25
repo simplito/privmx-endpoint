@@ -22,6 +22,7 @@
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/VarSerializer.hpp>
 #include <privmx/endpoint/search/SearchApi.hpp>
+#include <privmx/endpoint/lock/LockApi.hpp>
 #include <privmx/endpoint/search/Types.hpp>
 #include <privmx/endpoint/search/VarSerializer.hpp>
 
@@ -80,7 +81,8 @@ int main(int argc, char** argv) {
         endpoint::store::StoreApi storeApi = endpoint::store::StoreApi::create(connection);
         endpoint::inbox::InboxApi inboxApi = endpoint::inbox::InboxApi::create(connection, threadApi, storeApi);
         endpoint::kvdb::KvdbApi kvdbApi = endpoint::kvdb::KvdbApi::create(connection);
-        endpoint::search::SearchApi searchApi = endpoint::search::SearchApi::create(connection, storeApi, kvdbApi);
+        endpoint::lock::LockApi lockApi = endpoint::lock::LockApi::create(connection);
+        endpoint::search::SearchApi searchApi = endpoint::search::SearchApi::create(connection, storeApi, kvdbApi, lockApi);
         const std::vector<endpoint::core::UserWithPubKey> users_1 = {
             endpoint::core::UserWithPubKey{.userId=user_1_Id, .pubKey=user_1_PubKey}
         };

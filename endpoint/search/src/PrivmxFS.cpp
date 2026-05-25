@@ -4,6 +4,7 @@
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
 #include <privmx/utils/Logger.hpp>
+#include <Poco/UUIDGenerator.h>
 
 static const privmx::endpoint::core::Buffer META = privmx::endpoint::core::Buffer::from("{}");
 
@@ -21,6 +22,7 @@ std::shared_ptr<PrivmxSession> SessionManager::addSession(
     const privmx::endpoint::core::Connection& connection,
     const privmx::endpoint::store::StoreApi& storeApi,
     const privmx::endpoint::kvdb::KvdbApi& kvdbApi,
+    const privmx::endpoint::lock::LockApi& lockApi,
     const std::string& kvdbId,
     const std::string& storeId
 ) {
@@ -29,6 +31,7 @@ std::shared_ptr<PrivmxSession> SessionManager::addSession(
         .connection = connection,
         .storeApi = storeApi,
         .kvdbApi = kvdbApi,
+        .lockApi = lockApi,
         .kvdbId = kvdbId,
         .storeId = storeId
     });
@@ -66,7 +69,8 @@ int64_t Writer::size() {
 }
 
 PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
-        : session(session), fileId(fileId), path(path), lockSession(session->kvdbApi, session->kvdbId, path) {}
+        : session(session), fileId(fileId), path(path),
+          _uuid(Poco::UUIDGenerator::defaultGenerator().createRandom().toString()) {}
 
 void PrivmxFile::open() {
     LOG_TRACE("PrivmxFile::open - ", fileId)
@@ -121,19 +125,20 @@ int64_t PrivmxFile::getFileSize() {
 }
 
 bool PrivmxFile::lock(LockLevel level) {
-    bool val = lockSession.lock(level);
-    if (val) {
+    auto result = session->lockApi.lock(fileId, _uuid, static_cast<lock::LockLevel>(level));
+    if (result.success) {
         session->storeApi.syncFile(fh);
     }
-    return val;
+    return result.success;
 }
 
 bool PrivmxFile::unlock(LockLevel level) {
-    return lockSession.unlock(level);
+    auto result = session->lockApi.unlock(fileId, _uuid, static_cast<lock::LockLevel>(level));
+    return result.success;
 }
 
 bool PrivmxFile::checkReservedLock() {
-    return lockSession.checkReservedLock();
+    return session->lockApi.checkReservedLock(fileId, _uuid);
 }
 
 std::shared_ptr<PrivmxFS> PrivmxFS::create(
@@ -164,7 +169,6 @@ void PrivmxFS::deleteFile(const std::string& path) {
     }
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
-    LockSession::destroyLock(_session->kvdbApi, _session->kvdbId, path);
 }
 PrivmxFS::PrivmxFS(
     const std::shared_ptr<PrivmxSession>& session
