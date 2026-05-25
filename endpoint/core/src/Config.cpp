@@ -17,5 +17,5 @@ using namespace privmx::endpoint::core;
 
 void Config::setCertsPath(const std::string& certsPath) {
     crypto::OpenSSLUtils::CaLocation = certsPath;
-    DrvNetConfig::setConfig("caCertPath=" + certsPath);
+    privmx::rpc::DrvNetConfig::setConfig("caCertPath=" + certsPath);
 }
