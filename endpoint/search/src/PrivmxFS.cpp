@@ -59,7 +59,6 @@ void PrivmxFile::close() {
 }
 
 privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
-    sync();
     session->storeApi.seekInFile(fh, offset);
     auto res = session->storeApi.readFromFile(fh, size);
     return res;
