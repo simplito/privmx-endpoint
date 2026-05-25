@@ -109,6 +109,21 @@ void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
     _fts.remove(indexHandle);
 }
 
+void SearchApiImpl::beginTransaction(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->beginTransaction();
+}
+
+void SearchApiImpl::commit(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->commit();
+}
+
+void SearchApiImpl::rollback(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->rollback();
+}
+
 int64_t SearchApiImpl::addDocument(const int64_t indexHandle, const std::string& name, const std::string& content) {
     auto fts = _fts.get(indexHandle);
     return fts->addDocument(name, content);

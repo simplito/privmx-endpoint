@@ -33,7 +33,10 @@ std::map<SearchApiVarInterface::METHOD, Poco::Dynamic::Var (SearchApiVarInterfac
                                         {DeleteDocument, &SearchApiVarInterface::deleteDocument},
                                         {GetDocument, &SearchApiVarInterface::getDocument},
                                         {ListDocuments, &SearchApiVarInterface::listDocuments},
-                                        {SearchDocuments, &SearchApiVarInterface::searchDocuments}};
+                                        {SearchDocuments, &SearchApiVarInterface::searchDocuments},
+                                        {BeginTransaction, &SearchApiVarInterface::beginTransaction},
+                                        {Commit, &SearchApiVarInterface::commit},
+                                        {Rollback, &SearchApiVarInterface::rollback}};
 
 Poco::Dynamic::Var SearchApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -153,6 +156,27 @@ Poco::Dynamic::Var SearchApiVarInterface::searchDocuments(const Poco::Dynamic::V
     auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(2), "pagingQuery");
     auto result = _searchApi.searchDocuments(indexHandle, searchQuery, pagingQuery);
     return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var SearchApiVarInterface::beginTransaction(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto indexHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "indexHandle");
+    _searchApi.beginTransaction(indexHandle);
+    return {};
+}
+
+Poco::Dynamic::Var SearchApiVarInterface::commit(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto indexHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "indexHandle");
+    _searchApi.commit(indexHandle);
+    return {};
+}
+
+Poco::Dynamic::Var SearchApiVarInterface::rollback(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto indexHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "indexHandle");
+    _searchApi.rollback(indexHandle);
+    return {};
 }
 
 Poco::Dynamic::Var SearchApiVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
