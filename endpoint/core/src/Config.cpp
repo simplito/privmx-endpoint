@@ -10,11 +10,12 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/Config.hpp"
-
+#include "privmx/rpc/channel/DrvNetConfig.hpp"
 #include <privmx/crypto/OpenSSLUtils.hpp>
 
 using namespace privmx::endpoint::core;
 
 void Config::setCertsPath(const std::string& certsPath) {
     crypto::OpenSSLUtils::CaLocation = certsPath;
+    privmx::rpc::DrvNetConfig::setConfig("caCertPath=" + certsPath);
 }
