@@ -34,7 +34,6 @@ limitations under the License.
 #include "privmx/utils/Utils.hpp"
 
 #include "privmx/endpoint/search/SearchTypes.hpp"
-#include "privmx/endpoint/search/LockSession.hpp"
 
 namespace privmx {
 namespace endpoint {
