@@ -62,46 +62,6 @@ JSON_STRUCT_EXT(File, Blob, FILE_FIELDS_DYNAMIC);
     F(chunkSize, int64_t)
 JSON_STRUCT(SendFileResult, SEND_FILE_RESULT_FIELDS);
 
-namespace compat_v1 {
-
-#define STORE_DATA_FIELDS(F)                                                                                           \
-    F(name, std::string)                                                                                               \
-    F(statusCode, int64_t)
-JSON_STRUCT(StoreData, STORE_DATA_FIELDS);
-
-#define STORE_FILE_META_AUTHOR_FIELDS(F) F(pubKey, std::string)
-JSON_STRUCT(StoreFileMetaAuthor, STORE_FILE_META_AUTHOR_FIELDS);
-
-#define STORE_FILE_META_DESTINATION_FIELDS(F)                                                                          \
-    F(server, std::string)                                                                                             \
-    F(contextId, std::string)                                                                                          \
-    F(storeId, std::string)                                                                                            \
-    F(store, std::string)
-JSON_STRUCT(StoreFileMetaDestination, STORE_FILE_META_DESTINATION_FIELDS);
-
-#define STORE_META_FIELDS(F)                                                                                           \
-    F(mimetype, std::string)                                                                                           \
-    F(size, int64_t)                                                                                                   \
-    F(cipherType, int64_t)                                                                                             \
-    F(chunkSize, int64_t)                                                                                              \
-    F(key, std::string)                                                                                                \
-    F(hmac, std::string)                                                                                               \
-    F(statusCode, int64_t)
-JSON_STRUCT(StoreMeta, STORE_META_FIELDS);
-
-#define STORE_THUMB_META_FIELDS(F)
-JSON_STRUCT_EXT(StoreThumbMeta, StoreMeta, STORE_THUMB_META_FIELDS);
-
-#define STORE_FILE_META_FIELDS(F)                                                                                      \
-    F(ver, int64_t)                                                                                                    \
-    F(name, std::string)                                                                                               \
-    F(author, StoreFileMetaAuthor)                                                                                     \
-    F(destination, StoreFileMetaDestination)                                                                           \
-    F(thumb, std::optional<StoreThumbMeta>)
-JSON_STRUCT_EXT(StoreFileMeta, StoreMeta, STORE_FILE_META_FIELDS);
-
-} // namespace compat_v1
-
 } // namespace dynamic
 } // namespace store
 } // namespace endpoint
