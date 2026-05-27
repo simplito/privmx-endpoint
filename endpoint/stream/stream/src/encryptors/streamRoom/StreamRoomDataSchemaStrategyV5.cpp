@@ -35,14 +35,6 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
     };
 }
 
-std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5::makeErrorResult(
-    const server::StreamRoomInfo& streamRoom,
-    int64_t errorCode
-) const {
-    return {
-        StreamRoomDataSchemaMapper::toLibStreamRoom(
-            streamRoom, {}, {}, errorCode, StreamRoomDataSchema::Version::VERSION_5
-        ),
-        core::DataIntegrityObject{}
-    };
+StreamRoom StreamRoomDataSchemaStrategyV5::toLibError(const server::StreamRoomInfo& streamRoom, int64_t errorCode) const {
+    return StreamRoomDataSchemaMapper::toLibStreamRoom(streamRoom, {}, {}, errorCode, StreamRoomDataSchema::Version::VERSION_5);
 }

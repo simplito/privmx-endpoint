@@ -94,14 +94,8 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
     };
 }
 
-std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::makeErrorResult(
-    const server::File& file,
-    int64_t errorCode
-) const {
-    return {
-        FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_5, false),
-        core::DataIntegrityObject{}
-    };
+File FileDataSchemaStrategyV5::toLibError(const server::File& file, int64_t errorCode) const {
+    return FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_5, false);
 }
 
 server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::encrypt(

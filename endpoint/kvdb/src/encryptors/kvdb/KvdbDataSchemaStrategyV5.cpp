@@ -37,12 +37,6 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::convert(
     };
 }
 
-std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::makeErrorResult(
-    const server::KvdbInfo& kvdb,
-    int64_t errorCode
-) const {
-    return {
-        KvdbDataSchemaMapper::toLibKvdb(kvdb, {}, {}, errorCode, KvdbDataSchema::Version::VERSION_5),
-        core::DataIntegrityObject{}
-    };
+Kvdb KvdbDataSchemaStrategyV5::toLibError(const server::KvdbInfo& kvdb, int64_t errorCode) const {
+    return KvdbDataSchemaMapper::toLibKvdb(kvdb, {}, {}, errorCode, KvdbDataSchema::Version::VERSION_5);
 }

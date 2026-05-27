@@ -13,14 +13,14 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_TYPEDDATASCHEMASTRATEGYV5_HPP_
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include "privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp"
+#include "privmx/endpoint/core/encryptors/TypedDataSchemaStrategyDIO.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
-template<typename TEncryptor, typename TEncryptedData, typename TRawData, typename TServerModel, typename TDomainObject>
-class TypedDataSchemaStrategyV5 : public TypedDataSchemaStrategy<TServerModel, TRawData, TDomainObject> {
+template<typename TEncryptor, typename TEncryptedData, typename TRawData, typename TServerModel, typename TLibObject>
+class TypedDataSchemaStrategyV5 : public TypedDataSchemaStrategyDIO<TServerModel, TRawData, TLibObject> {
 public:
     DataIntegrityObject getDIOAndAssertIntegrity(const TEncryptedData& encData) const {
         return _encryptor.getDIOAndAssertIntegrity(encData);

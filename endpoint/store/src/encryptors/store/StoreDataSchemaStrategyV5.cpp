@@ -38,14 +38,8 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV5::convert(
     };
 }
 
-std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV5::makeErrorResult(
-    const server::Store& store,
-    int64_t errorCode
-) const {
-    return {
-        StoreDataSchemaMapper::toLibStore(store, {}, {}, errorCode, StoreDataSchema::Version::VERSION_5),
-        core::DataIntegrityObject{}
-    };
+Store StoreDataSchemaStrategyV5::toLibError(const server::Store& store, int64_t errorCode) const {
+    return StoreDataSchemaMapper::toLibStore(store, {}, {}, errorCode, StoreDataSchema::Version::VERSION_5);
 }
 
 core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::encrypt(

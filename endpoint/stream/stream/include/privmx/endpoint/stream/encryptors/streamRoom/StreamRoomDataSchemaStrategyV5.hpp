@@ -34,7 +34,7 @@ class StreamRoomDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     core::dynamic::EncryptedModuleDataV5,
     core::DecryptedModuleDataV5,
     server::StreamRoomInfo,
-    std::tuple<StreamRoom, core::DataIntegrityObject>
+    StreamRoom
 > {
     // clang-format on
 public:
@@ -42,10 +42,7 @@ public:
         const server::StreamRoomInfo& streamRoom,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<StreamRoom, core::DataIntegrityObject> makeErrorResult(
-        const server::StreamRoomInfo& streamRoom,
-        int64_t errorCode
-    ) const override;
+    StreamRoom toLibError(const server::StreamRoomInfo& streamRoom, int64_t errorCode) const override;
 
 protected:
     core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::StreamRoomInfo& model) const override;

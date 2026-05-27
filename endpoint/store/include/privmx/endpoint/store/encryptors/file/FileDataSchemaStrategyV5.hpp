@@ -33,7 +33,7 @@ class FileDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::EncryptedFileMetaV5,
     DecryptedFileMetaV5,
     server::File,
-    std::tuple<File, core::DataIntegrityObject>
+    File
 > {
     // clang-format on
 public:
@@ -42,10 +42,7 @@ public:
         const server::File& file,
         const DecryptedFileMetaV5& raw
     ) const override;
-    std::tuple<File, core::DataIntegrityObject> makeErrorResult(
-        const server::File& file,
-        int64_t errorCode
-    ) const override;
+    File toLibError(const server::File& file, int64_t errorCode) const override;
     server::EncryptedFileMetaV5 encrypt(
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,

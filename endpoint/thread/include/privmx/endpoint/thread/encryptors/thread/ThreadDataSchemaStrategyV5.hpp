@@ -33,7 +33,7 @@ class ThreadDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     core::dynamic::EncryptedModuleDataV5,
     core::DecryptedModuleDataV5,
     server::ThreadInfo,
-    std::tuple<Thread, core::DataIntegrityObject>
+    Thread
 > {
     // clang-format on
 public:
@@ -46,10 +46,7 @@ public:
         const server::ThreadInfo& thread,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<Thread, core::DataIntegrityObject> makeErrorResult(
-        const server::ThreadInfo& thread,
-        int64_t errorCode
-    ) const override;
+    Thread toLibError(const server::ThreadInfo& thread, int64_t errorCode) const override;
 
 protected:
     core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::ThreadInfo& model) const override;

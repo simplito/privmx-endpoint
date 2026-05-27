@@ -34,7 +34,7 @@ class StoreDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     core::dynamic::EncryptedModuleDataV5,
     core::DecryptedModuleDataV5,
     server::Store,
-    std::tuple<Store, core::DataIntegrityObject>
+    Store
 > {
     // clang-format on
 public:
@@ -42,10 +42,7 @@ public:
         const server::Store& store,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<Store, core::DataIntegrityObject> makeErrorResult(
-        const server::Store& store,
-        int64_t errorCode
-    ) const override;
+    Store toLibError(const server::Store& store, int64_t errorCode) const override;
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,
         const privmx::crypto::PrivateKey& userPrivKey,

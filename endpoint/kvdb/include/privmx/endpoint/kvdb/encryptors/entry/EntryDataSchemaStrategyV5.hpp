@@ -33,7 +33,7 @@ class EntryDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::EncryptedKvdbEntryDataV5,
     DecryptedKvdbEntryDataV5,
     server::KvdbEntryInfo,
-    std::tuple<KvdbEntry, core::DataIntegrityObject>
+    KvdbEntry
 > {
     // clang-format on
 public:
@@ -41,10 +41,7 @@ public:
         const server::KvdbEntryInfo& entry,
         const DecryptedKvdbEntryDataV5& raw
     ) const override;
-    std::tuple<KvdbEntry, core::DataIntegrityObject> makeErrorResult(
-        const server::KvdbEntryInfo& entry,
-        int64_t errorCode
-    ) const override;
+    KvdbEntry toLibError(const server::KvdbEntryInfo& entry, int64_t errorCode) const override;
 
 protected:
     server::EncryptedKvdbEntryDataV5 getEncryptedData(const server::KvdbEntryInfo& model) const override;

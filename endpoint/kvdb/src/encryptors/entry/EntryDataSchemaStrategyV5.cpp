@@ -36,14 +36,6 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::conv
     };
 }
 
-std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::makeErrorResult(
-    const server::KvdbEntryInfo& entry,
-    int64_t errorCode
-) const {
-    return {
-        EntryDataSchemaMapper::toLibKvdbEntry(
-            entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5
-        ),
-        core::DataIntegrityObject{}
-    };
+KvdbEntry EntryDataSchemaStrategyV5::toLibError(const server::KvdbEntryInfo& entry, int64_t errorCode) const {
+    return EntryDataSchemaMapper::toLibKvdbEntry(entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5);
 }

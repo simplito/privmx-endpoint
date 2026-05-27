@@ -34,7 +34,7 @@ class KvdbDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     core::dynamic::EncryptedModuleDataV5,
     core::DecryptedModuleDataV5,
     server::KvdbInfo,
-    std::tuple<Kvdb, core::DataIntegrityObject>
+    Kvdb
 > {
     // clang-format on
 public:
@@ -42,10 +42,7 @@ public:
         const server::KvdbInfo& kvdb,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<Kvdb, core::DataIntegrityObject> makeErrorResult(
-        const server::KvdbInfo& kvdb,
-        int64_t errorCode
-    ) const override;
+    Kvdb toLibError(const server::KvdbInfo& kvdb, int64_t errorCode) const override;
 
 protected:
     core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::KvdbInfo& model) const override;
