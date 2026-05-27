@@ -167,41 +167,14 @@ void InboxApiImpl::updateInbox(
     auto currentInboxData = currentInboxEntry.data;
     auto currentInboxResourceId = currentInbox.resourceId.has_value() ? currentInbox.resourceId.value() :
                                                                         core::EndpointUtils::generateId();
-    auto location{getModuleEncKeyLocation(currentInbox, currentInboxResourceId)};
-    auto inboxKeys{getAndValidateModuleKeys(currentInbox, currentInboxResourceId)};
-    auto currentInboxKey{findEncKeyByKeyId(inboxKeys, currentInboxEntry.keyId)};
-    auto inboxInternalMeta = _inboxDataSchemaMapper.decryptInternalMeta(currentInboxEntry, currentInboxKey);
-
-    auto usersKeysResolver{
-        core::UsersKeysResolver::create(currentInbox, users, managers, forceGenerateNewKey, currentInboxKey)
-    };
-
-    if (!_keyProvider->verifyKeysSecret(inboxKeys, location, inboxInternalMeta.secret)) {
-        throw InboxEncryptionKeyValidationException();
-    }
-    core::EncKey inboxKey = currentInboxKey;
-    core::DataIntegrityObject updateInboxDio = _connection.getImpl()->createDIO(
-        currentInbox.contextId, currentInboxResourceId
+    auto ctx = prepareContainerUpdate(
+        currentInbox, currentInboxEntry, currentInboxResourceId, users, managers, forceGenerateNewKey,
+        [this](const inbox::server::InboxDataEntry& entry, const core::DecryptedEncKeyV2& key) {
+            return _inboxDataSchemaMapper.decryptInternalMeta(entry, key).secret;
+        },
+        [] { throw InboxEncryptionKeyValidationException(); }
     );
-
-    std::vector<core::server::KeyEntrySet> keysList;
-    if (usersKeysResolver->doNeedNewKey()) {
-        inboxKey = _keyProvider->generateKey();
-        keysList = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(), inboxKey, updateInboxDio, location, inboxInternalMeta.secret
-        );
-    }
-
-    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-    if (usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            inboxKeys, usersToAddMissingKey, updateInboxDio, location, inboxInternalMeta.secret
-        );
-        for (auto t : tmp)
-            keysList.push_back(t);
-    }
-
-    auto eccKey = crypto::ECC::fromPrivateKey(inboxKey.key);
+    auto eccKey = crypto::ECC::fromPrivateKey(ctx.key.key);
     auto privateKey = crypto::PrivateKey(eccKey);
     auto pubKey = privateKey.getPublicKey();
     InboxDataProcessorModelV5 inboxDataIn{
@@ -212,15 +185,15 @@ void InboxApiImpl::updateInbox(
             {.privateMeta = privateMeta,
              .internalMeta =
                  InboxInternalMetaV5{
-                     .secret = inboxInternalMeta.secret,
+                     .secret = ctx.secret,
                      .resourceId = currentInboxResourceId,
-                     .randomId = updateInboxDio.randomId
+                     .randomId = ctx.dio.randomId
                  },
-             .dio = updateInboxDio},
+             .dio = ctx.dio},
         .publicData = {
             .publicMeta = publicMeta,
             .inboxEntriesPubKeyBase58DER = pubKey.toBase58DER(),
-            .inboxEntriesKeyId = inboxKey.id
+            .inboxEntriesKeyId = ctx.key.id
         }
     };
 
@@ -229,9 +202,9 @@ void InboxApiImpl::updateInbox(
     inboxUpdateModel.resourceId = currentInboxResourceId;
     inboxUpdateModel.users = InboxDataHelper::mapUsers(users);
     inboxUpdateModel.managers = InboxDataHelper::mapUsers(managers);
-    inboxUpdateModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, inboxKey.key);
-    inboxUpdateModel.keyId = inboxKey.id;
-    inboxUpdateModel.keys = keysList;
+    inboxUpdateModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, ctx.key.key);
+    inboxUpdateModel.keyId = ctx.key.id;
+    inboxUpdateModel.keys = ctx.keyEntries;
     inboxUpdateModel.force = force;
     inboxUpdateModel.version = version;
 

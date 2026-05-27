@@ -185,40 +185,11 @@ void StoreApiImpl::updateStore(
     auto currentStoreEntry = currentStore.data.back();
     auto currentStoreResourceId = currentStore.resourceId.has_value() ? currentStore.resourceId.value() :
                                                                         core::EndpointUtils::generateId();
-    auto location{getModuleEncKeyLocation(currentStore, currentStoreResourceId)};
-    auto storeKeys{getAndValidateModuleKeys(currentStore, currentStoreResourceId)};
-    auto currentStoreKey{findEncKeyByKeyId(storeKeys, currentStoreEntry.keyId)};
-    auto storeInternalMeta = extractAndDecryptModuleInternalMeta(currentStoreEntry, currentStoreKey);
-
-    auto usersKeysResolver{
-        core::UsersKeysResolver::create(currentStore, users, managers, forceGenerateNewKey, currentStoreKey)
-    };
-
-    if (!_keyProvider->verifyKeysSecret(storeKeys, location, storeInternalMeta.secret)) {
-        throw StoreEncryptionKeyValidationException();
-    }
-    core::EncKey storeKey = currentStoreKey;
-    core::DataIntegrityObject updateStoreDio = _connection.getImpl()->createDIO(
-        currentStore.contextId, currentStoreResourceId
+    auto ctx = prepareContainerUpdate(
+        currentStore, currentStoreEntry, currentStoreResourceId, users, managers, forceGenerateNewKey,
+        [this](const server::StoreDataEntry& entry, const core::DecryptedEncKeyV2& key) { return extractAndDecryptModuleInternalMeta(entry, key).secret; },
+        [] { throw StoreEncryptionKeyValidationException(); }
     );
-
-    std::vector<core::server::KeyEntrySet> keys;
-    if (usersKeysResolver->doNeedNewKey()) {
-        storeKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(), storeKey, updateStoreDio, location, storeInternalMeta.secret
-        );
-    }
-
-    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-    if (usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            storeKeys, usersToAddMissingKey, updateStoreDio, location, storeInternalMeta.secret
-        );
-        for (auto t : tmp)
-            keys.push_back(t);
-    }
-
     server::StoreUpdateModel model;
     std::vector<std::string> usersList;
     for (auto user : users) {
@@ -230,8 +201,8 @@ void StoreApiImpl::updateStore(
     }
     model.id = storeId;
     model.resourceId = currentStoreResourceId;
-    model.keyId = storeKey.id;
-    model.keys = keys;
+    model.keyId = ctx.key.id;
+    model.keys = ctx.keyEntries;
     model.users = usersList;
     model.managers = managersList;
     model.version = version;
@@ -244,13 +215,13 @@ void StoreApiImpl::updateStore(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = storeInternalMeta.secret,
+                .secret = ctx.secret,
                 .resourceId = currentStoreResourceId,
-                .randomId = updateStoreDio.randomId
+                .randomId = ctx.dio.randomId
             },
-        .dio = updateStoreDio
+        .dio = ctx.dio
     };
-    model.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, storeKey.key);
+    model.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key);
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeUpdate, data encrypted)
     _serverApi->storeUpdate(model);

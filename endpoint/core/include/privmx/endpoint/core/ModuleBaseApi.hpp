@@ -35,6 +35,8 @@ limitations under the License.
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/utils/GuardedExecutor.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -83,6 +85,58 @@ protected:
         ModuleStruct moduleObj,
         const std::string& resourceId
     ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
+
+    template<typename TContainer, typename TEntry>
+    ContainerUpdateContext prepareContainerUpdate(
+        const TContainer& container,
+        const TEntry& entry,
+        const std::string& resourceId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        bool forceGenerateNewKey,
+        std::function<std::string(const type_identity_t<TEntry>&, const core::DecryptedEncKeyV2&)> getSecret,
+        std::function<void()> throwIfInvalid
+    ) {
+        auto location{getModuleEncKeyLocation(container, resourceId)};
+        auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
+        auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
+        std::string secret = getSecret(entry, currentKey);
+        auto usersKeysResolver{
+            core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)
+        };
+        if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
+            throwIfInvalid();
+        }
+        core::EncKey key = currentKey;
+        core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);
+        std::vector<core::server::KeyEntrySet> keyEntries;
+        if (usersKeysResolver->doNeedNewKey()) {
+            key = _keyProvider->generateKey();
+            keyEntries = _keyProvider->prepareKeysList(
+                usersKeysResolver->getNewUsers(), key, dio, location, secret
+            );
+        }
+        auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
+        if (!usersToAddMissingKey.empty()) {
+            auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
+                containerKeys, usersToAddMissingKey, dio, location, secret
+            );
+            keyEntries.insert(keyEntries.end(), tmp.begin(), tmp.end());
+        }
+        return {location, key, dio, secret, keyEntries};
+    }
+
+    template<typename TCallable>
+    auto withKeyRefresh(const std::string& moduleId, int64_t invalidKeyCode, TCallable&& op) {
+        try {
+            return op(getModuleKeys(moduleId));
+        } catch (const privmx::utils::PrivmxException& e) {
+            if (core::ExceptionConverter::convert(e).getCode() == invalidKeyCode) {
+                return op(getNewModuleKeysAndUpdateCache(moduleId));
+            }
+            throw;
+        }
+    }
 
     DecryptedEncKeyV2 findEncKeyByKeyId(
         std::unordered_map<std::string, DecryptedEncKeyV2> keys,

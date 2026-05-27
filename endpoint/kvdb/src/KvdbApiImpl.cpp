@@ -140,39 +140,11 @@ void KvdbApiImpl::updateKvdb(
     auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
     auto currentKvdbEntry = currentKvdb.data.back();
     auto currentKvdbResourceId = currentKvdb.resourceId;
-    auto location{getModuleEncKeyLocation(currentKvdb, currentKvdbResourceId)};
-    auto kvdbKeys{getAndValidateModuleKeys(currentKvdb, currentKvdbResourceId)};
-    auto currentKvdbKey{findEncKeyByKeyId(kvdbKeys, currentKvdbEntry.keyId)};
-    auto kvdbInternalMeta = extractAndDecryptModuleInternalMeta(currentKvdbEntry, currentKvdbKey);
-
-    auto usersKeysResolver{
-        core::UsersKeysResolver::create(currentKvdb, users, managers, forceGenerateNewKey, currentKvdbKey)
-    };
-
-    if (!_keyProvider->verifyKeysSecret(kvdbKeys, location, kvdbInternalMeta.secret)) {
-        throw KvdbEncryptionKeyValidationException();
-    }
-    // setting kvdb Key adding new users
-    core::EncKey kvdbKey = currentKvdbKey;
-    core::DataIntegrityObject updateKvdbDio = _connection.getImpl()->createDIO(
-        currentKvdb.contextId, currentKvdbResourceId
+    auto ctx = prepareContainerUpdate(
+        currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers, forceGenerateNewKey,
+        [this](const server::KvdbDataEntry& entry, const core::DecryptedEncKeyV2& key) { return extractAndDecryptModuleInternalMeta(entry, key).secret; },
+        [] { throw KvdbEncryptionKeyValidationException(); }
     );
-    std::vector<core::server::KeyEntrySet> keys;
-    if (usersKeysResolver->doNeedNewKey()) {
-        kvdbKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(), kvdbKey, updateKvdbDio, location, kvdbInternalMeta.secret
-        );
-    }
-
-    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-    if (usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            kvdbKeys, usersToAddMissingKey, updateKvdbDio, location, kvdbInternalMeta.secret
-        );
-        for (auto t : tmp)
-            keys.push_back(t);
-    }
     server::KvdbUpdateModel model;
     std::vector<std::string> usersList;
     for (auto user : users) {
@@ -184,8 +156,8 @@ void KvdbApiImpl::updateKvdb(
     }
     model.id = kvdbId;
     model.resourceId = currentKvdbResourceId;
-    model.keyId = kvdbKey.id;
-    model.keys = keys;
+    model.keyId = ctx.key.id;
+    model.keys = ctx.keyEntries;
     model.users = usersList;
     model.managers = managersList;
     model.version = version;
@@ -198,13 +170,13 @@ void KvdbApiImpl::updateKvdb(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = kvdbInternalMeta.secret,
+                .secret = ctx.secret,
                 .resourceId = currentKvdbResourceId,
-                .randomId = updateKvdbDio.randomId
+                .randomId = ctx.dio.randomId
             },
-        .dio = updateKvdbDio
+        .dio = ctx.dio
     };
-    model.data = _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, kvdbKey.key);
+    model.data = _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key);
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, updateKvdb, data encrypted)
     _serverApi.kvdbUpdate(model);

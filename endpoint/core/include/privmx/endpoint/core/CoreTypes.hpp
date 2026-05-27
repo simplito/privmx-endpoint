@@ -96,6 +96,14 @@ struct ModuleKeys {
     std::string contextId;
 };
 
+struct ContainerUpdateContext {
+    EncKeyLocation location;
+    EncKey key;
+    DataIntegrityObject dio;
+    std::string secret;
+    std::vector<server::KeyEntrySet> keyEntries;
+};
+
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

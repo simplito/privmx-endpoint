@@ -156,46 +156,16 @@ void ThreadApiImpl::updateThread(
     const auto& currentThreadEntry = currentThread.data.back();
     auto currentThreadResourceId = currentThread.resourceId ? currentThread.resourceId.value() :
                                                               core::EndpointUtils::generateId();
-    core::EncKeyLocation location{.contextId = currentThread.contextId, .resourceId = currentThreadResourceId};
-    core::KeyDecryptionAndVerificationRequest keysRequest;
-    keysRequest.addAll(currentThread.keys, location);
-    auto threadKeys{_keyProvider->getKeysAndVerify(keysRequest).at(location)};
-    auto currentThreadKey{findEncKeyByKeyId(threadKeys, currentThreadEntry.keyId)};
-    auto threadInternalMeta = extractAndDecryptModuleInternalMeta(currentThreadEntry, currentThreadKey);
-
-    auto usersKeysResolver{core::UsersKeysResolver::create(
-        currentThread.users, currentThread.managers, users, managers, forceGenerateNewKey, currentThreadKey
-    )};
-
-    if (!_keyProvider->verifyKeysSecret(threadKeys, location, threadInternalMeta.secret)) {
-        throw ThreadEncryptionKeyValidationException();
-    }
-    // setting thread Key adding new users
-    core::EncKey threadKey = currentThreadKey;
-    core::DataIntegrityObject updateThreadDio = _connection.getImpl()->createDIO(
-        currentThread.contextId, currentThreadResourceId
+    auto ctx = prepareContainerUpdate(
+        currentThread, currentThreadEntry, currentThreadResourceId, users, managers, forceGenerateNewKey,
+        [this](const server::Thread2DataEntry& entry, const core::DecryptedEncKeyV2& key) { return extractAndDecryptModuleInternalMeta(entry, key).secret; },
+        [] { throw ThreadEncryptionKeyValidationException(); }
     );
-
-    std::vector<core::server::KeyEntrySet> keys;
-    if (usersKeysResolver->doNeedNewKey()) {
-        threadKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(), threadKey, updateThreadDio, location, threadInternalMeta.secret
-        );
-    }
-
-    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-    if (usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            threadKeys, usersToAddMissingKey, updateThreadDio, location, threadInternalMeta.secret
-        );
-        keys.insert(keys.end(), tmp.begin(), tmp.end());
-    }
     server::ThreadUpdateModel model;
     model.id = threadId;
     model.resourceId = currentThreadResourceId;
-    model.keyId = threadKey.id;
-    model.keys = keys;
+    model.keyId = ctx.key.id;
+    model.keys = ctx.keyEntries;
     model.users = mapUsers(users);
     model.managers = mapUsers(managers);
     model.version = version;
@@ -208,13 +178,13 @@ void ThreadApiImpl::updateThread(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = threadInternalMeta.secret,
+                .secret = ctx.secret,
                 .resourceId = currentThreadResourceId,
-                .randomId = updateThreadDio.randomId
+                .randomId = ctx.dio.randomId
             },
-        .dio = updateThreadDio
+        .dio = ctx.dio
     };
-    model.data = _threadDataSchemaMapper.encrypt(threadDataToEncrypt, threadKey.key);
+    model.data = _threadDataSchemaMapper.encrypt(threadDataToEncrypt, ctx.key.key);
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateThread, data encrypted)
     _serverApi.threadUpdate(model);
