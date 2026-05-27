@@ -680,8 +680,8 @@ FileEncryptionParams StoreApiImpl::getFileEncryptionParams(server::File file, se
 }
 
 core::ModuleKeys StoreApiImpl::getFileDecryptionKeys(server::File file) {
-    return getModuleKeys(
-        file.storeId, std::set<std::string>{file.keyId}, _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file)
+    return getModuleKeysForItem(
+        file.storeId, file.keyId, _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file)
     );
 }
 

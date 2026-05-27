@@ -152,6 +152,13 @@ protected:
         const std::optional<std::set<std::string>>& keyIds = std::nullopt,
         const std::optional<int64_t>& minimumSchemaVersion = std::nullopt
     );
+    ModuleKeys getModuleKeysForItem(
+        const std::string& moduleId,
+        const std::string& keyId,
+        std::optional<int64_t> minimumSchemaVersion = std::nullopt
+    ) {
+        return getModuleKeys(moduleId, std::set<std::string>{keyId}, minimumSchemaVersion);
+    }
     virtual std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) = 0;
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);

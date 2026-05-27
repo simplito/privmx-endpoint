@@ -465,7 +465,7 @@ core::ModuleKeys KvdbApiImpl::getEntryDecryptionKeys(server::KvdbEntryInfo entry
         minimumKvdbSchemaVersion = kvdb::KvdbDataSchema::VERSION_5;
         break;
     }
-    return getModuleKeys(entry.kvdbId, std::set<std::string>{keyId}, minimumKvdbSchemaVersion);
+    return getModuleKeysForItem(entry.kvdbId, keyId, minimumKvdbSchemaVersion);
 }
 
 Poco::Dynamic::Var KvdbApiImpl::encryptEntryData(

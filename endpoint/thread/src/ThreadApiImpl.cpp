@@ -462,8 +462,8 @@ std::vector<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWit
 }
 
 core::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message) {
-    return getModuleKeys(
-        message.threadId, std::set<std::string>{message.keyId},
+    return getModuleKeysForItem(
+        message.threadId, message.keyId,
         _messageDataSchemaMapper.getMinimumContainerSchemaVersionForMessage(message)
     );
 }
