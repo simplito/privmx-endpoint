@@ -48,7 +48,7 @@ struct StreamRoom {
     int64_t version;
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::ContainerPolicy policy;
+    core::ContainerPolicyWithoutItem policy;
     int64_t statusCode;
     int64_t schemaVersion;
     bool closed;

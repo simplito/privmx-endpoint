@@ -93,7 +93,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynami
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(5), "policies");
     auto result = _streamApi.createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
@@ -108,7 +108,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::updateStreamRoom(const Poco::Dynami
     auto version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(8), "policies");
     _streamApi.updateStreamRoom(
         inboxId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
     );

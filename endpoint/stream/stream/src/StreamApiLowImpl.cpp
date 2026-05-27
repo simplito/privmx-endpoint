@@ -562,7 +562,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
     const std::string& type
 ) {
     auto streamRoomKey = _keyProvider->generateKey();
@@ -608,7 +608,7 @@ void StreamApiLowImpl::updateStreamRoom(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
 
     // get current streamRoom
