@@ -518,34 +518,24 @@ std::string StoreApiImpl::closeFile(const int64_t handle) {
 
 std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle) {
     auto data = handle->finalize();
-    try {
-        privmx::endpoint::core::ModuleKeys storeKey;
-        if (handle->getFileId().empty()) {
-            storeKey = getModuleKeys(handle->getStoreId());
-        } else {
-            server::StoreFileGetModel storeFileGetModel;
-            storeFileGetModel.fileId = handle->getFileId();
-            auto store = _serverApi->storeFileGet(storeFileGetModel).store;
-            storeKey = core::ModuleKeys{
-                .keys = store.keys,
-                .currentKeyId = store.keyId,
-                .moduleSchemaVersion = _storeDataSchemaMapper.getDataStructureVersion(store.data.back()),
-                .moduleResourceId = store.resourceId.value_or(""),
-                .contextId = store.contextId
-            };
-            setNewModuleKeysInCache(store.id, storeKey, store.version);
-        }
-        return storeFileFinalizeWriteRequest(handle, data, storeKey);
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-                privmx::endpoint::server::InvalidKeyException().getCode() &&
-            handle->getFileId().empty()) {
-            privmx::endpoint::core::ModuleKeys storeKey = getNewModuleKeysAndUpdateCache(handle->getStoreId());
-
-            return storeFileFinalizeWriteRequest(handle, data, storeKey);
-        }
-        throw e;
+    if (handle->getFileId().empty()) {
+        return withKeyRefresh<std::string>(handle->getStoreId(), privmx::endpoint::server::InvalidKeyException().getCode(),
+            [&](const core::ModuleKeys& keys) {
+                return storeFileFinalizeWriteRequest(handle, data, keys);
+            });
     }
+    server::StoreFileGetModel storeFileGetModel;
+    storeFileGetModel.fileId = handle->getFileId();
+    auto store = _serverApi->storeFileGet(storeFileGetModel).store;
+    auto storeKey = core::ModuleKeys{
+        .keys = store.keys,
+        .currentKeyId = store.keyId,
+        .moduleSchemaVersion = _storeDataSchemaMapper.getDataStructureVersion(store.data.back()),
+        .moduleResourceId = store.resourceId.value_or(""),
+        .contextId = store.contextId
+    };
+    setNewModuleKeysInCache(store.id, storeKey, store.version);
+    return storeFileFinalizeWriteRequest(handle, data, storeKey);
 }
 
 std::string StoreApiImpl::storeFileFinalizeWriteRequest(

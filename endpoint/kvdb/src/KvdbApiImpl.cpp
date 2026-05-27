@@ -313,17 +313,10 @@ void KvdbApiImpl::setEntry(
     const core::Buffer& data,
     int64_t version
 ) {
-    try {
-        auto currentKeys{getModuleKeys(kvdbId)};
-        return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, currentKeys);
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-            privmx::endpoint::server::InvalidKeyIdException().getCode()) {
-            auto newestKeys{getNewModuleKeysAndUpdateCache(kvdbId)};
-            return setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, newestKeys);
-        }
-        e.rethrow();
-    }
+    withKeyRefresh<void>(kvdbId, privmx::endpoint::server::InvalidKeyIdException().getCode(),
+        [&](const core::ModuleKeys& keys) {
+            setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, keys);
+        });
 }
 
 void KvdbApiImpl::setEntryRequest(

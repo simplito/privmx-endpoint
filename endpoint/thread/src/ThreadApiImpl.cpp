@@ -306,17 +306,10 @@ std::string ThreadApiImpl::sendMessage(
     const core::Buffer& privateMeta,
     const core::Buffer& data
 ) {
-    try {
-        auto currentKeys{getModuleKeys(threadId)};
-        return sendMessageRequest(threadId, publicMeta, privateMeta, data, currentKeys);
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-            privmx::endpoint::server::InvalidThreadKeyException().getCode()) {
-            auto newestKeys{getNewModuleKeysAndUpdateCache(threadId)};
-            return sendMessageRequest(threadId, publicMeta, privateMeta, data, newestKeys);
-        }
-        throw e;
-    }
+    return withKeyRefresh<std::string>(threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
+        [&](const core::ModuleKeys& keys) {
+            return sendMessageRequest(threadId, publicMeta, privateMeta, data, keys);
+        });
 }
 
 std::string ThreadApiImpl::sendMessageRequest(
@@ -360,23 +353,12 @@ void ThreadApiImpl::updateMessage(
     model.messageId = messageId;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message;
-    try {
-        auto currentKeys{getModuleKeys(message.threadId)};
-        return updateMessageRequest(
-            messageId, message.resourceId.empty() ? core::EndpointUtils::generateId() : message.resourceId,
-            message.threadId, publicMeta, privateMeta, data, currentKeys
-        );
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-            privmx::endpoint::server::InvalidThreadKeyException().getCode()) {
-            auto newestKeys{getNewModuleKeysAndUpdateCache(message.threadId)};
-            return updateMessageRequest(
-                messageId, message.resourceId.empty() ? core::EndpointUtils::generateId() : message.resourceId,
-                message.threadId, publicMeta, privateMeta, data, newestKeys
-            );
-        }
-        e.rethrow();
-    }
+    const std::string resourceId =
+        message.resourceId.empty() ? core::EndpointUtils::generateId() : message.resourceId;
+    withKeyRefresh<void>(message.threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
+        [&](const core::ModuleKeys& keys) {
+            updateMessageRequest(messageId, resourceId, message.threadId, publicMeta, privateMeta, data, keys);
+        });
 }
 
 void ThreadApiImpl::updateMessageRequest(

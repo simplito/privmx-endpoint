@@ -126,8 +126,12 @@ protected:
         return {location, key, dio, secret, keyEntries};
     }
 
-    template<typename TCallable>
-    auto withKeyRefresh(const std::string& moduleId, int64_t invalidKeyCode, TCallable&& op) {
+    template<typename TReturn>
+    TReturn withKeyRefresh(
+        const std::string& moduleId,
+        int64_t invalidKeyCode,
+        std::function<TReturn(const core::ModuleKeys&)> op
+    ) {
         try {
             return op(getModuleKeys(moduleId));
         } catch (const privmx::utils::PrivmxException& e) {
