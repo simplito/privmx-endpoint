@@ -1,4 +1,5 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
+#include <string_view>
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
@@ -195,6 +196,12 @@ std::shared_ptr<PrivmxFile> PrivmxExtFS::openFile(const std::string& path) {
 }
 
 bool PrivmxExtFS::access(const std::string& path) {
+    if (_blockWalAccess) {
+        std::string_view name(path);
+        if (name.size() >= 4 && name.substr(name.size() - 4) == "-wal") {
+            return false;
+        }
+    }
     auto parsed = parsePath(path);
     auto fs = getPrivmxFS(parsed);
     return fs->access(parsed.path);

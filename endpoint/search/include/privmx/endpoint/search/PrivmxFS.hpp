@@ -113,6 +113,7 @@ private:
 class PrivmxExtFS
 {
 public:
+    explicit PrivmxExtFS(bool blockWalAccess = false) : _blockWalAccess(blockWalAccess) {}
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
     bool access(const std::string& path);
     void deleteFile(const std::string& path);
@@ -129,6 +130,8 @@ private:
     std::shared_ptr<PrivmxFS> getPrivmxFS(const ParsedPath& parsed);
     std::string extractPath(const std::string& uri);
     std::string sanitizeFilepath(const std::string& filepath);
+
+    bool _blockWalAccess;
 };
 
 
