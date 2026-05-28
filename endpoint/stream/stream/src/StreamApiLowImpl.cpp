@@ -484,6 +484,7 @@ SubscriptionHandle StreamApiLowImpl::createSubscription(
         SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
         acceptOfferOnReconfigure(subscribeResult.sessionId, sdpModel);
     }
+    _handleToRoomId.set(streamHandle, streamRoomId);
     return streamHandle;
 }
 
@@ -493,7 +494,7 @@ void StreamApiLowImpl::updateSubscription(
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
     auto room = getStreamRoomData(subscriptionHandle);
-    if (room->subscriberStream) {
+    if (!room->subscriberStream) {
         throw SubscriptionHandleNotInitialized();
     }
     // Sending Request to Bridge
@@ -546,10 +547,12 @@ void StreamApiLowImpl::removeSubscription(
     const SubscriptionHandle& subscriptionHandle
 ) {
     auto room = getStreamRoomData(subscriptionHandle);
-    if (room->subscriberStream) {
+    if (!room->subscriberStream) {
         throw SubscriptionHandleNotInitialized();
     }
     room->webRtc->close(room->streamRoomId, "subscriber");
+    _handleToRoomId.erase(subscriptionHandle);
+    room->subscriberStream.reset();
 }
 
 std::string StreamApiLowImpl::createStreamRoom(

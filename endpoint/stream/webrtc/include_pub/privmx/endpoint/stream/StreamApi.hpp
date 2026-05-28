@@ -266,15 +266,16 @@ public:
      *
      * @param streamHandle handle returned by createStream
      */
-    void unpublishStream(const StreamHandle& streamHandle);
+    void removeStream(const StreamHandle& streamHandle);
 
     /**
      * Subscribes to selected remote streams (and optionally specific tracks) in the Stream Room.
      *
      * @param streamRoomId ID of the Stream Room
      * @param subscriptions list of remote streams/tracks to subscribe to
+     * @return handle to the created subscription
      */
-    void subscribeToRemoteStreams(
+    SubscriptionHandle createSubscription(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
@@ -282,26 +283,22 @@ public:
     /**
      * Modifies current remote streams subscriptions.
      *
-     * @param streamRoomId ID of the Stream Room
+     * @param subscriptionHandle handle returned by createSubscription
      * @param subscriptionsToAdd list of subscriptions to add
      * @param subscriptionsToRemove list of subscriptions to remove
      */
-    void modifyRemoteStreamsSubscriptions(
-        const std::string& streamRoomId,
+    void updateSubscription(
+        const SubscriptionHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
 
     /**
-     * Unsubscribes from selected remote streams (and optionally specific tracks) in the Stream Room.
+     * Unsubscribes from remote streams for the given subscription handle.
      *
-     * @param streamRoomId ID of the Stream Room
-     * @param subscriptionsToRemove list of subscriptions to remove
+     * @param subscriptionHandle handle returned by createSubscription
      */
-    void unsubscribeFromRemoteStreams(
-        const std::string& streamRoomId,
-        const std::vector<StreamSubscription>& subscriptionsToRemove
-    );
+    void removeSubscription(const SubscriptionHandle& subscriptionHandle);
 
     /**
      * Configures whether to drop encrypted frames that cannot be decrypted.

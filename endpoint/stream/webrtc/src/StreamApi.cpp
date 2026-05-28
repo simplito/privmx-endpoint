@@ -254,53 +254,48 @@ StreamPublishResult StreamApi::updateStream(const StreamHandle& streamHandle) {
     }
 }
 
-void StreamApi::unpublishStream(const StreamHandle& streamHandle) {
+void StreamApi::removeStream(const StreamHandle& streamHandle) {
     validateEndpoint();
     try {
-        return _impl->unpublishStream(streamHandle);
+        return _impl->removeStream(streamHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::subscribeToRemoteStreams(
+SubscriptionHandle StreamApi::createSubscription(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->subscribeToRemoteStreams(streamRoomId, subscriptions);
+        return _impl->createSubscription(streamRoomId, subscriptions);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::modifyRemoteStreamsSubscriptions(
-    const std::string& streamRoomId,
+void StreamApi::updateSubscription(
+    const SubscriptionHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
     validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
+        return _impl->updateSubscription(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::unsubscribeFromRemoteStreams(
-    const std::string& streamRoomId,
-    const std::vector<StreamSubscription>& subscriptionsToRemove
-) {
+void StreamApi::removeSubscription(const SubscriptionHandle& subscriptionHandle) {
     validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
+        return _impl->removeSubscription(subscriptionHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
