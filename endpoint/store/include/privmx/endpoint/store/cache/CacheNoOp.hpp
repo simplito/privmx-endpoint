@@ -24,7 +24,7 @@ namespace store {
 class CacheNoOp : public CacheInterface {
 public:
     std::optional<core::Buffer> get([[maybe_unused]] const std::string& key) override { return std::nullopt; }
-    void put([[maybe_unused]] const std::string& key, [[maybe_unused]] core::Buffer data) override {}
+    void put([[maybe_unused]] const std::string& key, [[maybe_unused]] const core::Buffer& data) override {}
     void del([[maybe_unused]] const std::string& key) override {}
 };
 

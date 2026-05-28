@@ -43,7 +43,7 @@ public:
     /**
      * Inserts or replaces the value for the given key.
      */
-    virtual void put(const std::string& key, core::Buffer data) = 0;
+    virtual void put(const std::string& key, const core::Buffer& data) = 0;
 
     /**
      * Removes the entry for the given key. No-op if the key does not exist.

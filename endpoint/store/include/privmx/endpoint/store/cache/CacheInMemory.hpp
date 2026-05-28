@@ -25,7 +25,7 @@ namespace store {
 class CacheInMemory : public CacheInterface {
 public:
     std::optional<core::Buffer> get(const std::string& key) override;
-    void put(const std::string& key, core::Buffer data) override;
+    void put(const std::string& key, const core::Buffer& data) override;
     void del(const std::string& key) override;
 
 private:

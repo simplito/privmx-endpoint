@@ -23,8 +23,8 @@ std::optional<core::Buffer> CacheInMemory::get(const std::string& key) {
     return it->second;
 }
 
-void CacheInMemory::put(const std::string& key, core::Buffer data) {
-    _store[key] = std::move(data);
+void CacheInMemory::put(const std::string& key, const core::Buffer& data) {
+    _store[key] = data;
 }
 
 void CacheInMemory::del(const std::string& key) {

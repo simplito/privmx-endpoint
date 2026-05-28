@@ -33,7 +33,7 @@ public:
 
     std::optional<core::Buffer> get(const std::string& key) override { return _inner->get(_prefix + key); }
 
-    void put(const std::string& key, core::Buffer data) override { _inner->put(_prefix + key, std::move(data)); }
+    void put(const std::string& key, const core::Buffer& data) override { _inner->put(_prefix + key, data); }
 
     void del(const std::string& key) override { _inner->del(_prefix + key); }
 
