@@ -53,10 +53,11 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
     auto cacheKey = CacheKey::chunk(_fileId, chunkNumber);
     auto cached = _cache->get(cacheKey);
     if (cached.has_value()) {
-        if (!_chunkEncryptor->hasHash(cached.value(), hash)) {
+        auto value = cached->stdString();
+        if (!_chunkEncryptor->hasHash(value, hash)) {
             _cache->del(cacheKey);
         } else {
-            return cached.value();
+            return value;
         }
     }
 
@@ -77,7 +78,7 @@ std::string ChunkDataProvider::getChunk(uint32_t chunkNumber, int64_t fileVersio
             uint64_t pos = i * _encryptedChunkSize;
             _cache->put(
                 CacheKey::chunk(_fileId, firstChunkNumber + i),
-                Pson::BinaryString(_lastSegment.substr(pos, _encryptedChunkSize))
+                core::Buffer::from(_lastSegment.substr(pos, _encryptedChunkSize))
             );
         }
     }
@@ -118,7 +119,7 @@ void ChunkDataProvider::update(
 }
 
 void ChunkDataProvider::cacheChunk(uint32_t chunkNumber, const std::string& encryptedData) {
-    _cache->put(CacheKey::chunk(_fileId, chunkNumber), Pson::BinaryString(encryptedData));
+    _cache->put(CacheKey::chunk(_fileId, chunkNumber), core::Buffer::from(encryptedData));
 }
 
 std::string ChunkDataProvider::requestSegment(uint32_t segmentNumber) {

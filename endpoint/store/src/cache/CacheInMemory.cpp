@@ -15,7 +15,7 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-std::optional<Pson::BinaryString> CacheInMemory::get(const std::string& key) {
+std::optional<core::Buffer> CacheInMemory::get(const std::string& key) {
     auto it = _store.find(key);
     if (it == _store.end()) {
         return std::nullopt;
@@ -23,7 +23,7 @@ std::optional<Pson::BinaryString> CacheInMemory::get(const std::string& key) {
     return it->second;
 }
 
-void CacheInMemory::put(const std::string& key, Pson::BinaryString data) {
+void CacheInMemory::put(const std::string& key, core::Buffer data) {
     _store[key] = std::move(data);
 }
 

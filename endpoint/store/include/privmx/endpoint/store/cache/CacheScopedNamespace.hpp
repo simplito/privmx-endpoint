@@ -31,9 +31,9 @@ public:
     CacheScopedNamespace(std::string prefix, std::shared_ptr<CacheInterface> inner)
         : _prefix(std::move(prefix)), _inner(std::move(inner)) {}
 
-    std::optional<Pson::BinaryString> get(const std::string& key) override { return _inner->get(_prefix + key); }
+    std::optional<core::Buffer> get(const std::string& key) override { return _inner->get(_prefix + key); }
 
-    void put(const std::string& key, Pson::BinaryString data) override { _inner->put(_prefix + key, std::move(data)); }
+    void put(const std::string& key, core::Buffer data) override { _inner->put(_prefix + key, std::move(data)); }
 
     void del(const std::string& key) override { _inner->del(_prefix + key); }
 

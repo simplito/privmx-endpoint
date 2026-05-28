@@ -12,9 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CACHE_INTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CACHE_INTERFACE_HPP_
 
-#include <Pson/BinaryString.hpp>
 #include <optional>
 #include <string>
+
+#include <privmx/endpoint/core/Buffer.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -37,12 +38,12 @@ public:
     /**
      * Returns the cached value for the given key, or std::nullopt if not present.
      */
-    virtual std::optional<Pson::BinaryString> get(const std::string& key) = 0;
+    virtual std::optional<core::Buffer> get(const std::string& key) = 0;
 
     /**
      * Inserts or replaces the value for the given key.
      */
-    virtual void put(const std::string& key, Pson::BinaryString data) = 0;
+    virtual void put(const std::string& key, core::Buffer data) = 0;
 
     /**
      * Removes the entry for the given key. No-op if the key does not exist.
