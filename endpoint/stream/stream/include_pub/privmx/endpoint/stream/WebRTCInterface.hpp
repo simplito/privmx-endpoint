@@ -35,23 +35,28 @@ struct Key {
 
 class WebRTCInterface {
 public:
-    virtual std::string createOfferAndSetLocalDescription(const std::string& streamRoomId) = 0;
+    virtual std::string createOfferAndSetLocalDescription(
+        const std::string& streamRoomId,
+        const std::string& connectionType) = 0;
     virtual std::string createAnswerAndSetDescriptions(
         const std::string& streamRoomId,
         const std::string& sdp,
-        const std::string& type
+        const std::string& type,
+        const std::string& connectionType
     ) = 0;
     virtual void setAnswerAndSetRemoteDescription(
         const std::string& streamRoomId,
         const std::string& sdp,
-        const std::string& type
+        const std::string& type,
+        const std::string& connectionType
     ) = 0;
     virtual void updateSessionId(
         const std::string& streamRoomId,
         const int64_t sessionId,
         const std::string& connectionType
     ) = 0;
-    virtual void close(const std::string& streamRoomId) = 0;
+    virtual void closeAll(const std::string& streamRoomId) = 0;
+    virtual void close(const std::string& streamRoomId, const std::string& connectionType) = 0;
     virtual void updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) = 0;
 
 protected:

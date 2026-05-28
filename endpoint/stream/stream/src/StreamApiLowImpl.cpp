@@ -76,7 +76,7 @@ StreamApiLowImpl::~StreamApiLowImpl() {
         if (roomValue->subscriberStream) {
             roomValue->subscriberStream.reset();
         }
-        roomValue->webRtc->close(roomValue->streamRoomId);
+        roomValue->webRtc->closeAll(roomValue->streamRoomId);
     });
     _streamRoomMap.clear();
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
@@ -225,7 +225,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         }
         if (raw.jsep.has_value()) {
             std::string sdp = room->webRtc->createAnswerAndSetDescriptions(
-                room->streamRoomId, raw.jsep.value().sdp, raw.jsep.value().type
+                room->streamRoomId, raw.jsep.value().sdp, raw.jsep.value().type, "subscriber"
             );
             SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
 
@@ -298,6 +298,7 @@ void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shar
     model.streamRoomId = streamRoomId;
     _serverApi->streamRoomJoin(model);
 }
+
 void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     auto room = getStreamRoomData(streamRoomId);
     _subscriber.unsubscribeFrom(room->subscriptionsIds);
@@ -306,15 +307,15 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     LOG_DEBUG("StreamApiLowImpl:leaveStreamRoom", "gently close of streams");
     if (room->publisherStream) {
         if (room->publisherStream->streamHandle.has_value()) {
-            _streamHandleToRoomId.erase(room->publisherStream->streamHandle.value());
+            _handleToRoomId.erase(room->publisherStream->streamHandle.value());
         }
     }
     if (room->subscriberStream) {
         if (room->subscriberStream->streamHandle.has_value()) {
-            _streamHandleToRoomId.erase(room->subscriberStream->streamHandle.value());
+            _handleToRoomId.erase(room->subscriberStream->streamHandle.value());
         }
     }
-    room->webRtc->close(room->streamRoomId);
+    room->webRtc->closeAll(room->streamRoomId);
     _streamRoomMap.erase(streamRoomId);
     server::StreamRoomLeaveModel model;
     model.streamRoomId = streamRoomId;
@@ -357,7 +358,7 @@ StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     if (room->publisherStream) {
         throw StreamAlreadyPublishedException();
     }
-    _streamHandleToRoomId.set(streamHandle, streamRoomId);
+    _handleToRoomId.set(streamHandle, streamRoomId);
     room->publisherStream = std::make_shared<StreamData>(
         StreamData{.sessionId = std::nullopt, .streamHandle = streamHandle}
     );
@@ -371,7 +372,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
         throw StreamHandleNotInitialized();
     }
     auto streamData = room->publisherStream;
-    std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
+    std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
     sessionDescription.sdp = sdp;
     sessionDescription.type = "offer";
@@ -385,7 +386,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     // Set remote description
     if (result.answer.has_value()) {
         room->webRtc->setAnswerAndSetRemoteDescription(
-            room->streamRoomId, result.answer.value().sdp, result.answer.value().type
+            room->streamRoomId, result.answer.value().sdp, result.answer.value().type, "publisher"
         );
     }
     if (result.publishedData.has_value()) {
@@ -402,7 +403,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
         throw StreamHandleNotInitialized();
     }
     auto streamData = room->publisherStream;
-    std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
+    std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
     sessionDescription.sdp = sdp;
     sessionDescription.type = "offer";
@@ -416,7 +417,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
     // Set remote description
     if (result.answer.has_value()) {
         room->webRtc->setAnswerAndSetRemoteDescription(
-            room->streamRoomId, result.answer.value().sdp, result.answer.value().type
+            room->streamRoomId, result.answer.value().sdp, result.answer.value().type, "publisher"
         );
     }
     if (result.publishedData.has_value()) {
@@ -427,7 +428,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
     }
 }
 
-void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
+void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {
     auto room = getStreamRoomData(streamHandle);
     if (!room->publisherStream) {
         throw StreamHandleNotInitialized();
@@ -438,16 +439,20 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
         model.sessionId = streamData->sessionId.value();
         _serverApi->streamUnpublish(model);
     }
-    // room->webRtc->close(room->streamRoomId);
-    _streamHandleToRoomId.erase(streamHandle);
+    room->webRtc->close(room->streamRoomId, "publisher");
+    _handleToRoomId.erase(streamHandle);
     room->publisherStream.reset();
 }
 
-void StreamApiLowImpl::subscribeToRemoteStreams(
+SubscriptionHandle StreamApiLowImpl::createSubscription(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
+    auto streamHandle{nextId()};
     auto room = getStreamRoomData(streamRoomId);
+    if (room->subscriberStream) {
+        throw SubscriptionAlreadyCreatedException();
+    }
     server::StreamsSubscribeModel model;
     model.streamRoomId = streamRoomId;
 
@@ -466,31 +471,34 @@ void StreamApiLowImpl::subscribeToRemoteStreams(
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId, std::string("subscriber"));
 
-    room->subscriberStream = std::make_shared<StreamData>(
-        StreamData{.sessionId = subscribeResult.sessionId, .streamHandle = StreamHandle()}
+    room->subscriberStream = std::make_shared<SubscriptionData>(
+        SubscriptionData{.sessionId = subscribeResult.sessionId, .streamHandle = streamHandle}
     );
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (subscribeResult.offer.has_value()) {
         std::string sdp = room->webRtc->createAnswerAndSetDescriptions(
-            streamRoomId, subscribeResult.offer.value().sdp, subscribeResult.offer.value().type
+            streamRoomId, subscribeResult.offer.value().sdp, subscribeResult.offer.value().type, "subscriber"
         );
 
         SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
         acceptOfferOnReconfigure(subscribeResult.sessionId, sdpModel);
     }
+    return streamHandle;
 }
 
-void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(
-    const std::string& streamRoomId,
+void StreamApiLowImpl::updateSubscription(
+    const SubscriptionHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
-    auto room = getStreamRoomData(streamRoomId);
+    auto room = getStreamRoomData(subscriptionHandle);
+    if (room->subscriberStream) {
+        throw SubscriptionHandleNotInitialized();
+    }
     // Sending Request to Bridge
     server::StreamsModifySubscriptionsModel model;
-    model.streamRoomId = streamRoomId;
-
+    model.streamRoomId = room->streamRoomId;
     // subscriptions to add
     std::vector<server::StreamSubscription> itemsToAdd;
     for (size_t i = 0; i < subscriptionsToAdd.size(); i++) {
@@ -502,7 +510,6 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(
         itemsToAdd.push_back(item);
     }
     model.subscriptionsToAdd = itemsToAdd;
-
     // subscriptions to remove
     std::vector<server::StreamSubscription> itemsToRemove;
     for (size_t i = 0; i < subscriptionsToRemove.size(); i++) {
@@ -518,16 +525,16 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(
     auto result = _serverApi->streamsModifyRemoteSubscriptions(model);
 
     // update/set sessionId in webrtc (for Janus - trickle)
-    room->webRtc->updateSessionId(streamRoomId, result.sessionId, std::string("subscriber"));
+    room->webRtc->updateSessionId(room->streamRoomId, result.sessionId, std::string("subscriber"));
 
-    room->subscriberStream = std::make_shared<StreamData>(
-        StreamData{.sessionId = result.sessionId, .streamHandle = StreamHandle()}
+    room->subscriberStream = std::make_shared<SubscriptionData>(
+        SubscriptionData{.sessionId = result.sessionId, .streamHandle = StreamHandle()}
     );
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (result.offer.has_value()) {
         std::string sdp = room->webRtc->createAnswerAndSetDescriptions(
-            streamRoomId, result.offer.value().sdp, result.offer.value().type
+            room->streamRoomId, result.offer.value().sdp, result.offer.value().type, "subscriber"
         );
 
         SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
@@ -535,25 +542,14 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(
     }
 }
 
-void StreamApiLowImpl::unsubscribeFromRemoteStreams(
-    const std::string& streamRoomId,
-    const std::vector<StreamSubscription>& subscriptionsToRemove
+void StreamApiLowImpl::removeSubscription(
+    const SubscriptionHandle& subscriptionHandle
 ) {
-    server::StreamsUnsubscribeModel model;
-    model.streamRoomId = streamRoomId;
-
-    std::vector<server::StreamSubscription> itemsToRemove;
-    for (size_t i = 0; i < subscriptionsToRemove.size(); i++) {
-        server::StreamSubscription item;
-        item.streamId = subscriptionsToRemove[i].streamId;
-        if (subscriptionsToRemove[i].streamTrackId) {
-            item.streamTrackId = subscriptionsToRemove[i].streamTrackId.value();
-        }
-        itemsToRemove.push_back(item);
+    auto room = getStreamRoomData(subscriptionHandle);
+    if (room->subscriberStream) {
+        throw SubscriptionHandleNotInitialized();
     }
-
-    model.subscriptionsToRemove = itemsToRemove;
-    _serverApi->streamsUnsubscribeFromRemote(model);
+    room->webRtc->close(room->streamRoomId, "subscriber");
 }
 
 std::string StreamApiLowImpl::createStreamRoom(
@@ -737,7 +733,7 @@ std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoo
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(
     const StreamHandle& streamHandle
 ) {
-    auto streamRoomId = _streamHandleToRoomId.get(streamHandle);
+    auto streamRoomId = _handleToRoomId.get(streamHandle);
     if (!streamRoomId.has_value()) {
         throw IncorrectStreamHandleException();
     }

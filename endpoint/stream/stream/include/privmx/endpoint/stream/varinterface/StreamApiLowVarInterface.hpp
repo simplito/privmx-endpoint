@@ -45,10 +45,11 @@ public:
 
         CreateStream = 13,
         PublishStream = 14,
-        UnpublishStream = 15,
-        SubscribeToRemoteStreams = 16,
-        ModifyRemoteStreamsSubscriptions = 17,
-        UnsubscribeFromRemoteStreams = 18,
+        RemoveStream = 15,
+
+        CreateSubscription = 16,
+        UpdateSubscription = 17,
+        RemoveSubscription = 18,
         Trickle = 19,
         AcceptOfferOnReconfigure = 20,
         KeyManagement = 21,
@@ -83,11 +84,11 @@ public:
     Poco::Dynamic::Var createStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var publishStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateStream(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unpublishStream(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var removeStream(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var subscribeToRemoteStreams(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var modifyRemoteStreamsSubscriptions(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var createSubscription(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateSubscription(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var removeSubscription(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getStreamRoomRecordingKeys(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);

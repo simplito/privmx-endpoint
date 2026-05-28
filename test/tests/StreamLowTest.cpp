@@ -34,12 +34,31 @@ class FakeWebRTC : public privmx::endpoint::stream::WebRTCInterface
 public:
     FakeWebRTC() {}
     ~FakeWebRTC() {}
-    std::string createOfferAndSetLocalDescription(const std::string& streamRoomId) override {return "random";}
-    std::string createAnswerAndSetDescriptions(const std::string& streamRoomId, const std::string& sdp, const std::string& type) override {return "random";}
-    void setAnswerAndSetRemoteDescription(const std::string& streamRoomId, const std::string& sdp, const std::string& type) override {return;}
-    virtual void updateSessionId(const std::string& streamRoomId, const int64_t sessionId, const std::string& connectionType) override {return;}
-    void close(const std::string& streamRoomId) override {return;}
-    void updateKeys(const std::string& streamRoomId, const std::vector<privmx::endpoint::stream::Key>& keys) override {return;}
+    std::string createOfferAndSetLocalDescription(
+        const std::string& streamRoomId,
+        const std::string& connectionType
+    ) override final {return "";};
+    virtual std::string createAnswerAndSetDescriptions(
+        const std::string& streamRoomId,
+        const std::string& sdp,
+        const std::string& type,
+        const std::string& connectionType
+    ) override final {return "";};
+    void setAnswerAndSetRemoteDescription(
+        const std::string& streamRoomId,
+        const std::string& sdp,
+        const std::string& type,
+        const std::string& connectionType
+    ) override final {return;};
+    void updateSessionId(
+        const std::string& streamRoomId,
+        const int64_t sessionId,
+        const std::string& connectionType
+    ) override final {return;};
+    void closeAll(const std::string& streamRoomId) override final {return;};
+    void close(const std::string& streamRoomId, const std::string& connectionType) override final {return;};
+    void updateKeys(const std::string& streamRoomId, const std::vector<stream::Key>& keys) override final {return;};
+
 };
 
 class StreamLowTest : public privmx::test::BaseTest {
