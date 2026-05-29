@@ -101,6 +101,22 @@ struct FileEncryptionParams {
     core::DecryptedEncKey encKey;
 };
 
+struct StaticMeta {
+    std::string fileId;
+    std::string resourceId;
+    int64_t cipherType;
+    size_t chunkSize;
+    std::string key;
+};
+
+struct DynamicMeta {
+    int64_t size;
+    int64_t serverSize;
+    std::string hmac;
+    int64_t version;
+    std::string signature;
+};
+
 } // namespace store
 } // namespace endpoint
 } // namespace privmx

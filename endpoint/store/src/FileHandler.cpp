@@ -10,9 +10,12 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/store/FileHandler.hpp"
+#include <Poco/JSON/Object.h>
 #include <Pson/BinaryString.hpp>
 #include <map>
+#include <privmx/crypto/Crypto.hpp>
 #include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
@@ -22,19 +25,16 @@ FileHandler::FileHandler(
     std::shared_ptr<IChunkEncryptor> chunkEncryptor,
     std::shared_ptr<IHashList> hashList,
     std::shared_ptr<IChunkReader> chunkReader,
-    std::shared_ptr<FileMetaEncryptor> metaEncryptor,
+    std::shared_ptr<ServerApi> server,
     uint64_t plainfileSize,
     uint64_t encryptedFileSize,
     int64_t version,
-    FileInfo fileInfo,
-    FileMeta fileMeta,
-    core::DecryptedEncKey fileEncKey,
-    std::shared_ptr<ServerApi> server
+    StaticMeta staticMeta
 )
     : _chunkDataProvider(chunkDataProvider), _chunkEncryptor(chunkEncryptor), _hashList(hashList),
-      _chunkReader(chunkReader), _fileMetaEncryptor(metaEncryptor), _plainfileSize(plainfileSize),
-      _encryptedFileSize(encryptedFileSize), _version(version), _fileInfo(fileInfo), _fileMeta(fileMeta),
-      _fileEncKey(fileEncKey), _server(server), _plainChunkSize(chunkEncryptor->getPlainChunkSize()),
+      _chunkReader(chunkReader), _server(server), _plainfileSize(plainfileSize),
+      _encryptedFileSize(encryptedFileSize), _version(version), _staticMeta(std::move(staticMeta)),
+      _plainChunkSize(chunkEncryptor->getPlainChunkSize()),
       _encryptedChunkSize(chunkEncryptor->getEncryptedChunkSize()), _pendingPlainfileSize(plainfileSize) {}
 
 void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate) {
@@ -238,15 +238,8 @@ void FileHandler::flush() {
             batch.push_back({chunk, pc.chunkIndex});
         }
 
-        store::FileMeta batchFileMeta = _fileMeta;
-        batchFileMeta.internalFileMeta.hmac = utils::Base64::from(_hashList->getTopHash());
-        batchFileMeta.internalFileMeta.size = static_cast<int64_t>(_pendingPlainfileSize);
-        auto batchMeta = _fileMetaEncryptor->encrypt(
-            _fileInfo, batchFileMeta, _fileEncKey, _fileEncKey.dataStructureVersion
-        );
-
         try {
-            updateOnServer(batch, batchMeta, _fileEncKey.id, isLastBatch && isTruncate);
+            updateOnServer(batch, newEncryptedFileSize, isLastBatch && isTruncate);
         } catch (const core::Exception& e) {
             _hashList->setAll(savedHashList);
             e.rethrow();
@@ -264,7 +257,6 @@ void FileHandler::flush() {
             _chunkReader->update(_version, batch[k].chunkIndex);
         }
 
-        _fileMeta = batchFileMeta;
         _plainfileSize = _pendingPlainfileSize;
         _encryptedFileSize = newEncryptedFileSize;
 
@@ -285,20 +277,42 @@ void FileHandler::close() {
     flush();
 }
 
-void FileHandler::sync(
-    const FileMeta& fileMeta,
-    const store::FileDecryptionParams& newParms,
-    const core::DecryptedEncKey& fileEncKey
-) {
-    _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
-    _chunkDataProvider->sync(_version, _encryptedFileSize);
-    _chunkReader->sync(newParms);
-    _fileMeta = fileMeta;
-    _version = newParms.version;
-    _plainfileSize = newParms.originalSize;
-    _pendingPlainfileSize = newParms.originalSize;
-    _encryptedFileSize = newParms.sizeOnServer;
-    _fileEncKey = fileEncKey;
+void FileHandler::sync() {
+    server::StoreFileRwPullModel pullModel;
+    pullModel.fileId = _staticMeta.fileId;
+    pullModel.rwVersion = _version;
+    auto pullResult = _server->storeFileRwPull(pullModel);
+
+    auto dmObj = pullResult.meta.rwMeta.extract<Poco::JSON::Object::Ptr>();
+    std::string dmHmacBase64 = dmObj->get("hmac").convert<std::string>();
+    int64_t dmSize = dmObj->get("size").convert<int64_t>();
+    int64_t dmServerSize = dmObj->get("serverSize").convert<int64_t>();
+    int64_t rwMetaVersion = pullResult.meta.rwVersion;
+
+    std::string dmHmacRaw = utils::Base64::toString(dmHmacBase64);
+
+    if (pullResult.checksums.has_value()) {
+        std::string checksumBytes = static_cast<std::string>(*pullResult.checksums);
+        _hashList->sync(_staticMeta.key, dmHmacRaw, checksumBytes);
+    }
+    _chunkDataProvider->sync(rwMetaVersion, dmServerSize);
+
+    FileDecryptionParams dynParms;
+    dynParms.fileId = _staticMeta.fileId;
+    dynParms.resourceId = _staticMeta.resourceId;
+    dynParms.sizeOnServer = static_cast<uint64_t>(dmServerSize);
+    dynParms.originalSize = static_cast<uint64_t>(dmSize);
+    dynParms.cipherType = _staticMeta.cipherType;
+    dynParms.chunkSize = _staticMeta.chunkSize;
+    dynParms.key = _staticMeta.key;
+    dynParms.hmac = dmHmacRaw;
+    dynParms.version = rwMetaVersion;
+
+    _chunkReader->sync(dynParms);
+    _version = rwMetaVersion;
+    _plainfileSize = static_cast<uint64_t>(dmSize);
+    _pendingPlainfileSize = static_cast<uint64_t>(dmSize);
+    _encryptedFileSize = static_cast<uint64_t>(dmServerSize);
     _dirtyChunks.clear();
     _pendingTruncateBoundary = UINT64_MAX;
 }
@@ -332,8 +346,7 @@ void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
 
 void FileHandler::updateOnServer(
     const std::vector<UpdateChunkData>& chunks,
-    Poco::Dynamic::Var updatedMeta,
-    const std::string& encKeyId,
+    uint64_t newEncryptedFileSize,
     bool truncate
 ) {
     std::vector<server::StoreFileRandomWriteOperation> operations;
@@ -371,15 +384,37 @@ void FileHandler::updateOnServer(
         i = j + 1;
     }
 
-    server::StoreFileWriteModelByOperations writeRequest;
-    writeRequest.fileId = _fileInfo.fileId;
+    int64_t newVersion = _version + 1;
+    std::string hmacBase64 = utils::Base64::from(_hashList->getTopHash());
+    int64_t dmSize = static_cast<int64_t>(_pendingPlainfileSize);
+    int64_t dmServerSize = static_cast<int64_t>(newEncryptedFileSize);
+
+    std::string metadataKey = privmx::crypto::Crypto::sha256(_staticMeta.key + std::string("metadata"));
+
+    Poco::JSON::Object::Ptr dmForSigning = new Poco::JSON::Object();
+    dmForSigning->set("hmac", hmacBase64);
+    dmForSigning->set("serverSize", dmServerSize);
+    dmForSigning->set("size", dmSize);
+    dmForSigning->set("version", newVersion);
+    std::string rawSignature = privmx::crypto::Crypto::hmacSha256(
+        metadataKey, utils::Utils::stringifyVar(Poco::Dynamic::Var(dmForSigning))
+    );
+
+    Poco::JSON::Object::Ptr dynamicMetaObj = new Poco::JSON::Object();
+    dynamicMetaObj->set("hmac", hmacBase64);
+    dynamicMetaObj->set("serverSize", dmServerSize);
+    dynamicMetaObj->set("signature", utils::Base64::from(rawSignature));
+    dynamicMetaObj->set("size", dmSize);
+    dynamicMetaObj->set("version", newVersion);
+
+    server::StoreFileRwWriteModel writeRequest;
+    writeRequest.fileId = _staticMeta.fileId;
     writeRequest.operations = std::move(operations);
-    writeRequest.meta = updatedMeta;
-    writeRequest.keyId = encKeyId;
-    writeRequest.version = _version;
-    writeRequest.force = false;
-    _server->storeFileWrite(writeRequest);
-    _version += 1;
+    writeRequest.rwVersion = _version;
+    writeRequest.rwMeta = Poco::Dynamic::Var(dynamicMetaObj);
+
+    _server->storeFileRwWrite(writeRequest);
+    _version = newVersion;
 }
 
 uint64_t FileHandler::committedChunkCount() const {
