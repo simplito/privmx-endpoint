@@ -19,6 +19,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
+#include "privmx/endpoint/lock/LockApi.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/search/Types.hpp"
 
@@ -66,7 +67,8 @@ public:
     SearchApiImpl(
         const core::Connection& connection,
         const store::StoreApi& storeApi,
-        const kvdb::KvdbApi& kvdbApi
+        const kvdb::KvdbApi& kvdbApi,
+        const lock::LockApi& lockApi
     );
     ~SearchApiImpl();
 
@@ -111,6 +113,7 @@ private:
     core::Connection _connection;
     store::StoreApi _storeApi;
     kvdb::KvdbApi _kvdbApi;
+    lock::LockApi _lockApi;
     FtsContainer _fts;
     
 };

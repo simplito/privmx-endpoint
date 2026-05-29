@@ -17,11 +17,12 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/store/StoreApi.hpp"
-#include "privmx/endpoint/kvdb/KvdbApi.hpp"
-#include "privmx/endpoint/core/Types.hpp"
-#include "privmx/endpoint/search/Types.hpp"
 #include "privmx/endpoint/core/ExtendedPointer.hpp"
+#include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/kvdb/KvdbApi.hpp"
+#include "privmx/endpoint/lock/LockApi.hpp"
+#include "privmx/endpoint/search/Types.hpp"
+#include "privmx/endpoint/store/StoreApi.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -32,8 +33,7 @@ class SearchApiImpl;
 /**
  * 'SearchApi' is a class representing Endpoint's API for Search Indexes and their Documents.
  */
-class SearchApi : public privmx::endpoint::core::ExtendedPointer<SearchApiImpl>
-{
+class SearchApi : public privmx::endpoint::core::ExtendedPointer<SearchApiImpl> {
 public:
     /**
      * Creates an instance of 'SearchApi'.
@@ -42,7 +42,12 @@ public:
      *
      * @return SearchApi object
      */
-    static SearchApi create(core::Connection& connection, store::StoreApi& storeApi, kvdb::KvdbApi& kvdbApi);
+    static SearchApi create(
+        core::Connection& connection,
+        store::StoreApi& storeApi,
+        kvdb::KvdbApi& kvdbApi,
+        lock::LockApi& lockApi
+    );
 
     /**
      * //doc-gen:ignore
@@ -66,9 +71,15 @@ public:
      * @param policies Index's policies
      * @return ID of the created Search Index
      */
-    std::string createSearchIndex(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                                  const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta,
-                                  const core::Buffer& privateMeta, const IndexMode mode, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+    std::string createSearchIndex(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const IndexMode mode,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
 
     /**
      * Updates an existing Search Index.
@@ -84,9 +95,17 @@ public:
      * @param forceGenerateNewKey force to regenerate a key for the Index
      * @param policies Index's policies
      */
-    void updateSearchIndex(const std::string& indexId, const std::vector<core::UserWithPubKey>& users,
-                           const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                           const int64_t version, const bool force, const bool forceGenerateNewKey, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+    void updateSearchIndex(
+        const std::string& indexId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
 
     /**
      * Deletes a Search Index by given Index ID.
@@ -179,14 +198,18 @@ public:
      * @param pagingQuery struct with list query parameters (e.g., search query, pagination)
      * @return struct containing a list of matching Documents
      */
-    core::PagingList<Document> searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery);
+    core::PagingList<Document> searchDocuments(
+        const int64_t indexHandle,
+        const std::string& searchQuery,
+        const core::PagingQuery& pagingQuery
+    );
 
 private:
     SearchApi(const std::shared_ptr<SearchApiImpl>& impl);
 };
 
-}  // namespace search
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_SEARCHAPI_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_SEARCHAPI_HPP_

@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
+#include "privmx/endpoint/lock/LockApi.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -28,6 +29,7 @@ struct PrivmxSession
     privmx::endpoint::core::Connection connection;
     privmx::endpoint::store::StoreApi storeApi;
     privmx::endpoint::kvdb::KvdbApi kvdbApi;
+    privmx::endpoint::lock::LockApi lockApi;
     std::string kvdbId;
     std::string storeId;
 };

@@ -32,7 +32,6 @@ limitations under the License.
 #include "privmx/utils/Utils.hpp"
 #include <Poco/Path.h>
 
-#include "privmx/endpoint/search/LockSession.hpp"
 #include "privmx/endpoint/search/SearchTypes.hpp"
 
 namespace privmx {
@@ -46,6 +45,7 @@ public:
         const privmx::endpoint::core::Connection& connection,
         const privmx::endpoint::store::StoreApi& storeApi,
         const privmx::endpoint::kvdb::KvdbApi& kvdbApi,
+        const privmx::endpoint::lock::LockApi& lockApi,
         const std::string& kvdbId,
         const std::string& storeId
     );
@@ -77,7 +77,7 @@ public:
     std::string fileId = "";
     std::string path;
     int64_t fh = -1;
-    LockSession lockSession;
+    std::string _uuid;
 };
 
 class PrivmxFS {

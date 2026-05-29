@@ -37,7 +37,7 @@ std::map<SearchApiVarInterface::METHOD, Poco::Dynamic::Var (SearchApiVarInterfac
 
 Poco::Dynamic::Var SearchApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _searchApi = SearchApi::create(_connection, _storeApi, _kvdbApi);
+    _searchApi = SearchApi::create(_connection, _storeApi, _kvdbApi, _lockApi);
     return {};
 }
 
