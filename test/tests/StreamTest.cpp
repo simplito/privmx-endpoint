@@ -83,19 +83,7 @@ private:
     std::vector<Message> _messages;
 };
 
-class ScopeExit {
-public:
-    explicit ScopeExit(std::function<void()> callback) : _callback(std::move(callback)) {}
-
-    ~ScopeExit() {
-        if(_callback) {
-            _callback();
-        }
-    }
-
-private:
-    std::function<void()> _callback;
-};
+using privmx::test::ScopeExit;
 
 enum ConnectionType {
     User1,
@@ -284,7 +272,14 @@ TEST_F(StreamTest, createStreamRoom) {
             }},
             core::Buffer::from("public"),
             core::Buffer::from("private"),
-            std::nullopt
+            core::ContainerPolicyWithoutItem{
+                .get="all",
+                .update="all",
+                .delete_="all",
+                .updatePolicy="all",
+                .updaterCanBeRemovedFromManagers="yes",
+                .ownerCanBeRemovedFromManagers="yes"
+            }
         );
     });
     if(streamRoomId.empty()) {
@@ -307,6 +302,12 @@ TEST_F(StreamTest, createStreamRoom) {
     if(streamRoom.managers.size() == 1) {
         EXPECT_EQ(streamRoom.managers[0], reader->getString("Login.user_1_id"));
     }
+    EXPECT_EQ(streamRoom.policy.get, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.update, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.delete_, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updatePolicy, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updaterCanBeRemovedFromManagers, std::optional<std::string>("yes"));
+    EXPECT_EQ(streamRoom.policy.ownerCanBeRemovedFromManagers, std::optional<std::string>("yes"));
     // same users and managers
     EXPECT_NO_THROW({
         streamRoomId = streamApi->createStreamRoom(
@@ -625,7 +626,14 @@ TEST_F(StreamTest, updateStreamRoom_correct_data) {
             1,
             false,
             false,
-            std::nullopt
+            core::ContainerPolicyWithoutItem{
+                .get="all",
+                .update="all",
+                .delete_="all",
+                .updatePolicy="all",
+                .updaterCanBeRemovedFromManagers="yes",
+                .ownerCanBeRemovedFromManagers="yes"
+            }
         );
     });
     EXPECT_NO_THROW({
@@ -647,6 +655,12 @@ TEST_F(StreamTest, updateStreamRoom_correct_data) {
         EXPECT_EQ(streamRoom.managers[0], reader->getString("Login.user_1_id"));
         EXPECT_EQ(streamRoom.managers[1], reader->getString("Login.user_2_id"));
     }
+    EXPECT_EQ(streamRoom.policy.get, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.update, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.delete_, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updatePolicy, std::optional<std::string>("all"));
+    EXPECT_EQ(streamRoom.policy.updaterCanBeRemovedFromManagers, std::optional<std::string>("yes"));
+    EXPECT_EQ(streamRoom.policy.ownerCanBeRemovedFromManagers, std::optional<std::string>("yes"));
     // less managers
     EXPECT_NO_THROW({
         streamApi->updateStreamRoom(
@@ -969,6 +983,9 @@ TEST_F(StreamTest, publish_with_tracks) {
     EXPECT_THROW({
         streamApi->publishStream(handle);
     }, core::Exception);
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, publish_with_multiple_instance_of_same_track) {
@@ -987,6 +1004,9 @@ TEST_F(StreamTest, publish_with_multiple_instance_of_same_track) {
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
@@ -1040,9 +1060,12 @@ TEST_F(StreamTest, subscribeToRemoteStreams) {
             streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
         });
     } else {
-        std::cerr << "No streams on bridge" << std::endl; 
+        std::cerr << "No streams on bridge" << std::endl;
         FAIL();
     }
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, unsubscribeFromRemoteStreams) {
@@ -1069,6 +1092,9 @@ TEST_F(StreamTest, unsubscribeFromRemoteStreams) {
     }, core::Exception);
     EXPECT_NO_THROW({
         streamApi->unsubscribeFromRemoteStreams(streamRoomId_1, streamsId);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
@@ -1112,6 +1138,9 @@ TEST_F(StreamTest, updateStream_remove_all_tracks) {
     EXPECT_NO_THROW({
     streamApi->updateStream(handle);
     });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, updateStream_adding_track) {
@@ -1137,6 +1166,9 @@ TEST_F(StreamTest, updateStream_adding_track) {
     EXPECT_NO_THROW({
         streamApi->updateStream(handle);
     });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, updateStream_no_changes) {
@@ -1157,6 +1189,9 @@ TEST_F(StreamTest, updateStream_no_changes) {
     });
     EXPECT_NO_THROW({
         streamApi->updateStream(handle);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
@@ -1181,6 +1216,9 @@ TEST_F(StreamTest, updateStream_after_failed_add_track) {
     }, core::Exception);
     EXPECT_NO_THROW({
         streamApi->updateStream(handle);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
@@ -1207,6 +1245,9 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     EXPECT_THROW({
         streamApi->updateStream(handle);
     }, core::Exception);
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_invalid_data) {
@@ -1246,6 +1287,9 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_invalid_data) {
     EXPECT_THROW({
         streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, streamsId, {{-1, "invalid"}});
     }, core::Exception);
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_remove_all_tracks) {
@@ -1269,6 +1313,9 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_remove_all_tracks) {
     EXPECT_NO_THROW({
         streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, streamsId);
     });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_new_track) {
@@ -1290,6 +1337,9 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_new_track) {
     });
     EXPECT_NO_THROW({
         streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, streamsId, {});
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
@@ -1313,6 +1363,9 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_and_remove_same_track) {
     });
     EXPECT_NO_THROW({
         streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, streamsId, streamsId);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
@@ -1342,6 +1395,9 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_after_unpublish) {
     EXPECT_THROW({
         streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, streamsId);
     }, core::Exception);
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, user_3_can_connect) {
@@ -1413,6 +1469,12 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     EXPECT_EQ(messages[0].payload, dataToSend);
     EXPECT_EQ(messages[0].seq, 0);
     EXPECT_EQ(messages[0].statusCode, 0);
+    EXPECT_NO_THROW({
+        client2.streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
 }
 
 TEST_F(StreamTest, dataChannel_seq_between_three_users) {
@@ -1560,5 +1622,9 @@ TEST_F(StreamTest, dataChannel_seq_between_three_users) {
     assertCollector(client1.userId, collector1);
     assertCollector(client2.userId, collector2);
     assertCollector(client3.userId, collector3);
-    
+    EXPECT_NO_THROW({
+        client1.streamApi->leaveStreamRoom(streamRoomId);
+        client2.streamApi->leaveStreamRoom(streamRoomId);
+        client3.streamApi->leaveStreamRoom(streamRoomId);
+    });
 }
