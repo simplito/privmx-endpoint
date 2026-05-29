@@ -402,7 +402,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
         throw StreamHandleNotInitialized();
     }
     if (!room->publisherStream->sessionId.has_value()) {
-        throw StreamRoomNotPublishedException();
+        throw StreamHandleNotPublishedException();
     }
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId);
