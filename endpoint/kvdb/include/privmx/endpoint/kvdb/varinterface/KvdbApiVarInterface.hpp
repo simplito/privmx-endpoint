@@ -46,6 +46,7 @@ public:
         UnsubscribeFrom = 18,
         BuildSubscriptionQuery = 19,
         BuildSubscriptionQueryForSelectedEntry = 20,
+        FindEntry = 21,
     };
 
     KvdbApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -68,6 +69,7 @@ public:
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQueryForSelectedEntry(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var findEntry(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
