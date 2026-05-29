@@ -399,6 +399,96 @@ int64_t StoreApiImpl::createFile(
     return handle->getId();
 }
 
+std::string StoreApiImpl::createRwFile(
+    const std::string& storeId,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta
+) {
+    auto storeKey = getModuleKeys(storeId);
+    auto key = getAndValidateModuleCurrentEncKey(storeKey);
+    if (key.statusCode != 0) {
+        throw StoreEncryptionKeyValidationException(
+            "Current encryption key statusCode: " + std::to_string(key.statusCode)
+        );
+    }
+
+    std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
+    std::string resourceId = core::EndpointUtils::generateId();
+    std::string emptyTopHash = privmx::crypto::Crypto::hmacSha256(fileKey, std::string());
+
+    dynamic::InternalStoreFileMeta internalFileMeta;
+    internalFileMeta.version = 4;
+    internalFileMeta.size = 0;
+    internalFileMeta.cipherType = 1;
+    internalFileMeta.chunkSize = _CHUNK_SIZE;
+    internalFileMeta.key = utils::Base64::from(fileKey);
+    internalFileMeta.hmac = utils::Base64::from(emptyTopHash);
+    internalFileMeta.randomWrite = true;
+
+    Poco::Dynamic::Var encryptedMetaVar;
+    switch (storeKey.moduleSchemaVersion) {
+    case StoreDataSchema::Version::UNKNOWN:
+        throw UnknowStoreFormatException();
+    case StoreDataSchema::Version::VERSION_1:
+    case StoreDataSchema::Version::VERSION_4: {
+        store::FileMetaToEncryptV4 fileMeta{
+            .publicMeta = publicMeta,
+            .privateMeta = privateMeta,
+            .fileSize = 0,
+            .internalMeta = core::Buffer::from(internalFileMeta.serialize())
+        };
+        encryptedMetaVar = _fileMetaEncryptorV4.encrypt(fileMeta, _userPrivKey, key.key).toJSON();
+        break;
+    }
+    case StoreDataSchema::Version::VERSION_5: {
+        privmx::endpoint::core::DataIntegrityObject fileDIO = _connection.getImpl()->createDIO(
+            storeKey.contextId, resourceId, storeId, storeKey.moduleResourceId
+        );
+        store::FileMetaToEncryptV5 fileMeta{
+            .publicMeta = publicMeta,
+            .privateMeta = privateMeta,
+            .internalMeta = core::Buffer::from(internalFileMeta.serialize()),
+            .dio = fileDIO
+        };
+        encryptedMetaVar = _fileMetaEncryptorV5.encrypt(fileMeta, _userPrivKey, key.key).toJSON();
+        break;
+    }
+    }
+
+    int64_t dmSize = 0;
+    int64_t dmServerSize = 0;
+    std::string dmHmac = utils::Base64::from(emptyTopHash);
+    int64_t dmVersion = 1;
+
+    std::string metadataKey = privmx::crypto::Crypto::sha256(fileKey + std::string("metadata"));
+
+    // Serialize DynamicMeta fields without signature (alphabetical key order for determinism)
+    Poco::JSON::Object::Ptr dmForSigning = new Poco::JSON::Object();
+    dmForSigning->set("hmac", dmHmac);
+    dmForSigning->set("serverSize", dmServerSize);
+    dmForSigning->set("size", dmSize);
+    dmForSigning->set("version", dmVersion);
+    std::string rawSignature = privmx::crypto::Crypto::hmacSha256(
+        metadataKey, utils::Utils::stringifyVar(Poco::Dynamic::Var(dmForSigning))
+    );
+
+    Poco::JSON::Object::Ptr dynamicMetaObj = new Poco::JSON::Object();
+    dynamicMetaObj->set("hmac", dmHmac);
+    dynamicMetaObj->set("serverSize", dmServerSize);
+    dynamicMetaObj->set("signature", utils::Base64::from(rawSignature));
+    dynamicMetaObj->set("size", dmSize);
+    dynamicMetaObj->set("version", dmVersion);
+
+    server::StoreFileRwCreateModel model;
+    model.storeId = storeId;
+    model.resourceId = resourceId;
+    model.meta = encryptedMetaVar;
+    model.keyId = key.id;
+    model.rwMeta = Poco::Dynamic::Var(dynamicMetaObj);
+
+    return _serverApi->storeFileRwCreate(model).fileId;
+}
+
 int64_t StoreApiImpl::updateFile(
     const std::string& fileId,
     const core::Buffer& publicMeta,
@@ -515,9 +605,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
 
     std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
-        rw_handle->file->sync(
-            encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, encryptionParams.encKey
-        );
+        rw_handle->file->sync();
         return;
     }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);

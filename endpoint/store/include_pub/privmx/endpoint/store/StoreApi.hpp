@@ -129,6 +129,21 @@ public:
     );
 
     /**
+     * Creates a new random-write file in a Store directly, without streaming chunks.
+     * The file is created empty; use openFile to obtain a read/write handle.
+     *
+     * @param storeId ID of the Store to create the file in
+     * @param publicMeta public file metadata
+     * @param privateMeta private file metadata
+     * @return ID of the created file
+     */
+    std::string createRwFile(
+        const std::string& storeId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta
+    );
+
+    /**
      * Update an existing file in a Store.
      *
      * @param fileId ID of the file to update

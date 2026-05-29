@@ -139,8 +139,7 @@ std::string PrivmxFS::getFileId(const std::string& name) {
         return fileId;
     } catch (const privmx::endpoint::server::KvdbEntryDoesNotExistException& e) {
         LOG_DEBUG("PrivmxFS::getFileId file not found, creating new file - ", name)
-        int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
-        std::string fileId = _session->storeApi.closeFile(fh);
+        std::string fileId = _session->storeApi.createRwFile(_session->storeId, META, META);
         _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
         return fileId;
     }

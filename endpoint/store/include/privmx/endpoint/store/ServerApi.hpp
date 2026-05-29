@@ -32,9 +32,12 @@ public:
     server::StoreGetResult storeGet(const server::StoreGetModel& model);
     server::StoreListResult storeList(const server::StoreListModel& model);
     server::StoreFileGetResult storeFileGet(const server::StoreFileGetModel& model);
+    server::StoreFileRwPullResult storeFileRwPull(const server::StoreFileRwPullModel& model);
     server::StoreFileGetManyResult storeFileGetMany(const server::StoreFileGetManyModel& model);
     server::StoreFileListResult storeFileList(const server::StoreFileListModel& model);
     server::StoreFileCreateResult storeFileCreate(const server::StoreFileCreateModel& model);
+    server::StoreFileCreateResult storeFileRwCreate(const server::StoreFileRwCreateModel& model);
+    void storeFileRwWrite(const server::StoreFileRwWriteModel& model);
     server::StoreFileReadResult storeFileRead(const server::StoreFileReadModel& model);
     void storeFileWrite(const server::StoreFileWriteModel& model);
     void storeFileWrite(const server::StoreFileWriteModelByOperations& model);

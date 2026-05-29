@@ -29,11 +29,7 @@ public:
     virtual core::Buffer read(const uint64_t length) = 0;
     virtual void write(const core::Buffer& chunk, bool truncate = false) = 0;
     virtual void close() = 0;
-    virtual void sync(
-        const FileMeta& fileMeta,
-        const store::FileDecryptionParams& newParms,
-        const core::DecryptedEncKey& fileEncKey
-    ) = 0;
+    virtual void sync() = 0;
     virtual void flush() = 0;
 };
 

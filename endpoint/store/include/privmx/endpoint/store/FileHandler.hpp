@@ -40,25 +40,18 @@ public:
         std::shared_ptr<IChunkEncryptor> chunkEncryptor,
         std::shared_ptr<IHashList> hashList,
         std::shared_ptr<IChunkReader> chunkReader,
-        std::shared_ptr<FileMetaEncryptor> metaEncryptor,
+        std::shared_ptr<ServerApi> server,
         uint64_t plainfileSize,
         uint64_t encryptedFileSize,
         int64_t version,
-        FileInfo fileInfo,
-        FileMeta fileMeta,
-        core::DecryptedEncKey fileEncKey,
-        std::shared_ptr<ServerApi> server
+        StaticMeta staticMeta
     );
 
     void write(uint64_t offset, const core::Buffer& data, bool truncate = false);
     void truncate(uint64_t length);
     core::Buffer read(uint64_t offset, uint64_t size);
     uint64_t getFileSize();
-    void sync(
-        const FileMeta& fileMeta,
-        const store::FileDecryptionParams& newParms,
-        const core::DecryptedEncKey& fileEncKey
-    );
+    void sync();
     void close();
     void flush();
 
@@ -83,8 +76,7 @@ private:
     uint64_t committedChunkCount() const;
     void updateOnServer(
         const std::vector<UpdateChunkData>& chunks,
-        Poco::Dynamic::Var updatedMeta,
-        const std::string& encKeyId,
+        uint64_t newEncryptedFileSize,
         bool truncate
     );
 
@@ -92,14 +84,11 @@ private:
     std::shared_ptr<IChunkEncryptor> _chunkEncryptor;
     std::shared_ptr<IHashList> _hashList;
     std::shared_ptr<IChunkReader> _chunkReader;
-    std::shared_ptr<store::FileMetaEncryptor> _fileMetaEncryptor;
+    std::shared_ptr<ServerApi> _server;
     uint64_t _plainfileSize = 0;
     uint64_t _encryptedFileSize = 0;
     int64_t _version = 0;
-    FileInfo _fileInfo;
-    FileMeta _fileMeta;
-    core::DecryptedEncKey _fileEncKey;
-    std::shared_ptr<ServerApi> _server;
+    StaticMeta _staticMeta;
     size_t _plainChunkSize;
     size_t _encryptedChunkSize;
     uint64_t _pendingPlainfileSize = 0;
@@ -118,13 +107,7 @@ public:
     void write(const core::Buffer& chunk, bool truncate = false) override;
 
     inline void close() override { _file->close(); }
-    inline void sync(
-        const FileMeta& fileMeta,
-        const store::FileDecryptionParams& newParms,
-        const core::DecryptedEncKey& fileEncKey
-    ) override {
-        return _file->sync(fileMeta, newParms, fileEncKey);
-    }
+    inline void sync() override { _file->sync(); }
     inline void flush() override { _file->flush(); }
 
 private:

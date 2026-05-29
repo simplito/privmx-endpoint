@@ -113,6 +113,11 @@ public:
         const int64_t size,
         bool randomWriteSupport = false
     );
+    std::string createRwFile(
+        const std::string& storeId,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta
+    );
     int64_t updateFile(
         const std::string& fileId,
         const core::Buffer& publicMeta,

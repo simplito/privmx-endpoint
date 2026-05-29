@@ -159,6 +159,21 @@ int64_t StoreApi::createFile(
     }
 }
 
+std::string StoreApi::createRwFile(
+    const std::string& storeId,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(storeId, "field:storeId ");
+    try {
+        return impl->createRwFile(storeId, publicMeta, privateMeta);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 int64_t StoreApi::updateFile(
     const std::string& fileId,
     const core::Buffer& publicMeta,
