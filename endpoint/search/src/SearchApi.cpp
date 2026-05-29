@@ -152,6 +152,36 @@ void SearchApi::closeSearchIndex(const int64_t indexHandle) {
     }
 }
 
+void SearchApi::beginTransaction(const int64_t indexHandle) {
+    auto impl = getImpl();
+    try {
+        impl->beginTransaction(indexHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void SearchApi::commit(const int64_t indexHandle) {
+    auto impl = getImpl();
+    try {
+        impl->commit(indexHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void SearchApi::rollback(const int64_t indexHandle) {
+    auto impl = getImpl();
+    try {
+        impl->rollback(indexHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 int64_t SearchApi::addDocument(const int64_t indexHandle, const std::string& name, const std::string& content) {
     auto impl = getImpl();
     try {

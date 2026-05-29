@@ -57,6 +57,10 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, SelectPrepareException, "Err
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, QueryPrepareException, "Error preparing query", 0x0208)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TableCreationException, "Error creating table", 0x0209)
 
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TransactionBeginException, "Error beginning transaction", 0x0301)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TransactionCommitException, "Error committing transaction", 0x0302)
+DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TransactionRollbackException, "Error rolling back transaction", 0x0303)
+
 } // search
 } // endpoint
 } // privmx
