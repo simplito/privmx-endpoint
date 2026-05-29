@@ -267,39 +267,39 @@ void StreamApiLow::removeStream(const StreamHandle& streamHandle) {
     }
 }
 
-SubscriptionHandle StreamApiLow::createSubscription(
+SubscriptionHandle StreamApiLow::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
     auto impl = getImpl();
     try {
-        return impl->createSubscription(streamRoomId, subscriptions);
+        return impl->createSubscriberStream(streamRoomId, subscriptions);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApiLow::updateSubscription(
+void StreamApiLow::updateSubscriberStream(
     const SubscriptionHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
     auto impl = getImpl();
     try {
-        return impl->updateSubscription(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
+        return impl->updateSubscriberStream(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApiLow::removeSubscription(
+void StreamApiLow::removeSubscriberStream(
     const SubscriptionHandle& subscriptionHandle
 ) {
     auto impl = getImpl();
     try {
-        return impl->removeSubscription(subscriptionHandle);
+        return impl->removeSubscriberStream(subscriptionHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

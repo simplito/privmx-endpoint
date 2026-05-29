@@ -264,38 +264,40 @@ void StreamApi::removeStream(const StreamHandle& streamHandle) {
     }
 }
 
-SubscriptionHandle StreamApi::createSubscription(
+SubscriptionHandle StreamApi::createSubscriberStream(
+
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->createSubscription(streamRoomId, subscriptions);
+        return _impl->createSubscriberStream(
+streamRoomId, subscriptions);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::updateSubscription(
+void StreamApi::updateSubscriberStream(
     const SubscriptionHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
     validateEndpoint();
     try {
-        return _impl->updateSubscription(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
+        return _impl->updateSubscriberStream(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void StreamApi::removeSubscription(const SubscriptionHandle& subscriptionHandle) {
+void StreamApi::removeSubscriberStream(const SubscriptionHandle& subscriptionHandle) {
     validateEndpoint();
     try {
-        return _impl->removeSubscription(subscriptionHandle);
+        return _impl->removeSubscriberStream(subscriptionHandle);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

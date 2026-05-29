@@ -46,9 +46,9 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
         {UpdateStream, &StreamApiLowVarInterface::updateStream},
         {RemoveStream, &StreamApiLowVarInterface::removeStream},
 
-        {CreateSubscription, &StreamApiLowVarInterface::createSubscription},
-        {UpdateSubscription, &StreamApiLowVarInterface::updateSubscription},
-        {RemoveSubscription, &StreamApiLowVarInterface::removeSubscription},
+        {CreateSubscriberStream, &StreamApiLowVarInterface::createSubscriberStream},
+        {UpdateSubscriberStream, &StreamApiLowVarInterface::updateSubscriberStream},
+        {RemoveSubscriberStream, &StreamApiLowVarInterface::removeSubscriberStream},
 
         {Trickle, &StreamApiLowVarInterface::trickle}
 };
@@ -204,13 +204,13 @@ Poco::Dynamic::Var StreamApiLowVarInterface::removeStream(const Poco::Dynamic::V
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::createSubscription(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StreamApiLowVarInterface::createSubscriberStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
     auto subscriptions = _deserializer.deserializeVector<StreamSubscription>(argsArr->get(1), "subscriptions");
-    return _streamApi.createSubscription(streamRoomId, subscriptions);
+    return _streamApi.createSubscriberStream(streamRoomId, subscriptions);
 }
-Poco::Dynamic::Var StreamApiLowVarInterface::updateSubscription(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StreamApiLowVarInterface::updateSubscriberStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto subscriptionHandle = _deserializer.deserialize<SubscriptionHandle>(argsArr->get(0), "subscriptionHandle");
     auto subscriptionsToAdd = _deserializer.deserializeVector<StreamSubscription>(
@@ -219,13 +219,13 @@ Poco::Dynamic::Var StreamApiLowVarInterface::updateSubscription(const Poco::Dyna
     auto subscriptionsToRemove = _deserializer.deserializeVector<StreamSubscription>(
         argsArr->get(2), "subscriptionsToRemove"
     );
-    _streamApi.updateSubscription(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
+    _streamApi.updateSubscriberStream(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
     return {};
 }
-Poco::Dynamic::Var StreamApiLowVarInterface::removeSubscription(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var StreamApiLowVarInterface::removeSubscriberStream(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto subscriptionHandle = _deserializer.deserialize<SubscriptionHandle>(argsArr->get(0), "subscriptionHandle");
-    _streamApi.removeSubscription(subscriptionHandle);
+    _streamApi.removeSubscriberStream(subscriptionHandle);
     return {};
 }
 

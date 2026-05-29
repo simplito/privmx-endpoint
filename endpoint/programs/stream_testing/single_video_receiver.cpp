@@ -243,7 +243,7 @@ int main(int argc, char** argv) {
         }
         streamApi.joinStreamRoom(streamRoomId);
         streamApi.addRemoteStreamListener(streamRoomId, std::nullopt, onTrack);
-        auto subscriptionHandle = streamApi.createSubscription(streamRoomId, streamsId);
+        auto subscriptionHandle = streamApi.createSubscriberStream(streamRoomId, streamsId);
 
         auto eventThread = std::thread([&](){
             while (true) {
@@ -268,7 +268,7 @@ int main(int argc, char** argv) {
                         }
                     }
                     if(toAddstreamsId.size() > 0 || toRemovestreamsId.size() > 0) {
-                        streamApi.updateSubscription(subscriptionHandle, toAddstreamsId, toRemovestreamsId);
+                        streamApi.updateSubscriberStream(subscriptionHandle, toAddstreamsId, toRemovestreamsId);
                     }
                 }
             }

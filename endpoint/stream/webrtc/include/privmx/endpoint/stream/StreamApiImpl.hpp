@@ -103,16 +103,16 @@ public:
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void removeStream(const StreamHandle& streamHandle);
-    SubscriptionHandle createSubscription(
+    SubscriptionHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
-    void updateSubscription(
+    void updateSubscriberStream(
         const SubscriptionHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void removeSubscription(const SubscriptionHandle& subscriptionHandle);
+    void removeSubscriberStream(const SubscriptionHandle& subscriptionHandle);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
     void addRemoteStreamListener(
         const std::string& streamRoomId,

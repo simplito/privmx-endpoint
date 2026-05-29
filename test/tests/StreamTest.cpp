@@ -1022,7 +1022,7 @@ TEST_F(StreamTest, createSubscription_no_streams) {
         streamApi->joinStreamRoom(streamRoomId_1);
     });
     EXPECT_THROW({
-        streamApi->createSubscription(streamRoomId_1, {});
+        streamApi->createSubscriberStream(streamRoomId_1, {});
     }, core::Exception);
 }
 
@@ -1032,7 +1032,7 @@ TEST_F(StreamTest, removeSubscription_invalid_handle) {
         streamApi->joinStreamRoom(streamRoomId_1);
     });
     EXPECT_THROW({
-        streamApi->removeSubscription(-1);
+        streamApi->removeSubscriberStream(-1);
     }, core::Exception);
 }
 
@@ -1044,7 +1044,7 @@ TEST_F(StreamTest, createSubscription) {
     // invalid StreamSubscription
     std::vector<stream::StreamSubscription> invalid_streamsId = {{99999, "invalid"}};
     EXPECT_THROW({
-        streamApi->createSubscription(streamRoomId_1, invalid_streamsId);
+        streamApi->createSubscriberStream(streamRoomId_1, invalid_streamsId);
     }, core::Exception);
     // valid StreamSubscription
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
@@ -1062,7 +1062,7 @@ TEST_F(StreamTest, createSubscription) {
     });
     if(streamsId.size() != 0) {
         EXPECT_NO_THROW({
-            streamApi->createSubscription(streamRoomId_1, streamsId);
+            streamApi->createSubscriberStream(streamRoomId_1, streamsId);
         });
     } else {
         std::cerr << "No streams on bridge" << std::endl;
@@ -1086,14 +1086,14 @@ TEST_F(StreamTest, removeSubscription) {
     });
     stream::SubscriptionHandle handle;
     EXPECT_NO_THROW({
-        handle = streamApi->createSubscription(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     // invalid handle
     EXPECT_THROW({
-        streamApi->removeSubscription(-1);
+        streamApi->removeSubscriberStream(-1);
     }, core::Exception);
     EXPECT_NO_THROW({
-        streamApi->removeSubscription(handle);
+        streamApi->removeSubscriberStream(handle);
     });
 }
 
@@ -1232,27 +1232,27 @@ TEST_F(StreamTest, updateSubscription_invalid_data) {
     });
     stream::SubscriptionHandle handle;
     EXPECT_NO_THROW({
-        handle = streamApi->createSubscription(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     //no change
     EXPECT_THROW({
-        streamApi->updateSubscription(handle, {}, {});
+        streamApi->updateSubscriberStream(handle, {}, {});
     }, core::Exception);
     //add invalid
     EXPECT_THROW({
-        streamApi->updateSubscription(handle, {{-1, "invalid"}}, {});
+        streamApi->updateSubscriberStream(handle, {{-1, "invalid"}}, {});
     }, core::Exception);
     //remove invalid
     EXPECT_THROW({
-        streamApi->updateSubscription(handle, {}, {{-1, "invalid"}});
+        streamApi->updateSubscriberStream(handle, {}, {{-1, "invalid"}});
     }, core::Exception);
     //add invalid, remove valid
     EXPECT_THROW({
-        streamApi->updateSubscription(handle, {{-1, "invalid"}}, streamsId);
+        streamApi->updateSubscriberStream(handle, {{-1, "invalid"}}, streamsId);
     }, core::Exception);
     //add valid, remove invalid
     EXPECT_THROW({
-        streamApi->updateSubscription(handle, streamsId, {{-1, "invalid"}});
+        streamApi->updateSubscriberStream(handle, streamsId, {{-1, "invalid"}});
     }, core::Exception);
 }
 
@@ -1272,10 +1272,10 @@ TEST_F(StreamTest, updateSubscription_remove_all_tracks) {
     });
     stream::SubscriptionHandle handle;
     EXPECT_NO_THROW({
-        handle = streamApi->createSubscription(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     EXPECT_NO_THROW({
-        streamApi->updateSubscription(handle, {}, streamsId);
+        streamApi->updateSubscriberStream(handle, {}, streamsId);
     });
 }
 
@@ -1295,10 +1295,10 @@ TEST_F(StreamTest, updateSubscription_add_new_track) {
     });
     stream::SubscriptionHandle handle;
     EXPECT_NO_THROW({
-        handle = streamApi->createSubscription(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     EXPECT_NO_THROW({
-        streamApi->updateSubscription(handle, streamsId, {});
+        streamApi->updateSubscriberStream(handle, streamsId, {});
     });
 }
 
@@ -1319,10 +1319,10 @@ TEST_F(StreamTest, updateSubscription_add_and_remove_same_track) {
     });
     stream::SubscriptionHandle handle;
     EXPECT_NO_THROW({
-        handle = streamApi->createSubscription(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     EXPECT_NO_THROW({
-        streamApi->updateSubscription(handle, streamsId, streamsId);
+        streamApi->updateSubscriberStream(handle, streamsId, streamsId);
     });
 }
 
@@ -1344,14 +1344,14 @@ TEST_F(StreamTest, updateSubscription_after_removeStream) {
     });
     stream::SubscriptionHandle subHandle;
     EXPECT_NO_THROW({
-        subHandle = streamApi->createSubscription(streamRoomId_1, streamsId);
+        subHandle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     EXPECT_NO_THROW({
         streamApi->removeStream(handle);
     });
     EXPECT_THROW({
-        streamApi->updateSubscription(subHandle, {}, streamsId);
+        streamApi->updateSubscriberStream(subHandle, {}, streamsId);
     }, core::Exception);
 }
 
@@ -1411,7 +1411,7 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     EXPECT_NO_THROW({
         client2.streamApi->joinStreamRoom(streamRoomId_1);
         client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
-        client2.streamApi->createSubscription(streamRoomId_1, streamsId);
+        client2.streamApi->createSubscriberStream(streamRoomId_1, streamsId);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     });
     //Send data
@@ -1517,9 +1517,9 @@ TEST_F(StreamTest, dataChannel_seq_between_three_users) {
         client2.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector2);
         client3.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector3);
 
-        client1.streamApi->createSubscription(streamRoomId, client1Subscriptions);
-        client2.streamApi->createSubscription(streamRoomId, client2Subscriptions);
-        client3.streamApi->createSubscription(streamRoomId, client3Subscriptions);
+        client1.streamApi->createSubscriberStream(streamRoomId, client1Subscriptions);
+        client2.streamApi->createSubscriberStream(streamRoomId, client2Subscriptions);
+        client3.streamApi->createSubscriberStream(streamRoomId, client3Subscriptions);
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     });
 

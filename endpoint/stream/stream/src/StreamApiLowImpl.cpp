@@ -444,7 +444,7 @@ void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-SubscriptionHandle StreamApiLowImpl::createSubscription(
+SubscriptionHandle StreamApiLowImpl::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
@@ -488,7 +488,7 @@ SubscriptionHandle StreamApiLowImpl::createSubscription(
     return streamHandle;
 }
 
-void StreamApiLowImpl::updateSubscription(
+void StreamApiLowImpl::updateSubscriberStream(
     const SubscriptionHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
@@ -543,7 +543,7 @@ void StreamApiLowImpl::updateSubscription(
     }
 }
 
-void StreamApiLowImpl::removeSubscription(
+void StreamApiLowImpl::removeSubscriberStream(
     const SubscriptionHandle& subscriptionHandle
 ) {
     auto room = getStreamRoomData(subscriptionHandle);

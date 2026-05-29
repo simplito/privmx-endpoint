@@ -93,16 +93,16 @@ public:
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void removeStream(const StreamHandle& streamHandle);
     // Subscriber stream part
-    SubscriptionHandle createSubscription (
+    SubscriptionHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
-    void updateSubscription(
+    void updateSubscriberStream(
         const SubscriptionHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void removeSubscription(
+    void removeSubscriberStream(
         const SubscriptionHandle& subscriptionHandle
     );
 
