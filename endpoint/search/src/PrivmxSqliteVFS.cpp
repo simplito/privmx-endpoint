@@ -264,7 +264,7 @@ sqlite3_vfs* sqlite3_privmxvfs() {
         MAXPATHNAME,
         0,
         "privmxvfs",
-        new std::shared_ptr<PrivmxExtFS>(std::make_shared<PrivmxExtFS>()),
+        new std::shared_ptr<PrivmxExtFS>(std::make_shared<PrivmxExtFS>(true)),
         privmxOpen,
         privmxDelete,
         privmxAccess,
