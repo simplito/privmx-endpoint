@@ -78,12 +78,15 @@ std::string KvdbApiImpl::createKvdb(
     core::ModuleDataToEncryptV5 kvdbDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio
     };
     server::KvdbCreateModel create_kvdb_model;
-    fillContainerCreateModel(create_kvdb_model, contextId, users, managers, ctx,
-        _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key));
+    fillContainerCreateModel(
+        create_kvdb_model, contextId, users, managers, ctx,
+        _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key)
+    );
     create_kvdb_model.type = KVDB_TYPE_FILTER_FLAG;
     if (policies.has_value()) {
         create_kvdb_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
@@ -115,7 +118,9 @@ void KvdbApiImpl::updateKvdb(
     auto currentKvdbResourceId = currentKvdb.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
         currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers, forceGenerateNewKey,
-        [this](const server::KvdbDataEntry& entry, const core::DecryptedEncKeyV2& key) { return extractAndDecryptModuleInternalMeta(entry, key).secret; },
+        [this](const server::KvdbDataEntry& entry, const core::DecryptedEncKeyV2& key) {
+            return extractAndDecryptModuleInternalMeta(entry, key).secret;
+        },
         [] { throw KvdbEncryptionKeyValidationException(); }
     );
     server::KvdbUpdateModel model;
@@ -128,9 +133,7 @@ void KvdbApiImpl::updateKvdb(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = ctx.secret,
-                .resourceId = currentKvdbResourceId,
-                .randomId = ctx.dio.randomId
+                .secret = ctx.secret, .resourceId = currentKvdbResourceId, .randomId = ctx.dio.randomId
             },
         .dio = ctx.dio
     };
@@ -255,10 +258,12 @@ void KvdbApiImpl::setEntry(
     const core::Buffer& data,
     int64_t version
 ) {
-    withKeyRefresh<void>(kvdbId, privmx::endpoint::server::InvalidKeyIdException().getCode(),
+    withKeyRefresh<void>(
+        kvdbId, privmx::endpoint::server::InvalidKeyIdException().getCode(),
         [&](const core::ModuleKeys& keys) {
             setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, keys);
-        });
+        }
+    );
 }
 
 void KvdbApiImpl::setEntryRequest(
@@ -406,7 +411,6 @@ void KvdbApiImpl::processDisconnectedEvent() {
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<KvdbApiImpl>::cleanup();
 }
-
 
 KvdbDataSchema::Version KvdbApiImpl::getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry) {
     return _kvdbDataSchemaMapper.getDataStructureVersion(kvdbEntry);

@@ -34,7 +34,6 @@ public:
 
     static server::FileConfig fileConfigToTypedObject(const FilesConfig& fileConfig);
     static FilesConfig fileConfigFromTypedObject(const server::FileConfig& fileConfig);
-
 };
 
 } // namespace inbox

@@ -40,7 +40,9 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaMapper::decrypt(
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(kvdb.data.back())), kvdb, encKey,
         [&]() -> std::tuple<Kvdb, core::DataIntegrityObject> {
-            return {toLibKvdb(kvdb, {}, {}, UnknownKvdbFormatException().getCode(), KvdbDataSchema::Version::UNKNOWN), {}};
+            return {
+                toLibKvdb(kvdb, {}, {}, UnknownKvdbFormatException().getCode(), KvdbDataSchema::Version::UNKNOWN), {}
+            };
         }
     );
 }
@@ -48,8 +50,10 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaMapper::decrypt(
 KvdbDataSchema::Version KvdbDataSchemaMapper::getDataStructureVersion(const server::KvdbDataEntry& entry) {
     return core::DataSchemaMapperUtils::mapVersionedData(entry.data, KvdbDataSchema::Version::UNKNOWN, [](int64_t v) {
         switch (v) {
-        case core::ModuleDataSchema::Version::VERSION_5: return KvdbDataSchema::Version::VERSION_5;
-        default:                                         return KvdbDataSchema::Version::UNKNOWN;
+        case core::ModuleDataSchema::Version::VERSION_5:
+            return KvdbDataSchema::Version::VERSION_5;
+        default:
+            return KvdbDataSchema::Version::UNKNOWN;
         }
     });
 }
@@ -60,7 +64,9 @@ void KvdbDataSchemaMapper::assertDataIntegrity(const server::KvdbInfo& kvdb) {
     case KvdbDataSchema::Version::UNKNOWN:
         throw UnknownKvdbFormatException();
     case KvdbDataSchema::Version::VERSION_5: {
-        core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, kvdb, _strategyV5, []{ throw KvdbDataIntegrityException(); });
+        core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, kvdb, _strategyV5, [] {
+            throw KvdbDataIntegrityException();
+        });
         return;
     }
     default:
@@ -69,7 +75,7 @@ void KvdbDataSchemaMapper::assertDataIntegrity(const server::KvdbInfo& kvdb) {
 }
 
 uint32_t KvdbDataSchemaMapper::validateDataIntegrity(const server::KvdbInfo& kvdb) {
-    return core::DataSchemaMapperUtils::toStatusCode([&]{ assertDataIntegrity(kvdb); });
+    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(kvdb); });
 }
 
 std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
@@ -77,10 +83,7 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Kvdb>(
-        kvdbs,
-        keyProvider,
-        _connection,
-        [&](const server::KvdbInfo& k) { return validateDataIntegrity(k); },
+        kvdbs, keyProvider, _connection, [&](const server::KvdbInfo& k) { return validateDataIntegrity(k); },
         [](const server::KvdbInfo& k) -> core::EncKeyLocation {
             return {.contextId = k.contextId, .resourceId = k.resourceId.value_or("")};
         },

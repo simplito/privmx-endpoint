@@ -185,9 +185,7 @@ void InboxApiImpl::updateInbox(
             {.privateMeta = privateMeta,
              .internalMeta =
                  InboxInternalMetaV5{
-                     .secret = ctx.secret,
-                     .resourceId = currentInboxResourceId,
-                     .randomId = ctx.dio.randomId
+                     .secret = ctx.secret, .resourceId = currentInboxResourceId, .randomId = ctx.dio.randomId
                  },
              .dio = ctx.dio},
         .publicData = {

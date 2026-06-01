@@ -118,5 +118,7 @@ server::EncryptedFileMetaV4 FileDataSchemaStrategyV4::encrypt(
 }
 
 File FileDataSchemaStrategyV4::toLibError(const server::File& file, int64_t errorCode) const {
-    return FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_4, false);
+    return FileMetaDataSchemaMapper::toLibFile(
+        file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_4, false
+    );
 }

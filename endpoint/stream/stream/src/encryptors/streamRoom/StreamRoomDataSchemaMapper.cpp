@@ -43,7 +43,13 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(streamRoom.data.back())), streamRoom, encKey,
         [&]() -> std::tuple<StreamRoom, core::DataIntegrityObject> {
-            return {toLibStreamRoom(streamRoom, {}, {}, UnknowStreamRoomFormatException().getCode(), StreamRoomDataSchema::Version::UNKNOWN), {}};
+            return {
+                toLibStreamRoom(
+                    streamRoom, {}, {}, UnknowStreamRoomFormatException().getCode(),
+                    StreamRoomDataSchema::Version::UNKNOWN
+                ),
+                {}
+            };
         }
     );
 }
@@ -51,12 +57,17 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
 StreamRoomDataSchema::Version StreamRoomDataSchemaMapper::getDataStructureVersion(
     const server::StreamRoomDataEntry& entry
 ) {
-    return core::DataSchemaMapperUtils::mapVersionedData(entry.data, StreamRoomDataSchema::Version::UNKNOWN, [](int64_t v) {
-        switch (v) {
-        case core::ModuleDataSchema::Version::VERSION_5: return StreamRoomDataSchema::Version::VERSION_5;
-        default:                                         return StreamRoomDataSchema::Version::UNKNOWN;
+    return core::DataSchemaMapperUtils::mapVersionedData(
+        entry.data, StreamRoomDataSchema::Version::UNKNOWN,
+        [](int64_t v) {
+            switch (v) {
+            case core::ModuleDataSchema::Version::VERSION_5:
+                return StreamRoomDataSchema::Version::VERSION_5;
+            default:
+                return StreamRoomDataSchema::Version::UNKNOWN;
+            }
         }
-    });
+    );
 }
 
 void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInfo& streamRoom) {
@@ -81,7 +92,7 @@ void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInf
 }
 
 uint32_t StreamRoomDataSchemaMapper::validateDataIntegrity(const server::StreamRoomInfo& streamRoom) {
-    return core::DataSchemaMapperUtils::toStatusCode([&]{ assertDataIntegrity(streamRoom); });
+    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(streamRoom); });
 }
 
 std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRooms(
@@ -89,9 +100,7 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<StreamRoom>(
-        streamRooms,
-        keyProvider,
-        _connection,
+        streamRooms, keyProvider, _connection,
         [&](const server::StreamRoomInfo& room) { return validateDataIntegrity(room); },
         [](const server::StreamRoomInfo& room) -> core::EncKeyLocation {
             return {.contextId = room.contextId, .resourceId = room.resourceId.value_or("")};

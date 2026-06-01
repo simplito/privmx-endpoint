@@ -60,19 +60,31 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaMapper::decrypt(
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getMessagesDataStructureVersion(message)), message, encKey,
         [&]() -> std::tuple<Message, core::DataIntegrityObject> {
-            return {toLibMessage(message, {}, {}, {}, {}, UnknowMessageFormatException().getCode(), MessageDataSchema::Version::UNKNOWN), {}};
+            return {
+                toLibMessage(
+                    message, {}, {}, {}, {}, UnknowMessageFormatException().getCode(),
+                    MessageDataSchema::Version::UNKNOWN
+                ),
+                {}
+            };
         }
     );
 }
 
 MessageDataSchema::Version MessageDataSchemaMapper::getMessagesDataStructureVersion(const server::Message& message) {
-    return core::DataSchemaMapperUtils::mapVersionedData(message.data, MessageDataSchema::Version::UNKNOWN, [](int64_t v) {
-        switch (v) {
-        case MessageDataSchema::Version::VERSION_4: return MessageDataSchema::Version::VERSION_4;
-        case MessageDataSchema::Version::VERSION_5: return MessageDataSchema::Version::VERSION_5;
-        default:                                    return MessageDataSchema::Version::UNKNOWN;
+    return core::DataSchemaMapperUtils::mapVersionedData(
+        message.data, MessageDataSchema::Version::UNKNOWN,
+        [](int64_t v) {
+            switch (v) {
+            case MessageDataSchema::Version::VERSION_4:
+                return MessageDataSchema::Version::VERSION_4;
+            case MessageDataSchema::Version::VERSION_5:
+                return MessageDataSchema::Version::VERSION_5;
+            default:
+                return MessageDataSchema::Version::UNKNOWN;
+            }
         }
-    });
+    );
 }
 
 uint32_t MessageDataSchemaMapper::validateMessageDataIntegrity(
@@ -89,10 +101,8 @@ uint32_t MessageDataSchemaMapper::validateMessageDataIntegrity(
             const auto& lastModifier = message.updates.empty() ? message.author : message.updates.back().author;
             const auto lastDate = message.updates.empty() ? message.createDate : message.updates.back().createDate;
             core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
-                dio, message.contextId, message.resourceId,
-                message.threadId, threadResourceId,
-                lastModifier, lastDate,
-                []{ throw MessageDataIntegrityException(); }
+                dio, message.contextId, message.resourceId, message.threadId, threadResourceId, lastModifier, lastDate,
+                [] { throw MessageDataIntegrityException(); }
             );
             return;
         }
@@ -145,14 +155,13 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<Message>(
-        messages,
-        threadKeys,
-        keyProvider,
-        _connection,
+        messages, threadKeys, keyProvider, _connection,
+        [&](const server::Message& msg) { return validateMessageDataIntegrity(msg, threadKeys.moduleResourceId); },
         [&](const server::Message& msg) {
-            return validateMessageDataIntegrity(msg, threadKeys.moduleResourceId);
+            return core::DataSchemaMapperUtils::toStatusCode([&] {
+                _messageKeyIdFormatValidator.assertKeyIdFormat(msg.keyId);
+            });
         },
-        [&](const server::Message& msg) { return core::DataSchemaMapperUtils::toStatusCode([&]{ _messageKeyIdFormatValidator.assertKeyIdFormat(msg.keyId); }); },
         [&](const server::Message& msg, const core::DecryptedEncKey& key) { return decrypt(msg, key); },
         [](const server::Message& msg, uint32_t code) {
             return toLibMessage(msg, {}, {}, {}, {}, code, MessageDataSchema::Version::UNKNOWN);

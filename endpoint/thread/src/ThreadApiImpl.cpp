@@ -93,12 +93,15 @@ std::string ThreadApiImpl::createThreadEx(
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio
     };
     server::ThreadCreateModel create_thread_model;
-    fillContainerCreateModel(create_thread_model, contextId, users, managers, ctx,
-        _threadDataSchemaMapper.encrypt(threadDataToEncrypt, ctx.key.key));
+    fillContainerCreateModel(
+        create_thread_model, contextId, users, managers, ctx,
+        _threadDataSchemaMapper.encrypt(threadDataToEncrypt, ctx.key.key)
+    );
     if (type.length() > 0) {
         create_thread_model.type = type;
     }
@@ -133,7 +136,9 @@ void ThreadApiImpl::updateThread(
                                                               core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentThread, currentThreadEntry, currentThreadResourceId, users, managers, forceGenerateNewKey,
-        [this](const server::Thread2DataEntry& entry, const core::DecryptedEncKeyV2& key) { return extractAndDecryptModuleInternalMeta(entry, key).secret; },
+        [this](const server::Thread2DataEntry& entry, const core::DecryptedEncKeyV2& key) {
+            return extractAndDecryptModuleInternalMeta(entry, key).secret;
+        },
         [] { throw ThreadEncryptionKeyValidationException(); }
     );
     server::ThreadUpdateModel model;
@@ -146,9 +151,7 @@ void ThreadApiImpl::updateThread(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = ctx.secret,
-                .resourceId = currentThreadResourceId,
-                .randomId = ctx.dio.randomId
+                .secret = ctx.secret, .resourceId = currentThreadResourceId, .randomId = ctx.dio.randomId
             },
         .dio = ctx.dio
     };
@@ -260,10 +263,10 @@ std::string ThreadApiImpl::sendMessage(
     const core::Buffer& privateMeta,
     const core::Buffer& data
 ) {
-    return withKeyRefresh<std::string>(threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
-        [&](const core::ModuleKeys& keys) {
-            return sendMessageRequest(threadId, publicMeta, privateMeta, data, keys);
-        });
+    return withKeyRefresh<std::string>(
+        threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
+        [&](const core::ModuleKeys& keys) { return sendMessageRequest(threadId, publicMeta, privateMeta, data, keys); }
+    );
 }
 
 std::string ThreadApiImpl::sendMessageRequest(
@@ -307,12 +310,13 @@ void ThreadApiImpl::updateMessage(
     model.messageId = messageId;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message;
-    const std::string resourceId =
-        message.resourceId.empty() ? core::EndpointUtils::generateId() : message.resourceId;
-    withKeyRefresh<void>(message.threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
+    const std::string resourceId = message.resourceId.empty() ? core::EndpointUtils::generateId() : message.resourceId;
+    withKeyRefresh<void>(
+        message.threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
         [&](const core::ModuleKeys& keys) {
             updateMessageRequest(messageId, resourceId, message.threadId, publicMeta, privateMeta, data, keys);
-        });
+        }
+    );
 }
 
 void ThreadApiImpl::updateMessageRequest(
@@ -433,11 +437,9 @@ void ThreadApiImpl::processDisconnectedEvent() {
     privmx::utils::ManualManagedClass<ThreadApiImpl>::cleanup();
 }
 
-
 core::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message) {
     return getModuleKeysForItem(
-        message.threadId, message.keyId,
-        _messageDataSchemaMapper.getMinimumContainerSchemaVersionForMessage(message)
+        message.threadId, message.keyId, _messageDataSchemaMapper.getMinimumContainerSchemaVersionForMessage(message)
     );
 }
 

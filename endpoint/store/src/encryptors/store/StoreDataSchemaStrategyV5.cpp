@@ -20,9 +20,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::getEncryptedData(
-    const server::Store& model
-) const {
+core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::getEncryptedData(const server::Store& model) const {
     return core::dynamic::EncryptedModuleDataV5::fromJSON(model.data.back().data);
 }
 

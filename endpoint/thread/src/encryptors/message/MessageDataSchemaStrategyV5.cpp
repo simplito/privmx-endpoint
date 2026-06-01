@@ -34,9 +34,7 @@ server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::encrypt(
     return _encryptor.encrypt(messageData, userPrivKey, key);
 }
 
-server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::getEncryptedData(
-    const server::Message& model
-) const {
+server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::getEncryptedData(const server::Message& model) const {
     return server::EncryptedMessageDataV5::fromJSON(model.data);
 }
 
@@ -54,5 +52,7 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::conv
 }
 
 Message MessageDataSchemaStrategyV5::toLibError(const server::Message& message, int64_t errorCode) const {
-    return MessageDataSchemaMapper::toLibMessage(message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_5);
+    return MessageDataSchemaMapper::toLibMessage(
+        message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_5
+    );
 }

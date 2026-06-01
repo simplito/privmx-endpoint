@@ -42,8 +42,7 @@ JSON_STRUCT(InboxData, INBOX_DATA_FIELDS);
     F(data, InboxData)
 JSON_STRUCT(InboxDataEntry, INBOX_DATA_ENTRY_FIELDS);
 
-#define INBOX_INFO_EXTRA_FIELDS(F)                                                                                     \
-    F(data, std::vector<InboxDataEntry>)
+#define INBOX_INFO_EXTRA_FIELDS(F) F(data, std::vector<InboxDataEntry>)
 JSON_STRUCT_EXT(InboxInfo, core::server::ContainerInfoBase, INBOX_INFO_EXTRA_FIELDS);
 
 #define PRIVATE_DATA_V4_FIELDS(F)                                                                                      \

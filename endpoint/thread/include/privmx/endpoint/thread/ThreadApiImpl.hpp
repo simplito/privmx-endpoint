@@ -112,7 +112,6 @@ public:
     );
 
 private:
-
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();

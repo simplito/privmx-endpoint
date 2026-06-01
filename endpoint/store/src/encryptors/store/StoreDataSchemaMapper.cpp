@@ -42,7 +42,9 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(store.data.back())), store, encKey,
         [&]() -> std::tuple<Store, core::DataIntegrityObject> {
-            return {toLibStore(store, {}, {}, UnknowStoreFormatException().getCode(), StoreDataSchema::Version::UNKNOWN), {}};
+            return {
+                toLibStore(store, {}, {}, UnknowStoreFormatException().getCode(), StoreDataSchema::Version::UNKNOWN), {}
+            };
         }
     );
 }
@@ -50,9 +52,12 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
 StoreDataSchema::Version StoreDataSchemaMapper::getDataStructureVersion(const server::StoreDataEntry& entry) {
     return core::DataSchemaMapperUtils::mapVersionedData(entry.data, StoreDataSchema::Version::UNKNOWN, [](int64_t v) {
         switch (v) {
-        case core::ModuleDataSchema::Version::VERSION_4: return StoreDataSchema::Version::VERSION_4;
-        case core::ModuleDataSchema::Version::VERSION_5: return StoreDataSchema::Version::VERSION_5;
-        default:                                         return StoreDataSchema::Version::UNKNOWN;
+        case core::ModuleDataSchema::Version::VERSION_4:
+            return StoreDataSchema::Version::VERSION_4;
+        case core::ModuleDataSchema::Version::VERSION_5:
+            return StoreDataSchema::Version::VERSION_5;
+        default:
+            return StoreDataSchema::Version::UNKNOWN;
         }
     });
 }
@@ -65,7 +70,9 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
     case StoreDataSchema::Version::VERSION_4:
         return;
     case StoreDataSchema::Version::VERSION_5: {
-        core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, store, _strategyV5, []{ throw StoreDataIntegrityException(); });
+        core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, store, _strategyV5, [] {
+            throw StoreDataIntegrityException();
+        });
         return;
     }
     default:
@@ -74,7 +81,7 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
 }
 
 uint32_t StoreDataSchemaMapper::validateDataIntegrity(const server::Store& store) {
-    return core::DataSchemaMapperUtils::toStatusCode([&]{ assertDataIntegrity(store); });
+    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(store); });
 }
 
 std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
@@ -82,10 +89,7 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Store>(
-        stores,
-        keyProvider,
-        _connection,
-        [&](const server::Store& s) { return validateDataIntegrity(s); },
+        stores, keyProvider, _connection, [&](const server::Store& s) { return validateDataIntegrity(s); },
         [](const server::Store& s) -> core::EncKeyLocation {
             return {.contextId = s.contextId, .resourceId = s.resourceId.value_or("")};
         },

@@ -108,12 +108,15 @@ std::string StoreApiImpl::createStoreEx(
     core::ModuleDataToEncryptV5 storeDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio
     };
     server::StoreCreateModel storeCreateModel;
-    fillContainerCreateModel(storeCreateModel, contextId, users, managers, ctx,
-        _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key));
+    fillContainerCreateModel(
+        storeCreateModel, contextId, users, managers, ctx,
+        _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key)
+    );
     if (type.length() > 0) {
         storeCreateModel.type = type;
     }
@@ -147,7 +150,9 @@ void StoreApiImpl::updateStore(
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentStore, currentStoreEntry, currentStoreResourceId, users, managers, forceGenerateNewKey,
-        [this](const server::StoreDataEntry& entry, const core::DecryptedEncKeyV2& key) { return extractAndDecryptModuleInternalMeta(entry, key).secret; },
+        [this](const server::StoreDataEntry& entry, const core::DecryptedEncKeyV2& key) {
+            return extractAndDecryptModuleInternalMeta(entry, key).secret;
+        },
         [] { throw StoreEncryptionKeyValidationException(); }
     );
     server::StoreUpdateModel model;
@@ -160,9 +165,7 @@ void StoreApiImpl::updateStore(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = ctx.secret,
-                .resourceId = currentStoreResourceId,
-                .randomId = ctx.dio.randomId
+                .secret = ctx.secret, .resourceId = currentStoreResourceId, .randomId = ctx.dio.randomId
             },
         .dio = ctx.dio
     };
@@ -452,10 +455,10 @@ std::string StoreApiImpl::closeFile(const int64_t handle) {
 std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle) {
     auto data = handle->finalize();
     if (handle->getFileId().empty()) {
-        return withKeyRefresh<std::string>(handle->getStoreId(), privmx::endpoint::server::InvalidKeyException().getCode(),
-            [&](const core::ModuleKeys& keys) {
-                return storeFileFinalizeWriteRequest(handle, data, keys);
-            });
+        return withKeyRefresh<std::string>(
+            handle->getStoreId(), privmx::endpoint::server::InvalidKeyException().getCode(),
+            [&](const core::ModuleKeys& keys) { return storeFileFinalizeWriteRequest(handle, data, keys); }
+        );
     }
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = handle->getFileId();
@@ -637,9 +640,7 @@ FileEncryptionParams StoreApiImpl::getFileEncryptionParams(server::File file, se
 }
 
 core::ModuleKeys StoreApiImpl::getFileDecryptionKeys(server::File file) {
-    return getModuleKeysForItem(
-        file.storeId, file.keyId, _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file)
-    );
+    return getModuleKeysForItem(file.storeId, file.keyId, _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file));
 }
 
 void StoreApiImpl::updateFileMeta(

@@ -17,9 +17,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-server::EncryptedKvdbEntryDataV5 EntryDataSchemaStrategyV5::getEncryptedData(
-    const server::KvdbEntryInfo& model
-) const {
+server::EncryptedKvdbEntryDataV5 EntryDataSchemaStrategyV5::getEncryptedData(const server::KvdbEntryInfo& model) const {
     return server::EncryptedKvdbEntryDataV5::fromJSON(model.kvdbEntryValue);
 }
 
@@ -37,5 +35,7 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::conv
 }
 
 KvdbEntry EntryDataSchemaStrategyV5::toLibError(const server::KvdbEntryInfo& entry, int64_t errorCode) const {
-    return EntryDataSchemaMapper::toLibKvdbEntry(entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5);
+    return EntryDataSchemaMapper::toLibKvdbEntry(
+        entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5
+    );
 }

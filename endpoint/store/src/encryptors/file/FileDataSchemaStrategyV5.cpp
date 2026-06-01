@@ -22,9 +22,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::getEncryptedData(
-    const server::File& model
-) const {
+server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::getEncryptedData(const server::File& model) const {
     return server::EncryptedFileMetaV5::fromJSON(model.meta);
 }
 
@@ -95,7 +93,9 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
 }
 
 File FileDataSchemaStrategyV5::toLibError(const server::File& file, int64_t errorCode) const {
-    return FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_5, false);
+    return FileMetaDataSchemaMapper::toLibFile(
+        file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_5, false
+    );
 }
 
 server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::encrypt(

@@ -61,7 +61,12 @@ std::tuple<File, core::DataIntegrityObject> FileMetaDataSchemaMapper::decrypt(
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(file)), file, encKey,
         [&]() -> std::tuple<File, core::DataIntegrityObject> {
-            return {toLibFile(file, {}, {}, 0, {}, UnknowFileFormatException().getCode(), FileDataSchema::Version::UNKNOWN, false), {}};
+            return {
+                toLibFile(
+                    file, {}, {}, 0, {}, UnknowFileFormatException().getCode(), FileDataSchema::Version::UNKNOWN, false
+                ),
+                {}
+            };
         }
     );
 }
@@ -80,9 +85,12 @@ StoreDataSchema::Version FileMetaDataSchemaMapper::getMinimumStoreSchemaVersion(
 FileDataSchema::Version FileMetaDataSchemaMapper::getDataStructureVersion(const server::File& file) {
     return core::DataSchemaMapperUtils::mapVersionedData(file.meta, FileDataSchema::Version::UNKNOWN, [](int64_t v) {
         switch (v) {
-        case FileDataSchema::Version::VERSION_4: return FileDataSchema::Version::VERSION_4;
-        case FileDataSchema::Version::VERSION_5: return FileDataSchema::Version::VERSION_5;
-        default:                                 return FileDataSchema::Version::UNKNOWN;
+        case FileDataSchema::Version::VERSION_4:
+            return FileDataSchema::Version::VERSION_4;
+        case FileDataSchema::Version::VERSION_5:
+            return FileDataSchema::Version::VERSION_5;
+        default:
+            return FileDataSchema::Version::UNKNOWN;
         }
     });
 }
@@ -96,10 +104,8 @@ uint32_t FileMetaDataSchemaMapper::validateDataIntegrity(const server::File& fil
             auto fileMeta = server::EncryptedFileMetaV5::fromJSON(file.meta);
             auto dio = _strategyV5->getDIOAndAssertIntegrity(fileMeta);
             core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
-                dio, file.contextId, file.resourceId,
-                file.storeId, storeResourceId,
-                file.lastModifier, file.lastModificationDate,
-                []{ throw FileDataIntegrityException(); }
+                dio, file.contextId, file.resourceId, file.storeId, storeResourceId, file.lastModifier,
+                file.lastModificationDate, [] { throw FileDataIntegrityException(); }
             );
             return;
         }
@@ -150,12 +156,13 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<File>(
-        files,
-        storeKeys,
-        keyProvider,
-        _connection,
+        files, storeKeys, keyProvider, _connection,
         [&](const server::File& f) { return validateDataIntegrity(f, storeKeys.moduleResourceId); },
-        [&](const server::File& f) { return core::DataSchemaMapperUtils::toStatusCode([&]{ _fileKeyIdFormatValidator.assertKeyIdFormat(f.keyId); }); },
+        [&](const server::File& f) {
+            return core::DataSchemaMapperUtils::toStatusCode([&] {
+                _fileKeyIdFormatValidator.assertKeyIdFormat(f.keyId);
+            });
+        },
         [&](const server::File& f, const core::DecryptedEncKey& key) { return decrypt(f, key); },
         [](const server::File& f, uint32_t code) {
             return toLibFile(f, {}, {}, 0, {}, code, FileDataSchema::Version::UNKNOWN, false);

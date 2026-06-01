@@ -569,12 +569,15 @@ std::string StreamApiLowImpl::createStreamRoom(
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio
     };
     server::StreamRoomCreateModel createStreamRoomModel;
-    fillContainerCreateModel(createStreamRoomModel, contextId, users, managers, ctx,
-        _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key));
+    fillContainerCreateModel(
+        createStreamRoomModel, contextId, users, managers, ctx,
+        _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key)
+    );
     createStreamRoomModel.type = type;
     if (policies.has_value()) {
         createStreamRoomModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
@@ -615,11 +618,10 @@ void StreamApiLowImpl::updateStreamRoom(
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret,
-            .resourceId = currentStreamRoomResourceId,
-            .randomId = ctx.dio.randomId
-        },
+        .internalMeta =
+            core::ModuleInternalMetaV5{
+                .secret = ctx.secret, .resourceId = currentStreamRoomResourceId, .randomId = ctx.dio.randomId
+            },
         .dio = ctx.dio
     };
     model.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key);
@@ -656,7 +658,6 @@ void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
     model.id = streamRoomId;
     _serverApi->streamRoomDelete(model);
 }
-
 
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const std::string& streamRoomId) {
     auto room = _streamRoomMap.get(streamRoomId);

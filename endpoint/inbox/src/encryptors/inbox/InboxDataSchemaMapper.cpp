@@ -42,19 +42,30 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaMapper::decrypt(
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(inbox.data.back())), inbox, encKey,
         [&]() -> std::tuple<Inbox, core::DataIntegrityObject> {
-            return {toLibInbox(inbox, {}, {}, {}, UnknownInboxFormatException().getCode(), InboxDataSchema::Version::UNKNOWN), {}};
+            return {
+                toLibInbox(
+                    inbox, {}, {}, {}, UnknownInboxFormatException().getCode(), InboxDataSchema::Version::UNKNOWN
+                ),
+                {}
+            };
         }
     );
 }
 
 InboxDataSchema::Version InboxDataSchemaMapper::getDataStructureVersion(const server::InboxDataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(entry.data.meta, InboxDataSchema::Version::UNKNOWN, [](int64_t v) {
-        switch (v) {
-        case InboxDataSchema::Version::VERSION_4: return InboxDataSchema::Version::VERSION_4;
-        case InboxDataSchema::Version::VERSION_5: return InboxDataSchema::Version::VERSION_5;
-        default:                                  return InboxDataSchema::Version::UNKNOWN;
+    return core::DataSchemaMapperUtils::mapVersionedData(
+        entry.data.meta, InboxDataSchema::Version::UNKNOWN,
+        [](int64_t v) {
+            switch (v) {
+            case InboxDataSchema::Version::VERSION_4:
+                return InboxDataSchema::Version::VERSION_4;
+            case InboxDataSchema::Version::VERSION_5:
+                return InboxDataSchema::Version::VERSION_5;
+            default:
+                return InboxDataSchema::Version::UNKNOWN;
+            }
         }
-    });
+    );
 }
 
 void InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) {
@@ -66,7 +77,9 @@ void InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) 
         return;
     case InboxDataSchema::Version::VERSION_5: {
         auto dio = _strategyV5->getDIOAndAssertIntegrity(entry.data);
-        core::DataSchemaMapperUtils::assertContainerDIOIntegrity(dio, inbox, []{ throw InboxDataIntegrityException(); });
+        core::DataSchemaMapperUtils::assertContainerDIOIntegrity(dio, inbox, [] {
+            throw InboxDataIntegrityException();
+        });
         return;
     }
     default:
@@ -75,7 +88,7 @@ void InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) 
 }
 
 uint32_t InboxDataSchemaMapper::validateDataIntegrity(const server::InboxInfo& inbox) {
-    return core::DataSchemaMapperUtils::toStatusCode([&]{ assertDataIntegrity(inbox); });
+    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(inbox); });
 }
 
 InboxPublicViewData InboxDataSchemaMapper::getPublicViewData(const server::InboxGetPublicViewResult& publicView) {
@@ -115,10 +128,7 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Inbox>(
-        inboxes,
-        keyProvider,
-        _connection,
-        [&](const server::InboxInfo& inbox) { return validateDataIntegrity(inbox); },
+        inboxes, keyProvider, _connection, [&](const server::InboxInfo& inbox) { return validateDataIntegrity(inbox); },
         [](const server::InboxInfo& inbox) -> core::EncKeyLocation {
             return {.contextId = inbox.contextId, .resourceId = inbox.resourceId.value_or("")};
         },
