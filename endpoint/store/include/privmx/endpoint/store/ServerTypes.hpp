@@ -130,7 +130,8 @@ JSON_STRUCT(StoreGetModel, STORE_GET_MODEL_FIELDS);
 #define STORE_GET_RESULT_FIELDS(F) F(store, Store)
 JSON_STRUCT(StoreGetResult, STORE_GET_RESULT_FIELDS);
 
-using StoreListModel = core::server::ContainerListModel;
+#define STORE_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(StoreListModel, core::server::ContainerListModel, STORE_LIST_MODEL_EXTRA_FIELDS);
 
 #define STORE_LIST_RESULT_FIELDS(F)                                                                                    \
     F(stores, std::vector<Store>)                                                                                      \

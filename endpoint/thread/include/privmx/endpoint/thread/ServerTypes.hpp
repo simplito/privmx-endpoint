@@ -48,7 +48,8 @@ JSON_STRUCT(ThreadDeleteModel, THREAD_DELETE_MODEL_FIELDS);
     F(type, std::optional<std::string>)
 JSON_STRUCT(ThreadGetModel, THREAD_GET_MODEL_FIELDS);
 
-using ThreadListModel = core::server::ContainerListModel;
+#define THREAD_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(ThreadListModel, core::server::ContainerListModel, THREAD_LIST_MODEL_EXTRA_FIELDS);
 
 #define THREAD_GET_RESULT_FIELDS(F) F(thread, ThreadInfo)
 JSON_STRUCT(ThreadGetResult, THREAD_GET_RESULT_FIELDS);

@@ -54,7 +54,8 @@ JSON_STRUCT(StreamRoomGetModel, STREAM_ROOM_GET_MODEL_FIELDS);
 #define STREAM_ROOM_GET_RESULT_FIELDS(F) F(streamRoom, StreamRoomInfo)
 JSON_STRUCT(StreamRoomGetResult, STREAM_ROOM_GET_RESULT_FIELDS);
 
-using StreamRoomListModel = core::server::ContainerListModel;
+#define STREAM_ROOM_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(StreamRoomListModel, core::server::ContainerListModel, STREAM_ROOM_LIST_MODEL_EXTRA_FIELDS);
 
 #define STREAM_ROOM_LIST_RESULT_FIELDS(F)                                                                              \
     F(list, std::vector<StreamRoomInfo>)                                                                               \

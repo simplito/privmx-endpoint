@@ -112,7 +112,8 @@ JSON_STRUCT(InboxGetModel, INBOX_GET_MODEL_FIELDS);
 #define INBOX_GET_RESULT_FIELDS(F) F(inbox, InboxInfo)
 JSON_STRUCT(InboxGetResult, INBOX_GET_RESULT_FIELDS);
 
-using InboxListModel = core::server::ContainerListModel;
+#define INBOX_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(InboxListModel, core::server::ContainerListModel, INBOX_LIST_MODEL_EXTRA_FIELDS);
 
 #define INBOX_LIST_RESULT_FIELDS(F)                                                                                    \
     F(inboxes, std::vector<InboxInfo>)                                                                                 \
