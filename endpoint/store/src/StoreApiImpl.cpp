@@ -104,32 +104,25 @@ std::string StoreApiImpl::createStoreEx(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformStore, createStoreEx)
-    auto storeKey = _keyProvider->generateKey();
-    std::string resourceId = core::EndpointUtils::generateId();
-    auto storeDIO = _connection.getImpl()->createDIO(contextId, resourceId);
-    auto storeSecret = _keyProvider->generateSecret();
+    auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 storeDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::
-            ModuleInternalMetaV5{.secret = storeSecret, .resourceId = resourceId, .randomId = storeDIO.randomId},
-        .dio = storeDIO
+        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .dio = ctx.dio
     };
     server::StoreCreateModel storeCreateModel;
-    storeCreateModel.resourceId = resourceId;
+    storeCreateModel.resourceId = ctx.resourceId;
     storeCreateModel.contextId = contextId;
-    storeCreateModel.keyId = storeKey.id;
-    storeCreateModel.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, storeKey.key);
+    storeCreateModel.keyId = ctx.key.id;
+    storeCreateModel.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key);
+    storeCreateModel.keys = ctx.keyEntries;
     if (type.length() > 0) {
         storeCreateModel.type = type;
     }
     if (policies.has_value()) {
         storeCreateModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
-    auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    storeCreateModel.keys = _keyProvider->prepareKeysList(
-        all_users, storeKey, storeDIO, {.contextId = contextId, .resourceId = resourceId}, storeSecret
-    );
     storeCreateModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     storeCreateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, createStoreEx, data encrypted)

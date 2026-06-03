@@ -86,6 +86,12 @@ protected:
         const std::string& resourceId
     ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
+    ContainerCreateContext prepareContainerCreate(
+        const std::string& contextId,
+        const std::vector<UserWithPubKey>& users,
+        const std::vector<UserWithPubKey>& managers
+    );
+
     template<typename TContainer, typename TEntry>
     ContainerUpdateContext prepareContainerUpdate(
         const TContainer& container,

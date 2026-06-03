@@ -565,29 +565,19 @@ std::string StreamApiLowImpl::createStreamRoom(
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
     const std::string& type
 ) {
-    auto streamRoomKey = _keyProvider->generateKey();
-    std::string resourceId = core::EndpointUtils::generateId();
-    auto streamRoomDIO = _connection->createDIO(contextId, resourceId);
-    auto streamRoomSecret = _keyProvider->generateSecret();
-
+    auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta =
-            core::ModuleInternalMetaV5{
-                .secret = streamRoomSecret, .resourceId = resourceId, .randomId = streamRoomDIO.randomId
-            },
-        .dio = streamRoomDIO
+        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .dio = ctx.dio
     };
     server::StreamRoomCreateModel createStreamRoomModel;
-    createStreamRoomModel.resourceId = resourceId;
+    createStreamRoomModel.resourceId = ctx.resourceId;
     createStreamRoomModel.contextId = contextId;
-    createStreamRoomModel.keyId = streamRoomKey.id;
-    createStreamRoomModel.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, streamRoomKey.key);
-    auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    createStreamRoomModel.keys = _keyProvider->prepareKeysList(
-        allUsers, streamRoomKey, streamRoomDIO, {.contextId = contextId, .resourceId = resourceId}, streamRoomSecret
-    );
+    createStreamRoomModel.keyId = ctx.key.id;
+    createStreamRoomModel.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key);
+    createStreamRoomModel.keys = ctx.keyEntries;
 
     createStreamRoomModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     createStreamRoomModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);

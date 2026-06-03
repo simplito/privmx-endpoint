@@ -89,27 +89,19 @@ std::string ThreadApiImpl::createThreadEx(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, createThreadEx)
-    auto threadKey = _keyProvider->generateKey();
-    std::string resourceId = core::EndpointUtils::generateId();
-    auto threadDIO = _connection.getImpl()->createDIO(contextId, resourceId);
-    auto threadSecret = _keyProvider->generateSecret();
-
+    auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::
-            ModuleInternalMetaV5{.secret = threadSecret, .resourceId = resourceId, .randomId = threadDIO.randomId},
-        .dio = threadDIO
+        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .dio = ctx.dio
     };
-    auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     server::ThreadCreateModel create_thread_model;
-    create_thread_model.resourceId = resourceId;
+    create_thread_model.resourceId = ctx.resourceId;
     create_thread_model.contextId = contextId;
-    create_thread_model.keyId = threadKey.id;
-    create_thread_model.data = _threadDataSchemaMapper.encrypt(threadDataToEncrypt, threadKey.key);
-    create_thread_model.keys = _keyProvider->prepareKeysList(
-        allUsers, threadKey, threadDIO, {.contextId = contextId, .resourceId = resourceId}, threadSecret
-    );
+    create_thread_model.keyId = ctx.key.id;
+    create_thread_model.data = _threadDataSchemaMapper.encrypt(threadDataToEncrypt, ctx.key.key);
+    create_thread_model.keys = ctx.keyEntries;
     create_thread_model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     create_thread_model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     if (type.length() > 0) {

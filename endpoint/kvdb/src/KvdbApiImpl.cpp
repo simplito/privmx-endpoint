@@ -74,27 +74,19 @@ std::string KvdbApiImpl::createKvdb(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, createKvdb)
-    auto kvdbKey = _keyProvider->generateKey();
-    std::string resourceId = core::EndpointUtils::generateId();
-    auto kvdbDIO = _connection.getImpl()->createDIO(contextId, resourceId);
-    auto kvdbSecret = _keyProvider->generateSecret();
-
+    auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 kvdbDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::
-            ModuleInternalMetaV5{.secret = kvdbSecret, .resourceId = resourceId, .randomId = kvdbDIO.randomId},
-        .dio = kvdbDIO
+        .internalMeta = core::ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .dio = ctx.dio
     };
     server::KvdbCreateModel create_kvdb_model;
-    create_kvdb_model.resourceId = resourceId;
+    create_kvdb_model.resourceId = ctx.resourceId;
     create_kvdb_model.contextId = contextId;
-    create_kvdb_model.keyId = kvdbKey.id;
-    create_kvdb_model.data = _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, kvdbKey.key);
-    auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    create_kvdb_model.keys = _keyProvider->prepareKeysList(
-        allUsers, kvdbKey, kvdbDIO, {.contextId = contextId, .resourceId = resourceId}, kvdbSecret
-    );
+    create_kvdb_model.keyId = ctx.key.id;
+    create_kvdb_model.data = _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key);
+    create_kvdb_model.keys = ctx.keyEntries;
     create_kvdb_model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     create_kvdb_model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     create_kvdb_model.type = KVDB_TYPE_FILTER_FLAG;
