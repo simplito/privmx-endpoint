@@ -92,6 +92,49 @@ protected:
         const std::vector<UserWithPubKey>& managers
     );
 
+    template<typename TCreateModel>
+    static void fillContainerCreateModel(
+        TCreateModel& model,
+        const std::string& contextId,
+        const std::vector<UserWithPubKey>& users,
+        const std::vector<UserWithPubKey>& managers,
+        const ContainerCreateContext& ctx,
+        Poco::Dynamic::Var encryptedData
+    ) {
+        static_assert(std::is_base_of_v<server::ContainerCreateModelBase, TCreateModel>,
+            "TCreateModel must inherit from ContainerCreateModelBase");
+        model.resourceId = ctx.resourceId;
+        model.contextId = contextId;
+        model.keyId = ctx.key.id;
+        model.data = std::move(encryptedData);
+        model.keys = ctx.keyEntries;
+        model.users = EndpointUtils::usersWithPubKeyToIds(users);
+        model.managers = EndpointUtils::usersWithPubKeyToIds(managers);
+    }
+
+    template<typename TUpdateModel>
+    static void fillContainerUpdateModel(
+        TUpdateModel& model,
+        const std::string& id,
+        const std::string& resourceId,
+        const std::vector<UserWithPubKey>& users,
+        const std::vector<UserWithPubKey>& managers,
+        const ContainerUpdateContext& ctx,
+        int64_t version,
+        bool force
+    ) {
+        static_assert(std::is_base_of_v<server::ContainerUpdateModelBase, TUpdateModel>,
+            "TUpdateModel must inherit from ContainerUpdateModelBase");
+        model.id = id;
+        model.resourceId = resourceId;
+        model.keyId = ctx.key.id;
+        model.keys = ctx.keyEntries;
+        model.users = EndpointUtils::usersWithPubKeyToIds(users);
+        model.managers = EndpointUtils::usersWithPubKeyToIds(managers);
+        model.version = version;
+        model.force = force;
+    }
+
     template<typename TContainer, typename TEntry>
     ContainerUpdateContext prepareContainerUpdate(
         const TContainer& container,

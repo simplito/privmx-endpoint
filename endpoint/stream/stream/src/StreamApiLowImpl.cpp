@@ -573,14 +573,8 @@ std::string StreamApiLowImpl::createStreamRoom(
         .dio = ctx.dio
     };
     server::StreamRoomCreateModel createStreamRoomModel;
-    createStreamRoomModel.resourceId = ctx.resourceId;
-    createStreamRoomModel.contextId = contextId;
-    createStreamRoomModel.keyId = ctx.key.id;
-    createStreamRoomModel.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key);
-    createStreamRoomModel.keys = ctx.keyEntries;
-
-    createStreamRoomModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    createStreamRoomModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
+    fillContainerCreateModel(createStreamRoomModel, contextId, users, managers, ctx,
+        _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key));
     createStreamRoomModel.type = type;
     if (policies.has_value()) {
         createStreamRoomModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
@@ -601,71 +595,34 @@ void StreamApiLowImpl::updateStreamRoom(
     const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
 
-    // get current streamRoom
-
     server::StreamRoomGetModel getModel;
     getModel.id = streamRoomId;
     auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
     auto currentStreamRoomEntry = currentStreamRoom.data.back();
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
-    auto location{getModuleEncKeyLocation(currentStreamRoom, currentStreamRoomResourceId)};
-    auto streamRoomKeys{getAndValidateModuleKeys(currentStreamRoom, currentStreamRoomResourceId)};
-    auto currentStreamRoomKey{findEncKeyByKeyId(streamRoomKeys, currentStreamRoomEntry.keyId)};
-    auto streamRoomInternalMeta = extractAndDecryptModuleInternalMeta(currentStreamRoomEntry, currentStreamRoomKey);
-
-    auto usersKeysResolver{
-        core::UsersKeysResolver::create(currentStreamRoom, users, managers, forceGenerateNewKey, currentStreamRoomKey)
-    };
-
-    if (!_keyProvider->verifyKeysSecret(streamRoomKeys, location, streamRoomInternalMeta.secret)) {
-        throw StreamRoomEncryptionKeyValidationException();
-    }
-    // setting streamRoom Key adding new users
-    core::EncKey streamRoomKey = currentStreamRoomKey;
-    core::DataIntegrityObject updateStreamRoomDio = _connection->createDIO(
-        currentStreamRoom.contextId, currentStreamRoomResourceId
+    auto ctx = prepareContainerUpdate(
+        currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers, forceGenerateNewKey,
+        [this](const server::StreamRoomDataEntry& entry, const core::DecryptedEncKeyV2& key) {
+            return extractAndDecryptModuleInternalMeta(entry, key).secret;
+        },
+        [] { throw StreamRoomEncryptionKeyValidationException(); }
     );
-    std::vector<core::server::KeyEntrySet> keys;
-    if (usersKeysResolver->doNeedNewKey()) {
-        streamRoomKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(), streamRoomKey, updateStreamRoomDio, location,
-            streamRoomInternalMeta.secret
-        );
-    }
-
-    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-    if (usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            streamRoomKeys, usersToAddMissingKey, updateStreamRoomDio, location, streamRoomInternalMeta.secret
-        );
-        for (auto t : tmp)
-            keys.push_back(t);
-    }
     server::StreamRoomUpdateModel model;
-    model.id = streamRoomId;
-    model.resourceId = currentStreamRoomResourceId;
-    model.keyId = streamRoomKey.id;
-    model.keys = keys;
-    model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    model.version = version;
-    model.force = force;
+    fillContainerUpdateModel(model, streamRoomId, currentStreamRoomResourceId, users, managers, ctx, version, force);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta =
-            core::ModuleInternalMetaV5{
-                .secret = streamRoomInternalMeta.secret,
-                .resourceId = currentStreamRoomResourceId,
-                .randomId = updateStreamRoomDio.randomId
-            },
-        .dio = updateStreamRoomDio
+        .internalMeta = core::ModuleInternalMetaV5{
+            .secret = ctx.secret,
+            .resourceId = currentStreamRoomResourceId,
+            .randomId = ctx.dio.randomId
+        },
+        .dio = ctx.dio
     };
-    model.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, streamRoomKey.key);
+    model.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key);
     _serverApi->streamRoomUpdate(model);
 }
 

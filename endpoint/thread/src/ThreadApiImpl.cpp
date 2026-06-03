@@ -97,13 +97,8 @@ std::string ThreadApiImpl::createThreadEx(
         .dio = ctx.dio
     };
     server::ThreadCreateModel create_thread_model;
-    create_thread_model.resourceId = ctx.resourceId;
-    create_thread_model.contextId = contextId;
-    create_thread_model.keyId = ctx.key.id;
-    create_thread_model.data = _threadDataSchemaMapper.encrypt(threadDataToEncrypt, ctx.key.key);
-    create_thread_model.keys = ctx.keyEntries;
-    create_thread_model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    create_thread_model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
+    fillContainerCreateModel(create_thread_model, contextId, users, managers, ctx,
+        _threadDataSchemaMapper.encrypt(threadDataToEncrypt, ctx.key.key));
     if (type.length() > 0) {
         create_thread_model.type = type;
     }
@@ -142,14 +137,7 @@ void ThreadApiImpl::updateThread(
         [] { throw ThreadEncryptionKeyValidationException(); }
     );
     server::ThreadUpdateModel model;
-    model.id = threadId;
-    model.resourceId = currentThreadResourceId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    model.version = version;
-    model.force = force;
+    fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }

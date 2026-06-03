@@ -112,19 +112,14 @@ std::string StoreApiImpl::createStoreEx(
         .dio = ctx.dio
     };
     server::StoreCreateModel storeCreateModel;
-    storeCreateModel.resourceId = ctx.resourceId;
-    storeCreateModel.contextId = contextId;
-    storeCreateModel.keyId = ctx.key.id;
-    storeCreateModel.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key);
-    storeCreateModel.keys = ctx.keyEntries;
+    fillContainerCreateModel(storeCreateModel, contextId, users, managers, ctx,
+        _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key));
     if (type.length() > 0) {
         storeCreateModel.type = type;
     }
     if (policies.has_value()) {
         storeCreateModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
-    storeCreateModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    storeCreateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, createStoreEx, data encrypted)
     auto result = _serverApi->storeCreate(storeCreateModel);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, createStoreEx, data send)
@@ -156,14 +151,7 @@ void StoreApiImpl::updateStore(
         [] { throw StoreEncryptionKeyValidationException(); }
     );
     server::StoreUpdateModel model;
-    model.id = storeId;
-    model.resourceId = currentStoreResourceId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    model.version = version;
-    model.force = force;
+    fillContainerUpdateModel(model, storeId, currentStoreResourceId, users, managers, ctx, version, force);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }

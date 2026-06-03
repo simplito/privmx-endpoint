@@ -200,13 +200,13 @@ void InboxApiImpl::updateInbox(
     server::InboxUpdateModel inboxUpdateModel;
     inboxUpdateModel.id = inboxId;
     inboxUpdateModel.resourceId = currentInboxResourceId;
-    inboxUpdateModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    inboxUpdateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    inboxUpdateModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, ctx.key.key);
     inboxUpdateModel.keyId = ctx.key.id;
     inboxUpdateModel.keys = ctx.keyEntries;
-    inboxUpdateModel.force = force;
+    inboxUpdateModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    inboxUpdateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     inboxUpdateModel.version = version;
+    inboxUpdateModel.force = force;
+    inboxUpdateModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, ctx.key.key);
 
     std::optional<core::ContainerPolicy> policiesWithItems{
         policies.has_value() ? std::make_optional<core::ContainerPolicy>({policies.value(), std::nullopt}) :

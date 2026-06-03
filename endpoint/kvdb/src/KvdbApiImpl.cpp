@@ -82,13 +82,8 @@ std::string KvdbApiImpl::createKvdb(
         .dio = ctx.dio
     };
     server::KvdbCreateModel create_kvdb_model;
-    create_kvdb_model.resourceId = ctx.resourceId;
-    create_kvdb_model.contextId = contextId;
-    create_kvdb_model.keyId = ctx.key.id;
-    create_kvdb_model.data = _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key);
-    create_kvdb_model.keys = ctx.keyEntries;
-    create_kvdb_model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
-    create_kvdb_model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
+    fillContainerCreateModel(create_kvdb_model, contextId, users, managers, ctx,
+        _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key));
     create_kvdb_model.type = KVDB_TYPE_FILTER_FLAG;
     if (policies.has_value()) {
         create_kvdb_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
@@ -124,22 +119,7 @@ void KvdbApiImpl::updateKvdb(
         [] { throw KvdbEncryptionKeyValidationException(); }
     );
     server::KvdbUpdateModel model;
-    std::vector<std::string> usersList;
-    for (auto user : users) {
-        usersList.push_back(user.userId);
-    }
-    std::vector<std::string> managersList;
-    for (auto x : managers) {
-        managersList.push_back(x.userId);
-    }
-    model.id = kvdbId;
-    model.resourceId = currentKvdbResourceId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.users = usersList;
-    model.managers = managersList;
-    model.version = version;
-    model.force = force;
+    fillContainerUpdateModel(model, kvdbId, currentKvdbResourceId, users, managers, ctx, version, force);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
