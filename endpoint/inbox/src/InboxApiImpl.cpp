@@ -133,8 +133,8 @@ std::string InboxApiImpl::createInbox(
     server::InboxCreateModel createInboxModel;
     createInboxModel.resourceId = resourceId;
     createInboxModel.contextId = contextId;
-    createInboxModel.users = InboxDataHelper::mapUsers(users);
-    createInboxModel.managers = InboxDataHelper::mapUsers(managers);
+    createInboxModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    createInboxModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     createInboxModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, inboxKey.key);
     createInboxModel.keyId = inboxKey.id;
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
@@ -200,8 +200,8 @@ void InboxApiImpl::updateInbox(
     server::InboxUpdateModel inboxUpdateModel;
     inboxUpdateModel.id = inboxId;
     inboxUpdateModel.resourceId = currentInboxResourceId;
-    inboxUpdateModel.users = InboxDataHelper::mapUsers(users);
-    inboxUpdateModel.managers = InboxDataHelper::mapUsers(managers);
+    inboxUpdateModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    inboxUpdateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     inboxUpdateModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, ctx.key.key);
     inboxUpdateModel.keyId = ctx.key.id;
     inboxUpdateModel.keys = ctx.keyEntries;

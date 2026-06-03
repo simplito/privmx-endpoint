@@ -159,7 +159,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc

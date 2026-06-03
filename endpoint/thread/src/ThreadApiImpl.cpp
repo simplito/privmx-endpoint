@@ -110,8 +110,8 @@ std::string ThreadApiImpl::createThreadEx(
     create_thread_model.keys = _keyProvider->prepareKeysList(
         allUsers, threadKey, threadDIO, {.contextId = contextId, .resourceId = resourceId}, threadSecret
     );
-    create_thread_model.users = mapUsers(users);
-    create_thread_model.managers = mapUsers(managers);
+    create_thread_model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    create_thread_model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     if (type.length() > 0) {
         create_thread_model.type = type;
     }
@@ -154,8 +154,8 @@ void ThreadApiImpl::updateThread(
     model.resourceId = currentThreadResourceId;
     model.keyId = ctx.key.id;
     model.keys = ctx.keyEntries;
-    model.users = mapUsers(users);
-    model.managers = mapUsers(managers);
+    model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.version = version;
     model.force = force;
     if (policies.has_value()) {
@@ -453,13 +453,6 @@ void ThreadApiImpl::processDisconnectedEvent() {
     privmx::utils::ManualManagedClass<ThreadApiImpl>::cleanup();
 }
 
-std::vector<std::string> ThreadApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
-    std::vector<std::string> result;
-    for (const auto& user : users) {
-        result.push_back(user.userId);
-    }
-    return result;
-}
 
 core::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message) {
     return getModuleKeysForItem(

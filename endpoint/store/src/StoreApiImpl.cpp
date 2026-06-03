@@ -130,28 +130,12 @@ std::string StoreApiImpl::createStoreEx(
     storeCreateModel.keys = _keyProvider->prepareKeysList(
         all_users, storeKey, storeDIO, {.contextId = contextId, .resourceId = resourceId}, storeSecret
     );
-    std::vector<std::string> usersList;
-    for (auto user : users) {
-        usersList.push_back(user.userId);
-    }
-    std::vector<std::string> managersList;
-    for (auto x : managers) {
-        managersList.push_back(x.userId);
-    }
-    storeCreateModel.users = usersList;
-    storeCreateModel.managers = managersList;
+    storeCreateModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    storeCreateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, createStoreEx, data encrypted)
     auto result = _serverApi->storeCreate(storeCreateModel);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, createStoreEx, data send)
     return result.storeId;
-}
-
-std::vector<std::string> StoreApiImpl::usersWithPubKeyToIds(std::vector<core::UserWithPubKey>& users) {
-    std::vector<std::string> ids{};
-    for (auto& user : users) {
-        ids.push_back(user.userId);
-    }
-    return ids;
 }
 
 void StoreApiImpl::updateStore(
@@ -179,20 +163,12 @@ void StoreApiImpl::updateStore(
         [] { throw StoreEncryptionKeyValidationException(); }
     );
     server::StoreUpdateModel model;
-    std::vector<std::string> usersList;
-    for (auto user : users) {
-        usersList.push_back(user.userId);
-    }
-    std::vector<std::string> managersList;
-    for (auto x : managers) {
-        managersList.push_back(x.userId);
-    }
     model.id = storeId;
     model.resourceId = currentStoreResourceId;
     model.keyId = ctx.key.id;
     model.keys = ctx.keyEntries;
-    model.users = usersList;
-    model.managers = managersList;
+    model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.version = version;
     model.force = force;
     if (policies.has_value()) {

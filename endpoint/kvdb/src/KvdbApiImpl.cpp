@@ -95,8 +95,8 @@ std::string KvdbApiImpl::createKvdb(
     create_kvdb_model.keys = _keyProvider->prepareKeysList(
         allUsers, kvdbKey, kvdbDIO, {.contextId = contextId, .resourceId = resourceId}, kvdbSecret
     );
-    create_kvdb_model.users = mapUsers(users);
-    create_kvdb_model.managers = mapUsers(managers);
+    create_kvdb_model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    create_kvdb_model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     create_kvdb_model.type = KVDB_TYPE_FILTER_FLAG;
     if (policies.has_value()) {
         create_kvdb_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
@@ -435,13 +435,6 @@ void KvdbApiImpl::processDisconnectedEvent() {
     privmx::utils::ManualManagedClass<KvdbApiImpl>::cleanup();
 }
 
-std::vector<std::string> KvdbApiImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
-    std::vector<std::string> result;
-    for (auto user : users) {
-        result.push_back(user.userId);
-    }
-    return result;
-}
 
 KvdbDataSchema::Version KvdbApiImpl::getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry) {
     return _kvdbDataSchemaMapper.getDataStructureVersion(kvdbEntry);

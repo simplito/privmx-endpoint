@@ -35,7 +35,6 @@ public:
     static server::FileConfig fileConfigToTypedObject(const FilesConfig& fileConfig);
     static FilesConfig fileConfigFromTypedObject(const server::FileConfig& fileConfig);
 
-    static std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
 };
 
 } // namespace inbox

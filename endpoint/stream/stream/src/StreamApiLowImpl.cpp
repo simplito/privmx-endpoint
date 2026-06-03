@@ -589,8 +589,8 @@ std::string StreamApiLowImpl::createStreamRoom(
         allUsers, streamRoomKey, streamRoomDIO, {.contextId = contextId, .resourceId = resourceId}, streamRoomSecret
     );
 
-    createStreamRoomModel.users = mapUsers(users);
-    createStreamRoomModel.managers = mapUsers(managers);
+    createStreamRoomModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    createStreamRoomModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     createStreamRoomModel.type = type;
     if (policies.has_value()) {
         createStreamRoomModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
@@ -653,20 +653,12 @@ void StreamApiLowImpl::updateStreamRoom(
             keys.push_back(t);
     }
     server::StreamRoomUpdateModel model;
-    std::vector<std::string> usersList;
-    for (auto user : users) {
-        usersList.push_back(user.userId);
-    }
-    std::vector<std::string> managersList;
-    for (auto x : managers) {
-        managersList.push_back(x.userId);
-    }
     model.id = streamRoomId;
     model.resourceId = currentStreamRoomResourceId;
     model.keyId = streamRoomKey.id;
     model.keys = keys;
-    model.users = usersList;
-    model.managers = managersList;
+    model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.version = version;
     model.force = force;
     if (policies.has_value()) {
@@ -718,13 +710,6 @@ void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
     _serverApi->streamRoomDelete(model);
 }
 
-std::vector<std::string> StreamApiLowImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
-    std::vector<std::string> result;
-    for (auto user : users) {
-        result.push_back(user.userId);
-    }
-    return result;
-}
 
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const std::string& streamRoomId) {
     auto room = _streamRoomMap.get(streamRoomId);

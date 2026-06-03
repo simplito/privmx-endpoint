@@ -136,7 +136,6 @@ private:
         const core::ModuleKeys& storeKey
     );
 
-    std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey>& users);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
