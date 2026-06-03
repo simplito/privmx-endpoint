@@ -24,58 +24,23 @@ namespace server {
 
 // KVDB
 
-#define KVDB_DATA_ENTRY_FIELDS(F)                                                                                      \
-    F(keyId, std::string)                                                                                              \
-    F(data, Poco::Dynamic::Var)
-JSON_STRUCT(KvdbDataEntry, KVDB_DATA_ENTRY_FIELDS);
+#define KVDB_DATA_ENTRY_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(KvdbDataEntry, core::server::ContainerDataEntry, KVDB_DATA_ENTRY_EXTRA_FIELDS);
 
-#define KVDB_INFO_FIELDS(F)                                                                                            \
-    F(id, std::string)                                                                                                 \
-    F(resourceId, std::string)                                                                                         \
-    F(contextId, std::string)                                                                                          \
-    F(createDate, int64_t)                                                                                             \
-    F(creator, std::string)                                                                                            \
-    F(lastModificationDate, int64_t)                                                                                   \
-    F(lastModifier, std::string)                                                                                       \
+#define KVDB_INFO_EXTRA_FIELDS(F)                                                                                      \
     F(data, std::vector<KvdbDataEntry>)                                                                                \
-    F(keyId, std::string)                                                                                              \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(keys, std::vector<core::server::KeyEntry>)                                                                       \
-    F(version, int64_t)                                                                                                \
-    F(type, std::optional<std::string>)                                                                                \
-    F(policy, Poco::Dynamic::Var)                                                                                      \
     F(entries, int64_t)                                                                                                \
     F(lastEntryDate, int64_t)
-JSON_STRUCT(KvdbInfo, KVDB_INFO_FIELDS);
+JSON_STRUCT_EXT(KvdbInfo, core::server::ContainerInfoBase, KVDB_INFO_EXTRA_FIELDS);
 
-#define KVDB_CREATE_MODEL_FIELDS(F)                                                                                    \
-    F(resourceId, std::string)                                                                                         \
-    F(type, std::string)                                                                                               \
-    F(contextId, std::string)                                                                                          \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(KvdbCreateModel, KVDB_CREATE_MODEL_FIELDS);
+#define KVDB_CREATE_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(KvdbCreateModel, core::server::ContainerCreateModelBase, KVDB_CREATE_MODEL_EXTRA_FIELDS);
 
 #define KVDB_CREATE_RESULT_FIELDS(F) F(kvdbId, std::string)
 JSON_STRUCT(KvdbCreateResult, KVDB_CREATE_RESULT_FIELDS);
 
-#define KVDB_UPDATE_MODEL_FIELDS(F)                                                                                    \
-    F(id, std::string)                                                                                                 \
-    F(resourceId, std::string)                                                                                         \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(version, int64_t)                                                                                                \
-    F(force, bool)                                                                                                     \
-    F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(KvdbUpdateModel, KVDB_UPDATE_MODEL_FIELDS);
+#define KVDB_UPDATE_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(KvdbUpdateModel, core::server::ContainerUpdateModelBase, KVDB_UPDATE_MODEL_EXTRA_FIELDS);
 
 #define KVDB_DELETE_MODEL_FIELDS(F) F(kvdbId, std::string)
 JSON_STRUCT(KvdbDeleteModel, KVDB_DELETE_MODEL_FIELDS);

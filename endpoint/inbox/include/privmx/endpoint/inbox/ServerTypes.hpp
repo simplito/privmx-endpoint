@@ -42,23 +42,9 @@ JSON_STRUCT(InboxData, INBOX_DATA_FIELDS);
     F(data, InboxData)
 JSON_STRUCT(InboxDataEntry, INBOX_DATA_ENTRY_FIELDS);
 
-#define INBOX_INFO_FIELDS(F)                                                                                           \
-    F(id, std::string)                                                                                                 \
-    F(resourceId, std::optional<std::string>)                                                                          \
-    F(contextId, std::string)                                                                                          \
-    F(createDate, int64_t)                                                                                             \
-    F(creator, std::string)                                                                                            \
-    F(lastModificationDate, int64_t)                                                                                   \
-    F(lastModifier, std::string)                                                                                       \
-    F(data, std::vector<InboxDataEntry>)                                                                               \
-    F(keyId, std::string)                                                                                              \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(keys, std::vector<core::server::KeyEntry>)                                                                       \
-    F(version, int64_t)                                                                                                \
-    F(type, std::optional<std::string>)                                                                                \
-    F(policy, Poco::Dynamic::Var)
-JSON_STRUCT(InboxInfo, INBOX_INFO_FIELDS);
+#define INBOX_INFO_EXTRA_FIELDS(F)                                                                                     \
+    F(data, std::vector<InboxDataEntry>)
+JSON_STRUCT_EXT(InboxInfo, core::server::ContainerInfoBase, INBOX_INFO_EXTRA_FIELDS);
 
 #define PRIVATE_DATA_V4_FIELDS(F)                                                                                      \
     F(privateMeta, std::string)                                                                                        \
@@ -126,10 +112,8 @@ JSON_STRUCT(InboxGetModel, INBOX_GET_MODEL_FIELDS);
 #define INBOX_GET_RESULT_FIELDS(F) F(inbox, InboxInfo)
 JSON_STRUCT(InboxGetResult, INBOX_GET_RESULT_FIELDS);
 
-#define INBOX_LIST_MODEL_FIELDS(F)                                                                                     \
-    F(contextId, std::string)                                                                                          \
-    F(type, std::optional<std::string>)
-JSON_STRUCT_EXT(InboxListModel, core::server::ListModel, INBOX_LIST_MODEL_FIELDS);
+#define INBOX_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(InboxListModel, core::server::ContainerListModel, INBOX_LIST_MODEL_EXTRA_FIELDS);
 
 #define INBOX_LIST_RESULT_FIELDS(F)                                                                                    \
     F(inboxes, std::vector<InboxInfo>)                                                                                 \

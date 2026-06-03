@@ -117,7 +117,7 @@ void KvdbApiImpl::updateKvdb(
     getModel.kvdbId = kvdbId;
     auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
     auto currentKvdbEntry = currentKvdb.data.back();
-    auto currentKvdbResourceId = currentKvdb.resourceId;
+    auto currentKvdbResourceId = currentKvdb.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
         currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers, forceGenerateNewKey,
         [this](const server::KvdbDataEntry& entry, const core::DecryptedEncKeyV2& key) { return extractAndDecryptModuleInternalMeta(entry, key).secret; },
@@ -485,7 +485,7 @@ core::ModuleKeys KvdbApiImpl::kvdbToModuleKeys(server::KvdbInfo kvdb) {
         .keys = kvdb.keys,
         .currentKeyId = kvdb.keyId,
         .moduleSchemaVersion = getKvdbDataEntryStructureVersion(kvdb.data.back()),
-        .moduleResourceId = kvdb.resourceId,
+        .moduleResourceId = kvdb.resourceId.value_or(""),
         .contextId = kvdb.contextId
     };
 }

@@ -82,7 +82,7 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
         _connection,
         [&](const server::KvdbInfo& k) { return validateDataIntegrity(k); },
         [](const server::KvdbInfo& k) -> core::EncKeyLocation {
-            return {.contextId = k.contextId, .resourceId = k.resourceId};
+            return {.contextId = k.contextId, .resourceId = k.resourceId.value_or("")};
         },
         [&](const server::KvdbInfo& k, const core::DecryptedEncKey& key) { return decrypt(k, key); },
         [](const server::KvdbInfo& k, uint32_t code) {
