@@ -39,24 +39,18 @@ template<typename T> using type_identity_t = typename type_identity<T>::type;
 
 class DataSchemaMapperUtils {
 public:
-    // Converts a throwing function to a uint32_t status code.
-    // Returns 0 on success, or the exception's code on failure.
-    template<typename F>
-    static uint32_t toStatusCode(F fn) noexcept {
+    static uint32_t toStatusCode(std::function<void()> fn) noexcept {
         try { fn(); return 0; }
         catch (const Exception& e) { return e.getCode(); }
         catch (const privmx::utils::PrivmxException& e) { return ExceptionConverter::convert(e).getCode(); }
         catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
     }
 
-    // Validates DIO fields against a container (Thread, Store, Kvdb).
-    // Calls throwOnFail() if any field mismatches.
-    // Requires c.contextId, c.resourceId, c.lastModifier, c.lastModificationDate.
-    template<typename TContainer, typename FThrow>
+    template<typename TContainer>
     static auto assertContainerDIOIntegrity(
         const DataIntegrityObject& dio,
         const TContainer& c,
-        FThrow throwOnFail
+        std::function<void()> throwOnFail
     ) -> decltype(c.contextId, c.resourceId, c.lastModifier, c.lastModificationDate, void()) {
         if (dio.contextId != c.contextId ||
             dio.resourceId != c.resourceId ||
@@ -66,9 +60,6 @@ public:
         }
     }
 
-    // Validates DIO fields against an entry (Message, File, KvdbEntry) that has
-    // containerId and containerResourceId.  Calls throwOnFail() on any mismatch.
-    template<typename FThrow>
     static void assertEntryDIOIntegrity(
         const DataIntegrityObject& dio,
         const std::string& contextId,
@@ -77,7 +68,7 @@ public:
         const std::string& containerResourceId,
         const std::string& creatorUserId,
         int64_t date,
-        FThrow throwOnFail
+        std::function<void()> throwOnFail
     ) {
         if (dio.contextId != contextId ||
             dio.resourceId != resourceId ||
@@ -89,41 +80,25 @@ public:
         }
     }
 
-    // Validates V5 module data integrity for a container (Thread, Store, Kvdb).
-    // Parses EncryptedModuleDataV5, extracts the DIO via strategyV5, then delegates
-    // to assertContainerDIOIntegrity.
-    template<typename TContainer, typename TStrategyV5, typename FThrow>
+    template<typename TContainer, typename TStrategyV5>
     static void assertContainerV5DIOIntegrity(
         const Poco::Dynamic::Var& data,
         const TContainer& container,
         const std::shared_ptr<TStrategyV5>& strategyV5,
-        FThrow throwOnFail
+        std::function<void()> throwOnFail
     ) {
         auto encData = dynamic::EncryptedModuleDataV5::fromJSON(data);
         assertContainerDIOIntegrity(strategyV5->getDIOAndAssertIntegrity(encData), container, throwOnFail);
     }
 
-    // Parses versioned JSON from a Poco::Dynamic::Var and maps the version integer
-    // to a module-specific enum via mapper(int64_t) -> VersionEnum.
-    // Returns unknown if the var is not a JSON object.
-    template<typename VersionEnum, typename F>
-    static VersionEnum mapVersionedData(const Poco::Dynamic::Var& var, VersionEnum unknown, F mapper) {
+    template<typename VersionEnum>
+    static VersionEnum mapVersionedData(const Poco::Dynamic::Var& var, VersionEnum unknown, type_identity_t<std::function<VersionEnum(int64_t)>> mapper) {
         if (var.type() == typeid(Poco::JSON::Object::Ptr)) {
             return mapper(dynamic::VersionedData::fromJSON(var).version);
         }
         return unknown;
     }
 
-    // Shared 4-phase pipeline for container-level mappers (Thread, Store, Kvdb).
-    //
-    // Callbacks:
-    //   validateIntegrity(item) -> uint32_t
-    //   getLocation(item)       -> EncKeyLocation
-    //   decrypt(item, encKey)   -> tuple<TLib, DataIntegrityObject>
-    //   toLibError(item, code)  -> TLib
-    //
-    // TServer must expose .keys and .data.back().keyId.
-    // TLib must expose .statusCode, .contextId, .lastModifier, .lastModificationDate.
     template<typename TLib, typename TServer>
     [[nodiscard]] static std::vector<TLib> batchValidateDecryptVerifyContainers(
         const std::vector<TServer>& items,
@@ -204,16 +179,6 @@ public:
         return result;
     }
 
-    // Shared 4-phase pipeline for entry-level mappers (Message, File, KvdbEntry).
-    //
-    // Callbacks:
-    //   validateIntegrity(item)  -> uint32_t
-    //   validateKeyId(item)      -> uint32_t  (return 0 if no per-item key validation needed)
-    //   decrypt(item, encKey)    -> tuple<TLib, DataIntegrityObject>
-    //   toLibError(item, code)   -> TLib
-    //
-    // TServer must expose .keyId.
-    // TLib must expose .statusCode, .info.author, .authorPubKey, .info.createDate.
     template<typename TLib, typename TServer>
     [[nodiscard]] static std::vector<TLib> batchValidateDecryptVerifyEntries(
         const std::vector<TServer>& items,
@@ -302,7 +267,6 @@ public:
         return result;
     }
 
-    // Overload without validateKeyId — for entry types that need no per-item key ID validation.
     template<typename TLib, typename TServer>
     [[nodiscard]] static std::vector<TLib> batchValidateDecryptVerifyEntries(
         const std::vector<TServer>& items,
