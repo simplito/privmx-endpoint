@@ -112,22 +112,6 @@ public:
     );
 
 private:
-    std::string _createThreadEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
-    Thread _getThreadEx(const std::string& threadId, const std::string& type);
-    core::PagingList<Thread> _listThreadsEx(
-        const std::string& contextId,
-        const core::PagingQuery& pagingQuery,
-        const std::string& type
-    );
 
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();

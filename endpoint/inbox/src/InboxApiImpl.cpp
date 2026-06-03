@@ -233,11 +233,17 @@ void InboxApiImpl::updateInbox(
 }
 
 Inbox InboxApiImpl::getInbox(const std::string& inboxId) {
-    return _getInboxEx(inboxId, std::string());
+    return getInboxEx(inboxId, std::string());
 }
 
 Inbox InboxApiImpl::getInboxEx(const std::string& inboxId, const std::string& type) {
-    return _getInboxEx(inboxId, type);
+    PRIVMX_DEBUG_TIME_START(PlatformInbox, getInboxEx)
+    auto inbox = getServerInbox(inboxId, type);
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, getInboxEx, data send)
+    setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
+    auto result = _inboxDataSchemaMapper.validateDecryptAndConvertInbox(inbox, _keyProvider);
+    PRIVMX_DEBUG_TIME_STOP(PlatformInbox, getInboxEx, data decrypted)
+    return result;
 }
 
 inbox::server::InboxInfo InboxApiImpl::getServerInbox(
@@ -253,16 +259,6 @@ inbox::server::InboxInfo InboxApiImpl::getServerInbox(
     auto inbox = _serverApi->inboxGet(model).inbox;
     PRIVMX_DEBUG_TIME_STOP(PlatformInbox, getServerInbox, data recived)
     return inbox;
-}
-
-Inbox InboxApiImpl::_getInboxEx(const std::string& inboxId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformInbox, _getInboxEx)
-    auto inbox = getServerInbox(inboxId, type);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, _getInboxEx, data send)
-    setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
-    auto result = _inboxDataSchemaMapper.validateDecryptAndConvertInbox(inbox, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformInbox, _getInboxEx, data decrypted)
-    return result;
 }
 
 core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& contextId, const core::PagingQuery& query) {

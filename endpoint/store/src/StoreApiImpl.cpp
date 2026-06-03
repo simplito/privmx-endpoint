@@ -91,7 +91,7 @@ std::string StoreApiImpl::createStore(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, STORE_TYPE_FILTER_FLAG, policies);
+    return createStoreEx(contextId, users, managers, publicMeta, privateMeta, STORE_TYPE_FILTER_FLAG, policies);
 }
 
 std::string StoreApiImpl::createStoreEx(
@@ -103,19 +103,7 @@ std::string StoreApiImpl::createStoreEx(
     const std::string& type,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
-}
-
-std::string StoreApiImpl::_storeCreateEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, _storeCreateEx)
+    PRIVMX_DEBUG_TIME_START(PlatformStore, createStoreEx)
     auto storeKey = _keyProvider->generateKey();
     std::string resourceId = core::EndpointUtils::generateId();
     auto storeDIO = _connection.getImpl()->createDIO(contextId, resourceId);
@@ -152,9 +140,9 @@ std::string StoreApiImpl::_storeCreateEx(
     }
     storeCreateModel.users = usersList;
     storeCreateModel.managers = managersList;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeCreateEx, data encrypted)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, createStoreEx, data encrypted)
     auto result = _serverApi->storeCreate(storeCreateModel);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeCreate, data send)
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, createStoreEx, data send)
     return result.storeId;
 }
 
@@ -237,31 +225,27 @@ void StoreApiImpl::deleteStore(const std::string& storeId) {
 }
 
 Store StoreApiImpl::getStore(const std::string& storeId) {
-    return _storeGetEx(storeId, STORE_TYPE_FILTER_FLAG);
+    return getStoreEx(storeId, STORE_TYPE_FILTER_FLAG);
 }
 
 Store StoreApiImpl::getStoreEx(const std::string& storeId, const std::string& type) {
-    return _storeGetEx(storeId, type);
-}
-
-Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, _storeGetEx)
+    PRIVMX_DEBUG_TIME_START(PlatformStore, getStoreEx)
     server::StoreGetModel model;
     model.storeId = storeId;
     if (type.length() > 0) {
         model.type = type;
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, getting store)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getStoreEx, getting store)
     auto store = _serverApi->storeGet(model).store;
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, data send)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getStoreEx, data send)
     auto result = _storeDataSchemaMapper.validateDecryptAndConvertStore(store, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _getStoreEx, data decrypted)
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, getStoreEx, data decrypted)
     return result;
 }
 
 core::PagingList<Store> StoreApiImpl::listStores(const std::string& contextId, const core::PagingQuery& query) {
-    return _storeListEx(contextId, query, STORE_TYPE_FILTER_FLAG);
+    return listStoresEx(contextId, query, STORE_TYPE_FILTER_FLAG);
 }
 
 core::PagingList<Store> StoreApiImpl::listStoresEx(
@@ -269,29 +253,21 @@ core::PagingList<Store> StoreApiImpl::listStoresEx(
     const core::PagingQuery& query,
     const std::string& type
 ) {
-    return _storeListEx(contextId, query, type);
-}
-
-core::PagingList<Store> StoreApiImpl::_storeListEx(
-    const std::string& contextId,
-    const core::PagingQuery& query,
-    const std::string& type
-) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, _listStoresEx)
+    PRIVMX_DEBUG_TIME_START(PlatformStore, listStoresEx)
     server::StoreListModel storeListModel;
     storeListModel.contextId = contextId;
     if (type.length() > 0) {
         storeListModel.type = type;
     }
     core::ListQueryMapper::map(storeListModel, query);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _listStoresEx)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, listStoresEx, getting storeList)
     auto storesList = _serverApi->storeList(storeListModel);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList, data send)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, listStoresEx, data send)
     for (auto store : storesList.stores) {
         setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     }
     auto stores = _storeDataSchemaMapper.validateDecryptAndConvertStores(storesList.stores, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _listStoresEx, data decrypted)
+    PRIVMX_DEBUG_TIME_STOP(PlatformStore, listStoresEx, data decrypted)
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }
 
