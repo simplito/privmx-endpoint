@@ -47,13 +47,6 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaMapper::decrypt(
     );
 }
 
-core::ModuleDataSchema::Version KvdbDataSchemaMapper::getDataStructureVersion(const server::KvdbDataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
-        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
-    );
-}
-
 void KvdbDataSchemaMapper::assertDataIntegrity(const server::KvdbInfo& kvdb) {
     const auto& entry = kvdb.data.back();
     switch (getDataStructureVersion(entry)) {

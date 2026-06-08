@@ -54,15 +54,6 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
     );
 }
 
-core::ModuleDataSchema::Version StreamRoomDataSchemaMapper::getDataStructureVersion(
-    const server::StreamRoomDataEntry& entry
-) {
-    return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
-        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
-    );
-}
-
 void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInfo& streamRoom) {
     const auto& entry = streamRoom.data.back();
     switch (getDataStructureVersion(entry)) {

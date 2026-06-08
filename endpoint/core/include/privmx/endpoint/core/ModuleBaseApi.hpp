@@ -140,6 +140,7 @@ protected:
         if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
             secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data, currentKey).secret;
         } else {
+            // Inbox special Case
             secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
         }
         auto usersKeysResolver{

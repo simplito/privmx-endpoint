@@ -49,8 +49,6 @@ public:
         const core::DecryptedEncKey& encKey
     );
 
-    core::ModuleDataSchema::Version getDataStructureVersion(const server::KvdbDataEntry& entry);
-
     void assertDataIntegrity(const server::KvdbInfo& kvdb);
 
     uint32_t validateDataIntegrity(const server::KvdbInfo& kvdb);

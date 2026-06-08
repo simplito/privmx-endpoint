@@ -49,13 +49,6 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
     );
 }
 
-core::ModuleDataSchema::Version StoreDataSchemaMapper::getDataStructureVersion(const server::StoreDataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
-        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
-    );
-}
-
 void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
     const auto& entry = store.data.back();
     switch (getDataStructureVersion(entry)) {

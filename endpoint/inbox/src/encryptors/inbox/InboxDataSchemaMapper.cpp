@@ -52,13 +52,6 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaMapper::decrypt(
     );
 }
 
-core::ModuleDataSchema::Version InboxDataSchemaMapper::getDataStructureVersion(const server::InboxDataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.data.meta, core::ModuleDataSchema::Version::UNKNOWN,
-        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
-    );
-}
-
 void InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) {
     const auto& entry = inbox.data.back();
     switch (getDataStructureVersion(entry)) {

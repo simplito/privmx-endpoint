@@ -46,8 +46,6 @@ public:
         const core::DecryptedEncKey& encKey
     );
 
-    core::ModuleDataSchema::Version getDataStructureVersion(const server::StoreDataEntry& entry);
-
     void assertDataIntegrity(const server::Store& store);
 
     uint32_t validateDataIntegrity(const server::Store& store);

@@ -50,8 +50,6 @@ public:
         const core::DecryptedEncKey& encKey
     );
 
-    core::ModuleDataSchema::Version getDataStructureVersion(const server::InboxDataEntry& entry);
-
     void assertDataIntegrity(const server::InboxInfo& inbox);
 
     uint32_t validateDataIntegrity(const server::InboxInfo& inbox);

@@ -53,13 +53,6 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaMapper::decrypt(
     );
 }
 
-core::ModuleDataSchema::Version ThreadDataSchemaMapper::getDataStructureVersion(const server::Thread2DataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
-        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
-    );
-}
-
 void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& thread) {
     const auto& entry = thread.data.back();
     switch (getDataStructureVersion(entry)) {

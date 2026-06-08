@@ -50,8 +50,6 @@ public:
         const core::DecryptedEncKey& encKey
     );
 
-    core::ModuleDataSchema::Version getDataStructureVersion(const server::Thread2DataEntry& entry);
-
     void assertDataIntegrity(const server::ThreadInfo& thread);
 
     uint32_t validateDataIntegrity(const server::ThreadInfo& thread);

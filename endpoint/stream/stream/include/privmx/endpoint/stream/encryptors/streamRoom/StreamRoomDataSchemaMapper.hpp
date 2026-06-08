@@ -47,8 +47,6 @@ public:
         const core::DecryptedEncKey& encKey
     );
 
-    core::ModuleDataSchema::Version getDataStructureVersion(const server::StreamRoomDataEntry& entry);
-
     void assertDataIntegrity(const server::StreamRoomInfo& streamRoom);
 
     uint32_t validateDataIntegrity(const server::StreamRoomInfo& streamRoom);
