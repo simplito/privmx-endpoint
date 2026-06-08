@@ -1081,7 +1081,7 @@ TEST_F(StreamTest, removeSubscription) {
             }
         }
     });
-    stream::SubscriptionHandle handle;
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
         handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
@@ -1245,7 +1245,7 @@ TEST_F(StreamTest, updateSubscription_invalid_data) {
             }
         }
     });
-    stream::SubscriptionHandle handle;
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
         handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
@@ -1288,7 +1288,7 @@ TEST_F(StreamTest, updateSubscription_remove_all_tracks) {
             }
         }
     });
-    stream::SubscriptionHandle handle;
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
         handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
@@ -1314,7 +1314,7 @@ TEST_F(StreamTest, updateSubscription_add_new_track) {
             }
         }
     });
-    stream::SubscriptionHandle handle;
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
         handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
@@ -1341,7 +1341,7 @@ TEST_F(StreamTest, updateSubscription_add_and_remove_same_track) {
             }
         }
     });
-    stream::SubscriptionHandle handle;
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
         handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
@@ -1369,7 +1369,7 @@ TEST_F(StreamTest, updateSubscription_after_removeStream) {
             }
         }
     });
-    stream::SubscriptionHandle subHandle;
+    stream::SubscriberStreamHandle subHandle;
     EXPECT_NO_THROW({
         subHandle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });

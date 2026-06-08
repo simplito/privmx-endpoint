@@ -532,7 +532,7 @@ void StreamApiImpl::removeStream(const StreamHandle& streamHandle) {
     _webRTC->closeSingleConnection(streamDataOpt.value()->streamRoomId, ConnectionType::Publisher);
 }
 
-SubscriptionHandle StreamApiImpl::createSubscriberStream(
+SubscriberStreamHandle StreamApiImpl::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
@@ -540,14 +540,14 @@ SubscriptionHandle StreamApiImpl::createSubscriberStream(
 }
 
 void StreamApiImpl::updateSubscriberStream(
-    const SubscriptionHandle& subscriptionHandle,
+    const SubscriberStreamHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
     _api->updateSubscriberStream(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
 }
 
-void StreamApiImpl::removeSubscriberStream(const SubscriptionHandle& subscriptionHandle) {
+void StreamApiImpl::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
     _api->removeSubscriberStream(subscriptionHandle);
 }
 

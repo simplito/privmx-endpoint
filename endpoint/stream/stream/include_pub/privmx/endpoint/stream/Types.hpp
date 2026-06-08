@@ -20,7 +20,7 @@ namespace endpoint {
 namespace stream {
 using Handle = int64_t; // can be everything that is DTO
 using StreamHandle = Handle;
-using SubscriptionHandle = Handle;
+using SubscriberStreamHandle = Handle;
 using RemoteStreamId = int64_t;
 using RemoteTrackId = std::string;
 

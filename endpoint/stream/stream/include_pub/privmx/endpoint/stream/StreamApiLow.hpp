@@ -93,17 +93,17 @@ public:
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void removeStream(const StreamHandle& streamHandle);
     // Subscriber stream part
-    SubscriptionHandle createSubscriberStream(
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
     void updateSubscriberStream(
-        const SubscriptionHandle& subscriptionHandle,
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
     void removeSubscriberStream(
-        const SubscriptionHandle& subscriptionHandle
+        const SubscriberStreamHandle& subscriptionHandle
     );
     // Data Channel
     void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);

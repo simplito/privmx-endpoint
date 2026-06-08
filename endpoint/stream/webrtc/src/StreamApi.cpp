@@ -264,7 +264,7 @@ void StreamApi::removeStream(const StreamHandle& streamHandle) {
     }
 }
 
-SubscriptionHandle StreamApi::createSubscriberStream(
+SubscriberStreamHandle StreamApi::createSubscriberStream(
 
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
@@ -281,7 +281,7 @@ streamRoomId, subscriptions);
 }
 
 void StreamApi::updateSubscriberStream(
-    const SubscriptionHandle& subscriptionHandle,
+    const SubscriberStreamHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
@@ -294,7 +294,7 @@ void StreamApi::updateSubscriberStream(
     }
 }
 
-void StreamApi::removeSubscriberStream(const SubscriptionHandle& subscriptionHandle) {
+void StreamApi::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
     validateEndpoint();
     try {
         return _impl->removeSubscriberStream(subscriptionHandle);

@@ -273,9 +273,9 @@ public:
      *
      * @param streamRoomId ID of the Stream Room
      * @param subscriptions list of remote streams/tracks to subscribe to
-     * @return handle to the created subscription
+     * @return handle to the created stream
      */
-    SubscriptionHandle createSubscriberStream(
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
@@ -283,22 +283,23 @@ public:
     /**
      * Modifies current remote streams subscriptions.
      *
-     * @param subscriptionHandle handle returned by createSubscription
+     * @param subscriptionHandle handle returned by createSubscriberStream
      * @param subscriptionsToAdd list of subscriptions to add
      * @param subscriptionsToRemove list of subscriptions to remove
      */
     void updateSubscriberStream(
-        const SubscriptionHandle& subscriptionHandle,
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
 
     /**
      * Unsubscribes from remote streams for the given subscription handle.
+     * The handle is closed after this call and cannot be used anymore.
      *
-     * @param subscriptionHandle handle returned by createSubscription
+     * @param subscriptionHandle handle returned by createSubscriberStream
      */
-    void removeSubscriberStream(const SubscriptionHandle& subscriptionHandle);
+    void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
 
     /**
      * Configures whether to drop encrypted frames that cannot be decrypted.

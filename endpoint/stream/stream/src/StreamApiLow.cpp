@@ -267,7 +267,7 @@ void StreamApiLow::removeStream(const StreamHandle& streamHandle) {
     }
 }
 
-SubscriptionHandle StreamApiLow::createSubscriberStream(
+SubscriberStreamHandle StreamApiLow::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
@@ -281,7 +281,7 @@ SubscriptionHandle StreamApiLow::createSubscriberStream(
 }
 
 void StreamApiLow::updateSubscriberStream(
-    const SubscriptionHandle& subscriptionHandle,
+    const SubscriberStreamHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
@@ -295,7 +295,7 @@ void StreamApiLow::updateSubscriberStream(
 }
 
 void StreamApiLow::removeSubscriberStream(
-    const SubscriptionHandle& subscriptionHandle
+    const SubscriberStreamHandle& subscriptionHandle
 ) {
     auto impl = getImpl();
     try {

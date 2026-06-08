@@ -444,14 +444,14 @@ void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-SubscriptionHandle StreamApiLowImpl::createSubscriberStream(
+SubscriberStreamHandle StreamApiLowImpl::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
     auto streamHandle{nextId()};
     auto room = getStreamRoomData(streamRoomId);
     if (room->subscriberStream) {
-        throw SubscriptionAlreadyCreatedException();
+        throw SubscriberStreamAlreadyCreatedException();
     }
     server::StreamsSubscribeModel model;
     model.streamRoomId = streamRoomId;
@@ -489,13 +489,13 @@ SubscriptionHandle StreamApiLowImpl::createSubscriberStream(
 }
 
 void StreamApiLowImpl::updateSubscriberStream(
-    const SubscriptionHandle& subscriptionHandle,
+    const SubscriberStreamHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
     auto room = getStreamRoomData(subscriptionHandle);
     if (!room->subscriberStream) {
-        throw SubscriptionHandleNotInitialized();
+        throw SubscriberStreamHandleNotInitialized();
     }
     // Sending Request to Bridge
     server::StreamsModifySubscriptionsModel model;
@@ -544,11 +544,11 @@ void StreamApiLowImpl::updateSubscriberStream(
 }
 
 void StreamApiLowImpl::removeSubscriberStream(
-    const SubscriptionHandle& subscriptionHandle
+    const SubscriberStreamHandle& subscriptionHandle
 ) {
     auto room = getStreamRoomData(subscriptionHandle);
     if (!room->subscriberStream) {
-        throw SubscriptionHandleNotInitialized();
+        throw SubscriberStreamHandleNotInitialized();
     }
     room->webRtc->close(room->streamRoomId, "subscriber");
     _handleToRoomId.erase(subscriptionHandle);

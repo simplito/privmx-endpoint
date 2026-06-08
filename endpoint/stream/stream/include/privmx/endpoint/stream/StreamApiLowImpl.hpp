@@ -93,17 +93,17 @@ public:
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
     void removeStream(const StreamHandle& streamHandle);
     // Subscriber stream part
-    SubscriptionHandle createSubscriberStream(
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
     void updateSubscriberStream(
-        const SubscriptionHandle& subscriptionHandle,
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
     void removeSubscriberStream(
-        const SubscriptionHandle& subscriptionHandle
+        const SubscriberStreamHandle& subscriptionHandle
     );
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
@@ -135,7 +135,7 @@ private:
     };
     struct SubscriptionData {
         std::optional<int64_t> sessionId;
-        std::optional<SubscriptionHandle> streamHandle;
+        std::optional<SubscriberStreamHandle> streamHandle;
     };
     struct StreamRoomData {
         StreamRoomData(
