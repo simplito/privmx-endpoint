@@ -75,21 +75,10 @@ std::string ThreadApiImpl::createThread(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::string& type
 ) {
-    return createThreadEx(contextId, users, managers, publicMeta, privateMeta, THREAD_TYPE_FILTER_FLAG, policies);
-}
-
-std::string ThreadApiImpl::createThreadEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, createThreadEx)
+    PRIVMX_DEBUG_TIME_START(PlatformThread, createThread)
     auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
@@ -109,9 +98,9 @@ std::string ThreadApiImpl::createThreadEx(
     if (policies.has_value()) {
         create_thread_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, createThreadEx, data encrypted)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, createThread, data encrypted)
     auto result = _serverApi.threadCreate(create_thread_model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, createThreadEx, data send)
+    PRIVMX_DEBUG_TIME_STOP(PlatformThread, createThread, data send)
     return result.threadId;
 }
 
@@ -166,55 +155,44 @@ void ThreadApiImpl::deleteThread(const std::string& threadId) {
     invalidateModuleKeysInCache(threadId);
 }
 
-Thread ThreadApiImpl::getThread(const std::string& threadId) {
-    return getThreadEx(threadId, THREAD_TYPE_FILTER_FLAG);
-}
-
-Thread ThreadApiImpl::getThreadEx(const std::string& threadId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, getThreadEx)
+Thread ThreadApiImpl::getThread(const std::string& threadId, const std::string& type) {
+    PRIVMX_DEBUG_TIME_START(PlatformThread, getThread)
     server::ThreadGetModel params;
     params.threadId = threadId;
     if (type.length() > 0) {
         params.type = type;
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThreadEx, getting thread)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, getting thread)
     auto thread = _serverApi.threadGet(params).thread;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThreadEx, data send)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, data send)
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     auto result = _threadDataSchemaMapper->validateDecryptAndConvertThread(thread, _keyProvider);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThreadEx, data decrypted)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, data decrypted)
     return result;
 }
 
 core::PagingList<Thread> ThreadApiImpl::listThreads(
     const std::string& contextId,
-    const core::PagingQuery& pagingQuery
-) {
-    return listThreadsEx(contextId, pagingQuery, THREAD_TYPE_FILTER_FLAG);
-}
-
-core::PagingList<Thread> ThreadApiImpl::listThreadsEx(
-    const std::string& contextId,
     const core::PagingQuery& pagingQuery,
     const std::string& type
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, listThreadsEx)
+    PRIVMX_DEBUG_TIME_START(PlatformThread, listThreads)
     server::ThreadListModel model;
     model.contextId = contextId;
     if (type.length() > 0) {
         model.type = type;
     }
     core::ListQueryMapper::map(model, pagingQuery);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listThreadsEx, getting threadList)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listThreads, getting threadList)
     auto threadsList = _serverApi.threadList(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listThreadsEx, data send)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listThreads, data send)
     for (const auto& thread : threadsList.threads) {
         setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     }
     std::vector<Thread> threads = _threadDataSchemaMapper->validateDecryptAndConvertThreads(
         threadsList.threads, _keyProvider
     );
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, listThreadsEx, data decrypted)
+    PRIVMX_DEBUG_TIME_STOP(PlatformThread, listThreads, data decrypted)
     return core::PagingList<Thread>({.totalAvailable = threadsList.count, .readItems = threads});
 }
 

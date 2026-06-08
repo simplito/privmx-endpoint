@@ -53,16 +53,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-    std::string createThreadEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::string& type = THREAD_TYPE_FILTER_FLAG
     );
 
     void updateThread(
@@ -78,13 +70,11 @@ public:
     );
     void deleteThread(const std::string& threadId);
 
-    Thread getThread(const std::string& threadId);
-    Thread getThreadEx(const std::string& threadId, const std::string& type);
-    core::PagingList<Thread> listThreads(const std::string& contextId, const core::PagingQuery& pagingQuery);
-    core::PagingList<Thread> listThreadsEx(
+    Thread getThread(const std::string& threadId, const std::string& type = THREAD_TYPE_FILTER_FLAG);
+    core::PagingList<Thread> listThreads(
         const std::string& contextId,
         const core::PagingQuery& pagingQuery,
-        const std::string& type
+        const std::string& type = THREAD_TYPE_FILTER_FLAG
     );
 
     Message getMessage(const std::string& messageId);

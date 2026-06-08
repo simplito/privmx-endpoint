@@ -107,11 +107,11 @@ std::string InboxApiImpl::createInbox(
                                std::nullopt
     };
 
-    auto storeId = _storeApi.getImpl()->createStoreEx(
-        contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policiesWithItems
+    auto storeId = _storeApi.getImpl()->createStore(
+        contextId, users, managers, emptyBuf, randNameAsBuf, policiesWithItems, INBOX_TYPE_FILTER_FLAG
     );
-    auto threadId = _threadApi.getImpl()->createThreadEx(
-        contextId, users, managers, emptyBuf, randNameAsBuf, INBOX_TYPE_FILTER_FLAG, policiesWithItems
+    auto threadId = _threadApi.getImpl()->createThread(
+        contextId, users, managers, emptyBuf, randNameAsBuf, policiesWithItems, INBOX_TYPE_FILTER_FLAG
     );
     auto resourceId = core::EndpointUtils::generateId();
     auto inboxDIO = _connection.getImpl()->createDIO(contextId, resourceId);
@@ -216,29 +216,25 @@ void InboxApiImpl::updateInbox(
     _serverApi->inboxUpdate(inboxUpdateModel);
     invalidateModuleKeysInCache(inboxId);
 
-    auto store = _storeApi.getImpl()->getStoreEx(currentInboxData.storeId, INBOX_TYPE_FILTER_FLAG);
+    auto store = _storeApi.getImpl()->getStore(currentInboxData.storeId, INBOX_TYPE_FILTER_FLAG);
     _storeApi.getImpl()->updateStore(
         currentInboxData.storeId, users, managers, store.publicMeta, store.privateMeta, store.version, force,
         forceGenerateNewKey, policiesWithItems
     );
-    auto thread = _threadApi.getImpl()->getThreadEx(currentInboxData.threadId, INBOX_TYPE_FILTER_FLAG);
+    auto thread = _threadApi.getImpl()->getThread(currentInboxData.threadId, INBOX_TYPE_FILTER_FLAG);
     _threadApi.getImpl()->updateThread(
         currentInboxData.threadId, users, managers, thread.publicMeta, thread.privateMeta, thread.version, force,
         forceGenerateNewKey, policiesWithItems
     );
 }
 
-Inbox InboxApiImpl::getInbox(const std::string& inboxId) {
-    return getInboxEx(inboxId, std::string());
-}
-
-Inbox InboxApiImpl::getInboxEx(const std::string& inboxId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformInbox, getInboxEx)
+Inbox InboxApiImpl::getInbox(const std::string& inboxId, const std::string& type) {
+    PRIVMX_DEBUG_TIME_START(PlatformInbox, getInbox)
     auto inbox = getServerInbox(inboxId, type);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, getInboxEx, data send)
+    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, getInbox, data send)
     setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
     auto result = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(inbox, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformInbox, getInboxEx, data decrypted)
+    PRIVMX_DEBUG_TIME_STOP(PlatformInbox, getInbox, data decrypted)
     return result;
 }
 

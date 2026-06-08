@@ -94,8 +94,7 @@ public:
         const std::optional<core::ContainerPolicyWithoutItem>& policies
     );
 
-    inbox::Inbox getInbox(const std::string& inboxId);
-    inbox::Inbox getInboxEx(const std::string& inboxId, const std::string& type);
+    inbox::Inbox getInbox(const std::string& inboxId, const std::string& type = std::string());
     core::PagingList<inbox::Inbox> listInboxes(const std::string& contextId, const core::PagingQuery& query);
     inbox::InboxPublicView getInboxPublicView(const std::string& inboxId);
     void deleteInbox(const std::string& inboxId);
@@ -135,7 +134,6 @@ private:
         const std::string& inboxId,
         const std::optional<std::string>& type = std::nullopt
     );
-    inbox::Inbox _getInboxEx(const std::string& inboxId, const std::string& type);
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);

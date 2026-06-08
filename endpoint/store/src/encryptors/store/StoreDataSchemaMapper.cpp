@@ -94,18 +94,6 @@ Store StoreDataSchemaMapper::validateDecryptAndConvertStore(
     return validateDecryptAndConvertStores({store}, keyProvider)[0];
 }
 
-core::ModuleInternalMetaV5 StoreDataSchemaMapper::decryptInternalMeta(
-    const Poco::Dynamic::Var& data,
-    const core::DecryptedEncKey& encKey
-) {
-    auto version = core::DataSchemaMapperUtils::mapVersionedData(
-        data, core::ModuleDataSchema::Version::UNKNOWN,
-        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
-    );
-    if (version != core::ModuleDataSchema::Version::VERSION_5) return {};
-    return core::BaseModuleDataSchemaMapper::decryptInternalMeta(data, encKey);
-}
-
 Store StoreDataSchemaMapper::toLibStore(
     const server::Store& store,
     const core::Buffer& publicMeta,

@@ -68,11 +68,6 @@ public:
         int64_t schemaVersion
     );
 
-    core::ModuleInternalMetaV5 decryptInternalMeta(
-        const Poco::Dynamic::Var& data,
-        const core::DecryptedEncKey& encKey
-    ) override;
-
 private:
     core::VersionStrategyMapper<server::Store, std::tuple<Store, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<StoreDataSchemaStrategyV4> _strategyV4;

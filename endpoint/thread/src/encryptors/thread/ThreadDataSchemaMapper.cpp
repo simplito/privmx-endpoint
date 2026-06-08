@@ -125,14 +125,3 @@ Thread ThreadDataSchemaMapper::validateDecryptAndConvertThread(
     return validateDecryptAndConvertThreads({thread}, keyProvider)[0];
 }
 
-core::ModuleInternalMetaV5 ThreadDataSchemaMapper::decryptInternalMeta(
-    const Poco::Dynamic::Var& data,
-    const core::DecryptedEncKey& encKey
-) {
-    auto version = core::DataSchemaMapperUtils::mapVersionedData(
-        data, core::ModuleDataSchema::Version::UNKNOWN,
-        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
-    );
-    if (version != core::ModuleDataSchema::Version::VERSION_5) return {};
-    return core::BaseModuleDataSchemaMapper::decryptInternalMeta(data, encKey);
-}

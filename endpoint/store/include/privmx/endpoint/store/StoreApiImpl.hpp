@@ -65,16 +65,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-    std::string createStoreEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::string& type = STORE_TYPE_FILTER_FLAG
     );
     void updateStore(
         const std::string& storeId,
@@ -88,13 +80,11 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
     void deleteStore(const std::string& storeId);
-    Store getStore(const std::string& storeId);
-    Store getStoreEx(const std::string& storeId, const std::string& type);
-    core::PagingList<Store> listStores(const std::string& contextId, const core::PagingQuery& query);
-    core::PagingList<Store> listStoresEx(
+    Store getStore(const std::string& storeId, const std::string& type = STORE_TYPE_FILTER_FLAG);
+    core::PagingList<Store> listStores(
         const std::string& contextId,
         const core::PagingQuery& query,
-        const std::string& type
+        const std::string& type = STORE_TYPE_FILTER_FLAG
     );
     File getFile(const std::string& fileId);
     core::PagingList<store::File> listFiles(const std::string& storeId, const core::PagingQuery& query);

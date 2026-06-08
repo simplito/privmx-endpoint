@@ -48,6 +48,7 @@ public:
         const Poco::Dynamic::Var& data,
         const core::DecryptedEncKey& encKey
     ) {
+        if (getVersionFromVar(data) != core::ModuleDataSchema::Version::VERSION_5) return {};
         if (encKey.statusCode != 0) return {};
         return _encryptorV5.decrypt(core::dynamic::EncryptedModuleDataV5::fromJSON(data), encKey.key).internalMeta;
     }
