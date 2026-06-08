@@ -93,9 +93,10 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidEncryptionKeyIdLength
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidMessageHeaderLengthException, "Invalid message header length", 0x002B);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnsupportedMessageFormatVersionException, "Unsupported message format version length", 0x002C);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadyJoinedStreamRoomException, "StreamRoom already joined", 0x002D)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamAlreadyCreatedException, "Subscriber stream is already created", 0x002F)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0030)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotPublishedException, "StreamHandle not published", 0x002F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamAlreadyCreatedException, "Subscriber stream is already created", 0x0030)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0031)
 // clang-format on
 } // namespace stream
 } // namespace endpoint
