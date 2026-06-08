@@ -24,9 +24,9 @@ StreamRoomDataSchemaMapper::StreamRoomDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
-    : _userPrivKey(userPrivKey), _connection(connection) {
+    : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyV5 = std::make_shared<StreamRoomDataSchemaStrategyV5>();
-    _strategyMapper.registerStrategy(StreamRoomDataSchema::Version::VERSION_5, _strategyV5);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
 Poco::Dynamic::Var StreamRoomDataSchemaMapper::encrypt(
@@ -54,28 +54,21 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
     );
 }
 
-StreamRoomDataSchema::Version StreamRoomDataSchemaMapper::getDataStructureVersion(
+core::ModuleDataSchema::Version StreamRoomDataSchemaMapper::getDataStructureVersion(
     const server::StreamRoomDataEntry& entry
 ) {
     return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.data, StreamRoomDataSchema::Version::UNKNOWN,
-        [](int64_t v) {
-            switch (v) {
-            case core::ModuleDataSchema::Version::VERSION_5:
-                return StreamRoomDataSchema::Version::VERSION_5;
-            default:
-                return StreamRoomDataSchema::Version::UNKNOWN;
-            }
-        }
+        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
+        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
     );
 }
 
 void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInfo& streamRoom) {
     const auto& entry = streamRoom.data.back();
     switch (getDataStructureVersion(entry)) {
-    case StreamRoomDataSchema::Version::UNKNOWN:
+    case core::ModuleDataSchema::Version::UNKNOWN:
         throw UnknowStreamRoomFormatException();
-    case StreamRoomDataSchema::Version::VERSION_5: {
+    case core::ModuleDataSchema::Version::VERSION_5: {
         auto encData = core::dynamic::EncryptedModuleDataV5::fromJSON(entry.data);
         auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
         if (dio.contextId != streamRoom.contextId ||

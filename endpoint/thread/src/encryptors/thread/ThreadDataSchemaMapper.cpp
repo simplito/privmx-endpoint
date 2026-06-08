@@ -24,12 +24,12 @@ ThreadDataSchemaMapper::ThreadDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
-    : _userPrivKey(userPrivKey), _connection(connection) {
+    : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyMapper.registerStrategy(
-        ThreadDataSchema::Version::VERSION_4, std::make_shared<ThreadDataSchemaStrategyV4>()
+        core::ModuleDataSchema::Version::VERSION_4, std::make_shared<ThreadDataSchemaStrategyV4>()
     );
     _strategyV5 = std::make_shared<ThreadDataSchemaStrategyV5>();
-    _strategyMapper.registerStrategy(ThreadDataSchema::Version::VERSION_5, _strategyV5);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
 Poco::Dynamic::Var ThreadDataSchemaMapper::encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key) {
@@ -53,27 +53,21 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaMapper::decrypt(
     );
 }
 
-ThreadDataSchema::Version ThreadDataSchemaMapper::getDataStructureVersion(const server::Thread2DataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(entry.data, ThreadDataSchema::Version::UNKNOWN, [](int64_t v) {
-        switch (v) {
-        case core::ModuleDataSchema::Version::VERSION_4:
-            return ThreadDataSchema::Version::VERSION_4;
-        case core::ModuleDataSchema::Version::VERSION_5:
-            return ThreadDataSchema::Version::VERSION_5;
-        default:
-            return ThreadDataSchema::Version::UNKNOWN;
-        }
-    });
+core::ModuleDataSchema::Version ThreadDataSchemaMapper::getDataStructureVersion(const server::Thread2DataEntry& entry) {
+    return core::DataSchemaMapperUtils::mapVersionedData(
+        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
+        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
+    );
 }
 
 void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& thread) {
     const auto& entry = thread.data.back();
     switch (getDataStructureVersion(entry)) {
-    case ThreadDataSchema::Version::UNKNOWN:
+    case core::ModuleDataSchema::Version::UNKNOWN:
         throw UnknowThreadFormatException();
-    case ThreadDataSchema::Version::VERSION_4:
+    case core::ModuleDataSchema::Version::VERSION_4:
         return;
-    case ThreadDataSchema::Version::VERSION_5: {
+    case core::ModuleDataSchema::Version::VERSION_5: {
         core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, thread, _strategyV5, [] {
             throw ThreadDataIntegrityException();
         });
@@ -136,4 +130,16 @@ Thread ThreadDataSchemaMapper::validateDecryptAndConvertThread(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return validateDecryptAndConvertThreads({thread}, keyProvider)[0];
+}
+
+core::ModuleInternalMetaV5 ThreadDataSchemaMapper::decryptInternalMeta(
+    const Poco::Dynamic::Var& data,
+    const core::DecryptedEncKey& encKey
+) {
+    auto version = core::DataSchemaMapperUtils::mapVersionedData(
+        data, core::ModuleDataSchema::Version::UNKNOWN,
+        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
+    );
+    if (version != core::ModuleDataSchema::Version::VERSION_5) return {};
+    return core::BaseModuleDataSchemaMapper::decryptInternalMeta(data, encKey);
 }

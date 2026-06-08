@@ -24,11 +24,11 @@ InboxDataSchemaMapper::InboxDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
-    : _userPrivKey(userPrivKey), _connection(connection) {
+    : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyV4 = std::make_shared<InboxDataSchemaStrategyV4>();
-    _strategyMapper.registerStrategy(InboxDataSchema::Version::VERSION_4, _strategyV4);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_4, _strategyV4);
     _strategyV5 = std::make_shared<InboxDataSchemaStrategyV5>();
-    _strategyMapper.registerStrategy(InboxDataSchema::Version::VERSION_5, _strategyV5);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
 server::InboxData InboxDataSchemaMapper::encrypt(const InboxDataProcessorModelV5& data, const std::string& key) {
@@ -52,30 +52,21 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaMapper::decrypt(
     );
 }
 
-InboxDataSchema::Version InboxDataSchemaMapper::getDataStructureVersion(const server::InboxDataEntry& entry) {
+core::ModuleDataSchema::Version InboxDataSchemaMapper::getDataStructureVersion(const server::InboxDataEntry& entry) {
     return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.data.meta, InboxDataSchema::Version::UNKNOWN,
-        [](int64_t v) {
-            switch (v) {
-            case InboxDataSchema::Version::VERSION_4:
-                return InboxDataSchema::Version::VERSION_4;
-            case InboxDataSchema::Version::VERSION_5:
-                return InboxDataSchema::Version::VERSION_5;
-            default:
-                return InboxDataSchema::Version::UNKNOWN;
-            }
-        }
+        entry.data.meta, core::ModuleDataSchema::Version::UNKNOWN,
+        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
     );
 }
 
 void InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) {
     const auto& entry = inbox.data.back();
     switch (getDataStructureVersion(entry)) {
-    case InboxDataSchema::Version::UNKNOWN:
+    case core::ModuleDataSchema::Version::UNKNOWN:
         throw UnknownInboxFormatException();
-    case InboxDataSchema::Version::VERSION_4:
+    case core::ModuleDataSchema::Version::VERSION_4:
         return;
-    case InboxDataSchema::Version::VERSION_5: {
+    case core::ModuleDataSchema::Version::VERSION_5: {
         auto dio = _strategyV5->getDIOAndAssertIntegrity(entry.data);
         core::DataSchemaMapperUtils::assertContainerDIOIntegrity(dio, inbox, [] {
             throw InboxDataIntegrityException();
@@ -96,9 +87,9 @@ InboxPublicViewData InboxDataSchemaMapper::getPublicViewData(const server::Inbox
     if (publicView.publicData.type() == typeid(Poco::JSON::Object::Ptr)) {
         auto versioned = core::dynamic::VersionedData::fromJSON(publicView.publicData);
         switch (versioned.version) {
-        case InboxDataSchema::Version::VERSION_4:
+        case core::ModuleDataSchema::Version::VERSION_4:
             return _strategyV4->getPublicViewData(publicView);
-        case InboxDataSchema::Version::VERSION_5:
+        case core::ModuleDataSchema::Version::VERSION_5:
             return _strategyV5->getPublicViewData(publicView);
         }
     }
@@ -112,15 +103,25 @@ InboxInternalMetaV5 InboxDataSchemaMapper::decryptInternalMeta(
     const core::DecryptedEncKey& encKey
 ) {
     switch (getDataStructureVersion(entry)) {
-    case InboxDataSchema::Version::UNKNOWN:
+    case core::ModuleDataSchema::Version::UNKNOWN:
         throw UnknownInboxFormatException();
-    case InboxDataSchema::Version::VERSION_4:
+    case core::ModuleDataSchema::Version::VERSION_4:
         return _strategyV4->decryptInternalMeta(entry, encKey);
-    case InboxDataSchema::Version::VERSION_5:
+    case core::ModuleDataSchema::Version::VERSION_5:
         return _strategyV5->decryptInternalMeta(entry, encKey);
     default:
         throw UnknownInboxFormatException();
     }
+}
+
+core::ModuleInternalMetaV5 InboxDataSchemaMapper::decryptInternalMeta(
+    const Poco::Dynamic::Var& data,
+    const core::DecryptedEncKey& encKey
+) {
+    server::InboxDataEntry tempEntry;
+    tempEntry.data = server::InboxData::fromJSON(data);
+    auto result = decryptInternalMeta(tempEntry, encKey);
+    return {result.secret, result.resourceId, result.randomId};
 }
 
 std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(

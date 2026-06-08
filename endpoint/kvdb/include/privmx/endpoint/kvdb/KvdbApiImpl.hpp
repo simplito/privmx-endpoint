@@ -104,7 +104,6 @@ private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(
         server::KvdbInfo kvdb,
         const core::DecryptedEncKey& encKey
@@ -140,7 +139,7 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
-    KvdbDataSchemaMapper _kvdbDataSchemaMapper;
+    std::shared_ptr<KvdbDataSchemaMapper> _kvdbDataSchemaMapper;
     EntryDataSchemaMapper _entryDataSchemaMapper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     inline static const std::string KVDB_TYPE_FILTER_FLAG = "kvdb";

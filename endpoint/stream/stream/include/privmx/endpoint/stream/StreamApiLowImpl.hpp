@@ -189,7 +189,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
-    StreamRoomDataSchemaMapper _streamRoomDataSchemaMapper;
+    std::shared_ptr<StreamRoomDataSchemaMapper> _streamRoomDataSchemaMapper;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;

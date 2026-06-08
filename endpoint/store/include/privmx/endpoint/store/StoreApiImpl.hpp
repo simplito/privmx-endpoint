@@ -174,7 +174,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId;
 
-    StoreDataSchemaMapper _storeDataSchemaMapper;
+    std::shared_ptr<StoreDataSchemaMapper> _storeDataSchemaMapper;
     FileMetaDataSchemaMapper _fileMetaDataSchemaMapper;
     core::DataEncryptorV4 _eventDataEncryptorV4;
 

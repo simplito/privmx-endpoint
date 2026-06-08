@@ -45,7 +45,9 @@ KvdbApiImpl::KvdbApiImpl(
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, KVDB_TYPE_FILTER_FLAG),
-      _kvdbDataSchemaMapper(userPrivKey, connection), _entryDataSchemaMapper(userPrivKey, connection) {
+      _kvdbDataSchemaMapper(std::make_shared<KvdbDataSchemaMapper>(userPrivKey, connection)),
+      _entryDataSchemaMapper(userPrivKey, connection) {
+    initModuleDataSchemaMapper(_kvdbDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -85,7 +87,7 @@ std::string KvdbApiImpl::createKvdb(
     server::KvdbCreateModel create_kvdb_model;
     fillContainerCreateModel(
         create_kvdb_model, contextId, users, managers, ctx,
-        _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key)
+        _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key.key)
     );
     create_kvdb_model.type = KVDB_TYPE_FILTER_FLAG;
     if (policies.has_value()) {
@@ -133,7 +135,7 @@ void KvdbApiImpl::updateKvdb(
             },
         .dio = ctx.dio
     };
-    model.data = _kvdbDataSchemaMapper.encrypt(kvdbDataToEncrypt, ctx.key.key);
+    model.data = _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key.key);
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, updateKvdb, data encrypted)
     _serverApi.kvdbUpdate(model);
@@ -156,7 +158,7 @@ Kvdb KvdbApiImpl::getKvdb(const std::string& kvdbId) {
     auto kvdb = _serverApi.kvdbGet(params).kvdb;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getKvdb, data send)
     setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
-    auto result = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdb(kvdb, _keyProvider);
+    auto result = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(kvdb, _keyProvider);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, getKvdb, data decrypted)
     return result;
 }
@@ -173,7 +175,7 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(const std::string& contextId, cons
     for (auto kvdb : kvdbsList.kvdbs) {
         setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
     }
-    std::vector<Kvdb> kvdbs = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdbs(kvdbsList.kvdbs, _keyProvider);
+    std::vector<Kvdb> kvdbs = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdbs(kvdbsList.kvdbs, _keyProvider);
     PRIVMX_DEBUG_TIME_STOP(PlatformKvdb, listKvdbs, data decrypted)
     return core::PagingList<Kvdb>({.totalAvailable = kvdbsList.count, .readItems = kvdbs});
 }
@@ -236,7 +238,7 @@ core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, 
     auto entriesList = _serverApi.kvdbListEntries(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
     auto kvdb = entriesList.kvdb;
-    _kvdbDataSchemaMapper.assertDataIntegrity(kvdb);
+    _kvdbDataSchemaMapper->assertDataIntegrity(kvdb);
     setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformKvdb, listEntriesKeys, data send)
     auto entries = _entryDataSchemaMapper.validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
@@ -323,7 +325,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             auto raw = server::KvdbInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
-                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdb(
+                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(
                     raw, _keyProvider
                 );
                 auto event = core::EventBuilder::buildEvent<KvdbCreatedEvent>("kvdb", data, notification);
@@ -333,7 +335,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             auto raw = server::KvdbInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
-                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper.validateDecryptAndConvertKvdb(
+                privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(
                     raw, _keyProvider
                 );
                 auto event = core::EventBuilder::buildEvent<KvdbUpdatedEvent>("kvdb", data, notification);
@@ -408,15 +410,11 @@ void KvdbApiImpl::processDisconnectedEvent() {
     privmx::utils::ManualManagedClass<KvdbApiImpl>::cleanup();
 }
 
-KvdbDataSchema::Version KvdbApiImpl::getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry) {
-    return _kvdbDataSchemaMapper.getDataStructureVersion(kvdbEntry);
-}
-
 std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(
     server::KvdbInfo kvdb,
     const core::DecryptedEncKey& encKey
 ) {
-    return _kvdbDataSchemaMapper.decrypt(kvdb, encKey);
+    return _kvdbDataSchemaMapper->decrypt(kvdb, encKey);
 }
 
 core::ModuleKeys KvdbApiImpl::getEntryDecryptionKeys(server::KvdbEntryInfo entry) {
@@ -456,7 +454,7 @@ std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromSer
     kvdb::server::KvdbGetModel params{.kvdbId = moduleId, .type = std::nullopt};
     auto kvdb = _serverApi.kvdbGet(params).kvdb;
     // validate kvdb Data before returning data
-    _kvdbDataSchemaMapper.assertDataIntegrity(kvdb);
+    _kvdbDataSchemaMapper->assertDataIntegrity(kvdb);
     return std::make_pair(kvdbToModuleKeys(kvdb), kvdb.version);
 }
 
@@ -464,7 +462,7 @@ core::ModuleKeys KvdbApiImpl::kvdbToModuleKeys(server::KvdbInfo kvdb) {
     return core::ModuleKeys{
         .keys = kvdb.keys,
         .currentKeyId = kvdb.keyId,
-        .moduleSchemaVersion = getKvdbDataEntryStructureVersion(kvdb.data.back()),
+        .moduleSchemaVersion = _kvdbDataSchemaMapper->getDataStructureVersion(kvdb.data.back()),
         .moduleResourceId = kvdb.resourceId.value_or(""),
         .contextId = kvdb.contextId
     };

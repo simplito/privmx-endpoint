@@ -19,8 +19,7 @@ limitations under the License.
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
@@ -36,7 +35,7 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-class StoreDataSchemaMapper {
+class StoreDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     StoreDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
@@ -47,7 +46,7 @@ public:
         const core::DecryptedEncKey& encKey
     );
 
-    StoreDataSchema::Version getDataStructureVersion(const server::StoreDataEntry& entry);
+    core::ModuleDataSchema::Version getDataStructureVersion(const server::StoreDataEntry& entry);
 
     void assertDataIntegrity(const server::Store& store);
 
@@ -71,9 +70,12 @@ public:
         int64_t schemaVersion
     );
 
+    core::ModuleInternalMetaV5 decryptInternalMeta(
+        const Poco::Dynamic::Var& data,
+        const core::DecryptedEncKey& encKey
+    ) override;
+
 private:
-    privmx::crypto::PrivateKey _userPrivKey;
-    core::Connection _connection;
     core::VersionStrategyMapper<server::Store, std::tuple<Store, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<StoreDataSchemaStrategyV4> _strategyV4;
     std::shared_ptr<StoreDataSchemaStrategyV5> _strategyV5;

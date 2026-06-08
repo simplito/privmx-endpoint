@@ -50,7 +50,8 @@ StreamApiLowImpl::StreamApiLowImpl(
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _serverApi(std::make_shared<ServerApi>(gateway)),
       _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
-      _streamRoomDataSchemaMapper(userPrivKey, connection) {
+      _streamRoomDataSchemaMapper(std::make_shared<StreamRoomDataSchemaMapper>(userPrivKey, connection)) {
+    initModuleDataSchemaMapper(_streamRoomDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -120,7 +121,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (raw.type.value_or(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
             return;
         }
-        auto eventData = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRoom(raw, _keyProvider);
+        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(raw, _keyProvider);
         auto event = core::EventBuilder::buildEvent<StreamRoomCreatedEvent, StreamRoom>(
             "stream", eventData, notification
         );
@@ -131,7 +132,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (raw.type.value_or(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
             return;
         }
-        auto eventData = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRoom(raw, _keyProvider);
+        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(raw, _keyProvider);
         auto event = core::EventBuilder::buildEvent<StreamRoomUpdatedEvent, StreamRoom>(
             "stream", eventData, notification
         );
@@ -333,7 +334,7 @@ std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKey
     params.id = streamRoomId;
     params.type = STREAM_TYPE_FILTER_FLAG;
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto statusCode = _streamRoomDataSchemaMapper.validateDataIntegrity(streamRoom);
+    auto statusCode = _streamRoomDataSchemaMapper->validateDataIntegrity(streamRoom);
     if (statusCode != 0) {
         throw StreamRoomDataIntegrityException();
     }
@@ -576,7 +577,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     server::StreamRoomCreateModel createStreamRoomModel;
     fillContainerCreateModel(
         createStreamRoomModel, contextId, users, managers, ctx,
-        _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key)
+        _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key)
     );
     createStreamRoomModel.type = type;
     if (policies.has_value()) {
@@ -620,7 +621,7 @@ void StreamApiLowImpl::updateStreamRoom(
             },
         .dio = ctx.dio
     };
-    model.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, ctx.key.key);
+    model.data = _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key);
     _serverApi->streamRoomUpdate(model);
 }
 
@@ -634,7 +635,7 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     model.type = type;
     core::ListQueryMapper::map(model, query);
     auto streamRoomsList = _serverApi->streamRoomList(model);
-    auto streamRooms = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRooms(
+    auto streamRooms = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRooms(
         streamRoomsList.list, _keyProvider
     );
     return core::PagingList<StreamRoom>({.totalAvailable = streamRoomsList.count, .readItems = streamRooms});
@@ -645,7 +646,7 @@ StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId, cons
     params.id = streamRoomId;
     params.type = type;
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto result = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRoom(streamRoom, _keyProvider);
+    auto result = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(streamRoom, _keyProvider);
     return result;
 }
 
@@ -697,7 +698,7 @@ std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFr
     params.id = moduleId;
     auto stream = _serverApi->streamRoomGet(params).streamRoom;
     // validate stream Data before returning data
-    _streamRoomDataSchemaMapper.assertDataIntegrity(stream);
+    _streamRoomDataSchemaMapper->assertDataIntegrity(stream);
     return std::make_pair(streamRoomToModuleKeys(stream), stream.version);
 }
 
@@ -705,7 +706,7 @@ core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo
     return core::ModuleKeys{
         .keys = stream.keys,
         .currentKeyId = stream.keyId,
-        .moduleSchemaVersion = _streamRoomDataSchemaMapper.getDataStructureVersion(stream.data.back()),
+        .moduleSchemaVersion = _streamRoomDataSchemaMapper->getDataStructureVersion(stream.data.back()),
         .moduleResourceId = stream.resourceId.value_or(""),
         .contextId = stream.contextId
     };

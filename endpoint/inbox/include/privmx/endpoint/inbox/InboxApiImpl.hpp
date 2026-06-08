@@ -180,7 +180,7 @@ private:
     store::FileMetaEncryptorV5 _fileMetaEncryptorV5;
     SubscriberImpl _subscriber;
 
-    InboxDataSchemaMapper _inboxDataSchemaMapper;
+    std::shared_ptr<InboxDataSchemaMapper> _inboxDataSchemaMapper;
     InboxEntryDataSchemaMapper _inboxEntryDataSchemaMapper;
     core::DataEncryptorV4 _eventDataEncryptorV4;
     inline static const std::string INBOX_TYPE_FILTER_FLAG = "inbox";

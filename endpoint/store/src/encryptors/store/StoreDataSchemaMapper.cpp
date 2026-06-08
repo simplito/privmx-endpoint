@@ -24,11 +24,11 @@ StoreDataSchemaMapper::StoreDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
-    : _userPrivKey(userPrivKey), _connection(connection) {
+    : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyV4 = std::make_shared<StoreDataSchemaStrategyV4>();
-    _strategyMapper.registerStrategy(StoreDataSchema::Version::VERSION_4, _strategyV4);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_4, _strategyV4);
     _strategyV5 = std::make_shared<StoreDataSchemaStrategyV5>();
-    _strategyMapper.registerStrategy(StoreDataSchema::Version::VERSION_5, _strategyV5);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
 Poco::Dynamic::Var StoreDataSchemaMapper::encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key) {
@@ -49,27 +49,21 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
     );
 }
 
-StoreDataSchema::Version StoreDataSchemaMapper::getDataStructureVersion(const server::StoreDataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(entry.data, StoreDataSchema::Version::UNKNOWN, [](int64_t v) {
-        switch (v) {
-        case core::ModuleDataSchema::Version::VERSION_4:
-            return StoreDataSchema::Version::VERSION_4;
-        case core::ModuleDataSchema::Version::VERSION_5:
-            return StoreDataSchema::Version::VERSION_5;
-        default:
-            return StoreDataSchema::Version::UNKNOWN;
-        }
-    });
+core::ModuleDataSchema::Version StoreDataSchemaMapper::getDataStructureVersion(const server::StoreDataEntry& entry) {
+    return core::DataSchemaMapperUtils::mapVersionedData(
+        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
+        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
+    );
 }
 
 void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
     const auto& entry = store.data.back();
     switch (getDataStructureVersion(entry)) {
-    case StoreDataSchema::Version::UNKNOWN:
+    case core::ModuleDataSchema::Version::UNKNOWN:
         throw UnknowStoreFormatException();
-    case StoreDataSchema::Version::VERSION_4:
+    case core::ModuleDataSchema::Version::VERSION_4:
         return;
-    case StoreDataSchema::Version::VERSION_5: {
+    case core::ModuleDataSchema::Version::VERSION_5: {
         core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, store, _strategyV5, [] {
             throw StoreDataIntegrityException();
         });
@@ -105,6 +99,18 @@ Store StoreDataSchemaMapper::validateDecryptAndConvertStore(
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
     return validateDecryptAndConvertStores({store}, keyProvider)[0];
+}
+
+core::ModuleInternalMetaV5 StoreDataSchemaMapper::decryptInternalMeta(
+    const Poco::Dynamic::Var& data,
+    const core::DecryptedEncKey& encKey
+) {
+    auto version = core::DataSchemaMapperUtils::mapVersionedData(
+        data, core::ModuleDataSchema::Version::UNKNOWN,
+        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
+    );
+    if (version != core::ModuleDataSchema::Version::VERSION_5) return {};
+    return core::BaseModuleDataSchemaMapper::decryptInternalMeta(data, encKey);
 }
 
 Store StoreDataSchemaMapper::toLibStore(

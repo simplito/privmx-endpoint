@@ -63,7 +63,9 @@ StoreApiImpl::StoreApiImpl(
 
       _fileHandleManager(FileHandleManager(handleManager, "Store")),
       _subscriber(connection.getImpl()->getGateway(), STORE_TYPE_FILTER_FLAG),
-      _storeDataSchemaMapper(userPrivKey, connection), _fileMetaDataSchemaMapper(userPrivKey, connection) {
+      _storeDataSchemaMapper(std::make_shared<StoreDataSchemaMapper>(userPrivKey, connection)),
+      _fileMetaDataSchemaMapper(userPrivKey, connection) {
+    initModuleDataSchemaMapper(_storeDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -115,7 +117,7 @@ std::string StoreApiImpl::createStoreEx(
     server::StoreCreateModel storeCreateModel;
     fillContainerCreateModel(
         storeCreateModel, contextId, users, managers, ctx,
-        _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key)
+        _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key)
     );
     if (type.length() > 0) {
         storeCreateModel.type = type;
@@ -165,7 +167,7 @@ void StoreApiImpl::updateStore(
             },
         .dio = ctx.dio
     };
-    model.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, ctx.key.key);
+    model.data = _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key);
 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeUpdate, data encrypted)
     _serverApi->storeUpdate(model);
@@ -195,7 +197,7 @@ Store StoreApiImpl::getStoreEx(const std::string& storeId, const std::string& ty
     auto store = _serverApi->storeGet(model).store;
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getStoreEx, data send)
-    auto result = _storeDataSchemaMapper.validateDecryptAndConvertStore(store, _keyProvider);
+    auto result = _storeDataSchemaMapper->validateDecryptAndConvertStore(store, _keyProvider);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, getStoreEx, data decrypted)
     return result;
 }
@@ -222,7 +224,7 @@ core::PagingList<Store> StoreApiImpl::listStoresEx(
     for (auto store : storesList.stores) {
         setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     }
-    auto stores = _storeDataSchemaMapper.validateDecryptAndConvertStores(storesList.stores, _keyProvider);
+    auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(storesList.stores, _keyProvider);
     PRIVMX_DEBUG_TIME_STOP(PlatformStore, listStoresEx, data decrypted)
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }
@@ -235,7 +237,7 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto serverFileResult = _serverApi->storeFileGet(storeFileGetModel);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getFile, data send)
     auto store = serverFileResult.store;
-    _storeDataSchemaMapper.assertDataIntegrity(store);
+    _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(
         serverFileResult.file, store.resourceId.value_or("")
@@ -263,7 +265,7 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
     auto serverFilesResult = _serverApi->storeFileList(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send);
     auto store = serverFilesResult.store;
-    _storeDataSchemaMapper.assertDataIntegrity(store);
+    _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     auto files = _fileMetaDataSchemaMapper.validateDecryptAndConvertFiles(
         serverFilesResult.files, storeToModuleKeys(store), _keyProvider
@@ -462,7 +464,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     auto storeKey = core::ModuleKeys{
         .keys = store.keys,
         .currentKeyId = store.keyId,
-        .moduleSchemaVersion = _storeDataSchemaMapper.getDataStructureVersion(store.data.back()),
+        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
         .moduleResourceId = store.resourceId.value_or(""),
         .contextId = store.contextId
     };
@@ -525,7 +527,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::Store::fromJSON(notification.data);
             if (raw.type.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, storeToModuleKeys(raw), raw.version);
-                auto data = _storeDataSchemaMapper.validateDecryptAndConvertStore(raw, _keyProvider);
+                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<StoreCreatedEvent>("store", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -533,7 +535,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::Store::fromJSON(notification.data);
             if (raw.type.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, storeToModuleKeys(raw), raw.version);
-                auto data = _storeDataSchemaMapper.validateDecryptAndConvertStore(raw, _keyProvider);
+                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<StoreUpdatedEvent>("store", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -689,7 +691,7 @@ void StoreApiImpl::assertFileExist(const std::string& fileId) {
 std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     store::server::StoreGetModel params{.storeId = moduleId, .type = std::nullopt};
     auto store = _serverApi->storeGet(params).store;
-    _storeDataSchemaMapper.assertDataIntegrity(store);
+    _storeDataSchemaMapper->assertDataIntegrity(store);
     return std::make_pair(storeToModuleKeys(store), store.version);
 }
 
@@ -697,7 +699,7 @@ core::ModuleKeys StoreApiImpl::storeToModuleKeys(server::Store store) {
     return core::ModuleKeys{
         .keys = store.keys,
         .currentKeyId = store.keyId,
-        .moduleSchemaVersion = _storeDataSchemaMapper.getDataStructureVersion(store.data.back()),
+        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
         .moduleResourceId = store.resourceId.value_or(""),
         .contextId = store.contextId
     };

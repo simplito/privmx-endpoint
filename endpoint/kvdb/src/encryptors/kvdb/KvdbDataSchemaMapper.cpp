@@ -24,9 +24,9 @@ KvdbDataSchemaMapper::KvdbDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
-    : _userPrivKey(userPrivKey), _connection(connection) {
+    : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyV5 = std::make_shared<KvdbDataSchemaStrategyV5>();
-    _strategyMapper.registerStrategy(KvdbDataSchema::Version::VERSION_5, _strategyV5);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
 Poco::Dynamic::Var KvdbDataSchemaMapper::encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key) {
@@ -47,23 +47,19 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaMapper::decrypt(
     );
 }
 
-KvdbDataSchema::Version KvdbDataSchemaMapper::getDataStructureVersion(const server::KvdbDataEntry& entry) {
-    return core::DataSchemaMapperUtils::mapVersionedData(entry.data, KvdbDataSchema::Version::UNKNOWN, [](int64_t v) {
-        switch (v) {
-        case core::ModuleDataSchema::Version::VERSION_5:
-            return KvdbDataSchema::Version::VERSION_5;
-        default:
-            return KvdbDataSchema::Version::UNKNOWN;
-        }
-    });
+core::ModuleDataSchema::Version KvdbDataSchemaMapper::getDataStructureVersion(const server::KvdbDataEntry& entry) {
+    return core::DataSchemaMapperUtils::mapVersionedData(
+        entry.data, core::ModuleDataSchema::Version::UNKNOWN,
+        [](int64_t v) { return static_cast<core::ModuleDataSchema::Version>(v); }
+    );
 }
 
 void KvdbDataSchemaMapper::assertDataIntegrity(const server::KvdbInfo& kvdb) {
     const auto& entry = kvdb.data.back();
     switch (getDataStructureVersion(entry)) {
-    case KvdbDataSchema::Version::UNKNOWN:
+    case core::ModuleDataSchema::Version::UNKNOWN:
         throw UnknownKvdbFormatException();
-    case KvdbDataSchema::Version::VERSION_5: {
+    case core::ModuleDataSchema::Version::VERSION_5: {
         core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, kvdb, _strategyV5, [] {
             throw KvdbDataIntegrityException();
         });
@@ -100,6 +96,7 @@ Kvdb KvdbDataSchemaMapper::validateDecryptAndConvertKvdb(
 ) {
     return validateDecryptAndConvertKvdbs({kvdb}, keyProvider)[0];
 }
+
 
 Kvdb KvdbDataSchemaMapper::toLibKvdb(
     const server::KvdbInfo& info,

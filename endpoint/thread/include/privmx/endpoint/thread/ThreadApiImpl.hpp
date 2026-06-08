@@ -158,7 +158,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _messageDecryptorId, _messageDeleterId;
     MessageDataSchemaMapper _messageDataSchemaMapper;
-    ThreadDataSchemaMapper _threadDataSchemaMapper;
+    std::shared_ptr<ThreadDataSchemaMapper> _threadDataSchemaMapper;
     core::DataEncryptorV4 _eventDataEncryptorV4;
     std::vector<std::string> _forbiddenChannelsNames;
 

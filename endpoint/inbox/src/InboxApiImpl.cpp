@@ -61,7 +61,9 @@ InboxApiImpl::InboxApiImpl(
       _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
       _fileKeyIdFormatValidator(FileKeyIdFormatValidator()), _serverRequestChunkSize(serverRequestChunkSize),
       _subscriber(connection.getImpl()->getGateway(), INBOX_TYPE_FILTER_FLAG),
-      _inboxDataSchemaMapper(userPrivKey, connection), _inboxEntryDataSchemaMapper(keyProvider, serverApi, storeApi) {
+      _inboxDataSchemaMapper(std::make_shared<InboxDataSchemaMapper>(userPrivKey, connection)),
+      _inboxEntryDataSchemaMapper(keyProvider, serverApi, storeApi) {
+    initModuleDataSchemaMapper(_inboxDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -135,7 +137,7 @@ std::string InboxApiImpl::createInbox(
     createInboxModel.contextId = contextId;
     createInboxModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     createInboxModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    createInboxModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, inboxKey.key);
+    createInboxModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, inboxKey.key);
     createInboxModel.keyId = inboxKey.id;
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     auto keysList = _keyProvider->prepareKeysList(
@@ -168,10 +170,7 @@ void InboxApiImpl::updateInbox(
     auto currentInboxResourceId = currentInbox.resourceId.has_value() ? currentInbox.resourceId.value() :
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
-        currentInbox, currentInboxEntry, currentInboxResourceId, users, managers, forceGenerateNewKey,
-        [this](const inbox::server::InboxDataEntry& entry, const core::DecryptedEncKeyV2& key) {
-            return _inboxDataSchemaMapper.decryptInternalMeta(entry, key).secret;
-        }
+        currentInbox, currentInboxEntry, currentInboxResourceId, users, managers, forceGenerateNewKey
     );
     auto eccKey = crypto::ECC::fromPrivateKey(ctx.key.key);
     auto privateKey = crypto::PrivateKey(eccKey);
@@ -203,7 +202,7 @@ void InboxApiImpl::updateInbox(
     inboxUpdateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     inboxUpdateModel.version = version;
     inboxUpdateModel.force = force;
-    inboxUpdateModel.data = _inboxDataSchemaMapper.encrypt(inboxDataIn, ctx.key.key);
+    inboxUpdateModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, ctx.key.key);
 
     std::optional<core::ContainerPolicy> policiesWithItems{
         policies.has_value() ? std::make_optional<core::ContainerPolicy>({policies.value(), std::nullopt}) :
@@ -238,7 +237,7 @@ Inbox InboxApiImpl::getInboxEx(const std::string& inboxId, const std::string& ty
     auto inbox = getServerInbox(inboxId, type);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, getInboxEx, data send)
     setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
-    auto result = _inboxDataSchemaMapper.validateDecryptAndConvertInbox(inbox, _keyProvider);
+    auto result = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(inbox, _keyProvider);
     PRIVMX_DEBUG_TIME_STOP(PlatformInbox, getInboxEx, data decrypted)
     return result;
 }
@@ -269,7 +268,7 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
     for (auto inbox : inboxesListResult.inboxes) {
         setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
     }
-    std::vector<Inbox> inboxes = _inboxDataSchemaMapper.validateDecryptAndConvertInboxes(
+    std::vector<Inbox> inboxes = _inboxDataSchemaMapper->validateDecryptAndConvertInboxes(
         inboxesListResult.inboxes, _keyProvider
     );
     return core::PagingList<inbox::Inbox>({.totalAvailable = inboxesListResult.count, .readItems = inboxes});
@@ -549,7 +548,7 @@ inbox::server::InboxDataEntry InboxApiImpl::getInboxCurrentDataEntry(inbox::serv
 InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inboxId) {
     server::InboxGetModel model;
     model.id = inboxId;
-    return _inboxDataSchemaMapper.getPublicViewData(_serverApi->inboxGetPublicView(model));
+    return _inboxDataSchemaMapper->getPublicViewData(_serverApi->inboxGetPublicView(model));
 }
 
 inbox::FilesConfig InboxApiImpl::getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig) {
@@ -580,7 +579,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::InboxInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
-                auto data = _inboxDataSchemaMapper.validateDecryptAndConvertInbox(raw, _keyProvider);
+                auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<InboxCreatedEvent>("inbox", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -588,7 +587,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::InboxInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
-                auto data = _inboxDataSchemaMapper.validateDecryptAndConvertInbox(raw, _keyProvider);
+                auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<InboxUpdatedEvent>("inbox", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -702,7 +701,7 @@ core::ModuleKeys InboxApiImpl::getEntryDecryptionKeys(thread::server::Message me
 
 std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     auto inbox = getServerInbox(moduleId);
-    _inboxDataSchemaMapper.assertDataIntegrity(inbox);
+    _inboxDataSchemaMapper->assertDataIntegrity(inbox);
     return std::make_pair(inboxToModuleKeys(inbox), inbox.version);
 }
 
@@ -710,7 +709,7 @@ core::ModuleKeys InboxApiImpl::inboxToModuleKeys(inbox::server::InboxInfo inbox)
     return core::ModuleKeys{
         .keys = inbox.keys,
         .currentKeyId = inbox.keyId,
-        .moduleSchemaVersion = _inboxDataSchemaMapper.getDataStructureVersion(inbox.data.back()),
+        .moduleSchemaVersion = _inboxDataSchemaMapper->getDataStructureVersion(inbox.data.back()),
         .moduleResourceId = inbox.resourceId.value_or(""),
         .contextId = inbox.contextId
     };
