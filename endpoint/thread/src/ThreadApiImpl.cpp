@@ -135,11 +135,7 @@ void ThreadApiImpl::updateThread(
     auto currentThreadResourceId = currentThread.resourceId ? currentThread.resourceId.value() :
                                                               core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
-        currentThread, currentThreadEntry, currentThreadResourceId, users, managers, forceGenerateNewKey,
-        [this](const server::Thread2DataEntry& entry, const core::DecryptedEncKeyV2& key) {
-            return extractAndDecryptModuleInternalMeta(entry, key).secret;
-        },
-        [] { throw ThreadEncryptionKeyValidationException(); }
+        currentThread, currentThreadEntry, currentThreadResourceId, users, managers, forceGenerateNewKey
     );
     server::ThreadUpdateModel model;
     fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force);
@@ -279,7 +275,7 @@ std::string ThreadApiImpl::sendMessageRequest(
     PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessageRequest);
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
     if (msgKey.statusCode != 0) {
-        throw ThreadEncryptionKeyValidationException(
+        throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
         );
     }
@@ -331,7 +327,7 @@ void ThreadApiImpl::updateMessageRequest(
     PRIVMX_DEBUG_TIME_START(PlatformThread, updateMessageRequest);
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
     if (msgKey.statusCode != 0) {
-        throw ThreadEncryptionKeyValidationException(
+        throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
         );
     }

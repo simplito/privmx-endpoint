@@ -604,11 +604,7 @@ void StreamApiLowImpl::updateStreamRoom(
     auto currentStreamRoomEntry = currentStreamRoom.data.back();
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
-        currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers, forceGenerateNewKey,
-        [this](const server::StreamRoomDataEntry& entry, const core::DecryptedEncKeyV2& key) {
-            return extractAndDecryptModuleInternalMeta(entry, key).secret;
-        },
-        [] { throw StreamRoomEncryptionKeyValidationException(); }
+        currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers, forceGenerateNewKey
     );
     server::StreamRoomUpdateModel model;
     fillContainerUpdateModel(model, streamRoomId, currentStreamRoomResourceId, users, managers, ctx, version, force);

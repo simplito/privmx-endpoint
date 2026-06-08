@@ -171,8 +171,7 @@ void InboxApiImpl::updateInbox(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers, forceGenerateNewKey,
         [this](const inbox::server::InboxDataEntry& entry, const core::DecryptedEncKeyV2& key) {
             return _inboxDataSchemaMapper.decryptInternalMeta(entry, key).secret;
-        },
-        [] { throw InboxEncryptionKeyValidationException(); }
+        }
     );
     auto eccKey = crypto::ECC::fromPrivateKey(ctx.key.key);
     auto privateKey = crypto::PrivateKey(eccKey);

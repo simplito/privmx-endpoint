@@ -143,18 +143,22 @@ protected:
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
         bool forceGenerateNewKey,
-        std::function<std::string(const type_identity_t<TEntry>&, const core::DecryptedEncKeyV2&)> getSecret,
-        std::function<void()> throwIfInvalid
+        std::optional<std::function<std::string(const type_identity_t<TEntry>&, const core::DecryptedEncKeyV2&)>> customSecretExtractor = std::nullopt
     ) {
         auto location{getModuleEncKeyLocation(container, resourceId)};
         auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
         auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
-        std::string secret = getSecret(entry, currentKey);
+        std::string secret;
+        if(customSecretExtractor.has_value()) {
+            secret = customSecretExtractor->value()(entry, currentKey);
+        } else {
+            secret = extractAndDecryptModuleInternalMeta(entry, currentKey).secret;
+        }
         auto usersKeysResolver{
             core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)
         };
         if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
-            throwIfInvalid();
+            throw core::EncryptionKeyValidationException();
         }
         core::EncKey key = currentKey;
         core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);

@@ -149,11 +149,7 @@ void StoreApiImpl::updateStore(
     auto currentStoreResourceId = currentStore.resourceId.has_value() ? currentStore.resourceId.value() :
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
-        currentStore, currentStoreEntry, currentStoreResourceId, users, managers, forceGenerateNewKey,
-        [this](const server::StoreDataEntry& entry, const core::DecryptedEncKeyV2& key) {
-            return extractAndDecryptModuleInternalMeta(entry, key).secret;
-        },
-        [] { throw StoreEncryptionKeyValidationException(); }
+        currentStore, currentStoreEntry, currentStoreResourceId, users, managers, forceGenerateNewKey
     );
     server::StoreUpdateModel model;
     fillContainerUpdateModel(model, storeId, currentStoreResourceId, users, managers, ctx, version, force);
@@ -482,7 +478,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
     auto serverId = _host;
     auto key = getAndValidateModuleCurrentEncKey(storeKey);
     if (key.statusCode != 0) {
-        throw StoreEncryptionKeyValidationException(
+        throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
         );
     }
@@ -661,7 +657,7 @@ void StoreApiImpl::updateFileMeta(
     }
     auto key = getAndValidateModuleCurrentEncKey(store);
     if (key.statusCode != 0) {
-        throw StoreEncryptionKeyValidationException(
+        throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
         );
     }

@@ -117,11 +117,7 @@ void KvdbApiImpl::updateKvdb(
     auto currentKvdbEntry = currentKvdb.data.back();
     auto currentKvdbResourceId = currentKvdb.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
-        currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers, forceGenerateNewKey,
-        [this](const server::KvdbDataEntry& entry, const core::DecryptedEncKeyV2& key) {
-            return extractAndDecryptModuleInternalMeta(entry, key).secret;
-        },
-        [] { throw KvdbEncryptionKeyValidationException(); }
+        currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers, forceGenerateNewKey
     );
     server::KvdbUpdateModel model;
     fillContainerUpdateModel(model, kvdbId, currentKvdbResourceId, users, managers, ctx, version, force);
@@ -278,7 +274,7 @@ void KvdbApiImpl::setEntryRequest(
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, sendEntry);
     auto msgKey = getAndValidateModuleCurrentEncKey(keys);
     if (msgKey.statusCode != 0) {
-        throw KvdbEncryptionKeyValidationException(
+        throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
         );
     }
