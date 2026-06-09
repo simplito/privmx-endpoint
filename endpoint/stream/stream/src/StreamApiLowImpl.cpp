@@ -60,10 +60,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(
         std::bind(&StreamApiLowImpl::processDisconnectedEvent, this)
     );
-    //
-    auto internalSubscriptionQuery{_subscriber.getInternalEventsSubscriptionQuery()};
-    auto result = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
-    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {
@@ -163,37 +159,31 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUpdated") {
-        if (type == "streamPublished") {
-            auto raw = server::StreamPublishedEventData::fromJSON(data);
-            auto eventData = Mapper::mapToPublishedStreamData(raw);
-            auto event = core::EventBuilder::buildEvent<StreamPublishedEvent, StreamPublishedEventData>(
-                "stream", eventData, notification
-            );
-            _eventMiddleware->emitApiEvent(event);
-        } else if (type == "streamUpdated") {
-            auto raw = server::StreamUpdatedEventData::fromJSON(data);
-            auto eventData = Mapper::mapToStreamUpdatedEventData(raw);
-            auto event = core::EventBuilder::buildEvent<StreamUpdatedEvent, StreamUpdatedEventData>(
-                "stream", eventData, notification
-            );
-            _eventMiddleware->emitApiEvent(event);
-        } else if (type == "streamJoined") {
-            auto raw = server::StreamEventData::fromJSON(data);
-            auto eventData = StreamEventData{
-                .streamRoomId = raw.streamRoomId, .streamIds = raw.streamIds, .userId = raw.userId
-            };
-            auto event = core::EventBuilder::buildEvent<StreamJoinedEvent, StreamEventData>(
-                "stream", eventData, notification
-            );
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "streamLeft") {
-        auto raw = server::StreamLeftEventData::fromJSON(data);
-        auto eventData = StreamLeftEventData{
-            .streamRoomId = raw.streamRoomId, .streamId = raw.streamId, .userId = raw.userId
-        };
-        auto event = core::EventBuilder::buildEvent<StreamLeftEvent, StreamLeftEventData>(
+    } else if (type == "streamPublished") {
+        auto raw = server::StreamPublishedEventData::fromJSON(data);
+        auto eventData = Mapper::mapToPublishedStreamData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamPublishedEvent, StreamPublishedEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamUpdated") {
+        auto raw = server::StreamUpdatedEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamUpdatedEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamUpdatedEvent, StreamUpdatedEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomJoined") {
+        auto raw = server::StreamRoomMemberEventData::fromJSON(data);
+        auto eventData = StreamRoomMemberEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
+        auto event = core::EventBuilder::buildEvent<StreamRoomJoinedEvent, StreamRoomMemberEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomLeft") {
+        auto raw = server::StreamRoomMemberEventData::fromJSON(data);
+        auto eventData = StreamRoomMemberEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
+        auto event = core::EventBuilder::buildEvent<StreamRoomLeftEvent, StreamRoomMemberEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
@@ -204,40 +194,40 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "remoteStreamsChanged") {
-        auto raw = server::NewStreams::fromJSON(data);
-        auto eventData = Mapper::mapToNewStreams(raw);
-        auto event = core::EventBuilder::buildEvent<RemoteStreamsChangedEvent, NewStreams>(
+    } else if (type == "streamSubscribed") {
+        auto raw = server::StreamSubscribedEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamSubscribedEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamSubscribedEvent, StreamSubscribedEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamsUpdated") {
-        auto raw = server::StreamsUpdatedData::fromJSON(data);
-
-        // update offer via WebRtcInterface
-        auto streamRoomId{raw.room};
+    } else if (type == "streamUnsubscribed") {
+        auto raw = server::StreamSubscribedEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamSubscribedEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamUnsubscribedEvent, StreamSubscribedEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomReoffer") {
+        auto raw = server::StreamReofferEventData::fromJSON(data);
+        auto streamRoomId{raw.streamRoomId};
         auto roomOpt = _streamRoomMap.get(streamRoomId);
-        std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
         if (!roomOpt.has_value()) {
-            throw CannotGetRoomOnStreamsUpdateEventException();
-        } else {
-            room = roomOpt.value();
+            LOG_ERROR("streamRoomReoffer: unknown streamRoomId '", streamRoomId, "'");
+            return;
         }
-        if (raw.jsep.has_value()) {
+        auto room = roomOpt.value();
+        if (raw.jsep.has_value() && room->subscriberStream && room->subscriberStream->sessionId.has_value()) {
             std::string sdp = room->webRtc->createAnswerAndSetDescriptions(
                 room->streamRoomId, raw.jsep.value().sdp, raw.jsep.value().type
             );
             SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
-
-            acceptOfferOnReconfigure(raw.sessionId, sdpModel);
+            acceptOfferOnReconfigure(room->subscriberStream->sessionId.value(), sdpModel);
         }
-
-        // pass event to client
-        auto eventData = Mapper::mapToStreamsUpdatedData(raw);
-        auto event = core::EventBuilder::buildEvent<StreamsUpdatedEvent, StreamsUpdatedData>(
+        auto eventData = Mapper::mapToStreamRoomReofferEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamRoomReofferEvent, StreamRoomReofferEventData>(
             "stream", eventData, notification
         );
-        _eventMiddleware->emitApiEvent(event);
     } else {
         LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
     }

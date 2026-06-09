@@ -73,10 +73,13 @@ enum EventType : int64_t {
     STREAMROOM_CREATE = 0,
     STREAMROOM_UPDATE = 1,
     STREAMROOM_DELETE = 2,
-    STREAM_JOIN = 4,
-    STREAM_LEAVE = 5,
+    STREAMROOM_JOIN = 4,
+    STREAMROOM_LEAVE = 5,
     STREAM_PUBLISH = 6,
     STREAM_UNPUBLISH = 7,
+    STREAM_SUBSCRIBE = 8,
+    STREAM_UNSUBSCRIBE = 9,
+    STREAM_UPDATE = 10,
 };
 
 enum EventSelectorType : int64_t {
@@ -111,16 +114,6 @@ struct StreamTrackModificationPair {
     std::optional<StreamTrackInfo> after;
 };
 
-struct StreamTrackModification {
-    int64_t streamId;
-    std::vector<StreamTrackModificationPair> tracks;
-};
-
-struct NewStreams {
-    std::string room;
-    std::vector<StreamInfo> streams;
-};
-
 struct PublishedStreamData {
     /**
      * StreamRoom ID
@@ -128,11 +121,52 @@ struct PublishedStreamData {
     std::string streamRoomId;
 
     /**
-     * Stream ID's
+     * Published stream info
      */
     StreamInfo stream;
 
     std::string userId;
+};
+
+struct StreamRoomMemberEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * User ID of the member who joined or left
+     */
+    std::string userId;
+};
+
+struct StreamSubscribedEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * User ID of the subscriber
+     */
+    std::string userId;
+
+    /**
+     * List of stream subscriptions
+     */
+    std::vector<StreamSubscription> subscriptions;
+};
+
+struct StreamRoomReofferEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * Optional SDP offer for renegotiation
+     */
+    std::optional<SdpWithTypeModel> jsep;
 };
 
 struct StreamUpdatedEventData {
@@ -141,40 +175,26 @@ struct StreamUpdatedEventData {
      */
     std::string streamRoomId;
 
-    std::vector<StreamInfo> streamsAdded;
+    /**
+     * Publisher stream ID that changed
+     */
+    int64_t streamId;
 
-    std::vector<StreamInfo> streamsRemoved;
+    /**
+     * User ID of who changed it
+     */
+    std::string userId;
 
-    std::vector<StreamTrackModification> streamsModified;
+    std::vector<StreamTrackInfo> tracksAdded;
+
+    std::vector<StreamTrackInfo> tracksRemoved;
+
+    std::vector<StreamTrackModificationPair> tracksModified;
 };
 
 struct StreamPublishResult {
     bool published;
     std::optional<PublishedStreamData> data;
-};
-
-struct UpdatedStreamData {
-    bool active;
-    std::string type;
-    std::optional<std::string> codec;
-    std::optional<int64_t> streamId;           // feed_id
-    std::optional<std::string> streamMid;      // feed_mid
-    std::optional<std::string> stream_display; // feed_display
-    int64_t mindex;
-    std::string mid;
-    bool send;
-    bool ready;
-};
-
-struct StreamsUpdatedDataInternal {
-    std::string room;
-    std::vector<UpdatedStreamData> streams;
-    std::optional<SdpWithTypeModel> jsep;
-};
-
-struct StreamsUpdatedData {
-    std::string room;
-    std::vector<UpdatedStreamData> streams;
 };
 
 struct RecordingEncKey {

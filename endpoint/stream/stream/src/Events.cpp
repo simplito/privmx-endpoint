@@ -39,24 +39,28 @@ std::string StreamUpdatedEvent::toJSON() const {
     return core::JsonSerializer<StreamUpdatedEvent>::serialize(*this);
 }
 
-std::string StreamJoinedEvent::toJSON() const {
-    return core::JsonSerializer<StreamJoinedEvent>::serialize(*this);
+std::string StreamRoomJoinedEvent::toJSON() const {
+    return core::JsonSerializer<StreamRoomJoinedEvent>::serialize(*this);
 }
 
 std::string StreamUnpublishedEvent::toJSON() const {
     return core::JsonSerializer<StreamUnpublishedEvent>::serialize(*this);
 }
 
-std::string StreamLeftEvent::toJSON() const {
-    return core::JsonSerializer<StreamLeftEvent>::serialize(*this);
+std::string StreamRoomLeftEvent::toJSON() const {
+    return core::JsonSerializer<StreamRoomLeftEvent>::serialize(*this);
 }
 
-std::string RemoteStreamsChangedEvent::toJSON() const {
-    return core::JsonSerializer<RemoteStreamsChangedEvent>::serialize(*this);
+std::string StreamRoomReofferEvent::toJSON() const {
+    return core::JsonSerializer<StreamRoomReofferEvent>::serialize(*this);
 }
 
-std::string StreamsUpdatedEvent::toJSON() const {
-    return core::JsonSerializer<StreamsUpdatedEvent>::serialize(*this);
+std::string StreamSubscribedEvent::toJSON() const {
+    return core::JsonSerializer<StreamSubscribedEvent>::serialize(*this);
+}
+
+std::string StreamUnsubscribedEvent::toJSON() const {
+    return core::JsonSerializer<StreamUnsubscribedEvent>::serialize(*this);
 }
 
 std::shared_ptr<core::SerializedEvent> StreamRoomCreatedEvent::serialize() const {
@@ -89,7 +93,7 @@ std::shared_ptr<core::SerializedEvent> StreamUpdatedEvent::serialize() const {
     );
 }
 
-std::shared_ptr<core::SerializedEvent> StreamJoinedEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> StreamRoomJoinedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(
         core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
     );
@@ -101,19 +105,25 @@ std::shared_ptr<core::SerializedEvent> StreamUnpublishedEvent::serialize() const
     );
 }
 
-std::shared_ptr<core::SerializedEvent> StreamLeftEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> StreamRoomLeftEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(
         core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
     );
 }
 
-std::shared_ptr<core::SerializedEvent> RemoteStreamsChangedEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> StreamRoomReofferEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(
         core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
     );
 }
 
-std::shared_ptr<core::SerializedEvent> StreamsUpdatedEvent::serialize() const {
+std::shared_ptr<core::SerializedEvent> StreamSubscribedEvent::serialize() const {
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
+}
+
+std::shared_ptr<core::SerializedEvent> StreamUnsubscribedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(
         core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
     );
@@ -204,15 +214,15 @@ StreamUpdatedEvent Events::extractStreamUpdatedEvent(const core::EventHolder& ha
     }
 }
 
-bool Events::isStreamJoinedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamJoined";
+bool Events::isStreamRoomJoinedEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamRoomJoined";
 }
 
-StreamJoinedEvent Events::extractStreamJoinedEvent(const core::EventHolder& handler) {
+StreamRoomJoinedEvent Events::extractStreamRoomJoinedEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<StreamJoinedEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<StreamRoomJoinedEvent>(handler.get());
         if (!event) {
-            throw CannotExtractStreamJoinedEventException();
+            throw CannotExtractStreamRoomJoinedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
@@ -238,15 +248,15 @@ StreamUnpublishedEvent Events::extractStreamUnpublishedEvent(const core::EventHo
     }
 }
 
-bool Events::isStreamLeftEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamLeft";
+bool Events::isStreamRoomLeftEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamRoomLeft";
 }
 
-StreamLeftEvent Events::extractStreamLeftEvent(const core::EventHolder& handler) {
+StreamRoomLeftEvent Events::extractStreamRoomLeftEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<StreamLeftEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<StreamRoomLeftEvent>(handler.get());
         if (!event) {
-            throw CannotExtractStreamLeftEventException();
+            throw CannotExtractStreamRoomLeftEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
@@ -255,15 +265,15 @@ StreamLeftEvent Events::extractStreamLeftEvent(const core::EventHolder& handler)
     }
 }
 
-bool Events::isRemoteStreamsChangedEvent(const core::EventHolder& handler) {
-    return handler.type() == "remoteStreamsChanged";
+bool Events::isStreamRoomReofferEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamRoomReoffer";
 }
 
-RemoteStreamsChangedEvent Events::extractRemoteStreamsChangedEvent(const core::EventHolder& handler) {
+StreamRoomReofferEvent Events::extractStreamRoomReofferEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<RemoteStreamsChangedEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<StreamRoomReofferEvent>(handler.get());
         if (!event) {
-            throw CannotExtractRemoteStreamsChangedEventException();
+            throw CannotExtractStreamRoomReofferEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {
@@ -272,15 +282,32 @@ RemoteStreamsChangedEvent Events::extractRemoteStreamsChangedEvent(const core::E
     }
 }
 
-bool Events::isStreamsUpdatedEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamsUpdated";
+bool Events::isStreamSubscribedEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamSubscribed";
 }
 
-StreamsUpdatedEvent Events::extractStreamsUpdatedEvent(const core::EventHolder& handler) {
+StreamSubscribedEvent Events::extractStreamSubscribedEvent(const core::EventHolder& handler) {
     try {
-        auto event = std::dynamic_pointer_cast<StreamsUpdatedEvent>(handler.get());
+        auto event = std::dynamic_pointer_cast<StreamSubscribedEvent>(handler.get());
         if (!event) {
-            throw CannotExtractStreamsUpdatedEventException();
+            throw CannotExtractStreamSubscribedEventException();
+        }
+        return *event;
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+bool Events::isStreamUnsubscribedEvent(const core::EventHolder& handler) {
+    return handler.type() == "streamUnsubscribed";
+}
+
+StreamUnsubscribedEvent Events::extractStreamUnsubscribedEvent(const core::EventHolder& handler) {
+    try {
+        auto event = std::dynamic_pointer_cast<StreamUnsubscribedEvent>(handler.get());
+        if (!event) {
+            throw CannotExtractStreamUnsubscribedEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

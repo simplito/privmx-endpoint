@@ -27,40 +27,6 @@ struct StreamRoomDeletedEventData {
     std::string streamRoomId;
 };
 
-struct StreamEventData {
-    /**
-     * StreamRoom ID
-     */
-    std::string streamRoomId;
-
-    /**
-     * Stream ID's
-     */
-    std::vector<int64_t> streamIds;
-
-    /**
-     * Modifier Id
-     */
-    std::string userId;
-};
-
-struct StreamLeftEventData {
-    /**
-     * StreamRoom ID
-     */
-    std::string streamRoomId;
-
-    /**
-     * Stream ID's
-     */
-    int64_t streamId;
-
-    /**
-     * UserID
-     */
-    std::string userId;
-};
-
 struct StreamUnpublishedEventData {
     /**
      * StreamRoom ID
@@ -68,7 +34,7 @@ struct StreamUnpublishedEventData {
     std::string streamRoomId;
 
     /**
-     * Stream ID's
+     * Stream ID
      */
     int64_t streamId;
 };
@@ -215,18 +181,18 @@ struct StreamUpdatedEvent : public core::Event {
 };
 
 /**
- * Holds data of event that arrives when Stream is published.
+ * Holds data of event that arrives when a user joins a StreamRoom.
  */
-struct StreamJoinedEvent : public core::Event {
+struct StreamRoomJoinedEvent : public core::Event {
 
     /**
      * Event constructor
      */
-    StreamJoinedEvent() : core::Event("streamJoined") {}
+    StreamRoomJoinedEvent() : core::Event("streamRoomJoined") {}
 
     /**
      * Get Event as JSON string
-     * 
+     *
      * @return JSON string
      */
     std::string toJSON() const override;
@@ -239,7 +205,7 @@ struct StreamJoinedEvent : public core::Event {
     /**
      * event data
      */
-    StreamEventData data;
+    StreamRoomMemberEventData data;
 };
 
 /**
@@ -271,42 +237,14 @@ struct StreamUnpublishedEvent : public core::Event {
 };
 
 /**
- * Holds data of event that arrives when Stream is left.
+ * Holds data of event that arrives when a user leaves a StreamRoom.
  */
-struct StreamLeftEvent : public core::Event {
+struct StreamRoomLeftEvent : public core::Event {
 
     /**
      * Event constructor
      */
-    StreamLeftEvent() : core::Event("streamLeft") {}
-
-    /**
-     * Get Event as JSON string
-     * 
-     * @return JSON string
-     */
-    std::string toJSON() const override;
-
-    /**
-     * //doc-gen:ignore
-     */
-    std::shared_ptr<core::SerializedEvent> serialize() const override;
-
-    /**
-     * event data
-     */
-    StreamLeftEventData data;
-};
-
-/**
- * Holds data of event that arrives on StreamPublish - contains information about available publishers/streams one can subscribe to.
- */
-struct RemoteStreamsChangedEvent : public core::Event {
-
-    /**
-     * Event constructor
-     */
-    RemoteStreamsChangedEvent() : core::Event("remoteStreamsChanged") {}
+    StreamRoomLeftEvent() : core::Event("streamRoomLeft") {}
 
     /**
      * Get Event as JSON string
@@ -323,18 +261,18 @@ struct RemoteStreamsChangedEvent : public core::Event {
     /**
      * event data
      */
-    NewStreams data;
+    StreamRoomMemberEventData data;
 };
 
 /**
- * Holds data of event that arrives after StreamJoin - contains information about updates on publishers streams one can subscribe to.
+ * Holds data of event that arrives when SDP renegotiation is needed for a subscriber.
  */
-struct StreamsUpdatedEvent : public core::Event {
+struct StreamRoomReofferEvent : public core::Event {
 
     /**
      * Event constructor
      */
-    StreamsUpdatedEvent() : core::Event("streamsUpdated") {}
+    StreamRoomReofferEvent() : core::Event("streamRoomReoffer") {}
 
     /**
      * Get Event as JSON string
@@ -351,7 +289,63 @@ struct StreamsUpdatedEvent : public core::Event {
     /**
      * event data
      */
-    StreamsUpdatedData data;
+    StreamRoomReofferEventData data;
+};
+
+/**
+ * Holds data of event that arrives when a viewer subscribes to feeds.
+ */
+struct StreamSubscribedEvent : public core::Event {
+
+    /**
+     * Event constructor
+     */
+    StreamSubscribedEvent() : core::Event("streamSubscribed") {}
+
+    /**
+     * Get Event as JSON string
+     *
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<core::SerializedEvent> serialize() const override;
+
+    /**
+     * event data
+     */
+    StreamSubscribedEventData data;
+};
+
+/**
+ * Holds data of event that arrives when a viewer unsubscribes from feeds.
+ */
+struct StreamUnsubscribedEvent : public core::Event {
+
+    /**
+     * Event constructor
+     */
+    StreamUnsubscribedEvent() : core::Event("streamUnsubscribed") {}
+
+    /**
+     * Get Event as JSON string
+     *
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<core::SerializedEvent> serialize() const override;
+
+    /**
+     * event data
+     */
+    StreamSubscribedEventData data;
 };
 
 /**
@@ -440,84 +434,100 @@ public:
     static StreamUpdatedEvent extractStreamUpdatedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'StreamJoinedEvent' 
-     * 
+     * Checks whether event held in the 'EventHolder' is a 'StreamRoomJoinedEvent'
+     *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StreamJoinedEvent', else otherwise
+     * @return true for 'StreamRoomJoinedEvent', else otherwise
      */
-    static bool isStreamJoinedEvent(const core::EventHolder& eventHolder);
+    static bool isStreamRoomJoinedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'StreamJoinedEvent' 
-     * 
+     * Gets Event held in the 'EventHolder' as a 'StreamRoomJoinedEvent'
+     *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StreamJoinedEvent' object
+     * @return 'StreamRoomJoinedEvent' object
      */
-    static StreamJoinedEvent extractStreamJoinedEvent(const core::EventHolder& eventHolder);
+    static StreamRoomJoinedEvent extractStreamRoomJoinedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'StreamUnpublishedEvent' 
-     * 
+     * Checks whether event held in the 'EventHolder' is an 'StreamUnpublishedEvent'
+     *
      * @param eventHolder holder object that wraps the 'Event'
      * @return true for 'StreamUnpublishedEvent', else otherwise
      */
     static bool isStreamUnpublishedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'StreamUnpublishedEvent' 
-     * 
+     * Gets Event held in the 'EventHolder' as an 'StreamUnpublishedEvent'
+     *
      * @param eventHolder holder object that wraps the 'Event'
      * @return 'StreamUnpublishedEvent' object
      */
     static StreamUnpublishedEvent extractStreamUnpublishedEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'StreamLeftEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StreamLeftEvent', else otherwise
-     */
-    static bool isStreamLeftEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Gets Event held in the 'EventHolder' as an 'StreamLeftEvent' 
-     * 
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StreamLeftEvent' object
-     */
-    static StreamLeftEvent extractStreamLeftEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Checks whether event held in the 'EventHolder' is an 'RemoteStreamsChangedEvent'
+     * Checks whether event held in the 'EventHolder' is a 'StreamRoomLeftEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'RemoteStreamsChangedEvent', else otherwise
+     * @return true for 'StreamRoomLeftEvent', else otherwise
      */
-    static bool isRemoteStreamsChangedEvent(const core::EventHolder& eventHolder);
+    static bool isStreamRoomLeftEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'RemoteStreamsChangedEvent'
+     * Gets Event held in the 'EventHolder' as a 'StreamRoomLeftEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'RemoteStreamsChangedEvent' object
+     * @return 'StreamRoomLeftEvent' object
      */
-    static RemoteStreamsChangedEvent extractRemoteStreamsChangedEvent(const core::EventHolder& eventHolder);
+    static StreamRoomLeftEvent extractStreamRoomLeftEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Checks whether event held in the 'EventHolder' is an 'PublishersStreamsUpdatedEvent'
+     * Checks whether event held in the 'EventHolder' is a 'StreamRoomReofferEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StreamsUpdatedEvent', else otherwise
+     * @return true for 'StreamRoomReofferEvent', else otherwise
      */
-    static bool isStreamsUpdatedEvent(const core::EventHolder& eventHolder);
+    static bool isStreamRoomReofferEvent(const core::EventHolder& eventHolder);
 
     /**
-     * Gets Event held in the 'EventHolder' as an 'PublishersStreamsUpdatedEvent'
+     * Gets Event held in the 'EventHolder' as a 'StreamRoomReofferEvent'
      *
      * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StreamsUpdatedEvent' object
+     * @return 'StreamRoomReofferEvent' object
      */
-    static StreamsUpdatedEvent extractStreamsUpdatedEvent(const core::EventHolder& eventHolder);
+    static StreamRoomReofferEvent extractStreamRoomReofferEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is a 'StreamSubscribedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'StreamSubscribedEvent', else otherwise
+     */
+    static bool isStreamSubscribedEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as a 'StreamSubscribedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'StreamSubscribedEvent' object
+     */
+    static StreamSubscribedEvent extractStreamSubscribedEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is a 'StreamUnsubscribedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return true for 'StreamUnsubscribedEvent', else otherwise
+     */
+    static bool isStreamUnsubscribedEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as a 'StreamUnsubscribedEvent'
+     *
+     * @param eventHolder holder object that wraps the 'Event'
+     * @return 'StreamUnsubscribedEvent' object
+     */
+    static StreamUnsubscribedEvent extractStreamUnsubscribedEvent(const core::EventHolder& eventHolder);
 };
 
 } // namespace stream

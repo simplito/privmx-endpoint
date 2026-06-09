@@ -48,6 +48,9 @@ target_link_libraries(test_e2e_KvdbModuleEventsTest privmx privmxendpointcore pr
 # StreamLow
 add_executable(test_e2e_StreamLowTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamLowTest.cpp)
 target_link_libraries(test_e2e_StreamLowTest privmx privmxendpointcore privmxendpointstream Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+# StreamRoom events (no WebRTC required)
+add_executable(test_e2e_StreamRoomEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamRoomEventsTest.cpp)
+target_link_libraries(test_e2e_StreamRoomEventsTest privmx privmxendpointcore privmxendpointstream Poco::Foundation Poco::Util GTest::GTest GTest::Main)
 
 if(PRIVMX_BUILD_WITH_WEBRTC)
     if(PRIVMX_IMPORT_LIBWEBRTC)

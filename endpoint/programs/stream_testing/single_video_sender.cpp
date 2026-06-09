@@ -80,8 +80,8 @@ int main(int argc, char** argv) {
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_DELETE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH,    stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH,  stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
         });
 
         streamApi.joinStreamRoom(streamRoomId);
