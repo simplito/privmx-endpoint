@@ -12,18 +12,17 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_HMACLIST_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_HMACLIST_HPP_
 
-#include <cstdint>
-#include <string>
-#include <optional>
 #include "privmx/endpoint/store/StoreTypes.hpp"
 #include "privmx/endpoint/store/interfaces/IHashList.hpp"
+#include <cstdint>
+#include <optional>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class HmacList : public IHashList
-{
+class HmacList : public IHashList {
 public:
     HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes = std::string());
     virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) override;
@@ -43,8 +42,8 @@ private:
     std::string _hashes;
 };
 
-} // store
-} // endpoint
-} // privmx
+} // namespace store
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_STORE_HMACLIST_HPP_

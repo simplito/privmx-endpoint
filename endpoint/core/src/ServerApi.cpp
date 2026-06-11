@@ -28,7 +28,8 @@ server::ContextListUsersResult ServerApi::contextListUsers(server::ContextListUs
     return request<server::ContextListUsersResult>("contextListUsers", model.toJSON());
 }
 
-template<class T> T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     auto result = _gateway->request("context." + method, params);
     return T::fromJSON(result);
 }

@@ -19,27 +19,24 @@ namespace endpoint {
 namespace inbox {
 
 namespace InboxDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_4 = 4,
-      VERSION_5 = 5
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_4 = 4,
+    VERSION_5 = 5
+};
+} // namespace InboxDataSchema
 constexpr static InboxDataSchema::Version CURRENT_INBOX_DATA_SCHEMA_VERSION = InboxDataSchema::Version::VERSION_5;
 
 namespace EntryDataSchema {
-   enum Version : int64_t {
-      UNKNOWN = 0,
-      VERSION_1 = 1
-   };
-}
+enum Version : int64_t {
+    UNKNOWN = 0,
+    VERSION_1 = 1
+};
+} // namespace EntryDataSchema
 constexpr static EntryDataSchema::Version CURRENT_ENTRY_DATA_SCHEMA_VERSION = EntryDataSchema::Version::VERSION_1;
 
-}  // namespace inbox
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
-
-
-#endif  // #define _PRIVMXLIB_ENDPOINT_INBOX_CONSTANTS_HPP_
-
+#endif // #define _PRIVMXLIB_ENDPOINT_INBOX_CONSTANTS_HPP_

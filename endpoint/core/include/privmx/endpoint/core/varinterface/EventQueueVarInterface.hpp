@@ -23,7 +23,11 @@ namespace core {
 
 class EventQueueVarInterface {
 public:
-    enum METHOD { WaitEvent = 0, GetEvent = 1, EmitBreakEvent = 2 };
+    enum METHOD {
+        WaitEvent = 0,
+        GetEvent = 1,
+        EmitBreakEvent = 2
+    };
 
     EventQueueVarInterface(EventQueue eventQueue, const VarSerializer& serializer)
         : _eventQueue(std::move(eventQueue)), _serializer(serializer) {}
@@ -41,8 +45,8 @@ private:
     VarSerializer _serializer;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_EVENTQUEUEVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_EVENTQUEUEVARINTERFACE_HPP_

@@ -12,9 +12,9 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_PROXYWEBRTC_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_PROXYWEBRTC_HPP_
 
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/stream/Types.hpp"
@@ -25,17 +25,26 @@ namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class ProxyWebRTC : public WebRTCInterface
-{
+class ProxyWebRTC : public WebRTCInterface {
 public:
-    ProxyWebRTC(
-        privmx_endpoint_stream_WebRTCInterface webRTCInterface
-    );
+    ProxyWebRTC(privmx_endpoint_stream_WebRTCInterface webRTCInterface);
     ~ProxyWebRTC() override = default;
     std::string createOfferAndSetLocalDescription(const std::string& streamRoomId) override;
-    std::string createAnswerAndSetDescriptions(const std::string& streamRoomId, const std::string& sdp, const std::string& type) override;
-    void setAnswerAndSetRemoteDescription(const std::string& streamRoomId, const std::string& sdp, const std::string& type) override;
-    void updateSessionId(const std::string& streamRoomId, const int64_t sessionId, const std::string& connectionType) override;
+    std::string createAnswerAndSetDescriptions(
+        const std::string& streamRoomId,
+        const std::string& sdp,
+        const std::string& type
+    ) override;
+    void setAnswerAndSetRemoteDescription(
+        const std::string& streamRoomId,
+        const std::string& sdp,
+        const std::string& type
+    ) override;
+    void updateSessionId(
+        const std::string& streamRoomId,
+        const int64_t sessionId,
+        const std::string& connectionType
+    ) override;
     void close(const std::string& streamRoomId) override;
     void updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) override;
 

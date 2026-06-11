@@ -9,22 +9,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 
 using namespace privmx::endpoint::core;
 
-CollectionItemChange Mapper::mapToCollectionItemChange(
-    const server::CollectionItemChange& data
-) {
-    return {
-        .itemId = data.itemId,
-        .action = data.action
-    };
+CollectionItemChange Mapper::mapToCollectionItemChange(const server::CollectionItemChange& data) {
+    return {.itemId = data.itemId, .action = data.action};
 }
 
 std::vector<CollectionItemChange> Mapper::mapToCollectionItemChanges(
-    const std::vector<server::CollectionItemChange>& data) {
+    const std::vector<server::CollectionItemChange>& data
+) {
     std::vector<CollectionItemChange> result;
     result.reserve(data.size());
     for (auto item : data) {
@@ -34,7 +30,8 @@ std::vector<CollectionItemChange> Mapper::mapToCollectionItemChanges(
 }
 
 CollectionChangedEventData Mapper::mapToCollectionChangedEventData(
-    const std::string& moduleType, const server::CollectionChangedEventData& data
+    const std::string& moduleType,
+    const server::CollectionChangedEventData& data
 ) {
     return {
         .moduleType = moduleType,
@@ -44,21 +41,11 @@ CollectionChangedEventData Mapper::mapToCollectionChangedEventData(
     };
 }
 
-UserWithAction Mapper::mapToUserWithAction(
-    const server::ContextUsersStatusChange& data
-) {
-    return {
-        .user = {
-            .userId = data.userId,
-            .pubKey = data.pubKey
-        },
-        .action = data.action
-    };
+UserWithAction Mapper::mapToUserWithAction(const server::ContextUsersStatusChange& data) {
+    return {.user = {.userId = data.userId, .pubKey = data.pubKey}, .action = data.action};
 }
 
-std::vector<UserWithAction> Mapper::mapToUserWithActions(
-    const std::vector<server::ContextUsersStatusChange>& data
-) {
+std::vector<UserWithAction> Mapper::mapToUserWithActions(const std::vector<server::ContextUsersStatusChange>& data) {
     std::vector<UserWithAction> result;
     result.reserve(data.size());
     for (auto item : data) {
@@ -70,20 +57,9 @@ std::vector<UserWithAction> Mapper::mapToUserWithActions(
 ContextUsersStatusChangedEventData Mapper::mapToContextUsersStatusChangedEventData(
     const server::ContextUsersStatusChangeEventData& data
 ) {
-    return {
-        .contextId = data.contextId,
-        .users = mapToUserWithActions(data.users)
-    };
+    return {.contextId = data.contextId, .users = mapToUserWithActions(data.users)};
 }
 
-ContextUserEventData Mapper::mapToContextUserEventData(
-    const server::ContextUserEventData& data
-) {
-    return {
-        .contextId = data.contextId,
-        .user = {
-            .userId = data.userId,
-            .pubKey = data.pubKey
-        }
-    };
+ContextUserEventData Mapper::mapToContextUserEventData(const server::ContextUserEventData& data) {
+    return {.contextId = data.contextId, .user = {.userId = data.userId, .pubKey = data.pubKey}};
 }

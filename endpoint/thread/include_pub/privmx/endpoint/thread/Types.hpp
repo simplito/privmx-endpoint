@@ -4,7 +4,6 @@
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 
-
 namespace privmx {
 namespace endpoint {
 namespace thread {
@@ -73,7 +72,6 @@ struct Message {
      */
     int64_t schemaVersion;
 };
-
 
 /**
  * Holds all available information about a Thread.
@@ -161,7 +159,7 @@ struct Thread {
     int64_t schemaVersion;
 };
 
-enum EventType: int64_t {
+enum EventType : int64_t {
     THREAD_CREATE = 0,
     THREAD_UPDATE = 1,
     THREAD_DELETE = 2,
@@ -172,14 +170,14 @@ enum EventType: int64_t {
     COLLECTION_CHANGE = 7,
 };
 
-enum EventSelectorType: int64_t {
+enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
     THREAD_ID = 1,
     MESSAGE_ID = 2,
 };
 
-}  // namespace thread
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_THREAD_THREADAPI_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_THREAD_THREADAPI_TYPES_HPP_

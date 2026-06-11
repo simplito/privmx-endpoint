@@ -12,11 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_THREAD_SERVER_API_HPP_
 #define _PRIVMXLIB_ENDPOINT_THREAD_SERVER_API_HPP_
 
-#include <string>
-#include <Poco/Dynamic/Var.h>
-#include <privmx/privfs/gateway/RpcGateway.hpp>
-#include <privmx/endpoint/core/ServerTypes.hpp>
 #include "privmx/endpoint/thread/ServerTypes.hpp"
+#include <Poco/Dynamic/Var.h>
+#include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/privfs/gateway/RpcGateway.hpp>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
@@ -38,6 +38,7 @@ public:
     server::ThreadMessageGetResult threadMessageGet(server::ThreadMessageGetModel model);
     server::ThreadMessagesGetResult threadMessagesGet(server::ThreadMessagesGetModel model);
     void threadMessageUpdate(server::ThreadMessageUpdateModel model);
+
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);
@@ -46,8 +47,8 @@ private:
     privfs::RpcGateway::Ptr _gateway;
 };
 
-} // thread
-} // endpoint
-} // privmx
+} // namespace thread
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_THREAD_SERVER_API_HPP_

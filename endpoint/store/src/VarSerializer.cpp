@@ -17,7 +17,6 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::Store>(const store::Store& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
@@ -78,7 +77,8 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreDeletedEventData>(const 
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreStatsChangedEventData>(
-    const store::StoreStatsChangedEventData& val) {
+    const store::StoreStatsChangedEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "store$StoreStatsChangedEventData");
@@ -92,7 +92,8 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreStatsChangedEventData>(
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEventData>(
-    const store::StoreFileDeletedEventData& val) {
+    const store::StoreFileDeletedEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "store$StoreFileDeletedEventData");
@@ -105,7 +106,8 @@ Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEventData>(
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileUpdatedEventData>(
-    const store::StoreFileUpdatedEventData& val) {
+    const store::StoreFileUpdatedEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "store$StoreFileUpdatedEventData");
@@ -149,7 +151,6 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::StoreFileDeletedEvent>(const store::StoreFileDeletedEvent& val) {
     return serializeBaseWithData<Event>(val, "store$StoreFileDeletedEvent");
 }
-
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<store::ServerFileInfo>(const store::ServerFileInfo& val) {

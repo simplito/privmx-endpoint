@@ -13,14 +13,14 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_USERS_KEYS_RESOLVER_HPP_
 
 #include <algorithm>
-#include <memory>
 #include <map>
-#include <set>
-#include <vector>
-#include <string>
+#include <memory>
+#include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Utils.hpp>
-#include <privmx/endpoint/core/CoreTypes.hpp>
+#include <set>
+#include <string>
+#include <vector>
 
 namespace privmx {
 namespace endpoint {
@@ -30,20 +30,20 @@ class UsersKeysResolver {
 public:
     template<typename ModuleStructAsTypedObj>
     static auto create(
-            ModuleStructAsTypedObj moduleObj,
-            const std::vector<core::UserWithPubKey>& users,
-            const std::vector<core::UserWithPubKey>& managers,
-            const bool forceGenerateNewKey,
-            const DecryptedEncKeyV2& moduleCurrentKey
-    )-> decltype(moduleObj.users, moduleObj.managers, std::shared_ptr<UsersKeysResolver>());
+        ModuleStructAsTypedObj moduleObj,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const bool forceGenerateNewKey,
+        const DecryptedEncKeyV2& moduleCurrentKey
+    ) -> decltype(moduleObj.users, moduleObj.managers, std::shared_ptr<UsersKeysResolver>());
 
     static std::shared_ptr<UsersKeysResolver> create(
-            const std::vector<std::string>& currentUserIds,
-            const std::vector<std::string>& currentManagerIds,
-            const std::vector<core::UserWithPubKey>& users,
-            const std::vector<core::UserWithPubKey>& managers,
-            const bool forceGenerateNewKey,
-            const DecryptedEncKeyV2& moduleCurrentKey
+        const std::vector<std::string>& currentUserIds,
+        const std::vector<std::string>& currentManagerIds,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const bool forceGenerateNewKey,
+        const DecryptedEncKeyV2& moduleCurrentKey
     );
 
     std::vector<core::UserWithPubKey> getUsersToAddKey();
@@ -53,20 +53,20 @@ public:
 private:
     template<typename ModuleStructAsTypedObj>
     auto init(
-            ModuleStructAsTypedObj moduleObj,
-            const std::vector<core::UserWithPubKey>& users,
-            const std::vector<core::UserWithPubKey>& managers,
-            const bool forceGenerateNewKey,
-            const DecryptedEncKeyV2& moduleCurrentKey
-    )-> decltype(moduleObj.users, moduleObj.managers, void());
+        ModuleStructAsTypedObj moduleObj,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const bool forceGenerateNewKey,
+        const DecryptedEncKeyV2& moduleCurrentKey
+    ) -> decltype(moduleObj.users, moduleObj.managers, void());
 
     void init(
-            const std::vector<std::string>& currentUserIds,
-            const std::vector<std::string>& currentManagerIds,
-            const std::vector<core::UserWithPubKey>& users,
-            const std::vector<core::UserWithPubKey>& managers,
-            const bool forceGenerateNewKey,
-            const DecryptedEncKeyV2& moduleCurrentKey
+        const std::vector<std::string>& currentUserIds,
+        const std::vector<std::string>& currentManagerIds,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const bool forceGenerateNewKey,
+        const DecryptedEncKeyV2& moduleCurrentKey
     );
 
     std::vector<core::UserWithPubKey> _usersToAddMissingKey;
@@ -77,12 +77,12 @@ private:
 
 template<typename ModuleStructAsTypedObj>
 auto UsersKeysResolver::create(
-        ModuleStructAsTypedObj moduleObj,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const bool forceGenerateNewKey,
-        const DecryptedEncKeyV2& moduleCurrentKey
-)-> decltype(moduleObj.users, moduleObj.managers, std::shared_ptr<UsersKeysResolver>()) {
+    ModuleStructAsTypedObj moduleObj,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const bool forceGenerateNewKey,
+    const DecryptedEncKeyV2& moduleCurrentKey
+) -> decltype(moduleObj.users, moduleObj.managers, std::shared_ptr<UsersKeysResolver>()) {
     auto instance = std::make_shared<UsersKeysResolver>();
     instance->init(moduleObj, users, managers, forceGenerateNewKey, moduleCurrentKey);
     return instance;
@@ -95,23 +95,23 @@ auto UsersKeysResolver::init(
     const std::vector<core::UserWithPubKey>& managers,
     const bool forceGenerateNewKey,
     const DecryptedEncKeyV2& moduleCurrentKey
-)-> decltype(moduleObj.users, moduleObj.managers, void()) {
-    auto usersVec {std::vector<std::string>(moduleObj.users.begin(), moduleObj.users.end())};
-    auto managersVec {std::vector<std::string>(moduleObj.managers.begin(), moduleObj.managers.end())};
-    auto oldUsersIds {core::EndpointUtils::uniqueList(usersVec, managersVec)};
+) -> decltype(moduleObj.users, moduleObj.managers, void()) {
+    auto usersVec{std::vector<std::string>(moduleObj.users.begin(), moduleObj.users.end())};
+    auto managersVec{std::vector<std::string>(moduleObj.managers.begin(), moduleObj.managers.end())};
+    auto oldUsersIds{core::EndpointUtils::uniqueList(usersVec, managersVec)};
 
     _new_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    auto newUsersIds {core::EndpointUtils::usersWithPubKeyToIds(_new_users)};
-    auto deletedUsersIds {core::EndpointUtils::getDifference(oldUsersIds, newUsersIds)};
-    auto addedUsersIds {core::EndpointUtils::getDifference(newUsersIds, oldUsersIds)};
+    auto newUsersIds{core::EndpointUtils::usersWithPubKeyToIds(_new_users)};
+    auto deletedUsersIds{core::EndpointUtils::getDifference(oldUsersIds, newUsersIds)};
+    auto addedUsersIds{core::EndpointUtils::getDifference(newUsersIds, oldUsersIds)};
 
     // adjust key
-    if(moduleCurrentKey.dataStructureVersion < 2) {
+    if (moduleCurrentKey.dataStructureVersion < 2) {
         //force update all keys if thread keys is in older version
         _usersToAddMissingKey = _new_users;
     } else {
-        for(auto new_user: _new_users) {
-            if( std::find(addedUsersIds.begin(), addedUsersIds.end(), new_user.userId) != addedUsersIds.end()) {
+        for (auto new_user : _new_users) {
+            if (std::find(addedUsersIds.begin(), addedUsersIds.end(), new_user.userId) != addedUsersIds.end()) {
                 _usersToAddMissingKey.push_back(new_user);
             }
         }
@@ -119,8 +119,8 @@ auto UsersKeysResolver::init(
     _needNewKey = deletedUsersIds.size() > 0 || forceGenerateNewKey;
 }
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_USERS_KEYS_RESOLVER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_USERS_KEYS_RESOLVER_HPP_

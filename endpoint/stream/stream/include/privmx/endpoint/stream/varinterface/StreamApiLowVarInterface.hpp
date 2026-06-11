@@ -16,9 +16,9 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamVarSerializer.hpp"
+#include <mutex>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/stream/StreamVarDeserializer.hpp>
-#include <mutex>
 #include <shared_mutex>
 namespace privmx {
 namespace endpoint {
@@ -98,6 +98,7 @@ public:
     std::shared_ptr<WebRTCInterface> getWebRtcInterface();
     void setWebRtcInterface(std::shared_ptr<WebRTCInterface> webRtcInterface);
     int64_t getWebRtcInterfaceRawPtr();
+
 private:
     static std::map<METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
@@ -109,8 +110,8 @@ private:
     std::shared_mutex _mutex;
 };
 
-}  // namespace stream
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWVARINTERFACE_HPP_

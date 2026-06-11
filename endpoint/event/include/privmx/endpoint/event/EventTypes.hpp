@@ -16,6 +16,7 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/Buffer.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -26,8 +27,8 @@ struct InternalContextEventDataV1 {
     privmx::endpoint::core::Buffer data;
 };
 
-struct DecryptedInternalContextEventDataV1 :  public InternalContextEventDataV1, public core::DecryptedVersionedData {};
-struct DecryptedContextEventDataV1 :  public core::DecryptedVersionedData {
+struct DecryptedInternalContextEventDataV1 : public InternalContextEventDataV1, public core::DecryptedVersionedData {};
+struct DecryptedContextEventDataV1 : public core::DecryptedVersionedData {
     privmx::endpoint::core::Buffer data;
 };
 
@@ -49,8 +50,8 @@ struct ContextEventDataV5 {
 struct ContextEventDataToEncryptV5 : public ContextEventDataV5 {};
 struct DecryptedEventDataV5 : public ContextEventDataV5, public core::DecryptedVersionedData {};
 
-}  // namespace event
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace event
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_EVENT_EVENTTYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_EVENT_EVENTTYPES_HPP_

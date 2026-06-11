@@ -18,9 +18,11 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 std::map<EventQueueVarInterface::METHOD, Poco::Dynamic::Var (EventQueueVarInterface::*)(const Poco::Dynamic::Var&)>
-    EventQueueVarInterface::methodMap = {{WaitEvent, &EventQueueVarInterface::waitEvent},
-                                         {GetEvent, &EventQueueVarInterface::getEvent},
-                                         {EmitBreakEvent, &EventQueueVarInterface::emitBreakEvent}};
+    EventQueueVarInterface::methodMap = {
+        {WaitEvent, &EventQueueVarInterface::waitEvent},
+        {GetEvent, &EventQueueVarInterface::getEvent},
+        {EmitBreakEvent, &EventQueueVarInterface::emitBreakEvent}
+};
 
 Poco::Dynamic::Var EventQueueVarInterface::waitEvent(const Poco::Dynamic::Var& args) {
     VarInterfaceUtil::validateAndExtractArray(args, 0);

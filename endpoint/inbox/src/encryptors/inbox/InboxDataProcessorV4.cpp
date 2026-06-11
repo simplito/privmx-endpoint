@@ -11,33 +11,37 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataProcessorV4.hpp"
 
-#include "privmx/endpoint/inbox/InboxException.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
+#include "privmx/endpoint/inbox/InboxException.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
 
-server::InboxData InboxDataProcessorV4::packForServer(const InboxDataProcessorModelV4& plainData,
-                                                               const crypto::PrivateKey& authorPrivateKey,
-                                                               const std::string& inboxKey) {
+server::InboxData InboxDataProcessorV4::packForServer(
+    const InboxDataProcessorModelV4& plainData,
+    const crypto::PrivateKey& authorPrivateKey,
+    const std::string& inboxKey
+) {
     server::PublicDataV4 serverPublicData;
     serverPublicData.version = InboxDataSchema::Version::VERSION_4;
     serverPublicData.publicMeta = _dataEncryptor.signAndEncode(plainData.publicData.publicMeta, authorPrivateKey);
     try {
         serverPublicData.publicMetaObject = utils::Utils::parseJsonObject(plainData.publicData.publicMeta.stdString());
-    } catch (...) {
-        serverPublicData.publicMetaObject = Poco::Dynamic::Var();
-    }
-    auto authorPubKeyECC {authorPrivateKey.getPublicKey().toBase58DER()};
+    } catch (...) { serverPublicData.publicMetaObject = Poco::Dynamic::Var(); }
+    auto authorPubKeyECC{authorPrivateKey.getPublicKey().toBase58DER()};
     serverPublicData.authorPubKey = authorPubKeyECC;
     serverPublicData.inboxPubKey = plainData.publicData.inboxEntriesPubKeyBase58DER;
     serverPublicData.inboxKeyId = plainData.publicData.inboxEntriesKeyId;
 
     server::PrivateDataV4 serverPrivateData;
     serverPrivateData.version = InboxDataSchema::Version::VERSION_4;
-    serverPrivateData.privateMeta = _dataEncryptor.signAndEncryptAndEncode(plainData.privateData.privateMeta, authorPrivateKey, inboxKey);
+    serverPrivateData.privateMeta = _dataEncryptor.signAndEncryptAndEncode(
+        plainData.privateData.privateMeta, authorPrivateKey, inboxKey
+    );
     if (plainData.privateData.internalMeta.has_value()) {
-        serverPrivateData.internalMeta = _dataEncryptor.signAndEncryptAndEncode(plainData.privateData.internalMeta.value(), authorPrivateKey, inboxKey);
+        serverPrivateData.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
+            plainData.privateData.internalMeta.value(), authorPrivateKey, inboxKey
+        );
     }
     serverPrivateData.authorPubKey = authorPubKeyECC;
 
@@ -98,14 +102,14 @@ InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 
 InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
-    const server::InboxData& encryptedData, const std::string& inboxKey) {
+    const server::InboxData& encryptedData,
+    const std::string& inboxKey
+) {
 
     InboxPrivateDataV4AsResult result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_4;
@@ -115,19 +119,21 @@ InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
         auto privateDataV4 = server::PrivateDataV4::fromJSON(encryptedData.meta);
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV4.authorPubKey);
 
-        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(privateDataV4.privateMeta, authorPublicKeyECC, inboxKey);
+        result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
+            privateDataV4.privateMeta, authorPublicKeyECC, inboxKey
+        );
         result.internalMeta = !privateDataV4.internalMeta.has_value() ?
             std::nullopt :
-            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(privateDataV4.internalMeta.value(), authorPublicKeyECC, inboxKey));
+            std::make_optional(_dataEncryptor.decodeAndDecryptAndVerify(
+                privateDataV4.internalMeta.value(), authorPublicKeyECC, inboxKey
+            ));
         result.authorPubKey = privateDataV4.authorPubKey;
 
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
         result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
 

@@ -37,10 +37,8 @@ public:
         BuildSubscriptionQuery = 9,
         ListContextUsers = 10,
     };
-    
 
-    ConnectionVarInterface(const core::VarSerializer& serializer)
-        : _serializer(serializer) {}
+    ConnectionVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
 
     Poco::Dynamic::Var connect(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var connectPublic(const Poco::Dynamic::Var& args);
@@ -48,7 +46,9 @@ public:
     Poco::Dynamic::Var listContexts(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var disconnect(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listContextUsers(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var setUserVerifier(const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback);
+    Poco::Dynamic::Var setUserVerifier(
+        const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback
+    );
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
@@ -65,8 +65,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONVARINTERFACE_HPP_

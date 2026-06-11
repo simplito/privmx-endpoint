@@ -14,14 +14,8 @@ limitations under the License.
 
 using namespace privmx::endpoint::store;
 
-FileReader::FileReader(
-    std::shared_ptr<IChunkReader> chunkReader,
-    const store::FileDecryptionParams& decryptionParams
-) 
-    : _chunkReader(chunkReader),
-    _plainfileSize(decryptionParams.originalSize),
-    _version(decryptionParams.version)
-{}
+FileReader::FileReader(std::shared_ptr<IChunkReader> chunkReader, const store::FileDecryptionParams& decryptionParams)
+    : _chunkReader(chunkReader), _plainfileSize(decryptionParams.originalSize), _version(decryptionParams.version) {}
 
 void FileReader::sync(const store::FileDecryptionParams& newParms) {
     _plainfileSize = newParms.originalSize;
@@ -29,13 +23,16 @@ void FileReader::sync(const store::FileDecryptionParams& newParms) {
 }
 
 std::string FileReader::read(uint64_t pos, uint64_t length) {
-    if(pos >= _plainfileSize) return std::string();
-    if(pos+length > _plainfileSize) length = _plainfileSize-pos;
-    if(length == 0) return std::string();
+    if (pos >= _plainfileSize)
+        return std::string();
+    if (pos + length > _plainfileSize)
+        length = _plainfileSize - pos;
+    if (length == 0)
+        return std::string();
     auto startIndex = _chunkReader->filePosToFileChunkIndex(pos);
-    auto stopIndex = _chunkReader->filePosToFileChunkIndex(pos+length-1);
+    auto stopIndex = _chunkReader->filePosToFileChunkIndex(pos + length - 1);
     std::string data = std::string();
-    for(auto i = startIndex; i <= stopIndex; i++) {
+    for (auto i = startIndex; i <= stopIndex; i++) {
         data.append(_chunkReader->getDecryptedChunk(i));
     }
     return data.substr(_chunkReader->filePosToPosInFileChunk(pos), length);

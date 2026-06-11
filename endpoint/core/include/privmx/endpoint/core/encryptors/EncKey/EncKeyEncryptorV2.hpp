@@ -24,17 +24,23 @@ namespace core {
 
 class EncKeyEncryptorV2 {
 public:
-    server::EncryptedKeyEntryDataV2 encrypt(const EncKeyV2ToEncrypt& key, 
-        const privmx::crypto::PublicKey& encryptionKey, const crypto::PrivateKey& authorPrivateKey);
-    DecryptedEncKeyV2 decrypt(const server::EncryptedKeyEntryDataV2& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey);
+    server::EncryptedKeyEntryDataV2 encrypt(
+        const EncKeyV2ToEncrypt& key,
+        const privmx::crypto::PublicKey& encryptionKey,
+        const crypto::PrivateKey& authorPrivateKey
+    );
+    DecryptedEncKeyV2 decrypt(
+        const server::EncryptedKeyEntryDataV2& encryptedEncKey,
+        const privmx::crypto::PrivateKey& decryptionKey
+    );
 
 private:
     void assertDataFormat(const server::EncryptedKeyEntryDataV2& encryptedEncKey);
     DIOEncryptorV1 _DIOEncryptor;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_ENCKEYENCRYPTOR_V2_HPP
+#endif // _PRIVMXLIB_ENDPOINT_CORE_ENCKEYENCRYPTOR_V2_HPP

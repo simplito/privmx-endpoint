@@ -12,14 +12,14 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_TYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_TYPES_HPP_
 
-#include <string>
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
+#include <string>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
-    
+
 // Version 4 (deprecated)
 
 struct ModuleDataToEncryptV4 {
@@ -35,7 +35,7 @@ struct DecryptedModuleDataV4 : public core::DecryptedVersionedData {
     std::string authorPubKey;
 };
 
-// Version 5 
+// Version 5
 struct ModuleInternalMetaV5 {
     std::string secret;
     std::string resourceId;
@@ -57,8 +57,8 @@ struct DecryptedModuleDataV5 : public core::DecryptedVersionedData {
     core::DataIntegrityObject dio;
 };
 
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_TYPES_HPP_

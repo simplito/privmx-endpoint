@@ -12,10 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_EVENT_QUEUE_IMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_EVENT_QUEUE_IMPL_HPP_
 
+#include <Poco/JSON/Object.h>
 #include <atomic>
 #include <functional>
 #include <vector>
-#include <Poco/JSON/Object.h>
 
 #include <Poco/Notification.h>
 #include <Poco/NotificationQueue.h>
@@ -27,32 +27,29 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-class EventQueueImpl
-{
+class EventQueueImpl {
 public:
     static std::shared_ptr<EventQueueImpl> getInstance();
     static void freeInstance();
-    EventQueueImpl(const EventQueueImpl& obj) = delete; 
-    void operator=(const EventQueueImpl &) = delete;
+    EventQueueImpl(const EventQueueImpl& obj) = delete;
+    void operator=(const EventQueueImpl&) = delete;
 
     void emit(const std::shared_ptr<Event>& event);
     void emitBreakEvent();
     EventHolder waitEvent();
     std::optional<EventHolder> getEvent();
     void clear();
+
 protected:
     EventQueueImpl() {};
 
 private:
     static std::shared_ptr<EventQueueImpl> impl;
 
-    class Notification : public Poco::Notification
-    {
+    class Notification : public Poco::Notification {
     public:
         Notification(const std::shared_ptr<Event>& data) : _data(data) {}
-        std::shared_ptr<Event> data() const {
-            return _data;
-        }
+        std::shared_ptr<Event> data() const { return _data; }
 
     private:
         std::shared_ptr<Event> _data;
@@ -60,10 +57,8 @@ private:
     Poco::NotificationQueue _queue;
 };
 
-
-
-} // core
-} // endpoint
-} // privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_CORE_EVENT_QUEUE_IMPL_HPP_

@@ -4,7 +4,6 @@
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 
-
 namespace privmx {
 namespace endpoint {
 namespace kvdb {
@@ -95,7 +94,6 @@ struct Kvdb {
     int64_t schemaVersion;
 };
 
-
 /**
  * Holds Kvdb entry's information created by the server
  */
@@ -167,7 +165,7 @@ struct KvdbEntry {
     int64_t schemaVersion;
 };
 
-enum EventType: int64_t {
+enum EventType : int64_t {
     KVDB_CREATE = 0,
     KVDB_UPDATE = 1,
     KVDB_DELETE = 2,
@@ -178,13 +176,13 @@ enum EventType: int64_t {
     COLLECTION_CHANGE = 7,
 };
 
-enum EventSelectorType: int64_t {
+enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
     KVDB_ID = 1
 };
 
-}  // namespace kvdb
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace kvdb
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_TYPES_HPP_

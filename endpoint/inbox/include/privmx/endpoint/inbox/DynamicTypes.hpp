@@ -21,15 +21,15 @@ namespace endpoint {
 namespace inbox {
 namespace dynamic {
 
-#define INBOX_INTERNAL_META_V5_FIELDS(F)\
-    F(secret, std::string)\
-    F(resourceId, std::string)\
+#define INBOX_INTERNAL_META_V5_FIELDS(F)                                                                               \
+    F(secret, std::string)                                                                                             \
+    F(resourceId, std::string)                                                                                         \
     F(randomId, std::string)
 JSON_STRUCT(InboxInternalMetaV5, INBOX_INTERNAL_META_V5_FIELDS);
 
-} // dynamic
-} // inbox
-} // endpoint
-} // privmx
+} // namespace dynamic
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_DYNAMICTYPES_HPP_

@@ -12,20 +12,22 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_SUBSCRIBERIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_SUBSCRIBERIMPL_HPP_
 
-#include <privmx/endpoint/core/Subscriber.hpp>
 #include "privmx/endpoint/stream/Types.hpp"
+#include <privmx/endpoint/core/Subscriber.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class SubscriberImpl : public privmx::endpoint::core::Subscriber
-{
+class SubscriberImpl : public privmx::endpoint::core::Subscriber {
 public:
-    
-    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway, std::string typeFilterFlag) : Subscriber(gateway), _typeFilterFlag(typeFilterFlag) {}
+    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway, std::string typeFilterFlag)
+        : Subscriber(gateway), _typeFilterFlag(typeFilterFlag) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
-    static std::string getInternalEventsSubscriptionQuery(const std::optional<std::string>& streamRoomId = std::nullopt);
+    static std::string getInternalEventsSubscriptionQuery(
+        const std::optional<std::string>& streamRoomId = std::nullopt
+    );
+
 private:
     virtual std::vector<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
@@ -43,9 +45,8 @@ private:
     constexpr static size_t MODULE_NAME_IN_QUERY_PATH = 0;
 };
 
-} // stream
-} // endpoint
-} // privmx
+} // namespace stream
+} // namespace endpoint
+} // namespace privmx
 
-
-#endif  // _PRIVMXLIB_ENDPOINT_STREAM_SUBSCRIBERIMPL_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_STREAM_SUBSCRIBERIMPL_HPP_

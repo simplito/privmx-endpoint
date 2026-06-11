@@ -52,7 +52,10 @@ bool VarDeserializer::deserialize<bool>(const Poco::Dynamic::Var& val, const std
 }
 
 template<>
-Poco::JSON::Object::Ptr VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& val, const std::string& name) {
+Poco::JSON::Object::Ptr VarDeserializer::deserialize<Poco::JSON::Object::Ptr>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
     TypeValidator::validateObject(val, name);
     return val.extract<Poco::JSON::Object::Ptr>();
 }
@@ -63,26 +66,31 @@ template<>
 UserWithPubKey VarDeserializer::deserialize<UserWithPubKey>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    return {.userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
-            .pubKey = deserialize<std::string>(obj->get("pubKey"), name + ".pubKey")};
+    return {
+        .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
+        .pubKey = deserialize<std::string>(obj->get("pubKey"), name + ".pubKey")
+    };
 }
 
 template<>
 PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    return {.skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),
-            .limit = deserialize<int64_t>(obj->get("limit"), name + ".limit"),
-            .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
-            .lastId = deserializeOptional<std::string>(obj->get("lastId"), name + ".lastId"),
-            .sortBy = deserializeOptional<std::string>(obj->get("sortBy"), name + ".sortBy"),
-            .queryAsJson = deserializeOptional<std::string>(obj->get("queryAsJson"), name + ".queryAsJson")
+    return {
+        .skip = deserialize<int64_t>(obj->get("skip"), name + ".skip"),
+        .limit = deserialize<int64_t>(obj->get("limit"), name + ".limit"),
+        .sortOrder = deserialize<std::string>(obj->get("sortOrder"), name + ".sortOrder"),
+        .lastId = deserializeOptional<std::string>(obj->get("lastId"), name + ".lastId"),
+        .sortBy = deserializeOptional<std::string>(obj->get("sortBy"), name + ".sortBy"),
+        .queryAsJson = deserializeOptional<std::string>(obj->get("queryAsJson"), name + ".queryAsJson")
     };
 }
 
-
 template<>
-ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutItem>(const Poco::Dynamic::Var& val, const std::string& name) {
+ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutItem>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {
@@ -90,8 +98,12 @@ ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutIt
         .update = deserializeOptional<std::string>(obj->get("update"), name + ".update"),
         .delete_ = deserializeOptional<std::string>(obj->get("delete_"), name + ".delete_"),
         .updatePolicy = deserializeOptional<std::string>(obj->get("updatePolicy"), name + ".updatePolicy"),
-        .updaterCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("updaterCanBeRemovedFromManagers"), name + ".updaterCanBeRemovedFromManagers"),
-        .ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"),
+        .updaterCanBeRemovedFromManagers = deserializeOptional<std::string>(
+            obj->get("updaterCanBeRemovedFromManagers"), name + ".updaterCanBeRemovedFromManagers"
+        ),
+        .ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(
+            obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"
+        ),
     };
 }
 
@@ -113,46 +125,62 @@ template<>
 ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    ContainerPolicy result {};
+    ContainerPolicy result{};
     result.get = deserializeOptional<std::string>(obj->get("get"), name + ".get");
     result.update = deserializeOptional<std::string>(obj->get("update"), name + ".update");
     result.delete_ = deserializeOptional<std::string>(obj->get("delete_"), name + ".delete_");
     result.updatePolicy = deserializeOptional<std::string>(obj->get("updatePolicy"), name + ".updatePolicy");
-    result.updaterCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("updaterCanBeRemovedFromManagers"), name + ".updaterCanBeRemovedFromManagers");
-    result.ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers");
+    result.updaterCanBeRemovedFromManagers = deserializeOptional<std::string>(
+        obj->get("updaterCanBeRemovedFromManagers"), name + ".updaterCanBeRemovedFromManagers"
+    );
+    result.ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(
+        obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"
+    );
     result.item = deserializeOptional<ItemPolicy>(obj->get("item"), name + ".item");
     return result;
 }
 
 template<>
-PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(const Poco::Dynamic::Var& val, const std::string& name) {
+PKIVerificationOptions VarDeserializer::deserialize<PKIVerificationOptions>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    PKIVerificationOptions result {};
+    PKIVerificationOptions result{};
     result.bridgePubKey = deserializeOptional<std::string>(obj->get("bridgePubKey"), name + ".bridgePubKey");
-    result.bridgeInstanceId = deserializeOptional<std::string>(obj->get("bridgeInstanceId"), name + ".bridgeInstanceId");
+    result.bridgeInstanceId = deserializeOptional<std::string>(
+        obj->get("bridgeInstanceId"), name + ".bridgeInstanceId"
+    );
     return result;
 }
 
 template<>
 EventType VarDeserializer::deserialize<EventType>(const Poco::Dynamic::Var& val, const std::string& name) {
     switch (val.convert<int64_t>()) {
-        case core::EventType::USER_ADD:
-            return core::EventType::USER_ADD;
-        case core::EventType::USER_REMOVE:
-            return core::EventType::USER_REMOVE;
-        case core::EventType::USER_STATUS:
-            return core::EventType::USER_STATUS;
+    case core::EventType::USER_ADD:
+        return core::EventType::USER_ADD;
+    case core::EventType::USER_REMOVE:
+        return core::EventType::USER_REMOVE;
+    case core::EventType::USER_STATUS:
+        return core::EventType::USER_STATUS;
     }
-    throw InvalidParamsException(name + " | " + ("Unknown thread::EventType value, received " + std::to_string(val.convert<int64_t>())));
+    throw InvalidParamsException(
+        name + " | " + ("Unknown thread::EventType value, received " + std::to_string(val.convert<int64_t>()))
+    );
 }
 
 template<>
-EventSelectorType VarDeserializer::deserialize<EventSelectorType>(const Poco::Dynamic::Var& val, const std::string& name) {
+EventSelectorType VarDeserializer::deserialize<EventSelectorType>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
 
     switch (val.convert<int64_t>()) {
-        case core::EventSelectorType::CONTEXT_ID:
-            return core::EventSelectorType::CONTEXT_ID;
+    case core::EventSelectorType::CONTEXT_ID:
+        return core::EventSelectorType::CONTEXT_ID;
     }
-    throw InvalidParamsException(name + " | " + ("Unknown thread::EventSelectorType value, received " + std::to_string(val.convert<int64_t>())));
+    throw InvalidParamsException(
+        name + " | " + ("Unknown thread::EventSelectorType value, received " + std::to_string(val.convert<int64_t>()))
+    );
 }

@@ -9,12 +9,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/endpoint/core/EventVarSerializer.hpp>
 
-#include "privmx/endpoint/event/Events.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
+#include "privmx/endpoint/event/Events.hpp"
 #include "privmx/endpoint/event/VarSerializer.hpp"
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
@@ -24,7 +24,9 @@ std::string ContextCustomEvent::toJSON() const {
 }
 
 std::shared_ptr<core::SerializedEvent> ContextCustomEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)});
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
 }
 
 bool Events::isContextCustomEvent(const core::EventHolder& handler) {
@@ -43,5 +45,3 @@ ContextCustomEvent Events::extractContextCustomEvent(const core::EventHolder& ha
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
-
-

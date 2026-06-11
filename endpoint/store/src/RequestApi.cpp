@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/utils/JsonHelper.hpp>
 #include "privmx/endpoint/store/RequestApi.hpp"
+#include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::store;
 
@@ -28,7 +28,8 @@ void RequestApi::commitFile(const server::CommitFileModel& model) {
     requestVoid("commitFile", model.toJSON());
 }
 
-template<class T> T RequestApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
+template<class T>
+T RequestApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("request." + method, params));
 }
 

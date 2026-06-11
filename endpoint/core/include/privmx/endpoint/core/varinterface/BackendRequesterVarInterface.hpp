@@ -28,12 +28,12 @@ public:
         BackendRequest = 0
     };
 
-    BackendRequesterVarInterface(const core::VarSerializer& serializer)
-        : _serializer(serializer) {}
+    BackendRequesterVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
 
     Poco::Dynamic::Var backendRequest(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
+
 private:
     static std::map<METHOD, Poco::Dynamic::Var (BackendRequesterVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
@@ -41,8 +41,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTERVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTERVARINTERFACE_HPP_

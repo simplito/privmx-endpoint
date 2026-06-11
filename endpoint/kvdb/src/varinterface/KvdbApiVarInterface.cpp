@@ -18,23 +18,25 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
 std::map<KvdbApiVarInterface::METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    KvdbApiVarInterface::methodMap = {{Create, &KvdbApiVarInterface::create},
-                                        {CreateKvdb, &KvdbApiVarInterface::createKvdb},
-                                        {UpdateKvdb, &KvdbApiVarInterface::updateKvdb},
-                                        {DeleteKvdb, &KvdbApiVarInterface::deleteKvdb},
-                                        {GetKvdb, &KvdbApiVarInterface::getKvdb},
-                                        {ListKvdbs, &KvdbApiVarInterface::listKvdbs},
-                                        {GetEntry, &KvdbApiVarInterface::getEntry},
-                                        {ListEntriesKeys, &KvdbApiVarInterface::listEntriesKeys},
-                                        {ListEntries, &KvdbApiVarInterface::listEntries},
-                                        {SetEntry, &KvdbApiVarInterface::setEntry},
-                                        {DeleteEntry, &KvdbApiVarInterface::deleteEntry},
-                                        {DeleteEntries, &KvdbApiVarInterface::deleteEntries},
-                                        {HasEntry, &KvdbApiVarInterface::hasEntry},
-                                        {SubscribeFor, &KvdbApiVarInterface::subscribeFor},
-                                        {UnsubscribeFrom, &KvdbApiVarInterface::unsubscribeFrom},
-                                        {BuildSubscriptionQuery, &KvdbApiVarInterface::buildSubscriptionQuery},
-                                        {BuildSubscriptionQueryForSelectedEntry, &KvdbApiVarInterface::buildSubscriptionQueryForSelectedEntry}};
+    KvdbApiVarInterface::methodMap = {
+        {Create, &KvdbApiVarInterface::create},
+        {CreateKvdb, &KvdbApiVarInterface::createKvdb},
+        {UpdateKvdb, &KvdbApiVarInterface::updateKvdb},
+        {DeleteKvdb, &KvdbApiVarInterface::deleteKvdb},
+        {GetKvdb, &KvdbApiVarInterface::getKvdb},
+        {ListKvdbs, &KvdbApiVarInterface::listKvdbs},
+        {GetEntry, &KvdbApiVarInterface::getEntry},
+        {ListEntriesKeys, &KvdbApiVarInterface::listEntriesKeys},
+        {ListEntries, &KvdbApiVarInterface::listEntries},
+        {SetEntry, &KvdbApiVarInterface::setEntry},
+        {DeleteEntry, &KvdbApiVarInterface::deleteEntry},
+        {DeleteEntries, &KvdbApiVarInterface::deleteEntries},
+        {HasEntry, &KvdbApiVarInterface::hasEntry},
+        {SubscribeFor, &KvdbApiVarInterface::subscribeFor},
+        {UnsubscribeFrom, &KvdbApiVarInterface::unsubscribeFrom},
+        {BuildSubscriptionQuery, &KvdbApiVarInterface::buildSubscriptionQuery},
+        {BuildSubscriptionQueryForSelectedEntry, &KvdbApiVarInterface::buildSubscriptionQueryForSelectedEntry}
+};
 
 Poco::Dynamic::Var KvdbApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -65,7 +67,9 @@ Poco::Dynamic::Var KvdbApiVarInterface::updateKvdb(const Poco::Dynamic::Var& arg
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
-    _kvdbApi.updateKvdb(kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+    _kvdbApi.updateKvdb(
+        kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+    );
     return {};
 }
 
@@ -123,7 +127,7 @@ Poco::Dynamic::Var KvdbApiVarInterface::setEntry(const Poco::Dynamic::Var& args)
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "privateMeta");
     auto data = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "data");
     int64_t version = 0;
-    if(argsArr->size() >= 6) {
+    if (argsArr->size() >= 6) {
         version = _deserializer.deserialize<int64_t>(argsArr->get(5), "version");
     }
     _kvdbApi.setEntry(kvdbId, key, publicMeta, privateMeta, data, version);
@@ -137,7 +141,6 @@ Poco::Dynamic::Var KvdbApiVarInterface::deleteEntry(const Poco::Dynamic::Var& ar
     _kvdbApi.deleteEntry(kvdbId, key);
     return {};
 }
-
 
 Poco::Dynamic::Var KvdbApiVarInterface::deleteEntries(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);

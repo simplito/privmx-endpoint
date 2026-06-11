@@ -10,33 +10,37 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/EndpointUtils.hpp"
-#include <privmx/utils/Utils.hpp>
-#include <privmx/crypto/Crypto.hpp>
 #include <Poco/UUID.h>
 #include <Poco/UUIDGenerator.h>
-
+#include <privmx/crypto/Crypto.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
 
-std::vector<privmx::endpoint::core::UserWithPubKey> EndpointUtils::uniqueListUserWithPubKey(const std::vector<core::UserWithPubKey>& list1, const std::vector<core::UserWithPubKey>& list2) {
+std::vector<privmx::endpoint::core::UserWithPubKey> EndpointUtils::uniqueListUserWithPubKey(
+    const std::vector<core::UserWithPubKey>& list1,
+    const std::vector<core::UserWithPubKey>& list2
+) {
     std::map<std::string, core::UserWithPubKey> map;
-    for(const auto &a : list1) {
-        map[a.userId+a.pubKey] = a;
+    for (const auto& a : list1) {
+        map[a.userId + a.pubKey] = a;
     }
-    for(const auto &a : list2) {
-        map[a.userId+a.pubKey] = a;
+    for (const auto& a : list2) {
+        map[a.userId + a.pubKey] = a;
     }
     std::vector<core::UserWithPubKey> unique_list;
-    for(const auto &a : map) {
+    for (const auto& a : map) {
         unique_list.push_back(a.second);
     }
     return unique_list;
 }
 
-
-std::vector<std::string> EndpointUtils::getDifference(const std::vector<std::string>& baseList, const std::vector<std::string>& subList) {
-    auto vec1 {baseList};
-    auto vec2 {subList};
+std::vector<std::string> EndpointUtils::getDifference(
+    const std::vector<std::string>& baseList,
+    const std::vector<std::string>& subList
+) {
+    auto vec1{baseList};
+    auto vec2{subList};
     std::sort(vec1.begin(), vec1.end());
     std::sort(vec2.begin(), vec2.end());
     std::vector<std::string> diff{};
@@ -53,13 +57,16 @@ std::vector<std::string> EndpointUtils::getDifference(const std::vector<std::str
     return diff;
 }
 
-std::vector<std::string> EndpointUtils::uniqueList(const std::vector<std::string> &list1, const std::vector<std::string> &list2) {
+std::vector<std::string> EndpointUtils::uniqueList(
+    const std::vector<std::string>& list1,
+    const std::vector<std::string>& list2
+) {
     std::set<std::string> input{};
     std::vector<std::string> output;
-    for (auto & x : list1) {
+    for (auto& x : list1) {
         input.insert(x);
     }
-    for (auto & x : list2) {
+    for (auto& x : list2) {
         input.insert(x);
     }
     std::copy(input.begin(), input.end(), std::back_inserter(output));
@@ -68,14 +75,14 @@ std::vector<std::string> EndpointUtils::uniqueList(const std::vector<std::string
 
 std::vector<std::string> EndpointUtils::usersWithPubKeyToIds(std::vector<core::UserWithPubKey>& users) {
     std::vector<std::string> ids{};
-    for (auto & user : users) {
+    for (auto& user : users) {
         ids.push_back(user.userId);
     }
     return ids;
 }
 
 std::string EndpointUtils::generateId() {
-   return Poco::UUIDGenerator().createRandom().toString();
+    return Poco::UUIDGenerator().createRandom().toString();
 }
 
 std::string EndpointUtils::generateDIORandomId() {

@@ -13,14 +13,15 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXTYPES_HPP_
 
 #include <string>
+#include <vector>
 
-#include "privmx/endpoint/inbox/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
+#include "privmx/endpoint/inbox/ServerTypes.hpp"
+#include "privmx/endpoint/inbox/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
-
 
 struct InboxPublicViewData : public core::DecryptedVersionedData {
     std::string authorPubKey;
@@ -113,8 +114,41 @@ struct InboxDataResultV5 : public core::DecryptedVersionedData {
     InboxPrivateDataV5AsResult privateData;
 };
 
-} // inbox
-} // endpoint
-} // privmx
+// Entry
+
+struct InboxEntryPublicData {
+    std::string userPubKey;
+    bool keyPreset;
+    std::string usedInboxKeyId;
+};
+
+struct InboxEntryPrivateData {
+    std::string filesMetaKey;
+    std::string text;
+};
+
+struct InboxEntrySendModel {
+    InboxEntryPublicData publicData;
+    InboxEntryPrivateData privateData;
+};
+
+struct InboxEntryPublicDataResult : public InboxEntryPublicData {
+    int64_t statusCode;
+};
+
+struct InboxEntryDataResult {
+    InboxEntryPublicData publicData;
+    InboxEntryPrivateData privateData;
+    int64_t statusCode;
+};
+
+struct InboxEntryResult : public InboxEntryDataResult {
+    std::string storeId;
+    std::vector<std::string> filesIds;
+};
+
+} // namespace inbox
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_INBOX_INBOXTYPES_HPP_
