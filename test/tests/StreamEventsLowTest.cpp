@@ -12,6 +12,7 @@
 using namespace privmx::endpoint;
 using privmx::test::ScopeExit;
 
+// Minimal WebRTC stub — returns empty strings so no real media session is needed.
 class FakeWebRTC : public stream::WebRTCInterface {
 public:
     std::string createOfferAndSetLocalDescription(const std::string&) override { return ""; }
@@ -22,7 +23,7 @@ public:
     void updateKeys(const std::string&, const std::vector<stream::Key>&) override {}
 };
 
-class StreamRoomEventsTest : public privmx::test::BaseEndpointEventTest {
+class StreamEventsLowTest : public privmx::test::BaseEndpointEventTest {
 protected:
     struct StreamClient {
         std::string userId;
@@ -33,7 +34,7 @@ protected:
         bool ownsConnection = true;
 
         void disconnect() {
-            if(ownsConnection && connection) {
+            if (ownsConnection && connection) {
                 connection->disconnect();
             }
             streamApi.reset();
@@ -73,10 +74,10 @@ protected:
         return client;
     }
 
-    std::vector<core::UserWithPubKey> usersFor(const StreamClient& user1, const StreamClient& user2) {
-        return std::vector<core::UserWithPubKey>{
-            core::UserWithPubKey{.userId = user1.userId, .pubKey = user1.pubKey},
-            core::UserWithPubKey{.userId = user2.userId, .pubKey = user2.pubKey}
+    std::vector<core::UserWithPubKey> usersFor(const StreamClient& u1, const StreamClient& u2) {
+        return {
+            core::UserWithPubKey{.userId = u1.userId, .pubKey = u1.pubKey},
+            core::UserWithPubKey{.userId = u2.userId, .pubKey = u2.pubKey},
         };
     }
 
@@ -99,11 +100,11 @@ protected:
         );
     }
 
-    std::string createStreamRoomFor(const StreamClient& user1, const StreamClient& user2) {
-        return user1.streamApi->createStreamRoom(
+    std::string createStreamRoomFor(const StreamClient& u1, const StreamClient& u2) {
+        return u1.streamApi->createStreamRoom(
             reader->getString("Context_1.contextId"),
-            usersFor(user1, user2),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId = user1.userId, .pubKey = user1.pubKey}},
+            usersFor(u1, u2),
+            std::vector<core::UserWithPubKey>{{.userId = u1.userId, .pubKey = u1.pubKey}},
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             std::nullopt
@@ -136,7 +137,9 @@ protected:
     std::shared_ptr<stream::StreamApiLow> streamApi;
 };
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomCreated_two_users) {
+// ── StreamRoom lifecycle events ───────────────────────────────────────────────
+
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomCreated_two_users) {
     eventQueue.waitEvent();
 
     auto user1 = fixtureClient();
@@ -155,7 +158,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomCreated_two_users) {
     auto streamRoomId = user1.streamApi->createStreamRoom(
         reader->getString("Context_1.contextId"),
         usersFor(user1, user2),
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId = user1.userId, .pubKey = user1.pubKey}},
+        std::vector<core::UserWithPubKey>{{.userId = user1.userId, .pubKey = user1.pubKey}},
         core::Buffer::from("public"),
         core::Buffer::from("private"),
         std::nullopt
@@ -172,7 +175,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomCreated_two_users) {
     assertStreamRoomCreatedEvent(events.at(user2ConnectionId), user2, streamRoomId);
 }
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomUpdated) {
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomUpdated) {
     eventQueue.waitEvent();
     auto user1 = fixtureClient();
     auto user2 = user2Client();
@@ -190,7 +193,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomUpdated) {
     user1.streamApi->updateStreamRoom(
         streamRoomId,
         usersFor(user1, user2),
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId = user1.userId, .pubKey = user1.pubKey}},
+        std::vector<core::UserWithPubKey>{{.userId = user1.userId, .pubKey = user1.pubKey}},
         core::Buffer::from("public-updated"),
         core::Buffer::from("private-updated"),
         1, false, false, std::nullopt
@@ -202,7 +205,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomUpdated) {
     EXPECT_EQ(stream::Events::extractStreamRoomUpdatedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
 }
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomDeleted) {
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomDeleted) {
     eventQueue.waitEvent();
     auto user1 = fixtureClient();
     auto user2 = user2Client();
@@ -225,7 +228,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomDeleted) {
     EXPECT_EQ(stream::Events::extractStreamRoomDeletedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
 }
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomJoined) {
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomJoined) {
     eventQueue.waitEvent();
     auto user1 = fixtureClient();
     auto user2 = user2Client();
@@ -249,7 +252,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomJoined) {
     EXPECT_EQ(stream::Events::extractStreamRoomJoinedEvent(eventHolder.value()).data.userId, user2.userId);
 }
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomLeft) {
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomLeft) {
     eventQueue.waitEvent();
     auto user1 = fixtureClient();
     auto user2 = user2Client();
@@ -274,7 +277,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomLeft) {
     EXPECT_EQ(stream::Events::extractStreamRoomLeftEvent(eventHolder.value()).data.userId, user2.userId);
 }
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomCreated_disabled) {
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomCreated_disabled) {
     auto user1 = fixtureClient();
     auto user2 = user2Client();
     ScopeExit cleanup([&user2]() { user2.disconnect(); });
@@ -293,7 +296,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomCreated_disabled) {
     EXPECT_NO_THROW({ assertNoEventReceived(); });
 }
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomUpdated_disabled) {
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomUpdated_disabled) {
     auto user1 = fixtureClient();
     auto user2 = user2Client();
     ScopeExit cleanup([&user2]() { user2.disconnect(); });
@@ -313,7 +316,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomUpdated_disabled) {
         user1.streamApi->updateStreamRoom(
             streamRoomId,
             usersFor(user1, user2),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId = user1.userId, .pubKey = user1.pubKey}},
+            std::vector<core::UserWithPubKey>{{.userId = user1.userId, .pubKey = user1.pubKey}},
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             1, false, false, std::nullopt
@@ -322,7 +325,7 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomUpdated_disabled) {
     EXPECT_NO_THROW({ assertNoEventReceived(); });
 }
 
-TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomDeleted_disabled) {
+TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomDeleted_disabled) {
     auto user1 = fixtureClient();
     auto user2 = user2Client();
     ScopeExit cleanup([&user2]() { user2.disconnect(); });
@@ -340,4 +343,74 @@ TEST_F(StreamRoomEventsTest, waitEvent_getEvent_streamRoomDeleted_disabled) {
     });
     EXPECT_NO_THROW({ user1.streamApi->deleteStreamRoom(streamRoomId); });
     EXPECT_NO_THROW({ assertNoEventReceived(); });
+}
+
+// ── Diagnostic tests: isolate Bindings-vs-C++ failures ─────────────────────────────
+
+TEST_F(StreamEventsLowTest, joinStreamRoom_second_join_throws) {
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+
+    EXPECT_NO_THROW({ user1.joinStreamRoom(streamRoomId); });
+    EXPECT_THROW({ user1.joinStreamRoom(streamRoomId); }, core::Exception);
+}
+
+TEST_F(StreamEventsLowTest, subscribeFor_stream_subscribe_eventtype_noThrow) {
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+
+    EXPECT_NO_THROW({
+        auto ids = user1.streamApi->subscribeFor({
+            user1.streamApi->buildSubscriptionQuery(
+                stream::EventType::STREAM_SUBSCRIBE,
+                stream::EventSelectorType::STREAMROOM_ID,
+                streamRoomId
+            )
+        });
+        user1.streamApi->unsubscribeFrom(ids);
+    });
+}
+
+TEST_F(StreamEventsLowTest, subscribeFor_stream_unsubscribe_eventtype_noThrow) {
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+
+    EXPECT_NO_THROW({
+        auto ids = user1.streamApi->subscribeFor({
+            user1.streamApi->buildSubscriptionQuery(
+                stream::EventType::STREAM_UNSUBSCRIBE,
+                stream::EventSelectorType::STREAMROOM_ID,
+                streamRoomId
+            )
+        });
+        user1.streamApi->unsubscribeFrom(ids);
+    });
+}
+
+TEST_F(StreamEventsLowTest, subscribeFor_stream_update_eventtype_noThrow) {
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+
+    EXPECT_NO_THROW({
+        auto ids = user1.streamApi->subscribeFor({
+            user1.streamApi->buildSubscriptionQuery(
+                stream::EventType::STREAM_UPDATE,
+                stream::EventSelectorType::STREAMROOM_ID,
+                streamRoomId
+            )
+        });
+        user1.streamApi->unsubscribeFrom(ids);
+    });
 }
