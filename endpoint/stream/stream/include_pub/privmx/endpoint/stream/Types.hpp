@@ -182,6 +182,12 @@ struct RecordingEncKey {
     core::Buffer key;
 };
 
+struct StreamSubscriber {
+    std::string userId;
+    std::vector<StreamSubscription> subscriptions;
+    std::optional<StreamInfo> publishedStream;
+};
+
 struct DataChannelMessage {
     core::Buffer data;
     int64_t seq;

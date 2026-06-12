@@ -143,3 +143,20 @@ StreamsUpdatedData Mapper::mapToStreamsUpdatedData(const server::StreamsUpdatedD
         .streams = std::move(streams),
     };
 }
+
+StreamSubscriber Mapper::mapToStreamSubscriber(const server::StreamSubscriber& s) {
+    std::vector<StreamSubscription> subscriptions;
+    subscriptions.reserve(s.subscriptions.size());
+    for (const auto& sub : s.subscriptions) {
+        subscriptions.push_back(StreamSubscription{.streamId = sub.streamId, .streamTrackId = sub.streamTrackId});
+    }
+    std::optional<StreamInfo> publishedStream;
+    if (s.publishedStream.has_value()) {
+        publishedStream = mapToStreamInfo(s.publishedStream.value());
+    }
+    return {
+        .userId = s.userId,
+        .subscriptions = std::move(subscriptions),
+        .publishedStream = std::move(publishedStream),
+    };
+}

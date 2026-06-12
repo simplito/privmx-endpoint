@@ -494,3 +494,15 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::RecordingEncKey>(const strea
     obj->set("key", serialize(val.key));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscriber>(const stream::StreamSubscriber& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamSubscriber");
+    }
+    obj->set("userId", serialize(val.userId));
+    obj->set("subscriptions", serialize<stream::StreamSubscription>(val.subscriptions));
+    obj->set("publishedStream", serialize(val.publishedStream));
+    return obj;
+}

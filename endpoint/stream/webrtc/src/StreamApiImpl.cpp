@@ -69,6 +69,10 @@ std::vector<StreamInfo> StreamApiImpl::listStreams(const std::string& streamRoom
     return _api->listStreams(streamRoomId);
 }
 
+std::vector<StreamSubscriber> StreamApiImpl::listStreamRoomParticipants(const std::string& streamRoomId) {
+    return _api->listStreamRoomParticipants(streamRoomId);
+}
+
 void StreamApiImpl::joinStreamRoom(const std::string& streamRoomId) {
     _api->joinStreamRoom(streamRoomId, _webRTC);
 }
