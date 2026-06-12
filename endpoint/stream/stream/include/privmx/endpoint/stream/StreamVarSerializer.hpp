@@ -57,11 +57,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscribedEventData>(
 );
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomReofferEventData>(
-    const stream::StreamRoomReofferEventData& val
-);
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomCreatedEvent>(const stream::StreamRoomCreatedEvent& val);
 
 template<>
@@ -89,9 +84,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEvent>(cons
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomLeftEvent>(const stream::StreamRoomLeftEvent& val);
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomReofferEvent>(const stream::StreamRoomReofferEvent& val);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscribedEvent>(const stream::StreamSubscribedEvent& val);

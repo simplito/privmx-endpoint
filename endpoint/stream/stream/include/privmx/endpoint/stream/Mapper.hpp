@@ -27,7 +27,6 @@ public:
     static PublishedStreamData mapToPublishedStreamData(const server::PublishedStreamData& s);
     static PublishedStreamData mapToPublishedStreamData(const server::StreamPublishedEventData& s);
     static StreamUpdatedEventData mapToStreamUpdatedEventData(const server::StreamUpdatedEventData& s);
-    static StreamRoomReofferEventData mapToStreamRoomReofferEventData(const server::StreamReofferEventData& s);
     static StreamSubscribedEventData mapToStreamSubscribedEventData(const server::StreamSubscribedEventData& s);
 };
 

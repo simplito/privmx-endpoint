@@ -265,34 +265,6 @@ struct StreamRoomLeftEvent : public core::Event {
 };
 
 /**
- * Holds data of event that arrives when SDP renegotiation is needed for a subscriber.
- */
-struct StreamRoomReofferEvent : public core::Event {
-
-    /**
-     * Event constructor
-     */
-    StreamRoomReofferEvent() : core::Event("streamRoomReoffer") {}
-
-    /**
-     * Get Event as JSON string
-     *
-     * @return JSON string
-     */
-    std::string toJSON() const override;
-
-    /**
-     * //doc-gen:ignore
-     */
-    std::shared_ptr<core::SerializedEvent> serialize() const override;
-
-    /**
-     * event data
-     */
-    StreamRoomReofferEventData data;
-};
-
-/**
  * Holds data of event that arrives when a viewer subscribes to feeds.
  */
 struct StreamSubscribedEvent : public core::Event {
@@ -488,14 +460,6 @@ public:
      * @return true for 'StreamRoomReofferEvent', else otherwise
      */
     static bool isStreamRoomReofferEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Gets Event held in the 'EventHolder' as a 'StreamRoomReofferEvent'
-     *
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return 'StreamRoomReofferEvent' object
-     */
-    static StreamRoomReofferEvent extractStreamRoomReofferEvent(const core::EventHolder& eventHolder);
 
     /**
      * Checks whether event held in the 'EventHolder' is a 'StreamSubscribedEvent'

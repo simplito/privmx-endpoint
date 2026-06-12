@@ -51,10 +51,6 @@ std::string StreamRoomLeftEvent::toJSON() const {
     return core::JsonSerializer<StreamRoomLeftEvent>::serialize(*this);
 }
 
-std::string StreamRoomReofferEvent::toJSON() const {
-    return core::JsonSerializer<StreamRoomReofferEvent>::serialize(*this);
-}
-
 std::string StreamSubscribedEvent::toJSON() const {
     return core::JsonSerializer<StreamSubscribedEvent>::serialize(*this);
 }
@@ -106,12 +102,6 @@ std::shared_ptr<core::SerializedEvent> StreamUnpublishedEvent::serialize() const
 }
 
 std::shared_ptr<core::SerializedEvent> StreamRoomLeftEvent::serialize() const {
-    return std::make_shared<core::SerializedEvent>(
-        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
-    );
-}
-
-std::shared_ptr<core::SerializedEvent> StreamRoomReofferEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(
         core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
     );
@@ -267,19 +257,6 @@ StreamRoomLeftEvent Events::extractStreamRoomLeftEvent(const core::EventHolder& 
 
 bool Events::isStreamRoomReofferEvent(const core::EventHolder& handler) {
     return handler.type() == "streamRoomReoffer";
-}
-
-StreamRoomReofferEvent Events::extractStreamRoomReofferEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamRoomReofferEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamRoomReofferEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
 }
 
 bool Events::isStreamSubscribedEvent(const core::EventHolder& handler) {

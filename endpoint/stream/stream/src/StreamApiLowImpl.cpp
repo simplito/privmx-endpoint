@@ -224,10 +224,6 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
             acceptOfferOnReconfigure(room->subscriberStream->sessionId.value(), sdpModel);
         }
-        auto eventData = Mapper::mapToStreamRoomReofferEventData(raw);
-        auto event = core::EventBuilder::buildEvent<StreamRoomReofferEvent, StreamRoomReofferEventData>(
-            "stream", eventData, notification
-        );
     } else {
         LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
     }

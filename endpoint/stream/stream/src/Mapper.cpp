@@ -95,18 +95,6 @@ StreamUpdatedEventData Mapper::mapToStreamUpdatedEventData(const server::StreamU
         .tracksModified = std::move(tracksModified),
     };
 }
-
-StreamRoomReofferEventData Mapper::mapToStreamRoomReofferEventData(const server::StreamReofferEventData& s) {
-    std::optional<SdpWithTypeModel> jsep;
-    if (s.jsep.has_value()) {
-        jsep = SdpWithTypeModel{.sdp = s.jsep.value().sdp, .type = s.jsep.value().type};
-    }
-    return {
-        .streamRoomId = s.streamRoomId,
-        .jsep = jsep,
-    };
-}
-
 StreamSubscribedEventData Mapper::mapToStreamSubscribedEventData(const server::StreamSubscribedEventData& s) {
     std::vector<StreamSubscription> subscriptions;
     subscriptions.reserve(s.subscriptions.size());

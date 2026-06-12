@@ -157,18 +157,6 @@ struct StreamSubscribedEventData {
     std::vector<StreamSubscription> subscriptions;
 };
 
-struct StreamRoomReofferEventData {
-    /**
-     * StreamRoom ID
-     */
-    std::string streamRoomId;
-
-    /**
-     * Optional SDP offer for renegotiation
-     */
-    std::optional<SdpWithTypeModel> jsep;
-};
-
 struct StreamUpdatedEventData {
     /**
      * StreamRoom ID
