@@ -121,10 +121,6 @@ stream::StreamTrackInfo VarDeserializer::deserialize<stream::StreamTrackInfo>(
         .simulcast =
             {obj->has("simulcast") ? std::make_optional(deserialize<bool>(obj->get("simulcast"), name + ".simulcast")) :
                                      std::nullopt},
-        .talking = {
-            obj->has("talking") ? std::make_optional(deserialize<bool>(obj->get("talking"), name + ".talking")) :
-                                  std::nullopt
-        },
     };
 }
 
@@ -146,10 +142,6 @@ stream::StreamInfo VarDeserializer::deserialize<stream::StreamInfo>(
             {obj->has("dummy") ? std::make_optional(deserialize<bool>(obj->get("dummy"), name + ".dummy")) :
                                  std::nullopt}, // czy to publisher-dummy
         .tracks = deserializeVector<stream::StreamTrackInfo>(obj->get("tracks"), name + ".tracks"),
-        .talking = {
-            obj->has("talking") ? std::make_optional(deserialize<bool>(obj->get("talking"), name + ".talking")) :
-                                  std::nullopt
-        },
     };
 }
 

@@ -168,8 +168,7 @@ JSON_STRUCT(StreamListModel, STREAM_LIST_MODEL_FIELDS);
     F(codec, std::optional<std::string>)                                                                               \
     F(description, std::optional<std::string>)                                                                         \
     F(moderated, std::optional<bool>)                                                                                  \
-    F(simulcast, std::optional<bool>)                                                                                  \
-    F(talking, std::optional<bool>)
+    F(simulcast, std::optional<bool>)
 JSON_STRUCT(StreamTrackInfo, STREAM_TRACK_INFO_FIELDS);
 
 #define STREAM_INFO_FIELDS(F)                                                                                          \
@@ -177,8 +176,7 @@ JSON_STRUCT(StreamTrackInfo, STREAM_TRACK_INFO_FIELDS);
     F(userId, std::string)                                                                                             \
     F(metadata, std::optional<Poco::Dynamic::Var>)                                                                     \
     F(dummy, std::optional<bool>)                                                                                      \
-    F(tracks, std::vector<StreamTrackInfo>)                                                                            \
-    F(talking, std::optional<bool>)
+    F(tracks, std::vector<StreamTrackInfo>)
 JSON_STRUCT(StreamInfo, STREAM_INFO_FIELDS);
 
 #define STREAM_PUBLISHED_EVENT_DATA_FIELDS(F)                                                                          \
