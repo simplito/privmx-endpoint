@@ -18,8 +18,9 @@ limitations under the License.
 namespace privmx {
 namespace endpoint {
 namespace stream {
-
-using StreamHandle = int64_t; // can be everything that is DTO
+using Handle = int64_t; // can be everything that is DTO
+using StreamHandle = Handle;
+using SubscriberStreamHandle = Handle;
 using RemoteStreamId = int64_t;
 using RemoteTrackId = std::string;
 

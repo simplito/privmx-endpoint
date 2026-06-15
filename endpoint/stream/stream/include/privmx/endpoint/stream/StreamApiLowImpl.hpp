@@ -87,24 +87,23 @@ public:
     void leaveStreamRoom(const std::string& streamRoomId);
     void enableStreamRoomRecording(const std::string& streamRoomId);
     std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
+    // Publisher stream part
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
-
-    void unpublishStream(const StreamHandle& streamHandle);
-
-    void subscribeToRemoteStreams(
+    void removeStream(const StreamHandle& streamHandle);
+    // Subscriber stream part
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
-    void modifyRemoteStreamsSubscriptions(
-        const std::string& streamRoomId,
+    void updateSubscriberStream(
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void unsubscribeFromRemoteStreams(
-        const std::string& streamRoomId,
-        const std::vector<StreamSubscription>& subscriptionsToRemove
+    void removeSubscriberStream(
+        const SubscriberStreamHandle& subscriptionHandle
     );
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
@@ -134,6 +133,10 @@ private:
         std::optional<int64_t> sessionId;
         std::optional<StreamHandle> streamHandle;
     };
+    struct SubscriptionData {
+        std::optional<int64_t> sessionId;
+        std::optional<SubscriberStreamHandle> streamHandle;
+    };
     struct StreamRoomData {
         StreamRoomData(
             std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor,
@@ -145,7 +148,7 @@ private:
             : messageEncryptor(_messageEncryptor), streamRoomId(_streamRoomId), webRtc(_webRtc),
               subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId) {}
         std::shared_ptr<StreamData> publisherStream;
-        std::shared_ptr<StreamData> subscriberStream;
+        std::shared_ptr<SubscriptionData> subscriberStream;
         std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
@@ -194,7 +197,7 @@ private:
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
-    privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
+    privmx::utils::ThreadSaveMap<Handle, std::string> _handleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

@@ -366,7 +366,7 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamUnpublished) {
         auto handle = publishVideoStream(user1, streamRoomId);
         drainEventQueue();
 
-        user1.streamApi->unpublishStream(handle);
+        user1.streamApi->removeStream(handle);
         auto eventHolder = waitForEvent("streamUnpublished", {user1.connection->getConnectionId()});
         ASSERT_TRUE(eventHolder.has_value());
         assertEventBasics(eventHolder.value(), "streamUnpublished");
@@ -408,7 +408,7 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamsUpdated) {
         ASSERT_FALSE(subscriptions.empty());
         drainEventQueue();
 
-        user2.streamApi->subscribeToRemoteStreams(streamRoomId, subscriptions);
+        user2.streamApi->createSubscriberStream(streamRoomId, subscriptions);
         drainEventQueue();
 
         user1.streamApi->getImpl()->addFakeVideoTrack(handle);
