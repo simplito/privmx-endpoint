@@ -446,79 +446,34 @@ void StreamApiLowImpl::unpublishStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-void StreamApiLowImpl::subscribeToRemoteStreams(
-    const std::string& streamRoomId,
+std::vector<server::StreamSubscription> StreamApiLowImpl::mapSubscriptions(
     const std::vector<StreamSubscription>& subscriptions
 ) {
-    auto room = getStreamRoomData(streamRoomId);
-    server::StreamsSubscribeModel model;
-    model.streamRoomId = streamRoomId;
-
-    std::vector<server::StreamSubscription> itemsToAdd;
+    std::vector<server::StreamSubscription> items;
     for (size_t i = 0; i < subscriptions.size(); i++) {
         server::StreamSubscription item;
         item.streamId = subscriptions[i].streamId;
         if (subscriptions[i].streamTrackId) {
             item.streamTrackId = subscriptions[i].streamTrackId.value();
         }
-        itemsToAdd.push_back(item);
+        items.push_back(item);
     }
-    model.subscriptionsToAdd = itemsToAdd;
-    auto subscribeResult = _serverApi->streamsSubscribeToRemote(model);
-
-    // update/set sessionId in webrtc (for Janus - trickle)
-    room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId, std::string("subscriber"));
-
-    room->subscriberStream = std::make_shared<StreamData>(
-        StreamData{.sessionId = subscribeResult.sessionId, .streamHandle = StreamHandle()}
-    );
-
-    // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
-    if (subscribeResult.offer.has_value()) {
-        std::string sdp = room->webRtc->createAnswerAndSetDescriptions(
-            streamRoomId, subscribeResult.offer.value().sdp, subscribeResult.offer.value().type
-        );
-
-        SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
-        acceptOfferOnReconfigure(subscribeResult.sessionId, sdpModel);
-    }
+    return items;
 }
 
-void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(
+void StreamApiLowImpl::applyRemoteSubscriptionsUpdate(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
     auto room = getStreamRoomData(streamRoomId);
     // Sending Request to Bridge
-    server::StreamsModifySubscriptionsModel model;
+    server::StreamUpdateRemoteSubscriptionsModel model;
     model.streamRoomId = streamRoomId;
+    model.subscriptionsToAdd = mapSubscriptions(subscriptionsToAdd);
+    model.subscriptionsToRemove = mapSubscriptions(subscriptionsToRemove);
 
-    // subscriptions to add
-    std::vector<server::StreamSubscription> itemsToAdd;
-    for (size_t i = 0; i < subscriptionsToAdd.size(); i++) {
-        server::StreamSubscription item;
-        item.streamId = subscriptionsToAdd[i].streamId;
-        if (subscriptionsToAdd[i].streamTrackId) {
-            item.streamTrackId = subscriptionsToAdd[i].streamTrackId.value();
-        }
-        itemsToAdd.push_back(item);
-    }
-    model.subscriptionsToAdd = itemsToAdd;
-
-    // subscriptions to remove
-    std::vector<server::StreamSubscription> itemsToRemove;
-    for (size_t i = 0; i < subscriptionsToRemove.size(); i++) {
-        server::StreamSubscription item;
-        item.streamId = subscriptionsToRemove[i].streamId;
-        if (subscriptionsToRemove[i].streamTrackId) {
-            item.streamTrackId = subscriptionsToRemove[i].streamTrackId.value();
-        }
-        itemsToRemove.push_back(item);
-    }
-    model.subscriptionsToRemove = itemsToRemove;
-
-    auto result = _serverApi->streamsModifyRemoteSubscriptions(model);
+    auto result = _serverApi->streamsUpdateRemoteSubscriptions(model);
 
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, result.sessionId, std::string("subscriber"));
@@ -538,25 +493,26 @@ void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(
     }
 }
 
+void StreamApiLowImpl::subscribeToRemoteStreams(
+    const std::string& streamRoomId,
+    const std::vector<StreamSubscription>& subscriptions
+) {
+    applyRemoteSubscriptionsUpdate(streamRoomId, subscriptions, {});
+}
+
+void StreamApiLowImpl::modifyRemoteStreamsSubscriptions(
+    const std::string& streamRoomId,
+    const std::vector<StreamSubscription>& subscriptionsToAdd,
+    const std::vector<StreamSubscription>& subscriptionsToRemove
+) {
+    applyRemoteSubscriptionsUpdate(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
+}
+
 void StreamApiLowImpl::unsubscribeFromRemoteStreams(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
-    server::StreamsUnsubscribeModel model;
-    model.streamRoomId = streamRoomId;
-
-    std::vector<server::StreamSubscription> itemsToRemove;
-    for (size_t i = 0; i < subscriptionsToRemove.size(); i++) {
-        server::StreamSubscription item;
-        item.streamId = subscriptionsToRemove[i].streamId;
-        if (subscriptionsToRemove[i].streamTrackId) {
-            item.streamTrackId = subscriptionsToRemove[i].streamTrackId.value();
-        }
-        itemsToRemove.push_back(item);
-    }
-
-    model.subscriptionsToRemove = itemsToRemove;
-    _serverApi->streamsUnsubscribeFromRemote(model);
+    applyRemoteSubscriptionsUpdate(streamRoomId, {}, subscriptionsToRemove);
 }
 
 std::string StreamApiLowImpl::createStreamRoom(

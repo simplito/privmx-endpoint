@@ -44,9 +44,7 @@ public:
     void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
 
-    server::StreamsSubscribeResult streamsSubscribeToRemote(server::StreamsSubscribeModel model);
-    server::StreamsSubscribeResult streamsModifyRemoteSubscriptions(server::StreamsModifySubscriptionsModel model);
-    server::StreamsSubscribeResult streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model);
+    server::StreamsSubscribeResult streamsUpdateRemoteSubscriptions(server::StreamUpdateRemoteSubscriptionsModel model);
     void streamRoomJoin(server::StreamRoomJoinModel model);
     void streamRoomLeave(server::StreamRoomLeaveModel model);
     void streamRoomEnableRecording(server::StreamRoomRecordingModel model);

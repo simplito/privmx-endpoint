@@ -160,6 +160,12 @@ private:
     void processDisconnectedEvent();
 
     std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    static std::vector<server::StreamSubscription> mapSubscriptions(const std::vector<StreamSubscription>& subscriptions);
+    void applyRemoteSubscriptionsUpdate(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptionsToAdd,
+        const std::vector<StreamSubscription>& subscriptionsToRemove
+    );
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc
