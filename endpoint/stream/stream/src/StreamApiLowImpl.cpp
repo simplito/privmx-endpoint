@@ -50,7 +50,8 @@ StreamApiLowImpl::StreamApiLowImpl(
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _serverApi(std::make_shared<ServerApi>(gateway)),
       _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
-      _streamRoomDataSchemaMapper(userPrivKey, connection) {
+      _streamRoomDataSchemaMapper(std::make_shared<StreamRoomDataSchemaMapper>(userPrivKey, connection)) {
+    initModuleDataSchemaMapper(_streamRoomDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -120,7 +121,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (raw.type.value_or(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
             return;
         }
-        auto eventData = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRoom(raw, _keyProvider);
+        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(raw, _keyProvider);
         auto event = core::EventBuilder::buildEvent<StreamRoomCreatedEvent, StreamRoom>(
             "stream", eventData, notification
         );
@@ -131,7 +132,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (raw.type.value_or(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
             return;
         }
-        auto eventData = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRoom(raw, _keyProvider);
+        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(raw, _keyProvider);
         auto event = core::EventBuilder::buildEvent<StreamRoomUpdatedEvent, StreamRoom>(
             "stream", eventData, notification
         );
@@ -334,7 +335,7 @@ std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKey
     params.id = streamRoomId;
     params.type = STREAM_TYPE_FILTER_FLAG;
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto statusCode = _streamRoomDataSchemaMapper.validateDataIntegrity(streamRoom);
+    auto statusCode = _streamRoomDataSchemaMapper->validateDataIntegrity(streamRoom);
     if (statusCode != 0) {
         throw StreamRoomDataIntegrityException();
     }
@@ -567,32 +568,19 @@ std::string StreamApiLowImpl::createStreamRoom(
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
     const std::string& type
 ) {
-    auto streamRoomKey = _keyProvider->generateKey();
-    std::string resourceId = core::EndpointUtils::generateId();
-    auto streamRoomDIO = _connection->createDIO(contextId, resourceId);
-    auto streamRoomSecret = _keyProvider->generateSecret();
-
+    auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta =
-            core::ModuleInternalMetaV5{
-                .secret = streamRoomSecret, .resourceId = resourceId, .randomId = streamRoomDIO.randomId
-            },
-        .dio = streamRoomDIO
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .dio = ctx.dio
     };
     server::StreamRoomCreateModel createStreamRoomModel;
-    createStreamRoomModel.resourceId = resourceId;
-    createStreamRoomModel.contextId = contextId;
-    createStreamRoomModel.keyId = streamRoomKey.id;
-    createStreamRoomModel.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, streamRoomKey.key);
-    auto allUsers = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    createStreamRoomModel.keys = _keyProvider->prepareKeysList(
-        allUsers, streamRoomKey, streamRoomDIO, {.contextId = contextId, .resourceId = resourceId}, streamRoomSecret
+    fillContainerCreateModel(
+        createStreamRoomModel, contextId, users, managers, ctx,
+        _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key)
     );
-
-    createStreamRoomModel.users = mapUsers(users);
-    createStreamRoomModel.managers = mapUsers(managers);
     createStreamRoomModel.type = type;
     if (policies.has_value()) {
         createStreamRoomModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
@@ -613,64 +601,16 @@ void StreamApiLowImpl::updateStreamRoom(
     const std::optional<core::ContainerPolicyWithoutItem>& policies
 ) {
 
-    // get current streamRoom
-
     server::StreamRoomGetModel getModel;
     getModel.id = streamRoomId;
     auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
     auto currentStreamRoomEntry = currentStreamRoom.data.back();
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
-    auto location{getModuleEncKeyLocation(currentStreamRoom, currentStreamRoomResourceId)};
-    auto streamRoomKeys{getAndValidateModuleKeys(currentStreamRoom, currentStreamRoomResourceId)};
-    auto currentStreamRoomKey{findEncKeyByKeyId(streamRoomKeys, currentStreamRoomEntry.keyId)};
-    auto streamRoomInternalMeta = extractAndDecryptModuleInternalMeta(currentStreamRoomEntry, currentStreamRoomKey);
-
-    auto usersKeysResolver{
-        core::UsersKeysResolver::create(currentStreamRoom, users, managers, forceGenerateNewKey, currentStreamRoomKey)
-    };
-
-    if (!_keyProvider->verifyKeysSecret(streamRoomKeys, location, streamRoomInternalMeta.secret)) {
-        throw StreamRoomEncryptionKeyValidationException();
-    }
-    // setting streamRoom Key adding new users
-    core::EncKey streamRoomKey = currentStreamRoomKey;
-    core::DataIntegrityObject updateStreamRoomDio = _connection->createDIO(
-        currentStreamRoom.contextId, currentStreamRoomResourceId
+    auto ctx = prepareContainerUpdate(
+        currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers, forceGenerateNewKey
     );
-    std::vector<core::server::KeyEntrySet> keys;
-    if (usersKeysResolver->doNeedNewKey()) {
-        streamRoomKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(), streamRoomKey, updateStreamRoomDio, location,
-            streamRoomInternalMeta.secret
-        );
-    }
-
-    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-    if (usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            streamRoomKeys, usersToAddMissingKey, updateStreamRoomDio, location, streamRoomInternalMeta.secret
-        );
-        for (auto t : tmp)
-            keys.push_back(t);
-    }
     server::StreamRoomUpdateModel model;
-    std::vector<std::string> usersList;
-    for (auto user : users) {
-        usersList.push_back(user.userId);
-    }
-    std::vector<std::string> managersList;
-    for (auto x : managers) {
-        managersList.push_back(x.userId);
-    }
-    model.id = streamRoomId;
-    model.resourceId = currentStreamRoomResourceId;
-    model.keyId = streamRoomKey.id;
-    model.keys = keys;
-    model.users = usersList;
-    model.managers = managersList;
-    model.version = version;
-    model.force = force;
+    fillContainerUpdateModel(model, streamRoomId, currentStreamRoomResourceId, users, managers, ctx, version, force);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
@@ -679,13 +619,11 @@ void StreamApiLowImpl::updateStreamRoom(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = streamRoomInternalMeta.secret,
-                .resourceId = currentStreamRoomResourceId,
-                .randomId = updateStreamRoomDio.randomId
+                .secret = ctx.secret, .resourceId = currentStreamRoomResourceId, .randomId = ctx.dio.randomId
             },
-        .dio = updateStreamRoomDio
+        .dio = ctx.dio
     };
-    model.data = _streamRoomDataSchemaMapper.encrypt(streamRoomDataToEncrypt, streamRoomKey.key);
+    model.data = _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key);
     _serverApi->streamRoomUpdate(model);
 }
 
@@ -699,7 +637,7 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     model.type = type;
     core::ListQueryMapper::map(model, query);
     auto streamRoomsList = _serverApi->streamRoomList(model);
-    auto streamRooms = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRooms(
+    auto streamRooms = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRooms(
         streamRoomsList.list, _keyProvider
     );
     return core::PagingList<StreamRoom>({.totalAvailable = streamRoomsList.count, .readItems = streamRooms});
@@ -710,7 +648,7 @@ StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId, cons
     params.id = streamRoomId;
     params.type = type;
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto result = _streamRoomDataSchemaMapper.validateDecryptAndConvertStreamRoom(streamRoom, _keyProvider);
+    auto result = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(streamRoom, _keyProvider);
     return result;
 }
 
@@ -718,14 +656,6 @@ void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
     server::StreamRoomDeleteModel model;
     model.id = streamRoomId;
     _serverApi->streamRoomDelete(model);
-}
-
-std::vector<std::string> StreamApiLowImpl::mapUsers(const std::vector<core::UserWithPubKey>& users) {
-    std::vector<std::string> result;
-    for (auto user : users) {
-        result.push_back(user.userId);
-    }
-    return result;
 }
 
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const std::string& streamRoomId) {
@@ -770,7 +700,7 @@ std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFr
     params.id = moduleId;
     auto stream = _serverApi->streamRoomGet(params).streamRoom;
     // validate stream Data before returning data
-    _streamRoomDataSchemaMapper.assertDataIntegrity(stream);
+    _streamRoomDataSchemaMapper->assertDataIntegrity(stream);
     return std::make_pair(streamRoomToModuleKeys(stream), stream.version);
 }
 
@@ -778,7 +708,7 @@ core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo
     return core::ModuleKeys{
         .keys = stream.keys,
         .currentKeyId = stream.keyId,
-        .moduleSchemaVersion = _streamRoomDataSchemaMapper.getDataStructureVersion(stream.data.back()),
+        .moduleSchemaVersion = _streamRoomDataSchemaMapper->getDataStructureVersion(stream.data.back()),
         .moduleResourceId = stream.resourceId.value_or(""),
         .contextId = stream.contextId
     };

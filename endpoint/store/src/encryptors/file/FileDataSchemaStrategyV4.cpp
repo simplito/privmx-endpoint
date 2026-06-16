@@ -117,12 +117,8 @@ server::EncryptedFileMetaV4 FileDataSchemaStrategyV4::encrypt(
     return _encryptor.encrypt(fileMeta, userPrivKey, key);
 }
 
-std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV4::makeErrorResult(
-    const server::File& file,
-    int64_t errorCode
-) const {
-    return {
-        FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_4, false),
-        core::DataIntegrityObject{}
-    };
+File FileDataSchemaStrategyV4::toLibError(const server::File& file, int64_t errorCode) const {
+    return FileMetaDataSchemaMapper::toLibFile(
+        file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_4, false
+    );
 }

@@ -65,16 +65,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-    std::string createStoreEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::string& type = STORE_TYPE_FILTER_FLAG
     );
     void updateStore(
         const std::string& storeId,
@@ -88,13 +80,11 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
     void deleteStore(const std::string& storeId);
-    Store getStore(const std::string& storeId);
-    Store getStoreEx(const std::string& storeId, const std::string& type);
-    core::PagingList<Store> listStores(const std::string& contextId, const core::PagingQuery& query);
-    core::PagingList<Store> listStoresEx(
+    Store getStore(const std::string& storeId, const std::string& type = STORE_TYPE_FILTER_FLAG);
+    core::PagingList<Store> listStores(
         const std::string& contextId,
         const core::PagingQuery& query,
-        const std::string& type
+        const std::string& type = STORE_TYPE_FILTER_FLAG
     );
     File getFile(const std::string& fileId);
     core::PagingList<store::File> listFiles(const std::string& storeId, const core::PagingQuery& query);
@@ -130,28 +120,12 @@ public:
     inline FileMetaDataSchemaMapper& getFileMetaDataSchemaMapper() { return _fileMetaDataSchemaMapper; }
 
 private:
-    std::string _storeCreateEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-    Store _storeGetEx(const std::string& storeId, const std::string& type);
-    core::PagingList<Store> _storeListEx(
-        const std::string& contextId,
-        const core::PagingQuery& query,
-        const std::string& type
-    );
     std::string storeFileFinalizeWriteRequest(
         const std::shared_ptr<FileWriteHandle>& handle,
         const ChunksSentInfo& data,
         const core::ModuleKeys& storeKey
     );
 
-    std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey>& users);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
@@ -190,7 +164,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId;
 
-    StoreDataSchemaMapper _storeDataSchemaMapper;
+    std::shared_ptr<StoreDataSchemaMapper> _storeDataSchemaMapper;
     FileMetaDataSchemaMapper _fileMetaDataSchemaMapper;
     core::DataEncryptorV4 _eventDataEncryptorV4;
 

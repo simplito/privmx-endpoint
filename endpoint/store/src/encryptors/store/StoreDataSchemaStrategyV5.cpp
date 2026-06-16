@@ -20,21 +20,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-core::DecryptedModuleDataV5 StoreDataSchemaStrategyV5::decrypt(
-    const server::Store& store,
-    const core::DecryptedEncKey& encKey
-) const {
-    auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(store.data.back().data);
-    core::DecryptedModuleDataV5 result;
-    if (encKey.statusCode != 0) {
-        result = _encryptor.extractPublic(encryptedData);
-    } else {
-        result = _encryptor.decrypt(encryptedData, encKey.key);
-    }
-    if (encKey.statusCode != 0) {
-        result.statusCode = encKey.statusCode;
-    }
-    return result;
+core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::getEncryptedData(const server::Store& model) const {
+    return core::dynamic::EncryptedModuleDataV5::fromJSON(model.data.back().data);
 }
 
 std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV5::convert(
@@ -49,14 +36,8 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV5::convert(
     };
 }
 
-std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV5::makeErrorResult(
-    const server::Store& store,
-    int64_t errorCode
-) const {
-    return {
-        StoreDataSchemaMapper::toLibStore(store, {}, {}, errorCode, StoreDataSchema::Version::VERSION_5),
-        core::DataIntegrityObject{}
-    };
+Store StoreDataSchemaStrategyV5::toLibError(const server::Store& store, int64_t errorCode) const {
+    return StoreDataSchemaMapper::toLibStore(store, {}, {}, errorCode, StoreDataSchema::Version::VERSION_5);
 }
 
 core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::encrypt(
@@ -65,10 +46,4 @@ core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::encrypt(
     const std::string& key
 ) const {
     return _encryptor.encrypt(data, userPrivKey, key);
-}
-
-core::DataIntegrityObject StoreDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const core::dynamic::EncryptedModuleDataV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
 }

@@ -17,7 +17,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
@@ -29,31 +29,28 @@ namespace endpoint {
 namespace store {
 
 // clang-format off
-class StoreDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
-    server::Store,
+class StoreDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
+    core::ModuleDataEncryptorV5,
+    core::dynamic::EncryptedModuleDataV5,
     core::DecryptedModuleDataV5,
-    std::tuple<Store, core::DataIntegrityObject>
+    server::Store,
+    Store
 > {
     // clang-format on
 public:
-    core::DecryptedModuleDataV5 decrypt(const server::Store& store, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Store, core::DataIntegrityObject> convert(
         const server::Store& store,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<Store, core::DataIntegrityObject> makeErrorResult(
-        const server::Store& store,
-        int64_t errorCode
-    ) const override;
+    Store toLibError(const server::Store& store, int64_t errorCode) const override;
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
 
-private:
-    mutable core::ModuleDataEncryptorV5 _encryptor;
+protected:
+    core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::Store& model) const override;
 };
 
 } // namespace store

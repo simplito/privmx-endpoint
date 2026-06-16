@@ -28,18 +28,10 @@ core::dynamic::EncryptedModuleDataV5 ThreadDataSchemaStrategyV5::encrypt(
     return _encryptor.encrypt(data, userPrivKey, key);
 }
 
-core::DecryptedModuleDataV5 ThreadDataSchemaStrategyV5::decrypt(
-    const server::ThreadInfo& thread,
-    const core::DecryptedEncKey& encKey
+core::dynamic::EncryptedModuleDataV5 ThreadDataSchemaStrategyV5::getEncryptedData(
+    const server::ThreadInfo& model
 ) const {
-    auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(thread.data.back().data);
-    if (encKey.statusCode == 0) {
-        return _encryptor.decrypt(encryptedData, encKey.key);
-    } else {
-        auto result = _encryptor.extractPublic(encryptedData);
-        result.statusCode = encKey.statusCode;
-        return result;
-    }
+    return core::dynamic::EncryptedModuleDataV5::fromJSON(model.data.back().data);
 }
 
 std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV5::convert(
@@ -54,18 +46,6 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV5::conver
     };
 }
 
-std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV5::makeErrorResult(
-    const server::ThreadInfo& thread,
-    int64_t errorCode
-) const {
-    return {
-        ThreadDataSchemaMapper::toLibThread(thread, {}, {}, errorCode, ThreadDataSchema::Version::VERSION_5),
-        core::DataIntegrityObject{}
-    };
-}
-
-core::DataIntegrityObject ThreadDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const core::dynamic::EncryptedModuleDataV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
+Thread ThreadDataSchemaStrategyV5::toLibError(const server::ThreadInfo& thread, int64_t errorCode) const {
+    return ThreadDataSchemaMapper::toLibThread(thread, {}, {}, errorCode, ThreadDataSchema::Version::VERSION_5);
 }

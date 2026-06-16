@@ -12,12 +12,8 @@ limitations under the License.
 #include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp"
 
 #include <Poco/JSON/Object.h>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/ConvertedExceptions.hpp>
-#include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
-#include <set>
+#include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/stream/StreamException.hpp"
 
@@ -28,9 +24,9 @@ StreamRoomDataSchemaMapper::StreamRoomDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
-    : _userPrivKey(userPrivKey), _connection(connection) {
+    : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyV5 = std::make_shared<StreamRoomDataSchemaStrategyV5>();
-    _strategyMapper.registerStrategy(StreamRoomDataSchema::Version::VERSION_5, _strategyV5);
+    _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
 Poco::Dynamic::Var StreamRoomDataSchemaMapper::encrypt(
@@ -44,37 +40,26 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
     const server::StreamRoomInfo& streamRoom,
     const core::DecryptedEncKey& encKey
 ) {
-    auto version = getDataStructureVersion(streamRoom.data.back());
-    auto strategy = _strategyMapper.getStrategy(static_cast<int64_t>(version));
-    if (!strategy) {
-        auto e = UnknowStreamRoomFormatException();
-        return {
-            toLibStreamRoom(streamRoom, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN),
-            core::DataIntegrityObject{}
-        };
-    }
-    return strategy->decryptAndConvert(streamRoom, encKey);
-}
-
-StreamRoomDataSchema::Version StreamRoomDataSchemaMapper::getDataStructureVersion(
-    const server::StreamRoomDataEntry& entry
-) {
-    if (entry.data.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = core::dynamic::VersionedData::fromJSON(entry.data);
-        switch (versioned.version) {
-        case core::ModuleDataSchema::Version::VERSION_5:
-            return StreamRoomDataSchema::Version::VERSION_5;
-        default:
-            return StreamRoomDataSchema::Version::UNKNOWN;
+    return _strategyMapper.dispatch(
+        static_cast<int64_t>(getDataStructureVersion(streamRoom.data.back())), streamRoom, encKey,
+        [&]() -> std::tuple<StreamRoom, core::DataIntegrityObject> {
+            return {
+                toLibStreamRoom(
+                    streamRoom, {}, {}, UnknowStreamRoomFormatException().getCode(),
+                    StreamRoomDataSchema::Version::UNKNOWN
+                ),
+                {}
+            };
         }
-    }
-    return StreamRoomDataSchema::Version::UNKNOWN;
+    );
 }
 
 void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInfo& streamRoom) {
     const auto& entry = streamRoom.data.back();
     switch (getDataStructureVersion(entry)) {
-    case StreamRoomDataSchema::Version::VERSION_5: {
+    case core::ModuleDataSchema::Version::UNKNOWN:
+        throw UnknowStreamRoomFormatException();
+    case core::ModuleDataSchema::Version::VERSION_5: {
         auto encData = core::dynamic::EncryptedModuleDataV5::fromJSON(entry.data);
         auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
         if (dio.contextId != streamRoom.contextId ||
@@ -88,100 +73,27 @@ void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInf
     default:
         throw UnknowStreamRoomFormatException();
     }
-    throw UnknowStreamRoomFormatException();
 }
 
 uint32_t StreamRoomDataSchemaMapper::validateDataIntegrity(const server::StreamRoomInfo& streamRoom) {
-    try {
-        assertDataIntegrity(streamRoom);
-        return 0;
-    } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
-        return core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
+    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(streamRoom); });
 }
 
 std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRooms(
     const std::vector<server::StreamRoomInfo>& streamRooms,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    if (streamRooms.empty()) {
-        return {};
-    }
-
-    std::vector<StreamRoom> result(streamRooms.size());
-    std::vector<core::DataIntegrityObject> result_dio(streamRooms.size());
-    std::set<std::string> seenRandomIds;
-
-    for (size_t i = 0; i < streamRooms.size(); i++) {
-        auto code = validateDataIntegrity(streamRooms[i]);
-        if (code != 0) {
-            result[i] = toLibStreamRoom(streamRooms[i], {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
+    return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<StreamRoom>(
+        streamRooms, keyProvider, _connection,
+        [&](const server::StreamRoomInfo& room) { return validateDataIntegrity(room); },
+        [](const server::StreamRoomInfo& room) -> core::EncKeyLocation {
+            return {.contextId = room.contextId, .resourceId = room.resourceId.value_or("")};
+        },
+        [&](const server::StreamRoomInfo& room, const core::DecryptedEncKey& key) { return decrypt(room, key); },
+        [](const server::StreamRoomInfo& room, uint32_t code) {
+            return toLibStreamRoom(room, {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
         }
-    }
-
-    core::KeyDecryptionAndVerificationRequest keyRequest;
-    for (size_t i = 0; i < streamRooms.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        const auto& room = streamRooms[i];
-        core::EncKeyLocation loc{.contextId = room.contextId, .resourceId = room.resourceId.value_or("")};
-        keyRequest.addOne(room.keys, room.data.back().keyId, loc);
-    }
-    auto roomKeys = keyProvider->getKeysAndVerify(keyRequest);
-
-    for (size_t i = 0; i < streamRooms.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        const auto& room = streamRooms[i];
-        core::EncKeyLocation loc{.contextId = room.contextId, .resourceId = room.resourceId.value_or("")};
-        try {
-            auto it = roomKeys.find(loc);
-            if (it == roomKeys.end()) {
-                throw UnknowStreamRoomFormatException();
-            }
-            auto [decryptedRoom, dio] = decrypt(room, it->second.at(room.data.back().keyId));
-            result[i] = decryptedRoom;
-            result_dio[i] = dio;
-            if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
-                result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
-            }
-        } catch (const core::Exception& e) {
-            result[i] = toLibStreamRoom(room, {}, {}, e.getCode(), StreamRoomDataSchema::Version::UNKNOWN);
-        } catch (const privmx::utils::PrivmxException& e) {
-            result[i] = toLibStreamRoom(
-                room, {}, {}, core::ExceptionConverter::convert(e).getCode(), StreamRoomDataSchema::Version::UNKNOWN
-            );
-        } catch (...) {
-            result[i] = toLibStreamRoom(
-                room, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, StreamRoomDataSchema::Version::UNKNOWN
-            );
-        }
-    }
-
-    std::vector<core::VerificationRequest> verifyRequests;
-    std::vector<size_t> verifyIndices;
-    for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        verifyRequests.push_back(
-            {.contextId = result[i].contextId,
-             .senderId = result[i].lastModifier,
-             .senderPubKey = result_dio[i].creatorPubKey,
-             .date = result[i].lastModificationDate,
-             .bridgeIdentity = result_dio[i].bridgeIdentity}
-        );
-        verifyIndices.push_back(i);
-    }
-    auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
-    for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode = verified[j] ?
-            0 :
-            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-    }
-    return result;
+    );
 }
 
 StreamRoom StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRoom(

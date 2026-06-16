@@ -162,7 +162,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc
@@ -193,7 +192,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
-    StreamRoomDataSchemaMapper _streamRoomDataSchemaMapper;
+    std::shared_ptr<StreamRoomDataSchemaMapper> _streamRoomDataSchemaMapper;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
