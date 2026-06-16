@@ -15,12 +15,44 @@ using privmx::test::ScopeExit;
 // Minimal WebRTC stub — returns empty strings so no real media session is needed.
 class FakeWebRTC : public stream::WebRTCInterface {
 public:
-    std::string createOfferAndSetLocalDescription(const std::string&) override { return ""; }
-    std::string createAnswerAndSetDescriptions(const std::string&, const std::string&, const std::string&) override { return ""; }
-    void setAnswerAndSetRemoteDescription(const std::string&, const std::string&, const std::string&) override {}
-    void updateSessionId(const std::string&, const int64_t, const std::string&) override {}
-    void close(const std::string&) override {}
-    void updateKeys(const std::string&, const std::vector<stream::Key>&) override {}
+    virtual std::string createOfferAndSetLocalDescription(
+        const std::string& streamRoomId,
+        const std::string& connectionType
+    ) override {
+        return "";
+    };
+    virtual std::string createAnswerAndSetDescriptions(
+        const std::string& streamRoomId,
+        const std::string& sdp,
+        const std::string& type,
+        const std::string& connectionType
+    ) override {
+        return "";
+    };
+    virtual void setAnswerAndSetRemoteDescription(
+        const std::string& streamRoomId,
+        const std::string& sdp,
+        const std::string& type,
+        const std::string& connectionType
+    ) override {
+        return;
+    };
+    virtual void updateSessionId(
+        const std::string& streamRoomId,
+        const int64_t sessionId,
+        const std::string& connectionType
+    ) override {
+        return;
+    };
+    virtual void closeAll(const std::string& streamRoomId) override {
+        return;
+    };
+    virtual void close(const std::string& streamRoomId, const std::string& connectionType) override {
+        return;
+    };
+    virtual void updateKeys(const std::string& streamRoomId, const std::vector<stream::Key>& keys) override {
+        return;
+    };
 };
 
 class StreamEventsLowTest : public privmx::test::BaseEndpointEventTest {

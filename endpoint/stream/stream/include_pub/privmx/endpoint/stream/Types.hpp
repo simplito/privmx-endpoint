@@ -18,8 +18,9 @@ limitations under the License.
 namespace privmx {
 namespace endpoint {
 namespace stream {
-
-using StreamHandle = int64_t; // can be everything that is DTO
+using Handle = int64_t; // can be everything that is DTO
+using StreamHandle = Handle;
+using SubscriberStreamHandle = Handle;
 using RemoteStreamId = int64_t;
 using RemoteTrackId = std::string;
 
@@ -97,7 +98,6 @@ struct StreamTrackInfo {
     std::optional<std::string> description; // opis strumienia
     std::optional<bool> moderated;          // czy zmoderowany
     std::optional<bool> simulcast;          // czy używa simulcast
-    std::optional<bool> talking;            // czy aktywność audio
 };
 
 struct StreamInfo {
@@ -106,7 +106,6 @@ struct StreamInfo {
     std::optional<std::string> metadata; // metadane jako tekst JSON
     std::optional<bool> dummy;           // czy to publisher-dummy
     std::vector<StreamTrackInfo> tracks; // lista trackow
-    std::optional<bool> talking;         // deprecated
 };
 
 struct StreamTrackModificationPair {

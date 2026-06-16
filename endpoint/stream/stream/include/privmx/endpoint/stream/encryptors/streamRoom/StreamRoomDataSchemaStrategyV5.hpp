@@ -16,7 +16,7 @@ limitations under the License.
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
@@ -29,29 +29,23 @@ namespace endpoint {
 namespace stream {
 
 // clang-format off
-class StreamRoomDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
-    server::StreamRoomInfo,
+class StreamRoomDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
+    core::ModuleDataEncryptorV5,
+    core::dynamic::EncryptedModuleDataV5,
     core::DecryptedModuleDataV5,
-    std::tuple<StreamRoom, core::DataIntegrityObject>
+    server::StreamRoomInfo,
+    StreamRoom
 > {
     // clang-format on
 public:
-    core::DecryptedModuleDataV5 decrypt(
-        const server::StreamRoomInfo& streamRoom,
-        const core::DecryptedEncKey& encKey
-    ) const override;
     std::tuple<StreamRoom, core::DataIntegrityObject> convert(
         const server::StreamRoomInfo& streamRoom,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<StreamRoom, core::DataIntegrityObject> makeErrorResult(
-        const server::StreamRoomInfo& streamRoom,
-        int64_t errorCode
-    ) const override;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
+    StreamRoom toLibError(const server::StreamRoomInfo& streamRoom, int64_t errorCode) const override;
 
-private:
-    mutable core::ModuleDataEncryptorV5 _encryptor;
+protected:
+    core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::StreamRoomInfo& model) const override;
 };
 
 } // namespace stream

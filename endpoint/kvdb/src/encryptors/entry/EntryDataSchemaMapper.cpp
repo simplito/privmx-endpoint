@@ -12,12 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/encryptors/entry/EntryDataSchemaMapper.hpp"
 
 #include <Poco/JSON/Object.h>
-#include <privmx/endpoint/core/ConnectionImpl.hpp>
-#include <privmx/endpoint/core/ConvertedExceptions.hpp>
-#include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 
@@ -66,60 +61,55 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaMapper::decrypt(
     const server::KvdbEntryInfo& entry,
     const core::DecryptedEncKey& encKey
 ) {
-    auto version = getDataStructureVersion(entry);
-    auto strategy = _strategyMapper.getStrategy(static_cast<int64_t>(version));
-    if (!strategy) {
-        auto e = UnknownKvdbEntryFormatException();
-        return {
-            toLibKvdbEntry(entry, {}, {}, {}, {}, e.getCode(), KvdbEntryDataSchema::Version::UNKNOWN),
-            core::DataIntegrityObject{}
-        };
-    }
-    return strategy->decryptAndConvert(entry, encKey);
+    return _strategyMapper.dispatch(
+        static_cast<int64_t>(getDataStructureVersion(entry)), entry, encKey,
+        [&]() -> std::tuple<KvdbEntry, core::DataIntegrityObject> {
+            return {
+                toLibKvdbEntry(
+                    entry, {}, {}, {}, {}, UnknownKvdbEntryFormatException().getCode(),
+                    KvdbEntryDataSchema::Version::UNKNOWN
+                ),
+                {}
+            };
+        }
+    );
 }
 
 KvdbEntryDataSchema::Version EntryDataSchemaMapper::getDataStructureVersion(const server::KvdbEntryInfo& entry) {
-    if (entry.kvdbEntryValue.type() == typeid(Poco::JSON::Object::Ptr)) {
-        auto versioned = core::dynamic::VersionedData::fromJSON(entry.kvdbEntryValue);
-        switch (versioned.version) {
-        case KvdbEntryDataSchema::Version::VERSION_5:
-            return KvdbEntryDataSchema::Version::VERSION_5;
-        default:
-            return KvdbEntryDataSchema::Version::UNKNOWN;
+    return core::DataSchemaMapperUtils::mapVersionedData(
+        entry.kvdbEntryValue, KvdbEntryDataSchema::Version::UNKNOWN,
+        [](int64_t v) {
+            switch (v) {
+            case KvdbEntryDataSchema::Version::VERSION_5:
+                return KvdbEntryDataSchema::Version::VERSION_5;
+            default:
+                return KvdbEntryDataSchema::Version::UNKNOWN;
+            }
         }
-    }
-    return KvdbEntryDataSchema::Version::UNKNOWN;
+    );
 }
 
 uint32_t EntryDataSchemaMapper::validateEntryDataIntegrity(
     const server::KvdbEntryInfo& entry,
     const std::string& kvdbResourceId
 ) {
-    try {
+    return core::DataSchemaMapperUtils::toStatusCode([&] {
         switch (getDataStructureVersion(entry)) {
         case KvdbEntryDataSchema::Version::UNKNOWN:
-            return UnknownKvdbEntryFormatException().getCode();
+            throw UnknownKvdbEntryFormatException();
         case KvdbEntryDataSchema::Version::VERSION_5: {
             auto encData = server::EncryptedKvdbEntryDataV5::fromJSON(entry.kvdbEntryValue);
             auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
-            if (dio.contextId != entry.contextId ||
-                dio.resourceId != entry.kvdbEntryKey ||
-                !dio.containerId.has_value() ||
-                dio.containerId.value() != entry.kvdbId ||
-                !dio.containerResourceId.has_value() ||
-                dio.containerResourceId.value() != kvdbResourceId ||
-                dio.creatorUserId != entry.lastModifier ||
-                !core::TimestampValidator::validate(dio.timestamp, entry.lastModificationDate)) {
-                return KvdbEntryDataIntegrityException().getCode();
-            }
-            return 0;
+            core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
+                dio, entry.contextId, entry.kvdbEntryKey, entry.kvdbId, kvdbResourceId, entry.lastModifier,
+                entry.lastModificationDate, [] { throw KvdbEntryDataIntegrityException(); }
+            );
+            return;
         }
         default:
-            return UnknownKvdbEntryFormatException().getCode();
+            throw UnknownKvdbEntryFormatException();
         }
-    } catch (const core::Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
-        return core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
+    });
 }
 
 std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
@@ -127,79 +117,14 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
     const core::ModuleKeys& kvdbKeys,
     const std::shared_ptr<core::KeyProvider>& keyProvider
 ) {
-    if (entries.empty()) {
-        return {};
-    }
-
-    std::vector<KvdbEntry> result(entries.size());
-    std::vector<core::DataIntegrityObject> entriesDIO(entries.size());
-    std::set<std::string> seenRandomIds;
-
-    for (size_t i = 0; i < entries.size(); i++) {
-        auto code = validateEntryDataIntegrity(entries[i], kvdbKeys.moduleResourceId);
-        if (code != 0) {
-            result[i] = toLibKvdbEntry(entries[i], {}, {}, {}, {}, code, KvdbEntryDataSchema::Version::UNKNOWN);
+    return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<KvdbEntry>(
+        entries, kvdbKeys, keyProvider, _connection,
+        [&](const server::KvdbEntryInfo& e) { return validateEntryDataIntegrity(e, kvdbKeys.moduleResourceId); },
+        [&](const server::KvdbEntryInfo& e, const core::DecryptedEncKey& key) { return decrypt(e, key); },
+        [](const server::KvdbEntryInfo& e, uint32_t code) {
+            return toLibKvdbEntry(e, {}, {}, {}, {}, code, KvdbEntryDataSchema::Version::UNKNOWN);
         }
-    }
-
-    const core::EncKeyLocation location{.contextId = kvdbKeys.contextId, .resourceId = kvdbKeys.moduleResourceId};
-    core::KeyDecryptionAndVerificationRequest keyRequest;
-    for (size_t i = 0; i < entries.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        keyRequest.addOne(kvdbKeys.keys, entries[i].keyId, location);
-    }
-    auto keysResult = keyProvider->getKeysAndVerify(keyRequest);
-    auto keyMapIt = keysResult.find(location);
-
-    for (size_t i = 0; i < entries.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        try {
-            auto [decryptedEntry, dio] = decrypt(entries[i], keyMapIt->second.at(entries[i].keyId));
-            result[i] = decryptedEntry;
-            entriesDIO[i] = dio;
-            if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
-                result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
-            }
-        } catch (const core::Exception& e) {
-            result[i] = toLibKvdbEntry(entries[i], {}, {}, {}, {}, e.getCode(), KvdbEntryDataSchema::Version::UNKNOWN);
-        } catch (const privmx::utils::PrivmxException& e) {
-            result[i] = toLibKvdbEntry(
-                entries[i], {}, {}, {}, {}, core::ExceptionConverter::convert(e).getCode(),
-                KvdbEntryDataSchema::Version::UNKNOWN
-            );
-        } catch (...) {
-            result[i] = toLibKvdbEntry(
-                entries[i], {}, {}, {}, {}, ENDPOINT_CORE_EXCEPTION_CODE, KvdbEntryDataSchema::Version::UNKNOWN
-            );
-        }
-    }
-
-    std::vector<core::VerificationRequest> verifyRequests;
-    std::vector<size_t> verifyIndices;
-    for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) {
-            continue;
-        }
-        verifyRequests.push_back(
-            {.contextId = kvdbKeys.contextId,
-             .senderId = result[i].info.author,
-             .senderPubKey = result[i].authorPubKey,
-             .date = result[i].info.createDate,
-             .bridgeIdentity = entriesDIO[i].bridgeIdentity}
-        );
-        verifyIndices.push_back(i);
-    }
-    auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyRequests);
-    for (size_t j = 0; j < verifyIndices.size(); j++) {
-        result[verifyIndices[j]].statusCode = verified[j] ?
-            0 :
-            core::ExceptionConverter::getCodeOfUserVerificationFailureException();
-    }
-    return result;
+    );
 }
 
 KvdbEntry EntryDataSchemaMapper::validateDecryptAndConvertEntryDataToEntry(

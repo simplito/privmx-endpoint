@@ -353,9 +353,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackInfo>(const strea
     if (val.simulcast.has_value()) {
         obj->set("simulcast", serialize(val.simulcast.value()));
     }
-    if (val.talking.has_value()) {
-        obj->set("talking", serialize(val.talking.value()));
-    }
     return obj;
 }
 
@@ -373,9 +370,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamInfo>(const stream::St
     }
     if (val.dummy.has_value()) {
         obj->set("dummy", serialize(val.dummy.value()));
-    }
-    if (val.talking.has_value()) {
-        obj->set("talking", serialize(val.talking.value()));
     }
     Poco::JSON::Array::Ptr tracksArr = new Poco::JSON::Array();
     for (auto track : val.tracks) {

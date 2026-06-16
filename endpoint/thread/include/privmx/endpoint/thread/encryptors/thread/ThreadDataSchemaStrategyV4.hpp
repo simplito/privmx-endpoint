@@ -15,8 +15,7 @@ limitations under the License.
 #include <tuple>
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/IDataSchemaStrategy.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyDIO.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
@@ -28,10 +27,10 @@ namespace endpoint {
 namespace thread {
 
 // clang-format off
-class ThreadDataSchemaStrategyV4 : public core::TypedDataSchemaStrategy<
-    server::ThreadInfo, 
-    core::DecryptedModuleDataV4, 
-    std::tuple<Thread, core::DataIntegrityObject>
+class ThreadDataSchemaStrategyV4 : public core::TypedDataSchemaStrategyDIO<
+    server::ThreadInfo,
+    core::DecryptedModuleDataV4,
+    Thread
 > {
     // clang-format on
 public:
@@ -43,10 +42,7 @@ public:
         const server::ThreadInfo& thread,
         const core::DecryptedModuleDataV4& raw
     ) const override;
-    std::tuple<Thread, core::DataIntegrityObject> makeErrorResult(
-        const server::ThreadInfo& thread,
-        int64_t errorCode
-    ) const override;
+    Thread toLibError(const server::ThreadInfo& thread, int64_t errorCode) const override;
 
 private:
     mutable core::ModuleDataEncryptorV4 _encryptor;

@@ -6,12 +6,15 @@ using namespace privmx::endpoint::stream;
 
 ProxyWebRTC::ProxyWebRTC(privmx_endpoint_stream_WebRTCInterface webRTCInterface) : _webRTCInterface(webRTCInterface) {}
 
-std::string ProxyWebRTC::createOfferAndSetLocalDescription(const std::string& streamRoomId) {
+std::string ProxyWebRTC::createOfferAndSetLocalDescription(
+    const std::string& streamRoomId,
+    const std::string& connectionType
+) {
     if (_webRTCInterface.createOfferAndSetLocalDescriptionCallback == nullptr) {
         throw NullCallbackException("CreateOfferAndSetLocalDescriptionCallback");
     }
     const char* result = _webRTCInterface.createOfferAndSetLocalDescriptionCallback(
-        _webRTCInterface.ctx, streamRoomId.c_str()
+        _webRTCInterface.ctx, streamRoomId.c_str(), connectionType.c_str()
     );
     return std::string(result);
 }
@@ -19,13 +22,14 @@ std::string ProxyWebRTC::createOfferAndSetLocalDescription(const std::string& st
 std::string ProxyWebRTC::createAnswerAndSetDescriptions(
     const std::string& streamRoomId,
     const std::string& sdp,
-    const std::string& type
+    const std::string& type,
+    const std::string& connectionType
 ) {
     if (_webRTCInterface.createAnswerAndSetDescriptionsCallback == nullptr) {
         throw NullCallbackException("CreateAnswerAndSetDescriptionsCallback");
     }
     const char* result = _webRTCInterface.createAnswerAndSetDescriptionsCallback(
-        _webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str()
+        _webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str(), connectionType.c_str()
     );
     return std::string(result);
 }
@@ -33,13 +37,14 @@ std::string ProxyWebRTC::createAnswerAndSetDescriptions(
 void ProxyWebRTC::setAnswerAndSetRemoteDescription(
     const std::string& streamRoomId,
     const std::string& sdp,
-    const std::string& type
+    const std::string& type,
+    const std::string& connectionType
 ) {
     if (_webRTCInterface.setAnswerAndSetRemoteDescriptionCallback == nullptr) {
         throw NullCallbackException("SetAnswerAndSetRemoteDescriptionCallback");
     }
     _webRTCInterface.setAnswerAndSetRemoteDescriptionCallback(
-        _webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str()
+        _webRTCInterface.ctx, streamRoomId.c_str(), sdp.c_str(), type.c_str(), connectionType.c_str()
     );
 }
 
@@ -56,11 +61,23 @@ void ProxyWebRTC::updateSessionId(
     );
 }
 
-void ProxyWebRTC::close(const std::string& streamRoomId) {
+void ProxyWebRTC::closeAll(
+    const std::string& streamRoomId
+) {
     if (_webRTCInterface.closeCallback == nullptr) {
         throw NullCallbackException("CloseCallback");
     }
-    _webRTCInterface.closeCallback(_webRTCInterface.ctx, streamRoomId.c_str());
+    _webRTCInterface.closeAllCallback(_webRTCInterface.ctx, streamRoomId.c_str());
+}
+
+void ProxyWebRTC::close(
+    const std::string& streamRoomId,
+    const std::string& connectionType
+) {
+    if (_webRTCInterface.closeCallback == nullptr) {
+        throw NullCallbackException("CloseCallback");
+    }
+    _webRTCInterface.closeCallback(_webRTCInterface.ctx, streamRoomId.c_str(), connectionType.c_str());
 }
 
 void ProxyWebRTC::updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) {

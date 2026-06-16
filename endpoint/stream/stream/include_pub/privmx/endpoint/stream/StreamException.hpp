@@ -95,6 +95,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnsupportedMessageFormatVers
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadyJoinedStreamRoomException, "StreamRoom already joined", 0x002D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotPublishedException, "StreamHandle not published", 0x002F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamAlreadyCreatedException, "Subscriber stream is already created", 0x0030)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0031)
 // clang-format on
 } // namespace stream
 } // namespace endpoint

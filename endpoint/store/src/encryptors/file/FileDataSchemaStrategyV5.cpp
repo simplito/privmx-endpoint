@@ -22,17 +22,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-DecryptedFileMetaV5 FileDataSchemaStrategyV5::decrypt(
-    const server::File& file,
-    const core::DecryptedEncKey& encKey
-) const {
-    auto encryptedFileMeta = server::EncryptedFileMetaV5::fromJSON(file.meta);
-    if (encKey.statusCode != 0) {
-        auto result = _encryptor.extractPublic(encryptedFileMeta);
-        result.statusCode = encKey.statusCode;
-        return result;
-    }
-    return _encryptor.decrypt(encryptedFileMeta, encKey.key);
+server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::getEncryptedData(const server::File& model) const {
+    return server::EncryptedFileMetaV5::fromJSON(model.meta);
 }
 
 DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
@@ -101,14 +92,10 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
     };
 }
 
-std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::makeErrorResult(
-    const server::File& file,
-    int64_t errorCode
-) const {
-    return {
-        FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_5, false),
-        core::DataIntegrityObject{}
-    };
+File FileDataSchemaStrategyV5::toLibError(const server::File& file, int64_t errorCode) const {
+    return FileMetaDataSchemaMapper::toLibFile(
+        file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_5, false
+    );
 }
 
 server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::encrypt(
@@ -123,10 +110,4 @@ server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::encrypt(
         .publicMeta = publicMeta, .privateMeta = privateMeta, .internalMeta = internalMeta, .dio = dio
     };
     return _encryptor.encrypt(fileMeta, userPrivKey, key);
-}
-
-core::DataIntegrityObject FileDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const server::EncryptedFileMetaV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
 }

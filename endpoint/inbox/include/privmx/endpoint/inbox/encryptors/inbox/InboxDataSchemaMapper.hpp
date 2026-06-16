@@ -19,11 +19,11 @@ limitations under the License.
 #include <tuple>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/encryptors/module/Types.hpp>
 #include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
 
 #include <Poco/Dynamic/Var.h>
@@ -39,7 +39,7 @@ namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxDataSchemaMapper {
+class InboxDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     InboxDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
@@ -50,14 +50,16 @@ public:
         const core::DecryptedEncKey& encKey
     );
 
-    InboxDataSchema::Version getDataStructureVersion(const server::InboxDataEntry& entry);
-
     void assertDataIntegrity(const server::InboxInfo& inbox);
 
     uint32_t validateDataIntegrity(const server::InboxInfo& inbox);
 
     InboxPublicViewData getPublicViewData(const server::InboxGetPublicViewResult& publicView);
     InboxInternalMetaV5 decryptInternalMeta(const server::InboxDataEntry& entry, const core::DecryptedEncKey& encKey);
+    core::ModuleInternalMetaV5 decryptInternalMeta(
+        const Poco::Dynamic::Var& data,
+        const core::DecryptedEncKey& encKey
+    ) override;
 
     std::vector<Inbox> validateDecryptAndConvertInboxes(
         const std::vector<server::InboxInfo>& inboxes,
@@ -79,8 +81,6 @@ public:
     );
 
 private:
-    privmx::crypto::PrivateKey _userPrivKey;
-    core::Connection _connection;
     core::VersionStrategyMapper<server::InboxInfo, std::tuple<Inbox, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<InboxDataSchemaStrategyV4> _strategyV4;
     std::shared_ptr<InboxDataSchemaStrategyV5> _strategyV5;

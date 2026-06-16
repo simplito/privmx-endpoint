@@ -70,13 +70,7 @@ public:
     );
     void deleteKvdb(const std::string& kvdbId);
     Kvdb getKvdb(const std::string& kvdbId);
-    Kvdb getKvdbEx(const std::string& kvdbId, const std::string& type);
     core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery);
-    core::PagingList<Kvdb> listKvdbsEx(
-        const std::string& contextId,
-        const core::PagingQuery& pagingQuery,
-        const std::string& type
-    );
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
     bool hasEntry(const std::string& kvdbId, const std::string& key);
@@ -107,22 +101,9 @@ public:
     );
 
 private:
-    std::string createKvdbEx(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::string& type,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
-    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-
-    KvdbDataSchema::Version getKvdbDataEntryStructureVersion(server::KvdbDataEntry kvdbEntry);
     std::tuple<Kvdb, core::DataIntegrityObject> decryptAndConvertKvdbDataToKvdb(
         server::KvdbInfo kvdb,
         const core::DecryptedEncKey& encKey
@@ -158,7 +139,7 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
-    KvdbDataSchemaMapper _kvdbDataSchemaMapper;
+    std::shared_ptr<KvdbDataSchemaMapper> _kvdbDataSchemaMapper;
     EntryDataSchemaMapper _entryDataSchemaMapper;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     inline static const std::string KVDB_TYPE_FILTER_FLAG = "kvdb";

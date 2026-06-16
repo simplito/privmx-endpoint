@@ -370,7 +370,7 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamUnpublished) {
     auto handle = publishVideoStream(user1, streamRoomId);
     drainEventQueue();
 
-    user1.streamApi->unpublishStream(handle);
+    user1.streamApi->removeStream(handle);
     auto eventHolder = waitForEvent("streamUnpublished", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
     ASSERT_TRUE(eventHolder.has_value());
     assertEventBasics(eventHolder.value(), "streamUnpublished");
@@ -397,8 +397,7 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamSubscribed) {
     auto feedSubscriptions = streamSubscriptionsForPublishedStreams(user2, streamRoomId);
     ASSERT_FALSE(feedSubscriptions.empty());
     drainEventQueue();
-
-    user2.streamApi->subscribeToRemoteStreams(streamRoomId, feedSubscriptions);
+    user2.streamApi->createSubscriberStream(streamRoomId, feedSubscriptions);
     auto eventHolder = waitForEvent("streamSubscribed", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
     ASSERT_TRUE(eventHolder.has_value());
     assertEventBasics(eventHolder.value(), "streamSubscribed");
@@ -422,7 +421,7 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamUnsubscribed) {
     user2.streamApi->joinStreamRoom(streamRoomId);
     auto feedSubscriptions = streamSubscriptionsForPublishedStreams(user2, streamRoomId);
     ASSERT_FALSE(feedSubscriptions.empty());
-    user2.streamApi->subscribeToRemoteStreams(streamRoomId, feedSubscriptions);
+    auto subscriberHandle = user2.streamApi->createSubscriberStream(streamRoomId, feedSubscriptions);
 
     auto unsubscribeQuery = user1.streamApi->buildSubscriptionQuery(
         stream::EventType::STREAM_UNSUBSCRIBE,
@@ -433,7 +432,7 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamUnsubscribed) {
     user2.streamApi->subscribeFor({unsubscribeQuery});
     drainEventQueue();
 
-    user2.streamApi->unsubscribeFromRemoteStreams(streamRoomId, feedSubscriptions);
+    user2.streamApi->removeSubscriberStream(subscriberHandle);
     auto eventHolder = waitForEvent("streamUnsubscribed", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
     ASSERT_TRUE(eventHolder.has_value());
     assertEventBasics(eventHolder.value(), "streamUnsubscribed");

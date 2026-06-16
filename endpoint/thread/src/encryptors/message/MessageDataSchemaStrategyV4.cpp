@@ -66,14 +66,8 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV4::conv
     };
 }
 
-std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV4::makeErrorResult(
-    const server::Message& message,
-    int64_t errorCode
-) const {
-    return {
-        MessageDataSchemaMapper::toLibMessage(
-            message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_4
-        ),
-        core::DataIntegrityObject{}
-    };
+Message MessageDataSchemaStrategyV4::toLibError(const server::Message& message, int64_t errorCode) const {
+    return MessageDataSchemaMapper::toLibMessage(
+        message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_4
+    );
 }

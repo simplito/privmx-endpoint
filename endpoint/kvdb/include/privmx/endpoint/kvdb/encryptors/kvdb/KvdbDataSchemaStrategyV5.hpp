@@ -16,7 +16,7 @@ limitations under the License.
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
@@ -29,29 +29,23 @@ namespace endpoint {
 namespace kvdb {
 
 // clang-format off
-class KvdbDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
-    server::KvdbInfo,
+class KvdbDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
+    core::ModuleDataEncryptorV5,
+    core::dynamic::EncryptedModuleDataV5,
     core::DecryptedModuleDataV5,
-    std::tuple<Kvdb, core::DataIntegrityObject>
+    server::KvdbInfo,
+    Kvdb
 > {
     // clang-format on
 public:
-    core::DecryptedModuleDataV5 decrypt(
-        const server::KvdbInfo& kvdb,
-        const core::DecryptedEncKey& encKey
-    ) const override;
     std::tuple<Kvdb, core::DataIntegrityObject> convert(
         const server::KvdbInfo& kvdb,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<Kvdb, core::DataIntegrityObject> makeErrorResult(
-        const server::KvdbInfo& kvdb,
-        int64_t errorCode
-    ) const override;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
+    Kvdb toLibError(const server::KvdbInfo& kvdb, int64_t errorCode) const override;
 
-private:
-    mutable core::ModuleDataEncryptorV5 _encryptor;
+protected:
+    core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::KvdbInfo& model) const override;
 };
 
 } // namespace kvdb

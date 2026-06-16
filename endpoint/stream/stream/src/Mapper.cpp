@@ -25,7 +25,6 @@ StreamTrackInfo Mapper::mapToStreamTrackInfo(const server::StreamTrackInfo& s) {
         .description = s.description,
         .moderated = s.moderated,
         .simulcast = s.simulcast,
-        .talking = s.talking,
     };
 }
 
@@ -42,7 +41,6 @@ StreamInfo Mapper::mapToStreamInfo(const server::StreamInfo& s) {
                                              std::nullopt,
         .dummy = s.dummy,
         .tracks = std::move(tracks),
-        .talking = s.talking,
     };
 }
 

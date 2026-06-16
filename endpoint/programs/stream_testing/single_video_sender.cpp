@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
             std::this_thread::sleep_for(std::chrono::seconds(2));
             streamApi.sendData(streamHandle, core::Buffer::from("ping"));
         }
-        streamApi.unpublishStream(streamHandle);
+        streamApi.removeStream(streamHandle);
         std::this_thread::sleep_for(std::chrono::seconds(2));
         streamApi.leaveStreamRoom(streamRoomId);
         connection.disconnect();
