@@ -52,7 +52,7 @@ struct StreamRoom {
     core::ContainerPolicyWithoutItem policy;
     int64_t statusCode;
     int64_t schemaVersion;
-    bool closed;
+    std::string state; // "created" | "open" | "closed"
 };
 
 struct Stream {
