@@ -58,24 +58,6 @@ stream::SdpWithTypeModel VarDeserializer::deserialize<stream::SdpWithTypeModel>(
 );
 
 template<>
-stream::NewStreams VarDeserializer::deserialize<stream::NewStreams>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-);
-
-template<>
-stream::StreamsUpdatedDataInternal VarDeserializer::deserialize<stream::StreamsUpdatedDataInternal>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-);
-
-template<>
-stream::StreamsUpdatedData VarDeserializer::deserialize<stream::StreamsUpdatedData>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-);
-
-template<>
 stream::StreamSubscription VarDeserializer::deserialize<stream::StreamSubscription>(
     const Poco::Dynamic::Var& val,
     const std::string& name
@@ -95,12 +77,6 @@ stream::StreamUpdatedEventData VarDeserializer::deserialize<stream::StreamUpdate
 
 template<>
 stream::StreamTrackModificationPair VarDeserializer::deserialize<stream::StreamTrackModificationPair>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-);
-
-template<>
-stream::StreamTrackModification VarDeserializer::deserialize<stream::StreamTrackModification>(
     const Poco::Dynamic::Var& val,
     const std::string& name
 );

@@ -377,9 +377,9 @@ MyFrame::MyFrame()
             } else if (privmx::endpoint::stream::Events::isStreamUnpublishedEvent(eventHolder)) {
                 PRIVMX_DEBUG("StreamProgram wx", "isStreamUnpublishedEvent")
                 auto eventData = privmx::endpoint::stream::Events::extractStreamUnpublishedEvent(eventHolder);
-            } else if (privmx::endpoint::stream::Events::isStreamsUpdatedEvent(eventHolder)) {
-                PRIVMX_DEBUG("StreamProgram wx", "isStreamsUpdatedEvent")
-                auto eventData = privmx::endpoint::stream::Events::extractStreamsUpdatedEvent(eventHolder);
+            } else if (privmx::endpoint::stream::Events::isStreamRoomReofferEvent(eventHolder)) {
+                PRIVMX_DEBUG("StreamProgram wx", "isStreamRoomReofferEvent")
+                auto eventData = privmx::endpoint::stream::Events::extractStreamRoomReofferEvent(eventHolder);
             }
         }
     });
@@ -499,8 +499,8 @@ void MyFrame::Connect(std::string login, std::string password, std::string url) 
         return;
     }
     streamApi->subscribeFor({
-        streamApi->buildSubscriptionQuery(stream::EventType::STREAM_JOIN, stream::EventSelectorType::CONTEXT_ID, contextId),
-        streamApi->buildSubscriptionQuery(stream::EventType::STREAM_LEAVE, stream::EventSelectorType::CONTEXT_ID, contextId),
+        streamApi->buildSubscriptionQuery(stream::EventType::STREAMROOM_JOIN, stream::EventSelectorType::CONTEXT_ID, contextId),
+        streamApi->buildSubscriptionQuery(stream::EventType::STREAMROOM_LEAVE, stream::EventSelectorType::CONTEXT_ID, contextId),
         streamApi->buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH, stream::EventSelectorType::CONTEXT_ID, contextId),
         streamApi->buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH, stream::EventSelectorType::CONTEXT_ID, contextId),
         streamApi->buildSubscriptionQuery(stream::EventType::STREAMROOM_CREATE, stream::EventSelectorType::CONTEXT_ID, contextId),

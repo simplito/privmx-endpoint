@@ -1395,9 +1395,9 @@ TEST_F(StreamTest, updateSubscription_after_removeStream) {
     EXPECT_NO_THROW({
         streamApi->removeStream(handle);
     });
-    EXPECT_THROW({
+    EXPECT_NO_THROW({
         streamApi->updateSubscriberStream(subHandle, {}, streamsId);
-    }, core::Exception);
+    });
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
     });

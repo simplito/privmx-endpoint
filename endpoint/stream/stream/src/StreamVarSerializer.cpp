@@ -97,14 +97,33 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomDeletedEventData>(
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamEventData>(const stream::StreamEventData& val) {
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomParticipantEventData>(
+    const stream::StreamRoomParticipantEventData& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "stream$StreamEventData");
+        obj->set("__type", "stream$StreamRoomParticipantEventData");
     }
     obj->set("streamRoomId", serialize(val.streamRoomId));
-    obj->set("streamIds", serialize(val.streamIds));
     obj->set("userId", serialize(val.userId));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscriptionEventData>(
+    const stream::StreamSubscriptionEventData& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamSubscriptionEventData");
+    }
+    obj->set("streamRoomId", serialize(val.streamRoomId));
+    obj->set("userId", serialize(val.userId));
+    Poco::JSON::Array::Ptr subsArr = new Poco::JSON::Array();
+    for (const auto& sub : val.subscriptions) {
+        subsArr->add(serialize<stream::StreamSubscription>(sub));
+    }
+    obj->set("subscriptions", subsArr);
     return obj;
 }
 
@@ -194,28 +213,15 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUpdatedEventData>(cons
         obj->set("__type", "stream$StreamUpdatedEventData");
     }
     obj->set("streamRoomId", serialize(val.streamRoomId));
-    obj->set("streamsAdded", serialize<stream::StreamInfo>(val.streamsAdded));
-    obj->set("streamsRemoved", serialize<stream::StreamInfo>(val.streamsRemoved));
-    obj->set("streamsModified", serialize<stream::StreamTrackModification>(val.streamsModified));
+    obj->set("streamId", serialize(val.streamId));
+    obj->set("userId", serialize(val.userId));
+    obj->set("tracksAdded", serialize<stream::StreamTrackInfo>(val.tracksAdded));
+    obj->set("tracksRemoved", serialize<stream::StreamTrackInfo>(val.tracksRemoved));
+    obj->set("tracksModified", serialize<stream::StreamTrackModificationPair>(val.tracksModified));
     return obj;
 }
 
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackModification>(
-    const stream::StreamTrackModification& val
-) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$StreamTrackModification");
-    }
-    obj->set("streamId", serialize(val.streamId));
-    Poco::JSON::Array::Ptr tracksArr = new Poco::JSON::Array();
-    for (auto track : val.tracks) {
-        tracksArr->add(serialize<stream::StreamTrackModificationPair>(track));
-    }
-    obj->set("tracks", tracksArr);
-    return obj;
-}
+
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackModificationPair>(
@@ -244,25 +250,10 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamPublishResult>(const s
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamJoinedEvent>(const stream::StreamJoinedEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomJoinedEvent>(const stream::StreamRoomJoinedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "stream$StreamJoinedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("data", serialize(val.data));
-    return obj;
-}
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::RemoteStreamsChangedEvent>(
-    const stream::RemoteStreamsChangedEvent& val
-) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$RemoteStreamsChangedEvent");
+        obj->set("__type", "stream$StreamRoomJoinedEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
@@ -285,18 +276,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEventData>(
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamLeftEventData>(const stream::StreamLeftEventData& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$StreamLeftEventData");
-    }
-    obj->set("streamRoomId", serialize(val.streamRoomId));
-    obj->set("streamId", serialize(val.streamId));
-    obj->set("userId", serialize(val.userId));
-    return obj;
-}
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEvent>(const stream::StreamUnpublishedEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
@@ -310,10 +289,38 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnpublishedEvent>(cons
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamLeftEvent>(const stream::StreamLeftEvent& val) {
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomLeftEvent>(const stream::StreamRoomLeftEvent& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "stream$StreamLeftEvent");
+        obj->set("__type", "stream$StreamRoomLeftEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("data", serialize(val.data));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscribedEvent>(const stream::StreamSubscribedEvent& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamSubscribedEvent");
+    }
+    obj->set("type", serialize(val.type));
+    obj->set("channel", serialize(val.channel));
+    obj->set("connectionId", serialize(val.connectionId));
+    obj->set("data", serialize(val.data));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUnsubscribedEvent>(
+    const stream::StreamUnsubscribedEvent& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$StreamUnsubscribedEvent");
     }
     obj->set("type", serialize(val.type));
     obj->set("channel", serialize(val.channel));
@@ -373,21 +380,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamInfo>(const stream::St
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::NewStreams>(const stream::NewStreams& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$NewStreams");
-    }
-    Poco::JSON::Array::Ptr streamsArr = new Poco::JSON::Array();
-    for (auto stream : val.streams) {
-        streamsArr->add(serialize<stream::StreamInfo>(stream));
-    }
-    obj->set("room", serialize(val.room));
-    obj->set("streams", streamsArr);
-    return obj;
-}
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::SdpWithTypeModel>(const stream::SdpWithTypeModel& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
@@ -414,55 +406,6 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::KeyType>(const stream::KeyType& val) {
 
     return Poco::Dynamic::Var(static_cast<int>(val));
-}
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::UpdatedStreamData>(const stream::UpdatedStreamData& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$UpdatedStreamData");
-    }
-    obj->set("active", serialize(val.active));
-    obj->set("type", serialize(val.type));
-    obj->set("streamId", serialize(val.streamId));
-    obj->set("streamMid", serialize(val.streamMid));
-    obj->set("stream_display", serialize(val.stream_display));
-    obj->set("mindex", serialize(val.mindex));
-    obj->set("mid", serialize(val.mid));
-    obj->set("send", serialize(val.send));
-    obj->set("ready", serialize(val.ready));
-    return obj;
-}
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamsUpdatedData>(const stream::StreamsUpdatedData& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$StreamsUpdatedData");
-    }
-    Poco::JSON::Array::Ptr streamsArr = new Poco::JSON::Array();
-    for (auto x : val.streams) {
-        streamsArr->add(serialize<stream::UpdatedStreamData>(x));
-    }
-    obj->set("room", serialize(val.room));
-    obj->set("streams", streamsArr);
-    // if (val.jsep.has_value()) {
-    //     obj->set("jsep", serialize(val.jsep.value()));
-    // }
-    return obj;
-}
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamsUpdatedEvent>(const stream::StreamsUpdatedEvent& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$StreamsUpdatedEvent");
-    }
-    obj->set("type", serialize(val.type));
-    obj->set("channel", serialize(val.channel));
-    obj->set("connectionId", serialize(val.connectionId));
-    obj->set("data", serialize(val.data));
-    return obj;
 }
 
 template<>

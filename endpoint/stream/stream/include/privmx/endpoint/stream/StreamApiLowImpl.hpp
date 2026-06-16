@@ -136,6 +136,7 @@ private:
     struct SubscriptionData {
         std::optional<int64_t> sessionId;
         std::optional<SubscriberStreamHandle> streamHandle;
+        std::vector<StreamSubscription> subscriptions;
     };
     struct StreamRoomData {
         StreamRoomData(
