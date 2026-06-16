@@ -14,6 +14,8 @@ limitations under the License.
 
 #include <Poco/URI.h>
 
+#include <algorithm>
+
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -462,7 +464,7 @@ SubscriberStreamHandle StreamApiLowImpl::createSubscriberStream(
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId, std::string("subscriber"));
 
     room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{.sessionId = subscribeResult.sessionId, .streamHandle = streamHandle}
+        SubscriptionData{.sessionId = subscribeResult.sessionId, .streamHandle = streamHandle, .subscriptions = subscriptions}
     );
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
@@ -518,8 +520,28 @@ void StreamApiLowImpl::updateSubscriberStream(
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(room->streamRoomId, result.sessionId, std::string("subscriber"));
 
+    // recompute the effective subscription set: (current \ toRemove) + toAdd
+    auto sameSubscription = [](const StreamSubscription& a, const StreamSubscription& b) {
+        return a.streamId == b.streamId && a.streamTrackId == b.streamTrackId;
+    };
+    std::vector<StreamSubscription> subscriptions;
+    for (const auto& current : room->subscriberStream->subscriptions) {
+        bool removed = std::any_of(
+            subscriptionsToRemove.begin(), subscriptionsToRemove.end(),
+            [&](const StreamSubscription& r) { return sameSubscription(current, r); }
+        );
+        if (!removed) {
+            subscriptions.push_back(current);
+        }
+    }
+    subscriptions.insert(subscriptions.end(), subscriptionsToAdd.begin(), subscriptionsToAdd.end());
+
     room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{.sessionId = result.sessionId, .streamHandle = StreamHandle()}
+        SubscriptionData{
+            .sessionId = result.sessionId,
+            .streamHandle = subscriptionHandle,
+            .subscriptions = subscriptions
+        }
     );
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
@@ -540,6 +562,20 @@ void StreamApiLowImpl::removeSubscriberStream(
     if (!room->subscriberStream) {
         throw SubscriberStreamHandleNotInitialized();
     }
+    server::StreamsUnsubscribeModel model;
+    model.streamRoomId = room->streamRoomId;
+    std::vector<server::StreamSubscription> itemsToRemove;
+    for (const auto& subscription : room->subscriberStream->subscriptions) {
+        server::StreamSubscription item;
+        item.streamId = subscription.streamId;
+        if (subscription.streamTrackId) {
+            item.streamTrackId = subscription.streamTrackId.value();
+        }
+        itemsToRemove.push_back(item);
+    }
+    model.subscriptionsToRemove = itemsToRemove;
+    _serverApi->streamsUnsubscribeFromRemote(model);
+
     room->webRtc->close(room->streamRoomId, "subscriber");
     _handleToRoomId.erase(subscriptionHandle);
     room->subscriberStream.reset();
