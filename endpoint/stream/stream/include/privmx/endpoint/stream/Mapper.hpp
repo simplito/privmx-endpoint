@@ -24,13 +24,10 @@ public:
     static StreamTrackInfo mapToStreamTrackInfo(const server::StreamTrackInfo& s);
     static StreamInfo mapToStreamInfo(const server::StreamInfo& s);
     static StreamTrackModificationPair mapToStreamTrackModificationPair(const server::StreamTrackModificationPair& s);
-    static StreamTrackModification mapToStreamTrackModification(const server::StreamTrackModification& s);
-    static NewStreams mapToNewStreams(const server::NewStreams& s);
     static PublishedStreamData mapToPublishedStreamData(const server::PublishedStreamData& s);
     static PublishedStreamData mapToPublishedStreamData(const server::StreamPublishedEventData& s);
     static StreamUpdatedEventData mapToStreamUpdatedEventData(const server::StreamUpdatedEventData& s);
-    static UpdatedStreamData mapToUpdatedStreamData(const server::UpdatedStreamData& s);
-    static StreamsUpdatedData mapToStreamsUpdatedData(const server::StreamsUpdatedData& s);
+    static StreamSubscriptionEventData mapToStreamSubscriptionEventData(const server::StreamSubscriptionEventData& s);
 };
 
 } // namespace stream
