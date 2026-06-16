@@ -27,7 +27,7 @@ public:
     static PublishedStreamData mapToPublishedStreamData(const server::PublishedStreamData& s);
     static PublishedStreamData mapToPublishedStreamData(const server::StreamPublishedEventData& s);
     static StreamUpdatedEventData mapToStreamUpdatedEventData(const server::StreamUpdatedEventData& s);
-    static StreamSubscribedEventData mapToStreamSubscribedEventData(const server::StreamSubscribedEventData& s);
+    static StreamSubscriptionEventData mapToStreamSubscriptionEventData(const server::StreamSubscriptionEventData& s);
 };
 
 } // namespace stream

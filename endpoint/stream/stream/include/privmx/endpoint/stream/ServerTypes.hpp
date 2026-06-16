@@ -224,21 +224,21 @@ JSON_STRUCT(StreamPublishResult, STREAM_PUBLISH_RESULT_FIELDS);
     F(type, std::optional<std::string>)
 JSON_STRUCT(StreamRoomDeletedEventData, STREAM_ROOM_DELETED_EVENT_DATA_FIELDS);
 
-#define STREAM_ROOM_MEMBER_EVENT_DATA_FIELDS(F)                                                                        \
+#define STREAM_ROOM_PARTICIPANT_EVENT_DATA_FIELDS(F)                                                                        \
     F(streamRoomId, std::string)                                                                                       \
     F(userId, std::string)
-JSON_STRUCT(StreamRoomMemberEventData, STREAM_ROOM_MEMBER_EVENT_DATA_FIELDS);
+JSON_STRUCT(StreamRoomParticipantEventData, STREAM_ROOM_PARTICIPANT_EVENT_DATA_FIELDS);
 
 #define STREAM_UNPUBLISHED_EVENT_DATA_FIELDS(F)                                                                        \
     F(streamRoomId, std::string)                                                                                       \
     F(streamId, int64_t)
 JSON_STRUCT(StreamUnpublishedEventData, STREAM_UNPUBLISHED_EVENT_DATA_FIELDS);
 
-#define STREAM_SUBSCRIBED_EVENT_DATA_FIELDS(F)                                                                         \
+#define STREAM_SUBSCRIPTION_EVENT_DATA_FIELDS(F)                                                                         \
     F(streamRoomId, std::string)                                                                                       \
     F(userId, std::string)                                                                                             \
     F(subscriptions, std::vector<StreamSubscription>)
-JSON_STRUCT(StreamSubscribedEventData, STREAM_SUBSCRIBED_EVENT_DATA_FIELDS);
+JSON_STRUCT(StreamSubscriptionEventData, STREAM_SUBSCRIPTION_EVENT_DATA_FIELDS);
 
 #define JANUS_EVENT_DATA_FIELDS(F)                                                                                     \
     F(janus, std::string)                                                                                              \

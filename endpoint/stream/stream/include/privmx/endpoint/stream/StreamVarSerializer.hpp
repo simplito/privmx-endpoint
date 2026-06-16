@@ -47,13 +47,13 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomDeletedEventData>(
 );
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomMemberEventData>(
-    const stream::StreamRoomMemberEventData& val
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoomParticipantEventData>(
+    const stream::StreamRoomParticipantEventData& val
 );
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscribedEventData>(
-    const stream::StreamSubscribedEventData& val
+Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscriptionEventData>(
+    const stream::StreamSubscriptionEventData& val
 );
 
 template<>

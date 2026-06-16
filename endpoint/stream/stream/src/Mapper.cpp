@@ -93,7 +93,7 @@ StreamUpdatedEventData Mapper::mapToStreamUpdatedEventData(const server::StreamU
         .tracksModified = std::move(tracksModified),
     };
 }
-StreamSubscribedEventData Mapper::mapToStreamSubscribedEventData(const server::StreamSubscribedEventData& s) {
+StreamSubscriptionEventData Mapper::mapToStreamSubscriptionEventData(const server::StreamSubscriptionEventData& s) {
     std::vector<StreamSubscription> subscriptions;
     subscriptions.reserve(s.subscriptions.size());
     for (const auto& sub : s.subscriptions) {

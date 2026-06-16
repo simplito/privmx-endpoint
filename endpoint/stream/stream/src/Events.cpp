@@ -255,10 +255,6 @@ StreamRoomLeftEvent Events::extractStreamRoomLeftEvent(const core::EventHolder& 
     }
 }
 
-bool Events::isStreamRoomReofferEvent(const core::EventHolder& handler) {
-    return handler.type() == "streamRoomReoffer";
-}
-
 bool Events::isStreamSubscribedEvent(const core::EventHolder& handler) {
     return handler.type() == "streamSubscribed";
 }

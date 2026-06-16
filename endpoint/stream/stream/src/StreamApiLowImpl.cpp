@@ -177,16 +177,16 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         );
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "streamRoomJoined") {
-        auto raw = server::StreamRoomMemberEventData::fromJSON(data);
-        auto eventData = StreamRoomMemberEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
-        auto event = core::EventBuilder::buildEvent<StreamRoomJoinedEvent, StreamRoomMemberEventData>(
+        auto raw = server::StreamRoomParticipantEventData::fromJSON(data);
+        auto eventData = StreamRoomParticipantEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
+        auto event = core::EventBuilder::buildEvent<StreamRoomJoinedEvent, StreamRoomParticipantEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "streamRoomLeft") {
-        auto raw = server::StreamRoomMemberEventData::fromJSON(data);
-        auto eventData = StreamRoomMemberEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
-        auto event = core::EventBuilder::buildEvent<StreamRoomLeftEvent, StreamRoomMemberEventData>(
+        auto raw = server::StreamRoomParticipantEventData::fromJSON(data);
+        auto eventData = StreamRoomParticipantEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
+        auto event = core::EventBuilder::buildEvent<StreamRoomLeftEvent, StreamRoomParticipantEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
@@ -198,16 +198,16 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         );
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "streamSubscribed") {
-        auto raw = server::StreamSubscribedEventData::fromJSON(data);
-        auto eventData = Mapper::mapToStreamSubscribedEventData(raw);
-        auto event = core::EventBuilder::buildEvent<StreamSubscribedEvent, StreamSubscribedEventData>(
+        auto raw = server::StreamSubscriptionEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamSubscriptionEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamSubscribedEvent, StreamSubscriptionEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
     } else if (type == "streamUnsubscribed") {
-        auto raw = server::StreamSubscribedEventData::fromJSON(data);
-        auto eventData = Mapper::mapToStreamSubscribedEventData(raw);
-        auto event = core::EventBuilder::buildEvent<StreamUnsubscribedEvent, StreamSubscribedEventData>(
+        auto raw = server::StreamSubscriptionEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamSubscriptionEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamUnsubscribedEvent, StreamSubscriptionEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);

@@ -205,7 +205,7 @@ struct StreamRoomJoinedEvent : public core::Event {
     /**
      * event data
      */
-    StreamRoomMemberEventData data;
+    StreamRoomParticipantEventData data;
 };
 
 /**
@@ -261,7 +261,7 @@ struct StreamRoomLeftEvent : public core::Event {
     /**
      * event data
      */
-    StreamRoomMemberEventData data;
+    StreamRoomParticipantEventData data;
 };
 
 /**
@@ -289,7 +289,7 @@ struct StreamSubscribedEvent : public core::Event {
     /**
      * event data
      */
-    StreamSubscribedEventData data;
+    StreamSubscriptionEventData data;
 };
 
 /**
@@ -317,7 +317,7 @@ struct StreamUnsubscribedEvent : public core::Event {
     /**
      * event data
      */
-    StreamSubscribedEventData data;
+    StreamSubscriptionEventData data;
 };
 
 /**
@@ -452,14 +452,6 @@ public:
      * @return 'StreamRoomLeftEvent' object
      */
     static StreamRoomLeftEvent extractStreamRoomLeftEvent(const core::EventHolder& eventHolder);
-
-    /**
-     * Checks whether event held in the 'EventHolder' is a 'StreamRoomReofferEvent'
-     *
-     * @param eventHolder holder object that wraps the 'Event'
-     * @return true for 'StreamRoomReofferEvent', else otherwise
-     */
-    static bool isStreamRoomReofferEvent(const core::EventHolder& eventHolder);
 
     /**
      * Checks whether event held in the 'EventHolder' is a 'StreamSubscribedEvent'

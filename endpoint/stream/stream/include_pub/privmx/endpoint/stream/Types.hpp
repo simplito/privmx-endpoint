@@ -127,7 +127,7 @@ struct PublishedStreamData {
     std::string userId;
 };
 
-struct StreamRoomMemberEventData {
+struct StreamRoomParticipantEventData {
     /**
      * StreamRoom ID
      */
@@ -139,7 +139,7 @@ struct StreamRoomMemberEventData {
     std::string userId;
 };
 
-struct StreamSubscribedEventData {
+struct StreamSubscriptionEventData {
     /**
      * StreamRoom ID
      */
