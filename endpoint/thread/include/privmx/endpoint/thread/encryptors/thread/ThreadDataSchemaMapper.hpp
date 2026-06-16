@@ -25,6 +25,7 @@ limitations under the License.
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
@@ -38,7 +39,7 @@ namespace privmx {
 namespace endpoint {
 namespace thread {
 
-class ThreadDataSchemaMapper {
+class ThreadDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     ThreadDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
@@ -48,8 +49,6 @@ public:
         const server::ThreadInfo& thread,
         const core::DecryptedEncKey& encKey
     );
-
-    ThreadDataSchema::Version getDataStructureVersion(const server::Thread2DataEntry& entry);
 
     void assertDataIntegrity(const server::ThreadInfo& thread);
 
@@ -74,8 +73,6 @@ public:
     );
 
 private:
-    privmx::crypto::PrivateKey _userPrivKey;
-    core::Connection _connection;
     core::VersionStrategyMapper<server::ThreadInfo, std::tuple<Thread, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<ThreadDataSchemaStrategyV5> _strategyV5;
 };

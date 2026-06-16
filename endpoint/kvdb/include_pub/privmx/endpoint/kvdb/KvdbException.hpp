@@ -47,7 +47,6 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbPublicDataMismatchExceptio
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedKvdbDataVersionException, "Invalid version of encrypted kvdb data", 0x0009)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEntryPublicDataMismatchException, "Kvdb entry public data mismatch", 0x000A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedKvdbEntryDataVersionException, "Invalid version of encrypted kvdb entry data", 0x000B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEncryptionKeyValidationException, "Failed kvdb encryption key validation", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, AlreadySubscribedException, "Already subscribed", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, NotSubscribedException, "Cannot unsubscribe if not subscribed", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknownKvdbFormatException, "Unknown kvdb format", 0x000F)

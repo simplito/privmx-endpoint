@@ -17,17 +17,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-DecryptedKvdbEntryDataV5 EntryDataSchemaStrategyV5::decrypt(
-    const server::KvdbEntryInfo& entry,
-    const core::DecryptedEncKey& encKey
-) const {
-    auto encryptedEntryData = server::EncryptedKvdbEntryDataV5::fromJSON(entry.kvdbEntryValue);
-    if (encKey.statusCode != 0) {
-        auto tmp = _encryptor.extractPublic(encryptedEntryData);
-        tmp.statusCode = encKey.statusCode;
-        return tmp;
-    }
-    return _encryptor.decrypt(encryptedEntryData, encKey.key);
+server::EncryptedKvdbEntryDataV5 EntryDataSchemaStrategyV5::getEncryptedData(const server::KvdbEntryInfo& model) const {
+    return server::EncryptedKvdbEntryDataV5::fromJSON(model.kvdbEntryValue);
 }
 
 std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::convert(
@@ -43,20 +34,8 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::conv
     };
 }
 
-std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::makeErrorResult(
-    const server::KvdbEntryInfo& entry,
-    int64_t errorCode
-) const {
-    return {
-        EntryDataSchemaMapper::toLibKvdbEntry(
-            entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5
-        ),
-        core::DataIntegrityObject{}
-    };
-}
-
-core::DataIntegrityObject EntryDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const server::EncryptedKvdbEntryDataV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
+KvdbEntry EntryDataSchemaStrategyV5::toLibError(const server::KvdbEntryInfo& entry, int64_t errorCode) const {
+    return EntryDataSchemaMapper::toLibKvdbEntry(
+        entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5
+    );
 }

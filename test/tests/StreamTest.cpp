@@ -1010,35 +1010,35 @@ TEST_F(StreamTest, publish_with_multiple_instance_of_same_track) {
     });
 }
 
-TEST_F(StreamTest, subscribeToRemoteStreams_no_streams) {
+TEST_F(StreamTest, createSubscription_no_streams) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         streamApi->joinStreamRoom(streamRoomId_1);
     });
     EXPECT_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, {});
-    }, core::Exception); 
-}
-
-TEST_F(StreamTest, unsubscribeFromRemoteStreams_no_streams) {
-    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
-    EXPECT_NO_THROW({
-        streamApi->joinStreamRoom(streamRoomId_1);
-    });
-    EXPECT_THROW({
-        streamApi->unsubscribeFromRemoteStreams(streamRoomId_1, {});
+        streamApi->createSubscriberStream(streamRoomId_1, {});
     }, core::Exception);
 }
 
-TEST_F(StreamTest, subscribeToRemoteStreams) {
+TEST_F(StreamTest, removeSubscription_invalid_handle) {
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+    });
+    EXPECT_THROW({
+        streamApi->removeSubscriberStream(-1);
+    }, core::Exception);
+}
+
+TEST_F(StreamTest, createSubscription) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
     });
-    // // invalid StreamSubscription
+    // invalid StreamSubscription
     std::vector<stream::StreamSubscription> invalid_streamsId = {{99999, "invalid"}};
     EXPECT_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, invalid_streamsId);
+        streamApi->createSubscriberStream(streamRoomId_1, invalid_streamsId);
     }, core::Exception);
     // valid StreamSubscription
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
@@ -1050,14 +1050,13 @@ TEST_F(StreamTest, subscribeToRemoteStreams) {
             std::cout << "stream.tracks.size():" << stream.tracks.size()  << std::endl;
             for(auto track : stream.tracks) {
                 streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
-
                 std::cout << "stream.id:" << stream.id << " | track.mid:" << track.mid << std::endl;
             }
         }
     });
     if(streamsId.size() != 0) {
         EXPECT_NO_THROW({
-            streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+            streamApi->createSubscriberStream(streamRoomId_1, streamsId);
         });
     } else {
         std::cerr << "No streams on bridge" << std::endl;
@@ -1068,7 +1067,7 @@ TEST_F(StreamTest, subscribeToRemoteStreams) {
     });
 }
 
-TEST_F(StreamTest, unsubscribeFromRemoteStreams) {
+TEST_F(StreamTest, removeSubscription) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
@@ -1082,16 +1081,16 @@ TEST_F(StreamTest, unsubscribeFromRemoteStreams) {
             }
         }
     });
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
-    // invalid StreamSubscription
-    std::vector<stream::StreamSubscription> invalid_streamsId = {{-1, "invalid"}};
+    // invalid handle
     EXPECT_THROW({
-        streamApi->unsubscribeFromRemoteStreams(streamRoomId_1, invalid_streamsId);
+        streamApi->removeSubscriberStream(-1);
     }, core::Exception);
     EXPECT_NO_THROW({
-        streamApi->unsubscribeFromRemoteStreams(streamRoomId_1, streamsId);
+        streamApi->removeSubscriberStream(handle);
     });
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
@@ -1240,7 +1239,7 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     EXPECT_NO_THROW({
-        streamApi->unpublishStream(handle);
+        streamApi->removeStream(handle);
     });
     EXPECT_THROW({
         streamApi->updateStream(handle);
@@ -1250,7 +1249,7 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     });
 }
 
-TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_invalid_data) {
+TEST_F(StreamTest, updateSubscription_invalid_data) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
@@ -1264,35 +1263,36 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_invalid_data) {
             }
         }
     });
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     //no change
     EXPECT_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, {});
+        streamApi->updateSubscriberStream(handle, {}, {});
     }, core::Exception);
     //add invalid
     EXPECT_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {{-1, "invalid"}}, {});
+        streamApi->updateSubscriberStream(handle, {{-1, "invalid"}}, {});
     }, core::Exception);
     //remove invalid
     EXPECT_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, {{-1, "invalid"}});
+        streamApi->updateSubscriberStream(handle, {}, {{-1, "invalid"}});
     }, core::Exception);
     //add invalid, remove valid
     EXPECT_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {{-1, "invalid"}}, streamsId);
+        streamApi->updateSubscriberStream(handle, {{-1, "invalid"}}, streamsId);
     }, core::Exception);
     //add valid, remove invalid
     EXPECT_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, streamsId, {{-1, "invalid"}});
+        streamApi->updateSubscriberStream(handle, streamsId, {{-1, "invalid"}});
     }, core::Exception);
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
-TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_remove_all_tracks) {
+TEST_F(StreamTest, updateSubscription_remove_all_tracks) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
@@ -1306,19 +1306,19 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_remove_all_tracks) {
             }
         }
     });
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
-
     EXPECT_NO_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, streamsId);
+        streamApi->updateSubscriberStream(handle, {}, streamsId);
     });
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
-TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_new_track) {
+TEST_F(StreamTest, updateSubscription_add_new_track) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
@@ -1332,18 +1332,19 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_new_track) {
             }
         }
     });
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     EXPECT_NO_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, streamsId, {});
+        streamApi->updateSubscriberStream(handle, streamsId, {});
     });
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
-TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_and_remove_same_track) {
+TEST_F(StreamTest, updateSubscription_add_and_remove_same_track) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
         publishStream(streamRoomId_1);
@@ -1358,18 +1359,19 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_add_and_remove_same_track) {
             }
         }
     });
+    stream::SubscriberStreamHandle handle;
     EXPECT_NO_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        handle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     EXPECT_NO_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, streamsId, streamsId);
+        streamApi->updateSubscriberStream(handle, streamsId, streamsId);
     });
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
     });
 }
 
-TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_after_unpublish) {
+TEST_F(StreamTest, updateSubscription_after_removeStream) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     stream::StreamHandle handle;
     EXPECT_NO_THROW({
@@ -1385,16 +1387,17 @@ TEST_F(StreamTest, modifyRemoteStreamsSubscriptions_after_unpublish) {
             }
         }
     });
+    stream::SubscriberStreamHandle subHandle;
     EXPECT_NO_THROW({
-        streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        subHandle = streamApi->createSubscriberStream(streamRoomId_1, streamsId);
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     EXPECT_NO_THROW({
-        streamApi->unpublishStream(handle);
+        streamApi->removeStream(handle);
     });
-    EXPECT_THROW({
-        streamApi->modifyRemoteStreamsSubscriptions(streamRoomId_1, {}, streamsId);
-    }, core::Exception);
+    EXPECT_NO_THROW({
+        streamApi->updateSubscriberStream(subHandle, {}, streamsId);
+    });
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
     });
@@ -1456,7 +1459,7 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     EXPECT_NO_THROW({
         client2.streamApi->joinStreamRoom(streamRoomId_1);
         client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
-        client2.streamApi->subscribeToRemoteStreams(streamRoomId_1, streamsId);
+        client2.streamApi->createSubscriberStream(streamRoomId_1, streamsId);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     });
     //Send data
@@ -1601,7 +1604,7 @@ TEST_F(StreamTest, listStreamRoomParticipants_with_single_track_subscription) {
         }
     });
     ASSERT_EQ(subscriptions.size(), 1);
-    EXPECT_NO_THROW({ streamApi->subscribeToRemoteStreams(streamRoomId, subscriptions); });
+    EXPECT_NO_THROW({ streamApi->createSubscriberStream(streamRoomId, subscriptions); });
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
     // user 1 should appear with exactly 1 subscription matching the subscribed track
@@ -1720,9 +1723,9 @@ TEST_F(StreamTest, dataChannel_seq_between_three_users) {
         client2.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector2);
         client3.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector3);
 
-        client1.streamApi->subscribeToRemoteStreams(streamRoomId, client1Subscriptions);
-        client2.streamApi->subscribeToRemoteStreams(streamRoomId, client2Subscriptions);
-        client3.streamApi->subscribeToRemoteStreams(streamRoomId, client3Subscriptions);
+        client1.streamApi->createSubscriberStream(streamRoomId, client1Subscriptions);
+        client2.streamApi->createSubscriberStream(streamRoomId, client2Subscriptions);
+        client3.streamApi->createSubscriberStream(streamRoomId, client3Subscriptions);
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     });
 
