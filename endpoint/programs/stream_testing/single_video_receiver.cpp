@@ -257,7 +257,7 @@ int main(int argc, char** argv) {
                     std::vector<stream::StreamSubscription> toRemovestreamsId;
                     for(auto& pair : streamUpdatedEvent.tracksModified) {
                         if(pair.after.has_value()) {
-                            if(pair.after.value().disabled.has_value()) {
+                            if(pair.after.value().disabled) {
                                 toRemovestreamsId.push_back({streamId, pair.after.value().mid});
                             } else {
                                 toAddstreamsId.push_back({streamId, pair.after.value().mid});

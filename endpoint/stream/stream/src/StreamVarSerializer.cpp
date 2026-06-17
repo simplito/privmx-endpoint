@@ -338,21 +338,15 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackInfo>(const strea
     obj->set("type", serialize(val.type));
     obj->set("mindex", serialize(val.mindex));
     obj->set("mid", serialize(val.mid));
-    if (val.disabled.has_value()) {
-        obj->set("disabled", serialize(val.disabled.value()));
-    }
+    obj->set("disabled", serialize(val.disabled));
     if (val.codec.has_value()) {
         obj->set("codec", serialize(val.codec.value()));
     }
     if (val.description.has_value()) {
         obj->set("description", serialize(val.description.value()));
     }
-    if (val.moderated.has_value()) {
-        obj->set("moderated", serialize(val.moderated.value()));
-    }
-    if (val.simulcast.has_value()) {
-        obj->set("simulcast", serialize(val.simulcast.value()));
-    }
+    obj->set("moderated", serialize(val.moderated));
+    obj->set("simulcast", serialize(val.simulcast));
     return obj;
 }
 
@@ -368,9 +362,7 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamInfo>(const stream::St
     if (val.metadata.has_value()) {
         obj->set("metadata", serialize(val.metadata.value()));
     }
-    if (val.dummy.has_value()) {
-        obj->set("dummy", serialize(val.dummy.value()));
-    }
+    obj->set("dummy", serialize(val.dummy));
     Poco::JSON::Array::Ptr tracksArr = new Poco::JSON::Array();
     for (auto track : val.tracks) {
         tracksArr->add(serialize<stream::StreamTrackInfo>(track));

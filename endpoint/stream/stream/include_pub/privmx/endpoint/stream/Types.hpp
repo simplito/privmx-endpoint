@@ -90,22 +90,22 @@ enum EventSelectorType : int64_t {
 };
 
 struct StreamTrackInfo {
-    std::string type;                       // "audio" | "video" | "data"
-    int64_t mindex;                         // unikalny mindex strumienia
-    std::string mid;                        // unikalny mid
-    std::optional<bool> disabled;           // czy strumień jest nieaktywny
-    std::optional<std::string> codec;       // np. "opus", "vp8"
-    std::optional<std::string> description; // opis strumienia
-    std::optional<bool> moderated;          // czy zmoderowany
-    std::optional<bool> simulcast;          // czy używa simulcast
+    std::string type;
+    int64_t mindex;
+    std::string mid;
+    bool disabled;
+    std::optional<std::string> codec;
+    std::optional<std::string> description;
+    bool moderated;
+    bool simulcast;
 };
 
 struct StreamInfo {
-    int64_t id;                          // unikalny ID wydawcy
-    std::string userId;                  // nazwa użytkownika
-    std::optional<std::string> metadata; // metadane jako tekst JSON
-    std::optional<bool> dummy;           // czy to publisher-dummy
-    std::vector<StreamTrackInfo> tracks; // lista trackow
+    int64_t id;
+    std::string userId;
+    std::optional<std::string> metadata;
+    bool dummy;
+    std::vector<StreamTrackInfo> tracks;
 };
 
 struct StreamTrackModificationPair {

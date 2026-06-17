@@ -127,18 +127,18 @@ JSON_STRUCT(StreamListModel, STREAM_LIST_MODEL_FIELDS);
     F(type, std::string)                                                                                               \
     F(mindex, int64_t)                                                                                                 \
     F(mid, std::string)                                                                                                \
-    F(disabled, std::optional<bool>)                                                                                   \
+    F(disabled, bool)                                                                                   \
     F(codec, std::optional<std::string>)                                                                               \
     F(description, std::optional<std::string>)                                                                         \
-    F(moderated, std::optional<bool>)                                                                                  \
-    F(simulcast, std::optional<bool>)
+    F(moderated, bool)                                                                                  \
+    F(simulcast, bool)
 JSON_STRUCT(StreamTrackInfo, STREAM_TRACK_INFO_FIELDS);
 
 #define STREAM_INFO_FIELDS(F)                                                                                          \
     F(id, int64_t)                                                                                                     \
     F(userId, std::string)                                                                                             \
     F(metadata, std::optional<Poco::Dynamic::Var>)                                                                     \
-    F(dummy, std::optional<bool>)                                                                                      \
+    F(dummy, bool)                                                                                      \
     F(tracks, std::vector<StreamTrackInfo>)
 JSON_STRUCT(StreamInfo, STREAM_INFO_FIELDS);
 
