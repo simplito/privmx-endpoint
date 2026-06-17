@@ -287,6 +287,18 @@ JSON_STRUCT(StreamListResult, STREAM_LIST_RESULT_FIELDS);
     F(jsep, std::optional<JanusJSEP>)
 JSON_STRUCT(StreamReofferEventData, STREAM_REOFFER_EVENT_DATA_FIELDS);
 
+#define STREAM_ROOM_LIST_PARTICIPANTS_MODEL_FIELDS(F) F(streamRoomId, std::string)
+JSON_STRUCT(StreamRoomListParticipantsModel, STREAM_ROOM_LIST_PARTICIPANTS_MODEL_FIELDS);
+
+#define STREAM_SUBSCRIBER_FIELDS(F)                                                                                    \
+    F(userId, std::string)                                                                                             \
+    F(subscriptions, std::vector<StreamSubscription>)                                                                  \
+    F(publishedStream, std::optional<StreamInfo>)
+JSON_STRUCT(StreamSubscriber, STREAM_SUBSCRIBER_FIELDS);
+
+#define STREAM_ROOM_LIST_PARTICIPANTS_RESULT_FIELDS(F) F(list, std::vector<StreamSubscriber>)
+JSON_STRUCT(StreamRoomListParticipantsResult, STREAM_ROOM_LIST_PARTICIPANTS_RESULT_FIELDS);
+
 } // namespace server
 } // namespace stream
 } // namespace endpoint

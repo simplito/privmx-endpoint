@@ -281,6 +281,18 @@ std::vector<StreamInfo> StreamApiLowImpl::listStreams(const std::string& streamR
     return result;
 }
 
+std::vector<StreamSubscriber> StreamApiLowImpl::listStreamRoomParticipants(const std::string& streamRoomId) {
+    server::StreamRoomListParticipantsModel model;
+    model.streamRoomId = streamRoomId;
+    auto list = _serverApi->streamRoomListParticipants(model).list;
+    std::vector<StreamSubscriber> result;
+    result.reserve(list.size());
+    for (const auto& subscriber : list) {
+        result.push_back(Mapper::mapToStreamSubscriber(subscriber));
+    }
+    return result;
+}
+
 void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
     createEmptyStreamRoomData(streamRoomId, webRtc);
     server::StreamRoomJoinModel model;

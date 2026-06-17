@@ -1480,6 +1480,158 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     });
 }
 
+TEST_F(StreamTest, listStreamRoomParticipants_incorrect_input_data) {
+    EXPECT_THROW({
+        streamApi->listStreamRoomParticipants("invalid_id");
+    }, core::Exception);
+}
+
+TEST_F(StreamTest, listStreamRoomParticipants_empty_room) {
+    auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    std::vector<stream::StreamSubscriber> subscribers;
+    EXPECT_NO_THROW({
+        subscribers = streamApi->listStreamRoomParticipants(streamRoomId);
+    });
+    EXPECT_EQ(subscribers.size(), 0);
+}
+
+TEST_F(StreamTest, listStreamRoomParticipants_one_subscriber) {
+    auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId);
+    });
+
+    std::vector<stream::StreamSubscriber> subscribers;
+    EXPECT_NO_THROW({
+        subscribers = streamApi->listStreamRoomParticipants(streamRoomId);
+    });
+
+    ASSERT_EQ(subscribers.size(), 1);
+    EXPECT_EQ(subscribers[0].userId, reader->getString("Login.user_1_id"));
+    EXPECT_EQ(subscribers[0].subscriptions.size(), 0);
+
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
+
+TEST_F(StreamTest, listStreamRoomParticipants_two_subscribers) {
+    auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId);
+        client2.streamApi->joinStreamRoom(streamRoomId);
+    });
+
+    std::vector<stream::StreamSubscriber> subscribers;
+    EXPECT_NO_THROW({
+        subscribers = streamApi->listStreamRoomParticipants(streamRoomId);
+    });
+
+    ASSERT_EQ(subscribers.size(), 2);
+    std::string expectedUser1 = reader->getString("Login.user_1_id");
+    std::string expectedUser2 = reader->getString("Login.user_2_id");
+    bool foundUser1 = false, foundUser2 = false;
+    for (const auto& sub : subscribers) {
+        if (sub.userId == expectedUser1) foundUser1 = true;
+        if (sub.userId == expectedUser2) foundUser2 = true;
+        EXPECT_EQ(sub.subscriptions.size(), 0);
+    }
+    EXPECT_TRUE(foundUser1);
+    EXPECT_TRUE(foundUser2);
+
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+    EXPECT_NO_THROW({ client2.streamApi->leaveStreamRoom(streamRoomId); });
+}
+
+TEST_F(StreamTest, listStreamRoomParticipants_after_leave) {
+    auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId);
+        client2.streamApi->joinStreamRoom(streamRoomId);
+    });
+    EXPECT_NO_THROW({ client2.streamApi->leaveStreamRoom(streamRoomId); });
+
+    std::vector<stream::StreamSubscriber> subscribers;
+    EXPECT_NO_THROW({
+        subscribers = streamApi->listStreamRoomParticipants(streamRoomId);
+    });
+
+    ASSERT_EQ(subscribers.size(), 1);
+    EXPECT_EQ(subscribers[0].userId, reader->getString("Login.user_1_id"));
+
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
+
+TEST_F(StreamTest, listStreamRoomParticipants_with_single_track_subscription) {
+    auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+
+    // user 2 joins and publishes a stream with one fake video track
+    EXPECT_NO_THROW({
+        client2.streamApi->joinStreamRoom(streamRoomId);
+        auto handle = client2.streamApi->createStream(streamRoomId);
+        client2.streamApi->getImpl()->addFakeVideoTrack(handle);
+        client2.streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+    // user 1 joins and subscribes to user 2's single track
+    EXPECT_NO_THROW({ streamApi->joinStreamRoom(streamRoomId); });
+    std::vector<stream::StreamSubscription> subscriptions;
+    EXPECT_NO_THROW({
+        auto streamList = streamApi->listStreams(streamRoomId);
+        for (const auto& s : streamList) {
+            for (const auto& track : s.tracks) {
+                subscriptions.push_back(stream::StreamSubscription{s.id, track.mid});
+            }
+        }
+    });
+    ASSERT_EQ(subscriptions.size(), 1);
+    EXPECT_NO_THROW({ streamApi->createSubscriberStream(streamRoomId, subscriptions); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+    // user 1 should appear with exactly 1 subscription matching the subscribed track
+    std::vector<stream::StreamSubscriber> subscribers;
+    EXPECT_NO_THROW({
+        subscribers = streamApi->listStreamRoomParticipants(streamRoomId);
+    });
+
+    std::string user1Id = reader->getString("Login.user_1_id");
+    bool foundUser1 = false;
+    for (const auto& sub : subscribers) {
+        if (sub.userId == user1Id) {
+            foundUser1 = true;
+            ASSERT_EQ(sub.subscriptions.size(), 1);
+            EXPECT_EQ(sub.subscriptions[0].streamId, subscriptions[0].streamId);
+            EXPECT_EQ(sub.subscriptions[0].streamTrackId, subscriptions[0].streamTrackId);
+            break;
+        }
+    }
+    EXPECT_TRUE(foundUser1);
+
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId);
+        client2.streamApi->leaveStreamRoom(streamRoomId);
+    });
+}
+
 TEST_F(StreamTest, dataChannel_seq_between_three_users) {
     auto contextId = reader->getString("Context_1.contextId");
     StreamClient client1;

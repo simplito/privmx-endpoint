@@ -67,6 +67,7 @@ public:
     void deleteStreamRoom(const std::string& streamRoomId);
     // Stream
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(

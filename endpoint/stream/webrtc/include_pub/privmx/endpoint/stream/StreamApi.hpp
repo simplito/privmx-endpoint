@@ -161,6 +161,14 @@ public:
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
 
     /**
+     * Gets a list of participants in given Stream Room.
+     *
+     * @param streamRoomId ID of the Stream Room
+     * @return list of StreamSubscriber structs describing current participants
+     */
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
+
+    /**
      * Joins a Stream Room.
      * This is required before calling createStream/publishStream and subscribing to remote streams in the room.
      *

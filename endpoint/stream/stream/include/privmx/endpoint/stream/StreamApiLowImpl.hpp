@@ -106,6 +106,7 @@ public:
         const SubscriberStreamHandle& subscriptionHandle
     );
 
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(

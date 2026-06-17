@@ -85,6 +85,7 @@ public:
 
     // Stream
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
     void enableStreamRoomRecording(const std::string& streamRoomId);
