@@ -34,18 +34,8 @@ server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::encrypt(
     return _encryptor.encrypt(messageData, userPrivKey, key);
 }
 
-DecryptedMessageDataV5 MessageDataSchemaStrategyV5::decrypt(
-    const server::Message& message,
-    const core::DecryptedEncKey& encKey
-) const {
-    auto encryptedMessageData = server::EncryptedMessageDataV5::fromJSON(message.data);
-    if (encKey.statusCode == 0) {
-        return _encryptor.decrypt(encryptedMessageData, encKey.key);
-    } else {
-        auto result = _encryptor.extractPublic(encryptedMessageData);
-        result.statusCode = encKey.statusCode;
-        return result;
-    }
+server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::getEncryptedData(const server::Message& model) const {
+    return server::EncryptedMessageDataV5::fromJSON(model.data);
 }
 
 std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::convert(
@@ -61,20 +51,8 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::conv
     };
 }
 
-std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::makeErrorResult(
-    const server::Message& message,
-    int64_t errorCode
-) const {
-    return {
-        MessageDataSchemaMapper::toLibMessage(
-            message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_5
-        ),
-        core::DataIntegrityObject{}
-    };
-}
-
-core::DataIntegrityObject MessageDataSchemaStrategyV5::getDIOAndAssertIntegrity(
-    const server::EncryptedMessageDataV5& encData
-) const {
-    return _encryptor.getDIOAndAssertIntegrity(encData);
+Message MessageDataSchemaStrategyV5::toLibError(const server::Message& message, int64_t errorCode) const {
+    return MessageDataSchemaMapper::toLibMessage(
+        message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_5
+    );
 }

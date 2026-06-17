@@ -69,6 +69,10 @@ std::vector<StreamInfo> StreamApiImpl::listStreams(const std::string& streamRoom
     return _api->listStreams(streamRoomId);
 }
 
+std::vector<StreamSubscriber> StreamApiImpl::listStreamRoomParticipants(const std::string& streamRoomId) {
+    return _api->listStreamRoomParticipants(streamRoomId);
+}
+
 void StreamApiImpl::joinStreamRoom(const std::string& streamRoomId) {
     _api->joinStreamRoom(streamRoomId, _webRTC);
 }
@@ -522,36 +526,33 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
     return _api->updateStream(streamHandle);
 }
 
-void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
+void StreamApiImpl::removeStream(const StreamHandle& streamHandle) {
     auto streamDataOpt = _streamDataMap.get(streamHandle);
     if (!streamDataOpt.has_value()) {
         throw IncorrectStreamHandleException();
     }
     _streamDataMap.erase(streamHandle);
-    _api->unpublishStream(streamHandle);
+    _api->removeStream(streamHandle);
     _webRTC->closeSingleConnection(streamDataOpt.value()->streamRoomId, ConnectionType::Publisher);
 }
 
-void StreamApiImpl::subscribeToRemoteStreams(
+SubscriberStreamHandle StreamApiImpl::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
-    _api->subscribeToRemoteStreams(streamRoomId, subscriptions);
+    return _api->createSubscriberStream(streamRoomId, subscriptions);
 }
 
-void StreamApiImpl::modifyRemoteStreamsSubscriptions(
-    const std::string& streamRoomId,
+void StreamApiImpl::updateSubscriberStream(
+    const SubscriberStreamHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
-    _api->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
+    _api->updateSubscriberStream(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
 }
 
-void StreamApiImpl::unsubscribeFromRemoteStreams(
-    const std::string& streamRoomId,
-    const std::vector<StreamSubscription>& subscriptionsToRemove
-) {
-    _api->unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
+void StreamApiImpl::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
+    _api->removeSubscriberStream(subscriptionHandle);
 }
 
 std::string StreamApiImpl::createStreamRoom(

@@ -64,16 +64,16 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomCreat
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomUpdatedEventException, "Cannot extract StreamRoomUpdatedEvent", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomDeletedEventException, "Cannot extract StreamRoomDeletedEvent", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamPublishedEventException, "Cannot extract StreamPublishedEvent", 0x0012)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamJoinedEventException, "Cannot extract StreamJoinedEvent", 0x0013)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomJoinedEventException, "Cannot extract StreamRoomJoinedEvent", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUnpublishedEventException, "Cannot extract StreamUnpublishedEvent", 0x0014)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamLeftEventException, "Cannot extract StreamLeftEvent", 0x0015)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomLeftEventException, "Cannot extract StreamRoomLeftEvent", 0x0015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomEncryptionKeyValidationException, "Failed StreamRoom encryption key validation", 0x0016);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownStreamRoomFormatException, "Unknown StreamRoom format", 0x0017);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomDataIntegrityException, "Failed StreamRoom data integrity check", 0x0018);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0019);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractRemoteStreamsChangedEventException, "Cannot extract RemoteStreamsChangedEvent", 0x001A)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamsUpdatedEventException, "Cannot extract StreamsUpdatedEvent", 0x001B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotGetRoomOnStreamsUpdateEventException, "Cannot get room on streamsUpdateEvent", 0x001C)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomReofferEventException, "Cannot extract StreamRoomReofferEvent", 0x001A)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamSubscribedEventException, "Cannot extract StreamSubscribedEvent", 0x001B)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUnsubscribedEventException, "Cannot extract StreamUnsubscribedEvent", 0x001C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidTurnServerURIException, "Invalid turn server URI", 0x001D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionAlreadyInitializedException, "Peer Connection already initialized", 0x001E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionNotInitializedException, "Peer Connection not initialized", 0x001F)
@@ -95,6 +95,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnsupportedMessageFormatVers
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadyJoinedStreamRoomException, "StreamRoom already joined", 0x002D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotPublishedException, "StreamHandle not published", 0x002F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamAlreadyCreatedException, "Subscriber stream is already created", 0x0030)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0031)
 // clang-format on
 } // namespace stream
 } // namespace endpoint

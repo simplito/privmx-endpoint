@@ -19,14 +19,12 @@ limitations under the License.
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
 #include "privmx/endpoint/stream/Constants.hpp"
@@ -38,7 +36,7 @@ namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class StreamRoomDataSchemaMapper {
+class StreamRoomDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     StreamRoomDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
@@ -48,8 +46,6 @@ public:
         const server::StreamRoomInfo& streamRoom,
         const core::DecryptedEncKey& encKey
     );
-
-    StreamRoomDataSchema::Version getDataStructureVersion(const server::StreamRoomDataEntry& entry);
 
     void assertDataIntegrity(const server::StreamRoomInfo& streamRoom);
 
@@ -73,12 +69,9 @@ public:
     );
 
 private:
-    privmx::crypto::PrivateKey _userPrivKey;
-    core::Connection _connection;
     core::VersionStrategyMapper<server::StreamRoomInfo, std::tuple<StreamRoom, core::DataIntegrityObject>>
         _strategyMapper;
     std::shared_ptr<StreamRoomDataSchemaStrategyV5> _strategyV5;
-    core::ModuleDataEncryptorV5 _encryptorV5;
 };
 
 } // namespace stream

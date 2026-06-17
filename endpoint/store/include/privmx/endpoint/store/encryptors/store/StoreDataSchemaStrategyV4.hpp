@@ -15,7 +15,7 @@ limitations under the License.
 #include <tuple>
 
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyDIO.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
@@ -27,10 +27,10 @@ namespace endpoint {
 namespace store {
 
 // clang-format off
-class StoreDataSchemaStrategyV4 : public core::TypedDataSchemaStrategy<
+class StoreDataSchemaStrategyV4 : public core::TypedDataSchemaStrategyDIO<
     server::Store,
     core::DecryptedModuleDataV4,
-    std::tuple<Store, core::DataIntegrityObject>
+    Store
 > {
     // clang-format on
 public:
@@ -39,10 +39,7 @@ public:
         const server::Store& store,
         const core::DecryptedModuleDataV4& raw
     ) const override;
-    std::tuple<Store, core::DataIntegrityObject> makeErrorResult(
-        const server::Store& store,
-        int64_t errorCode
-    ) const override;
+    Store toLibError(const server::Store& store, int64_t errorCode) const override;
 
 private:
     mutable core::ModuleDataEncryptorV4 _encryptor;

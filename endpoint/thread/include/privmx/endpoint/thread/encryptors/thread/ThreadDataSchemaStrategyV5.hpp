@@ -17,8 +17,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/encryptors/IDataSchemaStrategy.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
@@ -29,10 +28,12 @@ namespace privmx {
 namespace endpoint {
 namespace thread {
 // clang-format off
-class ThreadDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
-    server::ThreadInfo, 
-    core::DecryptedModuleDataV5, 
-    std::tuple<Thread, core::DataIntegrityObject>
+class ThreadDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
+    core::ModuleDataEncryptorV5,
+    core::dynamic::EncryptedModuleDataV5,
+    core::DecryptedModuleDataV5,
+    server::ThreadInfo,
+    Thread
 > {
     // clang-format on
 public:
@@ -41,22 +42,14 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
-    core::DecryptedModuleDataV5 decrypt(
-        const server::ThreadInfo& thread,
-        const core::DecryptedEncKey& encKey
-    ) const override;
     std::tuple<Thread, core::DataIntegrityObject> convert(
         const server::ThreadInfo& thread,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    std::tuple<Thread, core::DataIntegrityObject> makeErrorResult(
-        const server::ThreadInfo& thread,
-        int64_t errorCode
-    ) const override;
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const core::dynamic::EncryptedModuleDataV5& encData) const;
+    Thread toLibError(const server::ThreadInfo& thread, int64_t errorCode) const override;
 
-private:
-    mutable core::ModuleDataEncryptorV5 _encryptor;
+protected:
+    core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::ThreadInfo& model) const override;
 };
 
 } // namespace thread

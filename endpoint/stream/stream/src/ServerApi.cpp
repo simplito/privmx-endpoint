@@ -85,6 +85,12 @@ void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model
     requestWS("streamRoomEnableRecording", model.toJSON());
 }
 
+server::StreamRoomListParticipantsResult ServerApi::streamRoomListParticipants(
+    server::StreamRoomListParticipantsModel model
+) {
+    return requestWS<server::StreamRoomListParticipantsResult>("streamRoomListParticipants", model.toJSON());
+}
+
 void ServerApi::trickle(server::StreamTrickleModel model) {
     requestWS("streamTrickle", model.toJSON());
 }
