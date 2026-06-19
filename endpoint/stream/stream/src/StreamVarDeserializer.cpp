@@ -26,17 +26,6 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 template<>
-stream::Settings VarDeserializer::deserialize<stream::Settings>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-) {
-    core::TypeValidator::validateObject(val, name);
-    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    // empty object - for future use
-    return {};
-}
-
-template<>
 stream::EventType VarDeserializer::deserialize<stream::EventType>(
     const Poco::Dynamic::Var& val,
     const std::string& name

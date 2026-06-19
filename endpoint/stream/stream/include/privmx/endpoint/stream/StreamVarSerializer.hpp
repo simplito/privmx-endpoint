@@ -25,9 +25,6 @@ namespace endpoint {
 namespace core {
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::Settings>(const stream::Settings& val);
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::TurnCredentials>(const stream::TurnCredentials& val);
 
 template<>

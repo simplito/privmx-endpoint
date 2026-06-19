@@ -23,7 +23,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApi StreamApi::create(core::Connection& connection, event::EventApi& _eventApi) {
+StreamApi StreamApi::create(core::Connection& connection, [[maybe_unused]] event::EventApi& _eventApi) {
     try {
         std::shared_ptr<StreamApiImpl> impl(new StreamApiImpl(connection));
         return StreamApi(impl);

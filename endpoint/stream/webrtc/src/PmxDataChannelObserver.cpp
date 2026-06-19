@@ -32,7 +32,7 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
         LOG_INFO("PmxDataChannelObserver::OnStateChange::RTCDataChannelOpen")
         if (_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
-                Track{DataType::PLAIN, std::vector<std::string>{}, _remoteStreamId, false, [](bool mute) { return; }},
+                Track{DataType::PLAIN, std::vector<std::string>{}, _remoteStreamId, false, []([[maybe_unused]] bool mute) { return; }},
                 TrackAction::ADDED
             );
         }
@@ -40,7 +40,7 @@ void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state)
         LOG_INFO("PmxDataChannelObserver::OnStateChange::RTCDataChannelClosing")
         if (_onTrackInterface) {
             _onTrackInterface->OnRemoteTrack(
-                Track{DataType::PLAIN, std::vector<std::string>{}, _remoteStreamId, false, [](bool mute) { return; }},
+                Track{DataType::PLAIN, std::vector<std::string>{}, _remoteStreamId, false, []([[maybe_unused]] bool mute) { return; }},
                 TrackAction::REMOVED
             );
         }
