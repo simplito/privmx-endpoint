@@ -26,17 +26,6 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 template<>
-stream::Settings VarDeserializer::deserialize<stream::Settings>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-) {
-    core::TypeValidator::validateObject(val, name);
-    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
-    // empty object - for future use
-    return {};
-}
-
-template<>
 stream::EventType VarDeserializer::deserialize<stream::EventType>(
     const Poco::Dynamic::Var& val,
     const std::string& name
@@ -111,9 +100,7 @@ stream::StreamTrackInfo VarDeserializer::deserialize<stream::StreamTrackInfo>(
         .type = deserialize<std::string>(obj->get("type"), name + ".type"),
         .mindex = deserialize<int64_t>(obj->get("mindex"), name + ".mindex"),
         .mid = deserialize<std::string>(obj->get("mid"), name + ".mid"),
-        .disabled =
-            {obj->has("disabled") ? std::make_optional(deserialize<bool>(obj->get("disabled"), name + ".disabled")) :
-                                    std::nullopt},
+        .disabled = deserialize<bool>(obj->get("disabled"), name + ".disabled"),
         .codec =
             {obj->has("codec") ? std::make_optional(deserialize<std::string>(obj->get("codec"), name + ".codec")) :
                                  std::nullopt},
@@ -121,12 +108,8 @@ stream::StreamTrackInfo VarDeserializer::deserialize<stream::StreamTrackInfo>(
             {obj->has("description") ?
                  std::make_optional(deserialize<std::string>(obj->get("description"), name + ".description")) :
                  std::nullopt},
-        .moderated =
-            {obj->has("moderated") ? std::make_optional(deserialize<bool>(obj->get("moderated"), name + ".moderated")) :
-                                     std::nullopt},
-        .simulcast =
-            {obj->has("simulcast") ? std::make_optional(deserialize<bool>(obj->get("simulcast"), name + ".simulcast")) :
-                                     std::nullopt},
+        .moderated = deserialize<bool>(obj->get("moderated"), name + ".moderated"),
+        .simulcast = deserialize<bool>(obj->get("simulcast"), name + ".simulcast"),
     };
 }
 
@@ -144,9 +127,7 @@ stream::StreamInfo VarDeserializer::deserialize<stream::StreamInfo>(
             {obj->has("metadata") ?
                  std::make_optional(deserialize<std::string>(obj->get("metadata"), name + ".metadata")) :
                  std::nullopt},
-        .dummy =
-            {obj->has("dummy") ? std::make_optional(deserialize<bool>(obj->get("dummy"), name + ".dummy")) :
-                                 std::nullopt}, // czy to publisher-dummy
+        .dummy = deserialize<bool>(obj->get("dummy"), name + ".dummy"),
         .tracks = deserializeVector<stream::StreamTrackInfo>(obj->get("tracks"), name + ".tracks"),
     };
 }

@@ -125,6 +125,6 @@ StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
-        .closed = info.closed.value_or(true)
+        .state = info.state.value_or("closed")
     };
 }

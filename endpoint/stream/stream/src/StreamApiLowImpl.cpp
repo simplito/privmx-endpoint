@@ -102,7 +102,7 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
     return result;
 }
 
-void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core::NotificationEvent& _notification) {
+void StreamApiLowImpl::onNotificationEvent([[maybe_unused]] const std::string& _type, const core::NotificationEvent& _notification) {
     _guardedExecutor->exec([&, _notification]() { return processNotificationEvent(_notification); });
 }
 
