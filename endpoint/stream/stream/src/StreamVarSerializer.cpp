@@ -18,12 +18,6 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::Settings>(const stream::Settings& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    return obj;
-}
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::TurnCredentials>(const stream::TurnCredentials& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

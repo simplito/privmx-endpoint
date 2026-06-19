@@ -24,11 +24,7 @@ using SubscriberStreamHandle = Handle;
 using RemoteStreamId = int64_t;
 using RemoteTrackId = std::string;
 
-/**
- * Additional stream settings.
- * Reserved for future use.
-*/
-struct Settings {};
+
 
 struct TurnCredentials {
     std::string url;
