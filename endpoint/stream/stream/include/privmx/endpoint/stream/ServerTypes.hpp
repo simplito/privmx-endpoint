@@ -29,7 +29,7 @@ JSON_STRUCT_EXT(StreamRoomDataEntry, core::server::ContainerDataEntry, STREAM_RO
 
 #define STREAM_ROOM_INFO_EXTRA_FIELDS(F)                                                                               \
     F(data, std::vector<StreamRoomDataEntry>)                                                                          \
-    F(closed, std::optional<bool>)
+    F(state, std::optional<std::string>)
 JSON_STRUCT_EXT(StreamRoomInfo, core::server::ContainerInfoBase, STREAM_ROOM_INFO_EXTRA_FIELDS);
 
 #define SESSION_DESCRIPTION_FIELDS(F)                                                                                  \

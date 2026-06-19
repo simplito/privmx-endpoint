@@ -80,7 +80,7 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoom>(const stream::St
     obj->set("policy", serialize(val.policy));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
-    obj->set("closed", serialize(val.closed));
+    obj->set("state", serialize(val.state));
     return obj;
 }
 
