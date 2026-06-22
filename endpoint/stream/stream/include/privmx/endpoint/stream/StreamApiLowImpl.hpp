@@ -164,6 +164,7 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
+    static std::vector<server::StreamSubscription> mapSubscriptions(const std::vector<StreamSubscription>& subscriptions);
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc

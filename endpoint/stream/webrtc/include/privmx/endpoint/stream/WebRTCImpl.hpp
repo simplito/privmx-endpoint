@@ -135,6 +135,7 @@ private:
     std::shared_ptr<StreamApiLow> _apiLow;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;
+    privmx::utils::ThreadSaveMap<std::string, std::vector<Key>> _roomKeys;
 };
 
 } // namespace stream

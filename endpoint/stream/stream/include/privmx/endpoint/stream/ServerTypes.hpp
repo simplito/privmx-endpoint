@@ -90,21 +90,11 @@ JSON_STRUCT(StreamUpdateModel, STREAM_UPDATE_MODEL_FIELDS);
     F(streamTrackId, std::optional<std::string>)
 JSON_STRUCT(StreamSubscription, STREAM_SUBSCRIPTION_FIELDS);
 
-#define STREAMS_SUBSCRIBE_MODEL_FIELDS(F)                                                                              \
-    F(streamRoomId, std::string)                                                                                       \
-    F(subscriptionsToAdd, std::vector<StreamSubscription>)
-JSON_STRUCT(StreamsSubscribeModel, STREAMS_SUBSCRIBE_MODEL_FIELDS);
-
-#define STREAMS_MODIFY_SUBSCRIPTIONS_MODEL_FIELDS(F)                                                                   \
+#define STREAM_UPDATE_REMOTE_SUBSCRIPTIONS_MODEL_FIELDS(F)                                                            \
     F(streamRoomId, std::string)                                                                                       \
     F(subscriptionsToAdd, std::vector<StreamSubscription>)                                                             \
     F(subscriptionsToRemove, std::vector<StreamSubscription>)
-JSON_STRUCT(StreamsModifySubscriptionsModel, STREAMS_MODIFY_SUBSCRIPTIONS_MODEL_FIELDS);
-
-#define STREAMS_UNSUBSCRIBE_MODEL_FIELDS(F)                                                                            \
-    F(streamRoomId, std::string)                                                                                       \
-    F(subscriptionsToRemove, std::vector<StreamSubscription>)
-JSON_STRUCT(StreamsUnsubscribeModel, STREAMS_UNSUBSCRIBE_MODEL_FIELDS);
+JSON_STRUCT(StreamUpdateRemoteSubscriptionsModel, STREAM_UPDATE_REMOTE_SUBSCRIPTIONS_MODEL_FIELDS);
 
 #define STREAMS_SUBSCRIBE_RESULT_FIELDS(F)                                                                             \
     F(offer, std::optional<SessionDescription>)                                                                        \

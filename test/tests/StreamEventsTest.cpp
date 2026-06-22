@@ -546,3 +546,52 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamPublished_disabled) {
         user1.streamApi->leaveStreamRoom(streamRoomId);
     });
 }
+
+TEST_F(StreamEventsTest, streamPublished_emitted_again_after_republish) {
+    eventQueue.waitEvent();
+    auto user1 = fixtureClient();   
+    auto user2 = user2Client();     
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+
+    auto publishQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAM_PUBLISH,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({publishQuery});
+    drainEventQueue();
+
+    auto countPublished = [&](std::chrono::milliseconds window) {
+        int count = 0;
+        const auto deadline = std::chrono::steady_clock::now() + window;
+        while(std::chrono::steady_clock::now() < deadline) {
+            auto holder = waitForNextEvent(std::chrono::milliseconds(300));
+            if(!holder.has_value()) continue;
+            auto event = holder.value().get();
+            if(event != nullptr && event->type == "streamPublished" &&
+               stream::Events::isStreamPublishedEvent(holder.value()) &&
+               stream::Events::extractStreamPublishedEvent(holder.value()).data.streamRoomId == streamRoomId) {
+                ++count;
+            }
+        }
+        return count;
+    };
+
+    user2.streamApi->joinStreamRoom(streamRoomId);
+    auto handle1 = user2.streamApi->createStream(streamRoomId);
+    user2.streamApi->getImpl()->addFakeVideoTrack(handle1);
+    user2.streamApi->publishStream(handle1);
+    EXPECT_EQ(countPublished(std::chrono::seconds(8)), 1);
+
+    user2.streamApi->removeStream(handle1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    drainEventQueue();
+    EXPECT_NO_THROW({
+        auto handle2 = user2.streamApi->createStream(streamRoomId);
+        user2.streamApi->getImpl()->addFakeVideoTrack(handle2);
+        user2.streamApi->publishStream(handle2);
+    });
+    EXPECT_EQ(countPublished(std::chrono::seconds(8)), 1);
+    EXPECT_NO_THROW({ user2.streamApi->leaveStreamRoom(streamRoomId); });
+}

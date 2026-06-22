@@ -533,7 +533,6 @@ void StreamApiImpl::removeStream(const StreamHandle& streamHandle) {
     }
     _streamDataMap.erase(streamHandle);
     _api->removeStream(streamHandle);
-    _webRTC->closeSingleConnection(streamDataOpt.value()->streamRoomId, ConnectionType::Publisher);
 }
 
 SubscriberStreamHandle StreamApiImpl::createSubscriberStream(
