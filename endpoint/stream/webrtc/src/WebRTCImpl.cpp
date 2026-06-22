@@ -31,13 +31,20 @@ std::string WebRTCImpl::createOfferAndSetLocalDescription(const std::string& str
     std::promise<std::string> t_spd = std::promise<std::string>();
     peerConnection->pc->CreateOffer(
         [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
+            LOG_DEBUG("WebRTCImpl::createOfferAndSetLocalDescription", "CreateOffer success")
             t_spd.set_value(sdp.std_string());
         },
-        [&](const char* error) { throw stream::WebRTCException("SdpCreateFailure " + std::string(error)); },
+        [&](const char* error) {
+            LOG_ERROR("WebRTCImpl::createOfferAndSetLocalDescription SdpCreateFailure: ", std::string(error))
+            throw stream::WebRTCException("SdpCreateFailure " + std::string(error));
+        },
         _constraints
     );
-
-    std::string sdp = t_spd.get_future().get();
+    auto future = t_spd.get_future();
+    if (future.wait_for(std::chrono::seconds(15)) == std::future_status::timeout) {
+        throw stream::WebRTCException("CreateOfferTimeout");
+    }
+    std::string sdp = future.get();
     peerConnection->pc->SetLocalDescription(
         sdp, "offer", []() {},
         [](const char* error) { throw stream::WebRTCException("OnSetSdpFailure " + std::string(error)); }
@@ -136,6 +143,7 @@ void WebRTCImpl::closeSingleConnection(const std::string& streamRoomId, Connecti
 }
 
 void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) {
+    _roomKeys.set(streamRoomId, keys);
     auto peerConnection_p = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher)
                                 ->peerConnection;
     auto peerConnection_s = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Subscriber)
@@ -199,6 +207,7 @@ std::shared_ptr<privmx::webrtc::KeyStore> WebRTCImpl::createWebRtcKeyStore(
 }
 
 std::shared_ptr<PeerConnection> WebRTCImpl::createPeerConnection(const std::string& streamRoomId) {
+    LOG_DEBUG("WebRTCImpl::createPeerConnection", streamRoomId)
     auto peerConnection = std::make_shared<PeerConnection>();
     peerConnection->pc = _peerConnectionFactory->Create(_configuration, _constraints);
     std::string streamId = streamRoomId + "-" + privmx::utils::Utils::getNowTimestampStr(); // TMP
@@ -240,6 +249,17 @@ void WebRTCImpl::createPeerConnectionWithLocalStream(
     const std::optional<std::pair<std::string, std::function<void(std::string)>*>>& dataChannel
 ) {
     auto jc = _peerConnectionManager->getConnectionWithSession(streamRoomId, ConnectionType::Publisher);
+    if (!jc->peerConnection->keys) {
+        auto cachedKeys = _roomKeys.get(streamRoomId);
+        if (cachedKeys.has_value()) {
+            std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+            jc->peerConnection->cpp_keys = cachedKeys.value();
+            jc->peerConnection->keys = createWebRtcKeyStore(cachedKeys.value());
+            if (jc->peerConnection->observer) {
+                jc->peerConnection->observer->UpdateCurrentKeys(jc->peerConnection->keys);
+            }
+        }
+    }
 
     for (auto audioTrack : audioTracks) {
         AddAudioTrack(jc, audioTrack.second, privmx::utils::Hex::from(audioTrack.first));
