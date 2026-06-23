@@ -64,8 +64,8 @@ void ProxyWebRTC::updateSessionId(
 void ProxyWebRTC::closeAll(
     const std::string& streamRoomId
 ) {
-    if (_webRTCInterface.closeCallback == nullptr) {
-        throw NullCallbackException("CloseCallback");
+    if (_webRTCInterface.closeAllCallback == nullptr) {
+        throw NullCallbackException("CloseAllCallback");
     }
     _webRTCInterface.closeAllCallback(_webRTCInterface.ctx, streamRoomId.c_str());
 }

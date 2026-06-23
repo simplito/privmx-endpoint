@@ -231,7 +231,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::updateSubscriberStream(const Poco::
     return {};
 }
 Poco::Dynamic::Var StreamApiLowVarInterface::removeSubscriberStream(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto subscriptionHandle = _deserializer.deserialize<SubscriberStreamHandle>(argsArr->get(0), "subscriptionHandle");
     _streamApi.removeSubscriberStream(subscriptionHandle);
     return {};
