@@ -279,7 +279,8 @@ TEST_F(StreamTest, createStreamRoom) {
                 .updatePolicy="all",
                 .updaterCanBeRemovedFromManagers="yes",
                 .ownerCanBeRemovedFromManagers="yes"
-            }
+            },
+            60000
         );
     });
     if(streamRoomId.empty()) {
@@ -308,6 +309,7 @@ TEST_F(StreamTest, createStreamRoom) {
     EXPECT_EQ(streamRoom.policy.updatePolicy, std::optional<std::string>("all"));
     EXPECT_EQ(streamRoom.policy.updaterCanBeRemovedFromManagers, std::optional<std::string>("yes"));
     EXPECT_EQ(streamRoom.policy.ownerCanBeRemovedFromManagers, std::optional<std::string>("yes"));
+    EXPECT_EQ(streamRoom.streamRoomTtl, 60000);
     // same users and managers
     EXPECT_NO_THROW({
         streamRoomId = streamApi->createStreamRoom(
@@ -345,6 +347,62 @@ TEST_F(StreamTest, createStreamRoom) {
     if(streamRoom.managers.size() == 1) {
         EXPECT_EQ(streamRoom.managers[0], reader->getString("Login.user_1_id"));
     }
+    EXPECT_EQ(streamRoom.streamRoomTtl, 0);
+}
+
+TEST_F(StreamTest, streamRoomTtl_allowsRejoinAndRepublishAfterLeave) {
+    std::string streamRoomId;
+    EXPECT_NO_THROW({
+        streamRoomId = streamApi->createStreamRoom(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
+                .userId=reader->getString("Login.user_1_id"),
+                .pubKey=reader->getString("Login.user_1_pubKey")
+            }},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            60000
+        );
+    });
+    ASSERT_FALSE(streamRoomId.empty());
+
+    stream::StreamHandle handle;
+
+    // first session
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId);
+    });
+    EXPECT_NO_THROW({
+        handle = streamApi->createStream(streamRoomId);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    EXPECT_NO_THROW({
+        streamApi->removeStream(handle);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId);
+    });
+
+    // second session
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId);
+    });
+    EXPECT_NO_THROW({
+        handle = streamApi->createStream(streamRoomId);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId);
+    });
 }
 
 TEST_F(StreamTest, listStreamRooms_incorrect_input_data) {
