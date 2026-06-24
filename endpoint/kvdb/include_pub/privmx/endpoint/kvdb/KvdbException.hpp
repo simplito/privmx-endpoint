@@ -35,7 +35,6 @@ namespace kvdb {
 #define ENDPOINT_KVDB_EXCEPTION_CODE 0x00090000
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointKvdbException, "Unknown endpoint kvdb exception", "Kvdb", 0x0009)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbCreatedEventException, "Cannot extract KvdbCreatedEvent", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbUpdatedEventException, "Cannot extract KvdbUpdatedEvent", 0x0003)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbDeletedEventException, "Cannot extract KvdbDeletedEvent", 0x0004)
@@ -43,18 +42,12 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbStatsEventExc
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbNewEntryEventException, "Cannot extract KvdbNewEntryEvent", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbEntryUpdatedEventException, "Cannot extract KvdbKvdbEntryUpdatedEvent", 0x0006)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbDeletedEntryEventException, "Cannot extract KvdbDeletedEntryEvent", 0x0007)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbPublicDataMismatchException, "Kvdb public data mismatch", 0x0008)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedKvdbDataVersionException, "Invalid version of encrypted kvdb data", 0x0009)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEntryPublicDataMismatchException, "Kvdb entry public data mismatch", 0x000A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidEncryptedKvdbEntryDataVersionException, "Invalid version of encrypted kvdb entry data", 0x000B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, AlreadySubscribedException, "Already subscribed", 0x000D)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, NotSubscribedException, "Cannot unsubscribe if not subscribed", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknownKvdbFormatException, "Unknown kvdb format", 0x000F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, UnknownKvdbEntryFormatException, "Unknown item format", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbDataIntegrityException, "Failed kvdb data integrity check", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, KvdbEntryDataIntegrityException, "Failed kvdb entry data integrity check", 0x0012)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, NotImplementedException, "Not Implemented", 0x00013)
-DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00014)
 // clang-format on
 } // namespace kvdb
 } // namespace endpoint

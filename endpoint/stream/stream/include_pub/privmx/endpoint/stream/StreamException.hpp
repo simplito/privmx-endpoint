@@ -46,20 +46,10 @@ namespace stream {
 #define ENDPOINT_STREAM_EXCEPTION_CODE 0x00080000
 // clang-format off
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStreamException, "Unknown endpoint stream exception", "StreamRoom", 0x0008)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotInitializedException, "Endpoint not initialized", 0x0001)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotImplementedException, "Not Implemented", 0x0002)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidEncryptedStreamRoomDataVersionException, "Invalid version of encrypted stream room data", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomPublicDataMismatchException, "Stream room public data mismatch", 0x0004)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknowStreamRoomFormatException, "Unknown stream room format", 0x0005)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidStreamWebSocketRequestIdException, "Invalid stream web socket request id", 0x0006)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamWebsocketDisconnectedException, "Stream websocket disconnected", 0x0007)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NetConnectionException, "Network connection error", 0x0008);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, WebRTCException, "WebRTC error", 0x0009);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectStreamHandleException, "Incorrect stream handle", 0x000A);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamCacheException, "Incorrect Stream Cache state", 0x000B);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, IncorrectTrackIdException, "Incorrect track id", 0x000C);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadySubscribedException, "Already subscribed", 0x000D)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NotSubscribedException, "Cannot unsubscribe if not subscribed", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomCreatedEventException, "Cannot extract StreamRoomCreatedEvent", 0x000F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomUpdatedEventException, "Cannot extract StreamRoomUpdatedEvent", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomDeletedEventException, "Cannot extract StreamRoomDeletedEvent", 0x0011)
@@ -67,16 +57,10 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamPublished
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomJoinedEventException, "Cannot extract StreamRoomJoinedEvent", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUnpublishedEventException, "Cannot extract StreamUnpublishedEvent", 0x0014)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomLeftEventException, "Cannot extract StreamRoomLeftEvent", 0x0015)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomEncryptionKeyValidationException, "Failed StreamRoom encryption key validation", 0x0016);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownStreamRoomFormatException, "Unknown StreamRoom format", 0x0017);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomDataIntegrityException, "Failed StreamRoom data integrity check", 0x0018);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0019);
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamRoomReofferEventException, "Cannot extract StreamRoomReofferEvent", 0x001A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamSubscribedEventException, "Cannot extract StreamSubscribedEvent", 0x001B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUnsubscribedEventException, "Cannot extract StreamUnsubscribedEvent", 0x001C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidTurnServerURIException, "Invalid turn server URI", 0x001D)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionAlreadyInitializedException, "Peer Connection already initialized", 0x001E)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, PeerConnectionNotInitializedException, "Peer Connection not initialized", 0x001F)
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomConnectionNotInitialized, "StreamRoom connection not initialized", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotInitialized, "StreamHandle not initialized", 0x0021)

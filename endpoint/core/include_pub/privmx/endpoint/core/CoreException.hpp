@@ -38,7 +38,6 @@ namespace core {
 #define ENDPOINT_CORE_API_EXCEPTION_CODE 0x00020000
 // clang-format off
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointCoreException, "Unknown endpoint core exception", "Core", 0x0001)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NoUserEntryForGivenKeyIdException, "No user entry for given key id", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidParamsException, "Invalid params", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidNumberOfParamsException, "Invalid number of params", 0x0003)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnsupportedTypeException, "Unsupported type", 0x0004)
@@ -64,11 +63,10 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedVerifierResponseExcep
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleEncryptionKeyException, "Module's enc key with given keyId does not exist.", 0x0020)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, ModulePublicDataMismatchException, "Module public data mismatch", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidEncryptedModuleDataVersionException, "Invalid version of encrypted module data", 0x0022)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleFormatException, "Unknown module format", 0x0023)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00024)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSingletonsHolderStateException, "Invalid Singletons Holder state", 0x00025)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MissingBridgeIdentityException, "Missing Bridge Identity", 0x00026)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyValidationException, "Encryption key validation error", 0x0027)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, IncorrectKeyIdFormatException, "Incorrect key id format", 0x0028)
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
@@ -85,7 +83,6 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUser
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserRemovedEventException, "Cannot extract ContextUserRemovedEvent", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUsersStatusChangedEventException, "Cannot extract ContextUsersStatusChangedEvent", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotConnectedException, "Endpoint is not connected or not initialized", 0x000E)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, SessionExpiredException, "Endpoint session is expired", 0x000F)
 // clang-format on
 } // namespace core
 } // namespace endpoint

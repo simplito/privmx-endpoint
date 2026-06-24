@@ -495,7 +495,7 @@ core::Buffer InboxApiImpl::readFromFile(const int64_t handle, const int64_t leng
         result = core::Buffer::from(handlePtr->read(length));
     } catch (const store::FileVersionMismatchException& e) {
         closeFile(handle);
-        throw FileVersionMismatchHandleClosedException();
+        throw store::FileVersionMismatchHandleClosedException();
     }
     PRIVMX_DEBUG_TIME_STOP(InboxApi, readFromFile)
     return result;
@@ -510,7 +510,7 @@ void InboxApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
 std::string InboxApiImpl::closeFile(const int64_t handle) {
     PRIVMX_DEBUG_TIME_START(InboxApi, closeFile)
     if (!_inboxHandleManager.isFileReadHandle(handle)) {
-        throw InvalidFileReadHandleException(
+        throw store::InvalidFileReadHandleException(
             "CloseFile() invalid file handle. Expected FILE_READ_HANDLE, but FILE_WRITE_HANDLE used."
         );
     }

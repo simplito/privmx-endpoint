@@ -35,14 +35,9 @@ namespace event {
 #define ENDPOINT_EVENT_EXCEPTION_CODE 0x00090000
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointEventException, "Unknown endpoint event exception", "Event", 0x0009)
-DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, ForbiddenChannelNameException, "Forbidden channel name", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, CannotExtractContextCustomEvent, "Cannot extract ContextCustomEvent", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, NotSubscribedException, "Not subscribed", 0x0004)
-DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, AlreadySubscribedException, "Already subscribed", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, InvalidEncryptedEventDataVersionException, "Invalid version of encrypted event data", 0x0005)
-DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0006)
-DECLARE_ENDPOINT_EXCEPTION(EndpointEventException, UnknownEventFormatException, "Unknown event format", 0x0007)
 
 // clang-format on
 } // namespace event

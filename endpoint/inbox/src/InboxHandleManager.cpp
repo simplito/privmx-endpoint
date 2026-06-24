@@ -12,6 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxHandleManager.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/store/StoreException.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
@@ -122,7 +123,7 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandl
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {
     if (!isFileWriteHandle(fileHandleId)) {
-        throw InvalidFileWriteHandleException();
+        throw store::InvalidFileWriteHandleException();
     }
     return _fileHandleManager.getFileWriteHandle(fileHandleId);
 }
@@ -145,7 +146,7 @@ bool InboxHandleManager::isFileWriteHandle(int64_t fileHandleId) {
 
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::getFileReadHandle(int64_t fileHandleId) {
     if (!isFileReadHandle(fileHandleId)) {
-        throw InvalidFileReadHandleException();
+        throw store::InvalidFileReadHandleException();
     }
     return _fileHandleManager.getFileReadHandle(fileHandleId);
 }

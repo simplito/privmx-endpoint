@@ -15,6 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 #include "privmx/endpoint/store/StoreTypes.hpp"
 #include <cstdint>
 #include <privmx/endpoint/core/Buffer.hpp>
@@ -126,7 +127,7 @@ public:
     ) override {
         return _file->sync(fileMeta, newParms, fileEncKey);
     }
-    inline void flush() override { throw NotImplementedException(); }
+    inline void flush() override { throw core::NotImplementedException(); }
 
 private:
     std::shared_ptr<FileHandler> _file;

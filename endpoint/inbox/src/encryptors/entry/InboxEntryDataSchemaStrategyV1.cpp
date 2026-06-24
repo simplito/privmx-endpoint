@@ -17,6 +17,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/inbox/InboxException.hpp"
+#include <privmx/endpoint/store/StoreException.hpp>
 #include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaStrategyV1.hpp"
 
 using namespace privmx;
@@ -113,7 +114,7 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
                     );
                 } else {
                     store::File error;
-                    auto e = FileFetchFailedException();
+                    auto e = store::FileFetchFailedException();
                     error.statusCode = e.getCode();
                     result.files.push_back(error);
                 }

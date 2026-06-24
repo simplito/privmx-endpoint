@@ -1,5 +1,6 @@
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <algorithm>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 
@@ -68,12 +69,12 @@ std::vector<std::string> SubscriberImpl::transform(const std::vector<core::Subsc
 void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     for (auto& subscriptionQuery : subscriptionQueries) {
         if (subscriptionQuery.selectors().size() != 1) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
         if (subscriptionQuery.channelPath().size() != 3 ||
             subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName) ||
             subscriptionQuery.channelPath()[ITEM_NAME_IN_QUERY_PATH] != std::string(_itemName)) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
     }
 }
