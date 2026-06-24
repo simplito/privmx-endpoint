@@ -198,4 +198,3 @@ stream::StreamTrackModificationPair VarDeserializer::deserialize<stream::StreamT
             std::nullopt,
     };
 }
-

@@ -46,7 +46,10 @@ public:
         std::shared_ptr<StreamApiLow> apiLow
     );
     ~WebRTCImpl();
-    std::string createOfferAndSetLocalDescription(const std::string& streamRoomId, const std::string& connectionType) override;
+    std::string createOfferAndSetLocalDescription(
+        const std::string& streamRoomId,
+        const std::string& connectionType
+    ) override;
     std::string createAnswerAndSetDescriptions(
         const std::string& streamRoomId,
         const std::string& sdp,
