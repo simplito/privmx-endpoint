@@ -49,6 +49,7 @@ struct StreamRoom {
     int64_t statusCode;
     int64_t schemaVersion;
     std::string state; // "created" | "open" | "closed"
+    int64_t streamRoomTtl;
 };
 
 struct Stream {

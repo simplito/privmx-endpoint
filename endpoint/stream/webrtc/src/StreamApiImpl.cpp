@@ -560,9 +560,10 @@ std::string StreamApiImpl::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& streamRoomTtl
 ) {
-    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, streamRoomTtl);
 }
 
 void StreamApiImpl::updateStreamRoom(

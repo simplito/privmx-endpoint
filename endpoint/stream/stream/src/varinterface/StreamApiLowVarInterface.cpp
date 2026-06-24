@@ -89,14 +89,15 @@ Poco::Dynamic::Var StreamApiLowVarInterface::buildSubscriptionQuery(const Poco::
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(5), "policies");
-    auto result = _streamApi.createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+    auto streamRoomTtl = _deserializer.deserializeOptional<int64_t>(argsArr->get(6), "streamRoomTtl");
+    auto result = _streamApi.createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, streamRoomTtl);
     return _serializer.serialize(result);
 }
 

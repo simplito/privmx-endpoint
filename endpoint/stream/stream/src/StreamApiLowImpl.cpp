@@ -576,6 +576,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& streamRoomTtl,
     const std::string& type
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
@@ -595,6 +596,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     if (policies.has_value()) {
         createStreamRoomModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
+    createStreamRoomModel.streamRoomTtl = streamRoomTtl;
     auto result = _serverApi->streamRoomCreate(createStreamRoomModel);
     return result.streamRoomId;
 }
