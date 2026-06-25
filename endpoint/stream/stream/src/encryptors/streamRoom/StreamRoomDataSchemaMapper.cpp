@@ -58,7 +58,7 @@ void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInf
     const auto& entry = streamRoom.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
-        throw UnknowStreamRoomFormatException();
+        throw UnknowStreamRoomFormatException("dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry)));
     case core::ModuleDataSchema::Version::VERSION_5: {
         auto encData = core::dynamic::EncryptedModuleDataV5::fromJSON(entry.data);
         auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
@@ -71,7 +71,7 @@ void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInf
         return;
     }
     default:
-        throw UnknowStreamRoomFormatException();
+        throw UnknowStreamRoomFormatException("dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry)));
     }
 }
 

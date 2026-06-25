@@ -9,6 +9,8 @@
         NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
         NAME(const std::string& description)                                                                           \
             : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16), description) {}                       \
+        NAME(const std::string& description, unsigned int code)                                                        \
+            : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16) | code, description) {}                \
         NAME(const std::string& msg, const std::string& name, unsigned int code)                                       \
             : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}               \
         NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description)       \

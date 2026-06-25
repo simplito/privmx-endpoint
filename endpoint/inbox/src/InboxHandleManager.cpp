@@ -49,7 +49,7 @@ std::shared_ptr<InboxHandle> InboxHandleManager::createInboxHandle(
 std::shared_ptr<InboxHandle> InboxHandleManager::getInboxHandle(const int64_t& id) {
     auto inboxHandle = _map.get(id);
     if (!inboxHandle.has_value()) {
-        throw UnknownInboxHandleException();
+        throw UnknownInboxHandleException("inbox handle id=" + std::to_string(id));
     }
     return inboxHandle.value();
 }
@@ -61,7 +61,7 @@ bool InboxHandleManager::hasInboxHandle(const int64_t& id) {
 CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
     auto inboxHandle = _map.get(id);
     if (!inboxHandle.has_value())
-        throw UnknownInboxHandleException();
+        throw UnknownInboxHandleException("inbox handle id=" + std::to_string(id));
     CommitSendInfo result;
     if (!inboxHandle.value()->inboxFileHandles.empty()) {
         for (auto file_handle : inboxHandle.value()->inboxFileHandles) {
@@ -94,7 +94,7 @@ CommitSendInfo InboxHandleManager::commitInboxHandle(const int64_t& id) {
 void InboxHandleManager::abortInboxHandle(const int64_t& id) {
     auto inboxHandle = _map.get(id);
     if (!inboxHandle.has_value())
-        throw UnknownInboxHandleException();
+        throw UnknownInboxHandleException("inbox handle id=" + std::to_string(id));
     _map.erase(id);
     _handleManager->removeHandle(id);
     if (!inboxHandle.value()->inboxFileHandles.empty()) {
@@ -123,7 +123,7 @@ std::shared_ptr<store::FileWriteHandle> InboxHandleManager::createFileWriteHandl
 
 std::shared_ptr<store::FileWriteHandle> InboxHandleManager::getFileWriteHandle(int64_t fileHandleId) {
     if (!isFileWriteHandle(fileHandleId)) {
-        throw store::InvalidFileWriteHandleException();
+        throw store::InvalidFileWriteHandleException("file handle id=" + std::to_string(fileHandleId));
     }
     return _fileHandleManager.getFileWriteHandle(fileHandleId);
 }
@@ -146,7 +146,7 @@ bool InboxHandleManager::isFileWriteHandle(int64_t fileHandleId) {
 
 std::shared_ptr<store::FileReadHandle> InboxHandleManager::getFileReadHandle(int64_t fileHandleId) {
     if (!isFileReadHandle(fileHandleId)) {
-        throw store::InvalidFileReadHandleException();
+        throw store::InvalidFileReadHandleException("file handle id=" + std::to_string(fileHandleId));
     }
     return _fileHandleManager.getFileReadHandle(fileHandleId);
 }
@@ -157,7 +157,7 @@ void InboxHandleManager::removeFileHandle(int64_t fileHandleId, bool force) {
         );
     } else if (std::find(_fileHandlesUsedByInboxHandles.begin(), _fileHandlesUsedByInboxHandles.end(), fileHandleId) !=
                _fileHandlesUsedByInboxHandles.end()) {
-        throw HandleIsUsedInInboxHandleException();
+        throw HandleIsUsedInInboxHandleException("file handle id=" + std::to_string(fileHandleId));
     }
     return _fileHandleManager.removeHandle(fileHandleId);
 }

@@ -17,8 +17,13 @@ public:
         unsigned int code = 0,
         const std::string& description = std::string()
     )
-        : _msg(msg), _name(name), _scope(scope), _code(code), _description(description) {}
-    virtual const char* what() const noexcept override { return _msg.c_str(); }
+        : _msg(msg), _name(name), _scope(scope), _code(code), _description(description) {
+        _what = _msg;
+        if (!_description.empty()) {
+            _what += " | " + _description;
+        }
+    }
+    virtual const char* what() const noexcept override { return _what.c_str(); }
     std::string getName() const noexcept;
     std::string getScope() const noexcept;
     unsigned int getCode() const noexcept;
@@ -32,6 +37,7 @@ private:
     std::string _scope;
     unsigned int _code;
     std::string _description;
+    std::string _what;
 };
 
 inline std::string Exception::getName() const noexcept {

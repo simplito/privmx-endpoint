@@ -114,10 +114,11 @@ std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
     try {
         fileData = _server->storeFileRead(fileDataModel);
     } catch (const utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
+        core::Exception converted = core::ExceptionConverter::convert(e);
+        if (converted.getCode() ==
             privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
             // STORE_FILE_VERSION_MISMATCH
-            throw store::FileVersionMismatchException();
+            throw store::FileVersionMismatchException(converted.getFull());
         } else {
             e.rethrow();
         }

@@ -408,7 +408,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
         handlePtr->sync(encryptionParams.fileDecryptionParams);
     } catch (const store::FileCorruptedException& e) {
         _fileHandleManager.removeHandle(handle);
-        throw FileSyncFailedHandleCloseException("in file read handle");
+        throw FileSyncFailedHandleCloseException("in file read handle | " + e.getFull());
     }
 }
 
@@ -425,7 +425,7 @@ std::string StoreApiImpl::closeFile(const int64_t handle) {
         try {
             return storeFileFinalizeWrite(std::dynamic_pointer_cast<FileWriteHandle>(handlePtr));
         } catch (const core::DataDifferentThanDeclaredException& e) {
-            throw WritingToFileInteruptedWrittenDataSmallerThenDeclaredException();
+            throw WritingToFileInteruptedWrittenDataSmallerThenDeclaredException(e.getFull());
         }
     }
     return handlePtr->getFileId();
@@ -636,7 +636,7 @@ void StoreApiImpl::updateFileMeta(
     server::File file = storeFileGetResult.file;
     auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or(""));
     if (statusCode != 0) {
-        throw FileDataIntegrityException();
+        throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }
     auto key = getAndValidateModuleCurrentEncKey(store);
     if (key.statusCode != 0) {

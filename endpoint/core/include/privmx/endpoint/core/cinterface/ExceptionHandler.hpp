@@ -19,6 +19,7 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/Exception.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/cinterface/InterfaceException.hpp"
 #include <privmx/utils/PrivmxException.hpp>
 
@@ -51,13 +52,9 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exc
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const utils::PrivmxException& e) {
-    std::string message = std::string("utils::PrivmxException: ") +
-        e.what() +
-        ", type: " +
-        std::to_string(e.getType()) +
-        ", code: " +
-        std::to_string(e.getCode());
-    return make_error(message);
+    // Route through the converter so the structured fields (code/scope/name/description)
+    // survive instead of being flattened into a single string.
+    return make_error(endpoint::core::ExceptionConverter::convert(e));
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const Poco::Exception& e) {

@@ -264,7 +264,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::setNewOfferOnReconfigure(const Poco
 Poco::Dynamic::Var StreamApiLowVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
-        throw core::InvalidMethodException();
+        throw core::InvalidMethodException("method=" + std::to_string((int64_t)method));
     }
     return (*this.*(it->second))(args);
 }
