@@ -152,6 +152,13 @@ public:
     static std::string getReadableType() { return "PKIVerificationOptions"; }
 };
 
+template<>
+class StructValidator<GroupGrantWithKey> {
+public:
+    static void validate(const GroupGrantWithKey& value, const std::string& stack_trace = "");
+    static std::string getReadableType() { return "GroupGrantWithKey"; }
+};
+
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

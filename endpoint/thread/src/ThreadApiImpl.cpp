@@ -27,6 +27,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/thread/Mapper.hpp"
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
@@ -42,11 +43,13 @@ ThreadApiImpl::ThreadApiImpl(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const core::Connection& connection
+    const core::Connection& connection,
+    std::shared_ptr<group::GroupApiImpl> groupApiImpl
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
-      _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
+      _connection(connection), _groupApiImpl(std::move(groupApiImpl)), _serverApi(ServerApi(gateway)),
+      _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
       _messageDataSchemaMapper(userPrivKey, connection), _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
     initModuleDataSchemaMapper(_threadDataSchemaMapper);
@@ -76,7 +79,8 @@ std::string ThreadApiImpl::createThread(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies,
-    const std::string& type
+    const std::string& type,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, createThread)
     auto ctx = prepareContainerCreate(contextId, users, managers);
@@ -98,6 +102,16 @@ std::string ThreadApiImpl::createThread(
     if (policies.has_value()) {
         create_thread_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
+    if (!groups.empty()) {
+        create_thread_model.groupKeys = buildGroupKeyEntries(
+            groups, ctx.key, ctx.dio, contextId, ctx.resourceId, ctx.secret
+        );
+        std::vector<core::server::GroupGrant> groupGrants;
+        for (const auto& g : groups) {
+            groupGrants.push_back({.groupId = g.groupId, .role = g.role});
+        }
+        create_thread_model.groups = std::move(groupGrants);
+    }
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, createThread, data encrypted)
     auto result = _serverApi.threadCreate(create_thread_model);
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, createThread, data send)
@@ -113,7 +127,8 @@ void ThreadApiImpl::updateThread(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     PRIVMX_DEBUG_TIME_START(PlatformThread, updateThread)
 
@@ -124,13 +139,41 @@ void ThreadApiImpl::updateThread(
     const auto& currentThreadEntry = currentThread.data.back();
     auto currentThreadResourceId = currentThread.resourceId ? currentThread.resourceId.value() :
                                                               core::EndpointUtils::generateId();
+    // Force key rotation when groups are being removed so the old group
+    // no longer has access to the new key (Bridge rejects if it does).
+    bool groupRemovalForcesNewKey = false;
+    {
+        std::set<std::string> newGroupIds;
+        for (const auto& g : groups) {
+            newGroupIds.insert(g.groupId);
+        }
+        for (const auto& current : currentThread.groups) {
+            if (newGroupIds.find(current.groupId) == newGroupIds.end()) {
+                groupRemovalForcesNewKey = true;
+                break;
+            }
+        }
+    }
     auto ctx = prepareContainerUpdate(
-        currentThread, currentThreadEntry, currentThreadResourceId, users, managers, forceGenerateNewKey
+        currentThread, currentThreadEntry, currentThreadResourceId, users, managers,
+        forceGenerateNewKey || groupRemovalForcesNewKey
     );
     server::ThreadUpdateModel model;
     fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
+    }
+    if (!groups.empty()) {
+        model.groupKeys = buildGroupKeyEntries(
+            groups, ctx.key, ctx.dio, currentThread.contextId, currentThreadResourceId, ctx.secret
+        );
+        std::vector<core::server::GroupGrant> groupGrants;
+        for (const auto& g : groups) {
+            groupGrants.push_back({.groupId = g.groupId, .role = g.role});
+        }
+        model.groups = std::move(groupGrants);
+    } else {
+        model.groups = std::vector<core::server::GroupGrant>{};
     }
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
@@ -165,6 +208,7 @@ Thread ThreadApiImpl::getThread(const std::string& threadId, const std::string& 
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, getting thread)
     auto thread = _serverApi.threadGet(params).thread;
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, data send)
+    registerGroupKeys(thread);
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     auto result = _threadDataSchemaMapper->validateDecryptAndConvertThread(thread, _keyProvider);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, data decrypted)
@@ -187,6 +231,7 @@ core::PagingList<Thread> ThreadApiImpl::listThreads(
     auto threadsList = _serverApi.threadList(model);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listThreads, data send)
     for (const auto& thread : threadsList.threads) {
+        registerGroupKeys(thread);
         setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     }
     std::vector<Thread> threads = _threadDataSchemaMapper->validateDecryptAndConvertThreads(
@@ -224,6 +269,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting thread)
     const auto& thread = messagesList.thread;
     _threadDataSchemaMapper->assertDataIntegrity(thread);
+    registerGroupKeys(thread);
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     auto messages = _messageDataSchemaMapper.validateDecryptAndConvertMessages(
@@ -328,6 +374,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         if (type == "threadCreated") {
             auto raw = server::ThreadInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                registerGroupKeys(raw);
                 setNewModuleKeysInCache(raw.id, threadToModuleKeys(raw), raw.version);
                 auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<ThreadCreatedEvent>("thread", data, notification);
@@ -336,6 +383,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
         } else if (type == "threadUpdated") {
             auto raw = server::ThreadInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
+                registerGroupKeys(raw);
                 setNewModuleKeysInCache(raw.id, threadToModuleKeys(raw), raw.version);
                 auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<ThreadUpdatedEvent>("thread", data, notification);
@@ -443,17 +491,31 @@ std::pair<core::ModuleKeys, int64_t> ThreadApiImpl::getModuleKeysAndVersionFromS
     auto thread = _serverApi.threadGet(params).thread;
     // validate thread Data before returning data
     _threadDataSchemaMapper->assertDataIntegrity(thread);
+    registerGroupKeys(thread);
     return std::make_pair(threadToModuleKeys(thread), thread.version);
 }
 
 core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
     return core::ModuleKeys{
         .keys = thread.keys,
+        .groupKeys = thread.groupKeys,
         .currentKeyId = thread.keyId,
         .moduleSchemaVersion = _threadDataSchemaMapper->getDataStructureVersion(thread.data.back()),
         .moduleResourceId = thread.resourceId.value_or(""),
         .contextId = thread.contextId
     };
+}
+
+void ThreadApiImpl::registerGroupKeys(const server::ThreadInfo& thread) {
+    if (!_groupApiImpl || thread.groupKeys.empty()) return;
+    for (const auto& entry : thread.groupKeys) {
+        try {
+            auto privKey = _groupApiImpl->resolveGroupPrivKey(entry.group);
+            _keyProvider->registerGroupPrivKey(entry.group, privKey);
+        } catch (...) {
+            // user is not a member of this group — skip
+        }
+    }
 }
 
 std::vector<std::string> ThreadApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

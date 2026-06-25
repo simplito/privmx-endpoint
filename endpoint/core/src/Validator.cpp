@@ -341,3 +341,9 @@ void StructValidator<PKIVerificationOptions>::validate(
         );
     }
 }
+
+void StructValidator<GroupGrantWithKey>::validate(const GroupGrantWithKey& value, const std::string& stack_trace) {
+    Validator::validateId(value.groupId, stack_trace + ".groupId");
+    Validator::validateEnumParamString(value.role, {"user", "manager"}, "role", stack_trace + ".role");
+    Validator::validatePubKeyBase58DER(value.groupPubKey, stack_trace + ".groupPubKey");
+}

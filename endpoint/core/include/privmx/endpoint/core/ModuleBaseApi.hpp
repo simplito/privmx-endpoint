@@ -143,6 +143,7 @@ protected:
             // Inbox special Case
             secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
         }
+        LOG_DEBUG("secret - ",secret)
         auto usersKeysResolver{
             core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)
         };
@@ -205,6 +206,15 @@ protected:
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);
+
+    std::vector<server::GroupKeyEntrySet> buildGroupKeyEntries(
+        const std::vector<GroupGrantWithKey>& groups,
+        const EncKey& key,
+        const DataIntegrityObject& dio,
+        const std::string& contextId,
+        const std::string& resourceId,
+        const std::string& containerSecret
+    );
 
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
 

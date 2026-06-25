@@ -11,6 +11,8 @@
 #include "privmx/endpoint/thread/Types.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 
+namespace privmx { namespace endpoint { namespace group { class GroupApi; } } }
+
 namespace privmx {
 namespace endpoint {
 namespace thread {
@@ -29,7 +31,7 @@ public:
      * 
      * @return ThreadApi object
      */
-    static ThreadApi create(core::Connection& connetion);
+    static ThreadApi create(core::Connection& connection, group::GroupApi* groupApi = nullptr);
 
     /**
      * //doc-gen:ignore
@@ -58,7 +60,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**
@@ -84,7 +87,8 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**

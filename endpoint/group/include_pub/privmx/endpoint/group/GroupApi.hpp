@@ -1,0 +1,149 @@
+#ifndef _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPI_HPP_
+#define _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPI_HPP_
+
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "privmx/endpoint/core/Connection.hpp"
+#include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/group/Types.hpp"
+#include <privmx/endpoint/core/ExtendedPointer.hpp>
+
+namespace privmx {
+namespace endpoint {
+namespace group {
+
+class GroupApiImpl;
+
+/**
+ * 'GroupApi' is a class representing Endpoint's API for Groups.
+ */
+class GroupApi : public privmx::endpoint::core::ExtendedPointer<GroupApiImpl> {
+public:
+    /**
+     * Creates an instance of 'GroupApi'.
+     *
+     * @param connection instance of 'Connection'
+     * @return GroupApi object
+     */
+    static GroupApi create(core::Connection& connection);
+
+    /**
+     * //doc-gen:ignore
+     */
+    GroupApi();
+    GroupApi(const GroupApi& obj);
+    GroupApi& operator=(const GroupApi& obj);
+    GroupApi(GroupApi&& obj);
+    ~GroupApi();
+
+    /**
+     * Creates a new Group in given Context.
+     *
+     * @param contextId ID of the Context to create the Group in
+     * @param users vector of UserWithPubKey structs which indicates who will have access to the created Group
+     * @param managers vector of UserWithPubKey structs which indicates who will have access (and management rights) to
+     * the created Group
+     * @param publicMeta public (unencrypted) metadata
+     * @param privateMeta private (encrypted) metadata
+     * @param policies Group's policies
+     * @return ID of the created Group
+     */
+    std::string createGroup(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
+
+    /**
+     * Updates an existing Group.
+     *
+     * @param groupId ID of the Group to update
+     * @param users vector of UserWithPubKey structs which indicates who will have access to the updated Group
+     * @param managers vector of UserWithPubKey structs which indicates who will have access (and management rights) to
+     * the updated Group
+     * @param publicMeta public (unencrypted) metadata
+     * @param privateMeta private (encrypted) metadata
+     * @param version current version of the updated Group
+     * @param force force update (without checking version)
+     * @param forceGenerateNewKey force to regenerate a key for the Group
+     * @param policies Group's policies
+     */
+    void updateGroup(
+        const std::string& groupId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
+
+    /**
+     * Deletes a Group by given Group ID.
+     *
+     * @param groupId ID of the Group to delete
+     */
+    void deleteGroup(const std::string& groupId);
+
+    /**
+     * Gets a Group by given Group ID.
+     *
+     * @param groupId ID of the Group to get
+     * @return Group struct containing info about the Group
+     */
+    Group getGroup(const std::string& groupId);
+
+    /**
+     * Gets a list of Groups in given Context.
+     *
+     * @param contextId ID of the Context to get the Groups from
+     * @param pagingQuery struct with list query parameters
+     * @return struct containing a list of Groups
+     */
+    core::PagingList<Group> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
+
+    /**
+     * Subscribe for the Group events on the given subscription query.
+     *
+     * @param subscriptionQueries list of queries
+     * @return list of subscriptionIds in matching order to subscriptionQueries
+     */
+    std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
+
+    /**
+     * Unsubscribe from events for the given subscriptionIds.
+     *
+     * @param subscriptionIds list of subscriptionId
+     */
+    void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
+
+    /**
+     * Generate subscription Query for the Group events.
+     *
+     * @param eventType type of event which you listen for
+     * @param selectorType scope on which you listen for events
+     * @param selectorId ID of the selector
+     */
+    std::string buildSubscriptionQuery(
+        EventType eventType,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
+
+private:
+    GroupApi(const std::shared_ptr<GroupApiImpl>& impl);
+};
+
+} // namespace group
+} // namespace endpoint
+} // namespace privmx
+
+#endif // _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPI_HPP_

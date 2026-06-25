@@ -237,6 +237,42 @@ enum EventSelectorType : int64_t {
     CONTEXT_ID = 0
 };
 
+/**
+ * Represents a group granted access to a container.
+ */
+struct GroupGrant {
+    /**
+     * ID of the group
+     */
+    std::string groupId;
+
+    /**
+     * Role held by the group in the container ("user" or "manager")
+     */
+    std::string role;
+};
+
+/**
+ * Carries the group's verified public key along with grant info,
+ * used when granting a group access to a container.
+ */
+struct GroupGrantWithKey {
+    /**
+     * ID of the group
+     */
+    std::string groupId;
+
+    /**
+     * Role held by the group in the container ("user" or "manager")
+     */
+    std::string role;
+
+    /**
+     * Verified group identity public key (base58-DER encoded)
+     */
+    std::string groupPubKey;
+};
+
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

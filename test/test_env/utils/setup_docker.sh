@@ -5,6 +5,8 @@ BUILD_PATH="${SCRIPT_PATH}/../../../build/test"
 {
 
     "${SCRIPT_PATH}/clean_up_volumes.sh"
+    mkdir -p "${SCRIPT_PATH}/volumes/bridge/storage"
+    chmod 777 "${SCRIPT_PATH}/volumes/bridge/storage"
     echo Creating Docker
     # docker compose -f "${SCRIPT_PATH}/empty_server_and_mongo.yml" pull
     docker compose -f "${SCRIPT_PATH}/empty_server_and_mongo.yml" up -d --wait

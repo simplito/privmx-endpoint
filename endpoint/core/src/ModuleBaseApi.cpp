@@ -12,8 +12,12 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 #include <type_traits>
 
+#include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/ecc/PublicKey.hpp>
+
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
@@ -130,4 +134,37 @@ ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
         .moduleResourceId = moduleKeys.moduleResourceId,
         .contextId = moduleKeys.contextId
     };
+}
+
+std::vector<server::GroupKeyEntrySet> ModuleBaseApi::buildGroupKeyEntries(
+    const std::vector<GroupGrantWithKey>& groups,
+    const EncKey& key,
+    const DataIntegrityObject& dio,
+    const std::string& contextId,
+    const std::string& resourceId,
+    const std::string& containerSecret
+) {
+    EncKeyEncryptorV2 encryptor;
+    std::vector<server::GroupKeyEntrySet> result;
+    for (const auto& g : groups) {
+        auto groupPubKey = privmx::crypto::PublicKey::fromBase58DER(g.groupPubKey);
+        auto keySecret = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
+        auto encData = encryptor.encrypt(
+            EncKeyV2ToEncrypt{
+                EncKey{.id = key.id, .key = key.key},
+                .dio = dio,
+                .location = {.contextId = contextId, .resourceId = resourceId},
+                .keySecret = keySecret,
+                .secretHash = privmx::crypto::Crypto::hmacSha256(
+                    containerSecret, keySecret + contextId + resourceId
+                )
+            },
+            groupPubKey,
+            _userPrivKey
+        );
+        result.push_back(server::GroupKeyEntrySet{
+            .group = g.groupId, .keyId = key.id, .data = encData.toJSON()
+        });
+    }
+    return result;
 }

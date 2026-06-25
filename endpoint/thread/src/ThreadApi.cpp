@@ -14,6 +14,7 @@ limitations under the License.
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
+#include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
@@ -31,12 +32,13 @@ ThreadApi& ThreadApi::operator=(const ThreadApi& obj) {
 ThreadApi::ThreadApi(ThreadApi&& obj) : ExtendedPointer(std::move(obj)) {};
 ThreadApi::~ThreadApi() {}
 
-ThreadApi ThreadApi::create(core::Connection& connection) {
+ThreadApi ThreadApi::create(core::Connection& connection, group::GroupApi* groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+        std::shared_ptr<group::GroupApiImpl> groupImpl = groupApi ? groupApi->getImpl() : nullptr;
         std::shared_ptr<ThreadApiImpl> impl(new ThreadApiImpl(
             connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection
+            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupImpl
         ));
         impl->attach(impl);
         return ThreadApi(impl);
@@ -54,14 +56,16 @@ std::string ThreadApi::createThread(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
-        return impl->createThread(contextId, users, managers, publicMeta, privateMeta, policies);
+        return impl->createThread(contextId, users, managers, publicMeta, privateMeta, policies, "thread", groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -77,15 +81,17 @@ void ThreadApi::updateThread(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(threadId, "field:threadId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
         impl->updateThread(
-            threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+            threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
         );
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);

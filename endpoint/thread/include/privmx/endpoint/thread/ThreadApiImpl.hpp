@@ -32,6 +32,8 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 
+namespace privmx { namespace endpoint { namespace group { class GroupApiImpl; } } }
+
 namespace privmx {
 namespace endpoint {
 namespace thread {
@@ -44,7 +46,8 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const core::Connection& connection
+        const core::Connection& connection,
+        std::shared_ptr<group::GroupApiImpl> groupApiImpl = nullptr
     );
     ~ThreadApiImpl();
     std::string createThread(
@@ -54,7 +57,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies,
-        const std::string& type = THREAD_TYPE_FILTER_FLAG
+        const std::string& type = THREAD_TYPE_FILTER_FLAG,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void updateThread(
@@ -66,7 +70,8 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
     void deleteThread(const std::string& threadId);
 
@@ -107,6 +112,7 @@ private:
     void processDisconnectedEvent();
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
+    void registerGroupKeys(const server::ThreadInfo& thread);
 
     core::ModuleKeys getMessageDecryptionKeys(server::Message message);
     Poco::Dynamic::Var encryptMessageData(
@@ -142,6 +148,7 @@ private:
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
+    std::shared_ptr<group::GroupApiImpl> _groupApiImpl;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 

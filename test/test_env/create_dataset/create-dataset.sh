@@ -39,6 +39,9 @@ docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=kvdbEntry --db=
 # Inbox
 docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=inbox --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/inbox.json"
 docker cp $DOCKER_MONGO_NAME:/mongo_collections $DATASET_DIR
+# Group
+docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=group --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/group.json"
+docker cp $DOCKER_MONGO_NAME:/mongo_collections $DATASET_DIR
 
 # Migration Status
 docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=migration --db=privmx_localhost --jsonArray --pretty --out=migration.json"

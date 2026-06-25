@@ -157,6 +157,11 @@ struct Thread {
      * Version of the Thread data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
+
+    /**
+     * list of groups granted access to this Thread
+     */
+    std::vector<core::GroupGrant> groups;
 };
 
 enum EventType : int64_t {

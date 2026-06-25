@@ -37,6 +37,12 @@ namespace core {
 template<typename T> struct type_identity { using type = T; };
 template<typename T> using type_identity_t = typename type_identity<T>::type;
 
+template<typename T, typename = void>
+struct has_group_keys : std::false_type {};
+
+template<typename T>
+struct has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys)>> : std::true_type {};
+
 class DataSchemaMapperUtils {
 public:
     static uint32_t toStatusCode(std::function<void()> fn) noexcept {
@@ -128,6 +134,9 @@ public:
                 continue;
             }
             keyRequest.addOne(items[i].keys, items[i].data.back().keyId, getLocation(items[i]));
+            if constexpr (has_group_keys<TServer>::value) {
+                keyRequest.addGroupKeys(items[i].groupKeys, getLocation(items[i]));
+            }
         }
         auto allKeys = keyProvider->getKeysAndVerify(keyRequest);
         std::set<std::string> seenRandomIds;
@@ -215,6 +224,7 @@ public:
             }
             keyRequest.addOne(moduleKeys.keys, items[i].keyId, location);
         }
+        keyRequest.addGroupKeys(moduleKeys.groupKeys, location);
         auto allKeys = keyProvider->getKeysAndVerify(keyRequest);
         const auto keyMapIt = allKeys.find(location);
         const auto* keyMap = keyMapIt != allKeys.end() ? &keyMapIt->second : nullptr;

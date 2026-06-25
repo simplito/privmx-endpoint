@@ -311,3 +311,14 @@ Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const Verificat
     obj->set("bridgeIdentity", serialize(val.bridgeIdentity));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<GroupGrant>(const GroupGrant& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$GroupGrant");
+    }
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("role", serialize(val.role));
+    return obj;
+}

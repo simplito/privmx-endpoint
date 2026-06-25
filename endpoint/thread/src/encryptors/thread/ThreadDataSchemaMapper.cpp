@@ -82,6 +82,10 @@ Thread ThreadDataSchemaMapper::toLibThread(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
+    std::vector<core::GroupGrant> groups;
+    for (const auto& g : info.groups) {
+        groups.push_back({.groupId = g.groupId, .role = g.role});
+    }
     return Thread{
         .contextId = info.contextId,
         .threadId = info.id,
@@ -98,7 +102,8 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .messagesCount = info.messages,
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .groups = std::move(groups)
     };
 }
 

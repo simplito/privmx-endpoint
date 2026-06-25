@@ -264,7 +264,7 @@ def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
         "PRIVMX_PORT=3000",
         f"PRIVMX_MONGO_URL={internal_mongo_url}",
         "PRIVMX_WORKERS=1",
-        "PMX_MIGRATION=Migration_069_Indexes_for_session",
+        "PMX_MIGRATION=Migration_070_StreamRoomState",
         "PMX_MEDIA_SERVER_ALLOW_SELF_SIGNED_CERTS=true",
         "PMX_STREAM_ENABLED=true",
         "PRIVMX_HOSTNAME=0.0.0.0",
@@ -372,7 +372,7 @@ def list_tests(test_file_path: str, passthrough_args: Sequence[str]) -> list[str
 
 def pre_test(index: int, dataset_dir_path: str, test_name: str) -> BridgeInfo:
     log(f"[PRE-TEST] {test_name}")
-    bridge_info = create_bridge_docker(index, "simplito/privmx-bridge:latest")
+    bridge_info = create_bridge_docker(index, "privmx-bridge:latest")
     try:
         prepare_bridge_context(bridge_info, dataset_dir_path)
         return bridge_info

@@ -90,6 +90,7 @@ struct NotificationEvent {
 
 struct ModuleKeys {
     std::vector<server::KeyEntry> keys;
+    std::vector<server::GroupKeysEntry> groupKeys;
     std::string currentKeyId;
     int64_t moduleSchemaVersion;
     std::string moduleResourceId;

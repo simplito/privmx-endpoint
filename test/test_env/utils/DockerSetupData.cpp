@@ -20,6 +20,8 @@
 #include <privmx/endpoint/inbox/VarSerializer.hpp>
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/VarSerializer.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/VarSerializer.hpp>
 
 using namespace std;
 using namespace privmx;
@@ -76,6 +78,7 @@ int main(int argc, char** argv) {
         endpoint::store::StoreApi storeApi = endpoint::store::StoreApi::create(connection);
         endpoint::inbox::InboxApi inboxApi = endpoint::inbox::InboxApi::create(connection, threadApi, storeApi);
         endpoint::kvdb::KvdbApi kvdbApi = endpoint::kvdb::KvdbApi::create(connection);
+        endpoint::group::GroupApi groupApi = endpoint::group::GroupApi::create(connection);
         const std::vector<endpoint::core::UserWithPubKey> users_1 = {
             endpoint::core::UserWithPubKey{.userId=user_1_Id, .pubKey=user_1_PubKey}
         };
@@ -272,6 +275,26 @@ int main(int argc, char** argv) {
             kvdb_entry_1_data,
             0
         );
+        //group_1 — user_1 only (user + manager)
+        auto group_1_publicMeta = endpoint::core::Buffer::from("test_group_1_publicMeta");
+        auto group_1_privateMeta = endpoint::core::Buffer::from("test_group_1_privateMeta");
+        auto group_1_id = groupApi.createGroup(
+            context_1_Id,
+            users_1,
+            users_1,
+            group_1_publicMeta,
+            group_1_privateMeta
+        );
+        //group_2 — user_1 + user_2 as members, user_1 as manager
+        auto group_2_publicMeta = endpoint::core::Buffer::from("test_group_2_publicMeta");
+        auto group_2_privateMeta = endpoint::core::Buffer::from("test_group_2_privateMeta");
+        auto group_2_id = groupApi.createGroup(
+            context_1_Id,
+            users_1_2,
+            users_1,
+            group_2_publicMeta,
+            group_2_privateMeta
+        );
         //kvdb_entry_2
         auto kvdb_entry_2_publicMeta = endpoint::core::Buffer::from("test_kvdb_entry_2_publicMeta");
         auto kvdb_entry_2_privateMeta = endpoint::core::Buffer::from("test_kvdb_entry_2_privateMeta");
@@ -285,6 +308,8 @@ int main(int argc, char** argv) {
             kvdb_entry_2_data,
             0
         );
+        auto group_1_server_data = groupApi.getGroup(group_1_id);
+        auto group_2_server_data = groupApi.getGroup(group_2_id);
         auto thread_1_server_data = threadApi.getThread(thread_1_id);
         auto store_1_server_data = storeApi.getStore(store_1_id);
         auto thread_2_server_data = threadApi.getThread(thread_2_id);
@@ -311,6 +336,34 @@ int main(int argc, char** argv) {
         fstream iniFileWriter;
         iniFileWriter.open(iniFilePath, ios::app);
         if(iniFileWriter.is_open()) {
+            //Group_1
+            iniFileWriter << "[Group_1]" << std::endl;
+            iniFileWriter << "groupId = " << group_1_server_data.groupId << std::endl;
+            iniFileWriter << "contextId = " << group_1_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << group_1_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << group_1_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << group_1_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << group_1_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << group_1_server_data.version << std::endl;
+            iniFileWriter << "groupPubKey = " << group_1_server_data.groupPubKey << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_1_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_1_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << group_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << group_1_server_data.schemaVersion << std::endl;
+            //Group_2
+            iniFileWriter << "[Group_2]" << std::endl;
+            iniFileWriter << "groupId = " << group_2_server_data.groupId << std::endl;
+            iniFileWriter << "contextId = " << group_2_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << group_2_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << group_2_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << group_2_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << group_2_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << group_2_server_data.version << std::endl;
+            iniFileWriter << "groupPubKey = " << group_2_server_data.groupPubKey << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_2_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_2_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << group_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << group_2_server_data.schemaVersion << std::endl;
             //Thread_1
             iniFileWriter << "[Thread_1]" << std::endl;
             iniFileWriter << "threadId = " << thread_1_server_data.threadId << std::endl;
