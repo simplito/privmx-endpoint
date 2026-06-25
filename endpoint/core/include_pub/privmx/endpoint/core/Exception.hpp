@@ -2,12 +2,24 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_EXCEPTION_HPP_
 
 #include <exception>
+#include <initializer_list>
 #include <memory>
 #include <string>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
+
+constexpr bool exceptionCodesUnique(std::initializer_list<unsigned int> codes) {
+    for (auto i = codes.begin(); i != codes.end(); ++i) {
+        for (auto j = i + 1; j != codes.end(); ++j) {
+            if (*i == *j) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 class Exception : public std::exception {
 public:

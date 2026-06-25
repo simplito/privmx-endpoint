@@ -17,6 +17,7 @@ limitations under the License.
 #define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                                  \
     class NAME : public privmx::endpoint::core::Exception {                                                            \
     public:                                                                                                            \
+        static constexpr unsigned int SCOPE_CODE = (CODE);                                                             \
         NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
         NAME(const std::string& msg, const std::string& name, unsigned int code)                                       \
             : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}               \
@@ -31,6 +32,7 @@ limitations under the License.
 #define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                                  \
     class NAME : public BASE_SCOPED {                                                                                  \
     public:                                                                                                            \
+        static constexpr unsigned int FULL_CODE = (BASE_SCOPED::SCOPE_CODE << 16) | (CODE);                            \
         NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
         NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}             \
         void rethrow() const override;                                                                                 \
@@ -52,6 +54,10 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(
 )
 DECLARE_ENDPOINT_EXCEPTION(EndpointInterfaceException, UncaughtException, "Uncaught exception in C interface", 0x0002)
 
+// compile-time guard (generated): all exception codes in this scope must be unique
+static_assert(::privmx::endpoint::core::exceptionCodesUnique({
+    UncaughtException::FULL_CODE,
+}), "Duplicate exception code in cinterface scope");
 } // namespace cinterface
 } // namespace endpoint
 } // namespace privmx
