@@ -32,7 +32,7 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 // clang-format off
-#define ENDPOINT_KVDB_EXCEPTION_CODE 0x00090000
+#define ENDPOINT_KVDB_EXCEPTION_CODE 0x000A0000
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointKvdbException, "Unknown endpoint kvdb exception", "Kvdb", 0x0009)
 DECLARE_ENDPOINT_EXCEPTION(EndpointKvdbException, CannotExtractKvdbCreatedEventException, "Cannot extract KvdbCreatedEvent", 0x0002)

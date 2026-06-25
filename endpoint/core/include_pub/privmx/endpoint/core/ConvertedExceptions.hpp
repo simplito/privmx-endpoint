@@ -141,7 +141,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidMnemonicException, "I
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, InvalidChecksumException, "Invalid checksum", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, EncryptInvalidKeyLengthException, "Encrypt invalid key length", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, OnlyHmacSHA256WithIvIsSupportedForAES256CBCException, "Only hmac SHA-256 with iv is supported for AES-256-CBC", 0x0012)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, CannotPassIvToDeterministicAES256CBCHmacSHA256Exception, "Cannot pass iv to deterministic AES-256-CBC hmac SHA-256", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, CannotPassIvToDeterministicAES256CBCHmacSHA256Exception, "Cannot pass iv to deterministic AES-256-CBC hmac SHA-256", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, XTEAECBEncryptionDoesntSupportHmacAndIvException, "XTEA-ECB encryption doesn't support hmac and iv", 0x0014)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, UnsupportedEncryptionAlgorithmException, "Unsupported encryption algorithm", 0x0015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, MissingRequiredSignatureException, "Missing required signature", 0x0016)
