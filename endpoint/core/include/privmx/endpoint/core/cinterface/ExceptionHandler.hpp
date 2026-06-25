@@ -47,6 +47,9 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exc
     error->set("scope", e.getScope());
     error->set("description", e.getDescription());
     error->set("full", e.getFull());
+    if (e.getCause()) {
+        error->set("cause", make_error(*e.getCause()));
+    }
     error->set("__type", "Error");
     return error;
 }

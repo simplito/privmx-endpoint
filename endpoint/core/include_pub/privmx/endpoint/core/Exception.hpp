@@ -2,6 +2,7 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_EXCEPTION_HPP_
 
 #include <exception>
+#include <memory>
 #include <string>
 
 namespace privmx {
@@ -31,6 +32,12 @@ public:
     std::string getFull(bool JSON = false) const noexcept;
     virtual void rethrow() const;
 
+    // Attach the exception that caused this one. The cause is copied (sliced to the
+    // base Exception, which preserves name/scope/code/description and its own cause
+    // chain) and also folded into what() so the standard error path shows it.
+    void setCause(const Exception& cause);
+    std::shared_ptr<Exception> getCause() const noexcept { return _cause; }
+
 private:
     std::string _msg;
     std::string _name;
@@ -38,6 +45,7 @@ private:
     unsigned int _code;
     std::string _description;
     std::string _what;
+    std::shared_ptr<Exception> _cause;
 };
 
 inline std::string Exception::getName() const noexcept {
@@ -64,7 +72,8 @@ inline std::string Exception::getFull(bool JSON) const noexcept {
         res += "\"scope\" : \"" + _scope + "\",";
         res += "\"msg\" : \"" + _msg + "\",";
         res += "\"code\" : " + std::to_string(_code) + ",";
-        res += "\"description\" : \"" + _description + "\"";
+        res += "\"description\" : \"" + _description + "\",";
+        res += "\"cause\" : " + (_cause ? _cause->getFull(true) : std::string("null"));
         res += "}";
         return res;
     }
@@ -75,7 +84,16 @@ inline std::string Exception::getFull(bool JSON) const noexcept {
     res += " (code: " + std::to_string(_code);
     res += ", msg: \"" + _msg + "\")";
     res += "\n\nDescription: \n" + _description;
+    if (_cause) {
+        res += "\n\nCaused by:\n" + _cause->getFull(false);
+    }
     return res;
+}
+
+inline void Exception::setCause(const Exception& cause) {
+    _cause = std::make_shared<Exception>(cause);
+    _what += " | caused by: ";
+    _what += _cause->what();
 }
 
 inline void Exception::rethrow() const {

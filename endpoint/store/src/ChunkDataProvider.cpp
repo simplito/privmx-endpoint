@@ -118,7 +118,9 @@ std::string ChunkDataProvider::requestServerChunk(uint32_t serverChunkNumber) {
         if (converted.getCode() ==
             privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
             // STORE_FILE_VERSION_MISMATCH
-            throw store::FileVersionMismatchException(converted.getFull());
+            store::FileVersionMismatchException ex;
+            ex.setCause(converted);
+            throw ex;
         } else {
             e.rethrow();
         }

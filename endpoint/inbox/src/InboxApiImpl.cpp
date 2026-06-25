@@ -351,7 +351,9 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
             commitSentInfo = _inboxHandleManager.commitInboxHandle(inboxHandle);
         } catch (const core::DataDifferentThanDeclaredException& e) {
             _inboxHandleManager.abortInboxHandle(inboxHandle);
-            throw WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException(e.getFull());
+            WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException ex;
+            ex.setCause(e);
+            throw ex;
         }
         for (auto fileInfo : commitSentInfo.filesInfo) {
             fileIndex++;
@@ -495,7 +497,9 @@ core::Buffer InboxApiImpl::readFromFile(const int64_t handle, const int64_t leng
         result = core::Buffer::from(handlePtr->read(length));
     } catch (const store::FileVersionMismatchException& e) {
         closeFile(handle);
-        throw store::FileVersionMismatchHandleClosedException(e.getFull());
+        store::FileVersionMismatchHandleClosedException ex;
+        ex.setCause(e);
+        throw ex;
     }
     PRIVMX_DEBUG_TIME_STOP(InboxApi, readFromFile)
     return result;

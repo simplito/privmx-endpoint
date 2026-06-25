@@ -408,7 +408,9 @@ void StoreApiImpl::syncFile(const int64_t handle) {
         handlePtr->sync(encryptionParams.fileDecryptionParams);
     } catch (const store::FileCorruptedException& e) {
         _fileHandleManager.removeHandle(handle);
-        throw FileSyncFailedHandleCloseException("in file read handle | " + e.getFull());
+        FileSyncFailedHandleCloseException ex("in file read handle");
+        ex.setCause(e);
+        throw ex;
     }
 }
 
@@ -425,7 +427,9 @@ std::string StoreApiImpl::closeFile(const int64_t handle) {
         try {
             return storeFileFinalizeWrite(std::dynamic_pointer_cast<FileWriteHandle>(handlePtr));
         } catch (const core::DataDifferentThanDeclaredException& e) {
-            throw WritingToFileInteruptedWrittenDataSmallerThenDeclaredException(e.getFull());
+            WritingToFileInteruptedWrittenDataSmallerThenDeclaredException ex;
+            ex.setCause(e);
+            throw ex;
         }
     }
     return handlePtr->getFileId();
