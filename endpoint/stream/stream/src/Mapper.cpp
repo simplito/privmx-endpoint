@@ -51,7 +51,6 @@ StreamTrackModificationPair Mapper::mapToStreamTrackModificationPair(const serve
     };
 }
 
-
 PublishedStreamData Mapper::mapToPublishedStreamData(const server::StreamPublishedEventData& s) {
     return {
         .streamRoomId = s.streamRoomId,

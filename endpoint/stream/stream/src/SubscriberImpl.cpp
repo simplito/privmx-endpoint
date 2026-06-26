@@ -11,10 +11,10 @@ const std::map<EventSelectorType, std::string> SubscriberImpl::_selectorTypeName
     {EventSelectorType::STREAM_ID, "itemId"}
 };
 const std::map<EventType, std::string> SubscriberImpl::_eventTypeNames = {
-    {EventType::STREAMROOM_CREATE, "create"},      {EventType::STREAMROOM_UPDATE, "update"},
-    {EventType::STREAMROOM_DELETE, "delete"},      {EventType::STREAMROOM_JOIN, "join"},
-    {EventType::STREAMROOM_LEAVE, "leave"},            {EventType::STREAM_PUBLISH, "publish"},
-    {EventType::STREAM_UNPUBLISH, "unpublish"},    {EventType::STREAM_SUBSCRIBE, "subscribe"},
+    {EventType::STREAMROOM_CREATE, "create"},       {EventType::STREAMROOM_UPDATE, "update"},
+    {EventType::STREAMROOM_DELETE, "delete"},       {EventType::STREAMROOM_JOIN, "join"},
+    {EventType::STREAMROOM_LEAVE, "leave"},         {EventType::STREAM_PUBLISH, "publish"},
+    {EventType::STREAM_UNPUBLISH, "unpublish"},     {EventType::STREAM_SUBSCRIBE, "subscribe"},
     {EventType::STREAM_UNSUBSCRIBE, "unsubscribe"}, {EventType::STREAM_UPDATE, "update"}
 };
 const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTypeAllowedSelectorTypes = {
@@ -35,10 +35,10 @@ const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelector
     {EventSelectorType::STREAM_ID, "STREAM_ID"}
 };
 const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
-    {EventType::STREAMROOM_CREATE, "STREAMROOM_CREATE"}, {EventType::STREAMROOM_UPDATE, "STREAMROOM_UPDATE"},
-    {EventType::STREAMROOM_DELETE, "STREAMROOM_DELETE"}, {EventType::STREAMROOM_JOIN, "STREAMROOM_JOIN"},
-    {EventType::STREAMROOM_LEAVE, "STREAMROOM_LEAVE"},           {EventType::STREAM_PUBLISH, "STREAM_PUBLISH"},
-    {EventType::STREAM_UNPUBLISH, "STREAM_UNPUBLISH"},   {EventType::STREAM_SUBSCRIBE, "STREAM_SUBSCRIBE"},
+    {EventType::STREAMROOM_CREATE, "STREAMROOM_CREATE"},   {EventType::STREAMROOM_UPDATE, "STREAMROOM_UPDATE"},
+    {EventType::STREAMROOM_DELETE, "STREAMROOM_DELETE"},   {EventType::STREAMROOM_JOIN, "STREAMROOM_JOIN"},
+    {EventType::STREAMROOM_LEAVE, "STREAMROOM_LEAVE"},     {EventType::STREAM_PUBLISH, "STREAM_PUBLISH"},
+    {EventType::STREAM_UNPUBLISH, "STREAM_UNPUBLISH"},     {EventType::STREAM_SUBSCRIBE, "STREAM_SUBSCRIBE"},
     {EventType::STREAM_UNSUBSCRIBE, "STREAM_UNSUBSCRIBE"}, {EventType::STREAM_UPDATE, "STREAM_UPDATE"}
 };
 

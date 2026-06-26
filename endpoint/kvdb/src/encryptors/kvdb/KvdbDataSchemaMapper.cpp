@@ -90,7 +90,6 @@ Kvdb KvdbDataSchemaMapper::validateDecryptAndConvertKvdb(
     return validateDecryptAndConvertKvdbs({kvdb}, keyProvider)[0];
 }
 
-
 Kvdb KvdbDataSchemaMapper::toLibKvdb(
     const server::KvdbInfo& info,
     const core::Buffer& publicMeta,

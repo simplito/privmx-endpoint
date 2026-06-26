@@ -37,7 +37,8 @@ class WebRTCInterface {
 public:
     virtual std::string createOfferAndSetLocalDescription(
         const std::string& streamRoomId,
-        const std::string& connectionType) = 0;
+        const std::string& connectionType
+    ) = 0;
     virtual std::string createAnswerAndSetDescriptions(
         const std::string& streamRoomId,
         const std::string& sdp,

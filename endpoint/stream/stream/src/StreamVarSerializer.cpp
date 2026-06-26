@@ -215,8 +215,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamUpdatedEventData>(cons
     return obj;
 }
 
-
-
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamTrackModificationPair>(
     const stream::StreamTrackModificationPair& val

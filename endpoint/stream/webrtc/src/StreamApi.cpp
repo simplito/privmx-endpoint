@@ -283,8 +283,7 @@ SubscriberStreamHandle StreamApi::createSubscriberStream(
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->createSubscriberStream(
-streamRoomId, subscriptions);
+        return _impl->createSubscriberStream(streamRoomId, subscriptions);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
