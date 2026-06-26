@@ -163,7 +163,7 @@ std::vector<server::GroupKeyEntrySet> ModuleBaseApi::buildGroupKeyEntries(
             _userPrivKey
         );
         result.push_back(server::GroupKeyEntrySet{
-            .group = g.groupId, .keyId = key.id, .data = encData.toJSON()
+            .group = g.groupId, .keyId = key.id, .groupEpoch = g.groupEpoch, .data = encData.toJSON()
         });
     }
     return result;

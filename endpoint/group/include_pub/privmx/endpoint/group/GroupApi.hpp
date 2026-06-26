@@ -87,6 +87,21 @@ public:
     );
 
     /**
+     * Forces a group key rotation (EP-10) without changing the member list.
+     * Mints a fresh epoch keypair; removed members (if any were removed via updateGroup) cannot
+     * read content written after this rotation.
+     *
+     * @param groupId ID of the Group to rotate
+     * @param users current member list with public keys
+     * @param managers current manager list with public keys
+     */
+    void generateNewGroupKey(
+        const std::string& groupId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
+    /**
      * Deletes a Group by given Group ID.
      *
      * @param groupId ID of the Group to delete

@@ -95,6 +95,13 @@ struct Group {
      * Optional type tag
      */
     std::optional<std::string> type;
+
+    /**
+     * Epoch counter for the group identity keypair. Increments by 1 on each key rotation
+     * (removal or generateNewGroupKey). Matches the bridge's CAS field. 0 for Phase-1 groups
+     * whose bridge does not yet emit this field.
+     */
+    int64_t keyVersion;
 };
 
 enum EventType : int64_t {

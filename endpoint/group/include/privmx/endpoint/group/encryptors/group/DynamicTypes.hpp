@@ -34,6 +34,7 @@ JSON_STRUCT_EXT(EncryptedGroupDataV5, core::dynamic::VersionedData, ENCRYPTED_GR
     F(managers, std::vector<std::string>)                                                                              \
     F(groupPubKey, std::string)                                                                                        \
     F(keyId, std::string)                                                                                              \
+    F(keyVersion, std::optional<int64_t>)                                                                              \
     F(prevEntryHash, std::optional<std::string>)
 JSON_STRUCT(MembershipBlock, MEMBERSHIP_BLOCK_FIELDS);
 

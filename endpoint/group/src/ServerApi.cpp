@@ -31,6 +31,10 @@ server::GroupListResult ServerApi::groupList(server::GroupListModel model) {
     return request<server::GroupListResult>("groupList", model.toJSON());
 }
 
+void ServerApi::generateNewGroupKey(server::GenerateNewGroupKeyModel model) {
+    request("generateNewGroupKey", model.toJSON());
+}
+
 template<class T>
 T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("context." + method, params));

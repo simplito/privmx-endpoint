@@ -22,6 +22,7 @@ public:
     void groupDelete(server::GroupDeleteModel model);
     server::GroupGetResult groupGet(server::GroupGetModel model);
     server::GroupListResult groupList(server::GroupListModel model);
+    void generateNewGroupKey(server::GenerateNewGroupKeyModel model);
 
 private:
     template<typename T>

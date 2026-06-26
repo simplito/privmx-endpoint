@@ -49,6 +49,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupChainBrokenException, "G
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupUnauthorizedSignerException, "Group version signer was not an authorized manager (G2)", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupMembershipMismatchException, "Group membership in signed data does not match bridge-served fields", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x000E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, RotatedAlreadyException, "Concurrent group key rotation: another manager won and one auto-retry did not resolve it", 0x000F)
 // clang-format on
 } // namespace group
 } // namespace endpoint

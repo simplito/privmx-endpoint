@@ -42,9 +42,9 @@ public:
     void addGroupKeys(const std::vector<server::GroupKeysEntry>& groupKeys, const EncKeyLocation& location);
     void markAsCompleted();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, server::KeyEntry>> requestData;
-    // maps location -> keyId -> (KeyEntry, groupId)
+    // maps location -> keyId -> (KeyEntry, groupId, groupEpoch)
     std::unordered_map<EncKeyLocation,
-        std::unordered_map<std::string, std::pair<server::KeyEntry, std::string>>> groupRequestData;
+        std::unordered_map<std::string, std::tuple<server::KeyEntry, std::string, int64_t>>> groupRequestData;
 
 private:
     bool _completed = false;
@@ -55,7 +55,7 @@ public:
     KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
     EncKey generateKey();
     std::string generateSecret();
-    void registerGroupPrivKey(const std::string& groupId, const privmx::crypto::PrivateKey& groupPrivKey);
+    void registerGroupPrivKey(const std::string& groupId, int64_t epoch, const privmx::crypto::PrivateKey& groupPrivKey);
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(
         const KeyDecryptionAndVerificationRequest& request
     );
@@ -86,7 +86,7 @@ private:
         const EncKeyLocation& location
     );
     std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyGroupKeys(
-        const std::unordered_map<std::string, std::pair<server::KeyEntry, std::string>>& groupKeyMap,
+        const std::unordered_map<std::string, std::tuple<server::KeyEntry, std::string, int64_t>>& groupKeyMap,
         const EncKeyLocation& location
     );
     server::KeyEntrySet createKeyEntrySet(
@@ -103,7 +103,7 @@ private:
     );
     privmx::crypto::PrivateKey _key;
     std::function<std::shared_ptr<UserVerifier>()> _getUserVerifier;
-    std::unordered_map<std::string, privmx::crypto::PrivateKey> _groupPrivKeys;
+    std::unordered_map<std::string, std::unordered_map<int64_t, privmx::crypto::PrivateKey>> _groupPrivKeys;
     EncKeyEncryptorV1 _encKeyEncryptorV1;
     EncKeyEncryptorV2 _encKeyEncryptorV2;
 };

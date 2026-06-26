@@ -214,11 +214,13 @@ JSON_STRUCT(GroupGrant, GROUP_GRANT_FIELDS);
 #define GROUP_KEY_ENTRY_SET_FIELDS(F)                                                                                  \
     F(group, std::string)                                                                                              \
     F(keyId, std::string)                                                                                              \
+    F(groupEpoch, int64_t)                                                                                             \
     F(data, Poco::Dynamic::Var)
 JSON_STRUCT(GroupKeyEntrySet, GROUP_KEY_ENTRY_SET_FIELDS);
 
 #define GROUP_KEYS_ENTRY_FIELDS(F)                                                                                     \
     F(group, std::string)                                                                                              \
+    F(groupEpoch, std::optional<int64_t>)                                                                              \
     F(keys, std::vector<core::server::KeyEntry>)
 JSON_STRUCT(GroupKeysEntry, GROUP_KEYS_ENTRY_FIELDS);
 

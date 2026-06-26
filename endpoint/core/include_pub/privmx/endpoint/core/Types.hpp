@@ -271,6 +271,12 @@ struct GroupGrantWithKey {
      * Verified group identity public key (base58-DER encoded)
      */
     std::string groupPubKey;
+
+    /**
+     * Epoch at which groupPubKey was verified (= group.keyVersion; required for Phase 2
+     * lazy re-key so the bridge can enforce per-epoch coverage). Default 0 for Phase-1 compat.
+     */
+    int64_t groupEpoch = 0;
 };
 
 } // namespace core

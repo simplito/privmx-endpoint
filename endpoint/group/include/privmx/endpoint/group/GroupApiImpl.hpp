@@ -54,7 +54,8 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        bool allowRotationRetry = true
     );
     void deleteGroup(const std::string& groupId);
 
@@ -68,9 +69,17 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId);
+    privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
+    void generateNewGroupKey(
+        const std::string& groupId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        bool allowRotationRetry = true
+    );
 
 private:
+    // EP-11: verify winner's rotation payload, decrypt+register their epoch key, invalidate cache
+    void adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();

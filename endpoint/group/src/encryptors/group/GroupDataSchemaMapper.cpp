@@ -57,6 +57,9 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
 
     std::set<std::string> verifiedManagers;
     std::string prevDioStr;
+    int64_t prevKeyVersion = 0;
+    std::string prevGroupPubKey;
+    int64_t finalKeyVersion = 0;
 
     for (size_t i = 0; i < groupInfo.data.size(); ++i) {
         const auto& entry = groupInfo.data[i];
@@ -137,6 +140,24 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             membership.groupPubKey != histEntry.groupPubKey || membership.keyId != histEntry.keyId) {
             throw GroupMembershipMismatchException();
         }
+
+        // EP-9: epoch (keyVersion) monotonicity — backward compat: absent keyVersion treated as 0
+        int64_t thisKeyVersion = membership.keyVersion.value_or(0);
+        if (i == 0) {
+            if (thisKeyVersion != 0) throw GroupDataIntegrityException();
+        } else {
+            // Non-decreasing and increments by at most 1
+            if (thisKeyVersion < prevKeyVersion || thisKeyVersion - prevKeyVersion > 1) {
+                throw GroupDataIntegrityException();
+            }
+            // groupPubKey changes if and only if keyVersion increments
+            bool pubKeyChanged = (membership.groupPubKey != prevGroupPubKey);
+            bool epochBumped = (thisKeyVersion > prevKeyVersion);
+            if (pubKeyChanged != epochBumped) throw GroupDataIntegrityException();
+        }
+        prevKeyVersion = thisKeyVersion;
+        prevGroupPubKey = membership.groupPubKey;
+        finalKeyVersion = thisKeyVersion;
     }
 
     // Head consistency checks
@@ -145,8 +166,11 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     auto headUsers = std::set<std::string>(groupInfo.users.begin(), groupInfo.users.end());
     auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
 
+    // EP-9: cross-check bridge's top-level keyVersion == head membership's committed keyVersion
+    bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() &&
+                               groupInfo.keyVersion.value() != finalKeyVersion;
     if (finalUsers != headUsers || verifiedManagers != headManagers ||
-        groupInfo.groupPubKey != lastHist.groupPubKey) {
+        groupInfo.groupPubKey != lastHist.groupPubKey || bridgeEpochMismatch) {
         throw GroupDataIntegrityException();
     }
 }
@@ -178,7 +202,8 @@ Group GroupDataSchemaMapper::toLibGroup(
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
-        .type = info.type
+        .type = info.type,
+        .keyVersion = info.keyVersion.value_or(0)
     };
 }
 
@@ -224,6 +249,16 @@ std::string GroupDataSchemaMapper::getGroupPrivKey(
     const server::GroupInfo& groupInfo,
     const core::DecryptedEncKey& encKey
 ) {
+    // Search all data entries for the one encrypted with encKey (by matching keyId).
+    // Covers both the current entry and any historical epoch entry in group.keys[].
+    for (const auto& dataEntry : groupInfo.data) {
+        if (dataEntry.keyId == encKey.id) {
+            auto encData = dynamic::EncryptedGroupDataV5::fromJSON(dataEntry.data);
+            auto group = _groupEncryptor.decrypt(encData, encKey.key);
+            return group.groupPrivKey;
+        }
+    }
+    // Fallback to head if no match (e.g., old Phase-1 data without proper keyId tracking)
     auto encData = dynamic::EncryptedGroupDataV5::fromJSON(groupInfo.data.back().data);
     auto group = _groupEncryptor.decrypt(encData, encKey.key);
     return group.groupPrivKey;
