@@ -149,10 +149,14 @@ struct ContainerPolicyWithoutItem {
      * Determine whether the updater can be removed from the list of managers 
      */
     std::optional<std::string> updaterCanBeRemovedFromManagers;
-    /** 
-     * Determine whether the owner can be removed from the list of managers 
+    /**
+     * Determine whether the owner can be removed from the list of managers
      */
     std::optional<std::string> ownerCanBeRemovedFromManagers;
+    /**
+     * Determine who can rotate container keys (re-encrypt for current members without changing data or membership)
+     */
+    std::optional<std::string> rotateKeys;
 };
 
 /**

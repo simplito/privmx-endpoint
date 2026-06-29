@@ -92,6 +92,27 @@ public:
     );
 
     /**
+     * Re-encrypts the Thread key for all current members without changing data, membership, or policy.
+     * Unlike updateThread, this can be called by any Thread member (not just managers) when the
+     * default rotateKeys policy of "user" is in effect.
+     *
+     * @param threadId ID of the Thread to re-key
+     * @param users current Thread users with their public keys
+     * @param managers current Thread managers with their public keys
+     * @param version current Thread version (optimistic lock guard)
+     * @param force skip the version check when true
+     * @param groups current group grantees with their epoch public keys (required when the Thread has group grants)
+     */
+    void rotateThreadKeys(
+        const std::string& threadId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    /**
      * Deletes a Thread by given Thread ID.
      *
      * @param threadId ID of the Thread to delete

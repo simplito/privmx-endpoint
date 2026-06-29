@@ -99,6 +99,27 @@ void ThreadApi::updateThread(
     }
 }
 
+void ThreadApi::rotateThreadKeys(
+    const std::string& threadId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(threadId, "field:threadId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
+    try {
+        impl->rotateThreadKeys(threadId, users, managers, version, force, groups);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void ThreadApi::deleteThread(const std::string& threadId) {
     auto impl = getImpl();
     core::Validator::validateId(threadId, "field:threadId ");

@@ -109,6 +109,12 @@ struct Thread {
     std::string lastModifier;
 
     /**
+     * ID of the user who last provided a new Thread key (may differ from lastModifier
+     * when key rotation was performed without a data change)
+     */
+    std::optional<std::string> keeper;
+
+    /**
      * list of users (their IDs) with access to the Thread
      */
     std::vector<std::string> users;

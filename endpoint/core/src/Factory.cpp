@@ -37,6 +37,9 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.ownerCanBeRemovedFromManagers.has_value()) {
         model->set("ownerCanBeRemovedFromManagers", policy.ownerCanBeRemovedFromManagers.value());
     }
+    if (policy.rotateKeys.has_value()) {
+        model->set("rotateKeys", policy.rotateKeys.value());
+    }
     if (policy.item.has_value()) {
         Poco::JSON::Object::Ptr itemModel = new Poco::JSON::Object();
         auto itemPolicy = policy.item.value();
@@ -86,6 +89,9 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.ownerCanBeRemovedFromManagers.has_value()) {
         model->set("ownerCanBeRemovedFromManagers", policy.ownerCanBeRemovedFromManagers.value());
     }
+    if (policy.rotateKeys.has_value()) {
+        model->set("rotateKeys", policy.rotateKeys.value());
+    }
     return model;
 }
 
@@ -105,6 +111,7 @@ ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var& serve
     result.ownerCanBeRemovedFromManagers = Factory::getValueOrNullopt<std::string>(
         obj, "ownerCanBeRemovedFromManagers"
     );
+    result.rotateKeys = Factory::getValueOrNullopt<std::string>(obj, "rotateKeys");
 
     if (obj->isObject("item")) {
         auto itemObj = obj->getObject("item");

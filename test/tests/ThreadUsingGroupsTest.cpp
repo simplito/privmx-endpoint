@@ -948,3 +948,159 @@ TEST_F(ThreadUsingGroupsTest, user_removed_from_group_loses_all_access) {
     EXPECT_NE(newMsg.statusCode, 0);
     EXPECT_TRUE(newMsg.privateMeta.stdString().empty());
 }
+
+TEST_F(ThreadUsingGroupsTest, non_manager_user_rotates_thread_key_after_group_removal) {
+    // Group: user_1=manager, user_2=user, user_3=user
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")},
+                {.userId = reader->getString("Login.user_3_id"), .pubKey = reader->getString("Login.user_3_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("dyn_group_pub"),
+            core::Buffer::from("dyn_group_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group dynGroup;
+    ASSERT_NO_THROW({ dynGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(dynGroup.statusCode, 0);
+
+    // Thread: user_1=manager, user_2=user (NOT manager); group has user-role grant.
+    // rotateKeys default policy is "user" so user_2 can call rotateThreadKeys without being a manager.
+    core::ContainerPolicy policy;
+    policy.get = "all";
+    policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("thread_pub"),
+            core::Buffer::from("thread_priv"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = groupId,
+                .role = "user",
+                .groupPubKey = dynGroup.groupPubKey
+            }}
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    // user_1 sends a message while user_3 still has group access
+    std::string messageId;
+    ASSERT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("msg_pub"),
+            core::Buffer::from("secret_priv"),
+            core::Buffer::from("secret_data")
+        );
+    });
+    ASSERT_FALSE(messageId.empty());
+
+    // user_3 can decrypt the message via group membership
+    disconnect();
+    connectAs(TUGConnectionType::TUGUser3);
+    thread::Message mBefore;
+    EXPECT_NO_THROW({ mBefore = threadApi->getMessage(messageId); });
+    EXPECT_EQ(mBefore.statusCode, 0);
+    EXPECT_EQ(mBefore.privateMeta.stdString(), "secret_priv");
+
+    // user_1 (group manager) removes user_3 and rotates the group key
+    disconnect();
+    connectAs(TUGConnectionType::TUGUser1);
+    EXPECT_NO_THROW({
+        groupApi->updateGroup(
+            groupId,
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            dynGroup.publicMeta,
+            dynGroup.privateMeta,
+            dynGroup.version,
+            false,
+            true  // forceGenerateNewKey: removing user_3 requires a new group key pair
+        );
+    });
+
+    // user_2 (thread USER, NOT manager, NOT group manager) fetches the updated group pub key
+    // and re-keys the thread via rotateThreadKeys — allowed because the default rotateKeys policy is "user"
+    disconnect();
+    connectAs(TUGConnectionType::TUGUser2);
+    group::Group updatedGroup;
+    ASSERT_NO_THROW({ updatedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(updatedGroup.statusCode, 0);
+
+    thread::Thread threadInfo;
+    ASSERT_NO_THROW({ threadInfo = threadApi->getThread(threadId); });
+    ASSERT_EQ(threadInfo.statusCode, 0);
+
+    EXPECT_NO_THROW({
+        threadApi->rotateThreadKeys(
+            threadId,
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            threadInfo.version, false,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = groupId,
+                .role = "user",
+                .groupPubKey = updatedGroup.groupPubKey
+            }}
+        );
+    });
+
+    // user_2 sends a new message encrypted with the rotated thread key
+    std::string newMessageId;
+    ASSERT_NO_THROW({
+        newMessageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("new_msg_pub"),
+            core::Buffer::from("new_secret_priv"),
+            core::Buffer::from("new_msg_data")
+        );
+    });
+    ASSERT_FALSE(newMessageId.empty());
+
+    // user_3 was removed from the group — cannot resolve the group private key —
+    // blocking decryption of the thread, old messages, and new messages.
+    disconnect();
+    connectAs(TUGConnectionType::TUGUser3);
+
+    thread::Thread tAfter;
+    EXPECT_NO_THROW({ tAfter = threadApi->getThread(threadId); });
+    EXPECT_NE(tAfter.statusCode, 0);
+
+    thread::Message mAfter;
+    EXPECT_NO_THROW({ mAfter = threadApi->getMessage(messageId); });
+    EXPECT_NE(mAfter.statusCode, 0);
+    EXPECT_TRUE(mAfter.privateMeta.stdString().empty());
+
+    thread::Message newMsg;
+    EXPECT_NO_THROW({ newMsg = threadApi->getMessage(newMessageId); });
+    EXPECT_NE(newMsg.statusCode, 0);
+    EXPECT_TRUE(newMsg.privateMeta.stdString().empty());
+}

@@ -74,6 +74,14 @@ public:
         const std::optional<core::ContainerPolicy>& policies,
         const std::vector<core::GroupGrantWithKey>& groups = {}
     );
+    void rotateThreadKeys(
+        const std::string& threadId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
     void deleteThread(const std::string& threadId);
 
     Thread getThread(const std::string& threadId, const std::string& type = THREAD_TYPE_FILTER_FLAG);

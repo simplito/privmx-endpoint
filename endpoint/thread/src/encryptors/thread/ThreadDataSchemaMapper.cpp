@@ -93,6 +93,7 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .creator = info.creator,
         .lastModificationDate = info.lastModificationDate,
         .lastModifier = info.lastModifier,
+        .keeper = info.keeper,
         .users = info.users,
         .managers = info.managers,
         .version = info.version,

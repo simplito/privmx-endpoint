@@ -32,11 +32,21 @@ JSON_STRUCT_EXT(ThreadCreateModel, core::server::ContainerCreateModelBase, THREA
     F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT_EXT(ThreadUpdateModel, core::server::ContainerUpdateModelBase, THREAD_UPDATE_MODEL_EXTRA_FIELDS);
 
+#define THREAD_ROTATE_KEYS_MODEL_FIELDS(F)                                                                             \
+    F(id, std::string)                                                                                                 \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)                                           \
+    F(version, int64_t)                                                                                                \
+    F(force, bool)
+JSON_STRUCT(ThreadRotateKeysModel, THREAD_ROTATE_KEYS_MODEL_FIELDS);
+
 #define THREAD2_DATA_ENTRY_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(Thread2DataEntry, core::server::ContainerDataEntry, THREAD2_DATA_ENTRY_EXTRA_FIELDS);
 
 #define THREAD_INFO_EXTRA_FIELDS(F)                                                                                    \
     F(data, std::vector<Thread2DataEntry>)                                                                             \
+    F(keeper, std::optional<std::string>)                                                                              \
     F(lastMsgDate, int64_t)                                                                                            \
     F(messages, int64_t)                                                                                               \
     F(groups, std::vector<core::server::GroupGrant>)                                                                   \

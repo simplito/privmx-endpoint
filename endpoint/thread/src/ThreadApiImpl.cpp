@@ -232,6 +232,51 @@ void ThreadApiImpl::updateThread(
     PRIVMX_DEBUG_TIME_STOP(PlatformThread, updateThread, data send)
 }
 
+void ThreadApiImpl::rotateThreadKeys(
+    const std::string& threadId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    server::ThreadGetModel getModel;
+    getModel.threadId = threadId;
+    auto currentThread = _serverApi.threadGet(getModel).thread;
+    const auto& currentEntry = currentThread.data.back();
+    auto resourceId = currentThread.resourceId.value_or(core::EndpointUtils::generateId());
+
+    auto ctx = prepareContainerUpdate(currentThread, currentEntry, resourceId, users, managers, true);
+
+    server::ThreadRotateKeysModel model;
+    model.id = threadId;
+    model.keyId = ctx.key.id;
+    model.keys = ctx.keyEntries;
+    model.version = version;
+    model.force = force;
+
+    if (!groups.empty()) {
+        std::vector<core::GroupGrantWithKey> resolvedGroups = groups;
+        if (_groupApiImpl) {
+            for (auto& g : resolvedGroups) {
+                if (g.groupEpoch == 0) {
+                    try {
+                        auto grp = _groupApiImpl->getGroup(g.groupId);
+                        g.groupEpoch = grp.keyVersion;
+                        g.groupPubKey = grp.groupPubKey;
+                    } catch (...) {}
+                }
+            }
+        }
+        model.groupKeys = buildGroupKeyEntries(
+            resolvedGroups, ctx.key, ctx.dio, currentThread.contextId, resourceId, ctx.secret
+        );
+    }
+
+    _serverApi.threadRotateKeys(model);
+    invalidateModuleKeysInCache(threadId);
+}
+
 void ThreadApiImpl::deleteThread(const std::string& threadId) {
     server::ThreadDeleteModel model{.threadId = threadId};
     _serverApi.threadDelete(model);
