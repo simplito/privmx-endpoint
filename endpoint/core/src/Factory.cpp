@@ -40,6 +40,9 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.rotateKeys.has_value()) {
         model->set("rotateKeys", policy.rotateKeys.value());
     }
+    if (policy.forwardSecrecy.has_value()) {
+        model->set("forwardSecrecy", policy.forwardSecrecy.value());
+    }
     if (policy.item.has_value()) {
         Poco::JSON::Object::Ptr itemModel = new Poco::JSON::Object();
         auto itemPolicy = policy.item.value();
@@ -92,6 +95,9 @@ Poco::Dynamic::Var Factory::createPolicyServerObject(const privmx::endpoint::cor
     if (policy.rotateKeys.has_value()) {
         model->set("rotateKeys", policy.rotateKeys.value());
     }
+    if (policy.forwardSecrecy.has_value()) {
+        model->set("forwardSecrecy", policy.forwardSecrecy.value());
+    }
     return model;
 }
 
@@ -112,6 +118,7 @@ ContainerPolicy Factory::parsePolicyServerObject(const Poco::Dynamic::Var& serve
         obj, "ownerCanBeRemovedFromManagers"
     );
     result.rotateKeys = Factory::getValueOrNullopt<std::string>(obj, "rotateKeys");
+    result.forwardSecrecy = Factory::getValueOrNullopt<std::string>(obj, "forwardSecrecy");
 
     if (obj->isObject("item")) {
         auto itemObj = obj->getObject("item");
@@ -143,5 +150,6 @@ ContainerPolicyWithoutItem Factory::parsePolicyServerObjectWithoutItem(const Poc
     result.ownerCanBeRemovedFromManagers = Factory::getValueOrNullopt<std::string>(
         obj, "ownerCanBeRemovedFromManagers"
     );
+    result.forwardSecrecy = Factory::getValueOrNullopt<std::string>(obj, "forwardSecrecy");
     return result;
 }

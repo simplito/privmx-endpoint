@@ -130,7 +130,7 @@ void GroupApiImpl::updateGroup(
     bool allowRotationRetry
 ) {
     // Fetch current group
-    server::GroupGetModel getModel{.groupId = groupId};
+    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -159,26 +159,14 @@ void GroupApiImpl::updateGroup(
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
-    // Determine group identity keypair and epoch for the new entry
+    // groupUpdate must not change groupPubKey (bridge contract); identity key rotation goes
+    // through generateNewGroupKey. Data key may still rotate for forward secrecy on removal.
     std::string newGroupPrivKeyStr;
-    std::string newGroupPubKeyStr;
-    int64_t newEpoch;
-    bool rotated = (ctx.key.id != currentEntry.keyId);
-
-    if (rotated) {
-        // Data key rotated → mint independent fresh identity keypair (EP-10)
-        auto newGroupKey = privmx::crypto::PrivateKey::generateRandom();
-        newGroupPrivKeyStr = newGroupKey.toWIF();
-        newGroupPubKeyStr = newGroupKey.getPublicKey().toBase58DER();
-        newEpoch = currentEpoch + 1;
-    } else {
-        // Reuse current group identity keypair (pure add — no forward secrecy needed)
-        if (currentDecryptedEncKey.statusCode == 0) {
-            newGroupPrivKeyStr = _groupDataSchemaMapper->getGroupPrivKey(currentGroup, currentDecryptedEncKey);
-        }
-        newGroupPubKeyStr = currentGroup.groupPubKey;
-        newEpoch = currentEpoch;
+    if (currentDecryptedEncKey.statusCode == 0) {
+        newGroupPrivKeyStr = _groupDataSchemaMapper->getGroupPrivKey(currentGroup, currentDecryptedEncKey);
     }
+    std::string newGroupPubKeyStr = currentGroup.groupPubKey;
+    int64_t newEpoch = currentEpoch;
 
     // Build new membership block with keyVersion committed in the DIO (EP-9)
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
@@ -215,15 +203,6 @@ void GroupApiImpl::updateGroup(
         model.policy = core::Factory::createPolicyServerObject(policies.value());
     }
 
-    // EP-10/12: on rotation, send CAS field and confirmation tag to bridge
-    if (rotated) {
-        model.expectedKeyVersion = currentEpoch;
-        auto confInput = std::string("confirm") + groupId + std::to_string(newEpoch) + ctx.key.id;
-        model.confirmationTag = privmx::utils::Hex::from(
-            privmx::crypto::Crypto::hmacSha256(ctx.key.key, confInput)
-        );
-    }
-
     try {
         _serverApi.groupUpdate(model);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -255,7 +234,7 @@ void GroupApiImpl::generateNewGroupKey(
     bool allowRotationRetry
 ) {
     // Explicit forced rotation (EP-10): mint fresh epoch without changing member list
-    server::GroupGetModel getModel{.groupId = groupId};
+    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -308,7 +287,8 @@ void GroupApiImpl::generateNewGroupKey(
     };
 
     server::GenerateNewGroupKeyModel model;
-    model.groupId = groupId;
+    model.id = groupId;
+    model.keyId = ctx.key.id;
     model.expectedKeyVersion = currentEpoch;
     model.groupPubKey = newGroupPubKeyStr;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
@@ -340,7 +320,7 @@ void GroupApiImpl::adoptRotatedAlready(
     const server::RotatedAlreadyPayload& payload
 ) {
     // Re-fetch the group so we see the winner's new state on the bridge
-    server::GroupGetModel getModel{.groupId = groupId};
+    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
     // Verify and decrypt the winner's data key (Gk'') that was wrapped to us
@@ -373,7 +353,7 @@ void GroupApiImpl::adoptRotatedAlready(
 }
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
-    server::GroupGetModel params{.groupId = groupId};
+    server::GroupGetModel params{.groupId = groupId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
     setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider);
@@ -440,7 +420,7 @@ void GroupApiImpl::processDisconnectedEvent() {
 }
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    server::GroupGetModel params{.groupId = moduleId};
+    server::GroupGetModel params{.groupId = moduleId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
     _groupDataSchemaMapper->assertDataIntegrity(group);
     return std::make_pair(groupToModuleKeys(group), group.version);
@@ -449,6 +429,7 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
 core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group) {
     return core::ModuleKeys{
         .keys = group.keys,
+        .groupKeys = {},
         .currentKeyId = group.data.back().keyId,
         .moduleSchemaVersion = _groupDataSchemaMapper->getDataStructureVersion(group.data.back()),
         .moduleResourceId = group.resourceId.value_or(""),
@@ -476,7 +457,7 @@ std::string GroupApiImpl::buildSubscriptionQuery(
 }
 
 privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
-    server::GroupGetModel params{.groupId = groupId};
+    server::GroupGetModel params{.groupId = groupId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
     int64_t currentEpoch = group.keyVersion.value_or(0);
 

@@ -53,6 +53,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             throw server::ThreadDoesNotExistException(e.getData());
         case 0x6002: // INVALID_THREAD_KEY
             throw server::InvalidThreadKeyException(e.getData());
+        case 0x600E: // CONTAINER_GROUP_EPOCH_OUTDATED
+            throw server::ContainerGroupEpochOutdatedException(e.getData());
         case 0x600D: // THREAD_MESSAGE_DOES_NOT_EXIST
             throw server::ThreadMessageDoesNotExistException(e.getData());
         case 0x6015: // INVALID_KEY_ID

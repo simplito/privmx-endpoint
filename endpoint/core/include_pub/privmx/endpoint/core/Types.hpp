@@ -157,6 +157,10 @@ struct ContainerPolicyWithoutItem {
      * Determine who can rotate container keys (re-encrypt for current members without changing data or membership)
      */
     std::optional<std::string> rotateKeys;
+    /**
+     * Enforce forward secrecy: block writes when group grants are stale after generateNewGroupKey
+     */
+    std::optional<std::string> forwardSecrecy;
 };
 
 /**

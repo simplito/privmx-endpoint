@@ -1104,3 +1104,236 @@ TEST_F(ThreadUsingGroupsTest, non_manager_user_rotates_thread_key_after_group_re
     EXPECT_NE(newMsg.statusCode, 0);
     EXPECT_TRUE(newMsg.privateMeta.stdString().empty());
 }
+
+TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_thread_rotation) {
+    // Scenario: user_2 caches thread keyId K1 via getThread. user_1 then calls
+    // rotateThreadKeys → server advances to keyId K2. user_2's sendMessage sends
+    // with stale K1; bridge returns INVALID_THREAD_KEY; withKeyRefresh fetches K2
+    // and retries transparently → message succeeds.
+
+    // Create a dynamic group containing user_1 and user_2.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("grp_pub"),
+            core::Buffer::from("grp_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group dynGroup;
+    ASSERT_NO_THROW({ dynGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(dynGroup.statusCode, 0);
+
+    // Create a thread with user_1=manager, user_2=user, plus group grant.
+    // user_2 is a direct thread user so sendMessage is allowed on their connection.
+    core::ContainerPolicy policy;
+    policy.get = "all";
+    policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("thread_pub"),
+            core::Buffer::from("thread_priv"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = groupId,
+                .role = "user",
+                .groupPubKey = dynGroup.groupPubKey
+            }}
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    // Open a SECOND connection as user_2 (kept alive throughout the test).
+    // Fetching the thread populates user_2's key cache with the current keyId K1.
+    auto conn2 = std::make_shared<core::Connection>(
+        core::Connection::connect(
+            reader->getString("Login.user_2_privKey"),
+            reader->getString("Login.solutionId"),
+            getPlatformUrl(reader->getString("Login.instanceUrl"))
+        )
+    );
+    auto grpApi2 = std::make_shared<group::GroupApi>(group::GroupApi::create(*conn2));
+    auto threadApi2 = std::make_shared<thread::ThreadApi>(
+        thread::ThreadApi::create(*conn2, grpApi2.get())
+    );
+    thread::Thread cachedThread;
+    ASSERT_NO_THROW({ cachedThread = threadApi2->getThread(threadId); });
+    ASSERT_EQ(cachedThread.statusCode, 0);
+
+    // user_1 (main connection) rotates the thread key → server advances to keyId K2.
+    // user_2's conn2 still holds K1 in its cache.
+    thread::Thread threadInfo;
+    ASSERT_NO_THROW({ threadInfo = threadApi->getThread(threadId); });
+    ASSERT_EQ(threadInfo.statusCode, 0);
+    EXPECT_NO_THROW({
+        threadApi->rotateThreadKeys(
+            threadId,
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            threadInfo.version,
+            false,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = groupId,
+                .role = "user",
+                .groupPubKey = dynGroup.groupPubKey
+            }}
+        );
+    });
+
+    // user_2 (threadApi2) sends a message with stale keyId K1.
+    // Bridge returns INVALID_THREAD_KEY; withKeyRefresh fetches K2 and retries → success.
+    std::string msgId;
+    EXPECT_NO_THROW({
+        msgId = threadApi2->sendMessage(
+            threadId,
+            core::Buffer::from("msg_pub"),
+            core::Buffer::from("msg_priv"),
+            core::Buffer::from("msg_data")
+        );
+    });
+    EXPECT_FALSE(msgId.empty());
+
+    conn2->disconnect();
+}
+
+TEST_F(ThreadUsingGroupsTest, sendMessage_blocked_when_group_epoch_is_stale) {
+    // Scenario: after generateNewGroupKey the group's keyVersion advances. The thread's
+    // grant still carries the old epoch, so the bridge returns THREAD_GROUP_EPOCH_OUTDATED
+    // on sendMessage. After rotateThreadKeys (which re-wraps to the new epoch pubkey) the
+    // send succeeds.
+
+    // Create a group with user_1 + user_2.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("grp_pub"),
+            core::Buffer::from("grp_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group grp;
+    ASSERT_NO_THROW({ grp = groupApi->getGroup(groupId); });
+    ASSERT_EQ(grp.statusCode, 0);
+
+    // Create thread with user_1=manager, user_2=user, plus group grant.
+    core::ContainerPolicy policy;
+    policy.get = "all";
+    policy.forwardSecrecy = "yes";
+    policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("thread_pub"),
+            core::Buffer::from("thread_priv"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = groupId,
+                .role = "user",
+                .groupPubKey = grp.groupPubKey
+            }}
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    // Rotate the group identity key → epoch advances, new groupPubKey issued.
+    ASSERT_NO_THROW({
+        groupApi->generateNewGroupKey(
+            groupId,
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            }
+        );
+    });
+
+    // sendMessage must now be blocked: thread grant still carries the pre-rotation epoch.
+    EXPECT_THROW(
+        { threadApi->sendMessage(threadId, core::Buffer::from("a"), core::Buffer::from("b"), core::Buffer::from("c")); },
+        core::Exception
+    );
+
+    // Fetch updated group to get the new groupPubKey and the current thread version.
+    group::Group updatedGrp;
+    ASSERT_NO_THROW({ updatedGrp = groupApi->getGroup(groupId); });
+    ASSERT_EQ(updatedGrp.statusCode, 0);
+
+    thread::Thread threadInfo;
+    ASSERT_NO_THROW({ threadInfo = threadApi->getThread(threadId); });
+    ASSERT_EQ(threadInfo.statusCode, 0);
+
+    // Re-key the thread to the new group epoch.
+    EXPECT_NO_THROW({
+        threadApi->rotateThreadKeys(
+            threadId,
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            threadInfo.version,
+            false,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = groupId,
+                .role = "user",
+                .groupPubKey = updatedGrp.groupPubKey
+            }}
+        );
+    });
+
+    // sendMessage must now succeed — thread grant epoch matches current group keyVersion.
+    std::string msgId;
+    EXPECT_NO_THROW({
+        msgId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("msg_pub"),
+            core::Buffer::from("msg_priv"),
+            core::Buffer::from("msg_data")
+        );
+    });
+    EXPECT_FALSE(msgId.empty());
+}

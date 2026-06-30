@@ -32,7 +32,7 @@ server::GroupListResult ServerApi::groupList(server::GroupListModel model) {
 }
 
 void ServerApi::generateNewGroupKey(server::GenerateNewGroupKeyModel model) {
-    request("generateNewGroupKey", model.toJSON());
+    request("groupGenerateNewKey", model.toJSON());
 }
 
 template<class T>

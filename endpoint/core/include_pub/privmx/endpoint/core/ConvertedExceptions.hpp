@@ -51,6 +51,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, InvalidKeyException, "Invali
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, ThreadDoesNotExistException, "Thread does not exist", 0x6001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, InvalidThreadKeyException, "Invalid thread key", 0x6002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, ThreadMessageDoesNotExistException, "Thread message does not exist", 0x600D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, ContainerGroupEpochOutdatedException, "Container group epoch outdated", 0x600E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, InvalidKeyIdException, "Invalid key id", 0x6015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, ContextDoesNotExistException, "Context does not exist", 0x6116)
 DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, StoreDoesNotExistException, "Store does not exist", 0x6117)

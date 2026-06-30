@@ -56,9 +56,7 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
 JSON_STRUCT_EXT(GroupCreateModel, core::server::ContainerCreateModelBase, GROUP_CREATE_MODEL_EXTRA_FIELDS);
 
 #define GROUP_UPDATE_MODEL_EXTRA_FIELDS(F)                                                                             \
-    F(groupPubKey, std::string)                                                                                        \
-    F(expectedKeyVersion, std::optional<int64_t>)                                                                      \
-    F(confirmationTag, std::optional<std::string>)
+    F(groupPubKey, std::string)
 JSON_STRUCT_EXT(GroupUpdateModel, core::server::ContainerUpdateModelBase, GROUP_UPDATE_MODEL_EXTRA_FIELDS);
 
 #define GROUP_CREATE_RESULT_FIELDS(F) F(groupId, std::string)
@@ -90,7 +88,8 @@ JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
 
 // generateNewGroupKey RPC (BR-2) — explicit forced group key rotation
 #define GENERATE_NEW_GROUP_KEY_MODEL_FIELDS(F)                                                                         \
-    F(groupId, std::string)                                                                                            \
+    F(id, std::string)                                                                                                 \
+    F(keyId, std::string)                                                                                              \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(groupPubKey, std::string)                                                                                        \
     F(data, Poco::Dynamic::Var)                                                                                        \

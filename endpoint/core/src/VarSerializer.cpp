@@ -212,6 +212,7 @@ Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const Co
     obj->set("updatePolicy", serialize(val.updatePolicy));
     obj->set("updaterCanBeRemovedFromManagers", serialize(val.updaterCanBeRemovedFromManagers));
     obj->set("ownerCanBeRemovedFromManagers", serialize(val.ownerCanBeRemovedFromManagers));
+    obj->set("forwardSecrecy", serialize(val.forwardSecrecy));
     return obj;
 }
 
