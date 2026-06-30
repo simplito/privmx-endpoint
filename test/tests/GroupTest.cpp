@@ -71,40 +71,36 @@ protected:
 TEST_F(GroupTest, setup) {
 }
 
-// ─── getGroup ────────────────────────────────────────────────────────────────
-
 TEST_F(GroupTest, getGroup) {
-    group::Group grp;
-    // incorrect groupId (use a contextId which is not a groupId)
+    group::Group group;
+    // incorrect groupId
     EXPECT_THROW({
         groupApi->getGroup(reader->getString("Context_1.contextId"));
     }, core::Exception);
-    // correct groupId — pre-created group from DockerSetupData
+    // correct groupId
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(reader->getString("Group_1.groupId"));
+        group = groupApi->getGroup(reader->getString("Group_1.groupId"));
     });
-    EXPECT_EQ(grp.contextId, reader->getString("Group_1.contextId"));
-    EXPECT_EQ(grp.groupId, reader->getString("Group_1.groupId"));
-    EXPECT_NE(grp.groupPubKey, "");
-    EXPECT_EQ(grp.createDate, reader->getInt64("Group_1.createDate"));
-    EXPECT_EQ(grp.creator, reader->getString("Group_1.creator"));
-    EXPECT_EQ(grp.lastModificationDate, reader->getInt64("Group_1.lastModificationDate"));
-    EXPECT_EQ(grp.lastModifier, reader->getString("Group_1.lastModifier"));
-    EXPECT_EQ(grp.version, reader->getInt64("Group_1.version"));
-    EXPECT_EQ(grp.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.publicMeta_inHex")));
-    EXPECT_EQ(grp.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.privateMeta_inHex")));
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.users.size(), 1);
-    if (grp.users.size() == 1) {
-        EXPECT_EQ(grp.users[0], reader->getString("Login.user_1_id"));
+    EXPECT_EQ(group.contextId, reader->getString("Group_1.contextId"));
+    EXPECT_EQ(group.groupId, reader->getString("Group_1.groupId"));
+    EXPECT_NE(group.groupPubKey, "");
+    EXPECT_EQ(group.createDate, reader->getInt64("Group_1.createDate"));
+    EXPECT_EQ(group.creator, reader->getString("Group_1.creator"));
+    EXPECT_EQ(group.lastModificationDate, reader->getInt64("Group_1.lastModificationDate"));
+    EXPECT_EQ(group.lastModifier, reader->getString("Group_1.lastModifier"));
+    EXPECT_EQ(group.version, reader->getInt64("Group_1.version"));
+    EXPECT_EQ(group.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.publicMeta_inHex")));
+    EXPECT_EQ(group.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.privateMeta_inHex")));
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.users.size(), 1);
+    if (group.users.size() == 1) {
+        EXPECT_EQ(group.users[0], reader->getString("Login.user_1_id"));
     }
-    EXPECT_EQ(grp.managers.size(), 1);
-    if (grp.managers.size() == 1) {
-        EXPECT_EQ(grp.managers[0], reader->getString("Login.user_1_id"));
+    EXPECT_EQ(group.managers.size(), 1);
+    if (group.managers.size() == 1) {
+        EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
     }
 }
-
-// ─── listGroups ───────────────────────────────────────────────────────────────
 
 TEST_F(GroupTest, listGroups_incorrect_input_data) {
     // incorrect contextId
@@ -131,7 +127,7 @@ TEST_F(GroupTest, listGroups_correct_input_data) {
             core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"}
         );
     });
-    // pre-created Group_1 and Group_2 exist; at least 2
+    // pre-created at least 2
     EXPECT_GE(groupsList.totalAvailable, 2);
     EXPECT_GE(groupsList.readItems.size(), 2);
     for (const auto& g : groupsList.readItems) {
@@ -150,7 +146,6 @@ TEST_F(GroupTest, listGroups_correct_input_data) {
     EXPECT_EQ(groupsPage.readItems.size(), 1);
 }
 
-// ─── createGroup ─────────────────────────────────────────────────────────────
 
 TEST_F(GroupTest, createGroup_incorrect_data) {
     // incorrect contextId
@@ -218,7 +213,7 @@ TEST_F(GroupTest, createGroup_incorrect_data) {
 
 TEST_F(GroupTest, createGroup) {
     std::string groupId;
-    group::Group grp;
+    group::Group group;
     // different users and managers
     EXPECT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -237,21 +232,21 @@ TEST_F(GroupTest, createGroup) {
     });
     ASSERT_FALSE(groupId.empty());
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(groupId);
+        group = groupApi->getGroup(groupId);
     });
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.contextId, reader->getString("Context_1.contextId"));
-    EXPECT_EQ(grp.publicMeta.stdString(), "public");
-    EXPECT_EQ(grp.privateMeta.stdString(), "private");
-    EXPECT_EQ(grp.version, 1);
-    EXPECT_NE(grp.groupPubKey, "");
-    EXPECT_EQ(grp.users.size(), 1);
-    if (grp.users.size() == 1) {
-        EXPECT_EQ(grp.users[0], reader->getString("Login.user_2_id"));
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.contextId, reader->getString("Context_1.contextId"));
+    EXPECT_EQ(group.publicMeta.stdString(), "public");
+    EXPECT_EQ(group.privateMeta.stdString(), "private");
+    EXPECT_EQ(group.version, 1);
+    EXPECT_NE(group.groupPubKey, "");
+    EXPECT_EQ(group.users.size(), 1);
+    if (group.users.size() == 1) {
+        EXPECT_EQ(group.users[0], reader->getString("Login.user_2_id"));
     }
-    EXPECT_EQ(grp.managers.size(), 1);
-    if (grp.managers.size() == 1) {
-        EXPECT_EQ(grp.managers[0], reader->getString("Login.user_1_id"));
+    EXPECT_EQ(group.managers.size(), 1);
+    if (group.managers.size() == 1) {
+        EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
     }
     // same users and managers
     EXPECT_NO_THROW({
@@ -271,15 +266,13 @@ TEST_F(GroupTest, createGroup) {
     });
     ASSERT_FALSE(groupId.empty());
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(groupId);
+        group = groupApi->getGroup(groupId);
     });
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.publicMeta.stdString(), "public2");
-    EXPECT_EQ(grp.privateMeta.stdString(), "private2");
-    EXPECT_EQ(grp.version, 1);
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.publicMeta.stdString(), "public2");
+    EXPECT_EQ(group.privateMeta.stdString(), "private2");
+    EXPECT_EQ(group.version, 1);
 }
-
-// ─── updateGroup ─────────────────────────────────────────────────────────────
 
 TEST_F(GroupTest, updateGroup_incorrect_data) {
     // incorrect groupId
@@ -358,8 +351,7 @@ TEST_F(GroupTest, updateGroup_incorrect_data) {
 }
 
 TEST_F(GroupTest, updateGroup_correct_data) {
-    group::Group grp;
-    // update Group_1: add user_2 to members
+    group::Group group;
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             reader->getString("Group_1.groupId"),
@@ -385,16 +377,16 @@ TEST_F(GroupTest, updateGroup_correct_data) {
         );
     });
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(reader->getString("Group_1.groupId"));
+        group = groupApi->getGroup(reader->getString("Group_1.groupId"));
     });
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.version, 2);
-    EXPECT_EQ(grp.publicMeta.stdString(), "updated_public");
-    EXPECT_EQ(grp.privateMeta.stdString(), "updated_private");
-    EXPECT_EQ(grp.users.size(), 2);
-    EXPECT_EQ(grp.managers.size(), 1);
-    if (grp.managers.size() == 1) {
-        EXPECT_EQ(grp.managers[0], reader->getString("Login.user_1_id"));
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.version, 2);
+    EXPECT_EQ(group.publicMeta.stdString(), "updated_public");
+    EXPECT_EQ(group.privateMeta.stdString(), "updated_private");
+    EXPECT_EQ(group.users.size(), 2);
+    EXPECT_EQ(group.managers.size(), 1);
+    if (group.managers.size() == 1) {
+        EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
     }
     // update managers
     EXPECT_NO_THROW({
@@ -422,13 +414,13 @@ TEST_F(GroupTest, updateGroup_correct_data) {
         );
     });
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(reader->getString("Group_1.groupId"));
+        group = groupApi->getGroup(reader->getString("Group_1.groupId"));
     });
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.version, 3);
-    EXPECT_EQ(grp.publicMeta.stdString(), "updated_public_2");
-    EXPECT_EQ(grp.privateMeta.stdString(), "updated_private_2");
-    EXPECT_EQ(grp.managers.size(), 2);
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.version, 3);
+    EXPECT_EQ(group.publicMeta.stdString(), "updated_public_2");
+    EXPECT_EQ(group.privateMeta.stdString(), "updated_private_2");
+    EXPECT_EQ(group.managers.size(), 2);
 }
 
 TEST_F(GroupTest, updateGroup_chain_integrity) {
@@ -488,20 +480,18 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
             false
         );
     });
-    group::Group grp;
+    group::Group group;
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(groupId);
+        group = groupApi->getGroup(groupId);
     });
-    EXPECT_EQ(grp.version, 3);
-    // statusCode=0 proves G1+G2+DIO chain validated cleanly over all 3 entries
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.publicMeta.stdString(), "v3");
-    EXPECT_EQ(grp.privateMeta.stdString(), "v3_priv");
+    EXPECT_EQ(group.version, 3);
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.publicMeta.stdString(), "v3");
+    EXPECT_EQ(group.privateMeta.stdString(), "v3_priv");
 }
 
 TEST_F(GroupTest, updateGroup_force) {
-    group::Group grp;
-    // force=true ignores version mismatch
+    group::Group group;
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             reader->getString("Group_2.groupId"),
@@ -521,33 +511,14 @@ TEST_F(GroupTest, updateGroup_force) {
         );
     });
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(reader->getString("Group_2.groupId"));
+        group = groupApi->getGroup(reader->getString("Group_2.groupId"));
     });
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.publicMeta.stdString(), "forced");
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.publicMeta.stdString(), "forced");
 }
 
-// ─── deleteGroup ─────────────────────────────────────────────────────────────
-
 TEST_F(GroupTest, deleteGroup) {
-    // create a temporary group to delete
-    std::string groupId;
-    EXPECT_NO_THROW({
-        groupId = groupApi->createGroup(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            core::Buffer::from("to_delete"),
-            core::Buffer::from("to_delete_priv")
-        );
-    });
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = reader->getString("Group_1.groupId");
     EXPECT_NO_THROW({
         groupApi->deleteGroup(groupId);
     });
@@ -560,8 +531,6 @@ TEST_F(GroupTest, deleteGroup) {
         groupApi->deleteGroup(reader->getString("Context_1.contextId"));
     }, core::Exception);
 }
-
-// ─── group member visibility ──────────────────────────────────────────────────
 
 TEST_F(GroupTest, group_member_can_read) {
     // Create group with user_1 as manager, user_2 as member
@@ -591,12 +560,12 @@ TEST_F(GroupTest, group_member_can_read) {
     // Connect as user_2 (member, not manager) and read the group
     disconnect();
     connectAs(GroupConnectionType::GUser2);
-    group::Group grp;
+    group::Group group;
     EXPECT_NO_THROW({
-        grp = groupApi->getGroup(groupId);
+        group = groupApi->getGroup(groupId);
     });
-    EXPECT_EQ(grp.statusCode, 0);
-    EXPECT_EQ(grp.publicMeta.stdString(), "shared_public");
-    EXPECT_EQ(grp.privateMeta.stdString(), "shared_private");
-    EXPECT_EQ(grp.groupId, groupId);
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.publicMeta.stdString(), "shared_public");
+    EXPECT_EQ(group.privateMeta.stdString(), "shared_private");
+    EXPECT_EQ(group.groupId, groupId);
 }

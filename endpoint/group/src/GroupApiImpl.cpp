@@ -68,12 +68,10 @@ std::string GroupApiImpl::createGroup(
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
 
-    // Generate group identity keypair
     auto groupIdentityKey = privmx::crypto::PrivateKey::generateRandom();
     std::string groupPubKeyStr = groupIdentityKey.getPublicKey().toBase58DER();
     std::string groupPrivKeyStr = groupIdentityKey.toWIF();
 
-    // Build sorted user/manager id lists for membership block
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
     std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     std::sort(sortedUsers.begin(), sortedUsers.end());
@@ -114,8 +112,7 @@ std::string GroupApiImpl::createGroup(
     return result.groupId;
 }
 
-// TODO: replace 0x6201 with the actual bridge ROTATED_ALREADY error code once bridge Phase 2 confirms it
-static constexpr unsigned int BRIDGE_GROUP_ROTATED_ALREADY = 0x6201;
+static constexpr unsigned int BRIDGE_GROUP_ROTATED_ALREADY = 0x621C;
 
 void GroupApiImpl::updateGroup(
     const std::string& groupId,
@@ -129,14 +126,12 @@ void GroupApiImpl::updateGroup(
     const std::optional<core::ContainerPolicy>& policies,
     bool allowRotationRetry
 ) {
-    // Fetch current group
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
 
-    // Detect member removal — removal always forces a new key (forward secrecy, EP-10)
     std::set<std::string> newMemberIds;
     for (const auto& u : users) newMemberIds.insert(u.userId);
     for (const auto& m : managers) newMemberIds.insert(m.userId);
@@ -150,17 +145,13 @@ void GroupApiImpl::updateGroup(
         }
     }
 
-    // Get current encryption key to decrypt groupPrivKey (needed when not rotating)
     auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup);
 
-    // Prepare update context — force new data key on removal or explicit request
     auto ctx = prepareContainerUpdate(
         currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
-    // groupUpdate must not change groupPubKey (bridge contract); identity key rotation goes
-    // through generateNewGroupKey. Data key may still rotate for forward secrecy on removal.
     std::string newGroupPrivKeyStr;
     if (currentDecryptedEncKey.statusCode == 0) {
         newGroupPrivKeyStr = _groupDataSchemaMapper->getGroupPrivKey(currentGroup, currentDecryptedEncKey);
@@ -168,7 +159,6 @@ void GroupApiImpl::updateGroup(
     std::string newGroupPubKeyStr = currentGroup.groupPubKey;
     int64_t newEpoch = currentEpoch;
 
-    // Build new membership block with keyVersion committed in the DIO (EP-9)
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
     std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     std::sort(sortedUsers.begin(), sortedUsers.end());
@@ -233,7 +223,6 @@ void GroupApiImpl::generateNewGroupKey(
     const std::vector<core::UserWithPubKey>& managers,
     bool allowRotationRetry
 ) {
-    // Explicit forced rotation (EP-10): mint fresh epoch without changing member list
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
@@ -243,10 +232,8 @@ void GroupApiImpl::generateNewGroupKey(
 
     auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup);
 
-    // Fresh epoch: prepareContainerUpdate with forceGenerateNewKey=true
     auto ctx = prepareContainerUpdate(currentGroup, currentEntry, resourceId, users, managers, true);
 
-    // Independent random group identity keypair (EP-10)
     auto newGroupKey = privmx::crypto::PrivateKey::generateRandom();
     std::string newGroupPrivKeyStr = newGroupKey.toWIF();
     std::string newGroupPubKeyStr = newGroupKey.getPublicKey().toBase58DER();
@@ -266,7 +253,6 @@ void GroupApiImpl::generateNewGroupKey(
         .prevEntryHash = privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(prevEncData.dio))
     };
 
-    // Preserve current publicMeta/privateMeta (rotation changes only the key, not content)
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     if (currentDecryptedEncKey.statusCode == 0) {
@@ -319,11 +305,9 @@ void GroupApiImpl::adoptRotatedAlready(
     const std::string& groupId,
     const server::RotatedAlreadyPayload& payload
 ) {
-    // Re-fetch the group so we see the winner's new state on the bridge
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
-    // Verify and decrypt the winner's data key (Gk'') that was wrapped to us
     std::vector<core::server::KeyEntry> winnerKeyVec{payload.winnerKeyEntry};
     core::KeyDecryptionAndVerificationRequest request;
     auto location = getModuleEncKeyLocation(updatedGroup, updatedGroup.resourceId);
@@ -334,7 +318,6 @@ void GroupApiImpl::adoptRotatedAlready(
         throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification");
     }
 
-    // Verify confirmation tag: HMAC_{Gk''}("confirm" || groupId || keyVersion || keyId)
     auto confInput = std::string("confirm") + groupId +
                      std::to_string(payload.keyVersion) + payload.winnerKeyEntry.keyId;
     auto expectedTag = privmx::utils::Hex::from(
@@ -344,7 +327,6 @@ void GroupApiImpl::adoptRotatedAlready(
         throw GroupDataIntegrityException("RotatedAlready: confirmation tag mismatch");
     }
 
-    // Decrypt the winner's group identity private key (GroupPriv'') for this epoch and register it
     auto winnerPrivKeyWif = _groupDataSchemaMapper->getGroupPrivKey(updatedGroup, winnerGk);
     auto winnerPrivKey = privmx::crypto::PrivateKey::fromWIF(winnerPrivKeyWif);
     _keyProvider->registerGroupPrivKey(groupId, payload.keyVersion, winnerPrivKey);
@@ -461,12 +443,10 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     auto group = _serverApi.groupGet(params).group;
     int64_t currentEpoch = group.keyVersion.value_or(0);
 
-    // Determine the keyId to decrypt. For epoch 0 or current epoch use the head entry.
     std::string targetKeyId;
     if (epoch == 0 || epoch == currentEpoch) {
         targetKeyId = group.data.back().keyId;
     } else if (group.keyHistory.has_value()) {
-        // Find which groupPubKey was used at the target epoch, then match to a history entry
         std::string epochPubKey;
         for (const auto& kh : group.keyHistory.value()) {
             if (kh.keyVersion == epoch) {
@@ -484,7 +464,6 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
         }
     }
     if (targetKeyId.empty()) {
-        // Fallback: no epoch info from bridge yet — use current key
         targetKeyId = group.data.back().keyId;
     }
 

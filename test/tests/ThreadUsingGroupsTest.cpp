@@ -67,14 +67,36 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
+    std::string createThreadWithGroupGrant(
+        const std::string& contextId,
+        const std::string& userId,
+        const std::string& userPubKey,
+        const group::Group& group
+    ) {
+        core::ContainerPolicy policy;
+        policy.get = "all";
+        policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
+        return threadApi->createThread(
+            contextId,
+            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
+            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
+            core::Buffer::from("group_thread_public"),
+            core::Buffer::from("group_thread_private"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = group.groupId,
+                .role = "user",
+                .groupPubKey = group.groupPubKey
+            }}
+        );
+    }
+
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<thread::ThreadApi> threadApi;
     std::shared_ptr<group::GroupApi> groupApi;
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
 };
-
-// ─── createThread with group grants ──────────────────────────────────────────
 
 TEST_F(ThreadUsingGroupsTest, createThread_with_group_grants) {
     // Fetch groupPubKey of the pre-created Group_1 (user_1 only)
@@ -165,7 +187,7 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_multiple_group_grants) {
     EXPECT_NO_THROW({ t = threadApi->getThread(threadId); });
     EXPECT_EQ(t.statusCode, 0);
     EXPECT_EQ(t.groups.size(), 2);
-    // verify both group IDs appear in the groups list
+    // Verify both group IDs appear in the groups list
     bool found1 = false, found2 = false;
     for (const auto& g : t.groups) {
         if (g.groupId == group_1.groupId && g.role == "user") found1 = true;
@@ -199,8 +221,6 @@ TEST_F(ThreadUsingGroupsTest, createThread_without_groups_has_empty_groups_field
     EXPECT_EQ(t.statusCode, 0);
     EXPECT_EQ(t.groups.size(), 0);
 }
-
-// ─── updateThread with group grants ──────────────────────────────────────────
 
 TEST_F(ThreadUsingGroupsTest, updateThread_add_group) {
     // Create thread without groups
@@ -421,8 +441,6 @@ TEST_F(ThreadUsingGroupsTest, updateThread_change_group_role) {
     }
 }
 
-// ─── listThreads groups field ─────────────────────────────────────────────────
-
 TEST_F(ThreadUsingGroupsTest, listThreads_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
@@ -476,8 +494,6 @@ TEST_F(ThreadUsingGroupsTest, listThreads_includes_groups_field) {
     EXPECT_TRUE(found);
 }
 
-// ─── invalid group pubKey ─────────────────────────────────────────────────────
-
 TEST_F(ThreadUsingGroupsTest, createThread_with_invalid_group_pubkey_throws) {
     EXPECT_THROW({
         threadApi->createThread(
@@ -502,35 +518,6 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_invalid_group_pubkey_throws) {
     }, core::Exception);
 }
 
-// ─── messages via group grants ────────────────────────────────────────────────
-
-// Helper: create a thread with a group grant and item policies that allow non-members
-// to download (but need the group key to decrypt). Returns the threadId.
-static std::string createThreadWithGroupGrant(
-    thread::ThreadApi& threadApi,
-    const std::string& contextId,
-    const std::string& userId,
-    const std::string& userPubKey,
-    const group::Group& group
-) {
-    core::ContainerPolicy policy;
-    policy.get = "all";
-    policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
-    return threadApi.createThread(
-        contextId,
-        std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
-        std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
-        core::Buffer::from("group_thread_public"),
-        core::Buffer::from("group_thread_private"),
-        policy,
-        std::vector<core::GroupGrantWithKey>{{
-            .groupId = group.groupId,
-            .role = "user",
-            .groupPubKey = group.groupPubKey
-        }}
-    );
-}
-
 TEST_F(ThreadUsingGroupsTest, getMessage_via_group_grant) {
     // user_1 creates thread with Group_2 grant; user_2 is a Group_2 member
     group::Group group_2;
@@ -540,7 +527,6 @@ TEST_F(ThreadUsingGroupsTest, getMessage_via_group_grant) {
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = createThreadWithGroupGrant(
-            *threadApi,
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -578,7 +564,6 @@ TEST_F(ThreadUsingGroupsTest, listMessages_via_group_grant) {
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = createThreadWithGroupGrant(
-            *threadApi,
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -616,7 +601,6 @@ TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = createThreadWithGroupGrant(
-            *threadApi,
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -654,7 +638,7 @@ TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
             std::vector<core::UserWithPubKey>{{.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}},
             core::Buffer::from("no_group"),
             core::Buffer::from("no_group_private"),
-            1, false, false,  
+            1, false, false,
             std::nullopt,
             std::vector<core::GroupGrantWithKey>{}
         );
@@ -696,7 +680,6 @@ TEST_F(ThreadUsingGroupsTest, messages_accessible_by_all_group_members) {
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = createThreadWithGroupGrant(
-            *threadApi,
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -735,8 +718,6 @@ TEST_F(ThreadUsingGroupsTest, messages_accessible_by_all_group_members) {
     EXPECT_EQ(msgUser3.data.stdString(), "shared_data");
 }
 
-// ─── group membership changes ─────────────────────────────────────────────────
-
 TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_messages) {
     // Group_2 has user_1 + user_2; user_3 is not yet a member
     group::Group group_2;
@@ -746,7 +727,6 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = createThreadWithGroupGrant(
-            *threadApi,
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -840,7 +820,6 @@ TEST_F(ThreadUsingGroupsTest, user_removed_from_group_loses_all_access) {
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = createThreadWithGroupGrant(
-            *threadApi,
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
