@@ -326,36 +326,6 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _serverApi->streamRoomLeave(model);
 }
 
-void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
-    server::StreamRoomRecordingModel model;
-    LOG_DEBUG("CPP-layer: call  enableStreamRoomRecording() with streamRoomId (on WS): ", streamRoomId);
-    model.streamRoomId = streamRoomId;
-    _serverApi->streamRoomEnableRecording(model);
-}
-
-std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    server::StreamRoomGetModel params;
-    params.id = streamRoomId;
-    params.type = STREAM_TYPE_FILTER_FLAG;
-    auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto statusCode = _streamRoomDataSchemaMapper->validateDataIntegrity(streamRoom);
-    if (statusCode != 0) {
-        throw StreamRoomDataIntegrityException();
-    }
-    auto keys = extractStreamRoomKeys(streamRoom);
-    std::vector<stream::RecordingEncKey> recordingEncKeys;
-    for (const auto& key : keys) {
-        if (key.second.statusCode == 0) {
-            recordingEncKeys.push_back(
-                stream::RecordingEncKey{
-                    core::Buffer::from(key.second.id), core::Buffer::from(deriveStreamEncryptionKey(key.second))
-                }
-            );
-        }
-    }
-    return recordingEncKeys;
-}
-
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle{nextId()};
     auto room = getStreamRoomData(streamRoomId);

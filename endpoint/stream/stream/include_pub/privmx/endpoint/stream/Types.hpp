@@ -178,11 +178,6 @@ struct StreamPublishResult {
     std::optional<PublishedStreamData> data;
 };
 
-struct RecordingEncKey {
-    core::Buffer id;
-    core::Buffer key;
-};
-
 struct StreamSubscriber {
     std::string userId;
     std::vector<StreamSubscription> subscriptions;

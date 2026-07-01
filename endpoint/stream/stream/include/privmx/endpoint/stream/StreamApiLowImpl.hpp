@@ -85,8 +85,6 @@ public:
         std::shared_ptr<WebRTCInterface> webRtc
     ); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     // Publisher stream part
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);

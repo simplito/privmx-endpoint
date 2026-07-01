@@ -81,10 +81,6 @@ void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model) {
     requestWS("streamRoomLeave", model.toJSON());
 }
 
-void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model) {
-    requestWS("streamRoomEnableRecording", model.toJSON());
-}
-
 server::StreamRoomListParticipantsResult ServerApi::streamRoomListParticipants(
     server::StreamRoomListParticipantsModel model
 ) {
