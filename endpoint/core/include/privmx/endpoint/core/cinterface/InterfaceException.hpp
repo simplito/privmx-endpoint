@@ -54,7 +54,7 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(
 )
 DECLARE_ENDPOINT_EXCEPTION(EndpointInterfaceException, UncaughtException, "Uncaught exception in C interface", 0x0002)
 
-// compile-time guard (generated): all exception codes in this scope must be unique
+
 static_assert(::privmx::endpoint::core::exceptionCodesUnique({
     UncaughtException::FULL_CODE,
 }), "Duplicate exception code in cinterface scope");

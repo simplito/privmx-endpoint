@@ -44,9 +44,6 @@ public:
     std::string getFull(bool JSON = false) const noexcept;
     virtual void rethrow() const;
 
-    // Attach the exception that caused this one. The cause is copied (sliced to the
-    // base Exception, which preserves name/scope/code/description and its own cause
-    // chain) and also folded into what() so the standard error path shows it.
     void setCause(const Exception& cause);
     std::shared_ptr<Exception> getCause() const noexcept { return _cause; }
 

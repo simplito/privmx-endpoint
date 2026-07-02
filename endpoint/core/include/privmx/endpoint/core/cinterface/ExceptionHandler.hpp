@@ -55,8 +55,6 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exc
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const utils::PrivmxException& e) {
-    // Route through the converter so the structured fields (code/scope/name/description)
-    // survive instead of being flattened into a single string.
     return make_error(endpoint::core::ExceptionConverter::convert(e));
 }
 
