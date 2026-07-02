@@ -102,7 +102,10 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
     return result;
 }
 
-void StreamApiLowImpl::onNotificationEvent([[maybe_unused]] const std::string& _type, const core::NotificationEvent& _notification) {
+void StreamApiLowImpl::onNotificationEvent(
+    [[maybe_unused]] const std::string& _type,
+    const core::NotificationEvent& _notification
+) {
     _guardedExecutor->exec([&, _notification]() { return processNotificationEvent(_notification); });
 }
 
@@ -480,9 +483,9 @@ SubscriberStreamHandle StreamApiLowImpl::createSubscriberStream(
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId, std::string("subscriber"));
 
-    room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{.sessionId = subscribeResult.sessionId, .streamHandle = streamHandle, .subscriptions = subscriptions}
-    );
+    room->subscriberStream = std::make_shared<SubscriptionData>(SubscriptionData{
+        .sessionId = subscribeResult.sessionId, .streamHandle = streamHandle, .subscriptions = subscriptions
+    });
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (subscribeResult.offer.has_value()) {
@@ -533,13 +536,9 @@ void StreamApiLowImpl::updateSubscriberStream(
     }
     subscriptions.insert(subscriptions.end(), subscriptionsToAdd.begin(), subscriptionsToAdd.end());
 
-    room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{
-            .sessionId = result.sessionId,
-            .streamHandle = subscriptionHandle,
-            .subscriptions = subscriptions
-        }
-    );
+    room->subscriberStream = std::make_shared<SubscriptionData>(SubscriptionData{
+        .sessionId = result.sessionId, .streamHandle = subscriptionHandle, .subscriptions = subscriptions
+    });
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (result.offer.has_value()) {
@@ -552,9 +551,7 @@ void StreamApiLowImpl::updateSubscriberStream(
     }
 }
 
-void StreamApiLowImpl::removeSubscriberStream(
-    const SubscriberStreamHandle& subscriptionHandle
-) {
+void StreamApiLowImpl::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
     auto room = getStreamRoomData(subscriptionHandle);
     if (!room->subscriberStream) {
         throw SubscriberStreamHandleNotInitialized();

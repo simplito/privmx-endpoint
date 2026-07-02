@@ -102,9 +102,7 @@ public:
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void removeSubscriberStream(
-        const SubscriberStreamHandle& subscriptionHandle
-    );
+    void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
 
     std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
@@ -164,7 +162,9 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    static std::vector<server::StreamSubscription> mapSubscriptions(const std::vector<StreamSubscription>& subscriptions);
+    static std::vector<server::StreamSubscription> mapSubscriptions(
+        const std::vector<StreamSubscription>& subscriptions
+    );
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc

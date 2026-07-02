@@ -25,9 +25,14 @@ WebRTCImpl::WebRTCImpl(
 
 WebRTCImpl::~WebRTCImpl() {}
 
-std::string WebRTCImpl::createOfferAndSetLocalDescription(const std::string& streamRoomId, const std::string& connectionType) {
-    ConnectionType connectionTypeEnum = (connectionType == "publisher") ? ConnectionType::Publisher : ConnectionType::Subscriber;
-    auto peerConnection = _peerConnectionManager->getConnectionWithSession(streamRoomId, connectionTypeEnum)->peerConnection;
+std::string WebRTCImpl::createOfferAndSetLocalDescription(
+    const std::string& streamRoomId,
+    const std::string& connectionType
+) {
+    ConnectionType connectionTypeEnum = (connectionType == "publisher") ? ConnectionType::Publisher :
+                                                                          ConnectionType::Subscriber;
+    auto peerConnection = _peerConnectionManager->getConnectionWithSession(streamRoomId, connectionTypeEnum)
+                              ->peerConnection;
     std::promise<std::string> t_spd = std::promise<std::string>();
     peerConnection->pc->CreateOffer(
         [&](const libwebrtc::string sdp, [[maybe_unused]] const libwebrtc::string type) {
@@ -57,8 +62,10 @@ std::string WebRTCImpl::createAnswerAndSetDescriptions(
     const std::string& type,
     const std::string& connectionType
 ) {
-    ConnectionType connectionTypeEnum = (connectionType == "publisher") ? ConnectionType::Publisher : ConnectionType::Subscriber;
-    auto peerConnection = _peerConnectionManager->getConnectionWithSession(streamRoomId, connectionTypeEnum)->peerConnection;
+    ConnectionType connectionTypeEnum = (connectionType == "publisher") ? ConnectionType::Publisher :
+                                                                          ConnectionType::Subscriber;
+    auto peerConnection = _peerConnectionManager->getConnectionWithSession(streamRoomId, connectionTypeEnum)
+                              ->peerConnection;
     // Set remote description
     std::promise<bool> tmp = std::promise<bool>();
     peerConnection->pc->SetRemoteDescription(
@@ -116,8 +123,10 @@ void WebRTCImpl::setAnswerAndSetRemoteDescription(
     const std::string& type,
     const std::string& connectionType
 ) {
-    ConnectionType connectionTypeEnum = (connectionType == "publisher") ? ConnectionType::Publisher : ConnectionType::Subscriber;
-    auto peerConnection = _peerConnectionManager->getConnectionWithSession(streamRoomId, connectionTypeEnum)->peerConnection;
+    ConnectionType connectionTypeEnum = (connectionType == "publisher") ? ConnectionType::Publisher :
+                                                                          ConnectionType::Subscriber;
+    auto peerConnection = _peerConnectionManager->getConnectionWithSession(streamRoomId, connectionTypeEnum)
+                              ->peerConnection;
     peerConnection->pc->SetRemoteDescription(
         sdp, type, [&]() {},
         [&](const char* error) { throw stream::WebRTCException("OnSetSdpFailure " + std::string(error)); }

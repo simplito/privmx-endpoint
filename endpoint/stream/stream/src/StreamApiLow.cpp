@@ -305,9 +305,7 @@ void StreamApiLow::updateSubscriberStream(
     }
 }
 
-void StreamApiLow::removeSubscriberStream(
-    const SubscriberStreamHandle& subscriptionHandle
-) {
+void StreamApiLow::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
     auto impl = getImpl();
     try {
         return impl->removeSubscriberStream(subscriptionHandle);

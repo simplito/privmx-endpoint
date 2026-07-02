@@ -124,4 +124,3 @@ Thread ThreadDataSchemaMapper::validateDecryptAndConvertThread(
 ) {
     return validateDecryptAndConvertThreads({thread}, keyProvider)[0];
 }
-
