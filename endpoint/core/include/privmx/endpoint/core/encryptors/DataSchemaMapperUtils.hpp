@@ -34,16 +34,22 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-template<typename T> struct type_identity { using type = T; };
-template<typename T> using type_identity_t = typename type_identity<T>::type;
+template<typename T>
+struct type_identity {
+    using type = T;
+};
+template<typename T>
+using type_identity_t = typename type_identity<T>::type;
 
 class DataSchemaMapperUtils {
 public:
     static uint32_t toStatusCode(std::function<void()> fn) noexcept {
-        try { fn(); return 0; }
-        catch (const Exception& e) { return e.getCode(); }
-        catch (const privmx::utils::PrivmxException& e) { return ExceptionConverter::convert(e).getCode(); }
-        catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
+        try {
+            fn();
+            return 0;
+        } catch (const Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
+            return ExceptionConverter::convert(e).getCode();
+        } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
     }
 
     template<typename TContainer>
@@ -72,8 +78,10 @@ public:
     ) {
         if (dio.contextId != contextId ||
             dio.resourceId != resourceId ||
-            !dio.containerId || dio.containerId.value() != containerId ||
-            !dio.containerResourceId || dio.containerResourceId.value() != containerResourceId ||
+            !dio.containerId ||
+            dio.containerId.value() != containerId ||
+            !dio.containerResourceId ||
+            dio.containerResourceId.value() != containerResourceId ||
             dio.creatorUserId != creatorUserId ||
             !TimestampValidator::validate(dio.timestamp, date)) {
             throwOnFail();
@@ -92,7 +100,11 @@ public:
     }
 
     template<typename VersionEnum>
-    static VersionEnum mapVersionedData(const Poco::Dynamic::Var& var, VersionEnum unknown, type_identity_t<std::function<VersionEnum(int64_t)>> mapper) {
+    static VersionEnum mapVersionedData(
+        const Poco::Dynamic::Var& var,
+        VersionEnum unknown,
+        type_identity_t<std::function<VersionEnum(int64_t)>> mapper
+    ) {
         if (var.type() == typeid(Poco::JSON::Object::Ptr)) {
             return mapper(dynamic::VersionedData::fromJSON(var).version);
         }
@@ -106,7 +118,10 @@ public:
         const Connection& connection,
         std::function<uint32_t(const type_identity_t<TServer>&)> validateIntegrity,
         std::function<EncKeyLocation(const type_identity_t<TServer>&)> getLocation,
-        std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(const type_identity_t<TServer>&, const DecryptedEncKey&)> decrypt,
+        std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
+            const type_identity_t<TServer>&,
+            const DecryptedEncKey&
+        )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError
     ) {
         if (items.empty()) {
@@ -151,9 +166,7 @@ public:
                 result[i] = toLibError(items[i], e.getCode());
             } catch (const privmx::utils::PrivmxException& e) {
                 result[i] = toLibError(items[i], ExceptionConverter::convert(e).getCode());
-            } catch (...) {
-                result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
-            }
+            } catch (...) { result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE); }
         }
 
         std::vector<VerificationRequest> verifyReqs;
@@ -173,8 +186,9 @@ public:
         }
         auto verified = connection.getImpl()->getUserVerifier()->verify(verifyReqs);
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
-            result[verifyIdxs[j]].statusCode =
-                verified[j] ? 0 : ExceptionConverter::getCodeOfUserVerificationFailureException();
+            result[verifyIdxs[j]].statusCode = verified[j] ?
+                0 :
+                ExceptionConverter::getCodeOfUserVerificationFailureException();
         }
         return result;
     }
@@ -187,7 +201,10 @@ public:
         const Connection& connection,
         std::function<uint32_t(const type_identity_t<TServer>&)> validateIntegrity,
         std::function<uint32_t(const type_identity_t<TServer>&)> validateKeyId,
-        std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(const type_identity_t<TServer>&, const DecryptedEncKey&)> decrypt,
+        std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
+            const type_identity_t<TServer>&,
+            const DecryptedEncKey&
+        )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError
     ) {
         if (items.empty()) {
@@ -239,9 +256,7 @@ public:
                 result[i] = toLibError(items[i], e.getCode());
             } catch (const privmx::utils::PrivmxException& e) {
                 result[i] = toLibError(items[i], ExceptionConverter::convert(e).getCode());
-            } catch (...) {
-                result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
-            }
+            } catch (...) { result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE); }
         }
 
         std::vector<VerificationRequest> verifyReqs;
@@ -261,8 +276,9 @@ public:
         }
         auto verified = connection.getImpl()->getUserVerifier()->verify(verifyReqs);
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
-            result[verifyIdxs[j]].statusCode =
-                verified[j] ? 0 : ExceptionConverter::getCodeOfUserVerificationFailureException();
+            result[verifyIdxs[j]].statusCode = verified[j] ?
+                0 :
+                ExceptionConverter::getCodeOfUserVerificationFailureException();
         }
         return result;
     }
@@ -274,15 +290,15 @@ public:
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
         std::function<uint32_t(const type_identity_t<TServer>&)> validateIntegrity,
-        std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(const type_identity_t<TServer>&, const DecryptedEncKey&)> decrypt,
+        std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
+            const type_identity_t<TServer>&,
+            const DecryptedEncKey&
+        )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError
     ) {
         return batchValidateDecryptVerifyEntries<TLib, TServer>(
-            items, moduleKeys, keyProvider, connection,
-            validateIntegrity,
-            std::function<uint32_t(const TServer&)>([](const TServer&) -> uint32_t { return 0; }),
-            decrypt,
-            toLibError
+            items, moduleKeys, keyProvider, connection, validateIntegrity,
+            std::function<uint32_t(const TServer&)>([](const TServer&) -> uint32_t { return 0; }), decrypt, toLibError
         );
     }
 };

@@ -129,6 +129,11 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::RecordingEncKey>(const strea
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscriber>(const stream::StreamSubscriber& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::DecryptedDataChannelMessage>(
+    const stream::DecryptedDataChannelMessage& val
+);
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

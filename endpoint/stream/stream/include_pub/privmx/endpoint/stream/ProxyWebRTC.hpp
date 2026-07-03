@@ -50,13 +50,8 @@ public:
         const int64_t sessionId,
         const std::string& connectionType
     ) override;
-    void closeAll(
-        const std::string& streamRoomId
-    ) override;
-    void close(
-        const std::string& streamRoomId,
-        const std::string& connectionType
-    ) override;
+    void closeAll(const std::string& streamRoomId) override;
+    void close(const std::string& streamRoomId, const std::string& connectionType) override;
     void updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) override;
 
 private:

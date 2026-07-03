@@ -312,9 +312,9 @@ MediaTrack StreamApiImpl::addTrack(
         if (streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
             throw ThereCanBeOnlyOneDataTrackException();
         }
-        auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(TrackStatus::ToAdd, []([[maybe_unused]] std::string data) {
-            return;
-        });
+        auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(
+            TrackStatus::ToAdd, []([[maybe_unused]] std::string data) { return; }
+        );
 
         streamData->dataTrack = streamDataTrackInfo;
         return MediaTrack{[]([[maybe_unused]] bool enabled) { return; }};

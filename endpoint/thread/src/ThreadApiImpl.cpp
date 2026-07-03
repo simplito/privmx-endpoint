@@ -47,7 +47,8 @@ ThreadApiImpl::ThreadApiImpl(
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
-      _messageDataSchemaMapper(userPrivKey, connection), _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
+      _messageDataSchemaMapper(userPrivKey, connection),
+      _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
     initModuleDataSchemaMapper(_threadDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
