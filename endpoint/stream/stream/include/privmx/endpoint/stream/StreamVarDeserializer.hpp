@@ -78,6 +78,12 @@ stream::StreamTrackModificationPair VarDeserializer::deserialize<stream::StreamT
     const std::string& name
 );
 
+template<>
+stream::DataChannelMessage VarDeserializer::deserialize<stream::DataChannelMessage>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

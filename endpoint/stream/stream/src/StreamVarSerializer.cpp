@@ -427,3 +427,17 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscriber>(const stre
     obj->set("publishedStream", serialize(val.publishedStream));
     return obj;
 }
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::DecryptedDataChannelMessage>(
+    const stream::DecryptedDataChannelMessage& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$DecryptedDataChannelMessage");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("seq", serialize(val.seq));
+    obj->set("statusCode", serialize(val.statusCode));
+    return obj;
+}
