@@ -73,7 +73,7 @@ std::vector<std::string> EndpointUtils::uniqueList(
     return output;
 }
 
-std::vector<std::string> EndpointUtils::usersWithPubKeyToIds(std::vector<core::UserWithPubKey>& users) {
+std::vector<std::string> EndpointUtils::usersWithPubKeyToIds(const std::vector<core::UserWithPubKey>& users) {
     std::vector<std::string> ids{};
     for (auto& user : users) {
         ids.push_back(user.userId);
