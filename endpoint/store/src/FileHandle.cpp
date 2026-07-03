@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp"
 #include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
@@ -197,28 +198,57 @@ FileReadWriteHandle::FileReadWriteHandle(
           0,
           true
       ) {
-    std::shared_ptr<FileMetaEncryptor> fileMetaEncryptor = std::make_shared<FileMetaEncryptor>(userPrivKey, connection);
-    std::shared_ptr<ChunkEncryptor> chunkEncryptor = std::make_shared<ChunkEncryptor>(
-        encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.chunkSize
-    );
+    const auto& sdp = encryptionParams.fileDecryptionParams;
+
+    server::StoreFileRwPullModel pullModel;
+    pullModel.fileId = sdp.fileId;
+    pullModel.rwVersion = 0;
+    auto pullResult = serverApi->storeFileRwPull(pullModel);
+
+    auto dmObj = pullResult.meta.rwMeta.extract<Poco::JSON::Object::Ptr>();
+    std::string dmHmacBase64 = dmObj->get("hmac").convert<std::string>();
+    int64_t dmSize = dmObj->get("size").convert<int64_t>();
+    int64_t dmServerSize = dmObj->get("serverSize").convert<int64_t>();
+    int64_t rwMetaVersion = pullResult.meta.rwVersion;
+
+    std::string dmHmacRaw = utils::Base64::toString(dmHmacBase64);
+    std::string checksumBytes =
+        pullResult.checksums.has_value() ? static_cast<std::string>(*pullResult.checksums) : std::string();
+
+    FileDecryptionParams pullParams;
+    pullParams.fileId = sdp.fileId;
+    pullParams.resourceId = sdp.resourceId;
+    pullParams.sizeOnServer = static_cast<uint64_t>(dmServerSize);
+    pullParams.originalSize = static_cast<uint64_t>(dmSize);
+    pullParams.cipherType = sdp.cipherType;
+    pullParams.chunkSize = sdp.chunkSize;
+    pullParams.key = sdp.key;
+    pullParams.hmac = dmHmacRaw;
+    pullParams.version = rwMetaVersion;
+
+    StaticMeta staticMeta;
+    staticMeta.fileId = sdp.fileId;
+    staticMeta.resourceId = sdp.resourceId;
+    staticMeta.cipherType = sdp.cipherType;
+    staticMeta.chunkSize = sdp.chunkSize;
+    staticMeta.key = sdp.key;
+
+    std::shared_ptr<ChunkEncryptor> chunkEncryptor =
+        std::make_shared<ChunkEncryptor>(sdp.key, sdp.chunkSize);
     std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(
         serverApi, chunkEncryptor, chunkEncryptor->getEncryptedChunkSize(), serverChunkSize,
-        encryptionParams.fileDecryptionParams.fileId, encryptionParams.fileDecryptionParams.sizeOnServer,
-        encryptionParams.fileDecryptionParams.version, std::move(cache)
+        sdp.fileId, static_cast<uint64_t>(dmServerSize), rwMetaVersion, std::move(cache)
     );
-    std::shared_ptr<IHashList> hashList = std::make_shared<HmacList>(
-        encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.hmac,
-        chunkDataProvider->getCurrentChecksumsFromBridge()
-    );
-    std::shared_ptr<IChunkReader> chunkReader = std::make_shared<ChunkReader>(
-        chunkDataProvider, chunkEncryptor, hashList, encryptionParams.fileDecryptionParams
-    );
+    std::shared_ptr<IHashList> hashList =
+        std::make_shared<HmacList>(sdp.key, dmHmacRaw, checksumBytes);
+    std::shared_ptr<IChunkReader> chunkReader =
+        std::make_shared<ChunkReader>(chunkDataProvider, chunkEncryptor, hashList, pullParams);
     std::shared_ptr<FileHandler> fileHandler = std::make_shared<FileHandler>(
-        chunkDataProvider, chunkEncryptor, hashList, chunkReader, fileMetaEncryptor,
-        encryptionParams.fileDecryptionParams.originalSize, encryptionParams.fileDecryptionParams.sizeOnServer,
-        encryptionParams.fileDecryptionParams.version, fileInfo, encryptionParams.fileMeta, encryptionParams.encKey,
-        serverApi
+        chunkDataProvider, chunkEncryptor, hashList, chunkReader, serverApi,
+        static_cast<uint64_t>(dmSize), static_cast<uint64_t>(dmServerSize),
+        0, std::move(staticMeta)
     );
+    fileHandler->sync();
     file = std::make_shared<FileHandlerImpl>(fileHandler);
 }
 

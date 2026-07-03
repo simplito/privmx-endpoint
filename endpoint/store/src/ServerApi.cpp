@@ -40,6 +40,10 @@ server::StoreFileGetResult ServerApi::storeFileGet(const server::StoreFileGetMod
     return request<server::StoreFileGetResult>("storeFileGet", model.toJSON());
 }
 
+server::StoreFileRwPullResult ServerApi::storeFileRwPull(const server::StoreFileRwPullModel& model) {
+    return request<server::StoreFileRwPullResult>("storeFileRwPull", model.toJSON());
+}
+
 server::StoreFileGetManyResult ServerApi::storeFileGetMany(const server::StoreFileGetManyModel& model) {
     return request<server::StoreFileGetManyResult>("storeFileGetMany", model.toJSON());
 }
@@ -50,6 +54,14 @@ server::StoreFileListResult ServerApi::storeFileList(const server::StoreFileList
 
 server::StoreFileCreateResult ServerApi::storeFileCreate(const server::StoreFileCreateModel& model) {
     return request<server::StoreFileCreateResult>("storeFileCreate", model.toJSON());
+}
+
+server::StoreFileCreateResult ServerApi::storeFileRwCreate(const server::StoreFileRwCreateModel& model) {
+    return request<server::StoreFileCreateResult>("storeFileRwCreate", model.toJSON());
+}
+
+void ServerApi::storeFileRwWrite(const server::StoreFileRwWriteModel& model) {
+    requestVoid("storeFileRwWrite", model.toJSON());
 }
 
 server::StoreFileReadResult ServerApi::storeFileRead(const server::StoreFileReadModel& model) {

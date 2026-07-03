@@ -155,7 +155,8 @@ JSON_STRUCT(StoreFileCreateResult, STORE_FILE_CREATE_RESULT_FIELDS);
     F(fileId, std::string)                                                                                             \
     F(range, Poco::Dynamic::Var)                                                                                       \
     F(version, std::optional<int64_t>)                                                                                 \
-    F(thumb, bool)
+    F(thumb, bool)                                                                                                     \
+    F(rwVersion, std::optional<int64_t>)
 JSON_STRUCT(StoreFileReadModel, STORE_FILE_READ_MODEL_FIELDS);
 
 #define STORE_FILE_READ_RESULT_FIELDS(F) F(data, Pson::BinaryString)
@@ -176,6 +177,39 @@ JSON_STRUCT(StoreFileWriteModel, STORE_FILE_WRITE_MODEL_FIELDS);
     F(data, Pson::BinaryString)                                                                                        \
     F(truncate, bool)
 JSON_STRUCT(StoreFileRandomWriteOperation, STORE_FILE_RANDOM_WRITE_OPERATION_FIELDS);
+
+#define STORE_FILE_RANDOM_WRITE_META_FIELDS(F)                                                                         \
+    F(rwVersion, int64_t)                                                                                              \
+    F(rwMeta, Poco::Dynamic::Var)
+JSON_STRUCT(StoreFileRandomWriteMeta, STORE_FILE_RANDOM_WRITE_META_FIELDS);
+
+#define STORE_FILE_RW_PULL_MODEL_FIELDS(F)                                                                             \
+    F(fileId, std::string)                                                                                             \
+    F(rwVersion, int64_t)                                                                                              \
+    F(version, std::optional<int64_t>)
+JSON_STRUCT(StoreFileRwPullModel, STORE_FILE_RW_PULL_MODEL_FIELDS);
+
+#define STORE_FILE_RW_PULL_RESULT_FIELDS(F)                                                                            \
+    F(meta, StoreFileRandomWriteMeta)                                                                                  \
+    F(checksums, std::optional<Pson::BinaryString>)                                                                    \
+    F(store, std::optional<Store>)                                                                                     \
+    F(file, std::optional<File>)
+JSON_STRUCT(StoreFileRwPullResult, STORE_FILE_RW_PULL_RESULT_FIELDS);
+
+#define STORE_FILE_RW_CREATE_MODEL_FIELDS(F)                                                                           \
+    F(storeId, std::string)                                                                                            \
+    F(resourceId, std::optional<std::string>)                                                                          \
+    F(meta, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(rwMeta, Poco::Dynamic::Var)
+JSON_STRUCT(StoreFileRwCreateModel, STORE_FILE_RW_CREATE_MODEL_FIELDS);
+
+#define STORE_FILE_RW_WRITE_MODEL_FIELDS(F)                                                                            \
+    F(fileId, std::string)                                                                                             \
+    F(operations, std::vector<StoreFileRandomWriteOperation>)                                                          \
+    F(rwVersion, int64_t)                                                                                              \
+    F(rwMeta, Poco::Dynamic::Var)
+JSON_STRUCT(StoreFileRwWriteModel, STORE_FILE_RW_WRITE_MODEL_FIELDS);
 
 #define STORE_FILE_WRITE_MODEL_BY_OPERATIONS_FIELDS(F)                                                                 \
     F(fileId, std::string)                                                                                             \

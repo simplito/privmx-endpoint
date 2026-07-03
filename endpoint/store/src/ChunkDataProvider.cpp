@@ -92,6 +92,7 @@ std::string ChunkDataProvider::getCurrentChecksumsFromBridge() {
     server::StoreFileReadModel fileDataModel{};
     fileDataModel.fileId = _fileId;
     fileDataModel.range = server::BufferReadRange{.type = "checksum"}.toJSON();
+    fileDataModel.rwVersion = _fileVersion;
     fileDataModel.thumb = false;
     return _server->storeFileRead(fileDataModel).data;
 }
@@ -130,7 +131,7 @@ std::string ChunkDataProvider::requestSegment(uint32_t segmentNumber) {
     server::StoreFileReadModel fileDataModel{};
     fileDataModel.fileId = _fileId;
     fileDataModel.range = range.toJSON();
-    fileDataModel.version = _fileVersion;
+    fileDataModel.rwVersion = _fileVersion;
     fileDataModel.thumb = false;
     server::StoreFileReadResult fileData;
     try {
