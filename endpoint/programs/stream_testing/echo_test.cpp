@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
         for(int i = 0; i < streamlist.size(); i++) {
             streamsId.push_back(stream::StreamSubscription{streamlist[i].id, std::nullopt});
         }
-        streamApi.subscribeToRemoteStreams(streamRoomId, streamsId);
+        streamApi.createSubscriberStream(streamRoomId, streamsId);
         std::this_thread::sleep_for(std::chrono::seconds(60));
 
     } catch (const core::Exception& e) {

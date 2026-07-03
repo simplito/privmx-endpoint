@@ -46,11 +46,3 @@ FilesConfig InboxDataHelper::fileConfigFromTypedObject(const server::FileConfig&
         .maxWholeUploadSize = fileConfig.maxWholeUploadSize
     };
 }
-
-std::vector<std::string> InboxDataHelper::mapUsers(const std::vector<core::UserWithPubKey>& users) {
-    std::vector<std::string> result;
-    for (auto user : users) {
-        result.push_back(user.userId);
-    }
-    return result;
-}
