@@ -88,8 +88,6 @@ public:
     std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<AudioDevice> getAudioDevices();
     std::vector<VideoDevice> getVideoDevices();

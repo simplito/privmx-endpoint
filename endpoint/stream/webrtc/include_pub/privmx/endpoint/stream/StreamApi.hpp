@@ -184,21 +184,6 @@ public:
     void leaveStreamRoom(const std::string& streamRoomId);
 
     /**
-     * Enables server-side recording for the Stream Room.
-     *
-     * @param streamRoomId ID of the Stream Room
-     */
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-
-    /**
-     * Gets encryption keys used for Stream Room recordings.
-     *
-     * @param streamRoomId ID of the Stream Room
-     * @return list of recording encryption keys
-     */
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
-
-    /**
      * Creates a local Stream handle for publishing media in given Stream Room.
      * Call addTrack/removeTrack to prepare tracks and publishStream/updateStream to send changes to the server.
      *
