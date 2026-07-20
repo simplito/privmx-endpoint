@@ -54,12 +54,12 @@ public:
         AcceptOfferOnReconfigure = 20,
         KeyManagement = 21,
         UpdateStream = 22,
-        JoinStreamRoomEx = 25,
-        ListStreamRoomParticipants = 26,
+        JoinStreamRoomEx = 23,
+        ListStreamRoomParticipants = 24,
 
-        RegisterRemoteDataChannel = 27,
-        EncryptDataChannelMessage = 28,
-        DecryptDataChannelMessage = 29,
+        RegisterRemoteDataChannel = 25,
+        EncryptDataChannelMessage = 26,
+        DecryptDataChannelMessage = 27,
     };
 
     StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
