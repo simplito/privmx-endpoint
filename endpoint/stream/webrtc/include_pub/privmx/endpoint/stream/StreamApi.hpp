@@ -58,6 +58,8 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param policies Stream Room's policies (pass std::nullopt to use defaults)
+     * @param emptyRoomTtl grace period (ms) the room stays open after the last participant leaves before being
+     * closed; 0 closes it immediately (pass std::nullopt to use the server default)
      *
      * @return created Stream Room ID
      */
@@ -67,7 +69,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl = std::nullopt
     );
 
     /**

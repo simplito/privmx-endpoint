@@ -41,14 +41,15 @@ std::string StreamApi::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& emptyRoomTtl
 ) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return _impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+        return _impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

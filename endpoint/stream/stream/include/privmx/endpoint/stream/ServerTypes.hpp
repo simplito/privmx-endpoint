@@ -29,7 +29,8 @@ JSON_STRUCT_EXT(StreamRoomDataEntry, core::server::ContainerDataEntry, STREAM_RO
 
 #define STREAM_ROOM_INFO_EXTRA_FIELDS(F)                                                                               \
     F(data, std::vector<StreamRoomDataEntry>)                                                                          \
-    F(state, std::optional<std::string>)
+    F(state, std::optional<std::string>)                                                                               \
+    F(emptyRoomTtl, std::optional<int64_t>)
 JSON_STRUCT_EXT(StreamRoomInfo, core::server::ContainerInfoBase, STREAM_ROOM_INFO_EXTRA_FIELDS);
 
 #define SESSION_DESCRIPTION_FIELDS(F)                                                                                  \
@@ -37,7 +38,7 @@ JSON_STRUCT_EXT(StreamRoomInfo, core::server::ContainerInfoBase, STREAM_ROOM_INF
     F(type, std::string)
 JSON_STRUCT(SessionDescription, SESSION_DESCRIPTION_FIELDS);
 
-#define STREAM_ROOM_CREATE_MODEL_EXTRA_FIELDS(F)
+#define STREAM_ROOM_CREATE_MODEL_EXTRA_FIELDS(F) F(emptyRoomTtl, std::optional<int64_t>)
 JSON_STRUCT_EXT(StreamRoomCreateModel, core::server::ContainerCreateModelBase, STREAM_ROOM_CREATE_MODEL_EXTRA_FIELDS);
 
 #define STREAM_ROOM_CREATE_RESULT_FIELDS(F) F(streamRoomId, std::string)

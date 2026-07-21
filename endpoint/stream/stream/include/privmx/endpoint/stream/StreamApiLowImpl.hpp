@@ -56,6 +56,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl,
         const std::string& type = STREAM_TYPE_FILTER_FLAG
     );
 
