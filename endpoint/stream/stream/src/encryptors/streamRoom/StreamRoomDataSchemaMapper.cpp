@@ -126,6 +126,6 @@ StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
         .state = info.state.value_or("closed"),
-        .streamRoomTtl = info.streamRoomTtl.value_or(0)
+        .emptyRoomTtl = info.emptyRoomTtl.value_or(0)
     };
 }

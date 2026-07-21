@@ -309,7 +309,7 @@ TEST_F(StreamTest, createStreamRoom) {
     EXPECT_EQ(streamRoom.policy.updatePolicy, std::optional<std::string>("all"));
     EXPECT_EQ(streamRoom.policy.updaterCanBeRemovedFromManagers, std::optional<std::string>("yes"));
     EXPECT_EQ(streamRoom.policy.ownerCanBeRemovedFromManagers, std::optional<std::string>("yes"));
-    EXPECT_EQ(streamRoom.streamRoomTtl, 60000);
+    EXPECT_EQ(streamRoom.emptyRoomTtl, 60000);
     // same users and managers
     EXPECT_NO_THROW({
         streamRoomId = streamApi->createStreamRoom(
@@ -347,10 +347,10 @@ TEST_F(StreamTest, createStreamRoom) {
     if(streamRoom.managers.size() == 1) {
         EXPECT_EQ(streamRoom.managers[0], reader->getString("Login.user_1_id"));
     }
-    EXPECT_EQ(streamRoom.streamRoomTtl, 0);
+    EXPECT_EQ(streamRoom.emptyRoomTtl, 0);
 }
 
-TEST_F(StreamTest, streamRoomTtl_allowsRejoinAndRepublishAfterLeave) {
+TEST_F(StreamTest, emptyRoomTtl_allowsRejoinAndRepublishAfterLeave) {
     std::string streamRoomId;
     EXPECT_NO_THROW({
         streamRoomId = streamApi->createStreamRoom(

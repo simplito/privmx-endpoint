@@ -561,9 +561,9 @@ std::string StreamApiImpl::createStreamRoom(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
-    const std::optional<int64_t>& streamRoomTtl
+    const std::optional<int64_t>& emptyRoomTtl
 ) {
-    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, streamRoomTtl);
+    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
 }
 
 void StreamApiImpl::updateStreamRoom(

@@ -54,7 +54,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
-        const std::optional<int64_t>& streamRoomTtl
+        const std::optional<int64_t>& emptyRoomTtl
     );
 
     void updateStreamRoom(
