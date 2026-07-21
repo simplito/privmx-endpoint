@@ -97,7 +97,9 @@ Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynami
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(5), "policies");
     auto emptyRoomTtl = _deserializer.deserializeOptional<int64_t>(argsArr->get(6), "emptyRoomTtl");
-    auto result = _streamApi.createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
+    auto result = _streamApi.createStreamRoom(
+        contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl
+    );
     return _serializer.serialize(result);
 }
 
