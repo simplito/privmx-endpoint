@@ -75,6 +75,7 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoom>(const stream::St
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("state", serialize(val.state));
+    obj->set("emptyRoomTtl", serialize(val.emptyRoomTtl));
     return obj;
 }
 
@@ -406,17 +407,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const st
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::RecordingEncKey>(const stream::RecordingEncKey& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$RecordingEncKey");
-    }
-    obj->set("id", serialize(val.id));
-    obj->set("key", serialize(val.key));
-    return obj;
-}
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscriber>(const stream::StreamSubscriber& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
@@ -425,5 +415,19 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscriber>(const stre
     obj->set("userId", serialize(val.userId));
     obj->set("subscriptions", serialize<stream::StreamSubscription>(val.subscriptions));
     obj->set("publishedStream", serialize(val.publishedStream));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<stream::DecryptedDataChannelMessage>(
+    const stream::DecryptedDataChannelMessage& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "stream$DecryptedDataChannelMessage");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("seq", serialize(val.seq));
+    obj->set("statusCode", serialize(val.statusCode));
     return obj;
 }

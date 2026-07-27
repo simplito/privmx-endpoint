@@ -198,3 +198,16 @@ stream::StreamTrackModificationPair VarDeserializer::deserialize<stream::StreamT
             std::nullopt,
     };
 }
+
+template<>
+stream::DataChannelMessage VarDeserializer::deserialize<stream::DataChannelMessage>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .data = deserialize<core::Buffer>(obj->get("data"), name + ".data"),
+        .seq = deserialize<int64_t>(obj->get("seq"), name + ".seq"),
+    };
+}

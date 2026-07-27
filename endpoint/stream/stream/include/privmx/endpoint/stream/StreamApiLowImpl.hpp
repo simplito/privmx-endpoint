@@ -56,6 +56,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl,
         const std::string& type = STREAM_TYPE_FILTER_FLAG
     );
 
@@ -85,8 +86,6 @@ public:
         std::shared_ptr<WebRTCInterface> webRtc
     ); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     // Publisher stream part
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);

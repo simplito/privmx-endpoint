@@ -67,14 +67,15 @@ std::string StreamApiLow::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& emptyRoomTtl
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+        return impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -212,26 +213,6 @@ void StreamApiLow::leaveStreamRoom(const std::string& streamRoomId) {
     auto impl = getImpl();
     try {
         return impl->leaveStreamRoom(streamRoomId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApiLow::enableStreamRoomRecording(const std::string& streamRoomId) {
-    auto impl = getImpl();
-    try {
-        return impl->enableStreamRoomRecording(streamRoomId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-std::vector<stream::RecordingEncKey> StreamApiLow::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    auto impl = getImpl();
-    try {
-        return impl->getStreamRoomRecordingKeys(streamRoomId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

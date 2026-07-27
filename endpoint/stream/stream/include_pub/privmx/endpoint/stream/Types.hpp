@@ -47,6 +47,7 @@ struct StreamRoom {
     int64_t statusCode;
     int64_t schemaVersion;
     std::string state; // "created" | "open" | "closed"
+    int64_t emptyRoomTtl;
 };
 
 struct Stream {
@@ -176,11 +177,6 @@ struct StreamUpdatedEventData {
 struct StreamPublishResult {
     bool published;
     std::optional<PublishedStreamData> data;
-};
-
-struct RecordingEncKey {
-    core::Buffer id;
-    core::Buffer key;
 };
 
 struct StreamSubscriber {

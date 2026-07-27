@@ -47,7 +47,6 @@ public:
     server::StreamsSubscribeResult streamsUpdateRemoteSubscriptions(server::StreamUpdateRemoteSubscriptionsModel model);
     void streamRoomJoin(server::StreamRoomJoinModel model);
     void streamRoomLeave(server::StreamRoomLeaveModel model);
-    void streamRoomEnableRecording(server::StreamRoomRecordingModel model);
     server::StreamRoomListParticipantsResult streamRoomListParticipants(server::StreamRoomListParticipantsModel model);
 
     void trickle(server::StreamTrickleModel model);
