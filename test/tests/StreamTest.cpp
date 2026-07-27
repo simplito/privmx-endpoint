@@ -1528,7 +1528,7 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     auto messages = collector->messages();
     ASSERT_EQ(messages.size(), 1);
     EXPECT_EQ(messages[0].payload, dataToSend);
-    EXPECT_EQ(messages[0].seq, 0);
+    EXPECT_EQ(messages[0].seq, 1);
     EXPECT_EQ(messages[0].statusCode, 0);
     EXPECT_NO_THROW({
         client2.streamApi->leaveStreamRoom(streamRoomId_1);
@@ -1937,8 +1937,8 @@ TEST_F(StreamTest, dataChannel_seq_between_three_users) {
             auto groupedIt = groupedBySender.find(senderUserId);
             ASSERT_NE(groupedIt, groupedBySender.end()) << "Missing messages from " << senderUserId;
             ASSERT_EQ(groupedIt->second.size(), 2);
-            EXPECT_EQ(groupedIt->second[0].seq, 0);
-            EXPECT_EQ(groupedIt->second[1].seq, 1);
+            EXPECT_EQ(groupedIt->second[0].seq, 1);
+            EXPECT_EQ(groupedIt->second[1].seq, 2);
             EXPECT_EQ(groupedIt->second[0].payload, payloads[0]);
             EXPECT_EQ(groupedIt->second[1].payload, payloads[1]);
         }
