@@ -1,8 +1,8 @@
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
-#include <privmx/endpoint/core/CoreException.hpp>
 #include <algorithm>
 #include <privmx/endpoint/core/CoreConstants.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;

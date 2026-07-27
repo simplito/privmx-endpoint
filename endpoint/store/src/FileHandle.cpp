@@ -89,7 +89,12 @@ FileReadHandle::FileReadHandle(
 
 void FileReadHandle::sync(const store::FileDecryptionParams& newDecryptionParams) {
     if (newDecryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(newDecryptionParams.originalSize)) {
-        throw FileCorruptedException("originalSize=" + std::to_string(newDecryptionParams.originalSize) + " sizeOnServer=" + std::to_string(newDecryptionParams.sizeOnServer));
+        throw FileCorruptedException(
+            "originalSize=" +
+            std::to_string(newDecryptionParams.originalSize) +
+            " sizeOnServer=" +
+            std::to_string(newDecryptionParams.sizeOnServer)
+        );
     }
     _chunkEncryptor->sync(newDecryptionParams.key, newDecryptionParams.chunkSize);
     _hashList->sync(

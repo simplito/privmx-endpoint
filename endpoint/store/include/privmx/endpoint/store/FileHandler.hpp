@@ -15,10 +15,10 @@ limitations under the License.
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
-#include <privmx/endpoint/core/CoreException.hpp>
 #include "privmx/endpoint/store/StoreTypes.hpp"
 #include <cstdint>
 #include <privmx/endpoint/core/Buffer.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <string>
 

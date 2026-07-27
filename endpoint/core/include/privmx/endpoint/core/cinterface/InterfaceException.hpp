@@ -54,10 +54,12 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(
 )
 DECLARE_ENDPOINT_EXCEPTION(EndpointInterfaceException, UncaughtException, "Uncaught exception in C interface", 0x0002)
 
-
-static_assert(::privmx::endpoint::core::exceptionCodesUnique({
-    UncaughtException::FULL_CODE,
-}), "Duplicate exception code in cinterface scope");
+static_assert(
+    ::privmx::endpoint::core::exceptionCodesUnique({
+        UncaughtException::FULL_CODE,
+    }),
+    "Duplicate exception code in cinterface scope"
+);
 } // namespace cinterface
 } // namespace endpoint
 } // namespace privmx

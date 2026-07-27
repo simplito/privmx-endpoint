@@ -12,8 +12,8 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApi.hpp"
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
-#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>

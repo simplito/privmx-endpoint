@@ -53,7 +53,9 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
     const auto& entry = store.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
-        throw UnknowStoreFormatException("dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry)));
+        throw UnknowStoreFormatException(
+            "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
+        );
     case core::ModuleDataSchema::Version::VERSION_4:
         return;
     case core::ModuleDataSchema::Version::VERSION_5: {
@@ -63,7 +65,9 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
         return;
     }
     default:
-        throw UnknowStoreFormatException("dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry)));
+        throw UnknowStoreFormatException(
+            "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
+        );
     }
 }
 

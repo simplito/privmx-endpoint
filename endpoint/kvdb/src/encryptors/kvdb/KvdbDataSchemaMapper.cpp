@@ -11,11 +11,10 @@ limitations under the License.
 
 #include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataSchemaMapper.hpp"
 
+#include "privmx/endpoint/kvdb/KvdbException.hpp"
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
-
-#include "privmx/endpoint/kvdb/KvdbException.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
@@ -51,7 +50,9 @@ void KvdbDataSchemaMapper::assertDataIntegrity(const server::KvdbInfo& kvdb) {
     const auto& entry = kvdb.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
-        throw UnknownKvdbFormatException("dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry)));
+        throw UnknownKvdbFormatException(
+            "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
+        );
     case core::ModuleDataSchema::Version::VERSION_5: {
         core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, kvdb, _strategyV5, [] {
             throw KvdbDataIntegrityException();
@@ -59,7 +60,9 @@ void KvdbDataSchemaMapper::assertDataIntegrity(const server::KvdbInfo& kvdb) {
         return;
     }
     default:
-        throw UnknownKvdbFormatException("dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry)));
+        throw UnknownKvdbFormatException(
+            "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
+        );
     }
 }
 

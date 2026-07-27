@@ -9,16 +9,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaStrategyV1.hpp"
+#include "privmx/endpoint/inbox/InboxException.hpp"
 #include <privmx/crypto/ecc/ECC.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
-#include <privmx/utils/Utils.hpp>
-
-#include "privmx/endpoint/inbox/InboxException.hpp"
 #include <privmx/endpoint/store/StoreException.hpp>
-#include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaStrategyV1.hpp"
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx;
 using namespace privmx::endpoint;
