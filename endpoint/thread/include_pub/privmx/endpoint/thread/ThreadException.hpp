@@ -6,6 +6,7 @@
 #define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                                  \
     class NAME : public privmx::endpoint::core::Exception {                                                            \
     public:                                                                                                            \
+        static constexpr unsigned int SCOPE_CODE = (CODE);                                                             \
         NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
         NAME(const std::string& msg, const std::string& name, unsigned int code)                                       \
             : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}               \
@@ -20,6 +21,7 @@
 #define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                                  \
     class NAME : public BASE_SCOPED {                                                                                  \
     public:                                                                                                            \
+        static constexpr unsigned int FULL_CODE = (BASE_SCOPED::SCOPE_CODE << 16) | (CODE);                            \
         NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
         NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}             \
         void rethrow() const override;                                                                                 \
@@ -35,28 +37,36 @@ namespace thread {
 #define ENDPOINT_THREAD_EXCEPTION_CODE 0x00030000
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointThreadException, "Unknown endpoint thread exception", "Thread", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NotInitializedException, "Endpoint not initialized", 0x0001)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadCreatedEventException, "Cannot extract ThreadCreatedEvent", 0x0002)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadUpdatedEventException, "Cannot extract ThreadUpdatedEvent", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadNewMessageEventException, "Cannot extract ThreadNewMessageEvent", 0x0004)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadDeletedEventException, "Cannot extract ThreadDeletedEvent", 0x0005)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadDeletedMessageEventException, "Cannot extract ThreadDeletedMessageEvent", 0x0006)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, IncorrectKeyIdFormatException, "Incorrect key id format", 0x0007)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadStatsEventException, "Cannot extract ThreadStatsEvent", 0x0008)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, AlreadySubscribedException, "Already subscribed", 0x0009)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NotSubscribedException, "Cannot unsubscribe if not subscribed", 0x000A)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, InvalidEncryptedThreadDataVersionException, "Invalid version of encrypted thread data", 0x000B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, InvalidEncryptedMessageDataVersionException, "Invalid version of encrypted message data", 0x000C)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, UnknowThreadFormatException, "Unknown Thread format", 0x000D)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, UnknowMessageFormatException, "Unknown Message format", 0x000E)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, CannotExtractThreadMessageUpdatedEventException, "Cannot extract ThreadMessageUpdatedEvent", 0x000F)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadPublicDataMismatchException, "Thread public data mismatch", 0x0010)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, MessagePublicDataMismatchException, "Message public data mismatch", 0x0011)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, ThreadDataIntegrityException, "Failed thread data integrity check", 0x0014)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, MessageDataIntegrityException, "Failed message data integrity check", 0x0015)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NotImplementedException, "Not Implemented", 0x0017)
-DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0018)
+
+#define THREAD_EXCEPTIONS(X)                                                                                           \
+    X(CannotExtractThreadCreatedEventException, "Cannot extract ThreadCreatedEvent", 0x0002)                           \
+    X(CannotExtractThreadUpdatedEventException, "Cannot extract ThreadUpdatedEvent", 0x0003)                           \
+    X(CannotExtractThreadNewMessageEventException, "Cannot extract ThreadNewMessageEvent", 0x0004)                     \
+    X(CannotExtractThreadDeletedEventException, "Cannot extract ThreadDeletedEvent", 0x0005)                           \
+    X(CannotExtractThreadDeletedMessageEventException, "Cannot extract ThreadDeletedMessageEvent", 0x0006)             \
+    X(CannotExtractThreadStatsEventException, "Cannot extract ThreadStatsEvent", 0x0008)                               \
+    X(InvalidEncryptedMessageDataVersionException, "Invalid version of encrypted message data", 0x000C)                \
+    X(UnknowThreadFormatException, "Unknown Thread format", 0x000D)                                                    \
+    X(UnknowMessageFormatException, "Unknown Message format", 0x000E)                                                  \
+    X(CannotExtractThreadMessageUpdatedEventException, "Cannot extract ThreadMessageUpdatedEvent", 0x000F)             \
+    X(MessagePublicDataMismatchException, "Message public data mismatch", 0x0011)                                      \
+    X(ThreadDataIntegrityException, "Failed thread data integrity check", 0x0014)                                      \
+    X(MessageDataIntegrityException, "Failed message data integrity check", 0x0015)
+
+#define PRIVMX_THREAD_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NAME, MSG, CODE)
+THREAD_EXCEPTIONS(PRIVMX_THREAD_DECLARE)
+#undef PRIVMX_THREAD_DECLARE
+
+// compile-time guard: codes are collected from the list above, never retyped
+#define PRIVMX_THREAD_CODE(NAME, MSG, CODE) NAME::FULL_CODE,
+static_assert(
+    privmx::endpoint::core::exceptionCodesUnique({THREAD_EXCEPTIONS(PRIVMX_THREAD_CODE)}),
+    "Duplicate exception code in thread scope"
+);
+#undef PRIVMX_THREAD_CODE
+#undef THREAD_EXCEPTIONS
 // clang-format on
+
 } // namespace thread
 } // namespace endpoint
 } // namespace privmx

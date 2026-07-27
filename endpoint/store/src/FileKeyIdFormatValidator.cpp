@@ -11,11 +11,12 @@ limitations under the License.
 
 #include "privmx/endpoint/store/FileKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint::store;
 
 void FileKeyIdFormatValidator::assertKeyIdFormat(const std::string& keyId) {
     if (!isKeyIdFormatValid(keyId)) {
-        throw IncorrectKeyIdFormatException();
+        throw privmx::endpoint::core::IncorrectKeyIdFormatException();
     }
 }
 

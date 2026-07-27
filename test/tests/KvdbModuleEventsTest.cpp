@@ -3,6 +3,7 @@
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/Events.hpp>
 #include <privmx/endpoint/kvdb/KvdbException.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 
@@ -445,12 +446,12 @@ TEST_F(KvdbEventTest, subscribeFor_query_from_other_module) {
         kvdbApi->subscribeFor({
             "kvdbs/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, kvdb::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
     EXPECT_THROW({
         kvdbApi->subscribeFor({
             "thread/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, kvdb::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
 }
 
 TEST_F(KvdbEventTest, subscribeFor_unsubscribeFor) {

@@ -3,6 +3,7 @@
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/Events.hpp>
 #include <privmx/endpoint/thread/ThreadException.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 
@@ -400,12 +401,12 @@ TEST_F(ThreadEventTest, subscribeFor_query_from_other_module) {
         auto tmp = threadApi->subscribeFor({
             "treads/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, thread::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
     EXPECT_THROW({
         auto tmp = threadApi->subscribeFor({
             "store/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, thread::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
 }
 
 TEST_F(ThreadEventTest, subscribeFor_unsubscribeFor) {

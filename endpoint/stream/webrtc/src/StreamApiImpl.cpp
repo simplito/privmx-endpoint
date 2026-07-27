@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 
 #include <base/portable.h>
 #include <libwebrtc.h>
@@ -312,7 +313,7 @@ MediaTrack StreamApiImpl::addTrack(
         return MediaTrack{[]([[maybe_unused]] bool enabled) { return; }};
     }
     default:
-        throw NotImplementedException();
+        throw core::NotImplementedException();
     }
 }
 
@@ -383,7 +384,7 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
         }
     } break;
     default:
-        throw NotImplementedException();
+        throw core::NotImplementedException();
     }
 }
 

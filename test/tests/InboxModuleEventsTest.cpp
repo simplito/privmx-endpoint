@@ -10,6 +10,7 @@
 #include <privmx/endpoint/inbox/Events.hpp>
 #include <privmx/endpoint/inbox/InboxException.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 
@@ -351,12 +352,12 @@ TEST_F(InboxEventTest, subscribeFor_query_from_other_module) {
         inboxApi->subscribeFor({
             "inboxes/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, inbox::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
     EXPECT_THROW({
         inboxApi->subscribeFor({
             "thread/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, inbox::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
 }
 
 TEST_F(InboxEventTest, subscribeFor_unsubscribeFor) {

@@ -58,7 +58,7 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
     case EventType::STREAM_UNSUBSCRIBE:
         return std::string(_moduleName) + "/subscribers/" + _eventTypeNames.at(eventType);
     }
-    throw NotImplementedException(_readableEventType.at(eventType));
+    throw core::NotImplementedException(_readableEventType.at(eventType));
 }
 
 std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const std::string& selectorId) {
@@ -114,12 +114,12 @@ std::vector<std::string> SubscriberImpl::transform(const std::vector<core::Subsc
 void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     for (auto& subscriptionQuery : subscriptionQueries) {
         if (subscriptionQuery.selectors().size() != 1) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
         if (subscriptionQuery.channelPath().size() < 2 ||
             subscriptionQuery.channelPath().size() > 4 ||
             subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName)) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
     }
 }
