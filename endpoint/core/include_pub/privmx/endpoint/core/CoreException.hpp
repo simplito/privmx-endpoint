@@ -6,6 +6,7 @@
 #define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                                  \
     class NAME : public privmx::endpoint::core::Exception {                                                            \
     public:                                                                                                            \
+        static constexpr unsigned int SCOPE_CODE = (CODE);                                                             \
         NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
         NAME(const std::string& description)                                                                           \
             : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16), description) {}                       \
@@ -22,6 +23,7 @@
 #define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                                  \
     class NAME : public BASE_SCOPED {                                                                                  \
     public:                                                                                                            \
+        static constexpr unsigned int FULL_CODE = (BASE_SCOPED::SCOPE_CODE << 16) | (CODE);                            \
         NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
         NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}             \
         void rethrow() const override;                                                                                 \
@@ -33,59 +35,81 @@
 namespace privmx {
 namespace endpoint {
 namespace core {
-
+// clang-format off
 #define ENDPOINT_CORE_EXCEPTION_CODE 0x00010000
 #define ENDPOINT_CORE_API_EXCEPTION_CODE 0x00020000
-// clang-format off
+
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointCoreException, "Unknown endpoint core exception", "Core", 0x0001)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NoUserEntryForGivenKeyIdException, "No user entry for given key id", 0x0001)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidParamsException, "Invalid params", 0x0002)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidNumberOfParamsException, "Invalid number of params", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnsupportedTypeException, "Unsupported type", 0x0004)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NoHandleFoundException, "No handle found", 0x0005)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidDataSignatureException, "Invalid data signature", 0x0007)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnsupportedSerializerBinaryFormatException, "Unsupported serializer binary format option", 0x0009)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NotImplementedException, "Not Implemented", 0x000A)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidMethodException, "Invalid method", 0x000B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidArgumentTypeException, "Invalid argument type", 0x000C)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidBackendRequestModeException, "Invalid BackendRequest mode", 0x000D)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationFailureException, "User verification failure", 0x000E)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UserVerificationMethodUnhandledException, "UserVerifierInterface.verify() thrown an exception. Implementation of the UserVerifierInterface should provide adequate error handling.", 0x000F)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedEncryptionKeyException, "Malformed encryption key", 0x0010)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownEncryptionKeyVersionException, "Unknown encryption key", 0x0011)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyContainerValidationException, "Encryption key container validation error", 0x0012)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectDuplicatedException, "Duplicated data integrity object", 0x0013)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedDataIntegrityObjectException, "Malformed data integrity object", 0x0014)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidDataIntegrityObjectChecksumException, "Invalid data integrity object checksum", 0x0015)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectMismatchEncKeyException, "User key does not match with author public key in data integrity object", 0x0016)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, DataIntegrityObjectInvalidSignatureException, "Invalid data integrity object signature", 0x0017)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, KeyProviderRequestCompletedException, "KeyProvider request completed", 0x0018)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MalformedVerifierResponseException, "Malformed verifier response", 0x0019)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleEncryptionKeyException, "Module's enc key with given keyId does not exist.", 0x0020)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, ModulePublicDataMismatchException, "Module public data mismatch", 0x0021)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidEncryptedModuleDataVersionException, "Invalid version of encrypted module data", 0x0022)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, UnknownModuleFormatException, "Unknown module format", 0x0023)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00024)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, InvalidSingletonsHolderStateException, "Invalid Singletons Holder state", 0x00025)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, MissingBridgeIdentityException, "Missing Bridge Identity", 0x00026)
-DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, EncryptionKeyValidationException, "Encryption key validation error", 0x0027)
+
+#define CORE_EXCEPTIONS(X)                                                                                            \
+    X(InvalidParamsException, "Invalid params", 0x0002)                                                               \
+    X(InvalidNumberOfParamsException, "Invalid number of params", 0x0003)                                             \
+    X(UnsupportedTypeException, "Unsupported type", 0x0004)                                                           \
+    X(NoHandleFoundException, "No handle found", 0x0005)                                                              \
+    X(InvalidDataSignatureException, "Invalid data signature", 0x0007)                                                \
+    X(UnsupportedSerializerBinaryFormatException, "Unsupported serializer binary format option", 0x0009)              \
+    X(NotImplementedException, "Not Implemented", 0x000A)                                                             \
+    X(InvalidMethodException, "Invalid method", 0x000B)                                                               \
+    X(InvalidArgumentTypeException, "Invalid argument type", 0x000C)                                                  \
+    X(InvalidBackendRequestModeException, "Invalid BackendRequest mode", 0x000D)                                      \
+    X(UserVerificationFailureException, "User verification failure", 0x000E)                                          \
+    X(UserVerificationMethodUnhandledException, "UserVerifierInterface.verify() thrown an exception. Implementation of the UserVerifierInterface should provide adequate error handling.", 0x000F) \
+    X(MalformedEncryptionKeyException, "Malformed encryption key", 0x0010)                                            \
+    X(UnknownEncryptionKeyVersionException, "Unknown encryption key", 0x0011)                                         \
+    X(EncryptionKeyContainerValidationException, "Encryption key container validation error", 0x0012)                 \
+    X(DataIntegrityObjectDuplicatedException, "Duplicated data integrity object", 0x0013)                             \
+    X(MalformedDataIntegrityObjectException, "Malformed data integrity object", 0x0014)                               \
+    X(InvalidDataIntegrityObjectChecksumException, "Invalid data integrity object checksum", 0x0015)                  \
+    X(DataIntegrityObjectMismatchEncKeyException, "User key does not match with author public key in data integrity object", 0x0016) \
+    X(DataIntegrityObjectInvalidSignatureException, "Invalid data integrity object signature", 0x0017)                \
+    X(KeyProviderRequestCompletedException, "KeyProvider request completed", 0x0018)                                  \
+    X(MalformedVerifierResponseException, "Malformed verifier response", 0x0019)                                      \
+    X(UnknownModuleEncryptionKeyException, "Module's enc key with given keyId does not exist.", 0x0020)               \
+    X(ModulePublicDataMismatchException, "Module public data mismatch", 0x0021)                                       \
+    X(InvalidEncryptedModuleDataVersionException, "Invalid version of encrypted module data", 0x0022)                 \
+    X(InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00024)                                        \
+    X(InvalidSingletonsHolderStateException, "Invalid Singletons Holder state", 0x00025)                              \
+    X(EncryptionKeyValidationException, "Encryption key validation error", 0x0027)                                    \
+    X(IncorrectKeyIdFormatException, "Incorrect key id format", 0x0028)
+
+#define PRIVMX_CORE_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NAME, MSG, CODE)
+CORE_EXCEPTIONS(PRIVMX_CORE_DECLARE)
+#undef PRIVMX_CORE_DECLARE
 
 DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointConnectionException, "Unknown endpoint connection exception", "Connection", 0x0002)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotInitializedException, "Endpoint not initialized", 0x0001)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibPlatformDisconnectedEventException, "Cannot extract LibPlatformDisconnectedEvent", 0x0002)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibConnectedEventException, "Cannot extract LibConnectedEvent", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibDisconnectedEventException, "Cannot extract LibDisconnectedEvent", 0x0004)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataBiggerThanDeclaredException, "Data bigger than declared", 0x0005)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataSmallerThanDeclaredException, "Data smaller than declared", 0x0006)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, DataDifferentThanDeclaredException, "Data different than declared", 0x0007)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractLibBreakEventException, "Cannot extract LibBreakEvent", 0x0008)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, ServerVersionMismatchException, "The Bridge Server and the PrivMX Endpoint library versions mismatch", 0x0009)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractCollectionChangedEventException, "Cannot extract CollectionChangedEvent", 0x000A)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserAddedEventException, "Cannot extract ContextUserAddedEvent", 0x000B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUserRemovedEventException, "Cannot extract ContextUserRemovedEvent", 0x000C)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, CannotExtractContextUsersStatusChangedEventException, "Cannot extract ContextUsersStatusChangedEvent", 0x000D)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NotConnectedException, "Endpoint is not connected or not initialized", 0x000E)
-DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, SessionExpiredException, "Endpoint session is expired", 0x000F)
+
+#define CONNECTION_EXCEPTIONS(X)                                                                                      \
+    X(NotInitializedException, "Endpoint not initialized", 0x0001)                                                    \
+    X(CannotExtractLibPlatformDisconnectedEventException, "Cannot extract LibPlatformDisconnectedEvent", 0x0002)      \
+    X(CannotExtractLibConnectedEventException, "Cannot extract LibConnectedEvent", 0x0003)                            \
+    X(CannotExtractLibDisconnectedEventException, "Cannot extract LibDisconnectedEvent", 0x0004)                      \
+    X(DataBiggerThanDeclaredException, "Data bigger than declared", 0x0005)                                           \
+    X(DataSmallerThanDeclaredException, "Data smaller than declared", 0x0006)                                         \
+    X(DataDifferentThanDeclaredException, "Data different than declared", 0x0007)                                     \
+    X(CannotExtractLibBreakEventException, "Cannot extract LibBreakEvent", 0x0008)                                    \
+    X(ServerVersionMismatchException, "The Bridge Server and the PrivMX Endpoint library versions mismatch", 0x0009)  \
+    X(CannotExtractCollectionChangedEventException, "Cannot extract CollectionChangedEvent", 0x000A)                  \
+    X(CannotExtractContextUserAddedEventException, "Cannot extract ContextUserAddedEvent", 0x000B)                    \
+    X(CannotExtractContextUserRemovedEventException, "Cannot extract ContextUserRemovedEvent", 0x000C)                \
+    X(CannotExtractContextUsersStatusChangedEventException, "Cannot extract ContextUsersStatusChangedEvent", 0x000D)  \
+    X(NotConnectedException, "Endpoint is not connected or not initialized", 0x000E)
+
+#define PRIVMX_CONNECTION_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointConnectionException, NAME, MSG, CODE)
+CONNECTION_EXCEPTIONS(PRIVMX_CONNECTION_DECLARE)
+#undef PRIVMX_CONNECTION_DECLARE
+
+// compile-time guard: codes are collected from the lists above, never retyped
+#define PRIVMX_CODE(NAME, MSG, CODE) NAME::FULL_CODE,
+static_assert(
+    privmx::endpoint::core::exceptionCodesUnique({
+        CORE_EXCEPTIONS(PRIVMX_CODE)
+        CONNECTION_EXCEPTIONS(PRIVMX_CODE)
+    }),
+    "Duplicate exception code in core scope"
+);
+#undef PRIVMX_CODE
+#undef CORE_EXCEPTIONS
+#undef CONNECTION_EXCEPTIONS
 // clang-format on
 } // namespace core
 } // namespace endpoint

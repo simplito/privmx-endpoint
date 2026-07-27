@@ -13,6 +13,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
@@ -23,7 +24,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApi StreamApi::create(core::Connection& connection, event::EventApi& _eventApi) {
+StreamApi StreamApi::create(core::Connection& connection, [[maybe_unused]] event::EventApi& _eventApi) {
     try {
         std::shared_ptr<StreamApiImpl> impl(new StreamApiImpl(connection));
         return StreamApi(impl);
@@ -41,14 +42,15 @@ std::string StreamApi::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& emptyRoomTtl
 ) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        return _impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+        return _impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -125,6 +127,17 @@ std::vector<StreamInfo> StreamApi::listStreams(const std::string& streamRoomId) 
     }
 }
 
+std::vector<StreamSubscriber> StreamApi::listStreamRoomParticipants(const std::string& streamRoomId) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->listStreamRoomParticipants(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void StreamApi::joinStreamRoom(const std::string& streamRoomId) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
@@ -141,28 +154,6 @@ void StreamApi::leaveStreamRoom(const std::string& streamRoomId) {
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
         return _impl->leaveStreamRoom(streamRoomId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void StreamApi::enableStreamRoomRecording(const std::string& streamRoomId) {
-    validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return _impl->enableStreamRoomRecording(streamRoomId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-std::vector<stream::RecordingEncKey> StreamApi::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    validateEndpoint();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return _impl->getStreamRoomRecordingKeys(streamRoomId);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -272,8 +263,7 @@ SubscriberStreamHandle StreamApi::createSubscriberStream(
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     try {
-        return _impl->createSubscriberStream(
-streamRoomId, subscriptions);
+        return _impl->createSubscriberStream(streamRoomId, subscriptions);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -374,5 +364,5 @@ void StreamApi::sendData(const StreamHandle& streamHandle, core::Buffer data) {
 
 void StreamApi::validateEndpoint() {
     if (!_impl)
-        throw NotInitializedException();
+        throw core::NotInitializedException();
 }

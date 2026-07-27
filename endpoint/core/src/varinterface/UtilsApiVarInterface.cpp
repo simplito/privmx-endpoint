@@ -128,7 +128,7 @@ Poco::Dynamic::Var UtilsVarInterface::rtrim(const Poco::Dynamic::Var& args) {
 Poco::Dynamic::Var UtilsVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
-        throw core::InvalidMethodException();
+        throw core::InvalidMethodException("method=" + std::to_string((int64_t)method));
     }
     return (*this.*(it->second))(args);
 }

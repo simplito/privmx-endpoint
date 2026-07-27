@@ -11,19 +11,23 @@ const std::map<EventSelectorType, std::string> SubscriberImpl::_selectorTypeName
     {EventSelectorType::STREAM_ID, "itemId"}
 };
 const std::map<EventType, std::string> SubscriberImpl::_eventTypeNames = {
-    {EventType::STREAMROOM_CREATE, "create"},  {EventType::STREAMROOM_UPDATE, "update"},
-    {EventType::STREAMROOM_DELETE, "delete"},  {EventType::STREAM_JOIN, "join"},
-    {EventType::STREAM_LEAVE, "leave"},        {EventType::STREAM_PUBLISH, "publish"},
-    {EventType::STREAM_UNPUBLISH, "unpublish"}
+    {EventType::STREAMROOM_CREATE, "create"},       {EventType::STREAMROOM_UPDATE, "update"},
+    {EventType::STREAMROOM_DELETE, "delete"},       {EventType::STREAMROOM_JOIN, "join"},
+    {EventType::STREAMROOM_LEAVE, "leave"},         {EventType::STREAM_PUBLISH, "publish"},
+    {EventType::STREAM_UNPUBLISH, "unpublish"},     {EventType::STREAM_SUBSCRIBE, "subscribe"},
+    {EventType::STREAM_UNSUBSCRIBE, "unsubscribe"}, {EventType::STREAM_UPDATE, "update"}
 };
 const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTypeAllowedSelectorTypes = {
     {EventType::STREAMROOM_CREATE, {EventSelectorType::CONTEXT_ID}},
     {EventType::STREAMROOM_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
     {EventType::STREAMROOM_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
-    {EventType::STREAM_JOIN, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
-    {EventType::STREAM_LEAVE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
+    {EventType::STREAMROOM_JOIN, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
+    {EventType::STREAMROOM_LEAVE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
     {EventType::STREAM_PUBLISH, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
-    {EventType::STREAM_UNPUBLISH, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}}
+    {EventType::STREAM_UNPUBLISH, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
+    {EventType::STREAM_SUBSCRIBE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
+    {EventType::STREAM_UNSUBSCRIBE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}},
+    {EventType::STREAM_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::STREAMROOM_ID}}
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorType = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
@@ -31,10 +35,11 @@ const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelector
     {EventSelectorType::STREAM_ID, "STREAM_ID"}
 };
 const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
-    {EventType::STREAMROOM_CREATE, "STREAMROOM_CREATE"}, {EventType::STREAMROOM_UPDATE, "STREAMROOM_UPDATE"},
-    {EventType::STREAMROOM_DELETE, "STREAMROOM_DELETE"}, {EventType::STREAM_JOIN, "STREAM_JOIN"},
-    {EventType::STREAM_LEAVE, "STREAM_LEAVE"},           {EventType::STREAM_PUBLISH, "STREAM_PUBLISH"},
-    {EventType::STREAM_UNPUBLISH, "STREAM_UNPUBLISH"}
+    {EventType::STREAMROOM_CREATE, "STREAMROOM_CREATE"},   {EventType::STREAMROOM_UPDATE, "STREAMROOM_UPDATE"},
+    {EventType::STREAMROOM_DELETE, "STREAMROOM_DELETE"},   {EventType::STREAMROOM_JOIN, "STREAMROOM_JOIN"},
+    {EventType::STREAMROOM_LEAVE, "STREAMROOM_LEAVE"},     {EventType::STREAM_PUBLISH, "STREAM_PUBLISH"},
+    {EventType::STREAM_UNPUBLISH, "STREAM_UNPUBLISH"},     {EventType::STREAM_SUBSCRIBE, "STREAM_SUBSCRIBE"},
+    {EventType::STREAM_UNSUBSCRIBE, "STREAM_UNSUBSCRIBE"}, {EventType::STREAM_UPDATE, "STREAM_UPDATE"}
 };
 
 std::string SubscriberImpl::getChannel(EventType eventType) {
@@ -42,14 +47,18 @@ std::string SubscriberImpl::getChannel(EventType eventType) {
     case EventType::STREAMROOM_CREATE:
     case EventType::STREAMROOM_UPDATE:
     case EventType::STREAMROOM_DELETE:
+    case EventType::STREAMROOM_JOIN:
+    case EventType::STREAMROOM_LEAVE:
         return std::string(_moduleName) + "/" + _eventTypeNames.at(eventType);
-    case EventType::STREAM_JOIN:
-    case EventType::STREAM_LEAVE:
     case EventType::STREAM_PUBLISH:
     case EventType::STREAM_UNPUBLISH:
+    case EventType::STREAM_UPDATE:
         return std::string(_moduleName) + "/" + std::string(_itemName) + "/" + _eventTypeNames.at(eventType);
+    case EventType::STREAM_SUBSCRIBE:
+    case EventType::STREAM_UNSUBSCRIBE:
+        return std::string(_moduleName) + "/subscribers/" + _eventTypeNames.at(eventType);
     }
-    throw NotImplementedException(_readableEventType.at(eventType));
+    throw core::NotImplementedException(_readableEventType.at(eventType));
 }
 
 std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const std::string& selectorId) {
@@ -58,7 +67,7 @@ std::string SubscriberImpl::getSelector(EventSelectorType selectorType, const st
 
 std::string SubscriberImpl::getInternalEventsSubscriptionQuery(const std::optional<std::string>& streamRoomId) {
     return std::string(_moduleName) +
-        "/internal" +
+        "/internal/reoffer" +
         (streamRoomId.has_value() ? getSelector(EventSelectorType::STREAMROOM_ID, streamRoomId.value()) : "");
 }
 
@@ -105,12 +114,12 @@ std::vector<std::string> SubscriberImpl::transform(const std::vector<core::Subsc
 void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     for (auto& subscriptionQuery : subscriptionQueries) {
         if (subscriptionQuery.selectors().size() != 1) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
         if (subscriptionQuery.channelPath().size() < 2 ||
-            subscriptionQuery.channelPath().size() > 3 ||
+            subscriptionQuery.channelPath().size() > 4 ||
             subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName)) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
     }
 }

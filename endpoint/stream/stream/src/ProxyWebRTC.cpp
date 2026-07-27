@@ -61,19 +61,14 @@ void ProxyWebRTC::updateSessionId(
     );
 }
 
-void ProxyWebRTC::closeAll(
-    const std::string& streamRoomId
-) {
-    if (_webRTCInterface.closeCallback == nullptr) {
-        throw NullCallbackException("CloseCallback");
+void ProxyWebRTC::closeAll(const std::string& streamRoomId) {
+    if (_webRTCInterface.closeAllCallback == nullptr) {
+        throw NullCallbackException("CloseAllCallback");
     }
     _webRTCInterface.closeAllCallback(_webRTCInterface.ctx, streamRoomId.c_str());
 }
 
-void ProxyWebRTC::close(
-    const std::string& streamRoomId,
-    const std::string& connectionType
-) {
+void ProxyWebRTC::close(const std::string& streamRoomId, const std::string& connectionType) {
     if (_webRTCInterface.closeCallback == nullptr) {
         throw NullCallbackException("CloseCallback");
     }

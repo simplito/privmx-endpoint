@@ -56,6 +56,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl,
         const std::string& type = STREAM_TYPE_FILTER_FLAG
     );
 
@@ -85,8 +86,6 @@ public:
         std::shared_ptr<WebRTCInterface> webRtc
     ); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     // Publisher stream part
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
@@ -102,10 +101,9 @@ public:
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void removeSubscriberStream(
-        const SubscriberStreamHandle& subscriptionHandle
-    );
+    void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
 
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(
@@ -136,6 +134,7 @@ private:
     struct SubscriptionData {
         std::optional<int64_t> sessionId;
         std::optional<SubscriberStreamHandle> streamHandle;
+        std::vector<StreamSubscription> subscriptions;
     };
     struct StreamRoomData {
         StreamRoomData(
@@ -162,6 +161,9 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
+    static std::vector<server::StreamSubscription> mapSubscriptions(
+        const std::vector<StreamSubscription>& subscriptions
+    );
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc

@@ -1,0 +1,20 @@
+name: Lint (clang-format)
+
+on:
+  pull_request:
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format 20
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-20
+
+      - name: Run clang-format check
+        run: |
+          ./scripts/clang-format.sh --dry-run --Werror

@@ -46,7 +46,10 @@ public:
         std::shared_ptr<StreamApiLow> apiLow
     );
     ~WebRTCImpl();
-    std::string createOfferAndSetLocalDescription(const std::string& streamRoomId, const std::string& connectionType) override;
+    std::string createOfferAndSetLocalDescription(
+        const std::string& streamRoomId,
+        const std::string& connectionType
+    ) override;
     std::string createAnswerAndSetDescriptions(
         const std::string& streamRoomId,
         const std::string& sdp,
@@ -135,6 +138,7 @@ private:
     std::shared_ptr<StreamApiLow> _apiLow;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;
+    privmx::utils::ThreadSaveMap<std::string, std::vector<Key>> _roomKeys;
 };
 
 } // namespace stream

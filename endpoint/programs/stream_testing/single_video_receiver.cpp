@@ -223,8 +223,8 @@ int main(int argc, char** argv) {
             streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_DELETE, stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_PUBLISH,    stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
             streamApi.buildSubscriptionQuery(stream::EventType::STREAM_UNPUBLISH,  stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
-            streamApi.buildSubscriptionQuery(stream::EventType::STREAM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_JOIN,       stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
+            streamApi.buildSubscriptionQuery(stream::EventType::STREAMROOM_LEAVE,      stream::EventSelectorType::STREAMROOM_ID, streamRoomId),
         });
         std::vector<stream::StreamSubscription> streamsId;
         {
@@ -251,20 +251,17 @@ int main(int argc, char** argv) {
                 if(core::Events::isLibBreakEvent(eventHolder)) return;
                 if(stream::Events::isStreamUpdatedEvent(eventHolder)) {
                     auto streamUpdatedEvent = stream::Events::extractStreamUpdatedEvent(eventHolder).data;
-                    auto streamsModified = streamUpdatedEvent.streamsModified;
+                    auto streamId = streamUpdatedEvent.streamId;
 
                     std::vector<stream::StreamSubscription> toAddstreamsId;
                     std::vector<stream::StreamSubscription> toRemovestreamsId;
-                    for(auto stream : streamsModified) {
-                        for(auto track : stream.tracks) {
-                            if(track.after.has_value()) {
-                                if(track.after.value().disabled.has_value()) {
-                                    toRemovestreamsId.push_back({stream.streamId, track.after.value().mid});
-                                } else {
-                                    toAddstreamsId.push_back({stream.streamId, track.after.value().mid});
-                                } 
+                    for(auto& pair : streamUpdatedEvent.tracksModified) {
+                        if(pair.after.has_value()) {
+                            if(pair.after.value().disabled) {
+                                toRemovestreamsId.push_back({streamId, pair.after.value().mid});
+                            } else {
+                                toAddstreamsId.push_back({streamId, pair.after.value().mid});
                             }
-                            
                         }
                     }
                     if(toAddstreamsId.size() > 0 || toRemovestreamsId.size() > 0) {
