@@ -339,14 +339,7 @@ void WebRTCImpl::AddAudioTrack(
     {
         std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
         jc->peerConnection->audioTracks.insert(
-            std::make_pair(
-                id,
-                AudioTrackInfo{
-                    .track = audioTrack,
-                    .sender = sender,
-                    .frameCryptor = frameCryptor
-                }
-            )
+            std::make_pair(id, AudioTrackInfo{.track = audioTrack, .sender = sender, .frameCryptor = frameCryptor})
         );
     }
 }
