@@ -128,6 +128,27 @@ public:
     void closeSearchIndex(const int64_t indexHandle);
 
     /**
+     * Begins a SQLite transaction on the Search Index.
+     *
+     * @param indexHandle Handle of the Index to begin the transaction on
+     */
+    void beginTransaction(const int64_t indexHandle);
+
+    /**
+     * Commits the active transaction on the Search Index.
+     *
+     * @param indexHandle Handle of the Index to commit the transaction on
+     */
+    void commit(const int64_t indexHandle);
+
+    /**
+     * Rolls back the active transaction on the Search Index.
+     *
+     * @param indexHandle Handle of the Index to roll back the transaction on
+     */
+    void rollback(const int64_t indexHandle);
+
+    /**
      * Adds a new document to the Search Index.
      *
      * @param indexHandle Handle of the Index to add the document to

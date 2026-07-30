@@ -88,6 +88,10 @@ public:
 
     void closeSearchIndex(const int64_t indexHandle);
 
+    void beginTransaction(const int64_t indexHandle);
+    void commit(const int64_t indexHandle);
+    void rollback(const int64_t indexHandle);
+
     int64_t addDocument(const int64_t indexHandle, const std::string& name, const std::string& content);
 
     void updateDocument(const int64_t indexHandle, const Document& document);

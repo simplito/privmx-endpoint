@@ -217,6 +217,33 @@ core::PagingList<Document> FullTextSearch::search(const std::string& query, cons
     return {getCount(query), results};
 }
 
+void FullTextSearch::beginTransaction() {
+    char* err = nullptr;
+    if (sqlite3_exec(_db.get(), "BEGIN TRANSACTION;", nullptr, nullptr, &err) != SQLITE_OK) {
+        std::string msg = err;
+        sqlite3_free(err);
+        throw TransactionBeginException(msg);
+    }
+}
+
+void FullTextSearch::commit() {
+    char* err = nullptr;
+    if (sqlite3_exec(_db.get(), "COMMIT;", nullptr, nullptr, &err) != SQLITE_OK) {
+        std::string msg = err;
+        sqlite3_free(err);
+        throw TransactionCommitException(msg);
+    }
+}
+
+void FullTextSearch::rollback() {
+    char* err = nullptr;
+    if (sqlite3_exec(_db.get(), "ROLLBACK;", nullptr, nullptr, &err) != SQLITE_OK) {
+        std::string msg = err;
+        sqlite3_free(err);
+        throw TransactionRollbackException(msg);
+    }
+}
+
 void FullTextSearch::ensureTableCreated() {
     try {
         createTable();
