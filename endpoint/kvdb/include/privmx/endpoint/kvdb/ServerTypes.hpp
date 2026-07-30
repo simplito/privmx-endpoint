@@ -108,6 +108,9 @@ JSON_STRUCT(KvdbEntryGetModel, KVDB_ENTRY_GET_MODEL_FIELDS);
 #define KVDB_ENTRY_GET_RESULT_FIELDS(F) F(kvdbEntry, KvdbEntryInfo)
 JSON_STRUCT(KvdbEntryGetResult, KVDB_ENTRY_GET_RESULT_FIELDS);
 
+#define KVDB_ENTRY_FIND_RESULT_FIELDS(F) F(kvdbEntry, std::optional<KvdbEntryInfo>)
+JSON_STRUCT(KvdbEntryFindResult, KVDB_ENTRY_FIND_RESULT_FIELDS);
+
 #define KVDB_ENTRY_SET_MODEL_FIELDS(F)                                                                                 \
     F(kvdbId, std::string)                                                                                             \
     F(kvdbEntryKey, std::string)                                                                                       \
