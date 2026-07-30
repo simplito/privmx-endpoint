@@ -29,23 +29,34 @@ class ProxyWebRTC : public WebRTCInterface {
 public:
     ProxyWebRTC(privmx_endpoint_stream_WebRTCInterface webRTCInterface);
     ~ProxyWebRTC() override = default;
-    std::string createOfferAndSetLocalDescription(const std::string& streamRoomId) override;
+    std::string createOfferAndSetLocalDescription(
+        const std::string& streamRoomId,
+        const std::string& connectionType
+    ) override;
     std::string createAnswerAndSetDescriptions(
         const std::string& streamRoomId,
         const std::string& sdp,
-        const std::string& type
+        const std::string& type,
+        const std::string& connectionType
     ) override;
     void setAnswerAndSetRemoteDescription(
         const std::string& streamRoomId,
         const std::string& sdp,
-        const std::string& type
+        const std::string& type,
+        const std::string& connectionType
     ) override;
     void updateSessionId(
         const std::string& streamRoomId,
         const int64_t sessionId,
         const std::string& connectionType
     ) override;
-    void close(const std::string& streamRoomId) override;
+    void closeAll(
+        const std::string& streamRoomId
+    ) override;
+    void close(
+        const std::string& streamRoomId,
+        const std::string& connectionType
+    ) override;
     void updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) override;
 
 private:

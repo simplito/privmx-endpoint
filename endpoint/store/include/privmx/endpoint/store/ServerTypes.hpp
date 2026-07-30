@@ -28,55 +28,20 @@ JSON_STRUCT(BufferReadRange, BUFFER_READ_RANGE_FIELDS);
     F(to, int64_t)
 JSON_STRUCT_EXT(BufferReadRangeSlice, BufferReadRange, BUFFER_READ_RANGE_SLICE_FIELDS);
 
-#define STORE_DATA_ENTRY_FIELDS(F)                                                                                     \
-    F(keyId, std::string)                                                                                              \
-    F(data, Poco::Dynamic::Var)
-JSON_STRUCT(StoreDataEntry, STORE_DATA_ENTRY_FIELDS);
+#define STORE_DATA_ENTRY_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(StoreDataEntry, core::server::ContainerDataEntry, STORE_DATA_ENTRY_EXTRA_FIELDS);
 
-#define STORE_FIELDS(F)                                                                                                \
-    F(id, std::string)                                                                                                 \
-    F(resourceId, std::optional<std::string>)                                                                          \
-    F(contextId, std::string)                                                                                          \
-    F(createDate, int64_t)                                                                                             \
-    F(creator, std::string)                                                                                            \
-    F(lastModificationDate, int64_t)                                                                                   \
-    F(lastModifier, std::string)                                                                                       \
+#define STORE_EXTRA_FIELDS(F)                                                                                          \
     F(data, std::vector<StoreDataEntry>)                                                                               \
-    F(keyId, std::string)                                                                                              \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(keys, std::vector<core::server::KeyEntry>)                                                                       \
-    F(version, int64_t)                                                                                                \
     F(lastFileDate, int64_t)                                                                                           \
-    F(files, int64_t)                                                                                                  \
-    F(type, std::optional<std::string>)                                                                                \
-    F(policy, Poco::Dynamic::Var)
-JSON_STRUCT(Store, STORE_FIELDS);
+    F(files, int64_t)
+JSON_STRUCT_EXT(Store, core::server::ContainerInfoBase, STORE_EXTRA_FIELDS);
 
-#define STORE_CREATE_MODEL_FIELDS(F)                                                                                   \
-    F(resourceId, std::string)                                                                                         \
-    F(contextId, std::string)                                                                                          \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(type, std::string)                                                                                               \
-    F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(StoreCreateModel, STORE_CREATE_MODEL_FIELDS);
+#define STORE_CREATE_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(StoreCreateModel, core::server::ContainerCreateModelBase, STORE_CREATE_MODEL_EXTRA_FIELDS);
 
-#define STORE_UPDATE_MODEL_FIELDS(F)                                                                                   \
-    F(id, std::string)                                                                                                 \
-    F(resourceId, std::string)                                                                                         \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(version, int64_t)                                                                                                \
-    F(force, bool)                                                                                                     \
-    F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(StoreUpdateModel, STORE_UPDATE_MODEL_FIELDS);
+#define STORE_UPDATE_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(StoreUpdateModel, core::server::ContainerUpdateModelBase, STORE_UPDATE_MODEL_EXTRA_FIELDS);
 
 #define FILE_THUMB_FIELDS(F) F(size, int64_t)
 JSON_STRUCT(FileThumb, FILE_THUMB_FIELDS);
@@ -165,10 +130,8 @@ JSON_STRUCT(StoreGetModel, STORE_GET_MODEL_FIELDS);
 #define STORE_GET_RESULT_FIELDS(F) F(store, Store)
 JSON_STRUCT(StoreGetResult, STORE_GET_RESULT_FIELDS);
 
-#define STORE_LIST_MODEL_FIELDS(F)                                                                                     \
-    F(contextId, std::string)                                                                                          \
-    F(type, std::optional<std::string>)
-JSON_STRUCT_EXT(StoreListModel, core::server::ListModel, STORE_LIST_MODEL_FIELDS);
+#define STORE_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(StoreListModel, core::server::ContainerListModel, STORE_LIST_MODEL_EXTRA_FIELDS);
 
 #define STORE_LIST_RESULT_FIELDS(F)                                                                                    \
     F(stores, std::vector<Store>)                                                                                      \

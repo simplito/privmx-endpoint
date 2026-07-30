@@ -56,8 +56,8 @@ std::string SearchApiImpl::createSearchIndex(
     const IndexMode mode,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    std::string indexId = _kvdbApi.getImpl()->createKvdbEx(contextId, users, managers, publicMeta, privateMeta, SEARCH_TYPE_FILTER_FLAG, policies);
-    std::string storeId = _storeApi.getImpl()->createStoreEx(contextId, users, managers, {}, {}, SEARCH_TYPE_FILTER_FLAG, policies);
+    std::string indexId = _kvdbApi.getImpl()->createKvdb(contextId, users, managers, publicMeta, privateMeta, policies, SEARCH_TYPE_FILTER_FLAG);
+    std::string storeId = _storeApi.getImpl()->createStore(contextId, users, managers, {}, {}, policies, SEARCH_TYPE_FILTER_FLAG);
     setIndexData(indexId, storeId, mode);
     return indexId;
 }
@@ -85,12 +85,12 @@ void SearchApiImpl::deleteSearchIndex(const std::string& indexId) {
 }
 
 SearchIndex SearchApiImpl::getSearchIndex(const std::string& indexId) {
-    auto kvdb = _kvdbApi.getImpl()->getKvdbEx(indexId, SEARCH_TYPE_FILTER_FLAG);
+    auto kvdb = _kvdbApi.getImpl()->getKvdb(indexId, SEARCH_TYPE_FILTER_FLAG);
     return mapSearchIndex(kvdb);
 }
 
 core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
-    auto kvdbs = _kvdbApi.getImpl()->listKvdbsEx(contextId, pagingQuery, SEARCH_TYPE_FILTER_FLAG);
+    auto kvdbs = _kvdbApi.getImpl()->listKvdbs(contextId, pagingQuery, SEARCH_TYPE_FILTER_FLAG);
     return { .totalAvailable = kvdbs.totalAvailable, mapSearchIndexes(kvdbs.readItems) };
 }
 

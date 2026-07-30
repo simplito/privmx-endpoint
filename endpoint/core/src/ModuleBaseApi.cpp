@@ -36,6 +36,22 @@ ModuleBaseApi::ModuleBaseApi(
     : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()), _userPrivKey(userPrivKey),
       _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware), _connection(connection) {}
 
+ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
+    const std::string& contextId,
+    const std::vector<UserWithPubKey>& users,
+    const std::vector<UserWithPubKey>& managers
+) {
+    auto key = _keyProvider->generateKey();
+    std::string resourceId = EndpointUtils::generateId();
+    auto dio = _connection.getImpl()->createDIO(contextId, resourceId);
+    auto secret = _keyProvider->generateSecret();
+    auto allUsers = EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    auto keyEntries = _keyProvider->prepareKeysList(
+        allUsers, key, dio, {.contextId = contextId, .resourceId = resourceId}, secret
+    );
+    return {key, resourceId, dio, secret, keyEntries};
+}
+
 DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
     std::unordered_map<std::string, DecryptedEncKeyV2> keys,
     const std::string& keyId

@@ -22,55 +22,20 @@ namespace endpoint {
 namespace thread {
 namespace server {
 
-#define THREAD_CREATE_MODEL_FIELDS(F)                                                                                  \
-    F(resourceId, std::string)                                                                                         \
-    F(contextId, std::string)                                                                                          \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(type, std::string)                                                                                               \
-    F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(ThreadCreateModel, THREAD_CREATE_MODEL_FIELDS);
+#define THREAD_CREATE_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(ThreadCreateModel, core::server::ContainerCreateModelBase, THREAD_CREATE_MODEL_EXTRA_FIELDS);
 
-#define THREAD_UPDATE_MODEL_FIELDS(F)                                                                                  \
-    F(id, std::string)                                                                                                 \
-    F(resourceId, std::string)                                                                                         \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(version, int64_t)                                                                                                \
-    F(force, bool)                                                                                                     \
-    F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(ThreadUpdateModel, THREAD_UPDATE_MODEL_FIELDS);
+#define THREAD_UPDATE_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(ThreadUpdateModel, core::server::ContainerUpdateModelBase, THREAD_UPDATE_MODEL_EXTRA_FIELDS);
 
-#define THREAD2_DATA_ENTRY_FIELDS(F)                                                                                   \
-    F(keyId, std::string)                                                                                              \
-    F(data, Poco::Dynamic::Var)
-JSON_STRUCT(Thread2DataEntry, THREAD2_DATA_ENTRY_FIELDS);
+#define THREAD2_DATA_ENTRY_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(Thread2DataEntry, core::server::ContainerDataEntry, THREAD2_DATA_ENTRY_EXTRA_FIELDS);
 
-#define THREAD_INFO_FIELDS(F)                                                                                          \
-    F(id, std::string)                                                                                                 \
-    F(resourceId, std::optional<std::string>)                                                                          \
-    F(contextId, std::string)                                                                                          \
-    F(createDate, int64_t)                                                                                             \
-    F(creator, std::string)                                                                                            \
-    F(lastModificationDate, int64_t)                                                                                   \
-    F(lastModifier, std::string)                                                                                       \
+#define THREAD_INFO_EXTRA_FIELDS(F)                                                                                    \
     F(data, std::vector<Thread2DataEntry>)                                                                             \
-    F(keyId, std::string)                                                                                              \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
-    F(keys, std::vector<core::server::KeyEntry>)                                                                       \
-    F(version, int64_t)                                                                                                \
     F(lastMsgDate, int64_t)                                                                                            \
-    F(messages, int64_t)                                                                                               \
-    F(type, std::optional<std::string>)                                                                                \
-    F(policy, Poco::Dynamic::Var)
-JSON_STRUCT(ThreadInfo, THREAD_INFO_FIELDS);
+    F(messages, int64_t)
+JSON_STRUCT_EXT(ThreadInfo, core::server::ContainerInfoBase, THREAD_INFO_EXTRA_FIELDS);
 
 #define THREAD_CREATE_RESULT_FIELDS(F) F(threadId, std::string)
 JSON_STRUCT(ThreadCreateResult, THREAD_CREATE_RESULT_FIELDS);
@@ -83,10 +48,8 @@ JSON_STRUCT(ThreadDeleteModel, THREAD_DELETE_MODEL_FIELDS);
     F(type, std::optional<std::string>)
 JSON_STRUCT(ThreadGetModel, THREAD_GET_MODEL_FIELDS);
 
-#define THREAD_LIST_MODEL_FIELDS(F)                                                                                    \
-    F(contextId, std::string)                                                                                          \
-    F(type, std::optional<std::string>)
-JSON_STRUCT_EXT(ThreadListModel, core::server::ListModel, THREAD_LIST_MODEL_FIELDS);
+#define THREAD_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(ThreadListModel, core::server::ContainerListModel, THREAD_LIST_MODEL_EXTRA_FIELDS);
 
 #define THREAD_GET_RESULT_FIELDS(F) F(thread, ThreadInfo)
 JSON_STRUCT(ThreadGetResult, THREAD_GET_RESULT_FIELDS);
