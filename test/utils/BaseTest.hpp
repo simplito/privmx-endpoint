@@ -3,6 +3,7 @@
 
 #include "./Main.hpp"
 
+#include <functional>
 #include <gtest/gtest.h>
 #include <random>
 #include <Poco/URI.h>
@@ -13,6 +14,14 @@
 
 namespace privmx {
 namespace test {
+
+class ScopeExit {
+public:
+    explicit ScopeExit(std::function<void()> callback) : _callback(std::move(callback)) {}
+    ~ScopeExit() { if(_callback) _callback(); }
+private:
+    std::function<void()> _callback;
+};
 
 enum BaseTestMode {
     online,

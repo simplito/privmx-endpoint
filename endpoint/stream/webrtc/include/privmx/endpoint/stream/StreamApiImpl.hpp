@@ -53,7 +53,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies
     );
 
     void updateStreamRoom(
@@ -65,7 +65,7 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies
     );
 
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);
@@ -102,20 +102,17 @@ public:
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
-    void unpublishStream(const StreamHandle& streamHandle);
-    void subscribeToRemoteStreams(
+    void removeStream(const StreamHandle& streamHandle);
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
-    void modifyRemoteStreamsSubscriptions(
-        const std::string& streamRoomId,
+    void updateSubscriberStream(
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void unsubscribeFromRemoteStreams(
-        const std::string& streamRoomId,
-        const std::vector<StreamSubscription>& subscriptionsToRemove
-    );
+    void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
     void addRemoteStreamListener(
         const std::string& streamRoomId,

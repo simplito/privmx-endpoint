@@ -19,7 +19,6 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -30,6 +29,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/Types.hpp"
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
+#include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 namespace privmx {
 namespace endpoint {
@@ -55,7 +55,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies,
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
         const std::string& type = STREAM_TYPE_FILTER_FLAG
     );
 
@@ -68,7 +68,7 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies
     );
     core::PagingList<StreamRoom> listStreamRooms(
         const std::string& contextId,
@@ -87,24 +87,23 @@ public:
     void leaveStreamRoom(const std::string& streamRoomId);
     void enableStreamRoomRecording(const std::string& streamRoomId);
     std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
+    // Publisher stream part
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
-
-    void unpublishStream(const StreamHandle& streamHandle);
-
-    void subscribeToRemoteStreams(
+    void removeStream(const StreamHandle& streamHandle);
+    // Subscriber stream part
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
-    void modifyRemoteStreamsSubscriptions(
-        const std::string& streamRoomId,
+    void updateSubscriberStream(
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void unsubscribeFromRemoteStreams(
-        const std::string& streamRoomId,
-        const std::vector<StreamSubscription>& subscriptionsToRemove
+    void removeSubscriberStream(
+        const SubscriberStreamHandle& subscriptionHandle
     );
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
@@ -134,6 +133,10 @@ private:
         std::optional<int64_t> sessionId;
         std::optional<StreamHandle> streamHandle;
     };
+    struct SubscriptionData {
+        std::optional<int64_t> sessionId;
+        std::optional<SubscriberStreamHandle> streamHandle;
+    };
     struct StreamRoomData {
         StreamRoomData(
             std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor,
@@ -145,7 +148,7 @@ private:
             : messageEncryptor(_messageEncryptor), streamRoomId(_streamRoomId), webRtc(_webRtc),
               subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId) {}
         std::shared_ptr<StreamData> publisherStream;
-        std::shared_ptr<StreamData> subscriberStream;
+        std::shared_ptr<SubscriptionData> subscriberStream;
         std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
@@ -159,31 +162,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
-    StreamRoom convertServerStreamRoomToLibStreamRoom(
-        server::StreamRoomInfo streamRoomInfo,
-        const core::Buffer& publicMeta = core::Buffer(),
-        const core::Buffer& privateMeta = core::Buffer(),
-        const int64_t& statusCode = 0,
-        const int64_t& schemaVersion = StreamRoomDataSchema::Version::UNKNOWN
-    );
-
-    StreamRoom convertDecryptedStreamRoomDataV5ToStreamRoom(
-        server::StreamRoomInfo streamRoomInfo,
-        const core::DecryptedModuleDataV5& streamRoomData
-    );
-    StreamRoomDataSchema::Version getStreamRoomEntryDataStructureVersion(server::StreamRoomDataEntry streamRoomEntry);
-    std::tuple<StreamRoom, core::DataIntegrityObject> decryptAndConvertStreamRoomDataToStreamRoom(
-        server::StreamRoomInfo streamRoom,
-        server::StreamRoomDataEntry streamRoomEntry,
-        const core::DecryptedEncKey& encKey
-    );
-    std::vector<StreamRoom> decryptAndConvertStreamRoomsDataToStreamRooms(
-        std::vector<server::StreamRoomInfo> streamRooms
-    );
-    StreamRoom decryptAndConvertStreamRoomDataToStreamRoom(server::StreamRoomInfo streamRoom);
-    void assertStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
-    uint32_t validateStreamRoomDataIntegrity(server::StreamRoomInfo streamRoom);
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc
@@ -214,11 +192,11 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
-    core::ModuleDataEncryptorV5 _streamRoomDataEncryptorV5;
+    std::shared_ptr<StreamRoomDataSchemaMapper> _streamRoomDataSchemaMapper;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
-    privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
+    privmx::utils::ThreadSaveMap<Handle, std::string> _handleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

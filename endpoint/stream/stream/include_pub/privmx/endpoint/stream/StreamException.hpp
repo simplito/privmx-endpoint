@@ -67,7 +67,6 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamPublished
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamJoinedEventException, "Cannot extract StreamJoinedEvent", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamUnpublishedEventException, "Cannot extract StreamUnpublishedEvent", 0x0014)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, CannotExtractStreamLeftEventException, "Cannot extract StreamLeftEvent", 0x0015)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomEncryptionKeyValidationException, "Failed StreamRoom encryption key validation", 0x0016);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnknownStreamRoomFormatException, "Unknown StreamRoom format", 0x0017);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamRoomDataIntegrityException, "Failed StreamRoom data integrity check", 0x0018);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x0019);
@@ -94,6 +93,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidMessageHeaderLengthEx
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, UnsupportedMessageFormatVersionException, "Unsupported message format version length", 0x002C);
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, AlreadyJoinedStreamRoomException, "StreamRoom already joined", 0x002D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, StreamHandleNotPublishedException, "StreamHandle not published", 0x002F)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamAlreadyCreatedException, "Subscriber stream is already created", 0x0030)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0031)
 // clang-format on
 } // namespace stream
 } // namespace endpoint

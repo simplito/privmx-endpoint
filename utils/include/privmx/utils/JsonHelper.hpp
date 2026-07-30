@@ -300,8 +300,7 @@ struct STRUCT_NAME : public BASE_NAME { \
         return STRUCT_NAME::fromJSON(privmx::utils::Utils::parseJsonObject(JSON_string)); \
     } \
     Poco::JSON::Object::Ptr toJSON() const { \
-        Poco::JSON::Object::Ptr result(new Poco::JSON::Object()); \
-        BASE_NAME::serializeFields(result); \
+        Poco::JSON::Object::Ptr result = BASE_NAME::toJSON(); \
         serializeFields(result); \
         return result; \
     } \

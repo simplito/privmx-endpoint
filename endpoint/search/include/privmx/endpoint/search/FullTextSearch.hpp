@@ -35,6 +35,9 @@ public:
     void updateDocument(const Document& document);
     void deleteDocument(const int64_t documentId);
     core::PagingList<Document> search(const std::string& query, const core::PagingQuery& pagingQuery);
+    void beginTransaction();
+    void commit();
+    void rollback();
     void ensureTableCreated();
     void createTable();
     void close();
