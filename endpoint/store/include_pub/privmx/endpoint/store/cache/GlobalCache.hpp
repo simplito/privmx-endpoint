@@ -15,6 +15,7 @@ limitations under the License.
 #include <memory>
 #include <mutex>
 
+#include <privmx/endpoint/store/cache/CacheBackendInterface.hpp>
 #include <privmx/endpoint/store/cache/CacheInterface.hpp>
 
 namespace privmx {
@@ -38,7 +39,8 @@ class GlobalCache {
 public:
     /**
      * Enables or disables the built-in in-memory cache.
-     * Must be called before Connection::connect(). Has no effect if setChunksCache() was already called.
+     * Must be called before Connection::connect(). Has no effect if setChunksCache() or
+     * setChunksCacheBackend() was already called.
      *
      * @param enabled true to use the built-in CacheInMemory (default), false to use a no-op cache
      */
@@ -46,11 +48,22 @@ public:
 
     /**
      * Sets a custom cache implementation for the entire runtime.
-     * Must be called before Connection::connect(). Takes precedence over setChunksCacheEnabled().
+     * Must be called before Connection::connect(). Takes precedence over all other setup methods.
      *
      * @param cache custom CacheInterface implementation (e.g. disk-backed or Redis cache)
      */
     static void setChunksCache(std::shared_ptr<CacheInterface> cache);
+
+    /**
+     * Configures the built-in SLRU cache backed by the given persistent backend.
+     * Must be called before Connection::connect(). Takes precedence over setChunksCacheEnabled()
+     * but is overridden by setChunksCache().
+     *
+     * @param backend  storage backend (e.g. LevelDB wrapper); GlobalCache takes shared ownership
+     * @param maxBytes maximum total size of cached data before SLRU eviction kicks in
+     */
+    static void setChunksCacheBackend(std::shared_ptr<CacheBackendInterface> backend,
+                                      size_t maxBytes = CacheBackendInterface::DEFAULT_MAX_BYTES);
 
     /**
      * Returns the shared cache instance, initializing it on the first call.
@@ -64,6 +77,8 @@ public:
 private:
     static bool _isChunksCacheEnabled;
     static std::shared_ptr<CacheInterface> _chunksCacheImpl;
+    static std::shared_ptr<CacheBackendInterface> _chunksCacheBackend;
+    static size_t _chunksCacheMaxBytes;
     static std::once_flag _chunksCacheInitFlag;
 };
 
