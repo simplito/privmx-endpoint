@@ -31,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/store/ServerApi.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/SubscriberImpl.hpp"
+#include "privmx/endpoint/store/cache/CacheInterface.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp"
 #include "privmx/endpoint/store/encryptors/store/StoreDataSchemaMapper.hpp"
 #include <privmx/endpoint/core/Connection.hpp>
@@ -108,6 +109,8 @@ public:
     core::Buffer readFromFile(const int64_t handle, const int64_t length);
     void seekInFile(const int64_t handle, const int64_t pos);
     void syncFile(const int64_t handle);
+    void flushFile(const int64_t handle);
+    uint64_t getFileSize(const int64_t handle);
     std::string closeFile(const int64_t handle);
     FileDecryptionParams getFileDecryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
@@ -159,6 +162,7 @@ private:
     core::Connection _connection;
     size_t _serverRequestChunkSize;
 
+    std::shared_ptr<CacheInterface> _chunksCache;
     FileHandleManager _fileHandleManager;
     SubscriberImpl _subscriber;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;

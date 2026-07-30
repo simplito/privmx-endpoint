@@ -21,6 +21,8 @@ limitations under the License.
 #include <privmx/endpoint/store/FileHandle.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
+#include <privmx/endpoint/store/cache/CacheScopedNamespace.hpp>
+#include <privmx/endpoint/store/cache/GlobalCache.hpp>
 #include <privmx/endpoint/thread/ServerTypes.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/ThreadApiImpl.hpp>
@@ -57,7 +59,13 @@ InboxApiImpl::InboxApiImpl(
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _connection(connection),
       _threadApi(threadApi), _storeApi(storeApi), _keyProvider(keyProvider), _serverApi(serverApi),
       _requestApi(requestApi), _host(host), _userPrivKey(userPrivKey), _eventMiddleware(eventMiddleware),
-      _handleManager(handleManager), _inboxHandleManager(InboxHandleManager(handleManager)),
+      _handleManager(handleManager), _chunksCache(
+                                         std::make_shared<store::CacheScopedNamespace>(
+                                             host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",
+                                             store::GlobalCache::getChunksCacheInstance()
+                                         )
+                                     ),
+      _inboxHandleManager(InboxHandleManager(handleManager)),
       _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
       _fileKeyIdFormatValidator(FileKeyIdFormatValidator()), _serverRequestChunkSize(serverRequestChunkSize),
       _subscriber(connection.getImpl()->getGateway(), INBOX_TYPE_FILTER_FLAG),
@@ -459,7 +467,7 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     auto decryptionParams = _storeApi.getImpl()->getFileDecryptionParams(file, fileMetaEncKey);
     PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, createInboxFileHandleForRead, file_key_extracted)
     std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
-        decryptionParams, _serverRequestChunkSize, _serverApi
+        decryptionParams, _serverRequestChunkSize, _serverApi, _chunksCache
     );
     PRIVMX_DEBUG_TIME_STOP(InboxApi, createInboxFileHandleForRead, handle_created)
     return handle->getId();
