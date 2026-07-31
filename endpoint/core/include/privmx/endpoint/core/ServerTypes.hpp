@@ -143,6 +143,67 @@ JSON_STRUCT(CollectionItemChange, COLLECTION_ITEM_CHANGE_FIELDS);
     F(items, std::vector<CollectionItemChange>)
 JSON_STRUCT(CollectionChangedEventData, COLLECTION_CHANGED_EVENT_DATA_FIELDS);
 
+#define CONTAINER_DATA_ENTRY_FIELDS(F)                                                                                 \
+    F(keyId, std::string)                                                                                              \
+    F(data, Poco::Dynamic::Var)
+JSON_STRUCT(ContainerDataEntry, CONTAINER_DATA_ENTRY_FIELDS);
+
+#define CONTAINER_LIST_MODEL_FIELDS(F)                                                                                 \
+    F(contextId, std::string)                                                                                          \
+    F(type, std::optional<std::string>)
+JSON_STRUCT_EXT(ContainerListModel, ListModel, CONTAINER_LIST_MODEL_FIELDS);
+
+#define CONTAINER_CREATE_MODEL_BASE_FIELDS(F)                                                                          \
+    F(resourceId, std::string)                                                                                         \
+    F(contextId, std::string)                                                                                          \
+    F(users, std::vector<std::string>)                                                                                 \
+    F(managers, std::vector<std::string>)                                                                              \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
+    F(type, std::string)                                                                                               \
+    F(policy, std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(ContainerCreateModelBase, CONTAINER_CREATE_MODEL_BASE_FIELDS);
+
+#define CONTAINER_UPDATE_MODEL_BASE_FIELDS(F)                                                                          \
+    F(id, std::string)                                                                                                 \
+    F(resourceId, std::string)                                                                                         \
+    F(users, std::vector<std::string>)                                                                                 \
+    F(managers, std::vector<std::string>)                                                                              \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
+    F(version, int64_t)                                                                                                \
+    F(force, bool)                                                                                                     \
+    F(policy, std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(ContainerUpdateModelBase, CONTAINER_UPDATE_MODEL_BASE_FIELDS);
+
+#define CONTAINER_INFO_PREFIX_FIELDS(F)                                                                                \
+    F(id, std::string)                                                                                                 \
+    F(resourceId, std::optional<std::string>)                                                                          \
+    F(contextId, std::string)                                                                                          \
+    F(createDate, int64_t)                                                                                             \
+    F(creator, std::string)                                                                                            \
+    F(lastModificationDate, int64_t)                                                                                   \
+    F(lastModifier, std::string)
+
+#define CONTAINER_INFO_SUFFIX_CORE_FIELDS(F)                                                                           \
+    F(keyId, std::string)                                                                                              \
+    F(users, std::vector<std::string>)                                                                                 \
+    F(managers, std::vector<std::string>)                                                                              \
+    F(keys, std::vector<core::server::KeyEntry>)                                                                       \
+    F(version, int64_t)
+
+#define CONTAINER_INFO_SUFFIX_FIELDS(F)                                                                                \
+    CONTAINER_INFO_SUFFIX_CORE_FIELDS(F)                                                                               \
+    F(type, std::optional<std::string>)                                                                                \
+    F(policy, Poco::Dynamic::Var)
+
+#define CONTAINER_INFO_BASE_FIELDS(F)                                                                                  \
+    CONTAINER_INFO_PREFIX_FIELDS(F)                                                                                    \
+    CONTAINER_INFO_SUFFIX_FIELDS(F)
+JSON_STRUCT(ContainerInfoBase, CONTAINER_INFO_BASE_FIELDS);
+
 } // namespace server
 } // namespace core
 } // namespace endpoint

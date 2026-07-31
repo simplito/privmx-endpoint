@@ -17,31 +17,29 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/store/StoreApi.hpp"
-#include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/search/Types.hpp"
+#include "privmx/endpoint/store/StoreApi.hpp"
 
 #include <sqlite3.h>
 
 #include <exception>
-#include <stdexcept>
-#include <iostream>
 #include <fstream>
+#include <iostream>
+#include <stdexcept>
 
-
-#include <Poco/Path.h>
 #include "privmx/utils/Utils.hpp"
+#include <Poco/Path.h>
 
-#include "privmx/endpoint/search/SearchTypes.hpp"
 #include "privmx/endpoint/search/LockSession.hpp"
+#include "privmx/endpoint/search/SearchTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace search {
 
-class SessionManager
-{
+class SessionManager {
 public:
     static std::shared_ptr<SessionManager> get();
     std::shared_ptr<PrivmxSession> addSession(
@@ -61,19 +59,7 @@ private:
     std::unordered_map<std::string, std::shared_ptr<PrivmxSession>> _sessions;
 };
 
-class Writer
-{
-public:
-    Writer();
-    std::tuple<int64_t, std::string> write(int64_t offset, const std::string& data);
-    int64_t size();
-
-    std::stringstream _buf;
-    int64_t _offset = -1;
-};
-
-class PrivmxFile
-{
+class PrivmxFile {
 public:
     PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path);
     void open();
@@ -91,12 +77,10 @@ public:
     std::string fileId = "";
     std::string path;
     int64_t fh = -1;
-    Writer writer;
     LockSession lockSession;
 };
 
-class PrivmxFS
-{
+class PrivmxFS {
 public:
     static std::shared_ptr<PrivmxFS> create(std::shared_ptr<PrivmxSession> session);
     PrivmxFS(const std::shared_ptr<PrivmxSession>& session);
@@ -110,8 +94,7 @@ private:
     std::shared_ptr<PrivmxSession> _session;
 };
 
-class PrivmxExtFS
-{
+class PrivmxExtFS {
 public:
     explicit PrivmxExtFS(bool blockWalAccess = false) : _blockWalAccess(blockWalAccess) {}
     std::shared_ptr<PrivmxFile> openFile(const std::string& path);
@@ -120,8 +103,7 @@ public:
     std::string fullPathname(const std::string& uri);
 
 private:
-    struct ParsedPath
-    {
+    struct ParsedPath {
         std::string sessionId;
         std::string path;
     };
@@ -134,9 +116,8 @@ private:
     bool _blockWalAccess;
 };
 
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace search
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_PRIVMXFS_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_PRIVMXFS_HPP_

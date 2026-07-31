@@ -56,8 +56,8 @@ std::string SearchApiImpl::createSearchIndex(
     const IndexMode mode,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    std::string indexId = _kvdbApi.getImpl()->createKvdbEx(contextId, users, managers, publicMeta, privateMeta, SEARCH_TYPE_FILTER_FLAG, policies);
-    std::string storeId = _storeApi.getImpl()->createStoreEx(contextId, users, managers, {}, {}, SEARCH_TYPE_FILTER_FLAG, policies);
+    std::string indexId = _kvdbApi.getImpl()->createKvdb(contextId, users, managers, publicMeta, privateMeta, policies, SEARCH_TYPE_FILTER_FLAG);
+    std::string storeId = _storeApi.getImpl()->createStore(contextId, users, managers, {}, {}, policies, SEARCH_TYPE_FILTER_FLAG);
     setIndexData(indexId, storeId, mode);
     return indexId;
 }
@@ -85,12 +85,12 @@ void SearchApiImpl::deleteSearchIndex(const std::string& indexId) {
 }
 
 SearchIndex SearchApiImpl::getSearchIndex(const std::string& indexId) {
-    auto kvdb = _kvdbApi.getImpl()->getKvdbEx(indexId, SEARCH_TYPE_FILTER_FLAG);
+    auto kvdb = _kvdbApi.getImpl()->getKvdb(indexId, SEARCH_TYPE_FILTER_FLAG);
     return mapSearchIndex(kvdb);
 }
 
 core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
-    auto kvdbs = _kvdbApi.getImpl()->listKvdbsEx(contextId, pagingQuery, SEARCH_TYPE_FILTER_FLAG);
+    auto kvdbs = _kvdbApi.getImpl()->listKvdbs(contextId, pagingQuery, SEARCH_TYPE_FILTER_FLAG);
     return { .totalAvailable = kvdbs.totalAvailable, mapSearchIndexes(kvdbs.readItems) };
 }
 
@@ -107,6 +107,21 @@ void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
     auto fts = _fts.get(indexHandle);
     fts->close();
     _fts.remove(indexHandle);
+}
+
+void SearchApiImpl::beginTransaction(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->beginTransaction();
+}
+
+void SearchApiImpl::commit(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->commit();
+}
+
+void SearchApiImpl::rollback(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->rollback();
 }
 
 int64_t SearchApiImpl::addDocument(const int64_t indexHandle, const std::string& name, const std::string& content) {

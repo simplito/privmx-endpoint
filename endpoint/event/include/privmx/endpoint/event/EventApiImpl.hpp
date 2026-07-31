@@ -5,8 +5,7 @@
 #include "privmx/endpoint/event/Events.hpp"
 #include "privmx/endpoint/event/ServerApi.hpp"
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
-#include "privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp"
-#include "privmx/endpoint/event/encryptors/event/OldEventDataDecryptor.hpp"
+#include "privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp"
 #include <atomic>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -75,7 +74,6 @@ private:
         const std::string& encryptionKey
     );
     void validateChannelName(const std::string& channelName);
-    bool verifyDecryptedEventDataV5(const DecryptedEventDataV5& data);
     core::Connection _connection;
     privmx::crypto::PrivateKey _userPrivKey;
     privfs::RpcGateway::Ptr _gateway;
@@ -86,9 +84,8 @@ private:
     EventKeyProvider _eventKeyProvider;
     SubscriberImpl _subscriber;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
-    EventDataEncryptorV5 _eventDataEncryptorV5;
-    OldEventDataDecryptor _oldEventDataDecryptor;
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
+    EventDataSchemaMapper _eventDataSchemaMapper;
 };
 
 } // namespace event

@@ -136,6 +136,17 @@ KvdbEntry KvdbApi::getEntry(const std::string& kvdbId, const std::string& key) {
     }
 }
 
+std::optional<KvdbEntry> KvdbApi::findEntry(const std::string& kvdbId, const std::string& key) {
+    auto impl = getImpl();
+    core::Validator::validateId(kvdbId, "field:kvdbId ");
+    try {
+        return impl->findEntry(kvdbId, key);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 bool KvdbApi::hasEntry(const std::string& kvdbId, const std::string& key) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");

@@ -54,7 +54,7 @@ public:
         return ret;
     }
 
-    static std::vector<std::string> usersWithPubKeyToIds(std::vector<core::UserWithPubKey>& users);
+    static std::vector<std::string> usersWithPubKeyToIds(const std::vector<core::UserWithPubKey>& users);
 
     static std::string generateId();
 

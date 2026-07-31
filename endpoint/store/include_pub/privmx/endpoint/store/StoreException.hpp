@@ -71,7 +71,6 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StorePublicDataMismatchExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FilePublicDataMismatchException, "File public data mismatch", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, WritingToFileInteruptedWrittenDataSmallerThenDeclaredException, "Writing to file interupted. Written data smaller then declared", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileDecryptionFailedException, "FileDecryptionFailed", 0x0023)
-DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StoreEncryptionKeyValidationException, "Failed Store encryption key validation", 0x0026)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, StoreDataIntegrityException, "Failed Store data integrity check", 0x0027)
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileDataIntegrityException, "Failed file data integrity check", 0x0028)
 // ------------------------------ Random/Write ------------------------------
@@ -82,6 +81,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileSyncFailedHandleCloseExce
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, FileRandomWriteInternalException, "File random write internal Exception ", 0x002C)
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x002D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, InvalidFileReadWriteHandleException, "Invalid file handle: handle is not FILE_READ_WRITE_HANDLE", 0x002E)
 // clang-format on
 
 } // namespace store

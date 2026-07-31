@@ -18,8 +18,9 @@ limitations under the License.
 namespace privmx {
 namespace endpoint {
 namespace stream {
-
-using StreamHandle = int64_t; // can be everything that is DTO
+using Handle = int64_t; // can be everything that is DTO
+using StreamHandle = Handle;
+using SubscriberStreamHandle = Handle;
 using RemoteStreamId = int64_t;
 using RemoteTrackId = std::string;
 
@@ -48,7 +49,7 @@ struct StreamRoom {
     int64_t version;
     core::Buffer publicMeta;
     core::Buffer privateMeta;
-    core::ContainerPolicy policy;
+    core::ContainerPolicyWithoutItem policy;
     int64_t statusCode;
     int64_t schemaVersion;
     bool closed;
