@@ -23,6 +23,7 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkBufferedStream.hpp"
 #include "privmx/endpoint/store/ChunkStreamer.hpp"
 #include "privmx/endpoint/store/ServerApi.hpp"
+#include "privmx/endpoint/store/cache/CacheInterface.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkReader.hpp"
@@ -70,7 +71,8 @@ public:
         int64_t id,
         const store::FileDecryptionParams& decryptionParams,
         size_t serverChunkSize,
-        std::shared_ptr<ServerApi> server
+        std::shared_ptr<ServerApi> server,
+        std::shared_ptr<CacheInterface> cache
     );
     void sync(const store::FileDecryptionParams& newDecryptionParams);
     bool isReadHandle() const override { return true; }
@@ -127,7 +129,8 @@ public:
         size_t serverChunkSize,
         const privmx::crypto::PrivateKey& userPrivKey,
         const privmx::endpoint::core::Connection& connection,
-        std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
+        std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
+        std::shared_ptr<CacheInterface> cache
     );
     bool isFileReadWriteHandle() const override { return true; }
     std::shared_ptr<IFileHandler> file;
@@ -139,7 +142,8 @@ public:
     std::shared_ptr<FileReadHandle> createFileReadHandle(
         const store::FileDecryptionParams& decryptionParams,
         size_t serverChunkSize,
-        std::shared_ptr<ServerApi> server
+        std::shared_ptr<ServerApi> server,
+        std::shared_ptr<CacheInterface> cache
     );
     std::shared_ptr<FileWriteHandle> createFileWriteHandle(
         const std::string& storeId,
@@ -159,7 +163,8 @@ public:
         size_t serverChunkSize,
         const privmx::crypto::PrivateKey& userPrivKey,
         const privmx::endpoint::core::Connection& connection,
-        std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
+        std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
+        std::shared_ptr<CacheInterface> cache
     );
     std::shared_ptr<FileReadHandle> getFileReadHandle(int64_t id);
     std::shared_ptr<FileWriteHandle> getFileWriteHandle(int64_t id);

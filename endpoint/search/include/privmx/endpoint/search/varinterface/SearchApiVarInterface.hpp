@@ -39,6 +39,9 @@ public:
         GetDocument = 11,
         ListDocuments = 12,
         SearchDocuments = 13,
+        BeginTransaction = 14,
+        Commit = 15,
+        Rollback = 16,
     };
 
     SearchApiVarInterface(core::Connection connection, store::StoreApi storeApi, kvdb::KvdbApi kvdbApi, lock::LockApi lockApi, const core::VarSerializer& serializer)
@@ -58,7 +61,9 @@ public:
     Poco::Dynamic::Var getDocument(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listDocuments(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var searchDocuments(const Poco::Dynamic::Var& args);
-
+    Poco::Dynamic::Var beginTransaction(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var commit(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rollback(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

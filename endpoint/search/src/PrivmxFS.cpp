@@ -1,8 +1,9 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
+#include <string_view>
+#include "privmx/endpoint/core/ConvertedExceptions.hpp"
+#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
-#include "privmx/endpoint/core/ConvertedExceptions.hpp"
 #include <privmx/utils/Logger.hpp>
 #include <Poco/UUIDGenerator.h>
 
@@ -26,7 +27,7 @@ std::shared_ptr<PrivmxSession> SessionManager::addSession(
     const std::string& kvdbId,
     const std::string& storeId
 ) {
-    std::shared_ptr<PrivmxSession> session = std::make_shared<PrivmxSession>(PrivmxSession {
+    std::shared_ptr<PrivmxSession> session = std::make_shared<PrivmxSession>(PrivmxSession{
         .id = generateId(),
         .connection = connection,
         .storeApi = storeApi,
@@ -46,28 +47,6 @@ std::string SessionManager::generateId() {
     return std::to_string(_lastId++);
 }
 
-Writer::Writer() : _buf(std::stringstream(std::ios::out | std::ios::binary)) {}
-
-std::tuple<int64_t, std::string> Writer::write(int64_t offset, const std::string& data) {
-    if (_offset == -1) {
-        _offset = offset;
-    }
-    if (_offset + size() != offset || size() > 128*1024*2) {
-        auto result = _buf.str();
-        auto resultOffset = _offset;
-        _buf.str(data);
-        _offset = offset;
-        return {resultOffset, result};
-    }
-    _buf.seekp(0, std::ios::end);
-    _buf.write(data.data(), data.size());
-    return {-1, {}};
-}
-
-int64_t Writer::size() {
-    return _buf.str().length();
-}
-
 PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
         : session(session), fileId(fileId), path(path),
           _uuid(Poco::UUIDGenerator::defaultGenerator().createRandom().toString()) {}
@@ -85,20 +64,14 @@ void PrivmxFile::close() {
 }
 
 privmx::endpoint::core::Buffer PrivmxFile::read(int64_t size, int64_t offset) {
-    sync();
     session->storeApi.seekInFile(fh, offset);
     auto res = session->storeApi.readFromFile(fh, size);
     return res;
 }
 
 void PrivmxFile::write(const privmx::endpoint::core::Buffer& data, int64_t offset) {
-    int64_t of;
-    std::string res;
-    tie(of, res) = writer.write(offset, data.stdString());
-    if (of != -1) {
-        session->storeApi.seekInFile(fh, of);
-        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
-    }
+    session->storeApi.seekInFile(fh, offset);
+    session->storeApi.writeToFile(fh, data);
 }
 
 void PrivmxFile::truncate(int64_t size) {
@@ -107,21 +80,11 @@ void PrivmxFile::truncate(int64_t size) {
 }
 
 void PrivmxFile::sync() {
-    int64_t of;
-    std::string res;
-    tie(of, res) = writer.write(-1, "");
-    if (of != -1) {
-        session->storeApi.seekInFile(fh, of);
-        session->storeApi.writeToFile(fh, privmx::endpoint::core::Buffer::from(res));
-    }
+    session->storeApi.flushFile(fh);
 }
 
 int64_t PrivmxFile::getFileSize() {
-    auto fileInfo = session->storeApi.getFile(fileId);
-    if(fileInfo.statusCode != 0) {
-        throw MalformedInternalFileException(); 
-    }
-    return fileInfo.size;
+    return session->storeApi.getFileSize(fh);
 }
 
 bool PrivmxFile::lock(LockLevel level) {
@@ -141,9 +104,7 @@ bool PrivmxFile::checkReservedLock() {
     return session->lockApi.checkReservedLock(fileId, _uuid);
 }
 
-std::shared_ptr<PrivmxFS> PrivmxFS::create(
-    std::shared_ptr<PrivmxSession> session
-) {
+std::shared_ptr<PrivmxFS> PrivmxFS::create(std::shared_ptr<PrivmxSession> session) {
     std::shared_ptr<PrivmxFS> res = std::make_shared<PrivmxFS>(session);
     return res;
 }
@@ -157,39 +118,34 @@ std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
 
 bool PrivmxFS::access(const std::string& path) {
     LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
-    return _session->kvdbApi.hasEntry(_session->kvdbId, path);
+    return _session->kvdbApi.findEntry(_session->kvdbId, path).has_value();
 }
 
 void PrivmxFS::deleteFile(const std::string& path) {
-    LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ",_session->kvdbId)
+    LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ", _session->kvdbId)
     privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, path);
     std::string fileId = "";
-    if(kvdbEntry.statusCode == 0) {
+    if (kvdbEntry.statusCode == 0) {
         fileId = kvdbEntry.data.stdString();
     }
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
     _session->storeApi.deleteFile(fileId);
 }
-PrivmxFS::PrivmxFS(
-    const std::shared_ptr<PrivmxSession>& session
-) : _session(session) {}
+PrivmxFS::PrivmxFS(const std::shared_ptr<PrivmxSession>& session) : _session(session) {}
 
 std::string PrivmxFS::getFileId(const std::string& name) {
     LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
-    try {
-        privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, name);
-        if(kvdbEntry.statusCode != 0) {
-           throw MalformedInternalFileIdException(); 
+    auto entry = _session->kvdbApi.findEntry(_session->kvdbId, name);
+    if (entry.has_value()) {
+        if(entry->statusCode != 0) {
+            throw MalformedInternalFileIdException();
         }
-        std::string fileId = kvdbEntry.data.stdString();
-        return fileId;
-    } catch (const privmx::endpoint::server::KvdbEntryDoesNotExistException& e) {
-        LOG_DEBUG("PrivmxFS::getFileId file not found, creating new file - ", name)
-        int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
-        std::string fileId = _session->storeApi.closeFile(fh);
-        _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
-        return fileId;
+        return entry->data.stdString();
     }
+    int64_t fh = _session->storeApi.createFile(_session->storeId, META, META, 0, true);
+    std::string fileId = _session->storeApi.closeFile(fh);
+    _session->kvdbApi.setEntry(_session->kvdbId, name, META, META, privmx::endpoint::core::Buffer::from(fileId));
+    return fileId;
 }
 
 std::shared_ptr<PrivmxFile> PrivmxExtFS::openFile(const std::string& path) {
@@ -199,6 +155,12 @@ std::shared_ptr<PrivmxFile> PrivmxExtFS::openFile(const std::string& path) {
 }
 
 bool PrivmxExtFS::access(const std::string& path) {
+    if (_blockWalAccess) {
+        std::string_view name(path);
+        if (name.size() >= 4 && name.substr(name.size() - 4) == "-wal") {
+            return false;
+        }
+    }
     auto parsed = parsePath(path);
     auto fs = getPrivmxFS(parsed);
     return fs->access(parsed.path);
@@ -219,14 +181,10 @@ PrivmxExtFS::ParsedPath PrivmxExtFS::parsePath(const std::string& path2) {
     Poco::Path path;
     path.parse(path2);
     if (path[0] == "pmx") {
-        ParsedPath parsed = ParsedPath {
-            .sessionId = path[1],
-            .path=std::string()
-        };
+        std::string sessionId = path[1];
         path.popFrontDirectory();
         path.popFrontDirectory();
-        parsed.path = path.toString();
-        return parsed;
+        return ParsedPath{.sessionId = sessionId, .path = path.toString()};
     }
     throw 0;
 }

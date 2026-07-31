@@ -74,6 +74,7 @@ public:
     core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type = KVDB_TYPE_FILTER_FLAG);
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
+    std::optional<KvdbEntry> findEntry(const std::string& kvdbId, const std::string& key);
     bool hasEntry(const std::string& kvdbId, const std::string& key);
     core::PagingList<std::string> listEntriesKeys(const std::string& kvdbId, const core::PagingQuery& pagingQuery);
     core::PagingList<KvdbEntry> listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery);

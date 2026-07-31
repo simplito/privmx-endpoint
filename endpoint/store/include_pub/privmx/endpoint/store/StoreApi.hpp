@@ -213,6 +213,33 @@ public:
     void seekInFile(const int64_t fileHandle, const int64_t position);
 
     /**
+     * Synchronize file handle data with newest data on server
+     * @param fileHandle handle to read/write file data
+     */
+    void syncFile(const int64_t fileHandle);
+
+    /**
+     * Flushes pending buffered writes to the server.
+     * 
+     * Only valid for random-write file handles.
+     * Throws InvalidFileReadWriteHandleException if the handle is not of that type.
+     *
+     * @param fileHandle handle to read/write file data
+     */
+    void flushFile(const int64_t fileHandle);
+
+    /**
+     * Gets the current file size from an open file handle.
+     * 
+     * Only valid for random-write file handles.
+     * Throws InvalidFileReadWriteHandleException if the handle is not of that type.
+     *
+     * @param fileHandle handle to read/write file data
+     * @return current file size in bytes
+     */
+    uint64_t getFileSize(const int64_t fileHandle);
+
+    /**
      * Closes the file handle.
      *
      * @param handle handle to read/write file data
@@ -245,12 +272,6 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-
-    /**
-     * Synchronize file handle data with newest data on server
-     * @param fileHandle handle to read/write file data
-     */
-    void syncFile(const int64_t fileHandle);
 
 private:
     StoreApi(const std::shared_ptr<StoreApiImpl>& impl);

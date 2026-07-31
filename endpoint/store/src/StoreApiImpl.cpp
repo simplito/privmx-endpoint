@@ -33,6 +33,8 @@ limitations under the License.
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include "privmx/endpoint/store/FileHandler.hpp"
+#include "privmx/endpoint/store/cache/CacheScopedNamespace.hpp"
+#include "privmx/endpoint/store/cache/GlobalCache.hpp"
 #include "privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp"
 #include "privmx/endpoint/store/encryptors/fileData/HmacList.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkDataProvider.hpp"
@@ -60,6 +62,12 @@ StoreApiImpl::StoreApiImpl(
       _serverApi(serverApi), _host(host), _userPrivKey(userPrivKey), _requestApi(requestApi),
       _fileDataProvider(fileDataProvider), _eventMiddleware(eventMiddleware), _handleManager(handleManager),
       _connection(connection), _serverRequestChunkSize(serverRequestChunkSize),
+      _chunksCache(
+          std::make_shared<CacheScopedNamespace>(
+              host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",
+              GlobalCache::getChunksCacheInstance()
+          )
+      ),
 
       _fileHandleManager(FileHandleManager(handleManager, "Store")),
       _subscriber(connection.getImpl()->getGateway(), STORE_TYPE_FILTER_FLAG),
@@ -314,7 +322,7 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
                 .fileId = file_raw.file.id,
                 .resourceId = file_raw.file.resourceId
             },
-            encryptionParams, _serverRequestChunkSize, _userPrivKey, _connection, _serverApi
+            encryptionParams, _serverRequestChunkSize, _userPrivKey, _connection, _serverApi, _chunksCache
         );
         return handle->getId();
     }
@@ -353,7 +361,7 @@ int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFile
         );
     }
     std::shared_ptr<FileReadHandle> handle = _fileHandleManager.createFileReadHandle(
-        storeFileDecryptionParams, _serverRequestChunkSize, _serverApi
+        storeFileDecryptionParams, _serverRequestChunkSize, _serverApi, _chunksCache
     );
     return handle->getId();
 }
@@ -410,6 +418,22 @@ void StoreApiImpl::syncFile(const int64_t handle) {
         _fileHandleManager.removeHandle(handle);
         throw FileSyncFailedHandleCloseException("in file read handle");
     }
+}
+
+void StoreApiImpl::flushFile(const int64_t handle) {
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
+    if (!rw_handle) {
+        throw InvalidFileReadWriteHandleException();
+    }
+    rw_handle->file->flush();
+}
+
+uint64_t StoreApiImpl::getFileSize(const int64_t handle) {
+    std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
+    if (!rw_handle) {
+        throw InvalidFileReadWriteHandleException();
+    }
+    return rw_handle->file->size();
 }
 
 std::string StoreApiImpl::closeFile(const int64_t handle) {
