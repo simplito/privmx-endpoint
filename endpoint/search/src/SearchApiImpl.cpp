@@ -11,15 +11,15 @@ limitations under the License.
 
 #include "privmx/endpoint/search/SearchApiImpl.hpp"
 #include "privmx/endpoint/search/PrivmxFS.hpp"
-#include "privmx/utils/ThreadSaveMap.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
+#include "privmx/utils/ThreadSaveMap.hpp"
 
 #include "privmx/endpoint/search/DynamicTypes.hpp"
-#include "privmx/utils/Utils.hpp"
 #include "privmx/utils/TypedObject.hpp"
+#include "privmx/utils/Utils.hpp"
 
-#include "privmx/endpoint/store/StoreApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
+#include "privmx/endpoint/store/StoreApiImpl.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
@@ -38,14 +38,16 @@ dynamic::IndexData deserializeIndexData(const core::Buffer& buf) {
 SearchApiImpl::SearchApiImpl(
         const core::Connection& connection,
         const store::StoreApi& storeApi,
-        const kvdb::KvdbApi& kvdbApi
+    const kvdb::KvdbApi& kvdbApi,
+    const lock::LockApi& lockApi
 ) {
     _connection = connection;
     _storeApi = storeApi;
     _kvdbApi = kvdbApi;
+    _lockApi = lockApi;
 }
 
-SearchApiImpl::~SearchApiImpl() { }
+SearchApiImpl::~SearchApiImpl() {}
 
 std::string SearchApiImpl::createSearchIndex(
     const std::string& contextId,
@@ -74,8 +76,12 @@ void SearchApiImpl::updateSearchIndex(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     auto data = getIndexData(indexId);
-    _kvdbApi.getImpl()->updateKvdb(indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
-    _storeApi.getImpl()->updateStore(data.storeId(), users, managers, {}, {}, version, force, forceGenerateNewKey, policies);
+    _kvdbApi.getImpl()->updateKvdb(
+        indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+    );
+    _storeApi.getImpl()->updateStore(
+        data.storeId(), users, managers, {}, {}, version, force, forceGenerateNewKey, policies
+    );
 }
 
 void SearchApiImpl::deleteSearchIndex(const std::string& indexId) {
@@ -96,7 +102,9 @@ core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(const std::string
 
 int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
     auto data = getIndexData(indexId);
-    auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, indexId, data.storeId());
+    auto session = SessionManager::get()->addSession(
+        _connection, _storeApi, _kvdbApi, _lockApi, indexId, data.storeId()
+    );
     std::string filename = "/pmx/" + session->id + "/index.db";
     auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode());
     fts->ensureTableCreated();
@@ -144,12 +152,19 @@ Document SearchApiImpl::getDocument(const int64_t indexHandle, const int64_t doc
     return fts->getDocument(documentId);
 }
 
-core::PagingList<Document> SearchApiImpl::listDocuments(const int64_t indexHandle, const core::PagingQuery& pagingQuery) {
+core::PagingList<Document> SearchApiImpl::listDocuments(
+    const int64_t indexHandle,
+    const core::PagingQuery& pagingQuery
+) {
     auto fts = _fts.get(indexHandle);
     return fts->listDocuments(pagingQuery);
 }
 
-core::PagingList<Document> SearchApiImpl::searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery) {
+core::PagingList<Document> SearchApiImpl::searchDocuments(
+    const int64_t indexHandle,
+    const std::string& searchQuery,
+    const core::PagingQuery& pagingQuery
+) {
     auto fts = _fts.get(indexHandle);
     core::PagingList<Document> result;
     return fts->search(searchQuery, pagingQuery);
@@ -168,7 +183,7 @@ void SearchApiImpl::setIndexData(const std::string& indexId, const std::string& 
 }
 
 SearchIndex SearchApiImpl::mapSearchIndex(const kvdb::Kvdb& kvdb) {
-    return SearchIndex {
+    return SearchIndex{
         .contextId = kvdb.contextId,
         .indexId = kvdb.kvdbId,
         .createDate = kvdb.createDate,

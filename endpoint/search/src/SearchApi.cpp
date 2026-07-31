@@ -9,36 +9,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/JsonSerializer.hpp>
 
+#include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/search/SearchApi.hpp"
 #include "privmx/endpoint/search/SearchApiImpl.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
-#include "privmx/endpoint/core/Validator.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
 
 SearchApi::SearchApi() {};
-SearchApi::SearchApi(const SearchApi& obj): ExtendedPointer(obj) {};
+SearchApi::SearchApi(const SearchApi& obj) : ExtendedPointer(obj) {};
 SearchApi& SearchApi::operator=(const SearchApi& obj) {
     this->ExtendedPointer::operator=(obj);
     return *this;
 };
-SearchApi::SearchApi(SearchApi&& obj): ExtendedPointer(std::move(obj)) {};
+SearchApi::SearchApi(SearchApi&& obj) : ExtendedPointer(std::move(obj)) {};
 SearchApi::~SearchApi() {}
 
-SearchApi SearchApi::create(core::Connection& connection, store::StoreApi& storeApi, kvdb::KvdbApi& kvdbApi) {
+SearchApi SearchApi::create(
+    core::Connection& connection,
+    store::StoreApi& storeApi,
+    kvdb::KvdbApi& kvdbApi,
+    lock::LockApi& lockApi
+) {
     try {
-        std::shared_ptr<SearchApiImpl> impl = std::make_shared<SearchApiImpl>(
-            connection,
-            storeApi,
-            kvdbApi
-        );
+        std::shared_ptr<SearchApiImpl> impl = std::make_shared<SearchApiImpl>(connection, storeApi, kvdbApi, lockApi);
         impl->attach(impl);
         return SearchApi(impl);
-    }  catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -84,7 +85,9 @@ void SearchApi::updateSearchIndex(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        impl->updateSearchIndex(indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+        impl->updateSearchIndex(
+            indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        );
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -113,7 +116,10 @@ SearchIndex SearchApi::getSearchIndex(const std::string& indexId) {
     }
 }
 
-core::PagingList<SearchIndex> SearchApi::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+core::PagingList<SearchIndex> SearchApi::listSearchIndexes(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery
+) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
@@ -227,7 +233,11 @@ core::PagingList<Document> SearchApi::listDocuments(const int64_t indexHandle, c
     }
 }
 
-core::PagingList<Document> SearchApi::searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery) {
+core::PagingList<Document> SearchApi::searchDocuments(
+    const int64_t indexHandle,
+    const std::string& searchQuery,
+    const core::PagingQuery& pagingQuery
+) {
     auto impl = getImpl();
     core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {

@@ -76,11 +76,17 @@ protected:
                 *connection
             )
         );
+        lockApi = std::make_shared<lock::LockApi>(
+            lock::LockApi::create(
+                *connection
+            )
+        );
         searchApi = std::make_shared<search::SearchApi>(
             search::SearchApi::create(
                 *connection,
                 *storeApi,
-                *kvdbApi
+                *kvdbApi,
+                *lockApi
             )
         );
     }
@@ -89,6 +95,7 @@ protected:
         searchApi.reset();
         kvdbApi.reset();
         storeApi.reset();
+        lockApi.reset();
         connection.reset();
     }
     void customSetUp() override {
@@ -110,11 +117,17 @@ protected:
                 *connection
             )
         );
+        lockApi = std::make_shared<lock::LockApi>(
+            lock::LockApi::create(
+                *connection
+            )
+        );
         searchApi = std::make_shared<search::SearchApi>(
             search::SearchApi::create(
                 *connection,
                 *storeApi,
-                *kvdbApi
+                *kvdbApi,
+                *lockApi
             )
         );
     }
@@ -129,6 +142,7 @@ protected:
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<store::StoreApi> storeApi;
     std::shared_ptr<kvdb::KvdbApi> kvdbApi;
+    std::shared_ptr<lock::LockApi> lockApi;
     std::shared_ptr<search::SearchApi> searchApi;
     Poco::Util::IniFileConfiguration::Ptr reader;
     core::VarSerializer _serializer = core::VarSerializer({});
@@ -918,8 +932,11 @@ TEST_F(SearchTest, openSearchIndex) {
     std::shared_ptr<kvdb::KvdbApi> kvdbApi_2 = std::make_shared<kvdb::KvdbApi>(
         kvdb::KvdbApi::create(*connection)
     );
+    std::shared_ptr<lock::LockApi> lockApi_2 = std::make_shared<lock::LockApi>(
+        lock::LockApi::create(*connection)
+    );
     std::shared_ptr<search::SearchApi> searchApi_2 = std::make_shared<search::SearchApi>(
-        search::SearchApi::create(*connection, *storeApi, *kvdbApi_2)
+        search::SearchApi::create(*connection, *storeApi, *kvdbApi_2, *lockApi_2)
     );
     int64_t indexHandle_3;
     EXPECT_NO_THROW({
