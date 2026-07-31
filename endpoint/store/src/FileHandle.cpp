@@ -90,7 +90,12 @@ FileReadHandle::FileReadHandle(
 
 void FileReadHandle::sync(const store::FileDecryptionParams& newDecryptionParams) {
     if (newDecryptionParams.sizeOnServer != _chunkEncryptor->getEncryptedFileSize(newDecryptionParams.originalSize)) {
-        throw FileCorruptedException();
+        throw FileCorruptedException(
+            "originalSize=" +
+            std::to_string(newDecryptionParams.originalSize) +
+            " sizeOnServer=" +
+            std::to_string(newDecryptionParams.sizeOnServer)
+        );
     }
     _chunkEncryptor->sync(newDecryptionParams.key, newDecryptionParams.chunkSize);
     _hashList->sync(
@@ -113,7 +118,7 @@ std::string FileReadHandle::read(uint64_t length) {
 
 void FileReadHandle::seek(uint64_t pos) {
     if (_size <= pos) {
-        throw PosOutOfBoundsException();
+        throw PosOutOfBoundsException("pos=" + std::to_string(pos) + " size=" + std::to_string(_size));
     }
     _pos = pos;
 }
@@ -280,7 +285,7 @@ std::shared_ptr<FileReadWriteHandle> FileHandleManager::createFileReadWriteHandl
 std::shared_ptr<FileReadHandle> FileHandleManager::getFileReadHandle(int64_t id) {
     std::shared_ptr<FileHandle> handle = getFileHandle(id);
     if (!handle->isReadHandle()) {
-        throw InvalidFileReadHandleException();
+        throw InvalidFileReadHandleException("file handle id=" + std::to_string(id));
     }
     return std::dynamic_pointer_cast<FileReadHandle>(handle);
 }
@@ -288,7 +293,7 @@ std::shared_ptr<FileReadHandle> FileHandleManager::getFileReadHandle(int64_t id)
 std::shared_ptr<FileWriteHandle> FileHandleManager::getFileWriteHandle(int64_t id) {
     std::shared_ptr<FileHandle> handle = getFileHandle(id);
     if (!handle->isWriteHandle()) {
-        throw InvalidFileWriteHandleException();
+        throw InvalidFileWriteHandleException("file handle id=" + std::to_string(id));
     }
     return std::dynamic_pointer_cast<FileWriteHandle>(handle);
 }
@@ -304,7 +309,7 @@ std::shared_ptr<FileReadWriteHandle> FileHandleManager::tryGetFileReadWriteHandl
 std::shared_ptr<FileHandle> FileHandleManager::getFileHandle(int64_t id) {
     auto optionalHandle = _map.get(id);
     if (!optionalHandle.has_value()) {
-        throw InvalidFileHandleException();
+        throw InvalidFileHandleException("file handle id=" + std::to_string(id));
     }
     std::shared_ptr<FileHandle> handle = optionalHandle.value();
     return handle;
@@ -313,7 +318,7 @@ std::shared_ptr<FileHandle> FileHandleManager::getFileHandle(int64_t id) {
 void FileHandleManager::removeHandle(int64_t id) {
     auto handle = _map.get(id);
     if (!handle.has_value()) {
-        throw InvalidFileHandleException();
+        throw InvalidFileHandleException("file handle id=" + std::to_string(id));
     }
     _map.erase(id);
     _handleManager->removeHandle(id);

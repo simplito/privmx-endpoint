@@ -29,7 +29,8 @@ JSON_STRUCT_EXT(StreamRoomDataEntry, core::server::ContainerDataEntry, STREAM_RO
 
 #define STREAM_ROOM_INFO_EXTRA_FIELDS(F)                                                                               \
     F(data, std::vector<StreamRoomDataEntry>)                                                                          \
-    F(closed, std::optional<bool>)
+    F(state, std::optional<std::string>)                                                                               \
+    F(emptyRoomTtl, std::optional<int64_t>)
 JSON_STRUCT_EXT(StreamRoomInfo, core::server::ContainerInfoBase, STREAM_ROOM_INFO_EXTRA_FIELDS);
 
 #define SESSION_DESCRIPTION_FIELDS(F)                                                                                  \
@@ -37,7 +38,7 @@ JSON_STRUCT_EXT(StreamRoomInfo, core::server::ContainerInfoBase, STREAM_ROOM_INF
     F(type, std::string)
 JSON_STRUCT(SessionDescription, SESSION_DESCRIPTION_FIELDS);
 
-#define STREAM_ROOM_CREATE_MODEL_EXTRA_FIELDS(F)
+#define STREAM_ROOM_CREATE_MODEL_EXTRA_FIELDS(F) F(emptyRoomTtl, std::optional<int64_t>)
 JSON_STRUCT_EXT(StreamRoomCreateModel, core::server::ContainerCreateModelBase, STREAM_ROOM_CREATE_MODEL_EXTRA_FIELDS);
 
 #define STREAM_ROOM_CREATE_RESULT_FIELDS(F) F(streamRoomId, std::string)
@@ -90,21 +91,11 @@ JSON_STRUCT(StreamUpdateModel, STREAM_UPDATE_MODEL_FIELDS);
     F(streamTrackId, std::optional<std::string>)
 JSON_STRUCT(StreamSubscription, STREAM_SUBSCRIPTION_FIELDS);
 
-#define STREAMS_SUBSCRIBE_MODEL_FIELDS(F)                                                                              \
-    F(streamRoomId, std::string)                                                                                       \
-    F(subscriptionsToAdd, std::vector<StreamSubscription>)
-JSON_STRUCT(StreamsSubscribeModel, STREAMS_SUBSCRIBE_MODEL_FIELDS);
-
-#define STREAMS_MODIFY_SUBSCRIPTIONS_MODEL_FIELDS(F)                                                                   \
+#define STREAM_UPDATE_REMOTE_SUBSCRIPTIONS_MODEL_FIELDS(F)                                                             \
     F(streamRoomId, std::string)                                                                                       \
     F(subscriptionsToAdd, std::vector<StreamSubscription>)                                                             \
     F(subscriptionsToRemove, std::vector<StreamSubscription>)
-JSON_STRUCT(StreamsModifySubscriptionsModel, STREAMS_MODIFY_SUBSCRIPTIONS_MODEL_FIELDS);
-
-#define STREAMS_UNSUBSCRIBE_MODEL_FIELDS(F)                                                                            \
-    F(streamRoomId, std::string)                                                                                       \
-    F(subscriptionsToRemove, std::vector<StreamSubscription>)
-JSON_STRUCT(StreamsUnsubscribeModel, STREAMS_UNSUBSCRIBE_MODEL_FIELDS);
+JSON_STRUCT(StreamUpdateRemoteSubscriptionsModel, STREAM_UPDATE_REMOTE_SUBSCRIPTIONS_MODEL_FIELDS);
 
 #define STREAMS_SUBSCRIBE_RESULT_FIELDS(F)                                                                             \
     F(offer, std::optional<SessionDescription>)                                                                        \
@@ -117,9 +108,6 @@ JSON_STRUCT(StreamRoomJoinModel, STREAM_ROOM_JOIN_MODEL_FIELDS);
 #define STREAM_ROOM_LEAVE_MODEL_FIELDS(F) F(streamRoomId, std::string)
 JSON_STRUCT(StreamRoomLeaveModel, STREAM_ROOM_LEAVE_MODEL_FIELDS);
 
-#define STREAM_ROOM_RECORDING_MODEL_FIELDS(F) F(streamRoomId, std::string)
-JSON_STRUCT(StreamRoomRecordingModel, STREAM_ROOM_RECORDING_MODEL_FIELDS);
-
 #define STREAM_LIST_MODEL_FIELDS(F) F(streamRoomId, std::string)
 JSON_STRUCT(StreamListModel, STREAM_LIST_MODEL_FIELDS);
 
@@ -127,21 +115,19 @@ JSON_STRUCT(StreamListModel, STREAM_LIST_MODEL_FIELDS);
     F(type, std::string)                                                                                               \
     F(mindex, int64_t)                                                                                                 \
     F(mid, std::string)                                                                                                \
-    F(disabled, std::optional<bool>)                                                                                   \
+    F(disabled, bool)                                                                                                  \
     F(codec, std::optional<std::string>)                                                                               \
     F(description, std::optional<std::string>)                                                                         \
-    F(moderated, std::optional<bool>)                                                                                  \
-    F(simulcast, std::optional<bool>)                                                                                  \
-    F(talking, std::optional<bool>)
+    F(moderated, bool)                                                                                                 \
+    F(simulcast, bool)
 JSON_STRUCT(StreamTrackInfo, STREAM_TRACK_INFO_FIELDS);
 
 #define STREAM_INFO_FIELDS(F)                                                                                          \
     F(id, int64_t)                                                                                                     \
     F(userId, std::string)                                                                                             \
     F(metadata, std::optional<Poco::Dynamic::Var>)                                                                     \
-    F(dummy, std::optional<bool>)                                                                                      \
-    F(tracks, std::vector<StreamTrackInfo>)                                                                            \
-    F(talking, std::optional<bool>)
+    F(dummy, bool)                                                                                                     \
+    F(tracks, std::vector<StreamTrackInfo>)
 JSON_STRUCT(StreamInfo, STREAM_INFO_FIELDS);
 
 #define STREAM_PUBLISHED_EVENT_DATA_FIELDS(F)                                                                          \
@@ -162,15 +148,12 @@ JSON_STRUCT(StreamTrackModification, STREAM_TRACK_MODIFICATION_FIELDS);
 
 #define STREAM_UPDATED_EVENT_DATA_FIELDS(F)                                                                            \
     F(streamRoomId, std::string)                                                                                       \
-    F(streamsAdded, std::vector<StreamInfo>)                                                                           \
-    F(streamsRemoved, std::vector<StreamInfo>)                                                                         \
-    F(streamsModified, std::vector<StreamTrackModification>)
+    F(streamId, int64_t)                                                                                               \
+    F(userId, std::string)                                                                                             \
+    F(tracksAdded, std::vector<StreamTrackInfo>)                                                                       \
+    F(tracksRemoved, std::vector<StreamTrackInfo>)                                                                     \
+    F(tracksModified, std::vector<StreamTrackModificationPair>)
 JSON_STRUCT(StreamUpdatedEventData, STREAM_UPDATED_EVENT_DATA_FIELDS);
-
-#define NEW_STREAMS_FIELDS(F)                                                                                          \
-    F(room, std::string)                                                                                               \
-    F(streams, std::vector<StreamInfo>)
-JSON_STRUCT(NewStreams, NEW_STREAMS_FIELDS);
 
 #define STREAM_SET_NEW_OFFER_MODEL_FIELDS(F)                                                                           \
     F(offer, SessionDescription)                                                                                       \
@@ -228,22 +211,21 @@ JSON_STRUCT(StreamPublishResult, STREAM_PUBLISH_RESULT_FIELDS);
     F(type, std::optional<std::string>)
 JSON_STRUCT(StreamRoomDeletedEventData, STREAM_ROOM_DELETED_EVENT_DATA_FIELDS);
 
-#define STREAM_EVENT_DATA_FIELDS(F)                                                                                    \
+#define STREAM_ROOM_PARTICIPANT_EVENT_DATA_FIELDS(F)                                                                   \
     F(streamRoomId, std::string)                                                                                       \
-    F(streamIds, std::vector<int64_t>)                                                                                 \
     F(userId, std::string)
-JSON_STRUCT(StreamEventData, STREAM_EVENT_DATA_FIELDS);
+JSON_STRUCT(StreamRoomParticipantEventData, STREAM_ROOM_PARTICIPANT_EVENT_DATA_FIELDS);
 
 #define STREAM_UNPUBLISHED_EVENT_DATA_FIELDS(F)                                                                        \
     F(streamRoomId, std::string)                                                                                       \
     F(streamId, int64_t)
 JSON_STRUCT(StreamUnpublishedEventData, STREAM_UNPUBLISHED_EVENT_DATA_FIELDS);
 
-#define STREAM_LEFT_EVENT_DATA_FIELDS(F)                                                                               \
+#define STREAM_SUBSCRIPTION_EVENT_DATA_FIELDS(F)                                                                       \
     F(streamRoomId, std::string)                                                                                       \
-    F(streamId, int64_t)                                                                                               \
-    F(userId, std::string)
-JSON_STRUCT(StreamLeftEventData, STREAM_LEFT_EVENT_DATA_FIELDS);
+    F(userId, std::string)                                                                                             \
+    F(subscriptions, std::vector<StreamSubscription>)
+JSON_STRUCT(StreamSubscriptionEventData, STREAM_SUBSCRIPTION_EVENT_DATA_FIELDS);
 
 #define JANUS_EVENT_DATA_FIELDS(F)                                                                                     \
     F(janus, std::string)                                                                                              \
@@ -286,25 +268,22 @@ JSON_STRUCT_EXT(JanusPluginEvent, JanusEventData, JANUS_PLUGIN_EVENT_FIELDS);
 #define STREAM_LIST_RESULT_FIELDS(F) F(list, std::vector<StreamInfo>)
 JSON_STRUCT(StreamListResult, STREAM_LIST_RESULT_FIELDS);
 
-#define UPDATED_STREAM_DATA_FIELDS(F)                                                                                  \
-    F(active, bool)                                                                                                    \
-    F(type, std::string)                                                                                               \
-    F(codec, std::optional<std::string>)                                                                               \
-    F(feed_id, std::optional<int64_t>)                                                                                 \
-    F(feed_mid, std::optional<std::string>)                                                                            \
-    F(feed_display, std::optional<std::string>)                                                                        \
-    F(mindex, int64_t)                                                                                                 \
-    F(mid, std::string)                                                                                                \
-    F(send, bool)                                                                                                      \
-    F(ready, bool)
-JSON_STRUCT(UpdatedStreamData, UPDATED_STREAM_DATA_FIELDS);
-
-#define STREAMS_UPDATED_DATA_FIELDS(F)                                                                                 \
-    F(room, std::string)                                                                                               \
-    F(sessionId, int64_t)                                                                                              \
-    F(streams, std::vector<UpdatedStreamData>)                                                                         \
+#define STREAM_REOFFER_EVENT_DATA_FIELDS(F)                                                                            \
+    F(streamRoomId, std::string)                                                                                       \
     F(jsep, std::optional<JanusJSEP>)
-JSON_STRUCT(StreamsUpdatedData, STREAMS_UPDATED_DATA_FIELDS);
+JSON_STRUCT(StreamReofferEventData, STREAM_REOFFER_EVENT_DATA_FIELDS);
+
+#define STREAM_ROOM_LIST_PARTICIPANTS_MODEL_FIELDS(F) F(streamRoomId, std::string)
+JSON_STRUCT(StreamRoomListParticipantsModel, STREAM_ROOM_LIST_PARTICIPANTS_MODEL_FIELDS);
+
+#define STREAM_SUBSCRIBER_FIELDS(F)                                                                                    \
+    F(userId, std::string)                                                                                             \
+    F(subscriptions, std::vector<StreamSubscription>)                                                                  \
+    F(publishedStream, std::optional<StreamInfo>)
+JSON_STRUCT(StreamSubscriber, STREAM_SUBSCRIBER_FIELDS);
+
+#define STREAM_ROOM_LIST_PARTICIPANTS_RESULT_FIELDS(F) F(list, std::vector<StreamSubscriber>)
+JSON_STRUCT(StreamRoomListParticipantsResult, STREAM_ROOM_LIST_PARTICIPANTS_RESULT_FIELDS);
 
 } // namespace server
 } // namespace stream

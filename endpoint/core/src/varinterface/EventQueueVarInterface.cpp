@@ -52,7 +52,7 @@ Poco::Dynamic::Var EventQueueVarInterface::emitBreakEvent(const Poco::Dynamic::V
 Poco::Dynamic::Var EventQueueVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
-        throw InvalidMethodException();
+        throw InvalidMethodException("method=" + std::to_string((int64_t)method));
     }
     return (*this.*(it->second))(args);
 }

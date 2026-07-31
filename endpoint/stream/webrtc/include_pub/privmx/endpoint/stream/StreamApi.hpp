@@ -58,6 +58,8 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param policies Stream Room's policies (pass std::nullopt to use defaults)
+     * @param emptyRoomTtl grace period (ms) the room stays open after the last participant leaves before being
+     * closed; 0 closes it immediately (pass std::nullopt to use the server default)
      *
      * @return created Stream Room ID
      */
@@ -67,7 +69,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl = std::nullopt
     );
 
     /**
@@ -161,6 +164,14 @@ public:
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
 
     /**
+     * Gets a list of participants in given Stream Room.
+     *
+     * @param streamRoomId ID of the Stream Room
+     * @return list of StreamSubscriber structs describing current participants
+     */
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
+
+    /**
      * Joins a Stream Room.
      * This is required before calling createStream/publishStream and subscribing to remote streams in the room.
      *
@@ -174,21 +185,6 @@ public:
      * @param streamRoomId ID of the Stream Room to leave
      */
     void leaveStreamRoom(const std::string& streamRoomId);
-
-    /**
-     * Enables server-side recording for the Stream Room.
-     *
-     * @param streamRoomId ID of the Stream Room
-     */
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-
-    /**
-     * Gets encryption keys used for Stream Room recordings.
-     *
-     * @param streamRoomId ID of the Stream Room
-     * @return list of recording encryption keys
-     */
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
 
     /**
      * Creates a local Stream handle for publishing media in given Stream Room.

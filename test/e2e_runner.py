@@ -8,8 +8,10 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -207,10 +209,18 @@ def load_bridge_dataset(dataset_path: str, bridge_container_name: str) -> None:
     if not full_path.exists():
         return
 
-    require_command_success(
-        ["docker", "cp", str(full_path), f"{bridge_container_name}:/work/privmx-bridge"],
-        action="Loading bridge dataset",
-    )
+    staging_dir = Path(tempfile.mkdtemp(prefix="privmx_e2e_storage_"))
+    try:
+        staged_storage = staging_dir / "storage"
+        shutil.copytree(full_path, staged_storage)
+        for entry in (staged_storage, *staged_storage.rglob("*")):
+            os.chmod(entry, 0o777)
+        require_command_success(
+            ["docker", "cp", str(staged_storage), f"{bridge_container_name}:/work/privmx-bridge"],
+            action="Loading bridge dataset",
+        )
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int = 30) -> None:
@@ -362,7 +372,7 @@ def list_tests(test_file_path: str, passthrough_args: Sequence[str]) -> list[str
 
 def pre_test(index: int, dataset_dir_path: str, test_name: str) -> BridgeInfo:
     log(f"[PRE-TEST] {test_name}")
-    bridge_info = create_bridge_docker(index, "simplito/privmx-bridge:latest")
+    bridge_info = create_bridge_docker(index, "hub.simplito.com/privmx/privmx-bridge:dev")
     try:
         prepare_bridge_context(bridge_info, dataset_dir_path)
         return bridge_info

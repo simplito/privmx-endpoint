@@ -14,6 +14,8 @@ limitations under the License.
 
 #include <Poco/URI.h>
 
+#include <algorithm>
+
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -61,10 +63,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(
         std::bind(&StreamApiLowImpl::processDisconnectedEvent, this)
     );
-    //
-    auto internalSubscriptionQuery{_subscriber.getInternalEventsSubscriptionQuery()};
-    auto result = _subscriber.subscribeFor({internalSubscriptionQuery}, true);
-    _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, result);
 }
 
 StreamApiLowImpl::~StreamApiLowImpl() {
@@ -104,7 +102,10 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
     return result;
 }
 
-void StreamApiLowImpl::onNotificationEvent(const std::string& _type, const core::NotificationEvent& _notification) {
+void StreamApiLowImpl::onNotificationEvent(
+    [[maybe_unused]] const std::string& _type,
+    const core::NotificationEvent& _notification
+) {
     _guardedExecutor->exec([&, _notification]() { return processNotificationEvent(_notification); });
 }
 
@@ -164,37 +165,31 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamPublished" || type == "streamJoined" || type == "streamUpdated") {
-        if (type == "streamPublished") {
-            auto raw = server::StreamPublishedEventData::fromJSON(data);
-            auto eventData = Mapper::mapToPublishedStreamData(raw);
-            auto event = core::EventBuilder::buildEvent<StreamPublishedEvent, StreamPublishedEventData>(
-                "stream", eventData, notification
-            );
-            _eventMiddleware->emitApiEvent(event);
-        } else if (type == "streamUpdated") {
-            auto raw = server::StreamUpdatedEventData::fromJSON(data);
-            auto eventData = Mapper::mapToStreamUpdatedEventData(raw);
-            auto event = core::EventBuilder::buildEvent<StreamUpdatedEvent, StreamUpdatedEventData>(
-                "stream", eventData, notification
-            );
-            _eventMiddleware->emitApiEvent(event);
-        } else if (type == "streamJoined") {
-            auto raw = server::StreamEventData::fromJSON(data);
-            auto eventData = StreamEventData{
-                .streamRoomId = raw.streamRoomId, .streamIds = raw.streamIds, .userId = raw.userId
-            };
-            auto event = core::EventBuilder::buildEvent<StreamJoinedEvent, StreamEventData>(
-                "stream", eventData, notification
-            );
-            _eventMiddleware->emitApiEvent(event);
-        }
-    } else if (type == "streamLeft") {
-        auto raw = server::StreamLeftEventData::fromJSON(data);
-        auto eventData = StreamLeftEventData{
-            .streamRoomId = raw.streamRoomId, .streamId = raw.streamId, .userId = raw.userId
-        };
-        auto event = core::EventBuilder::buildEvent<StreamLeftEvent, StreamLeftEventData>(
+    } else if (type == "streamPublished") {
+        auto raw = server::StreamPublishedEventData::fromJSON(data);
+        auto eventData = Mapper::mapToPublishedStreamData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamPublishedEvent, StreamPublishedEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamUpdated") {
+        auto raw = server::StreamUpdatedEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamUpdatedEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamUpdatedEvent, StreamUpdatedEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomJoined") {
+        auto raw = server::StreamRoomParticipantEventData::fromJSON(data);
+        auto eventData = StreamRoomParticipantEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
+        auto event = core::EventBuilder::buildEvent<StreamRoomJoinedEvent, StreamRoomParticipantEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomLeft") {
+        auto raw = server::StreamRoomParticipantEventData::fromJSON(data);
+        auto eventData = StreamRoomParticipantEventData{.streamRoomId = raw.streamRoomId, .userId = raw.userId};
+        auto event = core::EventBuilder::buildEvent<StreamRoomLeftEvent, StreamRoomParticipantEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
@@ -205,40 +200,36 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "remoteStreamsChanged") {
-        auto raw = server::NewStreams::fromJSON(data);
-        auto eventData = Mapper::mapToNewStreams(raw);
-        auto event = core::EventBuilder::buildEvent<RemoteStreamsChangedEvent, NewStreams>(
+    } else if (type == "streamSubscribed") {
+        auto raw = server::StreamSubscriptionEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamSubscriptionEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamSubscribedEvent, StreamSubscriptionEventData>(
             "stream", eventData, notification
         );
         _eventMiddleware->emitApiEvent(event);
-    } else if (type == "streamsUpdated") {
-        auto raw = server::StreamsUpdatedData::fromJSON(data);
-
-        // update offer via WebRtcInterface
-        auto streamRoomId{raw.room};
+    } else if (type == "streamUnsubscribed") {
+        auto raw = server::StreamSubscriptionEventData::fromJSON(data);
+        auto eventData = Mapper::mapToStreamSubscriptionEventData(raw);
+        auto event = core::EventBuilder::buildEvent<StreamUnsubscribedEvent, StreamSubscriptionEventData>(
+            "stream", eventData, notification
+        );
+        _eventMiddleware->emitApiEvent(event);
+    } else if (type == "streamRoomReoffer") {
+        auto raw = server::StreamReofferEventData::fromJSON(data);
+        auto streamRoomId{raw.streamRoomId};
         auto roomOpt = _streamRoomMap.get(streamRoomId);
-        std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> room;
         if (!roomOpt.has_value()) {
-            throw CannotGetRoomOnStreamsUpdateEventException();
-        } else {
-            room = roomOpt.value();
+            LOG_ERROR("streamRoomReoffer: unknown streamRoomId '", streamRoomId, "'");
+            return;
         }
-        if (raw.jsep.has_value()) {
+        auto room = roomOpt.value();
+        if (raw.jsep.has_value() && room->subscriberStream && room->subscriberStream->sessionId.has_value()) {
             std::string sdp = room->webRtc->createAnswerAndSetDescriptions(
                 room->streamRoomId, raw.jsep.value().sdp, raw.jsep.value().type, "subscriber"
             );
             SdpWithTypeModel sdpModel = {.sdp = sdp, .type = "answer"};
-
-            acceptOfferOnReconfigure(raw.sessionId, sdpModel);
+            acceptOfferOnReconfigure(room->subscriberStream->sessionId.value(), sdpModel);
         }
-
-        // pass event to client
-        auto eventData = Mapper::mapToStreamsUpdatedData(raw);
-        auto event = core::EventBuilder::buildEvent<StreamsUpdatedEvent, StreamsUpdatedData>(
-            "stream", eventData, notification
-        );
-        _eventMiddleware->emitApiEvent(event);
     } else {
         LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
     }
@@ -293,6 +284,18 @@ std::vector<StreamInfo> StreamApiLowImpl::listStreams(const std::string& streamR
     return result;
 }
 
+std::vector<StreamSubscriber> StreamApiLowImpl::listStreamRoomParticipants(const std::string& streamRoomId) {
+    server::StreamRoomListParticipantsModel model;
+    model.streamRoomId = streamRoomId;
+    auto list = _serverApi->streamRoomListParticipants(model).list;
+    std::vector<StreamSubscriber> result;
+    result.reserve(list.size());
+    for (const auto& subscriber : list) {
+        result.push_back(Mapper::mapToStreamSubscriber(subscriber));
+    }
+    return result;
+}
+
 void StreamApiLowImpl::joinStreamRoom(const std::string& streamRoomId, std::shared_ptr<WebRTCInterface> webRtc) {
     createEmptyStreamRoomData(streamRoomId, webRtc);
     server::StreamRoomJoinModel model;
@@ -321,36 +324,6 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     server::StreamRoomLeaveModel model;
     model.streamRoomId = streamRoomId;
     _serverApi->streamRoomLeave(model);
-}
-
-void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
-    server::StreamRoomRecordingModel model;
-    LOG_DEBUG("CPP-layer: call  enableStreamRoomRecording() with streamRoomId (on WS): ", streamRoomId);
-    model.streamRoomId = streamRoomId;
-    _serverApi->streamRoomEnableRecording(model);
-}
-
-std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    server::StreamRoomGetModel params;
-    params.id = streamRoomId;
-    params.type = STREAM_TYPE_FILTER_FLAG;
-    auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto statusCode = _streamRoomDataSchemaMapper->validateDataIntegrity(streamRoom);
-    if (statusCode != 0) {
-        throw StreamRoomDataIntegrityException();
-    }
-    auto keys = extractStreamRoomKeys(streamRoom);
-    std::vector<stream::RecordingEncKey> recordingEncKeys;
-    for (const auto& key : keys) {
-        if (key.second.statusCode == 0) {
-            recordingEncKeys.push_back(
-                stream::RecordingEncKey{
-                    core::Buffer::from(key.second.id), core::Buffer::from(deriveStreamEncryptionKey(key.second))
-                }
-            );
-        }
-    }
-    return recordingEncKeys;
 }
 
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
@@ -448,6 +421,21 @@ void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
+std::vector<server::StreamSubscription> StreamApiLowImpl::mapSubscriptions(
+    const std::vector<StreamSubscription>& subscriptions
+) {
+    std::vector<server::StreamSubscription> items;
+    for (size_t i = 0; i < subscriptions.size(); i++) {
+        server::StreamSubscription item;
+        item.streamId = subscriptions[i].streamId;
+        if (subscriptions[i].streamTrackId) {
+            item.streamTrackId = subscriptions[i].streamTrackId.value();
+        }
+        items.push_back(item);
+    }
+    return items;
+}
+
 SubscriberStreamHandle StreamApiLowImpl::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
@@ -457,27 +445,17 @@ SubscriberStreamHandle StreamApiLowImpl::createSubscriberStream(
     if (room->subscriberStream) {
         throw SubscriberStreamAlreadyCreatedException();
     }
-    server::StreamsSubscribeModel model;
+    server::StreamUpdateRemoteSubscriptionsModel model;
     model.streamRoomId = streamRoomId;
-
-    std::vector<server::StreamSubscription> itemsToAdd;
-    for (size_t i = 0; i < subscriptions.size(); i++) {
-        server::StreamSubscription item;
-        item.streamId = subscriptions[i].streamId;
-        if (subscriptions[i].streamTrackId) {
-            item.streamTrackId = subscriptions[i].streamTrackId.value();
-        }
-        itemsToAdd.push_back(item);
-    }
-    model.subscriptionsToAdd = itemsToAdd;
-    auto subscribeResult = _serverApi->streamsSubscribeToRemote(model);
+    model.subscriptionsToAdd = mapSubscriptions(subscriptions);
+    auto subscribeResult = _serverApi->streamsUpdateRemoteSubscriptions(model);
 
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId, std::string("subscriber"));
 
-    room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{.sessionId = subscribeResult.sessionId, .streamHandle = streamHandle}
-    );
+    room->subscriberStream = std::make_shared<SubscriptionData>(SubscriptionData{
+        .sessionId = subscribeResult.sessionId, .streamHandle = streamHandle, .subscriptions = subscriptions
+    });
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (subscribeResult.offer.has_value()) {
@@ -502,39 +480,35 @@ void StreamApiLowImpl::updateSubscriberStream(
         throw SubscriberStreamHandleNotInitialized();
     }
     // Sending Request to Bridge
-    server::StreamsModifySubscriptionsModel model;
+    server::StreamUpdateRemoteSubscriptionsModel model;
     model.streamRoomId = room->streamRoomId;
-    // subscriptions to add
-    std::vector<server::StreamSubscription> itemsToAdd;
-    for (size_t i = 0; i < subscriptionsToAdd.size(); i++) {
-        server::StreamSubscription item;
-        item.streamId = subscriptionsToAdd[i].streamId;
-        if (subscriptionsToAdd[i].streamTrackId) {
-            item.streamTrackId = subscriptionsToAdd[i].streamTrackId.value();
-        }
-        itemsToAdd.push_back(item);
-    }
-    model.subscriptionsToAdd = itemsToAdd;
-    // subscriptions to remove
-    std::vector<server::StreamSubscription> itemsToRemove;
-    for (size_t i = 0; i < subscriptionsToRemove.size(); i++) {
-        server::StreamSubscription item;
-        item.streamId = subscriptionsToRemove[i].streamId;
-        if (subscriptionsToRemove[i].streamTrackId) {
-            item.streamTrackId = subscriptionsToRemove[i].streamTrackId.value();
-        }
-        itemsToRemove.push_back(item);
-    }
-    model.subscriptionsToRemove = itemsToRemove;
+    model.subscriptionsToAdd = mapSubscriptions(subscriptionsToAdd);
+    model.subscriptionsToRemove = mapSubscriptions(subscriptionsToRemove);
 
-    auto result = _serverApi->streamsModifyRemoteSubscriptions(model);
+    auto result = _serverApi->streamsUpdateRemoteSubscriptions(model);
 
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(room->streamRoomId, result.sessionId, std::string("subscriber"));
 
-    room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{.sessionId = result.sessionId, .streamHandle = StreamHandle()}
-    );
+    // recompute the effective subscription set: (current \ toRemove) + toAdd
+    auto sameSubscription = [](const StreamSubscription& a, const StreamSubscription& b) {
+        return a.streamId == b.streamId && a.streamTrackId == b.streamTrackId;
+    };
+    std::vector<StreamSubscription> subscriptions;
+    for (const auto& current : room->subscriberStream->subscriptions) {
+        bool removed = std::any_of(
+            subscriptionsToRemove.begin(), subscriptionsToRemove.end(),
+            [&](const StreamSubscription& r) { return sameSubscription(current, r); }
+        );
+        if (!removed) {
+            subscriptions.push_back(current);
+        }
+    }
+    subscriptions.insert(subscriptions.end(), subscriptionsToAdd.begin(), subscriptionsToAdd.end());
+
+    room->subscriberStream = std::make_shared<SubscriptionData>(SubscriptionData{
+        .sessionId = result.sessionId, .streamHandle = subscriptionHandle, .subscriptions = subscriptions
+    });
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (result.offer.has_value()) {
@@ -547,13 +521,16 @@ void StreamApiLowImpl::updateSubscriberStream(
     }
 }
 
-void StreamApiLowImpl::removeSubscriberStream(
-    const SubscriberStreamHandle& subscriptionHandle
-) {
+void StreamApiLowImpl::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
     auto room = getStreamRoomData(subscriptionHandle);
     if (!room->subscriberStream) {
         throw SubscriberStreamHandleNotInitialized();
     }
+    server::StreamUpdateRemoteSubscriptionsModel model;
+    model.streamRoomId = room->streamRoomId;
+    model.subscriptionsToRemove = mapSubscriptions(room->subscriberStream->subscriptions);
+    _serverApi->streamsUpdateRemoteSubscriptions(model);
+
     room->webRtc->close(room->streamRoomId, "subscriber");
     _handleToRoomId.erase(subscriptionHandle);
     room->subscriberStream.reset();
@@ -566,6 +543,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& emptyRoomTtl,
     const std::string& type
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
@@ -585,6 +563,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     if (policies.has_value()) {
         createStreamRoomModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
+    createStreamRoomModel.emptyRoomTtl = emptyRoomTtl;
     auto result = _serverApi->streamRoomCreate(createStreamRoomModel);
     return result.streamRoomId;
 }

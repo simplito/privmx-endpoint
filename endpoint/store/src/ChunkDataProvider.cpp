@@ -136,10 +136,12 @@ std::string ChunkDataProvider::requestSegment(uint32_t segmentNumber) {
     try {
         fileData = _server->storeFileRead(fileDataModel);
     } catch (const utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-            privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
+        core::Exception converted = core::ExceptionConverter::convert(e);
+        if (converted.getCode() == privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
             // STORE_FILE_VERSION_MISMATCH
-            throw store::FileVersionMismatchException();
+            store::FileVersionMismatchException ex;
+            ex.setCause(converted);
+            throw ex;
         } else {
             e.rethrow();
         }

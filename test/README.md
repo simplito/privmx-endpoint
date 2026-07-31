@@ -1,4 +1,7 @@
 # Creating dataset
+Given version of endpoint comes with working dataset in `test/test_env/create_dataset/Dataset` and ini file `test/test_env/create_dataset/ServerData.ini`
+If you changes data on server creating new data set is recommended, but also run it with older to chec backward capability
+
 To create the dataset required for testing run:
 ```bash
 ./test_env/create_dataset/main.sh

@@ -103,9 +103,12 @@ void PeerConnectionManager::closeConnection(const std::string& streamRoomId, Con
     auto jc = _connections.get(streamRoomId).value()->get(connectionType);
     jc->peerConnection->audioTracks.clear();
     jc->peerConnection->videoTracks.clear();
-    jc->peerConnection->pc->Close();
-    jc->peerConnection->observer.reset();
+    if (jc->peerConnection->pc) {
+        jc->peerConnection->pc->DeRegisterRTCPeerConnectionObserver();
+        jc->peerConnection->pc->Close();
+    }
     jc->peerConnection->pc = NULL;
+    jc->peerConnection->observer.reset();
     _connections.get(streamRoomId).value()->set(connectionType, nullptr);
 }
 

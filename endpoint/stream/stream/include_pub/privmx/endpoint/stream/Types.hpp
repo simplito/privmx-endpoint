@@ -24,12 +24,6 @@ using SubscriberStreamHandle = Handle;
 using RemoteStreamId = int64_t;
 using RemoteTrackId = std::string;
 
-/**
- * Additional stream settings.
- * Reserved for future use.
-*/
-struct Settings {};
-
 struct TurnCredentials {
     std::string url;
     std::string username;
@@ -52,7 +46,8 @@ struct StreamRoom {
     core::ContainerPolicyWithoutItem policy;
     int64_t statusCode;
     int64_t schemaVersion;
-    bool closed;
+    std::string state; // "created" | "open" | "closed"
+    int64_t emptyRoomTtl;
 };
 
 struct Stream {
@@ -74,10 +69,13 @@ enum EventType : int64_t {
     STREAMROOM_CREATE = 0,
     STREAMROOM_UPDATE = 1,
     STREAMROOM_DELETE = 2,
-    STREAM_JOIN = 4,
-    STREAM_LEAVE = 5,
-    STREAM_PUBLISH = 6,
-    STREAM_UNPUBLISH = 7,
+    STREAMROOM_JOIN = 3,
+    STREAMROOM_LEAVE = 4,
+    STREAM_PUBLISH = 5,
+    STREAM_UNPUBLISH = 6,
+    STREAM_SUBSCRIBE = 7,
+    STREAM_UNSUBSCRIBE = 8,
+    STREAM_UPDATE = 9,
 };
 
 enum EventSelectorType : int64_t {
@@ -87,39 +85,27 @@ enum EventSelectorType : int64_t {
 };
 
 struct StreamTrackInfo {
-    std::string type;                       // "audio" | "video" | "data"
-    int64_t mindex;                         // unikalny mindex strumienia
-    std::string mid;                        // unikalny mid
-    std::optional<bool> disabled;           // czy strumień jest nieaktywny
-    std::optional<std::string> codec;       // np. "opus", "vp8"
-    std::optional<std::string> description; // opis strumienia
-    std::optional<bool> moderated;          // czy zmoderowany
-    std::optional<bool> simulcast;          // czy używa simulcast
-    std::optional<bool> talking;            // czy aktywność audio
+    std::string type;
+    int64_t mindex;
+    std::string mid;
+    bool disabled;
+    std::optional<std::string> codec;
+    std::optional<std::string> description;
+    bool moderated;
+    bool simulcast;
 };
 
 struct StreamInfo {
-    int64_t id;                          // unikalny ID wydawcy
-    std::string userId;                  // nazwa użytkownika
-    std::optional<std::string> metadata; // metadane jako tekst JSON
-    std::optional<bool> dummy;           // czy to publisher-dummy
-    std::vector<StreamTrackInfo> tracks; // lista trackow
-    std::optional<bool> talking;         // deprecated
+    int64_t id;
+    std::string userId;
+    std::optional<std::string> metadata;
+    bool dummy;
+    std::vector<StreamTrackInfo> tracks;
 };
 
 struct StreamTrackModificationPair {
     std::optional<StreamTrackInfo> before;
     std::optional<StreamTrackInfo> after;
-};
-
-struct StreamTrackModification {
-    int64_t streamId;
-    std::vector<StreamTrackModificationPair> tracks;
-};
-
-struct NewStreams {
-    std::string room;
-    std::vector<StreamInfo> streams;
 };
 
 struct PublishedStreamData {
@@ -129,11 +115,40 @@ struct PublishedStreamData {
     std::string streamRoomId;
 
     /**
-     * Stream ID's
+     * Published stream info
      */
     StreamInfo stream;
 
     std::string userId;
+};
+
+struct StreamRoomParticipantEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * User ID of the member who joined or left
+     */
+    std::string userId;
+};
+
+struct StreamSubscriptionEventData {
+    /**
+     * StreamRoom ID
+     */
+    std::string streamRoomId;
+
+    /**
+     * User ID of the subscriber
+     */
+    std::string userId;
+
+    /**
+     * List of stream subscriptions
+     */
+    std::vector<StreamSubscription> subscriptions;
 };
 
 struct StreamUpdatedEventData {
@@ -142,11 +157,21 @@ struct StreamUpdatedEventData {
      */
     std::string streamRoomId;
 
-    std::vector<StreamInfo> streamsAdded;
+    /**
+     * Publisher stream ID that changed
+     */
+    int64_t streamId;
 
-    std::vector<StreamInfo> streamsRemoved;
+    /**
+     * User ID of who changed it
+     */
+    std::string userId;
 
-    std::vector<StreamTrackModification> streamsModified;
+    std::vector<StreamTrackInfo> tracksAdded;
+
+    std::vector<StreamTrackInfo> tracksRemoved;
+
+    std::vector<StreamTrackModificationPair> tracksModified;
 };
 
 struct StreamPublishResult {
@@ -154,33 +179,10 @@ struct StreamPublishResult {
     std::optional<PublishedStreamData> data;
 };
 
-struct UpdatedStreamData {
-    bool active;
-    std::string type;
-    std::optional<std::string> codec;
-    std::optional<int64_t> streamId;           // feed_id
-    std::optional<std::string> streamMid;      // feed_mid
-    std::optional<std::string> stream_display; // feed_display
-    int64_t mindex;
-    std::string mid;
-    bool send;
-    bool ready;
-};
-
-struct StreamsUpdatedDataInternal {
-    std::string room;
-    std::vector<UpdatedStreamData> streams;
-    std::optional<SdpWithTypeModel> jsep;
-};
-
-struct StreamsUpdatedData {
-    std::string room;
-    std::vector<UpdatedStreamData> streams;
-};
-
-struct RecordingEncKey {
-    core::Buffer id;
-    core::Buffer key;
+struct StreamSubscriber {
+    std::string userId;
+    std::vector<StreamSubscription> subscriptions;
+    std::optional<StreamInfo> publishedStream;
 };
 
 struct DataChannelMessage {

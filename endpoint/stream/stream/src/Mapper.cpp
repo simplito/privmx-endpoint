@@ -25,7 +25,6 @@ StreamTrackInfo Mapper::mapToStreamTrackInfo(const server::StreamTrackInfo& s) {
         .description = s.description,
         .moderated = s.moderated,
         .simulcast = s.simulcast,
-        .talking = s.talking,
     };
 }
 
@@ -42,7 +41,6 @@ StreamInfo Mapper::mapToStreamInfo(const server::StreamInfo& s) {
                                              std::nullopt,
         .dummy = s.dummy,
         .tracks = std::move(tracks),
-        .talking = s.talking,
     };
 }
 
@@ -50,30 +48,6 @@ StreamTrackModificationPair Mapper::mapToStreamTrackModificationPair(const serve
     return {
         .before = s.before.has_value() ? std::make_optional(mapToStreamTrackInfo(s.before.value())) : std::nullopt,
         .after = s.after.has_value() ? std::make_optional(mapToStreamTrackInfo(s.after.value())) : std::nullopt,
-    };
-}
-
-StreamTrackModification Mapper::mapToStreamTrackModification(const server::StreamTrackModification& s) {
-    std::vector<StreamTrackModificationPair> tracks;
-    tracks.reserve(s.tracks.size());
-    for (const auto& t : s.tracks) {
-        tracks.push_back(mapToStreamTrackModificationPair(t));
-    }
-    return {
-        .streamId = s.streamId,
-        .tracks = std::move(tracks),
-    };
-}
-
-NewStreams Mapper::mapToNewStreams(const server::NewStreams& s) {
-    std::vector<StreamInfo> streams;
-    streams.reserve(s.streams.size());
-    for (const auto& st : s.streams) {
-        streams.push_back(mapToStreamInfo(st));
-    }
-    return {
-        .room = s.room,
-        .streams = std::move(streams),
     };
 }
 
@@ -94,52 +68,56 @@ PublishedStreamData Mapper::mapToPublishedStreamData(const server::PublishedStre
 }
 
 StreamUpdatedEventData Mapper::mapToStreamUpdatedEventData(const server::StreamUpdatedEventData& s) {
-    std::vector<StreamInfo> streamsAdded;
-    streamsAdded.reserve(s.streamsAdded.size());
-    for (const auto& st : s.streamsAdded) {
-        streamsAdded.push_back(mapToStreamInfo(st));
+    std::vector<StreamTrackInfo> tracksAdded;
+    tracksAdded.reserve(s.tracksAdded.size());
+    for (const auto& t : s.tracksAdded) {
+        tracksAdded.push_back(mapToStreamTrackInfo(t));
     }
-    std::vector<StreamInfo> streamsRemoved;
-    streamsRemoved.reserve(s.streamsRemoved.size());
-    for (const auto& st : s.streamsRemoved) {
-        streamsRemoved.push_back(mapToStreamInfo(st));
+    std::vector<StreamTrackInfo> tracksRemoved;
+    tracksRemoved.reserve(s.tracksRemoved.size());
+    for (const auto& t : s.tracksRemoved) {
+        tracksRemoved.push_back(mapToStreamTrackInfo(t));
     }
-    std::vector<StreamTrackModification> streamsModified;
-    streamsModified.reserve(s.streamsModified.size());
-    for (const auto& m : s.streamsModified) {
-        streamsModified.push_back(mapToStreamTrackModification(m));
+    std::vector<StreamTrackModificationPair> tracksModified;
+    tracksModified.reserve(s.tracksModified.size());
+    for (const auto& p : s.tracksModified) {
+        tracksModified.push_back(mapToStreamTrackModificationPair(p));
     }
     return {
         .streamRoomId = s.streamRoomId,
-        .streamsAdded = std::move(streamsAdded),
-        .streamsRemoved = std::move(streamsRemoved),
-        .streamsModified = std::move(streamsModified),
+        .streamId = s.streamId,
+        .userId = s.userId,
+        .tracksAdded = std::move(tracksAdded),
+        .tracksRemoved = std::move(tracksRemoved),
+        .tracksModified = std::move(tracksModified),
     };
 }
-
-UpdatedStreamData Mapper::mapToUpdatedStreamData(const server::UpdatedStreamData& s) {
-    return {
-        .active = s.active,
-        .type = s.type,
-        .codec = s.codec,
-        .streamId = s.feed_id,
-        .streamMid = s.feed_mid,
-        .stream_display = s.feed_display,
-        .mindex = s.mindex,
-        .mid = s.mid,
-        .send = s.send,
-        .ready = s.ready,
-    };
-}
-
-StreamsUpdatedData Mapper::mapToStreamsUpdatedData(const server::StreamsUpdatedData& s) {
-    std::vector<UpdatedStreamData> streams;
-    streams.reserve(s.streams.size());
-    for (const auto& st : s.streams) {
-        streams.push_back(mapToUpdatedStreamData(st));
+StreamSubscriptionEventData Mapper::mapToStreamSubscriptionEventData(const server::StreamSubscriptionEventData& s) {
+    std::vector<StreamSubscription> subscriptions;
+    subscriptions.reserve(s.subscriptions.size());
+    for (const auto& sub : s.subscriptions) {
+        subscriptions.push_back(StreamSubscription{.streamId = sub.streamId, .streamTrackId = sub.streamTrackId});
     }
     return {
-        .room = s.room,
-        .streams = std::move(streams),
+        .streamRoomId = s.streamRoomId,
+        .userId = s.userId,
+        .subscriptions = std::move(subscriptions),
+    };
+}
+
+StreamSubscriber Mapper::mapToStreamSubscriber(const server::StreamSubscriber& s) {
+    std::vector<StreamSubscription> subscriptions;
+    subscriptions.reserve(s.subscriptions.size());
+    for (const auto& sub : s.subscriptions) {
+        subscriptions.push_back(StreamSubscription{.streamId = sub.streamId, .streamTrackId = sub.streamTrackId});
+    }
+    std::optional<StreamInfo> publishedStream;
+    if (s.publishedStream.has_value()) {
+        publishedStream = mapToStreamInfo(s.publishedStream.value());
+    }
+    return {
+        .userId = s.userId,
+        .subscriptions = std::move(subscriptions),
+        .publishedStream = std::move(publishedStream),
     };
 }

@@ -16,7 +16,7 @@ int privmx_endpoint_android_init() {
     return 1;
 }
 
-void* privmx_endpoint_android_dlopen(const char *file, int flags) {
+void* privmx_endpoint_android_dlopen(const char* file, int flags) {
     return dlopen(file, flags);
 }
 
