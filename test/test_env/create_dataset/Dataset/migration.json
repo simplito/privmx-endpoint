@@ -1,139 +1,145 @@
 [{
 	"_id": "Migration_000_Scheme",
-	"startDate": 1.77741175106E+12,
-	"endDate": 1.777411751202E+12,
+	"startDate": 1.785736215493E+12,
+	"endDate": 1.785736215605E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_049_AddCloudCollections",
-	"startDate": 1.777411751209E+12,
-	"endDate": 1.777411751392E+12,
+	"startDate": 1.78573621561E+12,
+	"endDate": 1.785736215806E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_050_AddTypeToCloudResources",
-	"startDate": 1.777411751397E+12,
-	"endDate": 1.777411751528E+12,
+	"startDate": 1.785736215813E+12,
+	"endDate": 1.78573621595E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_051_AddAclToContextUser",
-	"startDate": 1.777411751535E+12,
-	"endDate": 1.777411751544E+12,
+	"startDate": 1.785736215954E+12,
+	"endDate": 1.785736215961E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_052_ThreadTypes",
-	"startDate": 1.777411751551E+12,
-	"endDate": 1.777411751558E+12,
+	"startDate": 1.785736215965E+12,
+	"endDate": 1.785736215969E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_053_AddIndexes",
-	"startDate": 1.777411751563E+12,
-	"endDate": 1.777411751656E+12,
+	"startDate": 1.785736215972E+12,
+	"endDate": 1.785736216041E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_053_StoreTypes",
-	"startDate": 1.777411751663E+12,
-	"endDate": 1.777411751671E+12,
+	"startDate": 1.785736216046E+12,
+	"endDate": 1.78573621605E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_054_Auth",
-	"startDate": 1.777411751677E+12,
-	"endDate": 1.777411751819E+12,
+	"startDate": 1.785736216054E+12,
+	"endDate": 1.785736216247E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_055_Context",
-	"startDate": 1.777411751825E+12,
-	"endDate": 1.777411751851E+12,
+	"startDate": 1.785736216252E+12,
+	"endDate": 1.785736216286E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_056_Solution",
-	"startDate": 1.777411751856E+12,
-	"endDate": 1.777411751879E+12,
+	"startDate": 1.785736216291E+12,
+	"endDate": 1.785736216317E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_057_RenameThreadCollection",
-	"startDate": 1.777411751884E+12,
-	"endDate": 1.777411751902E+12,
+	"startDate": 1.785736216321E+12,
+	"endDate": 1.785736216342E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_058_FileUpdates",
-	"startDate": 1.777411751906E+12,
-	"endDate": 1.777411751913E+12,
+	"startDate": 1.785736216347E+12,
+	"endDate": 1.785736216356E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_059_ApiKeyScopes",
-	"startDate": 1.777411751916E+12,
-	"endDate": 1.777411751923E+12,
+	"startDate": 1.785736216359E+12,
+	"endDate": 1.785736216375E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_060_IndexesForSortableFields",
-	"startDate": 1.777411751926E+12,
-	"endDate": 1.777411752088E+12,
+	"startDate": 1.785736216383E+12,
+	"endDate": 1.785736216553E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_061_IndexesForAuthorField",
-	"startDate": 1.777411752093E+12,
-	"endDate": 1.777411752122E+12,
+	"startDate": 1.785736216559E+12,
+	"endDate": 1.785736216601E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_062_IndexesForCreateDate",
-	"startDate": 1.777411752126E+12,
-	"endDate": 1.777411752156E+12,
+	"startDate": 1.78573621661E+12,
+	"endDate": 1.785736216645E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_063_AddDataToContainers",
-	"startDate": 1.77741175216E+12,
-	"endDate": 1.777411752171E+12,
+	"startDate": 1.785736216649E+12,
+	"endDate": 1.785736216668E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_064_ResourceId",
-	"startDate": 1.777411752174E+12,
-	"endDate": 1.777411752289E+12,
+	"startDate": 1.785736216673E+12,
+	"endDate": 1.78573621681E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_065_AddKvdbCollections",
-	"startDate": 1.777411752294E+12,
-	"endDate": 1.777411752394E+12,
+	"startDate": 1.785736216815E+12,
+	"endDate": 1.785736216926E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_066_MongoStorage",
-	"startDate": 1.777411752398E+12,
-	"endDate": 1.777411752457E+12,
+	"startDate": 1.785736216932E+12,
+	"endDate": 1.785736217003E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_067_AddNotificationCollection",
-	"startDate": 1.777411752463E+12,
-	"endDate": 1.777411752507E+12,
+	"startDate": 1.785736217006E+12,
+	"endDate": 1.785736217042E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_068_KnownPublicKeysCollection",
-	"startDate": 1.777411752513E+12,
-	"endDate": 1.777411752557E+12,
+	"startDate": 1.785736217049E+12,
+	"endDate": 1.785736217101E+12,
 	"status": "SUCCESS"
 },
 {
 	"_id": "Migration_069_Indexes_for_session",
-	"startDate": 1.777411752563E+12,
-	"endDate": 1.777411752723E+12,
+	"startDate": 1.78573621711E+12,
+	"endDate": 1.785736217311E+12,
+	"status": "SUCCESS"
+},
+{
+	"_id": "Migration_070_StreamRoomState",
+	"startDate": 1.785736217321E+12,
+	"endDate": 1.785736217337E+12,
 	"status": "SUCCESS"
 }]
 

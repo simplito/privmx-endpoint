@@ -21,3 +21,4 @@ test/test_env/utils/volumes/mongo/*
 test/logs
 test/volumes
 *.log
+*.pyc
