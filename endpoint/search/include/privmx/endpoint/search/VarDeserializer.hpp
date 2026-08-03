@@ -23,13 +23,16 @@ namespace endpoint {
 namespace core {
 
 template<>
-search::IndexMode VarDeserializer::deserialize<search::IndexMode>(const Poco::Dynamic::Var& val, const std::string& name);
+search::IndexMode VarDeserializer::deserialize<search::IndexMode>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
 
 template<>
 search::Document VarDeserializer::deserialize<search::Document>(const Poco::Dynamic::Var& val, const std::string& name);
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_VARDESERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_VARDESERIALIZER_HPP_

@@ -164,7 +164,11 @@ Kvdb KvdbApiImpl::getKvdb(const std::string& kvdbId, const std::string& type) {
     return result;
 }
 
-core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type) {
+core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery,
+    const std::string& type
+) {
     PRIVMX_DEBUG_TIME_START(PlatformKvdb, listKvdbs)
     server::KvdbListModel model;
     model.contextId = contextId;
@@ -206,9 +210,7 @@ std::optional<KvdbEntry> KvdbApiImpl::findEntry(const std::string& kvdbId, const
         return std::nullopt;
     }
     return _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
-        entryOpt.value(), 
-        getEntryDecryptionKeys(entryOpt.value()), 
-        _keyProvider
+        entryOpt.value(), getEntryDecryptionKeys(entryOpt.value()), _keyProvider
     );
 }
 

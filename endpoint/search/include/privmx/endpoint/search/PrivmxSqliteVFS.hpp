@@ -22,12 +22,10 @@ namespace search {
 extern "C" {
 
 sqlite3_vfs* sqlite3_privmxvfs();
-
 }
 
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace search
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_PRIVMXSQLITEVFS_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_PRIVMXSQLITEVFS_HPP_

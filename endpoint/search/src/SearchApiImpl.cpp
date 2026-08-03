@@ -15,7 +15,6 @@ limitations under the License.
 #include "privmx/utils/ThreadSaveMap.hpp"
 
 #include "privmx/endpoint/search/DynamicTypes.hpp"
-#include "privmx/utils/TypedObject.hpp"
 #include "privmx/utils/Utils.hpp"
 
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
@@ -27,17 +26,16 @@ using namespace privmx::endpoint::search;
 const std::string SearchApiImpl::SEARCH_TYPE_FILTER_FLAG = "search";
 
 core::Buffer serializeIndexData(const dynamic::IndexData& indexData) {
-    return core::Buffer::from(privmx::utils::Utils::stringifyVar(indexData));
+    return core::Buffer::from(indexData.serialize());
 }
 
 dynamic::IndexData deserializeIndexData(const core::Buffer& buf) {
-    auto json = privmx::utils::Utils::parseJson(buf.stdString());
-    return privmx::utils::TypedObjectFactory::createObjectFromVar<dynamic::IndexData>(json);
+    return dynamic::IndexData::deserialize(buf.stdString());
 }
 
 SearchApiImpl::SearchApiImpl(
-        const core::Connection& connection,
-        const store::StoreApi& storeApi,
+    const core::Connection& connection,
+    const store::StoreApi& storeApi,
     const kvdb::KvdbApi& kvdbApi,
     const lock::LockApi& lockApi
 ) {
@@ -58,8 +56,12 @@ std::string SearchApiImpl::createSearchIndex(
     const IndexMode mode,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    std::string indexId = _kvdbApi.getImpl()->createKvdb(contextId, users, managers, publicMeta, privateMeta, policies, SEARCH_TYPE_FILTER_FLAG);
-    std::string storeId = _storeApi.getImpl()->createStore(contextId, users, managers, {}, {}, policies, SEARCH_TYPE_FILTER_FLAG);
+    std::string indexId = _kvdbApi.getImpl()->createKvdb(
+        contextId, users, managers, publicMeta, privateMeta, policies, SEARCH_TYPE_FILTER_FLAG
+    );
+    std::string storeId = _storeApi.getImpl()->createStore(
+        contextId, users, managers, {}, {}, policies, SEARCH_TYPE_FILTER_FLAG
+    );
     setIndexData(indexId, storeId, mode);
     return indexId;
 }
@@ -80,14 +82,14 @@ void SearchApiImpl::updateSearchIndex(
         indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
     );
     _storeApi.getImpl()->updateStore(
-        data.storeId(), users, managers, {}, {}, version, force, forceGenerateNewKey, policies
+        data.storeId, users, managers, {}, {}, version, force, forceGenerateNewKey, policies
     );
 }
 
 void SearchApiImpl::deleteSearchIndex(const std::string& indexId) {
     auto data = getIndexData(indexId);
     _kvdbApi.getImpl()->deleteKvdb(indexId);
-    _storeApi.getImpl()->deleteStore(data.storeId());
+    _storeApi.getImpl()->deleteStore(data.storeId);
 }
 
 SearchIndex SearchApiImpl::getSearchIndex(const std::string& indexId) {
@@ -95,18 +97,21 @@ SearchIndex SearchApiImpl::getSearchIndex(const std::string& indexId) {
     return mapSearchIndex(kvdb);
 }
 
-core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery
+) {
     auto kvdbs = _kvdbApi.getImpl()->listKvdbs(contextId, pagingQuery, SEARCH_TYPE_FILTER_FLAG);
-    return { .totalAvailable = kvdbs.totalAvailable, mapSearchIndexes(kvdbs.readItems) };
+    return {.totalAvailable = kvdbs.totalAvailable, mapSearchIndexes(kvdbs.readItems)};
 }
 
 int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
     auto data = getIndexData(indexId);
     auto session = SessionManager::get()->addSession(
-        _connection, _storeApi, _kvdbApi, _lockApi, indexId, data.storeId()
+        _connection, _storeApi, _kvdbApi, _lockApi, indexId, data.storeId
     );
     std::string filename = "/pmx/" + session->id + "/index.db";
-    auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode());
+    auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode);
     fts->ensureTableCreated();
     return _fts.add(fts);
 }
@@ -176,9 +181,7 @@ dynamic::IndexData SearchApiImpl::getIndexData(const std::string& indexId) {
 }
 
 void SearchApiImpl::setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode) {
-    auto indexData = privmx::utils::TypedObjectFactory::createNewObject<dynamic::IndexData>();
-    indexData.storeId(storeId);
-    indexData.mode(mode);
+    dynamic::IndexData indexData {.storeId=storeId, .mode=mode};
     _kvdbApi.getImpl()->setEntry(indexId, "data", {}, {}, serializeIndexData(indexData), 0);
 }
 
@@ -196,7 +199,7 @@ SearchIndex SearchApiImpl::mapSearchIndex(const kvdb::Kvdb& kvdb) {
         .publicMeta = kvdb.publicMeta,
         .privateMeta = kvdb.privateMeta,
         .policy = kvdb.policy,
-        .mode = (kvdb.statusCode == 0) ? (IndexMode)getIndexData(kvdb.kvdbId).mode() : IndexMode::UNKNOWN,
+        .mode = (kvdb.statusCode == 0) ? (IndexMode)getIndexData(kvdb.kvdbId).mode : IndexMode::UNKNOWN,
         .statusCode = kvdb.statusCode,
         .schemaVersion = kvdb.schemaVersion
     };

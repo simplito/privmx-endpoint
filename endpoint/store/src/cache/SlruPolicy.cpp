@@ -26,8 +26,10 @@ void SlruPolicy::insertHead(SegmentState& seg, const std::string& key, size_t si
     seg.totalSize += size;
 }
 
-void SlruPolicy::removeFrom(SegmentState& seg,
-                              std::unordered_map<std::string, std::list<Entry>::iterator>::iterator indexIt) {
+void SlruPolicy::removeFrom(
+    SegmentState& seg,
+    std::unordered_map<std::string, std::list<Entry>::iterator>::iterator indexIt
+) {
     seg.totalSize -= indexIt->second->size;
     seg.list.erase(indexIt->second);
     seg.index.erase(indexIt);

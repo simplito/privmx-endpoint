@@ -20,13 +20,14 @@ namespace endpoint {
 namespace store {
 
 SlruBackedCache::SlruBackedCache(CacheBackendInterface& backend, size_t maxBytes, double protectedRatio)
-        : _backend(backend), _maxBytes(maxBytes), _slru(maxBytes, protectedRatio) {
+    : _backend(backend), _maxBytes(maxBytes), _slru(maxBytes, protectedRatio) {
     loadFromBackend();
 }
 
 std::optional<core::Buffer> SlruBackedCache::get(const std::string& key) {
     auto data = _backend.get(dataKey(key));
-    if (!data) return std::nullopt;
+    if (!data)
+        return std::nullopt;
     size_t size = data->size();
     auto seg = _slru.touch(key, size);
     persistMeta(key, size, seg);
@@ -67,7 +68,8 @@ core::Buffer SlruBackedCache::encodeMeta(uint64_t seq, uint64_t size, Segment se
 }
 
 std::tuple<uint64_t, uint64_t, Segment> SlruBackedCache::decodeMeta(const core::Buffer& raw) {
-    if (raw.size() < 17) return {0, 0, Segment::Probationary};
+    if (raw.size() < 17)
+        return {0, 0, Segment::Probationary};
     uint64_t seq = 0, size = 0;
     std::memcpy(&seq, raw.data(), 8);
     std::memcpy(&size, raw.data() + 8, 8);
@@ -88,7 +90,8 @@ void SlruBackedCache::loadFromBackend() {
 
         if (_backend.get(dataKey(userKey))) {
             records.emplace_back(seq, std::move(userKey), static_cast<size_t>(size), seg);
-            if (seq > _seq) _seq = seq;
+            if (seq > _seq)
+                _seq = seq;
         } else {
             orphanedMetaKeys.push_back(it->key());
         }
@@ -115,7 +118,8 @@ void SlruBackedCache::persistMeta(const std::string& key, size_t size, Segment s
 void SlruBackedCache::evictUntilFit(size_t incomingSize) {
     while (!_slru.empty() && _slru.totalSize() + incomingSize > _maxBytes) {
         auto evicted = _slru.evictOne();
-        if (!evicted) break;
+        if (!evicted)
+            break;
         _backend.del(dataKey(evicted->key));
         _backend.del(metaKey(evicted->key));
     }

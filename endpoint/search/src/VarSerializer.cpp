@@ -18,10 +18,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-
-
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::SearchIndex>>(const core::PagingList<search::SearchIndex>& val) {
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::SearchIndex>>(
+    const core::PagingList<search::SearchIndex>& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "core$PagingList<search$SearchIndex>");
@@ -32,7 +32,9 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::SearchIndex
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::Document>>(const core::PagingList<search::Document>& val) {
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::Document>>(
+    const core::PagingList<search::Document>& val
+) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "core$PagingList<search$Document>");

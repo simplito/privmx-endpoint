@@ -15,16 +15,15 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/lock/LockApi.hpp"
+#include "privmx/endpoint/store/StoreApi.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace search {
 
-struct PrivmxSession
-{
+struct PrivmxSession {
     std::string id;
     privmx::endpoint::core::Connection connection;
     privmx::endpoint::store::StoreApi storeApi;
@@ -42,8 +41,8 @@ enum LockLevel {
     EXCLUSIVE = 4
 };
 
-} // search
-} // endpoint
-} // privmx
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_SEARCH_SEARCHTYPES_HPP_

@@ -71,7 +71,11 @@ public:
     );
     void deleteKvdb(const std::string& kvdbId);
     Kvdb getKvdb(const std::string& kvdbId, const std::string& type = KVDB_TYPE_FILTER_FLAG);
-    core::PagingList<Kvdb> listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery, const std::string& type = KVDB_TYPE_FILTER_FLAG);
+    core::PagingList<Kvdb> listKvdbs(
+        const std::string& contextId,
+        const core::PagingQuery& pagingQuery,
+        const std::string& type = KVDB_TYPE_FILTER_FLAG
+    );
 
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
     std::optional<KvdbEntry> findEntry(const std::string& kvdbId, const std::string& key);

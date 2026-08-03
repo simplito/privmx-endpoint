@@ -24,10 +24,14 @@ namespace endpoint {
 namespace core {
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::SearchIndex>>(const core::PagingList<search::SearchIndex>& val);
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::SearchIndex>>(
+    const core::PagingList<search::SearchIndex>& val
+);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::Document>>(const core::PagingList<search::Document>& val);
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<search::Document>>(
+    const core::PagingList<search::Document>& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<search::IndexMode>(const search::IndexMode& val);
@@ -38,9 +42,8 @@ Poco::Dynamic::Var VarSerializer::serialize<search::SearchIndex>(const search::S
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<search::Document>(const search::Document& val);
 
+} // namespace core
+} // namespace endpoint
+} // namespace privmx
 
-}  // namespace core
-}  // namespace endpoint
-}  // namespace privmx
-
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_VARSERIALIZER_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_VARSERIALIZER_HPP_

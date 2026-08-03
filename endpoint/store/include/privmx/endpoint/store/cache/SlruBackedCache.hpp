@@ -44,9 +44,11 @@ class SlruBackedCache : public CacheInterface {
 public:
     static constexpr double DEFAULT_PROTECTED_RATIO = 0.8;
 
-    explicit SlruBackedCache(CacheBackendInterface& backend,
-                            size_t maxBytes = CacheBackendInterface::DEFAULT_MAX_BYTES,
-                            double protectedRatio = DEFAULT_PROTECTED_RATIO);
+    explicit SlruBackedCache(
+        CacheBackendInterface& backend,
+        size_t maxBytes = CacheBackendInterface::DEFAULT_MAX_BYTES,
+        double protectedRatio = DEFAULT_PROTECTED_RATIO
+    );
 
     std::optional<core::Buffer> get(const std::string& key) override;
     void put(const std::string& key, const core::Buffer& data) override;

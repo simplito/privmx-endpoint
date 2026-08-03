@@ -62,8 +62,10 @@ public:
      * @param backend  storage backend (e.g. LevelDB wrapper); GlobalCache takes shared ownership
      * @param maxBytes maximum total size of cached data before SLRU eviction kicks in
      */
-    static void setChunksCacheBackend(std::shared_ptr<CacheBackendInterface> backend,
-                                      size_t maxBytes = CacheBackendInterface::DEFAULT_MAX_BYTES);
+    static void setChunksCacheBackend(
+        std::shared_ptr<CacheBackendInterface> backend,
+        size_t maxBytes = CacheBackendInterface::DEFAULT_MAX_BYTES
+    );
 
     /**
      * Returns the shared cache instance, initializing it on the first call.

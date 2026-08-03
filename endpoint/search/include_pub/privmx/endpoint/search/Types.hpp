@@ -17,7 +17,6 @@ limitations under the License.
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 
-
 namespace privmx {
 namespace endpoint {
 namespace search {
@@ -26,8 +25,7 @@ namespace search {
  * Defines the mode in which the Search Index operates, specifically regarding 
  * the storage and retrieval of document content.
  */
-enum IndexMode : int64_t
-{
+enum IndexMode : int64_t {
     /**
      * IndexMode is UKNOWN or data is unreadable (check statusCode)
      */
@@ -51,8 +49,7 @@ enum IndexMode : int64_t
 /**
  * Holds all available information about a Search Index.
  */
-struct SearchIndex
-{
+struct SearchIndex {
     /**
      * ID of the Context
      */
@@ -132,8 +129,7 @@ struct SearchIndex
 /**
  * A structure representing a document for indexing.
  */
-struct Document
-{
+struct Document {
     /**
      * Document ID
      */
@@ -150,8 +146,8 @@ struct Document
     std::string content;
 };
 
-}  // namespace search
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_TYPES_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_TYPES_HPP_

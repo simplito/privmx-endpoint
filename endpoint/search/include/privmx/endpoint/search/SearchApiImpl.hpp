@@ -17,36 +17,33 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/store/StoreApi.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/lock/LockApi.hpp"
-#include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/search/Types.hpp"
+#include "privmx/endpoint/store/StoreApi.hpp"
 
 #include "privmx/endpoint/search/FullTextSearch.hpp"
 
-#include "privmx/utils/ThreadSaveMap.hpp"
-#include "privmx/endpoint/search/SearchException.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
+#include "privmx/endpoint/search/SearchException.hpp"
 #include "privmx/endpoint/search/SearchTypes.hpp"
 #include "privmx/utils/ManualManagedClass.hpp"
+#include "privmx/utils/ThreadSaveMap.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace search {
 
-class FtsContainer
-{
-    public:
+class FtsContainer {
+public:
     int64_t add(std::shared_ptr<FullTextSearch> fts) {
         int64_t handle = index++;
         _ftsMap.set(handle, fts);
         return handle;
     }
 
-    void remove(int64_t handle) {
-        _ftsMap.erase(handle);
-    }
+    void remove(int64_t handle) { _ftsMap.erase(handle); }
 
     std::shared_ptr<FullTextSearch> get(int64_t handle) {
         auto val = _ftsMap.get(handle);
@@ -61,8 +58,7 @@ private:
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<FullTextSearch>> _ftsMap;
 };
 
-class SearchApiImpl : public privmx::utils::ManualManagedClass<SearchApiImpl>
-{
+class SearchApiImpl : public privmx::utils::ManualManagedClass<SearchApiImpl> {
 public:
     SearchApiImpl(
         const core::Connection& connection,
@@ -72,13 +68,27 @@ public:
     );
     ~SearchApiImpl();
 
-    std::string createSearchIndex(const std::string& contextId, const std::vector<core::UserWithPubKey>& users,
-                                  const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta,
-                                  const core::Buffer& privateMeta, const IndexMode mode, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+    std::string createSearchIndex(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const IndexMode mode,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
 
-    void updateSearchIndex(const std::string& indexId, const std::vector<core::UserWithPubKey>& users,
-                           const std::vector<core::UserWithPubKey>& managers, const core::Buffer& publicMeta, const core::Buffer& privateMeta,
-                           const int64_t version, const bool force, const bool forceGenerateNewKey, const std::optional<core::ContainerPolicy>& policies = std::nullopt);
+    void updateSearchIndex(
+        const std::string& indexId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        const bool force,
+        const bool forceGenerateNewKey,
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+    );
 
     void deleteSearchIndex(const std::string& indexId);
 
@@ -104,7 +114,11 @@ public:
 
     core::PagingList<Document> listDocuments(const int64_t indexHandle, const core::PagingQuery& pagingQuery);
 
-    core::PagingList<Document> searchDocuments(const int64_t indexHandle, const std::string& searchQuery, const core::PagingQuery& pagingQuery);
+    core::PagingList<Document> searchDocuments(
+        const int64_t indexHandle,
+        const std::string& searchQuery,
+        const core::PagingQuery& pagingQuery
+    );
 
 private:
     static const std::string SEARCH_TYPE_FILTER_FLAG;
@@ -119,11 +133,10 @@ private:
     kvdb::KvdbApi _kvdbApi;
     lock::LockApi _lockApi;
     FtsContainer _fts;
-    
 };
 
-}  // namespace search
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_SEARCHAPIIMPL_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_SEARCHAPIIMPL_HPP_

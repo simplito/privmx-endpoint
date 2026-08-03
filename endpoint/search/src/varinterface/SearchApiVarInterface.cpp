@@ -12,31 +12,33 @@ limitations under the License.
 #include "privmx/endpoint/search/varinterface/SearchApiVarInterface.hpp"
 
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/search/VarDeserializer.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/search/VarDeserializer.hpp"
 #include "privmx/endpoint/search/VarSerializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
 
 std::map<SearchApiVarInterface::METHOD, Poco::Dynamic::Var (SearchApiVarInterface::*)(const Poco::Dynamic::Var&)>
-    SearchApiVarInterface::methodMap = {{Create, &SearchApiVarInterface::create},
-                                        {CreateSearchIndex, &SearchApiVarInterface::createSearchIndex},
-                                        {UpdateSearchIndex, &SearchApiVarInterface::updateSearchIndex},
-                                        {DeleteSearchIndex, &SearchApiVarInterface::deleteSearchIndex},
-                                        {GetSearchIndex, &SearchApiVarInterface::getSearchIndex},
-                                        {ListSearchIndexes, &SearchApiVarInterface::listSearchIndexes},
-                                        {OpenSearchIndex, &SearchApiVarInterface::openSearchIndex},
-                                        {CloseSearchIndex, &SearchApiVarInterface::closeSearchIndex},
-                                        {AddDocument, &SearchApiVarInterface::addDocument},
-                                        {UpdateDocument, &SearchApiVarInterface::updateDocument},
-                                        {DeleteDocument, &SearchApiVarInterface::deleteDocument},
-                                        {GetDocument, &SearchApiVarInterface::getDocument},
-                                        {ListDocuments, &SearchApiVarInterface::listDocuments},
-                                        {SearchDocuments, &SearchApiVarInterface::searchDocuments},
-                                        {BeginTransaction, &SearchApiVarInterface::beginTransaction},
-                                        {Commit, &SearchApiVarInterface::commit},
-                                        {Rollback, &SearchApiVarInterface::rollback}};
+    SearchApiVarInterface::methodMap = {
+        {Create, &SearchApiVarInterface::create},
+        {CreateSearchIndex, &SearchApiVarInterface::createSearchIndex},
+        {UpdateSearchIndex, &SearchApiVarInterface::updateSearchIndex},
+        {DeleteSearchIndex, &SearchApiVarInterface::deleteSearchIndex},
+        {GetSearchIndex, &SearchApiVarInterface::getSearchIndex},
+        {ListSearchIndexes, &SearchApiVarInterface::listSearchIndexes},
+        {OpenSearchIndex, &SearchApiVarInterface::openSearchIndex},
+        {CloseSearchIndex, &SearchApiVarInterface::closeSearchIndex},
+        {AddDocument, &SearchApiVarInterface::addDocument},
+        {UpdateDocument, &SearchApiVarInterface::updateDocument},
+        {DeleteDocument, &SearchApiVarInterface::deleteDocument},
+        {GetDocument, &SearchApiVarInterface::getDocument},
+        {ListDocuments, &SearchApiVarInterface::listDocuments},
+        {SearchDocuments, &SearchApiVarInterface::searchDocuments},
+        {BeginTransaction, &SearchApiVarInterface::beginTransaction},
+        {Commit, &SearchApiVarInterface::commit},
+        {Rollback, &SearchApiVarInterface::rollback}
+};
 
 Poco::Dynamic::Var SearchApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -68,7 +70,9 @@ Poco::Dynamic::Var SearchApiVarInterface::updateSearchIndex(const Poco::Dynamic:
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
-    _searchApi.updateSearchIndex(indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
+    _searchApi.updateSearchIndex(
+        indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+    );
     return {};
 }
 

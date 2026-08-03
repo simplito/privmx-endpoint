@@ -12,35 +12,33 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_SEARCH_DYNAMICTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_SEARCH_DYNAMICTYPES_HPP_
 
+#include <privmx/utils/JsonHelper.hpp>
 #include <string>
-
-#include <privmx/utils/TypedObject.hpp>
-#include <privmx/utils/TypesMacros.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace search {
 namespace dynamic {
 
-DECLARE_CORE_TYPE(IndexData)
-    STRING_FIELD(storeId)
-    INT64_FIELD(mode)
-TYPE_END
+#define INDEX_DATA_FIELDS(F)                                                                                           \
+    F(storeId, std::string)                                                                                            \
+    F(mode, int64_t)
+JSON_STRUCT(IndexData, INDEX_DATA_FIELDS);
 
-DECLARE_CORE_TYPE(Lock)
-    STRING_FIELD(lockId)
-    INT64_FIELD(level)
-    INT64_FIELD(timestamp)
-TYPE_END
+#define LOCK_FIELDS(F)                                                                                                 \
+    F(lockId, std::string)                                                                                             \
+    F(level, int64_t)                                                                                                  \
+    F(timestamp, int64_t)
+JSON_STRUCT(Lock, LOCK_FIELDS);
 
-DECLARE_CORE_TYPE(LockSet)
-    OBJECT_FIELD(writerLock, Lock)
-    MAP_FIELD(readerLocks, Lock)
-TYPE_END
+#define LOCK_SET_FIELDS(F)                                                                                             \
+    F(writerLock, Lock)                                                                                                \
+    F(readerLocks, std::map<std::string, Lock>)
+JSON_STRUCT(LockSet, LOCK_SET_FIELDS);
 
-} // dynamic
-} // search
-} // endpoint
-} // privmx
+} // namespace dynamic
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
 #endif // _PRIVMXLIB_ENDPOINT_SEARCH_DYNAMICTYPES_HPP_

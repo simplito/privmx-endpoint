@@ -24,8 +24,7 @@ namespace privmx {
 namespace endpoint {
 namespace search {
 
-class FullTextSearch
-{
+class FullTextSearch {
 public:
     static std::shared_ptr<FullTextSearch> openDb(const std::string& filename, const IndexMode mode);
     FullTextSearch(std::shared_ptr<sqlite3> db, const IndexMode mode);
@@ -50,8 +49,8 @@ private:
     IndexMode _mode;
 };
 
-}  // namespace search
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_FULLTEXTSEARCH_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_FULLTEXTSEARCH_HPP_

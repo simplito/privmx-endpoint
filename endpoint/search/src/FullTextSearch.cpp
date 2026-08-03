@@ -25,12 +25,12 @@ std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filena
     int rc;
 
     rc = sqlite3_vfs_register(sqlite3_privmxvfs(), 1);
-    if(rc) {
+    if (rc) {
         throw DatabaseVFSRegisterException();
     }
 
     rc = sqlite3_open(":memory:", &db);
-    if(rc) {
+    if (rc) {
         throw DatabaseOpenException();
     }
     std::shared_ptr<sqlite3> db2 = std::shared_ptr<sqlite3>(db, sqlite3_close);
@@ -38,7 +38,7 @@ std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filena
     sqlite3_busy_timeout(db, 10000);
 
     rc = sqlite3_exec(db, (std::string("ATTACH 'file:") + filename + "?vfs=privmxvfs' AS pmx;").c_str(), 0, 0, 0);
-    if(rc != SQLITE_OK){
+    if (rc != SQLITE_OK) {
         throw DatabaseAttachException(sqlite3_errmsg(db));
     }
 
@@ -247,15 +247,17 @@ void FullTextSearch::rollback() {
 void FullTextSearch::ensureTableCreated() {
     try {
         createTable();
-    }  catch (const privmx::endpoint::core::Exception& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("FullTextSearch::ensureTableCreated() recived endpoint::core::Exception ->\n", e.getFull())
     } catch (const privmx::utils::PrivmxException& e) {
-        LOG_ERROR("FullTextSearch::ensureTableCreated() recived utils::PrivmxException, converter to endpoint::core::Exception:->\n", core::ExceptionConverter::convert(e).getFull())
+        LOG_ERROR(
+            "FullTextSearch::ensureTableCreated() recived utils::PrivmxException, converter to "
+            "endpoint::core::Exception:->\n",
+            core::ExceptionConverter::convert(e).getFull()
+        )
     } catch (const std::exception& e) {
         LOG_FATAL("FullTextSearch::ensureTableCreated() recived std::exception->\n", e.what())
-    } catch (...) {
-        LOG_FATAL("FullTextSearch::ensureTableCreated() recived unknown exception\n")
-    }
+    } catch (...) { LOG_FATAL("FullTextSearch::ensureTableCreated() recived unknown exception\n") }
 }
 
 void FullTextSearch::createTable() {
@@ -283,10 +285,9 @@ void FullTextSearch::close() {
 int64_t FullTextSearch::getCount(const std::string& query) {
     sqlite3_stmt* stmt;
 
-    const char* sql =
-        "SELECT count(*) "
-        "FROM pmx.documents "
-        "WHERE documents MATCH ?;";
+    const char* sql = "SELECT count(*) "
+                      "FROM pmx.documents "
+                      "WHERE documents MATCH ?;";
 
     if (sqlite3_prepare_v2(_db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
         throw SelectPrepareException(sqlite3_errmsg(_db.get()));
@@ -307,9 +308,8 @@ int64_t FullTextSearch::getCount(const std::string& query) {
 int64_t FullTextSearch::getCountOfAll() {
     sqlite3_stmt* stmt;
 
-    const char* sql =
-        "SELECT count(*) "
-        "FROM pmx.documents;";
+    const char* sql = "SELECT count(*) "
+                      "FROM pmx.documents;";
 
     if (sqlite3_prepare_v2(_db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
         throw SelectPrepareException(sqlite3_errmsg(_db.get()));

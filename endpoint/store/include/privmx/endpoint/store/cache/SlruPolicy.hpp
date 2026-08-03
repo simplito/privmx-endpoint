@@ -22,7 +22,10 @@ namespace privmx {
 namespace endpoint {
 namespace store {
 
-enum class Segment : uint8_t { Probationary = 0, Protected = 1 };
+enum class Segment : uint8_t {
+    Probationary = 0,
+    Protected = 1
+};
 
 /**
  * In-memory Segmented LRU (SLRU) eviction policy tracker.
@@ -89,8 +92,7 @@ private:
     };
 
     void insertHead(SegmentState& seg, const std::string& key, size_t size);
-    void removeFrom(SegmentState& seg,
-                    std::unordered_map<std::string, std::list<Entry>::iterator>::iterator indexIt);
+    void removeFrom(SegmentState& seg, std::unordered_map<std::string, std::list<Entry>::iterator>::iterator indexIt);
     void rebalanceProtected();
 
     SegmentState _probationary;

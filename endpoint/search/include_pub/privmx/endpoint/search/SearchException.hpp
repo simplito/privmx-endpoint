@@ -1,32 +1,31 @@
 #ifndef _PRIVMXLIB_ENDPOINT_SEARCH_EXT_EXCEPTION_HPP_
 #define _PRIVMXLIB_ENDPOINT_SEARCH_EXT_EXCEPTION_HPP_
 
-
 #include "privmx/endpoint/core/Exception.hpp"
 
-#define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                            \
-    class NAME : public privmx::endpoint::core::Exception {                                                      \
-    public:                                                                                                      \
-        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                           \
-        NAME(const std::string& msg, const std::string& name, unsigned int code)                                 \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}         \
-        NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description) \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, description) {}           \
-        void rethrow() const override;                                                                           \
-    };                                                                                                           \
-    inline void NAME::rethrow() const {                                                                          \
-        throw *this;                                                                                             \
+#define DECLARE_SCOPE_ENDPOINT_EXCEPTION(NAME, MSG, SCOPE, CODE, ...)                                                  \
+    class NAME : public privmx::endpoint::core::Exception {                                                            \
+    public:                                                                                                            \
+        NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
+        NAME(const std::string& msg, const std::string& name, unsigned int code)                                       \
+            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}               \
+        NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description)       \
+            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, description) {}                 \
+        void rethrow() const override;                                                                                 \
+    };                                                                                                                 \
+    inline void NAME::rethrow() const {                                                                                \
+        throw *this;                                                                                                   \
     };
 
-#define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                            \
-    class NAME : public BASE_SCOPED {                                                                            \
-    public:                                                                                                      \
-        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                \
-        NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}       \
-        void rethrow() const override;                                                                           \
-    };                                                                                                           \
-    inline void NAME::rethrow() const {                                                                          \
-        throw *this;                                                                                             \
+#define DECLARE_ENDPOINT_EXCEPTION(BASE_SCOPED, NAME, MSG, CODE, ...)                                                  \
+    class NAME : public BASE_SCOPED {                                                                                  \
+    public:                                                                                                            \
+        NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
+        NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}             \
+        void rethrow() const override;                                                                                 \
+    };                                                                                                                 \
+    inline void NAME::rethrow() const {                                                                                \
+        throw *this;                                                                                                   \
     };
 
 namespace privmx {
@@ -39,7 +38,12 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointSearchException, "Unknown endpoint sear
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InvalidIndexHandleException, "Invalid Index handle", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, InvalidDocumentIdException, "Invalid document ID", 0x0003)
-DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, MalformedInternalFileIdException, "Malformed internal file Id", 0x0004)
+DECLARE_ENDPOINT_EXCEPTION(
+    EndpointSearchException,
+    MalformedInternalFileIdException,
+    "Malformed internal file Id",
+    0x0004
+)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, MalformedInternalFileException, "Malformed internal file", 0x0005)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, MalformedFileLockException, "Malformed file lock", 0x0006)
 
@@ -59,11 +63,16 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TableCreationException, "Err
 
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TransactionBeginException, "Error beginning transaction", 0x0301)
 DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TransactionCommitException, "Error committing transaction", 0x0302)
-DECLARE_ENDPOINT_EXCEPTION(EndpointSearchException, TransactionRollbackException, "Error rolling back transaction", 0x0303)
+DECLARE_ENDPOINT_EXCEPTION(
+    EndpointSearchException,
+    TransactionRollbackException,
+    "Error rolling back transaction",
+    0x0303
+)
 
-} // search
-} // endpoint
-} // privmx
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
 #undef DECLARE_SCOPE_ENDPOINT_EXCEPTION
 #undef DECLARE_ENDPOINT_EXCEPTION

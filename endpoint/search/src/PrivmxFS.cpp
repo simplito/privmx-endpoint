@@ -1,11 +1,11 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
-#include <string_view>
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
-#include <privmx/utils/Logger.hpp>
 #include <Poco/UUIDGenerator.h>
+#include <privmx/utils/Logger.hpp>
+#include <string_view>
 
 static const privmx::endpoint::core::Buffer META = privmx::endpoint::core::Buffer::from("{}");
 
@@ -48,8 +48,8 @@ std::string SessionManager::generateId() {
 }
 
 PrivmxFile::PrivmxFile(std::shared_ptr<PrivmxSession> session, const std::string& fileId, const std::string& path)
-        : session(session), fileId(fileId), path(path),
-          _uuid(Poco::UUIDGenerator::defaultGenerator().createRandom().toString()) {}
+    : session(session), fileId(fileId), path(path),
+      _uuid(Poco::UUIDGenerator::defaultGenerator().createRandom().toString()) {}
 
 void PrivmxFile::open() {
     LOG_TRACE("PrivmxFile::open - ", fileId)
@@ -117,7 +117,7 @@ std::shared_ptr<PrivmxFile> PrivmxFS::openFile(const std::string& path) {
 }
 
 bool PrivmxFS::access(const std::string& path) {
-    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ",_session->kvdbId)
+    LOG_TRACE("PrivmxFS::access - ", path, " | kvdbId: ", _session->kvdbId)
     return _session->kvdbApi.findEntry(_session->kvdbId, path).has_value();
 }
 
@@ -134,10 +134,10 @@ void PrivmxFS::deleteFile(const std::string& path) {
 PrivmxFS::PrivmxFS(const std::shared_ptr<PrivmxSession>& session) : _session(session) {}
 
 std::string PrivmxFS::getFileId(const std::string& name) {
-    LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ",_session->kvdbId)
+    LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ", _session->kvdbId)
     auto entry = _session->kvdbApi.findEntry(_session->kvdbId, name);
     if (entry.has_value()) {
-        if(entry->statusCode != 0) {
+        if (entry->statusCode != 0) {
             throw MalformedInternalFileIdException();
         }
         return entry->data.stdString();

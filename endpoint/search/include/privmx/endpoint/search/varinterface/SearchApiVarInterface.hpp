@@ -44,8 +44,15 @@ public:
         Rollback = 16,
     };
 
-    SearchApiVarInterface(core::Connection connection, store::StoreApi storeApi, kvdb::KvdbApi kvdbApi, lock::LockApi lockApi, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _storeApi(std::move(storeApi)), _kvdbApi(std::move(kvdbApi)), _lockApi(std::move(lockApi)), _serializer(serializer) {}
+    SearchApiVarInterface(
+        core::Connection connection,
+        store::StoreApi storeApi,
+        kvdb::KvdbApi kvdbApi,
+        lock::LockApi lockApi,
+        const core::VarSerializer& serializer
+    )
+        : _connection(std::move(connection)), _storeApi(std::move(storeApi)), _kvdbApi(std::move(kvdbApi)),
+          _lockApi(std::move(lockApi)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createSearchIndex(const Poco::Dynamic::Var& args);
@@ -81,8 +88,8 @@ private:
     core::VarSerializer _serializer;
 };
 
-}  // namespace search
-}  // namespace endpoint
-}  // namespace privmx
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
 
-#endif  // _PRIVMXLIB_ENDPOINT_SEARCH_SEARCHAPIVARINTERFACE_HPP_
+#endif // _PRIVMXLIB_ENDPOINT_SEARCH_SEARCHAPIVARINTERFACE_HPP_
