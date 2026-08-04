@@ -81,6 +81,10 @@ if(PRIVMX_BUILD_WITH_WEBRTC)
     target_link_libraries(datachannel_interop_client privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc)
     endif()
 
+# Lock
+add_executable(test_e2e_LockTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/LockTest.cpp)
+target_link_libraries(test_e2e_LockTest privmx privmxendpointcore privmxendpointstore privmxendpointlock Poco::Foundation Poco::Util GTest::GTest)
+
 # Search
 add_executable(test_e2e_SearchTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/SearchTest.cpp)
 target_link_libraries(test_e2e_SearchTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch Poco::Foundation Poco::Util GTest::GTest GTest::Main)
