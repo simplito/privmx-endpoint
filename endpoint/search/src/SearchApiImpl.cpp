@@ -107,9 +107,7 @@ core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(
 
 int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
     auto data = getIndexData(indexId);
-    auto session = SessionManager::get()->addSession(
-        _connection, _storeApi, _kvdbApi, _lockApi, indexId, data.storeId
-    );
+    auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, _lockApi, indexId, data.storeId);
     std::string filename = "/pmx/" + session->id + "/index.db";
     auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode);
     fts->ensureTableCreated();
@@ -181,7 +179,7 @@ dynamic::IndexData SearchApiImpl::getIndexData(const std::string& indexId) {
 }
 
 void SearchApiImpl::setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode) {
-    dynamic::IndexData indexData {.storeId=storeId, .mode=mode};
+    dynamic::IndexData indexData{.storeId = storeId, .mode = mode};
     _kvdbApi.getImpl()->setEntry(indexId, "data", {}, {}, serializeIndexData(indexData), 0);
 }
 
