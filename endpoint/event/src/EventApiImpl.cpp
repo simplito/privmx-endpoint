@@ -16,7 +16,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
-
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/event/Constants.hpp"
 #include "privmx/endpoint/event/EventApiImpl.hpp"

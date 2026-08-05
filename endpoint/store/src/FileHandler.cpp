@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/store/FileHandler.hpp"
 
-
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
 

@@ -12,7 +12,6 @@ limitations under the License.
 #include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
 
-
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>

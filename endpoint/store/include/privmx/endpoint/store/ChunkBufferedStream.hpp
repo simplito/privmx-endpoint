@@ -13,8 +13,8 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKBUFFEREDSTREAM_HPP_
 
 #include <optional>
-#include <string>
 #include <privmx/utils/Logger.hpp>
+#include <string>
 
 namespace privmx {
 namespace endpoint {
