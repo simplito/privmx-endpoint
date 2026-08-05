@@ -9,15 +9,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaStrategyV1.hpp"
+#include "privmx/endpoint/inbox/InboxException.hpp"
 #include <privmx/crypto/ecc/ECC.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
+#include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/utils/Utils.hpp>
-
-#include "privmx/endpoint/inbox/InboxException.hpp"
-#include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaStrategyV1.hpp"
 
 using namespace privmx;
 using namespace privmx::endpoint;
@@ -113,7 +113,7 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
                     );
                 } else {
                     store::File error;
-                    auto e = FileFetchFailedException();
+                    auto e = store::FileFetchFailedException();
                     error.statusCode = e.getCode();
                     result.files.push_back(error);
                 }

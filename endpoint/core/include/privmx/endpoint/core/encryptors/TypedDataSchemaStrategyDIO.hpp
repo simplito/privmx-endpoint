@@ -14,8 +14,8 @@ limitations under the License.
 
 #include <tuple>
 
-#include <privmx/endpoint/core/CoreTypes.hpp>
 #include "privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
 
 namespace privmx {
 namespace endpoint {

@@ -45,7 +45,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl = std::nullopt
     );
 
     void updateStreamRoom(
@@ -85,9 +86,6 @@ public:
         std::shared_ptr<WebRTCInterface> webRtc
     ); // required before createStream and createSubscription
     void leaveStreamRoom(const std::string& streamRoomId);
-    // Stream recording
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     // Publisher stream part
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
@@ -103,12 +101,10 @@ public:
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void removeSubscriberStream(
-        const SubscriberStreamHandle& subscriptionHandle
-    );
+    void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
     // Data Channel
     void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
-    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);    
+    core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);
     DecryptedDataChannelMessage decryptDataChannelMessage(
         const std::string& streamRoomId,
         const std::string& remoteStreamId,

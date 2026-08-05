@@ -11,11 +11,12 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/MessageKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint::thread;
 
 void MessageKeyIdFormatValidator::assertKeyIdFormat(const std::string& keyId) {
     if (!isKeyIdFormatValid(keyId)) {
-        throw IncorrectKeyIdFormatException();
+        throw privmx::endpoint::core::IncorrectKeyIdFormatException();
     }
 }
 

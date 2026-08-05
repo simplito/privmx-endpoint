@@ -36,7 +36,7 @@ Poco::Dynamic::Var BackendRequesterVarInterface::backendRequest(const Poco::Dyna
         auto paramsAsJson = _deserializer.deserialize<std::string>(argsArr->get(3), "paramsAsJson");
         return core::BackendRequester::backendRequest(serverUrl, accessToken, method, paramsAsJson);
     } else if (argsArr->size() == 5) {
-        throw core::InvalidNumberOfParamsException();
+        throw core::InvalidNumberOfParamsException("received " + std::to_string(argsArr->size()) + " params");
     } else {
         auto serverUrl = _deserializer.deserialize<std::string>(argsArr->get(0), "serverUrl");
         auto apiKeyId = _deserializer.deserialize<std::string>(argsArr->get(1), "apiKeyId");
@@ -51,7 +51,7 @@ Poco::Dynamic::Var BackendRequesterVarInterface::backendRequest(const Poco::Dyna
 Poco::Dynamic::Var BackendRequesterVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
-        throw InvalidMethodException();
+        throw InvalidMethodException("method=" + std::to_string((int64_t)method));
     }
     return (*this.*(it->second))(args);
 }

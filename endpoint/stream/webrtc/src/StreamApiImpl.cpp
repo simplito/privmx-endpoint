@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 
 #include <base/portable.h>
 #include <libwebrtc.h>
@@ -79,14 +80,6 @@ void StreamApiImpl::joinStreamRoom(const std::string& streamRoomId) {
 
 void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _api->leaveStreamRoom(streamRoomId);
-}
-
-void StreamApiImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
-    _api->enableStreamRoomRecording(streamRoomId);
-}
-
-std::vector<stream::RecordingEncKey> StreamApiImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    return _api->getStreamRoomRecordingKeys(streamRoomId);
 }
 
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
@@ -312,15 +305,15 @@ MediaTrack StreamApiImpl::addTrack(
         if (streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
             throw ThereCanBeOnlyOneDataTrackException();
         }
-        auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(TrackStatus::ToAdd, []([[maybe_unused]] std::string data) {
-            return;
-        });
+        auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(
+            TrackStatus::ToAdd, []([[maybe_unused]] std::string data) { return; }
+        );
 
         streamData->dataTrack = streamDataTrackInfo;
         return MediaTrack{[]([[maybe_unused]] bool enabled) { return; }};
     }
     default:
-        throw NotImplementedException();
+        throw core::NotImplementedException();
     }
 }
 
@@ -391,7 +384,7 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
         }
     } break;
     default:
-        throw NotImplementedException();
+        throw core::NotImplementedException();
     }
 }
 
@@ -560,9 +553,10 @@ std::string StreamApiImpl::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& emptyRoomTtl
 ) {
-    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
 }
 
 void StreamApiImpl::updateStreamRoom(

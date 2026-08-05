@@ -57,7 +57,9 @@ void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& threa
     const auto& entry = thread.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
-        throw UnknowThreadFormatException();
+        throw UnknowThreadFormatException(
+            "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
+        );
     case core::ModuleDataSchema::Version::VERSION_4:
         return;
     case core::ModuleDataSchema::Version::VERSION_5: {
@@ -67,7 +69,9 @@ void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& threa
         return;
     }
     default:
-        throw UnknowThreadFormatException();
+        throw UnknowThreadFormatException(
+            "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
+        );
     }
 }
 
@@ -130,4 +134,3 @@ Thread ThreadDataSchemaMapper::validateDecryptAndConvertThread(
 ) {
     return validateDecryptAndConvertThreads({thread}, keyProvider)[0];
 }
-

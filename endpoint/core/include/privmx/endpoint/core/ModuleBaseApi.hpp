@@ -12,17 +12,20 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_MODULEBASEAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_MODULEBASEAPI_HPP_
 
+#include <Poco/Dynamic/Var.h>
 #include <functional>
 #include <map>
-#include <Poco/Dynamic/Var.h>
 #include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
 
+#include "privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp"
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -32,11 +35,8 @@ limitations under the License.
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include "privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp"
 #include <privmx/utils/GuardedExecutor.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
-#include "privmx/endpoint/core/UsersKeysResolver.hpp"
-#include "privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -90,8 +90,10 @@ protected:
         const ContainerCreateContext& ctx,
         Poco::Dynamic::Var encryptedData
     ) {
-        static_assert(std::is_base_of_v<server::ContainerCreateModelBase, TCreateModel>,
-            "TCreateModel must inherit from ContainerCreateModelBase");
+        static_assert(
+            std::is_base_of_v<server::ContainerCreateModelBase, TCreateModel>,
+            "TCreateModel must inherit from ContainerCreateModelBase"
+        );
         model.resourceId = ctx.resourceId;
         model.contextId = contextId;
         model.keyId = ctx.key.id;
@@ -112,8 +114,10 @@ protected:
         int64_t version,
         bool force
     ) {
-        static_assert(std::is_base_of_v<server::ContainerUpdateModelBase, TUpdateModel>,
-            "TUpdateModel must inherit from ContainerUpdateModelBase");
+        static_assert(
+            std::is_base_of_v<server::ContainerUpdateModelBase, TUpdateModel>,
+            "TUpdateModel must inherit from ContainerUpdateModelBase"
+        );
         model.id = id;
         model.resourceId = resourceId;
         model.keyId = ctx.key.id;
@@ -155,9 +159,7 @@ protected:
         std::vector<core::server::KeyEntrySet> keyEntries;
         if (usersKeysResolver->doNeedNewKey()) {
             key = _keyProvider->generateKey();
-            keyEntries = _keyProvider->prepareKeysList(
-                usersKeysResolver->getNewUsers(), key, dio, location, secret
-            );
+            keyEntries = _keyProvider->prepareKeysList(usersKeysResolver->getNewUsers(), key, dio, location, secret);
         }
         auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
         if (!usersToAddMissingKey.empty()) {

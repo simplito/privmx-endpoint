@@ -57,6 +57,11 @@ target_link_libraries(test_e2e_StreamLowTest privmx privmxendpointcore privmxend
 add_executable(test_e2e_StreamEventsLowTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamEventsLowTest.cpp)
 target_link_libraries(test_e2e_StreamEventsLowTest privmx privmxendpointcore privmxendpointstream Poco::Foundation Poco::Util GTest::GTest GTest::Main)
 
+# Standalone DataChannel wire-format golden-vector tool 
+# DataChannel wire format against the TS implementation.
+add_executable(datachannel_vector_tool ${CMAKE_CURRENT_SOURCE_DIR}/tools/datachannel_vector_tool.cpp)
+target_link_libraries(datachannel_vector_tool privmx privmxendpointcore privmxendpointstream)
+
 if(PRIVMX_BUILD_WITH_WEBRTC)
     if(PRIVMX_IMPORT_LIBWEBRTC)
         add_library(libwebrtc SHARED IMPORTED)
@@ -75,6 +80,10 @@ if(PRIVMX_BUILD_WITH_WEBRTC)
     target_link_libraries(test_e2e_StreamTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
     add_executable(test_e2e_StreamEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamEventsTest.cpp)
     target_link_libraries(test_e2e_StreamEventsTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+    # Live E2E DataChannel interop client driven
+    # RTCDataChannel interop over a real connection.
+    add_executable(datachannel_interop_client ${CMAKE_CURRENT_SOURCE_DIR}/tools/datachannel_interop_client.cpp)
+    target_link_libraries(datachannel_interop_client privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc)
     endif()
 
 ## Docker Setup

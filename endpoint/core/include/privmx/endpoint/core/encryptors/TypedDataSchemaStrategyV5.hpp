@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_TYPEDDATASCHEMASTRATEGYV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_TYPEDDATASCHEMASTRATEGYV5_HPP_
 
-#include <privmx/endpoint/core/CoreTypes.hpp>
 #include "privmx/endpoint/core/encryptors/TypedDataSchemaStrategyDIO.hpp"
+#include <privmx/endpoint/core/CoreTypes.hpp>
 
 namespace privmx {
 namespace endpoint {

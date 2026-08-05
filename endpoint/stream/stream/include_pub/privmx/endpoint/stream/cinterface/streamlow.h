@@ -25,11 +25,11 @@ struct privmx_endpoint_stream_Key
     const char* keyId;
     const unsigned char* key;
     size_t keySize;
-    privmx_endpoint_stream_KeyType type;
+    enum privmx_endpoint_stream_KeyType type;
 };
 typedef struct privmx_endpoint_stream_Key privmx_endpoint_stream_Key;
 
-int privmx_endpoint_stream_extractKey(const privmx_endpoint_stream_Key key[], size_t index, const char** keyId, const unsigned char** keyBuf, size_t* keySize, privmx_endpoint_stream_KeyType* type);
+int privmx_endpoint_stream_extractKey(const privmx_endpoint_stream_Key key[], size_t index, const char** keyId, const unsigned char** keyBuf, size_t* keySize, enum privmx_endpoint_stream_KeyType* type);
 
 struct privmx_endpoint_stream_WebRTCInterface
 {

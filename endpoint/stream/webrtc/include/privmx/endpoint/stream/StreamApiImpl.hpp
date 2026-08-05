@@ -53,7 +53,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl
     );
 
     void updateStreamRoom(
@@ -88,8 +89,6 @@ public:
     std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<AudioDevice> getAudioDevices();
     std::vector<VideoDevice> getVideoDevices();
@@ -201,7 +200,7 @@ private:
         std::string label = "JanusDataChannel";
         TrackStatus status;
         std::function<void(std::string)> sendData;
-        std::atomic<uint32_t> seq{0};
+        std::atomic<uint32_t> seq{1};
     };
 
     struct StreamData {

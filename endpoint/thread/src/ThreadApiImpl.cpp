@@ -35,7 +35,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 
 using namespace privmx::endpoint;
-using namespace thread;
+using namespace privmx::endpoint::thread;
 
 ThreadApiImpl::ThreadApiImpl(
     const privfs::RpcGateway::Ptr& gateway,
@@ -104,7 +104,7 @@ std::string ThreadApiImpl::createThread(
     }
     if (!groups.empty()) {
         // Populate groupEpoch from current group state when caller didn't supply it (EP-13/14)
-        std::vector<core::GroupGrantWithKey> resolvedGroups = groups;
+        std::vector<privmx::endpoint::core::GroupGrantWithKey> resolvedGroups = groups;
         if (_groupApiImpl) {
             for (auto& g : resolvedGroups) {
                 if (g.groupEpoch == 0) {

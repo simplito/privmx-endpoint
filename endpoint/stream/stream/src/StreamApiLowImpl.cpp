@@ -102,7 +102,10 @@ std::vector<TurnCredentials> StreamApiLowImpl::getTurnCredentials() {
     return result;
 }
 
-void StreamApiLowImpl::onNotificationEvent([[maybe_unused]] const std::string& _type, const core::NotificationEvent& _notification) {
+void StreamApiLowImpl::onNotificationEvent(
+    [[maybe_unused]] const std::string& _type,
+    const core::NotificationEvent& _notification
+) {
     _guardedExecutor->exec([&, _notification]() { return processNotificationEvent(_notification); });
 }
 
@@ -323,36 +326,6 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _serverApi->streamRoomLeave(model);
 }
 
-void StreamApiLowImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
-    server::StreamRoomRecordingModel model;
-    LOG_DEBUG("CPP-layer: call  enableStreamRoomRecording() with streamRoomId (on WS): ", streamRoomId);
-    model.streamRoomId = streamRoomId;
-    _serverApi->streamRoomEnableRecording(model);
-}
-
-std::vector<stream::RecordingEncKey> StreamApiLowImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    server::StreamRoomGetModel params;
-    params.id = streamRoomId;
-    params.type = STREAM_TYPE_FILTER_FLAG;
-    auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto statusCode = _streamRoomDataSchemaMapper->validateDataIntegrity(streamRoom);
-    if (statusCode != 0) {
-        throw StreamRoomDataIntegrityException();
-    }
-    auto keys = extractStreamRoomKeys(streamRoom);
-    std::vector<stream::RecordingEncKey> recordingEncKeys;
-    for (const auto& key : keys) {
-        if (key.second.statusCode == 0) {
-            recordingEncKeys.push_back(
-                stream::RecordingEncKey{
-                    core::Buffer::from(key.second.id), core::Buffer::from(deriveStreamEncryptionKey(key.second))
-                }
-            );
-        }
-    }
-    return recordingEncKeys;
-}
-
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle{nextId()};
     auto room = getStreamRoomData(streamRoomId);
@@ -480,9 +453,9 @@ SubscriberStreamHandle StreamApiLowImpl::createSubscriberStream(
     // update/set sessionId in webrtc (for Janus - trickle)
     room->webRtc->updateSessionId(streamRoomId, subscribeResult.sessionId, std::string("subscriber"));
 
-    room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{.sessionId = subscribeResult.sessionId, .streamHandle = streamHandle, .subscriptions = subscriptions}
-    );
+    room->subscriberStream = std::make_shared<SubscriptionData>(SubscriptionData{
+        .sessionId = subscribeResult.sessionId, .streamHandle = streamHandle, .subscriptions = subscriptions
+    });
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (subscribeResult.offer.has_value()) {
@@ -533,13 +506,9 @@ void StreamApiLowImpl::updateSubscriberStream(
     }
     subscriptions.insert(subscriptions.end(), subscriptionsToAdd.begin(), subscriptionsToAdd.end());
 
-    room->subscriberStream = std::make_shared<SubscriptionData>(
-        SubscriptionData{
-            .sessionId = result.sessionId,
-            .streamHandle = subscriptionHandle,
-            .subscriptions = subscriptions
-        }
-    );
+    room->subscriberStream = std::make_shared<SubscriptionData>(SubscriptionData{
+        .sessionId = result.sessionId, .streamHandle = subscriptionHandle, .subscriptions = subscriptions
+    });
 
     // !!! peerConnection re-negotiation is optional as not always we will get an offer from MediaServer when calling in joinStream()
     if (result.offer.has_value()) {
@@ -552,9 +521,7 @@ void StreamApiLowImpl::updateSubscriberStream(
     }
 }
 
-void StreamApiLowImpl::removeSubscriberStream(
-    const SubscriberStreamHandle& subscriptionHandle
-) {
+void StreamApiLowImpl::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
     auto room = getStreamRoomData(subscriptionHandle);
     if (!room->subscriberStream) {
         throw SubscriberStreamHandleNotInitialized();
@@ -576,6 +543,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& emptyRoomTtl,
     const std::string& type
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
@@ -595,6 +563,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     if (policies.has_value()) {
         createStreamRoomModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
+    createStreamRoomModel.emptyRoomTtl = emptyRoomTtl;
     auto result = _serverApi->streamRoomCreate(createStreamRoomModel);
     return result.streamRoomId;
 }

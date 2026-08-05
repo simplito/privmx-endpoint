@@ -75,13 +75,13 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             throw server::KvdbEntryDoesNotExistException(e.getData());
         }
         if (code_second_two_bytes >= 0x0001 && code_second_two_bytes <= 0x00A0) {
-            throw server::EndpointServerException(e.getData(), e.what(), e.getCode());
+            throw server::EndpointServerException(std::string(e.what()) + " | " + e.getData(), e.getCode());
         }
         if (code_second_two_bytes >= 0x6001 && code_second_two_bytes <= 0x6FFF) {
-            throw server::EndpointServerException(e.getData(), e.what(), e.getCode());
+            throw server::EndpointServerException(std::string(e.what()) + " | " + e.getData(), e.getCode());
         }
         if (code_second_two_bytes >= 0x7001 && code_second_two_bytes <= 0xF0A0) {
-            throw server::EndpointServerException(e.getData(), e.what(), e.getCode());
+            throw server::EndpointServerException(std::string(e.what()) + " | " + e.getData(), e.getCode());
         }
         if (e.getType() != privmx::utils::PrivmxException::LIBRARY) {
             if (e.getType() == privmx::utils::PrivmxException::ALERT &&
