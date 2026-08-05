@@ -38,9 +38,6 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
         {JoinStreamRoom, &StreamApiLowVarInterface::joinStreamRoom},
         {JoinStreamRoomEx, &StreamApiLowVarInterface::joinStreamRoomEx},
         {LeaveStreamRoom, &StreamApiLowVarInterface::leaveStreamRoom},
-        {EnableStreamRoomRecording, &StreamApiLowVarInterface::enableStreamRoomRecording},
-        {GetStreamRoomRecordingKeys, &StreamApiLowVarInterface::getStreamRoomRecordingKeys},
-
         {CreateStream, &StreamApiLowVarInterface::createStream},
         {PublishStream, &StreamApiLowVarInterface::publishStream},
         {UpdateStream, &StreamApiLowVarInterface::updateStream},
@@ -93,14 +90,17 @@ Poco::Dynamic::Var StreamApiLowVarInterface::buildSubscriptionQuery(const Poco::
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(5), "policies");
-    auto result = _streamApi.createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+    auto emptyRoomTtl = _deserializer.deserializeOptional<int64_t>(argsArr->get(6), "emptyRoomTtl");
+    auto result = _streamApi.createStreamRoom(
+        contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl
+    );
     return _serializer.serialize(result);
 }
 
@@ -168,20 +168,6 @@ Poco::Dynamic::Var StreamApiLowVarInterface::leaveStreamRoom(const Poco::Dynamic
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
     _streamApi.leaveStreamRoom(streamRoomId);
     return {};
-}
-
-Poco::Dynamic::Var StreamApiLowVarInterface::enableStreamRoomRecording(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    _streamApi.enableStreamRoomRecording(streamRoomId);
-    return {};
-}
-
-Poco::Dynamic::Var StreamApiLowVarInterface::getStreamRoomRecordingKeys(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto result = _streamApi.getStreamRoomRecordingKeys(streamRoomId);
-    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::listStreamRoomParticipants(const Poco::Dynamic::Var& args) {
@@ -293,7 +279,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::decryptDataChannelMessage(const Poc
 Poco::Dynamic::Var StreamApiLowVarInterface::exec(METHOD method, const Poco::Dynamic::Var& args) {
     auto it = methodMap.find(method);
     if (it == methodMap.end()) {
-        throw core::InvalidMethodException();
+        throw core::InvalidMethodException("method=" + std::to_string((int64_t)method));
     }
     return (*this.*(it->second))(args);
 }

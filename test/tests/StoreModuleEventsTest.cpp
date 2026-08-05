@@ -4,6 +4,7 @@
 #include <privmx/endpoint/store/Events.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 
@@ -452,12 +453,12 @@ TEST_F(StoreEventTest, subscribeFor_query_from_other_module) {
         storeApi->subscribeFor({
             "stores/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, store::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
     EXPECT_THROW({
         storeApi->subscribeFor({
             "thread/update|contextId="+reader->getString("Context_1.contextId")
         });
-    }, store::InvalidSubscriptionQueryException);
+    }, core::InvalidSubscriptionQueryException);
 }
 
 TEST_F(StoreEventTest, subscribeFor_unsubscribeFor) {

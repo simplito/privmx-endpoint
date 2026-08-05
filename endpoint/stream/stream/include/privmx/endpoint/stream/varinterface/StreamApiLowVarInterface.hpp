@@ -54,15 +54,12 @@ public:
         AcceptOfferOnReconfigure = 20,
         KeyManagement = 21,
         UpdateStream = 22,
-        EnableStreamRoomRecording = 23,
-        GetStreamRoomRecordingKeys = 24,
+        JoinStreamRoomEx = 23,
+        ListStreamRoomParticipants = 24,
 
-        JoinStreamRoomEx = 25,
-        ListStreamRoomParticipants = 26,
-
-        RegisterRemoteDataChannel = 27,
-        EncryptDataChannelMessage = 28,
-        DecryptDataChannelMessage = 29,
+        RegisterRemoteDataChannel = 25,
+        EncryptDataChannelMessage = 26,
+        DecryptDataChannelMessage = 27,
     };
 
     StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -84,7 +81,6 @@ public:
     Poco::Dynamic::Var joinStreamRoom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var joinStreamRoomEx(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var leaveStreamRoom(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var enableStreamRoomRecording(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var createStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var publishStream(const Poco::Dynamic::Var& args);
@@ -94,7 +90,6 @@ public:
     Poco::Dynamic::Var createSubscriberStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateSubscriberStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var removeSubscriberStream(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var getStreamRoomRecordingKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listStreamRoomParticipants(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);

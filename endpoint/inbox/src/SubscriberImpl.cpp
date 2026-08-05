@@ -45,7 +45,7 @@ std::vector<std::string> SubscriberImpl::getChannelPath(EventType eventType) {
     case EventType::ENTRY_DELETE:
         return {std::string(_moduleName), std::string(_itemName), _eventTypeNames.at(eventType)};
     }
-    throw NotImplementedException(_readableEventType.at(eventType));
+    throw core::NotImplementedException(_readableEventType.at(eventType));
 }
 
 std::vector<core::SubscriptionQueryObj::QuerySelector> SubscriberImpl::getSelectors(
@@ -124,12 +124,12 @@ std::vector<std::string> SubscriberImpl::transform(const std::vector<core::Subsc
 void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     for (auto& subscriptionQuery : subscriptionQueries) {
         if (subscriptionQuery.selectors().size() != 1) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
         if (subscriptionQuery.channelPath().size() < 2 ||
             subscriptionQuery.channelPath().size() > 3 ||
             subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName)) {
-            throw InvalidSubscriptionQueryException();
+            throw core::InvalidSubscriptionQueryException();
         }
     }
 }

@@ -47,6 +47,7 @@ struct StreamRoom {
     int64_t statusCode;
     int64_t schemaVersion;
     std::string state; // "created" | "open" | "closed"
+    int64_t emptyRoomTtl;
 };
 
 struct Stream {
@@ -68,13 +69,13 @@ enum EventType : int64_t {
     STREAMROOM_CREATE = 0,
     STREAMROOM_UPDATE = 1,
     STREAMROOM_DELETE = 2,
-    STREAMROOM_JOIN = 4,
-    STREAMROOM_LEAVE = 5,
-    STREAM_PUBLISH = 6,
-    STREAM_UNPUBLISH = 7,
-    STREAM_SUBSCRIBE = 8,
-    STREAM_UNSUBSCRIBE = 9,
-    STREAM_UPDATE = 10,
+    STREAMROOM_JOIN = 3,
+    STREAMROOM_LEAVE = 4,
+    STREAM_PUBLISH = 5,
+    STREAM_UNPUBLISH = 6,
+    STREAM_SUBSCRIBE = 7,
+    STREAM_UNSUBSCRIBE = 8,
+    STREAM_UPDATE = 9,
 };
 
 enum EventSelectorType : int64_t {
@@ -176,11 +177,6 @@ struct StreamUpdatedEventData {
 struct StreamPublishResult {
     bool published;
     std::optional<PublishedStreamData> data;
-};
-
-struct RecordingEncKey {
-    core::Buffer id;
-    core::Buffer key;
 };
 
 struct StreamSubscriber {

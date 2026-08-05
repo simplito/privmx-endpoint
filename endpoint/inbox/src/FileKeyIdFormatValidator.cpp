@@ -11,11 +11,12 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/FileKeyIdFormatValidator.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint::inbox;
 
 void FileKeyIdFormatValidator::assertKeyIdFormat(const std::string& keyId) {
     if (!isKeyIdFormatValid(keyId)) {
-        throw IncorrectKeyIdFormatException();
+        throw privmx::endpoint::core::IncorrectKeyIdFormatException();
     }
 }
 

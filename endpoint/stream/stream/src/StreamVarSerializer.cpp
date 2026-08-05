@@ -75,6 +75,7 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoom>(const stream::St
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("state", serialize(val.state));
+    obj->set("emptyRoomTtl", serialize(val.emptyRoomTtl));
     return obj;
 }
 
@@ -402,17 +403,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamSubscription>(const st
     if (val.streamTrackId.has_value()) {
         obj->set("streamTrackId", serialize(val.streamTrackId));
     }
-    return obj;
-}
-
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::RecordingEncKey>(const stream::RecordingEncKey& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$RecordingEncKey");
-    }
-    obj->set("id", serialize(val.id));
-    obj->set("key", serialize(val.key));
     return obj;
 }
 

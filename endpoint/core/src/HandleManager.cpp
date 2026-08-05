@@ -25,7 +25,7 @@ int64_t HandleManager::createHandle(std::string label) {
 std::string HandleManager::getHandleLabel(int64_t id) {
     auto result = _map.get(id);
     if (!result.has_value()) {
-        throw NoHandleFoundException();
+        throw NoHandleFoundException("handle id=" + std::to_string(id));
     }
     return result.value();
 }
