@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/utils/Debug.hpp>
+
 #include <privmx/utils/JsonHelper.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -79,7 +79,6 @@ std::string ThreadApiImpl::createThread(
     const std::optional<core::ContainerPolicy>& policies,
     const std::string& type
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, createThread)
     auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
@@ -99,9 +98,7 @@ std::string ThreadApiImpl::createThread(
     if (policies.has_value()) {
         create_thread_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, createThread, data encrypted)
     auto result = _serverApi.threadCreate(create_thread_model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, createThread, data send)
     return result.threadId;
 }
 
@@ -116,8 +113,6 @@ void ThreadApiImpl::updateThread(
     const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, updateThread)
-
     // get current thread
     server::ThreadGetModel getModel;
     getModel.threadId = threadId;
@@ -143,11 +138,8 @@ void ThreadApiImpl::updateThread(
         .dio = ctx.dio
     };
     model.data = _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key.key);
-
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateThread, data encrypted)
     _serverApi.threadUpdate(model);
     invalidateModuleKeysInCache(threadId);
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, updateThread, data send)
 }
 
 void ThreadApiImpl::deleteThread(const std::string& threadId) {
@@ -157,18 +149,14 @@ void ThreadApiImpl::deleteThread(const std::string& threadId) {
 }
 
 Thread ThreadApiImpl::getThread(const std::string& threadId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, getThread)
     server::ThreadGetModel params;
     params.threadId = threadId;
     if (type.length() > 0) {
         params.type = type;
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, getting thread)
     auto thread = _serverApi.threadGet(params).thread;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, data send)
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     auto result = _threadDataSchemaMapper->validateDecryptAndConvertThread(thread, _keyProvider);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getThread, data decrypted)
     return result;
 }
 
@@ -177,38 +165,29 @@ core::PagingList<Thread> ThreadApiImpl::listThreads(
     const core::PagingQuery& pagingQuery,
     const std::string& type
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, listThreads)
     server::ThreadListModel model;
     model.contextId = contextId;
     if (type.length() > 0) {
         model.type = type;
     }
     core::ListQueryMapper::map(model, pagingQuery);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listThreads, getting threadList)
     auto threadsList = _serverApi.threadList(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listThreads, data send)
     for (const auto& thread : threadsList.threads) {
         setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     }
     std::vector<Thread> threads = _threadDataSchemaMapper->validateDecryptAndConvertThreads(
         threadsList.threads, _keyProvider
     );
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, listThreads, data decrypted)
     return core::PagingList<Thread>({.totalAvailable = threadsList.count, .readItems = threads});
 }
 
 Message ThreadApiImpl::getMessage(const std::string& messageId) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, getMessage)
     server::ThreadMessageGetModel model{.messageId = messageId};
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, data recived);
     Message result;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, getMessage, decrypting message)
     result = _messageDataSchemaMapper.validateDecryptAndConvertMessage(
         message, getMessageDecryptionKeys(message), _keyProvider
     );
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, getMessage, data decrypted)
     return result;
 }
 
@@ -216,21 +195,16 @@ core::PagingList<Message> ThreadApiImpl::listMessages(
     const std::string& threadId,
     const core::PagingQuery& pagingQuery
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, listMessages)
     server::ThreadMessagesGetModel model;
     model.threadId = threadId;
     core::ListQueryMapper::map(model, pagingQuery);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting messageList)
     auto messagesList = _serverApi.threadMessagesGet(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, getting thread)
     const auto& thread = messagesList.thread;
     _threadDataSchemaMapper->assertDataIntegrity(thread);
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, listMessages, data send)
     auto messages = _messageDataSchemaMapper.validateDecryptAndConvertMessages(
         messagesList.messages, threadToModuleKeys(thread), _keyProvider
     );
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, listMessages, data decrypted)
     return core::PagingList<Message>({.totalAvailable = messagesList.count, .readItems = messages});
 }
 std::string ThreadApiImpl::sendMessage(
@@ -252,7 +226,6 @@ std::string ThreadApiImpl::sendMessageRequest(
     const core::Buffer& data,
     const core::ModuleKeys& keys
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, sendMessageRequest);
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
     if (msgKey.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
@@ -265,9 +238,7 @@ std::string ThreadApiImpl::sendMessageRequest(
     send_message_model.threadId = threadId;
     send_message_model.keyId = msgKey.id;
     send_message_model.data = encryptMessageData(threadId, resourceId, publicMeta, privateMeta, data, keys);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, sendMessageRequest, data encrypted)
     auto result = _serverApi.threadMessageSend(send_message_model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, sendMessageRequest, data send)
     return result.messageId;
 }
 
@@ -281,10 +252,8 @@ void ThreadApiImpl::updateMessage(
     const core::Buffer& privateMeta,
     const core::Buffer& data
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, updateMessage);
     server::ThreadMessageGetModel model;
     model.messageId = messageId;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessage, getting message)
     auto message = _serverApi.threadMessageGet(model).message;
     const std::string resourceId = message.resourceId.empty() ? core::EndpointUtils::generateId() : message.resourceId;
     withKeyRefresh<void>(
@@ -304,7 +273,6 @@ void ThreadApiImpl::updateMessageRequest(
     const core::Buffer& data,
     const core::ModuleKeys& keys
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformThread, updateMessageRequest);
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
     if (msgKey.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
@@ -315,9 +283,7 @@ void ThreadApiImpl::updateMessageRequest(
     send_message_model.messageId = messageId;
     send_message_model.keyId = msgKey.id;
     send_message_model.data = encryptMessageData(threadId, resourceId, publicMeta, privateMeta, data, keys);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformThread, updateMessageRequest, data encrypted)
     _serverApi.threadMessageUpdate(send_message_model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformThread, updateMessageRequest, data send)
 }
 
 void ThreadApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {

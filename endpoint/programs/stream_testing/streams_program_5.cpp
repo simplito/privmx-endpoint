@@ -15,7 +15,7 @@
 #include <mutex>
 #include <map>
 
-#include <privmx/utils/Debug.hpp>
+
 #include <privmx/utils/CancellationToken.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 

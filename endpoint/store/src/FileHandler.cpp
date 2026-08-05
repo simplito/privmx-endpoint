@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/store/FileHandler.hpp"
-#include <privmx/utils/Debug.hpp>
+
 
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
@@ -107,12 +107,11 @@ void FileHandler::write(uint64_t offset, const core::Buffer& data, bool truncate
         );
         _chunkReader->update(_version, updateInfo.chunkIndex);
     }
-    PRIVMX_DEBUG(
-        "FileHandler", "write",
-        "_plainfileSize: " +
-            std::to_string(_plainfileSize) +
-            " | _encryptedFileSize: " +
-            std::to_string(_encryptedFileSize)
+    LOG_DEBUG(
+        "FileHandler::write _plainfileSize: " +
+        std::to_string(_plainfileSize) +
+        " | _encryptedFileSize: " +
+        std::to_string(_encryptedFileSize)
     );
 }
 

@@ -13,8 +13,8 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKBUFFEREDSTREAM_HPP_
 
 #include <optional>
-#include <privmx/utils/Debug.hpp>
 #include <string>
+#include <privmx/utils/Logger.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -55,8 +55,8 @@ inline uint64_t ChunkBufferedStream::getNumberOfFullChunks() const {
 }
 
 inline bool ChunkBufferedStream::isFullyFilled() {
-    PRIVMX_DEBUG(
-        "DEBUG", "ChunkBufferedStream::isFullyFilled",
+    LOG_DEBUG(
+        "ChunkBufferedStream::isFullyFilled ",
         std::to_string(_totalDataSize) + " == " + std::to_string(_maxTotalDataSize)
     );
     return _sizeControl ? _totalDataSize == _maxTotalDataSize : false;
