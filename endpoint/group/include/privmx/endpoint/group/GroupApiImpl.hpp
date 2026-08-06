@@ -18,6 +18,7 @@
 #include "privmx/endpoint/group/ServerApi.hpp"
 #include "privmx/endpoint/group/SubscriberImpl.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
+#include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -45,6 +46,64 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
+    /**
+     * Creates a group whose grant key is distributed by a hidden key tree instead of one wrap per member.
+     *
+     * The difference this makes shows up later, not here: removing a member costs the wraps on one path rather
+     * than one per remaining member, and adding one costs a single wrap and does not advance the epoch, so no
+     * container the group can read goes stale. Creation itself costs the same order either way.
+     *
+     * The grant private key is deliberately **not** placed in the group's encrypted metadata. Putting it there
+     * would hand it to every member through the metadata key, and the metadata key would then have to be
+     * re-wrapped for everyone on each removal — which is exactly the cost the tree exists to remove.
+     */
+    std::string createGroupWithKeyTree(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<core::ContainerPolicy>& policies
+    );
+
+    /**
+     * Seats one member in a tree-backed group, at the same epoch.
+     *
+     * @param users    the full roster after the addition, the newcomer included
+     * @param managers likewise
+     *
+     * The caller must be able to climb to the seat's parent, which any member can; this is not a manager-only
+     * operation cryptographically, though the bridge still applies its usual policy gate.
+     */
+    void addGroupMember(
+        const std::string& groupId,
+        const core::UserWithPubKey& newMember,
+        bool asManager,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta
+    );
+
+    /**
+     * Removes one member from a tree-backed group and advances the epoch.
+     *
+     * @param users    the roster that remains, the departing member excluded
+     * @param managers likewise
+     *
+     * Does four things at once because none of them is safe alone: blanks the leaf, refreshes its direct path
+     * with fresh random keys, rotates the grant keypair, and publishes the ladder rungs that keep the older
+     * epochs reachable from the new one.
+     */
+    void removeGroupMember(
+        const std::string& groupId,
+        const std::string& userId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta
+    );
+
     void updateGroup(
         const std::string& groupId,
         const std::vector<core::UserWithPubKey>& users,
@@ -69,7 +128,31 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
+    /**
+     * The group's grant private key for an epoch (`0` means current).
+     *
+     * Tries the **flat** path first — the caller's own key entry, which is how every group worked before the
+     * hidden key tree existed — and falls back to climbing the tree and descending the Epoch Ladder. The order
+     * matters: it keeps groups that have per-member key entries behaving exactly as they did, and only reaches
+     * for the new machinery when the flat path has nothing to offer.
+     *
+     * @throws core::EncryptionKeyValidationException when neither path yields a key
+     */
     privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
+
+    /** The pre-tree path: decrypt the caller's own key entry for the epoch's keyId. Unchanged behaviour. */
+    privmx::crypto::PrivateKey resolveGroupPrivKeyFlat(const server::GroupInfo& group, int64_t epoch);
+
+    /** Renders a resolver failure so policy (era boundary, pruning) reads differently from an attack. */
+    static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
+
+    /**
+     * Fetches the Epoch Ladder for one descent, windowed to the epochs it passes through.
+     *
+     * Only a descent needs it, so only a descent pays for it: the request is proportional to the hop rather
+     * than to how long the group has existed.
+     */
+    server::GroupGetKeyArchiveResult fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, int64_t currentEpoch);
     void generateNewGroupKey(
         const std::string& groupId,
         const std::vector<core::UserWithPubKey>& users,
@@ -86,6 +169,20 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys groupToModuleKeys(const server::GroupInfo& group);
 
+    /** Roster entries as tree leaves, in a stable order — the seating is part of the state the bridge checks. */
+    static std::vector<keytree::TreeMember> toTreeMembers(
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
+    /**
+     * Climbs the tree so the caller holds the node keys a plan needs, and returns the current runtime state.
+     *
+     * Both membership changes need this first: an addition needs the seat's parent key, a removal needs every key
+     * on the departing leaf's path plus the current grant key to wrap the first ladder rung.
+     */
+    keytree::TreeGroupState climbForPlanning(const server::GroupInfo& group);
+
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
@@ -97,6 +194,12 @@ private:
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
+    /**
+     * Cache of tree node keys and per-epoch grant keys, shared by the climb and the descent: the climb supplies
+     * the current epoch, the descent walks back from it. Purely an optimisation — losing it costs bandwidth, not
+     * access, because everything is rebuildable from what the bridge stores.
+     */
+    keytree::TreeKeyStore _treeKeyStore;
 };
 
 } // namespace group

@@ -24,6 +24,14 @@ public:
     server::GroupListResult groupList(server::GroupListModel model);
     void generateNewGroupKey(server::GenerateNewGroupKeyModel model);
 
+    // ── Tree-backed membership (documents/nested_groups/09-hidden-key-tree.md) ──
+    void groupAddMember(server::GroupAddMemberModel model);
+    void groupRemoveMember(server::GroupRemoveMemberModel model);
+    void groupCutEra(server::GroupCutEraModel model);
+    void groupPruneArchive(server::GroupPruneArchiveModel model);
+    /** The Epoch Ladder, fetched only when a client is actually reaching for an older epoch. */
+    server::GroupGetKeyArchiveResult groupGetKeyArchive(server::GroupGetKeyArchiveModel model);
+
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);
