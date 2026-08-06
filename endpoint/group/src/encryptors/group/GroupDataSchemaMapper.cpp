@@ -144,7 +144,11 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         // EP-9: epoch (keyVersion) monotonicity — backward compat: absent keyVersion treated as 0
         int64_t thisKeyVersion = membership.keyVersion.value_or(0);
         if (i == 0) {
-            if (thisKeyVersion != 0) throw GroupDataIntegrityException();
+            // The genesis epoch is 0 for a flat group and 1 for a tree-backed one, whose grant key exists from
+            // the moment of creation and whose Epoch Ladder counts from 1. Which of the two it is cannot be
+            // chosen freely: the head check below pins the committed value to the bridge's own `keyVersion`, and
+            // only the tree-backed creation path makes the bridge record 1. Anything above 1 is a fabrication.
+            if (thisKeyVersion > 1) throw GroupDataIntegrityException();
         } else {
             // Non-decreasing and increments by at most 1
             if (thisKeyVersion < prevKeyVersion || thisKeyVersion - prevKeyVersion > 1) {

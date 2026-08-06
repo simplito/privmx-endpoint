@@ -57,6 +57,69 @@ std::string GroupApi::createGroup(
     }
 }
 
+std::string GroupApi::createGroupWithKeyTree(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    try {
+        return impl->createGroupWithKeyTree(contextId, users, managers, publicMeta, privateMeta, policies);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void GroupApi::addGroupMember(
+    const std::string& groupId,
+    const core::UserWithPubKey& newMember,
+    bool asManager,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    core::Validator::validateClass<core::UserWithPubKey>(newMember, "field:newMember ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    try {
+        impl->addGroupMember(groupId, newMember, asManager, users, managers, publicMeta, privateMeta);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void GroupApi::removeGroupMember(
+    const std::string& groupId,
+    const std::string& userId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    core::Validator::validateId(userId, "field:userId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    try {
+        impl->removeGroupMember(groupId, userId, users, managers, publicMeta, privateMeta);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void GroupApi::updateGroup(
     const std::string& groupId,
     const std::vector<core::UserWithPubKey>& users,

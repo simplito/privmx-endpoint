@@ -102,6 +102,15 @@ void KeyDecryptionAndVerificationRequest::addAll(
     }
 }
 void KeyDecryptionAndVerificationRequest::addGroupKeys(
+    const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
+    const EncKeyLocation& location
+) {
+    if (groupKeys.has_value()) {
+        addGroupKeys(groupKeys.value(), location);
+    }
+}
+
+void KeyDecryptionAndVerificationRequest::addGroupKeys(
     const std::vector<server::GroupKeysEntry>& groupKeys,
     const EncKeyLocation& location
 ) {

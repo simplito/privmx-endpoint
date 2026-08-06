@@ -40,6 +40,16 @@ public:
     );
     void addAll(const std::vector<server::KeyEntry>& keys, const EncKeyLocation& location);
     void addGroupKeys(const std::vector<server::GroupKeysEntry>& groupKeys, const EncKeyLocation& location);
+    /**
+     * Convenience for a module whose wire field is optional.
+     *
+     * It has to be optional on any field added to an existing struct: a missing JSON array is a parse *error*,
+     * not an empty list, so a non-optional field would make every read fail against a server that predates it.
+     */
+    void addGroupKeys(
+        const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
+        const EncKeyLocation& location
+    );
     void markAsCompleted();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, server::KeyEntry>> requestData;
     // maps location -> keyId -> (KeyEntry, groupId, groupEpoch)

@@ -42,6 +42,16 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+/**
+ * Whether a served module struct carries key entries addressed to a group.
+ *
+ * Spelled as a trait rather than a `requires` expression because this header is compiled as C++17.
+ */
+template<typename T, typename = void>
+struct module_has_group_keys : std::false_type {};
+template<typename T>
+struct module_has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys)>> : std::true_type {};
+
 class ModuleBaseApi {
 public:
     ModuleBaseApi(
@@ -128,6 +138,13 @@ protected:
         model.force = force;
     }
 
+    /**
+     * @param distributeToUsers when false, a new key is still generated but **no per-user entries are built**.
+     *
+     * For a module that distributes its key some other way — a group that wraps it once to its own identity key
+     * rather than once per member — building those entries is not merely redundant, it is the `O(n)` cost that
+     * mechanism exists to avoid, and it would be paid in client CPU even after the entries are discarded.
+     */
     template<typename TContainer, typename TEntry>
     ContainerUpdateContext prepareContainerUpdate(
         const TContainer& container,
@@ -135,7 +152,8 @@ protected:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey
+        bool forceGenerateNewKey,
+        bool distributeToUsers = true
     ) {
         auto location{getModuleEncKeyLocation(container, resourceId)};
         auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
@@ -159,10 +177,13 @@ protected:
         std::vector<core::server::KeyEntrySet> keyEntries;
         if (usersKeysResolver->doNeedNewKey()) {
             key = _keyProvider->generateKey();
-            keyEntries = _keyProvider->prepareKeysList(usersKeysResolver->getNewUsers(), key, dio, location, secret);
+            if (distributeToUsers) {
+                keyEntries =
+                    _keyProvider->prepareKeysList(usersKeysResolver->getNewUsers(), key, dio, location, secret);
+            }
         }
         auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-        if (!usersToAddMissingKey.empty()) {
+        if (distributeToUsers && !usersToAddMissingKey.empty()) {
             auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
                 containerKeys, usersToAddMissingKey, dio, location, secret
             );
@@ -245,6 +266,12 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
     keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
+    if constexpr (module_has_group_keys<ModuleStruct>::value) {
+        // A module may distribute its key to a *group* rather than to each member — a group wrapping its own
+        // metadata key to itself does exactly that. Without this the current key is simply not found, and the
+        // failure surfaces as "enc key with given keyId does not exist" rather than as anything informative.
+        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
+    }
     core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(data_entry.keyId);
     return ret;
 }
@@ -264,6 +291,9 @@ auto ModuleBaseApi::getAndValidateModuleKeys(
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, resourceId)};
     keyProviderRequest.addAll(moduleObj.keys, location);
+    if constexpr (module_has_group_keys<ModuleStruct>::value) {
+        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
+    }
     auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
     return moduleKeys;
 }

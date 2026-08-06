@@ -27,7 +27,9 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/group/keytree/LadderKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
@@ -62,14 +64,21 @@ std::vector<TreeMember> publicOf(const std::vector<Member>& members) {
 }
 
 /**
- * Shortens a wrapped blob.
+ * Reduces a wrapped blob to its length and a digest.
  *
  * The consumer of this dump is a *structural* validator: it checks that an edge carries a ciphertext, never what
- * is inside one, because the server cannot decrypt anything. Emitting whole ECIES blobs would multiply the
- * fixture's size for no added coverage, so a prefix goes in — enough to see that a real wrap was produced.
+ * is inside one, because the server cannot decrypt anything. Whole ECIES blobs would multiply the fixture's size
+ * for no added coverage.
+ *
+ * A **prefix** would be worse than useless here, and was: the first 46 base64 characters of an ECIES blob are a
+ * fixed header — version byte plus the signer's public key, which is the same for every edge one client writes —
+ * so a truncated fixture showed the identical string on all 33 edges of a tree. A digest keeps the file small
+ * while staying distinct per ciphertext, which lets the consumer assert that a state does not repeat one wrap
+ * where it should carry many.
  */
 std::string shorten(const std::string& blob) {
-    return blob.size() <= 24 ? blob : blob.substr(0, 24) + "~";
+    return "b64:" + std::to_string(blob.size()) + ":"
+        + privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(blob)).substr(0, 16);
 }
 
 std::string quote(const std::string& value) {

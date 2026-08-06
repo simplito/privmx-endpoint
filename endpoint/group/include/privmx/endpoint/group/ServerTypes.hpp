@@ -91,6 +91,7 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
     F(keys, std::vector<core::server::KeyEntry>)                                                                       \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeysEntry>>)                                             \
     F(version, int64_t)                                                                                                \
     F(keyVersion, std::optional<int64_t>)                                                                              \
     F(keyHistory, std::optional<std::vector<GroupKeyHistoryEntry>>)                                                    \
@@ -180,6 +181,7 @@ JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
     F(tree, GroupTreeState)                                                                                            \
     F(rungs, std::vector<GroupArchiveRung>)                                                                            \
     F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
+    F(groupKeys, std::vector<core::server::GroupKeyEntrySet>)                                                          \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(confirmationTag, std::optional<std::string>)
 JSON_STRUCT(GroupRemoveMemberModel, GROUP_REMOVE_MEMBER_MODEL_FIELDS);

@@ -144,6 +144,23 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
     return members;
 }
 
+/**
+ * Runs a plan builder, converting its argument errors into an endpoint exception.
+ *
+ * The keytree module reports impossible requests — removing somebody who holds no leaf, growing without the
+ * roster — as `std::invalid_argument`, which is right for a library with no dependency on the endpoint's
+ * exception hierarchy. It is wrong to let one escape the SDK boundary: a caller catching `core::Exception`
+ * would get a `std::terminate` instead of an error.
+ */
+template<typename TPlan>
+static TPlan planOrThrow(const std::function<TPlan()>& build) {
+    try {
+        return build();
+    } catch (const std::invalid_argument& e) {
+        throw core::EncryptionKeyValidationException(std::string("key tree operation is not possible: ") + e.what());
+    }
+}
+
 keytree::TreeGroupState GroupApiImpl::climbForPlanning(const server::GroupInfo& group) {
     if (!keytree::GroupKeyResolver::hasTree(group)) {
         throw core::EncryptionKeyValidationException("this group is not backed by a key tree");
@@ -241,14 +258,19 @@ void GroupApiImpl::addGroupMember(
     const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
 
     const keytree::TreeGroupState state = climbForPlanning(currentGroup);
+    // The group's metadata key may live in an entry addressed to the group itself, which only opens with the
+    // grant key. Register it before anything asks the key provider for the current key.
+    registerOwnGrantKeys(currentGroup);
 
     keytree::TreeKeys tree(_treeKeyStore);
     tree.setMemberKeys(toTreeMembers(users, managers));
-    const keytree::AdditionPlan plan = tree.planAddition(
-        state,
-        keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
-        _userPrivKey
-    );
+    const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
+        return tree.planAddition(
+            state,
+            keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
+            _userPrivKey
+        );
+    });
 
     // No new epoch: `forceGenerateNewKey` stays false so the metadata key is untouched and every container the
     // group can read stays valid. The newcomer simply gets an entry for the key that already exists.
@@ -318,13 +340,16 @@ void GroupApiImpl::removeGroupMember(
     const int64_t newEpoch = currentEpoch + 1;
 
     const keytree::TreeGroupState state = climbForPlanning(currentGroup);
+    registerOwnGrantKeys(currentGroup);
     const auto currentGrantKey = _treeKeyStore.getGrantKey(static_cast<std::uint32_t>(currentEpoch));
 
     keytree::TreeKeys tree(_treeKeyStore);
     // The surviving siblings' public keys come from the roster: they are not part of the tree state, and a
     // refresh that skipped one would silently lock that member out.
     tree.setMemberKeys(toTreeMembers(users, managers));
-    const keytree::RemovalPlan plan = tree.planRemoval(state, userId, _userPrivKey);
+    const keytree::RemovalPlan plan = planOrThrow<keytree::RemovalPlan>([&] {
+        return tree.planRemoval(state, userId, _userPrivKey);
+    });
 
     // Rungs for the new epoch. The unit rung is mandatory — without it the group's own history is orphaned at
     // the moment of the removal. Skip rungs are added when this client happens to hold the older epoch keys,
@@ -341,7 +366,25 @@ void GroupApiImpl::removeGroupMember(
 
     // A removal DOES rotate the metadata key: otherwise the departing member keeps reading the group's name and
     // description, even though the grant key is beyond their reach.
-    auto ctx = prepareContainerUpdate(currentGroup, currentEntry, resourceId, users, managers, true);
+    //
+    // But it rotates it with **one** wrap, not one per remaining member. The new key is wrapped to the group's
+    // own new grant public key — the group is a grantee of itself, using the same mechanism a thread or store
+    // uses when it grants access to a group — and every remaining member opens it by climbing to a key they can
+    // already reach. Distributing it per member would put the O(n) cost back into the one operation the tree
+    // exists to keep cheap. See documents/nested_groups/09-hidden-key-tree.md §9.1.
+    // `distributeToUsers = false`: a new metadata key is generated, but not wrapped to anyone individually. Doing
+    // that would cost one ECIES operation per remaining member in this client's own CPU even though none of the
+    // results would be sent.
+    auto ctx = prepareContainerUpdate(currentGroup, currentEntry, resourceId, users, managers, true, false);
+    const std::vector<core::server::GroupKeyEntrySet> selfAddressedKey = buildGroupKeyEntries(
+        {core::GroupGrantWithKey{
+            .groupId = groupId,
+            .role = "manager",
+            .groupPubKey = plan.newGrantKey.getPublicKey().toBase58DER(),
+            .groupEpoch = newEpoch,
+        }},
+        ctx.key, ctx.dio, currentGroup.contextId, resourceId, ctx.secret
+    );
 
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
     std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
@@ -385,7 +428,9 @@ void GroupApiImpl::removeGroupMember(
         keytree::TreeWire::fromGroupInfo(currentGroup), plan, position.value()
     );
     model.rungs = keytree::TreeWire::toWire(rungs);
-    model.keys = ctx.keyEntries;
+    // Deliberately empty: `groupKeys` carries the same key in a single ciphertext.
+    model.keys = {};
+    model.groupKeys = selfAddressedKey;
     model.expectedKeyVersion = currentEpoch;
     const auto confInput = std::string("confirm") + groupId + std::to_string(newEpoch) + ctx.key.id;
     model.confirmationTag = privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(ctx.key.key, confInput));
@@ -625,6 +670,7 @@ void GroupApiImpl::adoptRotatedAlready(
 Group GroupApiImpl::getGroup(const std::string& groupId) {
     server::GroupGetModel params{.groupId = groupId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
+    registerOwnGrantKeys(group);
     setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider);
 }
@@ -638,6 +684,7 @@ core::PagingList<Group> GroupApiImpl::listGroups(
     core::ListQueryMapper::map(model, pagingQuery);
     auto groupsList = _serverApi.groupList(model);
     for (const auto& group : groupsList.groups) {
+        registerOwnGrantKeys(group);
         setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
     }
     std::vector<Group> groups = _groupDataSchemaMapper->validateDecryptAndConvertGroups(
@@ -657,12 +704,14 @@ void GroupApiImpl::processNotificationEvent(
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "groupCreated") {
             auto raw = server::GroupInfo::fromJSON(notification.data);
+            registerOwnGrantKeys(raw);
             setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
             auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider);
             auto event = core::EventBuilder::buildEvent<GroupCreatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupUpdated") {
             auto raw = server::GroupInfo::fromJSON(notification.data);
+            registerOwnGrantKeys(raw);
             setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
             invalidateModuleKeysInCache(raw.id);
             auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider);
@@ -693,13 +742,40 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
     server::GroupGetModel params{.groupId = moduleId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
     _groupDataSchemaMapper->assertDataIntegrity(group);
+    registerOwnGrantKeys(group);
     return std::make_pair(groupToModuleKeys(group), group.version);
+}
+
+/**
+ * Registers the group's own grant key so its metadata key entry can be opened.
+ *
+ * A tree-backed group wraps its metadata key to itself, so decrypting the group needs the grant private key for
+ * the epoch that entry names — which means climbing the tree, and descending the ladder when the entry belongs to
+ * an older epoch. Failures are swallowed per entry on purpose: a caller who cannot reach one epoch may still be
+ * able to read another, and the key provider reports an unreadable entry as a status code rather than an
+ * exception.
+ */
+void GroupApiImpl::registerOwnGrantKeys(const server::GroupInfo& group) {
+    if (!group.groupKeys.has_value() || group.groupKeys.value().empty()) {
+        return;
+    }
+    for (const core::server::GroupKeysEntry& entry : group.groupKeys.value()) {
+        if (entry.group != group.id) {
+            continue; // not self-addressed; another module's business
+        }
+        try {
+            const int64_t epoch = entry.groupEpoch.value_or(0);
+            _keyProvider->registerGroupPrivKey(group.id, epoch, resolveGroupPrivKey(group.id, epoch));
+        } catch (...) {
+            // Unreachable epoch: the caller was not a member then, or the archive has been cut or pruned.
+        }
+    }
 }
 
 core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group) {
     return core::ModuleKeys{
         .keys = group.keys,
-        .groupKeys = {},
+        .groupKeys = group.groupKeys.value_or(std::vector<core::server::GroupKeysEntry>{}),
         .currentKeyId = group.data.back().keyId,
         .moduleSchemaVersion = _groupDataSchemaMapper->getDataStructureVersion(group.data.back()),
         .moduleResourceId = group.resourceId.value_or(""),

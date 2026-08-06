@@ -50,6 +50,10 @@ add_executable(test_e2e_GroupTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/GroupTest.cp
 target_link_libraries(test_e2e_GroupTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_ThreadUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/ThreadUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_ThreadUsingGroupsTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# Tree-backed groups end to end: the only place the full round trip runs, since the unit tests each cover one side
+# of the client/server contract and the conformance fixture only proves the two agree on paper.
+add_executable(test_e2e_GroupKeyTreeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/GroupKeyTreeTest.cpp)
+target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 
 ## UNIT TESTS
 # These need no server, no docker and no network. They compile the source under test directly instead of
