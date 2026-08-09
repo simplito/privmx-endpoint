@@ -15,6 +15,7 @@ limitations under the License.
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
 
+
 namespace privmx {
 namespace cryptoservice {
 
@@ -27,9 +28,7 @@ public:
     virtual Bytes digest(Hash alg, BytesView data) override; 
     virtual Bytes hmac(Hash alg, BytesView key, BytesView data) override;
     virtual Bytes encrypt(const SymParams&, BytesView plaintext) override;
-    // virtual Bytes encrypt(SymParams& opt, BytesView plaintext) override;
     virtual Bytes decrypt(const SymParams&, BytesView ciphertext) override;
-    // virtual Bytes decrypt(SymParams& opt, BytesView ciphertext) override;
 
 protected:
     virtual Bytes digestConfStr(const char *config, BytesView data); 
@@ -42,8 +41,18 @@ protected:
                         BytesView key, BytesView iv, BytesView ciphertext);
     virtual Bytes decryptAeadConfStr(const char *alg, BytesView aad, 
                         BytesView key, BytesView iv, BytesView ciphertext);
-};
 
+private:
+    virtual Bytes pbkdf2(BytesView pass, BytesView salt, int rounds, 
+                        unsigned int length, const char* hash);
+    virtual Bytes kdf(size_t length, BytesView key, const std::string& label);
+    virtual std::tuple<Bytes, Bytes> getKEM(BytesView key, size_t kelen = 32, 
+                        size_t kmlen = 32);
+    // virtual Bytes generateIv(BytesView& key, Poco::Int32 idx); // require Poco
+    virtual Bytes aes256CbcHmac256Encrypt(BytesView data, BytesView key32, Bytes iv, 
+                        size_t taglen);
+    virtual Bytes aes256CbcHmac256Decrypt(Bytes data, BytesView key32, size_t taglen);
+};
 
 } // cryptoservice
 } // privmx

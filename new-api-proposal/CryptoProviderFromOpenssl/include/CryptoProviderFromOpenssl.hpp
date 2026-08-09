@@ -27,9 +27,7 @@ public:
     virtual Bytes digest(Hash alg, BytesView data) override; 
     virtual Bytes hmac(Hash alg, BytesView key, BytesView data) override;
     virtual Bytes encrypt(const SymParams&, BytesView plaintext) override;
-    // virtual Bytes encrypt(SymParams& opt, BytesView plaintext) override;
     virtual Bytes decrypt(const SymParams&, BytesView ciphertext) override;
-    // virtual Bytes decrypt(SymParams& opt, BytesView ciphertext) override;
 // protected:
 //     virtual Bytes digestConfStr(const char *config, BytesView data); 
 //     virtual Bytes hmacConfStr(const char *config,  BytesView key, BytesView data);

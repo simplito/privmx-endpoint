@@ -14,6 +14,7 @@ limitations under the License.
 #include <memory>
 #include <string>
 #include <vector>
+#include <tuple>
 
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
@@ -23,6 +24,8 @@ limitations under the License.
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/ripemd.h>
+
+#include <Poco/ByteOrder.h>
 
 
 namespace privmx {
@@ -342,6 +345,91 @@ Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView cipherte
         break;
     }
 }
+
+
+
+Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, const std::string& label) {
+    Poco::UInt32 len = Poco::ByteOrder::toBigEndian((Poco::UInt32)length);
+    std::string stringSeed = label + '\0' + std::string((char *)&len, 4);
+    const uint8_t* s = reinterpret_cast<const uint8_t*>(stringSeed.data());
+    BytesView seed(s, s + label.length() + 1 + 4);
+    Bytes k;      // k.size() == 0
+    Poco::UInt32 i = 1;
+    Bytes result; // result.size() == 0
+    while (result.size() < length) {
+        Bytes input = k;
+        Poco::UInt32 count = Poco::ByteOrder::toBigEndian(i++);
+        input.reserve(input.size() + 4 + seed.size());
+        input.insert(input.end(),(uint8_t*)&count,((uint8_t*)&count)+4);
+        input.insert(input.end(),seed.begin(),seed.end());       
+        k = hmac(Hash::Sha256, key, input);
+        result.reserve(result.size()+k.size());
+        result.insert(result.end(),k.begin(),k.end());
+    }
+    return Bytes(result.begin(), result.begin()+length);
+}
+
+std::tuple<Bytes, Bytes> CryptoProviderFromDriver::getKEM(BytesView key, size_t kelen, size_t kmlen) {
+    Bytes kEM = kdf(kelen + kmlen, key, "key expansion");
+    return std::make_tuple(Bytes(kEM.begin(),kEM.begin()+kelen), Bytes(kEM.begin()+kelen,kEM.end()));
+}
+
+Bytes CryptoProviderFromDriver::aes256CbcHmac256Encrypt(BytesView data, BytesView key32, Bytes iv, size_t taglen) {
+    Bytes kE, kM;
+    tie(kE, kM) = getKEM(key32);
+    if (iv.empty()) {
+        iv = hmac(Hash::Sha256, key32, data);
+    }
+    iv.resize(16);
+    Bytes data2(16, 0);
+    data2.insert(data2.end(),data.begin(),data.end());
+    Bytes cipher = encrypt({SymAlg::Aes256Cbc,kE,iv}, data2);
+    Bytes tag = hmac(Hash::Sha256, kM, cipher);
+    tag.resize(taglen);
+    cipher.reserve(cipher.size()+taglen);
+    cipher.insert(cipher.end(),tag.begin(),tag.end());
+    return cipher;
+}
+
+Bytes CryptoProviderFromDriver::aes256CbcHmac256Decrypt(Bytes data, BytesView key32, size_t taglen) {
+    Bytes kE, kM;
+    tie(kE, kM) = getKEM(key32);
+    Bytes tag(data.begin(), data.begin() + data.size() - taglen);
+    data.resize(data.size() - taglen);
+    Bytes rtag = hmac(Hash::Sha256, kM, data);
+    rtag.resize(taglen);
+    if (tag != rtag) {
+        throw PrivmxDriverCryptoException("WrongMessageSecurityTagException");
+    }
+    Bytes iv(data.begin(), data.begin()+16);
+    data.erase(data.begin(),data.begin()+16);
+    return decrypt({SymAlg::Aes256Cbc,kE,iv}, data);
+}
+
+Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int rounds, unsigned int length, const char* hash) {
+    std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> 
+            evp_md(EVP_MD_fetch(NULL, hash, NULL), EVP_MD_free);
+    if (evp_md.get() == NULL) {
+        throw PrivmxDriverCryptoException("PBKDF2: Unable to fetch protocol implementation");
+    }
+    Bytes result(length, 0);
+    const char *pass_as_chars = reinterpret_cast<const char *>(pass.data());
+    const unsigned char *salt_as_uchars = reinterpret_cast<const unsigned char *>(salt.data());
+    unsigned char *result_as_uchars = reinterpret_cast<unsigned char *>(result.data());
+    if (PKCS5_PBKDF2_HMAC(pass_as_chars, pass.size(), salt_as_uchars, salt.size(), 
+            rounds, evp_md.get(), length, result_as_uchars) != 1) {
+        throw PrivmxDriverCryptoException("PBKDF2: Unable to get hash");
+    }
+    return result;
+}
+
+// Bytes CryptoProviderFromDriver::generateIv(BytesView& key, Poco::Int32 idx) {
+//     std::string dataString = "iv" + std::to_string(idx).substr(0, 16);
+//     const uint8_t* s = reinterpret_cast<const uint8_t*>(dataString.data());
+//     Bytes hash = hmac(Hash::Sha256, key, Bytes(s, s+dataString.length()));
+//     hash.resize(16);
+//     return hash;
+// }
 
 } // cryptoservice
 } // privmx

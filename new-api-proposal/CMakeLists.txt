@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12) # >= 3.12 is necessary for C++20
 project(NewCryptoProvider VERSION 0.1 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 20) # C++ is necessary for std::span, std::uint8_t, etc.
 #set_property(TARGET tgt PROPERTY CXX_STANDARD 20)
 
 find_package(OpenSSL REQUIRED)
@@ -24,11 +24,12 @@ target_link_libraries(libraryFromOpenssl
     PRIVATE
         Poco::Poco)
 
-        
+
 add_library(libraryFromDriver STATIC ${BASEFILES} ${LIBRARYFROMDRIVER_FILES})
 target_include_directories(libraryFromDriver PUBLIC ${INCLUDE_LIBDRIVER})
 target_link_libraries(libraryFromDriver
     PRIVATE
+        Poco::Poco
         openssl::openssl)
 
 
