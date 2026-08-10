@@ -32,12 +32,9 @@ target_link_libraries(single_video_sender SDL2 privmx privmxendpointcore privmxe
 
 
 # privmxendpointstream + wxWidgets
-find_package(wxWidgets COMPONENTS core base xrc aui REQUIRED)
+find_package(wxWidgets COMPONENTS adv core base xrc aui REQUIRED)
 if(wxWidgets_USE_FILE) # not defined in CONFIG mode
     include(${wxWidgets_USE_FILE})
 endif()
-# add_executable(streamsProgram4 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_4.cpp)
-# target_link_libraries(streamsProgram4 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
-# # uses app serwer
-# add_executable(streamsProgram5 ${CMAKE_CURRENT_SOURCE_DIR}/streams_program_5.cpp)
-# target_link_libraries(streamsProgram5 ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
+add_executable(videoBoardGui ${CMAKE_CURRENT_SOURCE_DIR}/video_board_gui.cpp)
+target_link_libraries(videoBoardGui ${wxWidgets_LIBRARIES} privmx privmxendpointcore privmxendpointevent privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointstream libwebrtc)
