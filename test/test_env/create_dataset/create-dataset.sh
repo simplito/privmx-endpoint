@@ -43,6 +43,6 @@ docker cp $DOCKER_MONGO_NAME:/mongo_collections $DATASET_DIR
 # Migration Status
 docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=migration --db=privmx_localhost --jsonArray --pretty --out=migration.json"
 docker cp $DOCKER_MONGO_NAME:/migration.json $DATASET_DIR
-cp ${SCRIPT_DIR}/ServerData.ini $DATASET_DIR
-cp ${SCRIPT_DIR}/ServerData.json $DATASET_DIR
+mv ${SCRIPT_DIR}/ServerData.ini ${DATASET_DIR}/ServerData.ini
+mv ${SCRIPT_DIR}/ServerData.json ${DATASET_DIR}/ServerData.json
 
