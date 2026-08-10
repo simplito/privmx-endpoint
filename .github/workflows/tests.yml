@@ -50,4 +50,4 @@ jobs:
       run: |
         source build/build/Debug/generators/conanrun.sh
         cd test
-        python3 e2e_runner.py --max-workers 2 ../build/test "test_env/create_dataset/Dataset/ServerData.ini" "test_env/create_dataset/Dataset"
+        python3 e2e_runner.py --max-workers 2 --tests-dir ../build/test --dataset-dir "test_env/create_dataset/Dataset"
