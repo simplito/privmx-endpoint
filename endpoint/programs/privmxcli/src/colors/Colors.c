@@ -69,6 +69,7 @@ const char* get_color_c(enum Color color) {
         case WHITE:
             return "\033[97m";
     }
+    return "";
 }
 
 void set_color_c(enum Color color) {
@@ -112,6 +113,7 @@ const char* get_bgcolor_c(enum Color color) {
         case WHITE:
             return "\033[107m";
     }
+    return "";
 }
 
 void set_bgcolor_c(enum Color color) {

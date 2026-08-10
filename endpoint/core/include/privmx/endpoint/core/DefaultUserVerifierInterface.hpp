@@ -5,7 +5,7 @@
 #include <iostream>
 #include <optional>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
-#include <privmx/utils/Debug.hpp>
+#include <privmx/utils/Logger.hpp>
 #include <string>
 namespace privmx {
 namespace endpoint {
@@ -14,7 +14,7 @@ namespace core {
 class DefaultUserVerifierInterface : public virtual UserVerifierInterface {
 public:
     std::vector<bool> verify(const std::vector<VerificationRequest>& request) override {
-        PRIVMX_DEBUG("UserVerifierInterface", "VerificationRequest", "Default")
+        LOG_DEBUG("UserVerifierInterface::VerificationRequest Default")
         printWarning();
         return std::vector<bool>(request.size(), true);
     };

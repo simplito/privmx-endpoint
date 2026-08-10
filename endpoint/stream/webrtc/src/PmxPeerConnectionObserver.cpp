@@ -93,7 +93,6 @@ void PmxPeerConnectionObserver::OnDataChannel(libwebrtc::scoped_refptr<libwebrtc
     LOG_DEBUG(
         "STREAMS ", "API ", _streamRoomId + ": ON DATA CHANNEL channel_label: ", data_channel->label().std_string()
     )
-    _apiLow->registerRemoteDataChannel(_streamRoomId, data_channel->label().std_string());
     std::shared_ptr<stream::OnTrackInterface> roomOnTrackInterface = nullptr;
     {
         std::shared_lock<std::shared_mutex> lock(_onTrackInterfaceMutex);
@@ -121,16 +120,10 @@ void PmxPeerConnectionObserver::OnAddTrack(
 ) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON ADD TRACK")
     // set frame crypto to decrypt track
-    auto audioLevelAnalyzer = receiver->track()->kind().std_string() == "audio" ?
-        privmx::webrtc::FrameCryptorFactory::audioLevelAnalyzer() :
-        nullptr;
-    if (audioLevelAnalyzer) {
-        _audioLevelAnalyzers.set(receiver->track()->id().std_string(), audioLevelAnalyzer);
-    }
     _frameCryptors.set(
         receiver->track()->id().std_string(),
         privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(
-            _peerConnectionFactory, receiver, _currentKeys, audioLevelAnalyzer, _options
+            _peerConnectionFactory, receiver, _currentKeys, _options
         )
     );
 
@@ -229,8 +222,6 @@ void PmxPeerConnectionObserver::OnRemoveTrack(
             TrackAction::REMOVED
         );
     }
-    if (dataType == DataType::AUDIO)
-        _audioLevelAnalyzers.erase(receiver->track()->id().std_string());
     _frameCryptors.erase(receiver->track()->id().std_string());
     if (dataType == DataType::AUDIO)
         _audioTrackSinks.erase(receiver->track()->id().std_string());

@@ -31,17 +31,6 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::TurnCredentials>(const strea
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::Stream>(const stream::Stream& val) {
-    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
-    if (_options.addType) {
-        obj->set("__type", "stream$Stream");
-    }
-    obj->set("streamId", serialize(val.streamId));
-    obj->set("userId", serialize(val.userId));
-    return obj;
-}
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<stream::StreamRoom>>(
     const core::PagingList<stream::StreamRoom>& val
 ) {

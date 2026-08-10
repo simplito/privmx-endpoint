@@ -8,7 +8,7 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include <privmx/utils/Debug.hpp>
+
 #include <privmx/utils/Utils.hpp>
 #include <type_traits>
 
@@ -103,7 +103,7 @@ void ModuleBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>
 
 ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
     // get newest module
-    PRIVMX_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
+    LOG_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
     auto moduleKeys = getModuleKeysAndVersionFromServer(moduleId);
     auto keys = convertModuleKeysToContainerKeyCacheFormat(moduleKeys.first, moduleKeys.second);
     _keyCache.set(moduleId, keys);

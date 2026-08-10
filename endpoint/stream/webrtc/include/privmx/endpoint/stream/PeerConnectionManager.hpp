@@ -12,11 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 #define _PRIVMXLIB_ENDPOINT_WEBRTC_PEER_CONNECTIN_MANAGER_HPP_
 
-#include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
-#include "privmx/endpoint/stream/webrtc/Types.hpp"
-#include <atomic>
 #include <libwebrtc.h>
 #include <memory>
 #include <privmx/utils/ThreadSaveMap.hpp>
@@ -35,7 +32,6 @@ enum ConnectionType {
 struct AudioTrackInfo {
     libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> track;
     libwebrtc::scoped_refptr<libwebrtc::RTCRtpSender> sender;
-    std::shared_ptr<privmx::webrtc::AudioLevelAnalyzer> audioLevelAnalyzer;
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
 };
 

@@ -14,7 +14,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
-#include "privmx/utils/Debug.hpp"
 #include "privmx/utils/Utils.hpp"
 
 using namespace privmx::endpoint;

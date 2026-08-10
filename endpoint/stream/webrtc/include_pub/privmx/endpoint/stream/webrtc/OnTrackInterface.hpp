@@ -28,11 +28,6 @@ struct Track {
     bool muted;
     std::function<void(bool)> updateMute;
 };
-struct TrackEvent {
-    std::string id;
-    std::optional<Track> track;
-    Stream stream;
-};
 struct Data {
     Data(DataType _type, const std::vector<std::string>& _streamIds, const std::string& _track)
         : type(_type), streamIds(_streamIds), track(_track) {}

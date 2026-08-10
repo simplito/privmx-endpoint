@@ -3,7 +3,6 @@
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
-#include <privmx/utils/Debug.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 #include <privmx/utils/Utils.hpp>
 

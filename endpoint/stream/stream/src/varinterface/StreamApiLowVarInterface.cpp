@@ -12,10 +12,8 @@ limitations under the License.
 
 #include <Poco/JSON/Parser.h>
 
-#include "../../include/privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
-#include "privmx/endpoint/stream/DynamicTypes.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
@@ -50,7 +48,6 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
         {Trickle, &StreamApiLowVarInterface::trickle},
         {ListStreamRoomParticipants, &StreamApiLowVarInterface::listStreamRoomParticipants},
 
-        {RegisterRemoteDataChannel, &StreamApiLowVarInterface::registerRemoteDataChannel},
         {EncryptDataChannelMessage, &StreamApiLowVarInterface::encryptDataChannelMessage},
         {DecryptDataChannelMessage, &StreamApiLowVarInterface::decryptDataChannelMessage}
 };
@@ -250,15 +247,6 @@ Poco::Dynamic::Var StreamApiLowVarInterface::setNewOfferOnReconfigure(const Poco
     _streamApi.setNewOfferOnReconfigure(sessionId, jsep);
     return {};
 }
-
-Poco::Dynamic::Var StreamApiLowVarInterface::registerRemoteDataChannel(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
-    auto remoteStreamId = _deserializer.deserialize<std::string>(argsArr->get(1), "remoteStreamId");
-    _streamApi.registerRemoteDataChannel(streamRoomId, remoteStreamId);
-    return {};
-}
-
 Poco::Dynamic::Var StreamApiLowVarInterface::encryptDataChannelMessage(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
