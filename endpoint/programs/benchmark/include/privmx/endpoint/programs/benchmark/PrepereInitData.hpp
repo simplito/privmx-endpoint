@@ -21,6 +21,8 @@ limitations under the License.
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
+#include <privmx/endpoint/kvdb/KvdbApi.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/programs/benchmark/Types.hpp"
 
 
@@ -29,6 +31,8 @@ std::vector<std::string> PrepareInitDataThread(
     std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi, 
     std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi, 
     std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<privmx::endpoint::event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
@@ -39,6 +43,8 @@ std::vector<std::string> PrepareInitDataStore(
     std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi, 
     std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi, 
     std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<privmx::endpoint::event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
@@ -50,6 +56,8 @@ std::vector<std::string> PrepareInitDataInbox(
     std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi, 
     std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi, 
     std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<privmx::endpoint::event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
@@ -60,16 +68,44 @@ std::vector<std::string> PrepareInitDataCrypto(
     std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi, 
     std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi, 
     std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<privmx::endpoint::event::EventApi> eventApi,
+    std::string userId,
+    std::string userPubKey,
+    uint64_t fun_number
+);
+
+std::vector<std::string> PrepareInitDataKvdb(
+    std::shared_ptr<privmx::endpoint::core::Connection> connection,
+    std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi,
+    std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi,
+    std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<privmx::endpoint::event::EventApi> eventApi,
+    std::string userId,
+    std::string userPubKey,
+    uint64_t fun_number
+);
+
+std::vector<std::string> PrepareInitDataEvent(
+    std::shared_ptr<privmx::endpoint::core::Connection> connection,
+    std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi,
+    std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi,
+    std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<privmx::endpoint::event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
 );
 
 std::vector<std::string> PrepareInitData(
-    std::shared_ptr<privmx::endpoint::core::Connection> connection, 
+    std::shared_ptr<privmx::endpoint::core::Connection> connection,
     std::shared_ptr<privmx::endpoint::thread::ThreadApi> threadApi, 
     std::shared_ptr<privmx::endpoint::store::StoreApi> storeApi, 
     std::shared_ptr<privmx::endpoint::inbox::InboxApi> inboxApi,
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<privmx::endpoint::event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     Module module, 

@@ -110,10 +110,10 @@ int main() {
     auto inboxEntryId {inboxApi.listEntries(inboxId, defaultListQuery).readItems[0].entryId};
     
     // benchmarks
-    Times("getMessage", repeats, printToMd).invoke(threadId, emptyData, emptyData, msgData, 
+    Times("sendMessage", repeats, printToMd).invoke(threadId, emptyData, emptyData, msgData,
         [&](const std::string& id, const privmx::endpoint::core::Buffer& pub, const privmx::endpoint::core::Buffer& priv, const privmx::endpoint::core::Buffer& data) { return threadApi.sendMessage(id, pub, priv, data); }
     );
-    Times("sendMessage", repeats, printToMd).invoke(msgIdToGet, 
+    Times("getMessage", repeats, printToMd).invoke(msgIdToGet,
         [&](const std::string& msgId) { return threadApi.getMessage(msgId); }
     );
     Times("readFromFile", repeats, printToMd).invoke(fileIdToGet, [&](const std::string& fileId) {
