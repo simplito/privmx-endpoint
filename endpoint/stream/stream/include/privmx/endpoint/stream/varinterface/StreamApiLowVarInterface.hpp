@@ -57,7 +57,6 @@ public:
         JoinStreamRoomEx = 23,
         ListStreamRoomParticipants = 24,
 
-        RegisterRemoteDataChannel = 25,
         EncryptDataChannelMessage = 26,
         DecryptDataChannelMessage = 27,
     };
@@ -96,7 +95,6 @@ public:
     Poco::Dynamic::Var acceptOfferOnReconfigure(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setNewOfferOnReconfigure(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var registerRemoteDataChannel(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var encryptDataChannelMessage(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var decryptDataChannelMessage(const Poco::Dynamic::Var& args);
 

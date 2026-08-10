@@ -79,10 +79,6 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
     return result;
 }
 
-void DataChannelMessageEncryptorV1::registerRemoteStreamId(const std::string& remoteStreamId, int64_t initialSeq) {
-    _remoteStreamSeqMap.set(remoteStreamId, initialSeq);
-}
-
 void DataChannelMessageEncryptorV1::updateKey(const std::vector<Key>& keys) {
     std::unique_lock<std::shared_mutex> lock(_keysMutex);
     _keys = keys;

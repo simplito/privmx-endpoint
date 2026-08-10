@@ -3,6 +3,7 @@ build-emscripten/
 .vscode/
 .VSCodeCounter/
 .idea/
+.clangd
 doc/html
 doc/latex
 doc/xml
