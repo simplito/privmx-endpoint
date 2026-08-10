@@ -56,9 +56,8 @@ public:
         UpdateStream = 22,
         JoinStreamRoomEx = 23,
         ListStreamRoomParticipants = 24,
-
-        EncryptDataChannelMessage = 26,
-        DecryptDataChannelMessage = 27,
+        EncryptDataChannelMessage = 25,
+        DecryptDataChannelMessage = 26,
     };
 
     StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
