@@ -11,7 +11,7 @@ limitations under the License.
 
 #include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/utils/Debug.hpp>
+
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -102,7 +102,6 @@ std::string StoreApiImpl::createStore(
     const std::optional<core::ContainerPolicy>& policies,
     const std::string& type
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, createStore)
     auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 storeDataToEncrypt{
         .publicMeta = publicMeta,
@@ -122,9 +121,7 @@ std::string StoreApiImpl::createStore(
     if (policies.has_value()) {
         storeCreateModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, createStore, data encrypted)
     auto result = _serverApi->storeCreate(storeCreateModel);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, createStore, data send)
     return result.storeId;
 }
 
@@ -139,7 +136,6 @@ void StoreApiImpl::updateStore(
     const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeUpdate)
 
     server::StoreGetModel getModel;
     getModel.storeId = storeId;
@@ -165,11 +161,8 @@ void StoreApiImpl::updateStore(
         .dio = ctx.dio
     };
     model.data = _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key);
-
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeUpdate, data encrypted)
     _serverApi->storeUpdate(model);
     invalidateModuleKeysInCache(storeId);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeUpdate, data send)
 }
 
 void StoreApiImpl::deleteStore(const std::string& storeId) {
@@ -180,18 +173,14 @@ void StoreApiImpl::deleteStore(const std::string& storeId) {
 }
 
 Store StoreApiImpl::getStore(const std::string& storeId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, getStore)
     server::StoreGetModel model;
     model.storeId = storeId;
     if (type.length() > 0) {
         model.type = type;
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getStore, getting store)
     auto store = _serverApi->storeGet(model).store;
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getStore, data send)
     auto result = _storeDataSchemaMapper->validateDecryptAndConvertStore(store, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, getStore, data decrypted)
     return result;
 }
 
@@ -200,31 +189,24 @@ core::PagingList<Store> StoreApiImpl::listStores(
     const core::PagingQuery& query,
     const std::string& type
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, listStores)
     server::StoreListModel storeListModel;
     storeListModel.contextId = contextId;
     if (type.length() > 0) {
         storeListModel.type = type;
     }
     core::ListQueryMapper::map(storeListModel, query);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, listStores, getting storeList)
     auto storesList = _serverApi->storeList(storeListModel);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, listStores, data send)
     for (auto store : storesList.stores) {
         setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     }
     auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(storesList.stores, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, listStores, data decrypted)
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }
 
 File StoreApiImpl::getFile(const std::string& fileId) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, getFile)
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = fileId;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getFile)
     auto serverFileResult = _serverApi->storeFileGet(storeFileGetModel);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getFile, data send)
     auto store = serverFileResult.store;
     _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
@@ -232,7 +214,6 @@ File StoreApiImpl::getFile(const std::string& fileId) {
         serverFileResult.file, store.resourceId.value_or("")
     );
     if (statusCode != 0) {
-        PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data integrity validation failed)
         File result;
         result.statusCode = statusCode;
         return result;
@@ -240,36 +221,27 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto ret{_fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
         serverFileResult.file, storeToModuleKeys(store), _keyProvider
     )};
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data decrypted)
     return ret;
 }
 
 core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const core::PagingQuery& query) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeFileList)
     server::StoreFileListModel model;
     model.storeId = storeId;
     core::ListQueryMapper::map(model, query);
-
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList)
     auto serverFilesResult = _serverApi->storeFileList(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send);
     auto store = serverFilesResult.store;
     _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     auto files = _fileMetaDataSchemaMapper.validateDecryptAndConvertFiles(
         serverFilesResult.files, storeToModuleKeys(store), _keyProvider
     );
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileList, data decrypted)
     return core::PagingList<File>({.totalAvailable = serverFilesResult.count, .readItems = files});
 }
 
 void StoreApiImpl::deleteFile(const std::string& fileId) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeFileDelete)
     server::StoreFileDeleteModel model;
     model.fileId = fileId;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileWrite)
     _serverApi->storeFileDelete(model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileDelete, data send)
 }
 
 int64_t StoreApiImpl::createFile(

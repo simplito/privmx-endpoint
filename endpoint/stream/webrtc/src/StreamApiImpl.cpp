@@ -16,7 +16,6 @@ limitations under the License.
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/utils/Debug.hpp>
 
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
@@ -40,7 +39,7 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
     _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
     _configuration = libwebrtc::RTCConfiguration();
     for (size_t i = 0; i < credentials.size(); i++) {
-        PRIVMX_DEBUG("STREAMS", "StreamApiImpl", "IceServer.uri: " + credentials[i].url)
+        LOG_TRACE("StreamApiImpl - IceServer.uri: " + credentials[i].url)
         libwebrtc::IceServer iceServer = {
             .uri = credentials[i].url,
             .username = portable::string(credentials[i].username),

@@ -343,17 +343,6 @@ core::Buffer StreamApiLow::encryptDataChannelMessage(
     }
 }
 
-void StreamApiLow::registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId) {
-    auto impl = getImpl();
-    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
-    try {
-        return impl->registerRemoteDataChannel(streamRoomId, remoteStreamId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 DecryptedDataChannelMessage StreamApiLow::decryptDataChannelMessage(
     const std::string& streamRoomId,
     const std::string& remoteStreamId,

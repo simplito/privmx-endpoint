@@ -117,7 +117,6 @@ public:
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);
-    void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
     DecryptedDataChannelMessage decryptDataChannelMessage(
         const std::string& streamRoomId,
         const std::string& remoteStreamId,

@@ -10,7 +10,7 @@ limitations under the License.
 */
 #include "privmx/endpoint/programs/privmxcli/ConsoleWriter.hpp"
 #include "privmx/endpoint/programs/privmxcli/colors/Colors.hpp"
-#include <privmx/utils/Debug.hpp>
+
 
 using namespace privmx::endpoint::privmxcli;
 

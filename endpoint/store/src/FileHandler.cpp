@@ -12,7 +12,6 @@ limitations under the License.
 #include "privmx/endpoint/store/FileHandler.hpp"
 #include <Pson/BinaryString.hpp>
 #include <map>
-#include <privmx/utils/Debug.hpp>
 
 using namespace privmx::endpoint::store;
 using namespace privmx::endpoint;
@@ -272,12 +271,11 @@ void FileHandler::flush() {
     }
     _pendingTruncateBoundary = UINT64_MAX;
     _dirtyChunks.clear();
-    PRIVMX_DEBUG(
-        "FileHandler", "flush",
-        "_plainfileSize: " +
-            std::to_string(_plainfileSize) +
-            " | _encryptedFileSize: " +
-            std::to_string(_encryptedFileSize)
+    LOG_DEBUG(
+        "FileHandler::flush _plainfileSize: " +
+        std::to_string(_plainfileSize) +
+        " | _encryptedFileSize: " +
+        std::to_string(_encryptedFileSize)
     );
 }
 

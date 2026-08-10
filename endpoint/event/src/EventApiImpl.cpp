@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/utils/Debug.hpp>
 
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/event/Constants.hpp"
@@ -91,12 +90,12 @@ bool EventApiImpl::isInternalContextEvent(
     const std::optional<std::string>& internalContextEventType
 ) {
     //check if type == "custom" and channel == "context/<contextId>/internal"
-    PRIVMX_DEBUG("EventApiImpl", "isInternalContextEvent", "eventType: " + type)
+    LOG_TRACE("EventApiImpl", "isInternalContextEvent", "eventType: " + type)
     if (type == "custom") {
         auto channel = _subscriber.getSubscriptionQuery(subscriptions);
         if (!channel.has_value())
             return false;
-        PRIVMX_DEBUG("EventApiImpl", "isInternalContextEvent", "eventChannel: " + channel.value())
+        LOG_TRACE("EventApiImpl", "isInternalContextEvent", "eventChannel: " + channel.value())
         auto raw = server::ContextCustomEventData::fromJSON(eventData);
         if (!raw.id.empty() &&
             channel.value() == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + raw.id &&
@@ -164,7 +163,6 @@ void EventApiImpl::emitEventEx(
     model.channel = channelName;
     model.users = _eventKeyProvider.prepareKeysList(users, encryptionKey);
     _serverApi.contextSendCustomEvent(model);
-    PRIVMX_DEBUG("EventApiImpl", "emitEventEx", model.serialize(), true);
 }
 
 void EventApiImpl::validateChannelName(const std::string& channelName) {
