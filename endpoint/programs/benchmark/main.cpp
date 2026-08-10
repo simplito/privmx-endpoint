@@ -14,10 +14,11 @@
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
+#include <privmx/utils/Logger.hpp>
 #include "privmx/endpoint/programs/benchmark/Types.hpp"
 #include "privmx/endpoint/programs/benchmark/GetTestFunction.hpp"
 #include "privmx/endpoint/programs/benchmark/PrepereInitData.hpp"
-#include <privmx/utils/Debug.hpp>
+
 
 using namespace std::chrono_literals;
 using namespace privmx::endpoint;
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
     std::shared_ptr<inbox::InboxApi> inboxApi = std::make_shared<inbox::InboxApi>(inbox::InboxApi::create(*connection, *threadApi, *storeApi));
     std::shared_ptr<kvdb::KvdbApi> kvdbApi = std::make_shared<kvdb::KvdbApi>(kvdb::KvdbApi::create(*connection));
     std::shared_ptr<event::EventApi> eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
-    PRIVMX_DEBUG("Benchmark", "init", "Connected")
+    LOG_TRACE("Benchmark - init Connected")
     //contextId
     auto contextsList = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"});
     if(contextsList.totalAvailable == 0) {
@@ -93,7 +94,7 @@ int main(int argc, char** argv) {
     auto exec = GetTestFunction(benchmark_module, benchmark_grup);
     // prepare init data
     auto initLoopData = PrepareInitData(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, benchmark_module, benchmark_grup);
-    PRIVMX_DEBUG("Benchmark", "init", "PrepareInitData")
+    LOG_TRACE("Benchmark - init PrepareInitData")
     // Main
 
     uint64_t N = 0;
