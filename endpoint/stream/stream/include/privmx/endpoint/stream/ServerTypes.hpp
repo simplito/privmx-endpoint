@@ -160,11 +160,6 @@ JSON_STRUCT(StreamSetNewOfferModel, STREAM_SET_NEW_OFFER_MODEL_FIELDS);
     F(sessionId, int64_t)
 JSON_STRUCT(StreamAcceptOfferModel, STREAM_ACCEPT_OFFER_MODEL_FIELDS);
 
-#define STREAM_SEND_EVENT_MODEL_FIELDS(F)                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(data, std::string)
-JSON_STRUCT(StreamSendEventModel, STREAM_SEND_EVENT_MODEL_FIELDS);
-
 #define STREAM_UNPUBLISH_MODEL_FIELDS(F) F(sessionId, int64_t)
 JSON_STRUCT(StreamUnpublishModel, STREAM_UNPUBLISH_MODEL_FIELDS);
 
