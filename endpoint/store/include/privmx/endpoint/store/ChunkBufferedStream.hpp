@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKBUFFEREDSTREAM_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKBUFFEREDSTREAM_HPP_
 
+#include <cstdint>
 #include <optional>
 #include <privmx/utils/Logger.hpp>
 #include <string>
