@@ -1,8 +1,8 @@
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_USERVERIFIER_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_USERVERIFIER_HPP_
 
+#include <memory>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
-#include <privmx/utils/Debug.hpp>
 #include <string>
 namespace privmx {
 namespace endpoint {

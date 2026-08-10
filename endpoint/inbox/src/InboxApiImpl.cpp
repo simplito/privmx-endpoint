@@ -11,7 +11,6 @@ limitations under the License.
 
 #include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/utils/Debug.hpp>
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
@@ -229,12 +228,9 @@ void InboxApiImpl::updateInbox(
 }
 
 Inbox InboxApiImpl::getInbox(const std::string& inboxId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformInbox, getInbox)
     auto inbox = getServerInbox(inboxId, type);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, getInbox, data send)
     setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
     auto result = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(inbox, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformInbox, getInbox, data decrypted)
     return result;
 }
 
@@ -242,14 +238,11 @@ inbox::server::InboxInfo InboxApiImpl::getServerInbox(
     const std::string& inboxId,
     const std::optional<std::string>& type
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformInbox, getServerInbox)
     server::InboxGetModel model{.id = inboxId, .type = std::nullopt};
     if (type.has_value() && type->length() > 0) {
         model.type = type.value();
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformInbox, getServerInbox, getting inbox)
     auto inbox = _serverApi->inboxGet(model).inbox;
-    PRIVMX_DEBUG_TIME_STOP(PlatformInbox, getServerInbox, data recived)
     return inbox;
 }
 
@@ -388,14 +381,10 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
 }
 
 inbox::InboxEntry InboxApiImpl::readEntry(const std::string& inboxEntryId) {
-    PRIVMX_DEBUG_TIME_START(InboxApi, readEntry)
-    PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, readEntry)
     auto messageRaw = getServerMessage(inboxEntryId);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, readEntry, data recv);
     auto result = _inboxEntryDataSchemaMapper.decryptAndConvertInboxEntry(
         messageRaw, getEntryDecryptionKeys(messageRaw)
     );
-    PRIVMX_DEBUG_TIME_STOP(InboxApi, readEntry, data decrypted)
     return result;
 }
 
@@ -406,7 +395,6 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(
     if (query.queryAsJson.has_value()) {
         throw InboxModuleDoesNotSupportQueriesYetException();
     }
-    PRIVMX_DEBUG_TIME_START(InboxApi, listEntries)
     auto inboxRaw{getServerInbox(inboxId)};
     setNewModuleKeysInCache(inboxRaw.id, inboxToModuleKeys(inboxRaw), inboxRaw.version);
     auto inboxData{getInboxCurrentDataEntry(inboxRaw).data};
@@ -414,9 +402,7 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(
     thread::server::ThreadMessagesGetModel model;
     model.threadId = threadId;
     core::ListQueryMapper::map(model, query);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, listEntries)
     auto messagesList = _serverApi->threadMessagesGet(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, listEntries, data recv)
     std::vector<inbox::InboxEntry> messages;
     if (messagesList.messages.size() > 0) {
         for (auto message : messagesList.messages) {
@@ -425,7 +411,6 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(
             );
         }
     }
-    PRIVMX_DEBUG_TIME_STOP(InboxApi, listEntries, data decrypted)
     return core::PagingList<inbox::InboxEntry>{.totalAvailable = messagesList.count, .readItems = messages};
 }
 
@@ -448,7 +433,6 @@ int64_t InboxApiImpl::createFileHandle(
 }
 
 int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store::server::File& file) {
-    PRIVMX_DEBUG_TIME_START(InboxApi, createInboxFileHandleForRead, handle_to_create)
     auto messageRaw = getServerMessage(readMessageIdFromFileKeyId(file.keyId));
 
     auto inboxKeys = getEntryDecryptionKeys(messageRaw);
@@ -459,11 +443,9 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
         core::DecryptedVersionedData{.dataStructureVersion = 0, .statusCode = 0}
     };
     auto decryptionParams = _storeApi.getImpl()->getFileDecryptionParams(file, fileMetaEncKey);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, createInboxFileHandleForRead, file_key_extracted)
     std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
         decryptionParams, _serverRequestChunkSize, _serverApi
     );
-    PRIVMX_DEBUG_TIME_STOP(InboxApi, createInboxFileHandleForRead, handle_created)
     return handle->getId();
 }
 
@@ -480,17 +462,13 @@ void InboxApiImpl::writeToFile(
 }
 
 int64_t InboxApiImpl::openFile(const std::string& fileId) {
-    PRIVMX_DEBUG_TIME_START(InboxApi, openFile)
     store::server::StoreFileGetModel storeFileGetModel{.fileId = fileId};
     auto file{_serverApi->storeFileGet(storeFileGetModel).file};
-    PRIVMX_DEBUG_TIME_CHECKPOINT(InboxApi, openFile, data recv);
     auto result = createInboxFileHandleForRead(file);
-    PRIVMX_DEBUG_TIME_STOP(InboxApi, openFile, data decrypted);
     return result;
 }
 
 core::Buffer InboxApiImpl::readFromFile(const int64_t handle, const int64_t length) {
-    PRIVMX_DEBUG_TIME_START(InboxApi, readFromFile)
     std::shared_ptr<store::FileReadHandle> handlePtr = _inboxHandleManager.getFileReadHandle(handle);
     core::Buffer result;
     try {
@@ -501,18 +479,14 @@ core::Buffer InboxApiImpl::readFromFile(const int64_t handle, const int64_t leng
         ex.setCause(e);
         throw ex;
     }
-    PRIVMX_DEBUG_TIME_STOP(InboxApi, readFromFile)
     return result;
 }
 
 void InboxApiImpl::seekInFile(const int64_t handle, const int64_t pos) {
-    PRIVMX_DEBUG_TIME_START(InboxApi, seekInFile)
     _inboxHandleManager.getFileReadHandle(handle)->seek(pos);
-    PRIVMX_DEBUG_TIME_STOP(InboxApi, seekInFile)
 }
 
 std::string InboxApiImpl::closeFile(const int64_t handle) {
-    PRIVMX_DEBUG_TIME_START(InboxApi, closeFile)
     if (!_inboxHandleManager.isFileReadHandle(handle)) {
         throw store::InvalidFileReadHandleException(
             "CloseFile() invalid file handle. Expected FILE_READ_HANDLE, but FILE_WRITE_HANDLE used."
@@ -520,7 +494,6 @@ std::string InboxApiImpl::closeFile(const int64_t handle) {
     }
     std::shared_ptr<store::FileHandle> handlePtr = _inboxHandleManager.getFileReadHandle(handle);
     _inboxHandleManager.removeFileHandle(handle);
-    PRIVMX_DEBUG_TIME_STOP(InboxApi, closeFile)
     return handlePtr->getFileId();
 }
 

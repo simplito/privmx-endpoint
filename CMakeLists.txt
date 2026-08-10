@@ -17,7 +17,6 @@ option(PRIVMX_IMPORTED_LIBRARIES "Using imported libraries" OFF)
 option(PRIVMX_ENABLE_TESTS "Enable tests" OFF)
 option(PRIVMX_ENABLE_TESTS_E2E "Enable tests e2e" OFF)
 option(PRIVMX_BUILD_ENDPOINT "Build endpoint lib" ON)
-option(PRIVMX_BUILD_DEBUG "Enable extra debug data for lib" OFF)
 
 option(PRIVMX_EMSCRIPTEN "Enable emscripten build" OFF)
 message(STATUS "Enable emscripten build - PRIVMX_EMSCRIPTEN=${PRIVMX_EMSCRIPTEN}")
