@@ -35,7 +35,6 @@ enum ConnectionType {
 struct AudioTrackInfo {
     libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> track;
     libwebrtc::scoped_refptr<libwebrtc::RTCRtpSender> sender;
-    std::shared_ptr<privmx::webrtc::AudioLevelAnalyzer> audioLevelAnalyzer;
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
 };
 
