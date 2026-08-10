@@ -21,8 +21,6 @@ namespace stream {
 using Handle = int64_t; // can be everything that is DTO
 using StreamHandle = Handle;
 using SubscriberStreamHandle = Handle;
-using RemoteStreamId = int64_t;
-using RemoteTrackId = std::string;
 
 struct TurnCredentials {
     std::string url;
@@ -48,11 +46,6 @@ struct StreamRoom {
     int64_t schemaVersion;
     std::string state; // "created" | "open" | "closed"
     int64_t emptyRoomTtl;
-};
-
-struct Stream {
-    int64_t streamId;
-    std::string userId;
 };
 
 struct SdpWithTypeModel {
