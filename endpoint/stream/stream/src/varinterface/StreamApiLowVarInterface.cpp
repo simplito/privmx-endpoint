@@ -12,10 +12,8 @@ limitations under the License.
 
 #include <Poco/JSON/Parser.h>
 
-#include "../../include/privmx/endpoint/stream/ServerTypes.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
-#include "privmx/endpoint/stream/DynamicTypes.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;

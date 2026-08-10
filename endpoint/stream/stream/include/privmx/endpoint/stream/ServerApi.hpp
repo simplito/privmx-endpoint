@@ -41,7 +41,6 @@ public:
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
     void streamSetNewOffer(server::StreamSetNewOfferModel model);
 
-    void streamRoomSendCustomEvent(server::StreamRoomSendCustomEventModel model);
     void streamUnpublish(server::StreamUnpublishModel model);
 
     server::StreamsSubscribeResult streamsUpdateRemoteSubscriptions(server::StreamUpdateRemoteSubscriptionsModel model);

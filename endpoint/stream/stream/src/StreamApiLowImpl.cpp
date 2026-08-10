@@ -27,13 +27,9 @@ limitations under the License.
 #include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/EventBuilder.hpp"
-#include "privmx/endpoint/core/UsersKeysResolver.hpp"
-#include "privmx/endpoint/stream/DynamicTypes.hpp"
 #include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/stream/Mapper.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
-#include "privmx/endpoint/stream/StreamTypes.hpp"
-#include "privmx/endpoint/stream/StreamVarDeserializer.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
