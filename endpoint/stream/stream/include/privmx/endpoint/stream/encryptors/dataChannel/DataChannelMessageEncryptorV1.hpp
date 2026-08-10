@@ -28,7 +28,6 @@ public:
     DataChannelMessageEncryptorV1() = default;
     core::Buffer encryptMessage(const DataChannelMessage& plainMessage);
     DecryptedDataChannelMessage decryptMessage(const std::string& remoteStreamId, const core::Buffer& encryptedMessage);
-    void registerRemoteStreamId(const std::string& remoteStreamId, int64_t initialSeq = -1);
     void updateKey(const std::vector<Key>& keys);
 
 private:
