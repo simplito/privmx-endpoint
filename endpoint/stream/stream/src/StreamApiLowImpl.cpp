@@ -778,12 +778,6 @@ core::Buffer StreamApiLowImpl::encryptDataChannelMessage(
     auto room = getStreamRoomData(streamRoomId);
     return room->messageEncryptor->encryptMessage(plainMessage);
 }
-
-void StreamApiLowImpl::registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId) {
-    auto room = getStreamRoomData(streamRoomId);
-    room->messageEncryptor->registerRemoteStreamId(remoteStreamId);
-}
-
 DecryptedDataChannelMessage StreamApiLowImpl::decryptDataChannelMessage(
     const std::string& streamRoomId,
     const std::string& remoteStreamId,
