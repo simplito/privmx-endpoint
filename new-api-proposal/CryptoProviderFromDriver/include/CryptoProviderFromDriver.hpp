@@ -29,6 +29,7 @@ public:
     virtual Bytes hmac(Hash alg, BytesView key, BytesView data) override;
     virtual Bytes encrypt(const SymParams&, BytesView plaintext) override;
     virtual Bytes decrypt(const SymParams&, BytesView ciphertext) override;
+    virtual Bytes derive(const KdfParams& opt, BytesView secretData) override;  
 
 protected:
     virtual Bytes digestConfStr(const char *config, BytesView data); 
@@ -44,8 +45,9 @@ protected:
 
 private:
     virtual Bytes pbkdf2(BytesView pass, BytesView salt, int rounds, 
-                        unsigned int length, const char* hash);
+                        size_t length, const char* hash);
     virtual Bytes kdf(size_t length, BytesView key, const std::string& label);
+    virtual Bytes prf_tls12(BytesView key, BytesView seed, size_t length);
     virtual std::tuple<Bytes, Bytes> getKEM(BytesView key, size_t kelen = 32, 
                         size_t kmlen = 32);
     // virtual Bytes generateIv(BytesView& key, Poco::Int32 idx); // require Poco

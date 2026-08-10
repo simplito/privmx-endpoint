@@ -346,8 +346,6 @@ Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView cipherte
     }
 }
 
-
-
 Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, const std::string& label) {
     Poco::UInt32 len = Poco::ByteOrder::toBigEndian((Poco::UInt32)length);
     std::string stringSeed = label + '\0' + std::string((char *)&len, 4);
@@ -406,7 +404,7 @@ Bytes CryptoProviderFromDriver::aes256CbcHmac256Decrypt(Bytes data, BytesView ke
     return decrypt({SymAlg::Aes256Cbc,kE,iv}, data);
 }
 
-Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int rounds, unsigned int length, const char* hash) {
+Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int rounds, size_t length, const char* hash) {
     std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> 
             evp_md(EVP_MD_fetch(NULL, hash, NULL), EVP_MD_free);
     if (evp_md.get() == NULL) {
@@ -421,6 +419,39 @@ Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int round
         throw PrivmxDriverCryptoException("PBKDF2: Unable to get hash");
     }
     return result;
+}
+
+Bytes CryptoProviderFromDriver::prf_tls12(BytesView key, BytesView seed, size_t length) {
+    Bytes a(seed.begin(),seed.end());
+    Bytes result;    // result.size() == 0
+    while (result.size() < length) {
+        a = hmac(Hash::Sha256, key, a);
+        // string tmp = a + seed;
+        Bytes tmp(a);
+        tmp.reserve(tmp.size()+seed.size());
+        tmp.insert(tmp.end(),seed.begin(),seed.end());
+        Bytes d = hmac(Hash::Sha256, key, tmp);
+        result.reserve(result.size()+d.size());
+        result.insert(result.end(),d.begin(),d.end());
+    }
+    result.resize(length);
+    return result;
+}
+
+Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretData)
+{
+    switch (opt.kdf)
+    {
+    case Kdf::Kdf:
+        return kdf(opt.length, secretData, opt.label);
+    case Kdf::Prf12:
+        return prf_tls12(secretData, opt.salt, opt.length);
+    case Kdf::Pbkdf2:
+        return pbkdf2(secretData, opt.salt, opt.rounds, opt.length, "SHA512");
+    default:
+        throw PrivmxDriverCryptoException("Key derivation function: Unknown protocol");
+        break;
+    }
 }
 
 // Bytes CryptoProviderFromDriver::generateIv(BytesView& key, Poco::Int32 idx) {

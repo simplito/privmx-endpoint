@@ -51,13 +51,20 @@ public:
     virtual Bytes decrypt(const SymParams&, BytesView ciphertext) = 0;
 };
 
+// ---- 5. Key derivation functions ----
+class IKdf {
+public:
+    virtual ~IKdf() = default;
+    virtual Bytes derive(const KdfParams& opt, BytesView secretData) = 0;  
+};
+
 
 // ---- Provider facade (role aggregate) ----
 class ICryptoProvider : public IRandom
             , public IDigest
             , public IHmac
             , public ISymmetricCipher 
-            // , public IKdf
+            , public IKdf
             // , public IKeyProvider
             // , public IHybridSeal
             // // ...

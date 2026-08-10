@@ -282,8 +282,10 @@ Bytes CryptoProviderFromOpenssl::decrypt(const SymParams& opt, BytesView ciphert
     }
 }
 
-
-
+Bytes CryptoProviderFromOpenssl::derive(const KdfParams& opt, BytesView secretData)
+{
+    throw PrivmxDriverCryptoException("Key derivation function: NOT IMPLEMENTED");
+}
 } // cryptoservice
 } // privmx
 

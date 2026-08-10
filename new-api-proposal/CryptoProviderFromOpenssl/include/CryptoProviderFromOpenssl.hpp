@@ -28,6 +28,8 @@ public:
     virtual Bytes hmac(Hash alg, BytesView key, BytesView data) override;
     virtual Bytes encrypt(const SymParams&, BytesView plaintext) override;
     virtual Bytes decrypt(const SymParams&, BytesView ciphertext) override;
+// NOT IMPLEMENTED :
+    virtual Bytes derive(const KdfParams& opt, BytesView secretData) override;
 // protected:
 //     virtual Bytes digestConfStr(const char *config, BytesView data); 
 //     virtual Bytes hmacConfStr(const char *config,  BytesView key, BytesView data);
