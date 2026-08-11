@@ -9,6 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/crypto/CryptoOpStats.hpp> // EPHEMERAL benchmark instrumentation
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/Networks.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
@@ -32,19 +33,28 @@ PublicKey PublicKey::fromBase58DER(const string& base58) {
 PublicKey::PublicKey(const ECC& key) : _key(key) {}
 
 bool PublicKey::operator==(const PublicKey& obj) const {
-    return (_key.getPublicKey() == obj._key.getPublicKey());
+    // Through the cache: comparing two keys used to re-encode both points every time, which made verifying a
+    // recovered key against a published one cost more than the comparison it was guarding.
+    return toDERRef() == obj.toDERRef();
 }
 
 bool PublicKey::operator!=(const PublicKey& obj) const {
-    return (_key.getPublicKey() != obj._key.getPublicKey());
+    return toDERRef() != obj.toDERRef();
+}
+
+const string& PublicKey::toDERRef() const {
+    if (_der_cache.empty()) {
+        _der_cache = _key.getPublicKey();
+    }
+    return _der_cache;
 }
 
 string PublicKey::toDER() const {
-    return _key.getPublicKey();
+    return toDERRef();
 }
 
 string PublicKey::toBase58DER() const {
-    return Base58::encodeWithChecksum(_key.getPublicKey());
+    return Base58::encodeWithChecksum(toDERRef());
 }
 
 string PublicKey::toBase58Address() const {
@@ -54,6 +64,7 @@ string PublicKey::toBase58Address() const {
 }
 
 bool PublicKey::verifyCompactSignature(const string& message, const string& signature) const {
+    CryptoOpStats::count(CryptoOpStats::Op::Verify); // EPHEMERAL benchmark instrumentation
     return _key.verify(message, signature);
 }
 

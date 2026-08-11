@@ -178,7 +178,8 @@ private:
 
     TreeKeyStore& _store;
     /** Member public keys supplied by `setMemberKeys`, needed to wrap to surviving sibling leaves. */
-    std::map<std::string, privmx::crypto::PublicKey> _memberKeys;
+    /** userId -> base58-DER. Kept unparsed; only the members actually wrapped to get decompressed. */
+    std::map<std::string, std::string> _memberKeys;
 };
 
 } // namespace keytree

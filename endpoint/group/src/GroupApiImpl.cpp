@@ -137,9 +137,9 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
         if (!seen.insert(user.userId).second) {
             continue; // a manager listed as a user too gets one leaf, not two
         }
-        members.push_back(keytree::TreeMember{
-            user.userId, privmx::crypto::PublicKey::fromBase58DER(user.pubKey)
-        });
+        // The roster arrives base58-encoded and is handed on as such: decompressing every member's point here
+        // cost 3,0 s at 16 384 members on every membership change, for keys the operation mostly never touches.
+        members.push_back(keytree::TreeMember{user.userId, user.pubKey});
     }
     return members;
 }
@@ -267,7 +267,7 @@ void GroupApiImpl::addGroupMember(
     const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
         return tree.planAddition(
             state,
-            keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
+            keytree::TreeMember{newMember.userId, newMember.pubKey},
             _userPrivKey
         );
     });

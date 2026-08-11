@@ -108,7 +108,7 @@ Fixture buildFixture(std::uint32_t memberCount) {
         nodes.push_back(server::GroupTreeNode{
             static_cast<std::int64_t>(node.nodeIndex),
             static_cast<std::int64_t>(node.generation),
-            node.publicKey.toBase58DER(),
+            node.publicKeyBase58,
         });
     }
     group.treeNodes = nodes;
@@ -359,7 +359,7 @@ std::vector<PrivateKey> advanceEpochs(Fixture& fixture, std::uint32_t upTo) {
             const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
             for (const TreeNodeState& node : state.nodes) {
                 if (node.nodeIndex == rootIndex) {
-                    edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey, signer);
+                    edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey(), signer);
                 }
             }
             edge.parentGeneration = static_cast<std::int64_t>(upTo);

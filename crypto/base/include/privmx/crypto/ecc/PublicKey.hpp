@@ -29,6 +29,8 @@ public:
     bool operator==(const PublicKey& obj) const;
     bool operator!=(const PublicKey& obj) const;
     std::string toDER() const;
+    /** The cached encoding without copying it. */
+    const std::string& toDERRef() const;
     std::string toBase58DER() const;
     std::string toBase58Address() const;
     bool verifyCompactSignature(const std::string& message, const std::string& signature) const;
@@ -36,6 +38,14 @@ public:
     const ECC& getEcc() const;
 
 private:
+    /**
+     * Compressed DER encoding, computed once.
+     *
+     * A public key is immutable once constructed, yet `toDER()` re-encoded the point on every call — around 19 us,
+     * which is 40x a SHA-256 and is paid twice by every ECIES wrap (author key + recipient key). Caching it is
+     * safe precisely because there is no way to change the key behind it.
+     */
+    mutable std::string _der_cache;
     ECC _key;
 };
 

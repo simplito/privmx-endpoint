@@ -17,6 +17,7 @@ limitations under the License.
 #include <Poco/Types.h>
 
 #include <privmx/crypto/CryptoEnv.hpp>
+#include <privmx/crypto/CryptoOpStats.hpp> // EPHEMERAL benchmark instrumentation
 
 namespace privmx {
 namespace crypto {
@@ -55,41 +56,49 @@ public:
 };
 
 inline std::string Crypto::randomBytes(size_t length) {
+    CryptoOpStats::count(CryptoOpStats::Op::RandomBytes); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->randomBytes(length);
 }
 
 inline std::string Crypto::hmacSha1(const std::string& key, const std::string& data) {
+    CryptoOpStats::count(CryptoOpStats::Op::Hmac); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->hmacSha1(key, data);
 }
 
 inline std::string Crypto::hmacSha256(const std::string& key, const std::string& data) {
+    CryptoOpStats::count(CryptoOpStats::Op::Hmac); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->hmacSha256(key, data);
 }
 
 inline std::string Crypto::hmacSha512(const std::string& key, const std::string& data) {
+    CryptoOpStats::count(CryptoOpStats::Op::Hmac); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->hmacSha512(key, data);
 }
 
 inline std::string Crypto::sha1(const std::string& data) {
+    CryptoOpStats::count(CryptoOpStats::Op::OtherHash); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->sha1(data);
 }
 
 inline std::string Crypto::sha256(const std::string& data) {
+    CryptoOpStats::count(CryptoOpStats::Op::Sha256); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->sha256(data);
 }
 
 inline std::string Crypto::sha512(const std::string& data) {
+    CryptoOpStats::count(CryptoOpStats::Op::Sha512); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->sha512(data);
 }
 
 inline std::string Crypto::ripemd160(const std::string& data) {
+    CryptoOpStats::count(CryptoOpStats::Op::OtherHash); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->ripemd160(data);
 }
@@ -100,31 +109,37 @@ inline std::string Crypto::hash160(const std::string& data) {
 }
 
 inline std::string Crypto::aes256EcbEncrypt(const std::string& data, const std::string& key) {
+    CryptoOpStats::count(CryptoOpStats::Op::AesEncrypt); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256EcbEncrypt(data, key);
 }
 
 inline std::string Crypto::aes256EcbDecrypt(const std::string& data, const std::string& key) {
+    CryptoOpStats::count(CryptoOpStats::Op::AesDecrypt); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256EcbDecrypt(data, key);
 }
 
 inline std::string Crypto::aes256CbcPkcs7Encrypt(const std::string& data, const std::string& key, const std::string& iv) {
+    CryptoOpStats::count(CryptoOpStats::Op::AesEncrypt); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256CbcPkcs7Encrypt(data, key, iv);
 }
 
 inline std::string Crypto::aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv) {
+    CryptoOpStats::count(CryptoOpStats::Op::AesDecrypt); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256CbcPkcs7Decrypt(data, key, iv);
 }
 
 inline std::string Crypto::aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv) {
+    CryptoOpStats::count(CryptoOpStats::Op::AesEncrypt); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256CbcNoPadEncrypt(data, key, iv);
 }
 
 inline std::string Crypto::aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv) {
+    CryptoOpStats::count(CryptoOpStats::Op::AesDecrypt); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256CbcNoPadDecrypt(data, key, iv);
 }
@@ -145,11 +160,13 @@ inline std::string Crypto::prf_tls12(const std::string& key, const std::string& 
 }
 
 inline std::string Crypto::pbkdf2(const std::string& password, const std::string& salt, size_t rounds, size_t length, const std::string& algorithm) {
+    CryptoOpStats::count(CryptoOpStats::Op::Kdf); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->pbkdf2(password, salt, rounds, length, algorithm);
 }
 
 inline std::string Crypto::kdf(size_t length, const std::string& key, const std::string& label) {
+    CryptoOpStats::count(CryptoOpStats::Op::Kdf); // EPHEMERAL benchmark instrumentation
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->kdf(length, key, label);
 }

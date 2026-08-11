@@ -27,6 +27,9 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
     obj->set("policy", serialize(val.policy));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
+    // The epoch. Wrappers need it: it is what tells a caller whether a container granted to this group has to be
+    // re-keyed, and it is the value every tree/ladder operation is ordered by.
+    obj->set("keyVersion", serialize(val.keyVersion));
     if (val.type.has_value()) {
         obj->set("type", serialize(val.type.value()));
     }

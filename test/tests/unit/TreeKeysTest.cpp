@@ -82,7 +82,8 @@ void applyRemoval(TreeGroupState& state, const RemovalPlan& plan, const std::str
         for (TreeNodeState& node : state.nodes) {
             if (node.nodeIndex == refresh.nodeIndex) {
                 node.generation = refresh.newGeneration;
-                node.publicKey = refresh.newKey.getPublicKey();
+                node.publicKeyBase58 = refresh.newKey.getPublicKey().toBase58DER();
+                node.parsedCache.reset();
             }
         }
         // Replace this node's edges with the refreshed ones.

@@ -55,11 +55,29 @@ struct TreeEdge {
     std::string blob;
 };
 
-/** Public state of a tree node. Nodes are never deleted, only refreshed into a new generation. */
+/**
+ * Public state of a tree node. Nodes are never deleted, only refreshed into a new generation.
+ *
+ * The key is held **as published**, and decompressed only when something actually needs the point. Decompressing
+ * a secp256k1 point costs a modular square root — around 185 us, comparable to a full ECDH — while a climb
+ * touches `depth` nodes out of `N-1`. Parsing every node eagerly cost 3,1 s on a 16 384-member group, on every
+ * read; deferring it makes that cost proportional to what is used.
+ */
 struct TreeNodeState {
     std::uint32_t nodeIndex = 0;
     std::uint32_t generation = 0;
-    privmx::crypto::PublicKey publicKey;
+    /** Base58-DER, exactly as the bridge published it. Comparisons should use this, not the parsed point. */
+    std::string publicKeyBase58;
+    /** Decompressed form, filled on first use by `publicKey()`. Not part of the state; do not set it directly. */
+    mutable std::optional<privmx::crypto::PublicKey> parsedCache;
+
+    /** The point, decompressed on first use and remembered. */
+    const privmx::crypto::PublicKey& publicKey() const {
+        if (!parsedCache.has_value()) {
+            parsedCache = privmx::crypto::PublicKey::fromBase58DER(publicKeyBase58);
+        }
+        return parsedCache.value();
+    }
 };
 
 /**
@@ -147,9 +165,33 @@ struct BuildPlan {
 };
 
 /** A member and the public key their leaf represents. */
+/**
+ * A member and the public key their leaf represents.
+ *
+ * Held as published, for the same reason as `TreeNodeState`: building a group needs every member's point, but a
+ * removal wraps only to the departing leaf's copath — `depth` members out of `N`. Parsing the whole roster
+ * eagerly cost 3,0 s at 16 384 members, on every membership change.
+ */
 struct TreeMember {
     std::string userId;
-    privmx::crypto::PublicKey publicKey;
+    /** Base58-DER, as it arrives from the caller's roster. */
+    std::string publicKeyBase58;
+    /** Filled on first use by `publicKey()`; not part of the value. */
+    mutable std::optional<privmx::crypto::PublicKey> parsedCache;
+
+    TreeMember() = default;
+    TreeMember(std::string userIdValue, std::string publicKeyValue)
+        : userId(std::move(userIdValue)), publicKeyBase58(std::move(publicKeyValue)) {}
+    /** Accepts an already-parsed key, so callers that hold one do not serialise and re-parse it. */
+    TreeMember(std::string userIdValue, const privmx::crypto::PublicKey& key)
+        : userId(std::move(userIdValue)), publicKeyBase58(key.toBase58DER()), parsedCache(key) {}
+
+    const privmx::crypto::PublicKey& publicKey() const {
+        if (!parsedCache.has_value()) {
+            parsedCache = privmx::crypto::PublicKey::fromBase58DER(publicKeyBase58);
+        }
+        return parsedCache.value();
+    }
 };
 
 } // namespace keytree

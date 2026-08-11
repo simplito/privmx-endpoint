@@ -42,10 +42,11 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
 
     if (group.treeNodes.has_value()) {
         for (const server::GroupTreeNode& node : group.treeNodes.value()) {
+            // Kept as published and decompressed on demand: a climb needs `depth` of these, not all N-1.
             state.nodes.push_back(TreeNodeState{
                 static_cast<std::uint32_t>(node.nodeIndex),
                 static_cast<std::uint32_t>(node.generation),
-                privmx::crypto::PublicKey::fromBase58DER(node.publicKey),
+                node.publicKey,
             });
         }
     }

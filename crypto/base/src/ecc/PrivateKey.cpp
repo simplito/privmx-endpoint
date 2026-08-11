@@ -9,6 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/crypto/CryptoOpStats.hpp> // EPHEMERAL benchmark instrumentation
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/CryptoException.hpp>
 #include <privmx/crypto/ecc/Networks.hpp>
@@ -41,6 +42,7 @@ PrivateKey PrivateKey::fromWIF(const string& wif) {
 }
 
 PrivateKey PrivateKey::generateRandom() {
+    CryptoOpStats::count(CryptoOpStats::Op::Keygen); // EPHEMERAL benchmark instrumentation
     ECC key = ECC::genPair();
     return PrivateKey(move(key));
 }
@@ -53,6 +55,7 @@ string PrivateKey::getPrivateEncKey() const {
 }
 
 string PrivateKey::signToCompactSignature(const string& message) const {
+    CryptoOpStats::count(CryptoOpStats::Op::Sign); // EPHEMERAL benchmark instrumentation
     return _key.sign(message);
 }
 
@@ -62,6 +65,7 @@ string PrivateKey::signToCompactSignatureWithHash(const string& message) const {
 }
 
 string PrivateKey::derive(const PublicKey& public_key) const {
+    CryptoOpStats::count(CryptoOpStats::Op::Ecdh); // EPHEMERAL benchmark instrumentation
     return _key.derive(public_key.getEcc());
 }
 

@@ -121,6 +121,25 @@ add_executable(test_unit_TreeWireTest
 target_include_directories(test_unit_TreeWireTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/include)
 target_link_libraries(test_unit_TreeWireTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
 
+# The dispatch layer every language wrapper goes through. Links the group module, since the var interface is where
+# the enum, the method map and the argument shapes have to agree.
+add_executable(test_unit_GroupApiVarInterfaceTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupApiVarInterfaceTest.cpp
+)
+target_link_libraries(test_unit_GroupApiVarInterfaceTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# EPHEMERAL benchmark — revert with crypto/CryptoOpStats.hpp and its call sites.
+add_executable(keytree_benchmark
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/keytree_benchmark.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderKeys.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderMath.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeys.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeMath.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeWire.cpp
+)
+target_include_directories(keytree_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/include)
+target_link_libraries(keytree_benchmark privmx privmxendpointcore Poco::Foundation)
+
 # Emits the tree states this client produces, for the bridge's validator to run against. See test/tools/README.md.
 add_executable(keytree_state_dump
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/keytree_state_dump.cpp

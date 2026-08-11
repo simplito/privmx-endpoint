@@ -30,7 +30,10 @@ void TreeKeyStore::putNodeKey(
     std::uint32_t generation,
     const privmx::crypto::PrivateKey& key
 ) {
-    _nodeKeys[std::make_pair(nodeIndex, generation)] = key;
+    // `insert_or_assign`, not `operator[]`: subscripting default-constructs the value first, and a
+    // default-constructed EC key **generates a fresh keypair** (`ECC::ECC()` calls `genPair()`). That is ~225 us
+    // of thrown-away work per insertion — a thousand times the cost of the insertion itself.
+    _nodeKeys.insert_or_assign(std::make_pair(nodeIndex, generation), key);
 }
 
 std::optional<privmx::crypto::PrivateKey> TreeKeyStore::getNodeKey(std::uint32_t nodeIndex, std::uint32_t generation)
@@ -43,7 +46,7 @@ std::optional<privmx::crypto::PrivateKey> TreeKeyStore::getNodeKey(std::uint32_t
 }
 
 void TreeKeyStore::putGrantKey(std::uint32_t epoch, const privmx::crypto::PrivateKey& key) {
-    _grantKeys[epoch] = key;
+    _grantKeys.insert_or_assign(epoch, key); // see putNodeKey: subscripting would mint a throwaway keypair
 }
 
 std::optional<privmx::crypto::PrivateKey> TreeKeyStore::getGrantKey(std::uint32_t epoch) const {
@@ -204,7 +207,7 @@ ClimbResult TreeKeys::climbToGrantKey(
             return result;
         }
         const TreeNodeState* node = findNode(state, edge->parentIndex);
-        if (node == nullptr || !(node->publicKey == recovered.value().getPublicKey())) {
+        if (node == nullptr || node->publicKeyBase58 != recovered.value().getPublicKey().toBase58DER()) {
             result.failure = ClimbFailure::Tampered;
             result.reachedNode = currentNode;
             result.tamperedNode = edge->parentIndex;
@@ -234,7 +237,8 @@ ClimbResult TreeKeys::climbToGrantKey(
             return result;
         }
         const TreeNodeState* parentState = findNode(state, edge->parentIndex);
-        if (parentState == nullptr || !(parentState->publicKey == recovered.value().getPublicKey())) {
+        if (parentState == nullptr
+            || parentState->publicKeyBase58 != recovered.value().getPublicKey().toBase58DER()) {
             result.failure = ClimbFailure::Tampered;
             result.tamperedNode = edge->parentIndex;
             return result;
@@ -282,8 +286,8 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::
     std::map<std::uint32_t, privmx::crypto::PrivateKey> nodeKeys;
     for (std::uint32_t node = 1; node < nodeCount; node += 2) {
         const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
-        nodeKeys[node] = key;
-        plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey()});
+        nodeKeys.insert_or_assign(node, key); // subscripting would mint a throwaway keypair per node
+        plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey().toBase58DER()});
         plan.nodeKeys.emplace_back(node, key);
     }
 
@@ -297,7 +301,7 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::
                 const std::uint32_t position = TreeMath::leafPosition(child);
                 edge.childKind = EdgeChildKind::User;
                 edge.childUserId = members[position].userId;
-                edge.blob = wrapKey(key, members[position].publicKey, signer);
+                edge.blob = wrapKey(key, members[position].publicKey(), signer);
             } else {
                 edge.childKind = EdgeChildKind::Node;
                 edge.childIndex = child;
@@ -318,7 +322,7 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::
         // Single-member group: the root is the member's own leaf.
         grantEdge.childKind = EdgeChildKind::User;
         grantEdge.childUserId = members[TreeMath::leafPosition(rootIndex)].userId;
-        grantEdge.blob = wrapKey(plan.grantKey, members[TreeMath::leafPosition(rootIndex)].publicKey, signer);
+        grantEdge.blob = wrapKey(plan.grantKey, members[TreeMath::leafPosition(rootIndex)].publicKey(), signer);
     } else {
         grantEdge.childKind = EdgeChildKind::Node;
         grantEdge.childIndex = rootIndex;
@@ -367,7 +371,7 @@ AdditionPlan TreeKeys::planAddition(
         edge.parentGeneration = parentState->generation;
         edge.childKind = EdgeChildKind::User;
         edge.childUserId = newMember.userId;
-        edge.blob = wrapKey(parentKey.value(), newMember.publicKey, signer);
+        edge.blob = wrapKey(parentKey.value(), newMember.publicKey(), signer);
         plan.edges.push_back(edge);
         plan.wrapCount = 1;
         return plan;
@@ -382,8 +386,8 @@ AdditionPlan TreeKeys::planAddition(
         if (findNode(state, node) == nullptr) {
             // A node that did not exist before: mint it.
             const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
-            mintedKeys[node] = key;
-            plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey()});
+            mintedKeys.insert_or_assign(node, key); // subscripting would mint a throwaway keypair
+            plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey().toBase58DER()});
         }
     }
 
@@ -413,7 +417,7 @@ AdditionPlan TreeKeys::planAddition(
                 if (position == plan.position) {
                     edge.childKind = EdgeChildKind::User;
                     edge.childUserId = newMember.userId;
-                    edge.blob = wrapKey(nodeKey, newMember.publicKey, signer);
+                    edge.blob = wrapKey(nodeKey, newMember.publicKey(), signer);
                 } else {
                     // An existing leaf whose parent changed. Growth re-parents leaves at the truncated edge of
                     // the tree, and that member's climb now runs through a node that did not exist a moment ago,
@@ -432,7 +436,7 @@ AdditionPlan TreeKeys::planAddition(
                     }
                     edge.childKind = EdgeChildKind::User;
                     edge.childUserId = state.leafAssignment[position].value();
-                    edge.blob = wrapKey(nodeKey, memberPub->second, signer);
+                    edge.blob = wrapKey(nodeKey, privmx::crypto::PublicKey::fromBase58DER(memberPub->second), signer);
                 }
             } else {
                 const privmx::crypto::PublicKey childPub = [&]() {
@@ -443,7 +447,7 @@ AdditionPlan TreeKeys::planAddition(
                     if (existing == nullptr) {
                         throw std::invalid_argument("tree state is missing node " + std::to_string(child));
                     }
-                    return existing->publicKey;
+                    return existing->publicKey();
                 }();
                 edge.childKind = EdgeChildKind::Node;
                 edge.childIndex = child;
@@ -464,7 +468,7 @@ AdditionPlan TreeKeys::planAddition(
         if (rootKey == mintedKeys.end()) {
             throw std::invalid_argument("expected the new root to be freshly minted");
         }
-        plan.newRoot = TreeNodeState{newRoot, 0, rootKey->second.getPublicKey()};
+        plan.newRoot = TreeNodeState{newRoot, 0, rootKey->second.getPublicKey().toBase58DER()};
         plan.newRootKey = rootKey->second;
 
         // Re-link the grant edge to the new root. The grant keypair itself is UNCHANGED, so `grantPublicKey`
@@ -511,7 +515,7 @@ RemovalPlan TreeKeys::planRemoval(
     // that, so it lives or dies on this line.
     std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
     for (const std::uint32_t node : path) {
-        refreshed[node] = privmx::crypto::PrivateKey::generateRandom();
+        refreshed.insert_or_assign(node, privmx::crypto::PrivateKey::generateRandom());
     }
 
     for (const std::uint32_t node : path) {
@@ -519,10 +523,9 @@ RemovalPlan TreeKeys::planRemoval(
         if (existing == nullptr) {
             throw std::invalid_argument("tree state is missing node " + std::to_string(node));
         }
-        NodeRefresh refresh;
-        refresh.nodeIndex = node;
-        refresh.newGeneration = existing->generation + 1;
-        refresh.newKey = refreshed.at(node);
+        // Constructed in one step on purpose: declaring it and assigning afterwards would default-construct its
+        // `PrivateKey`, and a default-constructed EC key mints a keypair that is then thrown away.
+        NodeRefresh refresh{node, existing->generation + 1, refreshed.at(node), {}};
 
         for (const std::uint32_t child : TreeMath::children(node, state.numLeaves)) {
             if (child == leavingLeaf) {
@@ -547,7 +550,8 @@ RemovalPlan TreeKeys::planRemoval(
                 }
                 edge.childKind = EdgeChildKind::User;
                 edge.childUserId = state.leafAssignment[childPosition].value();
-                edge.blob = wrapKey(refresh.newKey, memberPub->second, signer);
+                edge.blob =
+                    wrapKey(refresh.newKey, privmx::crypto::PublicKey::fromBase58DER(memberPub->second), signer);
             } else {
                 // On-path children carry their NEW public key; copath children keep their current one.
                 const auto onPath = refreshed.find(child);
@@ -560,7 +564,7 @@ RemovalPlan TreeKeys::planRemoval(
                 edge.childIndex = child;
                 edge.childGeneration = childOnPath ? childState->generation + 1 : childState->generation;
                 edge.blob = wrapKey(
-                    refresh.newKey, childOnPath ? onPath->second.getPublicKey() : childState->publicKey, signer
+                    refresh.newKey, childOnPath ? onPath->second.getPublicKey() : childState->publicKey(), signer
                 );
             }
             refresh.edges.push_back(edge);
@@ -590,6 +594,8 @@ RemovalPlan TreeKeys::planRemoval(
 void TreeKeys::setMemberKeys(const std::vector<TreeMember>& members) {
     _memberKeys.clear();
     for (const TreeMember& member : members) {
-        _memberKeys[member.userId] = member.publicKey;
+        // The hot one: called on every addition and removal, once per member. With `operator[]` a 16 384-member
+        // roster cost 3,7 s of generating keypairs that were immediately overwritten.
+        _memberKeys.insert_or_assign(member.userId, member.publicKeyBase58);
     }
 }
