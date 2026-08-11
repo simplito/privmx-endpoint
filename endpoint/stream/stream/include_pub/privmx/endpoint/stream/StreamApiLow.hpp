@@ -78,7 +78,6 @@ public:
     );
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
-    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     void joinStreamRoom(
