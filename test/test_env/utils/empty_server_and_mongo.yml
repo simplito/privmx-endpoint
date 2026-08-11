@@ -15,7 +15,7 @@ services:
       start_interval: 1s
 
   teamserver:
-    image: privmx-bridge
+    image: ${DOCKER_BRIDGE_IMAGE}:${DOCKER_BRIDGE_VERSION}
     env_file:
       - path: ./bridge.env
         required: false
