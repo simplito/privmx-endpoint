@@ -221,18 +221,6 @@ public:
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
 
     /**
-     * Sends an answer to an offer received from the media server after it has reconfigured the connection.
-     *
-     * Only the 'sdp' field is sent - the description is always sent as an answer, regardless of the passed 'type'.
-     * The offers which the media server sends for a subscriber Stream are answered internally, so this method is
-     * only needed for connections negotiated outside of createSubscriberStream and updateSubscriberStream.
-     *
-     * @param sessionId ID of the media server session being reconfigured
-     * @param sdp answer created by the WebRTC layer
-     */
-    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
-
-    /**
      * Sends a new offer to the media server to reconfigure an existing Stream.
      *
      * This method can be used to start the renegotiation process when the WebRTC layer signals that renegotiation
