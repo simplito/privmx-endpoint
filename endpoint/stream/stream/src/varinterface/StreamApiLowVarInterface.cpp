@@ -232,14 +232,6 @@ Poco::Dynamic::Var StreamApiLowVarInterface::trickle(const Poco::Dynamic::Var& a
     return {};
 }
 
-Poco::Dynamic::Var StreamApiLowVarInterface::acceptOfferOnReconfigure(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
-    auto sessionId = _deserializer.deserialize<int64_t>(argsArr->get(0), "sessionId");
-    auto jsep = _deserializer.deserialize<stream::SdpWithTypeModel>(argsArr->get(1), "jsep");
-    _streamApi.acceptOfferOnReconfigure(sessionId, jsep);
-    return {};
-}
-
 Poco::Dynamic::Var StreamApiLowVarInterface::setNewOfferOnReconfigure(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto sessionId = _deserializer.deserialize<int64_t>(argsArr->get(0), "sessionId");

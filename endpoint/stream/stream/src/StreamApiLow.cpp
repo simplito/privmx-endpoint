@@ -307,17 +307,6 @@ void StreamApiLow::trickle(const int64_t sessionId, const std::string& candidate
     }
 }
 
-void StreamApiLow::acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
-    auto impl = getImpl();
-    core::Validator::validateNumberPositive(sessionId, "field:sessionId ");
-    try {
-        return impl->acceptOfferOnReconfigure(sessionId, sdp);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 void StreamApiLow::setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
     auto impl = getImpl();
     core::Validator::validateNumberPositive(sessionId, "field:sessionId ");
