@@ -25,7 +25,7 @@ limitations under the License.
 #include <openssl/evp.h>
 #include <openssl/ripemd.h>
 
-#include <Poco/ByteOrder.h>
+// #include <Poco/ByteOrder.h>
 
 
 namespace privmx {
@@ -346,19 +346,47 @@ Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView cipherte
     }
 }
 
+// // Original implementaion with Poco
+// //
+// Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, const std::string& label) {
+//     Poco::UInt32 len = Poco::ByteOrder::toBigEndian((Poco::UInt32)length);
+//     std::string stringSeed = label + '\0' + std::string((char *)&len, 4);
+//     const uint8_t* s = reinterpret_cast<const uint8_t*>(stringSeed.data());
+//     BytesView seed(s, s + label.length() + 1 + 4);
+//     Bytes k;      // k.size() == 0
+//     Poco::UInt32 i = 1;
+//     Bytes result; // result.size() == 0
+//     while (result.size() < length) {
+//         Bytes input = k;
+//         Poco::UInt32 count = Poco::ByteOrder::toBigEndian(i++);
+//         input.reserve(input.size() + 4 + seed.size());
+//         input.insert(input.end(),(uint8_t*)&count,((uint8_t*)&count)+4);
+//         input.insert(input.end(),seed.begin(),seed.end());       
+//         k = hmac(Hash::Sha256, key, input);
+//         result.reserve(result.size()+k.size());
+//         result.insert(result.end(),k.begin(),k.end());
+//     }
+//     return Bytes(result.begin(), result.begin()+length);
+// }
+
+// Implementation with intention to replace POCO with OPENSSL
+
 Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, const std::string& label) {
-    Poco::UInt32 len = Poco::ByteOrder::toBigEndian((Poco::UInt32)length);
-    std::string stringSeed = label + '\0' + std::string((char *)&len, 4);
-    const uint8_t* s = reinterpret_cast<const uint8_t*>(stringSeed.data());
-    BytesView seed(s, s + label.length() + 1 + 4);
+    const uint8_t* labStr = reinterpret_cast<const uint8_t*>(label.data());
+    Bytes seed(labStr, labStr + label.length());
+    seed.resize(label.length() + 1 + 4, (uint8_t) 0);
+    unsigned char* s = reinterpret_cast<unsigned char*>(seed.data());
+    // s[label.length()] = (unsigned char) 0;
+    store_u32_be(s + label.length() + 1, (uint32_t) length);
+
     Bytes k;      // k.size() == 0
-    Poco::UInt32 i = 1;
+    uint32_t i = 1;
     Bytes result; // result.size() == 0
     while (result.size() < length) {
         Bytes input = k;
-        Poco::UInt32 count = Poco::ByteOrder::toBigEndian(i++);
         input.reserve(input.size() + 4 + seed.size());
-        input.insert(input.end(),(uint8_t*)&count,((uint8_t*)&count)+4);
+        input.resize(input.size() + 4);
+        store_u32_be(reinterpret_cast<unsigned char*>(input.data()) + k.size(), i++);
         input.insert(input.end(),seed.begin(),seed.end());       
         k = hmac(Hash::Sha256, key, input);
         result.reserve(result.size()+k.size());
@@ -454,6 +482,8 @@ Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretDat
     }
 }
 
+// // Original implementaion with Poco
+//
 // Bytes CryptoProviderFromDriver::generateIv(BytesView& key, Poco::Int32 idx) {
 //     std::string dataString = "iv" + std::to_string(idx).substr(0, 16);
 //     const uint8_t* s = reinterpret_cast<const uint8_t*>(dataString.data());
@@ -461,6 +491,68 @@ Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretDat
 //     hash.resize(16);
 //     return hash;
 // }
+
+Bytes CryptoProviderFromDriver::generateIv(BytesView& key, int32_t idx) {
+    std::string dataString = "iv" + std::to_string(idx).substr(0, 16);
+    const uint8_t* s = reinterpret_cast<const uint8_t*>(dataString.data());
+    Bytes hash = hmac(Hash::Sha256, key, BytesView(s, s+dataString.length()));
+    hash.resize(16);
+    return hash;
+}
+
+
+// to be replaced by OPENSSL_store_u32_be after migration to OPENSSL >= 3.5
+unsigned char* CryptoProviderFromDriver::store_u32_be(unsigned char* out, uint32_t val) { // 
+    if (std::endian::native == std::endian::big) { 
+        // If native encoding == Big Endian
+          *(reinterpret_cast<uint32_t*> (out)) = val;
+          return out+4;
+    } else if (std::endian::native == std::endian::little) { 
+        // If native encoding == Little Endian
+          *(reinterpret_cast<uint32_t*> (out)) = 
+               val >> 24 | ((val >> 8) & 0xFF00) |
+               ((val & 0xFF00) << 8) | val << 24;
+          return out+4;
+    }
+    // If native encoding is neither Little Endian nor Little Endian
+    // (this is expected to be a very rare case)
+    
+    // creating structure  ASN1_INTEGER
+    ASN1_INTEGER *asn1_val = ASN1_INTEGER_new();
+    if (!asn1_val) {
+        throw PrivmxDriverCryptoException("store_u32_be: Memory allocation error");
+    }
+    // Setting value to structure ASN1_INTEGER 
+    if (!ASN1_INTEGER_set_uint64(asn1_val, val)) { 
+        ASN1_INTEGER_free(asn1_val);
+        throw PrivmxDriverCryptoException("store_u32_be: Error setting ASN1_INTEGER value");
+    }
+    // Converting from ASN1_INTEGER to BIGNUM
+    BIGNUM *bn = NULL;
+    bn = ASN1_INTEGER_to_BN(asn1_val, NULL);
+    if (!bn) {
+        ASN1_INTEGER_free(asn1_val);
+        throw PrivmxDriverCryptoException("store_u32_be: Conversion ASN1_INTEGER to BIGNUM error");
+    }
+    // Ensuring that the length of the number is correct
+    int len = BN_num_bytes(bn);
+    if (len > 4) {
+        BN_free(bn);
+        ASN1_INTEGER_free(asn1_val);
+        throw PrivmxDriverCryptoException("store_u32_be: Wrong BIGNUM size");
+    }
+    // Conversion from BIGNUM to binary format
+    int size = BN_bn2binpad(bn, out, 4);
+    if (size == -1) {
+        BN_free(bn);
+        ASN1_INTEGER_free(asn1_val);
+        throw PrivmxDriverCryptoException("store_u32_be: Conversion BIGNUM to binary error");
+    }
+    // freeing memory
+    BN_free(bn);
+    ASN1_INTEGER_free(asn1_val);
+    return out+4;
+}
 
 } // cryptoservice
 } // privmx

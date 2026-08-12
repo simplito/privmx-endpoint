@@ -29,7 +29,6 @@ add_library(libraryFromDriver STATIC ${BASEFILES} ${LIBRARYFROMDRIVER_FILES})
 target_include_directories(libraryFromDriver PUBLIC ${INCLUDE_LIBDRIVER})
 target_link_libraries(libraryFromDriver
     PRIVATE
-        Poco::Poco
         openssl::openssl)
 
 
@@ -54,5 +53,5 @@ target_include_directories(${PROJECT_NAME}-exec
         ${PROJECT_INCLUDE}
         )
 target_link_libraries(${PROJECT_NAME}-exec
-    PRIVATE
-         ${PROJECT_NAME})
+    PRIVATE         
+        ${PROJECT_NAME})

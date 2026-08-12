@@ -50,10 +50,22 @@ private:
     virtual Bytes prf_tls12(BytesView key, BytesView seed, size_t length);
     virtual std::tuple<Bytes, Bytes> getKEM(BytesView key, size_t kelen = 32, 
                         size_t kmlen = 32);
+
+    // Probably not used
     // virtual Bytes generateIv(BytesView& key, Poco::Int32 idx); // require Poco
+    virtual Bytes generateIv(BytesView& key, int32_t idx); 
+    // 
+    // methods used in bridge and endpint respectively
+    // are considered to be invoked by hmac()
     virtual Bytes aes256CbcHmac256Encrypt(BytesView data, BytesView key32, Bytes iv, 
                         size_t taglen);
     virtual Bytes aes256CbcHmac256Decrypt(Bytes data, BytesView key32, size_t taglen);
+    // 
+    // Methods created for binary compatibility (and replacing calls from "POCO")
+    // with the intention of quickly replacing functions from OPENSSL >= 3
+    // 
+    // to be replaced by OPENSSL_store_u32_be after migration to OPENSSL >= 3.5
+    unsigned char* store_u32_be(unsigned char* out, uint32_t val); 
 };
 
 } // cryptoservice
