@@ -371,7 +371,8 @@ Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView cipherte
 
 // Implementation with intention to replace POCO with OPENSSL
 
-Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, const std::string& label) {
+Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, 
+        const std::string& label, Hash hash) {
     const uint8_t* labStr = reinterpret_cast<const uint8_t*>(label.data());
     Bytes seed(labStr, labStr + label.length());
     seed.resize(label.length() + 1 + 4, (uint8_t) 0);
@@ -388,21 +389,22 @@ Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, const std::str
         input.resize(input.size() + 4);
         store_u32_be(reinterpret_cast<unsigned char*>(input.data()) + k.size(), i++);
         input.insert(input.end(),seed.begin(),seed.end());       
-        k = hmac(Hash::Sha256, key, input);
+        k = hmac(hash, key, input);
         result.reserve(result.size()+k.size());
         result.insert(result.end(),k.begin(),k.end());
     }
     return Bytes(result.begin(), result.begin()+length);
 }
 
-std::tuple<Bytes, Bytes> CryptoProviderFromDriver::getKEM(BytesView key, size_t kelen, size_t kmlen) {
-    Bytes kEM = kdf(kelen + kmlen, key, "key expansion");
+std::tuple<Bytes, Bytes> CryptoProviderFromDriver::getKEM(
+            BytesView key, Hash hash, size_t kelen, size_t kmlen) {
+    Bytes kEM = kdf(kelen + kmlen, key, "key expansion", hash);
     return std::make_tuple(Bytes(kEM.begin(),kEM.begin()+kelen), Bytes(kEM.begin()+kelen,kEM.end()));
 }
 
 Bytes CryptoProviderFromDriver::aes256CbcHmac256Encrypt(BytesView data, BytesView key32, Bytes iv, size_t taglen) {
     Bytes kE, kM;
-    tie(kE, kM) = getKEM(key32);
+    tie(kE, kM) = getKEM(key32, Hash::Sha256);
     if (iv.empty()) {
         iv = hmac(Hash::Sha256, key32, data);
     }
@@ -419,7 +421,7 @@ Bytes CryptoProviderFromDriver::aes256CbcHmac256Encrypt(BytesView data, BytesVie
 
 Bytes CryptoProviderFromDriver::aes256CbcHmac256Decrypt(Bytes data, BytesView key32, size_t taglen) {
     Bytes kE, kM;
-    tie(kE, kM) = getKEM(key32);
+    tie(kE, kM) = getKEM(key32, Hash::Sha256);
     Bytes tag(data.begin(), data.begin() + data.size() - taglen);
     data.resize(data.size() - taglen);
     Bytes rtag = hmac(Hash::Sha256, kM, data);
@@ -449,16 +451,17 @@ Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int round
     return result;
 }
 
-Bytes CryptoProviderFromDriver::prf_tls12(BytesView key, BytesView seed, size_t length) {
+Bytes CryptoProviderFromDriver::prf_tls12(BytesView key, BytesView seed, size_t length,
+        Hash hash) {
     Bytes a(seed.begin(),seed.end());
     Bytes result;    // result.size() == 0
     while (result.size() < length) {
-        a = hmac(Hash::Sha256, key, a);
+        a = hmac(hash, key, a);
         // string tmp = a + seed;
         Bytes tmp(a);
         tmp.reserve(tmp.size()+seed.size());
         tmp.insert(tmp.end(),seed.begin(),seed.end());
-        Bytes d = hmac(Hash::Sha256, key, tmp);
+        Bytes d = hmac(hash, key, tmp);
         result.reserve(result.size()+d.size());
         result.insert(result.end(),d.begin(),d.end());
     }
@@ -471,11 +474,12 @@ Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretDat
     switch (opt.kdf)
     {
     case Kdf::Kdf:
-        return kdf(opt.length, secretData, opt.label);
+        return kdf(opt.length, secretData, opt.label, opt.hash);
     case Kdf::Prf12:
-        return prf_tls12(secretData, opt.salt, opt.length);
+        return prf_tls12(secretData, opt.salt, opt.length, opt.hash);
     case Kdf::Pbkdf2:
-        return pbkdf2(secretData, opt.salt, opt.rounds, opt.length, "SHA512");
+        return pbkdf2(secretData, opt.salt, opt.rounds, opt.length, 
+                getHashAlgName(opt.hash));
     default:
         throw PrivmxDriverCryptoException("Key derivation function: Unknown protocol");
         break;
@@ -498,6 +502,25 @@ Bytes CryptoProviderFromDriver::generateIv(BytesView& key, int32_t idx) {
     Bytes hash = hmac(Hash::Sha256, key, BytesView(s, s+dataString.length()));
     hash.resize(16);
     return hash;
+}
+
+const char* CryptoProviderFromDriver::getHashAlgName(Hash alg) {
+    switch (alg)
+    {
+    case Hash::Sha1:
+        return "SHA1";
+    case Hash::Sha256:
+        return "SHA256";
+    case Hash::Sha512:
+        return "SHA512";
+    // case Hash::Ripemd160:
+    //     return "RIPEMD160";
+    // case Hash::Hash160:
+    //     return "HASH160";
+    default:
+        throw PrivmxDriverCryptoException("hashAlgName: Unknown algorithm");
+        break;
+    }
 }
 
 

@@ -62,7 +62,7 @@ struct SymParams {
 struct KdfParams {
     Kdf kdf;             // algorithm
     size_t length;       // length of resulting key
-//  Hash prf;            // Hash function - SHA512 for PBKDF2, SHA256 for Prf12 and Kdf
+    Hash hash;            // Hash function: SHA512 for PBKDF2, SHA256 for Prf12 and Kdf
     int rounds;          // only for Pbkdf2
     BytesView salt = {}; // salt Pbkdf2, seed for Prf12 
     std::string label = {}; // only for Kdf (maybe it should be replaced by "salt"?)

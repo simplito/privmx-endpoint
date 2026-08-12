@@ -46,10 +46,13 @@ protected:
 private:
     virtual Bytes pbkdf2(BytesView pass, BytesView salt, int rounds, 
                         size_t length, const char* hash);
-    virtual Bytes kdf(size_t length, BytesView key, const std::string& label);
-    virtual Bytes prf_tls12(BytesView key, BytesView seed, size_t length);
-    virtual std::tuple<Bytes, Bytes> getKEM(BytesView key, size_t kelen = 32, 
+    virtual Bytes kdf(size_t length, BytesView key, const std::string& label, Hash hash);
+    virtual Bytes prf_tls12(BytesView key, BytesView seed, size_t length, Hash hash);
+    virtual std::tuple<Bytes, Bytes> getKEM(BytesView key, Hash hash, size_t kelen = 32, 
                         size_t kmlen = 32);
+
+    // return the name used in the OpenSSL functions 
+    const char* getHashAlgName(Hash alg);
 
     // Probably not used
     // virtual Bytes generateIv(BytesView& key, Poco::Int32 idx); // require Poco
