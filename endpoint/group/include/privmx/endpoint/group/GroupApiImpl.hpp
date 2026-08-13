@@ -37,15 +37,6 @@ public:
     );
     ~GroupApiImpl();
 
-    std::string createGroup(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
-    );
-
     /**
      * Creates a group whose grant key is distributed by a hidden key tree instead of one wrap per member.
      *
@@ -131,17 +122,12 @@ public:
     /**
      * The group's grant private key for an epoch (`0` means current).
      *
-     * Tries the **flat** path first — the caller's own key entry, which is how every group worked before the
-     * hidden key tree existed — and falls back to climbing the tree and descending the Epoch Ladder. The order
-     * matters: it keeps groups that have per-member key entries behaving exactly as they did, and only reaches
-     * for the new machinery when the flat path has nothing to offer.
+     * Climbs the hidden key tree from the caller's leaf to the current epoch's grant key, then descends the
+     * Epoch Ladder if an older epoch was requested.
      *
-     * @throws core::EncryptionKeyValidationException when neither path yields a key
+     * @throws core::EncryptionKeyValidationException when the key tree cannot be resolved
      */
     privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
-
-    /** The pre-tree path: decrypt the caller's own key entry for the epoch's keyId. Unchanged behaviour. */
-    privmx::crypto::PrivateKey resolveGroupPrivKeyFlat(const server::GroupInfo& group, int64_t epoch);
 
     /** Renders a resolver failure so policy (era boundary, pruning) reads differently from an attack. */
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
@@ -153,12 +139,6 @@ public:
      * than to how long the group has existed.
      */
     server::GroupGetKeyArchiveResult fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, int64_t currentEpoch);
-    void generateNewGroupKey(
-        const std::string& groupId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        bool allowRotationRetry = true
-    );
 
 private:
     // EP-11: verify winner's rotation payload, decrypt+register their epoch key, invalidate cache

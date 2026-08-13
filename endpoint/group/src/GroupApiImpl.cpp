@@ -59,61 +59,6 @@ GroupApiImpl::~GroupApiImpl() {
     _guardedExecutor.reset();
 }
 
-std::string GroupApiImpl::createGroup(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    auto ctx = prepareContainerCreate(contextId, users, managers);
-
-    auto groupIdentityKey = privmx::crypto::PrivateKey::generateRandom();
-    std::string groupPubKeyStr = groupIdentityKey.getPublicKey().toBase58DER();
-    std::string groupPrivKeyStr = groupIdentityKey.toWIF();
-
-    std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
-    std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    std::sort(sortedUsers.begin(), sortedUsers.end());
-    std::sort(sortedManagers.begin(), sortedManagers.end());
-
-    dynamic::MembershipBlock membership{
-        .users = sortedUsers,
-        .managers = sortedManagers,
-        .groupPubKey = groupPubKeyStr,
-        .keyId = ctx.key.id,
-        .keyVersion = 0,
-        .prevEntryHash = std::nullopt
-    };
-
-    GroupDataToEncryptV5 dataToEncrypt{
-        .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId
-        },
-        .dio = ctx.dio,
-        .groupPrivKey = groupPrivKeyStr,
-        .membership = membership
-    };
-
-    server::GroupCreateModel model;
-    fillContainerCreateModel(
-        model, contextId, users, managers, ctx,
-        _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key)
-    );
-    model.groupPubKey = groupPubKeyStr;
-    model.type = GROUP_TYPE_FILTER_FLAG;
-    if (policies.has_value()) {
-        model.policy = core::Factory::createPolicyServerObject(policies.value());
-    }
-
-    auto result = _serverApi.groupCreate(model);
-    return result.groupId;
-}
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Tree-backed membership (documents/nested_groups/09-hidden-key-tree.md)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,90 +494,6 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
     invalidateModuleKeysInCache(groupId);
 }
 
-void GroupApiImpl::generateNewGroupKey(
-    const std::string& groupId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    bool allowRotationRetry
-) {
-    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
-    auto currentGroup = _serverApi.groupGet(getModel).group;
-    const auto& currentEntry = currentGroup.data.back();
-    const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
-    int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
-    int64_t newEpoch = currentEpoch + 1;
-
-    auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup);
-
-    auto ctx = prepareContainerUpdate(currentGroup, currentEntry, resourceId, users, managers, true);
-
-    auto newGroupKey = privmx::crypto::PrivateKey::generateRandom();
-    std::string newGroupPrivKeyStr = newGroupKey.toWIF();
-    std::string newGroupPubKeyStr = newGroupKey.getPublicKey().toBase58DER();
-
-    std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
-    std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    std::sort(sortedUsers.begin(), sortedUsers.end());
-    std::sort(sortedManagers.begin(), sortedManagers.end());
-
-    auto prevEncData = dynamic::EncryptedGroupDataV5::fromJSON(currentEntry.data);
-    dynamic::MembershipBlock membership{
-        .users = sortedUsers,
-        .managers = sortedManagers,
-        .groupPubKey = newGroupPubKeyStr,
-        .keyId = ctx.key.id,
-        .keyVersion = newEpoch,
-        .prevEntryHash = privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(prevEncData.dio))
-    };
-
-    core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    if (currentDecryptedEncKey.statusCode == 0) {
-        auto [grp, _dio] = _groupDataSchemaMapper->decrypt(currentGroup, currentDecryptedEncKey);
-        publicMeta = grp.publicMeta;
-        privateMeta = grp.privateMeta;
-    }
-
-    GroupDataToEncryptV5 dataToEncrypt{
-        .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId
-        },
-        .dio = ctx.dio,
-        .groupPrivKey = newGroupPrivKeyStr,
-        .membership = membership
-    };
-
-    server::GenerateNewGroupKeyModel model;
-    model.id = groupId;
-    model.keyId = ctx.key.id;
-    model.expectedKeyVersion = currentEpoch;
-    model.groupPubKey = newGroupPubKeyStr;
-    model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
-    model.keys = ctx.keyEntries;
-    auto confInput = std::string("confirm") + groupId + std::to_string(newEpoch) + ctx.key.id;
-    model.confirmationTag = privmx::utils::Hex::from(
-        privmx::crypto::Crypto::hmacSha256(ctx.key.key, confInput)
-    );
-
-    try {
-        _serverApi.generateNewGroupKey(model);
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
-            auto payload = server::RotatedAlreadyPayload::fromJSON(
-                privmx::utils::Utils::parseJsonObject(e.getData())
-            );
-            adoptRotatedAlready(groupId, payload);
-            generateNewGroupKey(groupId, users, managers, false);
-            return;
-        }
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-    invalidateModuleKeysInCache(groupId);
-}
-
 void GroupApiImpl::adoptRotatedAlready(
     const std::string& groupId,
     const server::RotatedAlreadyPayload& payload
@@ -805,15 +666,6 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     server::GroupGetModel params{.groupId = groupId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
 
-    // Flat path first: it is how every group worked before the hidden key tree, and groups that carry per-member
-    // key entries must keep behaving identically.
-    try {
-        return resolveGroupPrivKeyFlat(group, epoch);
-    } catch (const core::Exception&) {
-        // Fall through to the tree. A flat miss is the normal case for a tree-backed group, which has no
-        // per-member entry at all.
-    }
-
     keytree::GroupKeyResolver resolver(_treeKeyStore);
     const int64_t currentEpoch = group.keyVersion.value_or(1);
     const keytree::ResolveResult resolved = (epoch > 0 && epoch < currentEpoch)
@@ -846,7 +698,7 @@ GroupApiImpl::fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, i
 std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& resolved) {
     switch (resolved.failure) {
         case keytree::ResolveFailure::NoTree:
-            return "Group key unavailable: no per-member key entry and no key tree";
+            return "Group key unavailable: group has no key tree";
         case keytree::ResolveFailure::ClimbFailed:
             if (resolved.climb == keytree::ClimbFailure::Tampered) {
                 // A security event, not a transient failure. Deterministic and adversarial — do not retry.
@@ -874,48 +726,3 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
     }
 }
 
-privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKeyFlat(const server::GroupInfo& group, int64_t epoch) {
-    int64_t currentEpoch = group.keyVersion.value_or(0);
-
-    std::string targetKeyId;
-    if (epoch == 0 || epoch == currentEpoch) {
-        targetKeyId = group.data.back().keyId;
-    } else if (group.keyHistory.has_value()) {
-        std::string epochPubKey;
-        for (const auto& kh : group.keyHistory.value()) {
-            if (kh.keyVersion == epoch) {
-                epochPubKey = kh.groupPubKey;
-                break;
-            }
-        }
-        if (!epochPubKey.empty()) {
-            for (const auto& h : group.history) {
-                if (h.groupPubKey == epochPubKey) {
-                    targetKeyId = h.keyId;
-                    break;
-                }
-            }
-        }
-    }
-    if (targetKeyId.empty()) {
-        targetKeyId = group.data.back().keyId;
-    }
-
-    core::KeyDecryptionAndVerificationRequest request;
-    auto location = getModuleEncKeyLocation(group, group.resourceId);
-    request.addOne(group.keys, targetKeyId, location);
-    auto decrypted = _keyProvider->getKeysAndVerify(request);
-    auto& encKey = decrypted.at(location).at(targetKeyId);
-    if (encKey.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Group key statusCode: " + std::to_string(encKey.statusCode)
-        );
-    }
-    auto privKeyWif = _groupDataSchemaMapper->getGroupPrivKey(group, encKey);
-    if (privKeyWif.empty()) {
-        // A tree-backed group carries no grant key in its metadata on purpose. Saying so explicitly keeps the
-        // caller on the intended path instead of letting a WIF parse failure surface as something else.
-        throw core::EncryptionKeyValidationException("group carries no per-member grant key; use the key tree");
-    }
-    return privmx::crypto::PrivateKey::fromWIF(privKeyWif);
-}

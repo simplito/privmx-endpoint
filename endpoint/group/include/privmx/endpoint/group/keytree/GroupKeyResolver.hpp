@@ -29,7 +29,7 @@ namespace keytree {
 /** Why a group's grant key could not be resolved through the tree and ladder. */
 enum class ResolveFailure {
     None,
-    /** The group carries no tree state, so there is nothing to climb. Not an error — a flat group. */
+    /** The group carries no tree state, so there is nothing to climb. */
     NoTree,
     /** The caller holds no leaf, or the climb broke. `climb` carries the detail. */
     ClimbFailed,
@@ -56,11 +56,10 @@ struct ResolveResult {
  * 2. **descend** the ladder from there to the requested epoch, if an older one was asked for.
  *
  * This class deliberately knows nothing about `KeyProvider` or the server transport: it takes an already-fetched
- * `server::GroupInfo` and returns a key. That keeps it unit-testable without a running bridge, and keeps the
- * flat per-member key path — which existing groups rely on — entirely out of its way.
+ * `server::GroupInfo` and returns a key. That keeps it unit-testable without a running bridge.
  *
- * **The caller is expected to try the flat path first and fall back to this.** A group served without tree
- * fields yields `ResolveFailure::NoTree`, so nothing about existing behaviour changes.
+ * A group served without tree fields yields `ResolveFailure::NoTree` — there is no other path left to fall
+ * back to.
  */
 class GroupKeyResolver {
 public:

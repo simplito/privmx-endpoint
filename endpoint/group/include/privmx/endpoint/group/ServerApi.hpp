@@ -22,7 +22,6 @@ public:
     void groupDelete(server::GroupDeleteModel model);
     server::GroupGetResult groupGet(server::GroupGetModel model);
     server::GroupListResult groupList(server::GroupListModel model);
-    void generateNewGroupKey(server::GenerateNewGroupKeyModel model);
 
     // ── Tree-backed membership (documents/nested_groups/09-hidden-key-tree.md) ──
     void groupAddMember(server::GroupAddMemberModel model);

@@ -72,6 +72,7 @@ core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleK
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
+    keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
     return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(moduleKeys.currentKeyId);
 }
 
@@ -116,6 +117,7 @@ core::ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToCont
 ) {
     return core::ContainerKeyCache::CachedModuleKeys{
         .keys = moduleKeys.keys,
+        .groupKeys = moduleKeys.groupKeys,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
@@ -129,6 +131,7 @@ ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
 ) {
     return ModuleKeys{
         .keys = moduleKeys.keys,
+        .groupKeys = moduleKeys.groupKeys,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,

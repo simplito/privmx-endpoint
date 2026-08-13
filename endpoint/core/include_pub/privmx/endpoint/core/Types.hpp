@@ -158,7 +158,7 @@ struct ContainerPolicyWithoutItem {
      */
     std::optional<std::string> rotateKeys;
     /**
-     * Enforce forward secrecy: block writes when group grants are stale after generateNewGroupKey
+     * Enforce forward secrecy: block writes when group grants are stale after a group key rotation
      */
     std::optional<std::string> forwardSecrecy;
 };
