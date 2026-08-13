@@ -577,6 +577,32 @@ unsigned char* CryptoProviderFromDriver::store_u32_be(unsigned char* out, uint32
     return out+4;
 }
 
+std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAlg alg)
+{
+    throw PrivmxDriverCryptoException("generatePrivateKey: NOT IMPLEMENTED");
+    // std::shared_ptr<IPrivateKey> key;
+    // switch (alg)
+    // {
+    // case AsymAlg::Secp256k1:
+    //     key = EccPrivateKey::createKeyPair();
+    //     return key;
+    // // other algoritms ...
+    // default:
+    //     throw PrivmxDriverCryptoException("generatePrivateKey: Unknown protocol");
+    //     break;
+    // }
+}
+
+std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView, KeyFormat)
+{
+    throw PrivmxDriverCryptoException("importPrivateKey: NOT IMPLEMENTED");
+}
+
+std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView, KeyFormat)
+{
+    throw PrivmxDriverCryptoException("importPublicKey: NOT IMPLEMENTED");
+}
+
 } // cryptoservice
 } // privmx
 

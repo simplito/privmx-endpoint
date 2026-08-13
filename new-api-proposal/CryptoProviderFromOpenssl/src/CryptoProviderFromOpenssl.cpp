@@ -286,6 +286,21 @@ Bytes CryptoProviderFromOpenssl::derive(const KdfParams& opt, BytesView secretDa
 {
     throw PrivmxDriverCryptoException("Key derivation function: NOT IMPLEMENTED");
 }
+
+std::shared_ptr<IPrivateKey> CryptoProviderFromOpenssl::generatePrivateKey(AsymAlg)
+{
+    throw PrivmxDriverCryptoException("generatePrivateKey: NOT IMPLEMENTED");
+}
+
+std::shared_ptr<IPrivateKey> CryptoProviderFromOpenssl::importPrivateKey(BytesView, KeyFormat)
+{
+    throw PrivmxDriverCryptoException("importPrivateKey: NOT IMPLEMENTED");
+}
+
+std::shared_ptr<IPublicKey> CryptoProviderFromOpenssl::importPublicKey(BytesView, KeyFormat)
+{
+    throw PrivmxDriverCryptoException("importPublicKey: NOT IMPLEMENTED");
+}
 } // cryptoservice
 } // privmx
 

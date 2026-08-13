@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_CRYPTOSERVICE_CRYPTOPROVIDERFROMDRIVER_HPP_
 #define _PRIVMXLIB_CRYPTOSERVICE_CRYPTOPROVIDERFROMDRIVER_HPP_
 
+// #include <memory>
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
 
@@ -30,8 +31,13 @@ public:
     virtual Bytes encrypt(const SymParams&, BytesView plaintext) override;
     virtual Bytes decrypt(const SymParams&, BytesView ciphertext) override;
     virtual Bytes derive(const KdfParams& opt, BytesView secretData) override;  
+    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::Secp256k1) override;
+    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat) override;
+    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat) override;
 
 protected:
+    class EccPublicKey;
+    class EccPrivateKey;
     virtual Bytes digestConfStr(const char *config, BytesView data); 
     virtual Bytes hmacConfStr(const char *config,  BytesView key, BytesView data);
     virtual Bytes encryptConfStr(const char *alg, const bool padding, 

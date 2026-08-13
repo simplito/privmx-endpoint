@@ -58,6 +58,49 @@ public:
     virtual Bytes derive(const KdfParams& opt, BytesView secretData) = 0;  
 };
 
+// ---- 6. Keys in asymmetric cryptography ----
+
+class IPublicKey {
+public:
+    virtual ~IPublicKey() = default;
+    virtual bool  verify(BytesView data, BytesView sig, SigScheme) const = 0;
+    virtual Bytes export_(KeyFormat) const = 0;                 // np. Der/Base58Der
+
+
+
+};
+
+class IPrivateKey {
+public:
+    virtual ~IPrivateKey() = default;
+    virtual Bytes sign(BytesView data, SigScheme) const = 0;
+    virtual std::shared_ptr<IPublicKey> publicKey() const = 0;
+    virtual Bytes deriveSharedSecret(const IPublicKey&) const = 0;  // ECDH — zamiast ECDHE
+    virtual Bytes export_(KeyFormat) const = 0;                     // Raw / Wif
+
+
+
+};
+
+class IExtKey {
+
+
+
+};
+
+
+// ---- 7. Key provider ----
+
+class IKeyProvider {
+public:
+    virtual ~IKeyProvider() = default;
+    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::Secp256k1) = 0;
+    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat) = 0;
+    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat) = 0;
+//    virtual std::shared_ptr<IExtKey>      hdFromSeed(BytesView seed) = 0;
+};
+
+
 
 // ---- Provider facade (role aggregate) ----
 class ICryptoProvider : public IRandom
@@ -65,7 +108,7 @@ class ICryptoProvider : public IRandom
             , public IHmac
             , public ISymmetricCipher 
             , public IKdf
-            // , public IKeyProvider
+            , public IKeyProvider
             // , public IHybridSeal
             // // ...
 {

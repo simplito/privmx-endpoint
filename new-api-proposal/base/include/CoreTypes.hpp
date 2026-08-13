@@ -49,6 +49,26 @@ enum class Kdf {
     Prf12       // TLS 1.2 Pseudo-Random Function 
 };
 
+// formats of keys used in asymmetric cryptography
+enum class KeyFormat { 
+    Raw, 
+    Der, 
+    Wif, 
+    Base58Der 
+};
+
+// signing schemes
+enum class SigScheme { 
+    EcdsaSecp256k1Compact, 
+    EcdsaSecp256k1CompactWithHash 
+};
+
+// types of implemented asymmetric algorithms
+enum class AsymAlg {
+    Secp256k1    
+};
+
+
 // arguments used in symmetric cryptography
 struct SymParams {
     SymAlg cipher;
