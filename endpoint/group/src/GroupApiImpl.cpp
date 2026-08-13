@@ -40,6 +40,15 @@ GroupApiImpl::GroupApiImpl(
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway),
       _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
+    _groupPrivKeyResolver =
+        [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+        try {
+            return resolveGroupPrivKey(groupId, epoch);
+        } catch (...) {
+            // caller holds no leaf in this group's tree at this epoch — skip
+            return std::nullopt;
+        }
+    };
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&GroupApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -202,9 +211,6 @@ void GroupApiImpl::addGroupMember(
     const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
 
     const keytree::TreeGroupState state = climbForPlanning(currentGroup);
-    // The group's metadata key may live in an entry addressed to the group itself, which only opens with the
-    // grant key. Register it before anything asks the key provider for the current key.
-    registerOwnGrantKeys(currentGroup);
 
     keytree::TreeKeys tree(_treeKeyStore);
     tree.setMemberKeys(toTreeMembers(users, managers));
@@ -218,7 +224,9 @@ void GroupApiImpl::addGroupMember(
 
     // No new epoch: `forceGenerateNewKey` stays false so the metadata key is untouched and every container the
     // group can read stays valid. The newcomer simply gets an entry for the key that already exists.
-    auto ctx = prepareContainerUpdate(currentGroup, currentEntry, resourceId, users, managers, false);
+    auto ctx = prepareContainerUpdate(
+        currentGroup, currentEntry, resourceId, users, managers, false, true, _groupPrivKeyResolver
+    );
 
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
     std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
@@ -284,7 +292,6 @@ void GroupApiImpl::removeGroupMember(
     const int64_t newEpoch = currentEpoch + 1;
 
     const keytree::TreeGroupState state = climbForPlanning(currentGroup);
-    registerOwnGrantKeys(currentGroup);
     const auto currentGrantKey = _treeKeyStore.getGrantKey(static_cast<std::uint32_t>(currentEpoch));
 
     keytree::TreeKeys tree(_treeKeyStore);
@@ -319,7 +326,9 @@ void GroupApiImpl::removeGroupMember(
     // `distributeToUsers = false`: a new metadata key is generated, but not wrapped to anyone individually. Doing
     // that would cost one ECIES operation per remaining member in this client's own CPU even though none of the
     // results would be sent.
-    auto ctx = prepareContainerUpdate(currentGroup, currentEntry, resourceId, users, managers, true, false);
+    auto ctx = prepareContainerUpdate(
+        currentGroup, currentEntry, resourceId, users, managers, true, false, _groupPrivKeyResolver
+    );
     const std::vector<core::server::GroupKeyEntrySet> selfAddressedKey = buildGroupKeyEntries(
         {core::GroupGrantWithKey{
             .groupId = groupId,
@@ -422,10 +431,11 @@ void GroupApiImpl::updateGroup(
         }
     }
 
-    auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup);
+    auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup, _groupPrivKeyResolver);
 
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected
+        currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected,
+        true, _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
@@ -520,19 +530,14 @@ void GroupApiImpl::adoptRotatedAlready(
         throw GroupDataIntegrityException("RotatedAlready: confirmation tag mismatch");
     }
 
-    auto winnerPrivKeyWif = _groupDataSchemaMapper->getGroupPrivKey(updatedGroup, winnerGk);
-    auto winnerPrivKey = privmx::crypto::PrivateKey::fromWIF(winnerPrivKeyWif);
-    _keyProvider->registerGroupPrivKey(groupId, payload.keyVersion, winnerPrivKey);
-
     invalidateModuleKeysInCache(groupId);
 }
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
     server::GroupGetModel params{.groupId = groupId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
-    registerOwnGrantKeys(group);
     setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
-    return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider);
+    return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, _groupPrivKeyResolver);
 }
 
 core::PagingList<Group> GroupApiImpl::listGroups(
@@ -544,11 +549,10 @@ core::PagingList<Group> GroupApiImpl::listGroups(
     core::ListQueryMapper::map(model, pagingQuery);
     auto groupsList = _serverApi.groupList(model);
     for (const auto& group : groupsList.groups) {
-        registerOwnGrantKeys(group);
         setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
     }
     std::vector<Group> groups = _groupDataSchemaMapper->validateDecryptAndConvertGroups(
-        groupsList.groups, _keyProvider
+        groupsList.groups, _keyProvider, _groupPrivKeyResolver
     );
     return core::PagingList<Group>({.totalAvailable = groupsList.count, .readItems = groups});
 }
@@ -564,17 +568,15 @@ void GroupApiImpl::processNotificationEvent(
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "groupCreated") {
             auto raw = server::GroupInfo::fromJSON(notification.data);
-            registerOwnGrantKeys(raw);
             setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider);
+            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider, _groupPrivKeyResolver);
             auto event = core::EventBuilder::buildEvent<GroupCreatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupUpdated") {
             auto raw = server::GroupInfo::fromJSON(notification.data);
-            registerOwnGrantKeys(raw);
             setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
             invalidateModuleKeysInCache(raw.id);
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider);
+            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider, _groupPrivKeyResolver);
             auto event = core::EventBuilder::buildEvent<GroupUpdatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupDeleted") {
@@ -602,34 +604,7 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
     server::GroupGetModel params{.groupId = moduleId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
     _groupDataSchemaMapper->assertDataIntegrity(group);
-    registerOwnGrantKeys(group);
     return std::make_pair(groupToModuleKeys(group), group.version);
-}
-
-/**
- * Registers the group's own grant key so its metadata key entry can be opened.
- *
- * A tree-backed group wraps its metadata key to itself, so decrypting the group needs the grant private key for
- * the epoch that entry names — which means climbing the tree, and descending the ladder when the entry belongs to
- * an older epoch. Failures are swallowed per entry on purpose: a caller who cannot reach one epoch may still be
- * able to read another, and the key provider reports an unreadable entry as a status code rather than an
- * exception.
- */
-void GroupApiImpl::registerOwnGrantKeys(const server::GroupInfo& group) {
-    if (!group.groupKeys.has_value() || group.groupKeys.value().empty()) {
-        return;
-    }
-    for (const core::server::GroupKeysEntry& entry : group.groupKeys.value()) {
-        if (entry.group != group.id) {
-            continue; // not self-addressed; another module's business
-        }
-        try {
-            const int64_t epoch = entry.groupEpoch.value_or(0);
-            _keyProvider->registerGroupPrivKey(group.id, epoch, resolveGroupPrivKey(group.id, epoch));
-        } catch (...) {
-            // Unreachable epoch: the caller was not a member then, or the archive has been cut or pruned.
-        }
-    }
 }
 
 core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group) {

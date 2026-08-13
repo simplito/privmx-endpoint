@@ -68,12 +68,15 @@ DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
     throw UnknownModuleEncryptionKeyException();
 }
 
-core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys) {
+core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
+    ModuleKeys moduleKeys,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(moduleKeys.currentKeyId);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(moduleKeys.currentKeyId);
 }
 
 ModuleKeys ModuleBaseApi::getModuleKeys(

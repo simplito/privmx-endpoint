@@ -114,7 +114,8 @@ Thread ThreadDataSchemaMapper::toLibThread(
 
 std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
     const std::vector<server::ThreadInfo>& threads,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Thread>(
         threads, keyProvider, _connection, [&](const server::ThreadInfo& t) { return validateDataIntegrity(t); },
@@ -124,13 +125,15 @@ std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
         [&](const server::ThreadInfo& t, const core::DecryptedEncKey& key) { return decrypt(t, key); },
         [](const server::ThreadInfo& t, uint32_t code) {
             return toLibThread(t, {}, {}, code, ThreadDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Thread ThreadDataSchemaMapper::validateDecryptAndConvertThread(
     const server::ThreadInfo& thread,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertThreads({thread}, keyProvider)[0];
+    return validateDecryptAndConvertThreads({thread}, keyProvider, groupPrivKeyResolver)[0];
 }

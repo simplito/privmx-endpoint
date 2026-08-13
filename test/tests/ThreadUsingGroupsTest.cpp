@@ -757,12 +757,17 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     EXPECT_NO_THROW({ mBefore = threadApi->getMessage(messageId); });
     EXPECT_NE(mBefore.statusCode, 0);
 
-    // user_1 adds user_3 to Group_2 (no key rotation needed when adding)
+    // user_1 adds user_3 to Group_2 via the tree-aware path, seating user_3's leaf in the key tree
+    // (updateGroup would only re-wrap the group's own metadata key — it never touches tree leaf state)
     disconnect();
     connectAs(TUGConnectionType::TUGUser1);
     EXPECT_NO_THROW({
-        groupApi->updateGroup(
+        groupApi->addGroupMember(
             reader->getString("Group_2.groupId"),
+            core::UserWithPubKey{
+                .userId = reader->getString("Login.user_3_id"), .pubKey = reader->getString("Login.user_3_pubKey")
+            },
+            false, // asManager
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
                 {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")},
@@ -772,10 +777,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
             },
             group_2.publicMeta,
-            group_2.privateMeta,
-            group_2.version,
-            false,
-            false  // no key rotation: adding user re-encrypts existing private key, pub key stays the same
+            group_2.privateMeta
         );
     });
 

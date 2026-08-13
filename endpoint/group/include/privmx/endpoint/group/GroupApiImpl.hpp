@@ -149,14 +149,6 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys groupToModuleKeys(const server::GroupInfo& group);
 
-    /**
-     * Registers the group's own grant key, so the metadata key it wrapped to itself can be opened.
-     *
-     * A tree-backed group holds one metadata key ciphertext per epoch instead of one per member, which is what
-     * keeps a removal O(1) in the roster; the cost is that reading the group requires climbing first.
-     */
-    void registerOwnGrantKeys(const server::GroupInfo& group);
-
     /** Roster entries as tree leaves, in a stable order — the seating is part of the state the bridge checks. */
     static std::vector<keytree::TreeMember> toTreeMembers(
         const std::vector<core::UserWithPubKey>& users,
@@ -179,6 +171,8 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
+    /** Resolves a group's own grant key by climbing its own tree — swallows a failed climb to nullopt. */
+    core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
