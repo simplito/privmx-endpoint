@@ -56,6 +56,8 @@ public:
         ListStreamRoomParticipants = 22,
         EncryptDataChannelMessage = 23,
         DecryptDataChannelMessage = 24,
+
+        SetNewOfferOnReconfigure = 25
     };
 
     StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
