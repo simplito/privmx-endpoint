@@ -21,6 +21,8 @@ limitations under the License.
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
+#include <privmx/endpoint/kvdb/KvdbApi.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include "privmx/endpoint/programs/benchmark/Types.hpp"
 
 std::function<
@@ -28,7 +30,9 @@ std::function<
         std::shared_ptr<privmx::endpoint::core::Connection>, 
         std::shared_ptr<privmx::endpoint::thread::ThreadApi>, 
         std::shared_ptr<privmx::endpoint::store::StoreApi>, 
-        std::shared_ptr<privmx::endpoint::inbox::InboxApi>, 
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApi>,
+        std::shared_ptr<privmx::endpoint::event::EventApi>,
         const std::vector<std::string>&
     )
 > GetTestFunctionThread(uint64_t fun_number);
@@ -38,7 +42,9 @@ std::function<
         std::shared_ptr<privmx::endpoint::core::Connection>, 
         std::shared_ptr<privmx::endpoint::thread::ThreadApi>, 
         std::shared_ptr<privmx::endpoint::store::StoreApi>, 
-        std::shared_ptr<privmx::endpoint::inbox::InboxApi>, 
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApi>,
+        std::shared_ptr<privmx::endpoint::event::EventApi>,
         const std::vector<std::string>&
     )
 > GetTestFunctionStore(uint64_t fun_number);
@@ -49,7 +55,9 @@ std::function<
         std::shared_ptr<privmx::endpoint::core::Connection>, 
         std::shared_ptr<privmx::endpoint::thread::ThreadApi>, 
         std::shared_ptr<privmx::endpoint::store::StoreApi>, 
-        std::shared_ptr<privmx::endpoint::inbox::InboxApi>, 
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApi>,
+        std::shared_ptr<privmx::endpoint::event::EventApi>,
         const std::vector<std::string>&
     )
 > GetTestFunctionInbox(uint64_t fun_number);
@@ -59,17 +67,45 @@ std::function<
         std::shared_ptr<privmx::endpoint::core::Connection>, 
         std::shared_ptr<privmx::endpoint::thread::ThreadApi>, 
         std::shared_ptr<privmx::endpoint::store::StoreApi>, 
-        std::shared_ptr<privmx::endpoint::inbox::InboxApi>, 
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApi>,
+        std::shared_ptr<privmx::endpoint::event::EventApi>,
         const std::vector<std::string>&
     )
 > GetTestFunctionCrypto(uint64_t fun_number);
 
 std::function<
     void(
+        std::shared_ptr<privmx::endpoint::core::Connection>,
+        std::shared_ptr<privmx::endpoint::thread::ThreadApi>,
+        std::shared_ptr<privmx::endpoint::store::StoreApi>,
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApi>,
+        std::shared_ptr<privmx::endpoint::event::EventApi>,
+        const std::vector<std::string>&
+    )
+> GetTestFunctionKvdb(uint64_t fun_number);
+
+std::function<
+    void(
+        std::shared_ptr<privmx::endpoint::core::Connection>,
+        std::shared_ptr<privmx::endpoint::thread::ThreadApi>,
+        std::shared_ptr<privmx::endpoint::store::StoreApi>,
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApi>,
+        std::shared_ptr<privmx::endpoint::event::EventApi>,
+        const std::vector<std::string>&
+    )
+> GetTestFunctionEvent(uint64_t fun_number);
+
+std::function<
+    void(
         std::shared_ptr<privmx::endpoint::core::Connection>, 
         std::shared_ptr<privmx::endpoint::thread::ThreadApi>, 
         std::shared_ptr<privmx::endpoint::store::StoreApi>, 
-        std::shared_ptr<privmx::endpoint::inbox::InboxApi>, 
+        std::shared_ptr<privmx::endpoint::inbox::InboxApi>,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApi>,
+        std::shared_ptr<privmx::endpoint::event::EventApi>,
         const std::vector<std::string>&
     )
 > GetTestFunction(Module module, uint64_t fun_number);

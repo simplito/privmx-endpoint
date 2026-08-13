@@ -45,18 +45,19 @@ public:
 
         CreateStream = 13,
         PublishStream = 14,
-        UnpublishStream = 15,
-        SubscribeToRemoteStreams = 16,
-        ModifyRemoteStreamsSubscriptions = 17,
-        UnsubscribeFromRemoteStreams = 18,
-        Trickle = 19,
-        AcceptOfferOnReconfigure = 20,
-        KeyManagement = 21,
-        UpdateStream = 22,
-        EnableStreamRoomRecording = 23,
-        GetStreamRoomRecordingKeys = 24,
+        RemoveStream = 15,
 
-        JoinStreamRoomEx = 25,
+        CreateSubscriberStream = 16,
+        UpdateSubscriberStream = 17,
+        RemoveSubscriberStream = 18,
+        Trickle = 19,
+        UpdateStream = 20,
+        JoinStreamRoomEx = 21,
+        ListStreamRoomParticipants = 22,
+        EncryptDataChannelMessage = 23,
+        DecryptDataChannelMessage = 24,
+
+        SetNewOfferOnReconfigure = 25
     };
 
     StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -78,21 +79,23 @@ public:
     Poco::Dynamic::Var joinStreamRoom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var joinStreamRoomEx(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var leaveStreamRoom(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var enableStreamRoomRecording(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var createStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var publishStream(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateStream(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unpublishStream(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var removeStream(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var subscribeToRemoteStreams(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var modifyRemoteStreamsSubscriptions(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var unsubscribeFromRemoteStreams(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var getStreamRoomRecordingKeys(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var createSubscriberStream(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateSubscriberStream(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var removeSubscriberStream(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var listStreamRoomParticipants(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var acceptOfferOnReconfigure(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setNewOfferOnReconfigure(const Poco::Dynamic::Var& args);
+
+    Poco::Dynamic::Var encryptDataChannelMessage(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptDataChannelMessage(const Poco::Dynamic::Var& args);
+
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 
     std::shared_ptr<WebRTCInterface> getWebRtcInterface();

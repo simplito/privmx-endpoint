@@ -3,6 +3,7 @@ build-emscripten/
 .vscode/
 .VSCodeCounter/
 .idea/
+.clangd
 doc/html
 doc/latex
 doc/xml
@@ -21,3 +22,4 @@ test/test_env/utils/volumes/mongo/*
 test/logs
 test/volumes
 *.log
+*/__pycache__/*.pyc

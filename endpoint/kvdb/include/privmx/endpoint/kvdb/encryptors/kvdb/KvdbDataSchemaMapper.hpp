@@ -20,13 +20,13 @@ limitations under the License.
 
 #include <Poco/Dynamic/Var.h>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/endpoint/core/encryptors/module/Types.hpp>
 
 #include "privmx/endpoint/kvdb/Constants.hpp"
@@ -38,7 +38,7 @@ namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbDataSchemaMapper {
+class KvdbDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     KvdbDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
@@ -48,8 +48,6 @@ public:
         const server::KvdbInfo& kvdb,
         const core::DecryptedEncKey& encKey
     );
-
-    KvdbDataSchema::Version getDataStructureVersion(const server::KvdbDataEntry& entry);
 
     void assertDataIntegrity(const server::KvdbInfo& kvdb);
 
@@ -74,11 +72,8 @@ public:
     );
 
 private:
-    privmx::crypto::PrivateKey _userPrivKey;
-    core::Connection _connection;
     core::VersionStrategyMapper<server::KvdbInfo, std::tuple<Kvdb, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<KvdbDataSchemaStrategyV5> _strategyV5;
-    core::ModuleDataEncryptorV5 _encryptorV5;
 };
 
 } // namespace kvdb

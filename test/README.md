@@ -1,4 +1,7 @@
 # Creating dataset
+Given version of endpoint comes with working dataset in `test/test_env/create_dataset/Dataset` and ini file `test/test_env/create_dataset/ServerData.ini`
+If you changes data on server creating new data set is recommended, but also run it with older to chec backward capability
+
 To create the dataset required for testing run:
 ```bash
 ./test_env/create_dataset/main.sh
@@ -85,27 +88,34 @@ sudo insmod akvcam.ko
 
 ## Running all tests
 ```bash
-python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM
+python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM
 ```
 
-The first argument may point either directly to the directory with `test_e2e_*` binaries or to the CMake build root such as `build`. In the latter case, the runner will automatically use `build/test` when it exists.
+`--tests-dir` may point either directly to the directory with `test_e2e_*` binaries or to the CMake build root such as `build`. In the latter case, the runner will automatically use `build/test` when it exists. Defaults to `build` when omitted.
+
+`--dataset-dir` is the dataset directory produced by `create-dataset.sh`; the runner reads `ServerData.ini` directly from inside it, so it does not need to be passed separately. Defaults to `test/test_env/create_dataset/Dataset` when omitted.
+
+Running with no flags at all uses both defaults:
+```bash
+python3 e2e_runner.py
+```
 
 ## Running a single GTest or a pattern
-All extra arguments after the required paths are forwarded to each test executable.
+All extra arguments after the recognized flags are forwarded to each test executable.
 
 ```bash
-python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.listContextUsers
+python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.listContextUsers
 ```
 
 ```bash
-python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.*
+python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.*
 ```
 
 ## Passing other GTest flags
 You can also pass any other GTest arguments, for example:
 
 ```bash
-python3 e2e_runner.py build test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM/ServerData.ini test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM -- --gtest_repeat=2 --gtest_break_on_failure
+python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM -- --gtest_repeat=2 --gtest_break_on_failure
 ```
 
 `--gtest_filter` is handled specially by the runner to decide which tests should be scheduled.

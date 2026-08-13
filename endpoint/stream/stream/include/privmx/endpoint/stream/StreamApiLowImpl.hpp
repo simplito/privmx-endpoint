@@ -56,6 +56,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl,
         const std::string& type = STREAM_TYPE_FILTER_FLAG
     );
 
@@ -85,28 +86,24 @@ public:
         std::shared_ptr<WebRTCInterface> webRtc
     ); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
+    // Publisher stream part
     StreamHandle createStream(const std::string& streamRoomId);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
-
-    void unpublishStream(const StreamHandle& streamHandle);
-
-    void subscribeToRemoteStreams(
+    void removeStream(const StreamHandle& streamHandle);
+    // Subscriber stream part
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
-    void modifyRemoteStreamsSubscriptions(
-        const std::string& streamRoomId,
+    void updateSubscriberStream(
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void unsubscribeFromRemoteStreams(
-        const std::string& streamRoomId,
-        const std::vector<StreamSubscription>& subscriptionsToRemove
-    );
+    void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
 
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(
@@ -116,11 +113,9 @@ public:
     );
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
-    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);
-    void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
     DecryptedDataChannelMessage decryptDataChannelMessage(
         const std::string& streamRoomId,
         const std::string& remoteStreamId,
@@ -134,6 +129,11 @@ private:
         std::optional<int64_t> sessionId;
         std::optional<StreamHandle> streamHandle;
     };
+    struct SubscriptionData {
+        std::optional<int64_t> sessionId;
+        std::optional<SubscriberStreamHandle> streamHandle;
+        std::vector<StreamSubscription> subscriptions;
+    };
     struct StreamRoomData {
         StreamRoomData(
             std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor,
@@ -145,7 +145,7 @@ private:
             : messageEncryptor(_messageEncryptor), streamRoomId(_streamRoomId), webRtc(_webRtc),
               subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId) {}
         std::shared_ptr<StreamData> publisherStream;
-        std::shared_ptr<StreamData> subscriberStream;
+        std::shared_ptr<SubscriptionData> subscriberStream;
         std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
@@ -159,7 +159,9 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
 
-    std::vector<std::string> mapUsers(const std::vector<core::UserWithPubKey>& users);
+    static std::vector<server::StreamSubscription> mapSubscriptions(
+        const std::vector<StreamSubscription>& subscriptions
+    );
     std::shared_ptr<StreamRoomData> createEmptyStreamRoomData(
         const std::string& streamRoomId,
         std::shared_ptr<WebRTCInterface> webRtc
@@ -179,6 +181,7 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);
     void assertTurnServerUri(const std::string& uri);
+    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     static int32_t nextIdCounter;
     static int32_t nextId() { return nextIdCounter++; }
@@ -190,11 +193,11 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
-    StreamRoomDataSchemaMapper _streamRoomDataSchemaMapper;
+    std::shared_ptr<StreamRoomDataSchemaMapper> _streamRoomDataSchemaMapper;
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
-    privmx::utils::ThreadSaveMap<StreamHandle, std::string> _streamHandleToRoomId;
+    privmx::utils::ThreadSaveMap<Handle, std::string> _handleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
 };
 

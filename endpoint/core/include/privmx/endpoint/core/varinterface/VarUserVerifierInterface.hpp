@@ -5,7 +5,6 @@
 #include "privmx/endpoint/core/VarDeserializer.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
 #include <functional>
-#include <privmx/utils/Debug.hpp>
 #include <string>
 
 namespace privmx {

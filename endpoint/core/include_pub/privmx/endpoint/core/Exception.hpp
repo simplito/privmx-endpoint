@@ -2,11 +2,24 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_EXCEPTION_HPP_
 
 #include <exception>
+#include <initializer_list>
+#include <memory>
 #include <string>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
+
+constexpr bool exceptionCodesUnique(std::initializer_list<unsigned int> codes) {
+    for (auto i = codes.begin(); i != codes.end(); ++i) {
+        for (auto j = i + 1; j != codes.end(); ++j) {
+            if (*i == *j) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 class Exception : public std::exception {
 public:
@@ -17,8 +30,13 @@ public:
         unsigned int code = 0,
         const std::string& description = std::string()
     )
-        : _msg(msg), _name(name), _scope(scope), _code(code), _description(description) {}
-    virtual const char* what() const noexcept override { return _msg.c_str(); }
+        : _msg(msg), _name(name), _scope(scope), _code(code), _description(description) {
+        _what = _msg;
+        if (!_description.empty()) {
+            _what += " | " + _description;
+        }
+    }
+    virtual const char* what() const noexcept override { return _what.c_str(); }
     std::string getName() const noexcept;
     std::string getScope() const noexcept;
     unsigned int getCode() const noexcept;
@@ -26,12 +44,17 @@ public:
     std::string getFull(bool JSON = false) const noexcept;
     virtual void rethrow() const;
 
+    void setCause(const Exception& cause);
+    std::shared_ptr<Exception> getCause() const noexcept { return _cause; }
+
 private:
     std::string _msg;
     std::string _name;
     std::string _scope;
     unsigned int _code;
     std::string _description;
+    std::string _what;
+    std::shared_ptr<Exception> _cause;
 };
 
 inline std::string Exception::getName() const noexcept {
@@ -58,7 +81,8 @@ inline std::string Exception::getFull(bool JSON) const noexcept {
         res += "\"scope\" : \"" + _scope + "\",";
         res += "\"msg\" : \"" + _msg + "\",";
         res += "\"code\" : " + std::to_string(_code) + ",";
-        res += "\"description\" : \"" + _description + "\"";
+        res += "\"description\" : \"" + _description + "\",";
+        res += "\"cause\" : " + (_cause ? _cause->getFull(true) : std::string("null"));
         res += "}";
         return res;
     }
@@ -69,7 +93,16 @@ inline std::string Exception::getFull(bool JSON) const noexcept {
     res += " (code: " + std::to_string(_code);
     res += ", msg: \"" + _msg + "\")";
     res += "\n\nDescription: \n" + _description;
+    if (_cause) {
+        res += "\n\nCaused by:\n" + _cause->getFull(false);
+    }
     return res;
+}
+
+inline void Exception::setCause(const Exception& cause) {
+    _cause = std::make_shared<Exception>(cause);
+    _what += " | caused by: ";
+    _what += _cause->what();
 }
 
 inline void Exception::rethrow() const {

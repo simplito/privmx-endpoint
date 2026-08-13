@@ -11,7 +11,7 @@ limitations under the License.
 
 #include <Poco/ByteOrder.h>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/utils/Debug.hpp>
+
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -63,7 +63,9 @@ StoreApiImpl::StoreApiImpl(
 
       _fileHandleManager(FileHandleManager(handleManager, "Store")),
       _subscriber(connection.getImpl()->getGateway(), STORE_TYPE_FILTER_FLAG),
-      _storeDataSchemaMapper(userPrivKey, connection), _fileMetaDataSchemaMapper(userPrivKey, connection) {
+      _storeDataSchemaMapper(std::make_shared<StoreDataSchemaMapper>(userPrivKey, connection)),
+      _fileMetaDataSchemaMapper(userPrivKey, connection) {
+    initModuleDataSchemaMapper(_storeDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -89,81 +91,30 @@ std::string StoreApiImpl::createStore(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::string& type
 ) {
-    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, STORE_TYPE_FILTER_FLAG, policies);
-}
-
-std::string StoreApiImpl::createStoreEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    return _storeCreateEx(contextId, users, managers, publicMeta, privateMeta, type, policies);
-}
-
-std::string StoreApiImpl::_storeCreateEx(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::string& type,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, _storeCreateEx)
-    auto storeKey = _keyProvider->generateKey();
-    std::string resourceId = core::EndpointUtils::generateId();
-    auto storeDIO = _connection.getImpl()->createDIO(contextId, resourceId);
-    auto storeSecret = _keyProvider->generateSecret();
+    auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 storeDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .internalMeta = core::
-            ModuleInternalMetaV5{.secret = storeSecret, .resourceId = resourceId, .randomId = storeDIO.randomId},
-        .dio = storeDIO
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
+        .dio = ctx.dio
     };
     server::StoreCreateModel storeCreateModel;
-    storeCreateModel.resourceId = resourceId;
-    storeCreateModel.contextId = contextId;
-    storeCreateModel.keyId = storeKey.id;
-    storeCreateModel.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, storeKey.key);
+    fillContainerCreateModel(
+        storeCreateModel, contextId, users, managers, ctx,
+        _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key)
+    );
     if (type.length() > 0) {
         storeCreateModel.type = type;
     }
     if (policies.has_value()) {
         storeCreateModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
-    auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    storeCreateModel.keys = _keyProvider->prepareKeysList(
-        all_users, storeKey, storeDIO, {.contextId = contextId, .resourceId = resourceId}, storeSecret
-    );
-    std::vector<std::string> usersList;
-    for (auto user : users) {
-        usersList.push_back(user.userId);
-    }
-    std::vector<std::string> managersList;
-    for (auto x : managers) {
-        managersList.push_back(x.userId);
-    }
-    storeCreateModel.users = usersList;
-    storeCreateModel.managers = managersList;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeCreateEx, data encrypted)
     auto result = _serverApi->storeCreate(storeCreateModel);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeCreate, data send)
     return result.storeId;
-}
-
-std::vector<std::string> StoreApiImpl::usersWithPubKeyToIds(std::vector<core::UserWithPubKey>& users) {
-    std::vector<std::string> ids{};
-    for (auto& user : users) {
-        ids.push_back(user.userId);
-    }
-    return ids;
 }
 
 void StoreApiImpl::updateStore(
@@ -177,7 +128,6 @@ void StoreApiImpl::updateStore(
     const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeUpdate)
 
     server::StoreGetModel getModel;
     getModel.storeId = storeId;
@@ -185,57 +135,11 @@ void StoreApiImpl::updateStore(
     auto currentStoreEntry = currentStore.data.back();
     auto currentStoreResourceId = currentStore.resourceId.has_value() ? currentStore.resourceId.value() :
                                                                         core::EndpointUtils::generateId();
-    auto location{getModuleEncKeyLocation(currentStore, currentStoreResourceId)};
-    auto storeKeys{getAndValidateModuleKeys(currentStore, currentStoreResourceId)};
-    auto currentStoreKey{findEncKeyByKeyId(storeKeys, currentStoreEntry.keyId)};
-    auto storeInternalMeta = extractAndDecryptModuleInternalMeta(currentStoreEntry, currentStoreKey);
-
-    auto usersKeysResolver{
-        core::UsersKeysResolver::create(currentStore, users, managers, forceGenerateNewKey, currentStoreKey)
-    };
-
-    if (!_keyProvider->verifyKeysSecret(storeKeys, location, storeInternalMeta.secret)) {
-        throw StoreEncryptionKeyValidationException();
-    }
-    core::EncKey storeKey = currentStoreKey;
-    core::DataIntegrityObject updateStoreDio = _connection.getImpl()->createDIO(
-        currentStore.contextId, currentStoreResourceId
+    auto ctx = prepareContainerUpdate(
+        currentStore, currentStoreEntry, currentStoreResourceId, users, managers, forceGenerateNewKey
     );
-
-    std::vector<core::server::KeyEntrySet> keys;
-    if (usersKeysResolver->doNeedNewKey()) {
-        storeKey = _keyProvider->generateKey();
-        keys = _keyProvider->prepareKeysList(
-            usersKeysResolver->getNewUsers(), storeKey, updateStoreDio, location, storeInternalMeta.secret
-        );
-    }
-
-    auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-    if (usersToAddMissingKey.size() > 0) {
-        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
-            storeKeys, usersToAddMissingKey, updateStoreDio, location, storeInternalMeta.secret
-        );
-        for (auto t : tmp)
-            keys.push_back(t);
-    }
-
     server::StoreUpdateModel model;
-    std::vector<std::string> usersList;
-    for (auto user : users) {
-        usersList.push_back(user.userId);
-    }
-    std::vector<std::string> managersList;
-    for (auto x : managers) {
-        managersList.push_back(x.userId);
-    }
-    model.id = storeId;
-    model.resourceId = currentStoreResourceId;
-    model.keyId = storeKey.id;
-    model.keys = keys;
-    model.users = usersList;
-    model.managers = managersList;
-    model.version = version;
-    model.force = force;
+    fillContainerUpdateModel(model, storeId, currentStoreResourceId, users, managers, ctx, version, force);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
@@ -244,18 +148,13 @@ void StoreApiImpl::updateStore(
         .privateMeta = privateMeta,
         .internalMeta =
             core::ModuleInternalMetaV5{
-                .secret = storeInternalMeta.secret,
-                .resourceId = currentStoreResourceId,
-                .randomId = updateStoreDio.randomId
+                .secret = ctx.secret, .resourceId = currentStoreResourceId, .randomId = ctx.dio.randomId
             },
-        .dio = updateStoreDio
+        .dio = ctx.dio
     };
-    model.data = _storeDataSchemaMapper.encrypt(storeDataToEncrypt, storeKey.key);
-
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeUpdate, data encrypted)
+    model.data = _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key);
     _serverApi->storeUpdate(model);
     invalidateModuleKeysInCache(storeId);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeUpdate, data send)
 }
 
 void StoreApiImpl::deleteStore(const std::string& storeId) {
@@ -265,80 +164,48 @@ void StoreApiImpl::deleteStore(const std::string& storeId) {
     invalidateModuleKeysInCache(storeId);
 }
 
-Store StoreApiImpl::getStore(const std::string& storeId) {
-    return _storeGetEx(storeId, STORE_TYPE_FILTER_FLAG);
-}
-
-Store StoreApiImpl::getStoreEx(const std::string& storeId, const std::string& type) {
-    return _storeGetEx(storeId, type);
-}
-
-Store StoreApiImpl::_storeGetEx(const std::string& storeId, const std::string& type) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, _storeGetEx)
+Store StoreApiImpl::getStore(const std::string& storeId, const std::string& type) {
     server::StoreGetModel model;
     model.storeId = storeId;
     if (type.length() > 0) {
         model.type = type;
     }
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, getting store)
     auto store = _serverApi->storeGet(model).store;
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _storeGetEx, data send)
-    auto result = _storeDataSchemaMapper.validateDecryptAndConvertStore(store, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _getStoreEx, data decrypted)
+    auto result = _storeDataSchemaMapper->validateDecryptAndConvertStore(store, _keyProvider);
     return result;
 }
 
-core::PagingList<Store> StoreApiImpl::listStores(const std::string& contextId, const core::PagingQuery& query) {
-    return _storeListEx(contextId, query, STORE_TYPE_FILTER_FLAG);
-}
-
-core::PagingList<Store> StoreApiImpl::listStoresEx(
+core::PagingList<Store> StoreApiImpl::listStores(
     const std::string& contextId,
     const core::PagingQuery& query,
     const std::string& type
 ) {
-    return _storeListEx(contextId, query, type);
-}
-
-core::PagingList<Store> StoreApiImpl::_storeListEx(
-    const std::string& contextId,
-    const core::PagingQuery& query,
-    const std::string& type
-) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, _listStoresEx)
     server::StoreListModel storeListModel;
     storeListModel.contextId = contextId;
     if (type.length() > 0) {
         storeListModel.type = type;
     }
     core::ListQueryMapper::map(storeListModel, query);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, _listStoresEx)
     auto storesList = _serverApi->storeList(storeListModel);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeList, data send)
     for (auto store : storesList.stores) {
         setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     }
-    auto stores = _storeDataSchemaMapper.validateDecryptAndConvertStores(storesList.stores, _keyProvider);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, _listStoresEx, data decrypted)
+    auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(storesList.stores, _keyProvider);
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }
 
 File StoreApiImpl::getFile(const std::string& fileId) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, getFile)
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = fileId;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getFile)
     auto serverFileResult = _serverApi->storeFileGet(storeFileGetModel);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, getFile, data send)
     auto store = serverFileResult.store;
-    _storeDataSchemaMapper.assertDataIntegrity(store);
+    _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(
         serverFileResult.file, store.resourceId.value_or("")
     );
     if (statusCode != 0) {
-        PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data integrity validation failed)
         File result;
         result.statusCode = statusCode;
         return result;
@@ -346,36 +213,27 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto ret{_fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
         serverFileResult.file, storeToModuleKeys(store), _keyProvider
     )};
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, getFile, data decrypted)
     return ret;
 }
 
 core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const core::PagingQuery& query) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeFileList)
     server::StoreFileListModel model;
     model.storeId = storeId;
     core::ListQueryMapper::map(model, query);
-
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList)
     auto serverFilesResult = _serverApi->storeFileList(model);
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileList, data send);
     auto store = serverFilesResult.store;
-    _storeDataSchemaMapper.assertDataIntegrity(store);
+    _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     auto files = _fileMetaDataSchemaMapper.validateDecryptAndConvertFiles(
         serverFilesResult.files, storeToModuleKeys(store), _keyProvider
     );
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileList, data decrypted)
     return core::PagingList<File>({.totalAvailable = serverFilesResult.count, .readItems = files});
 }
 
 void StoreApiImpl::deleteFile(const std::string& fileId) {
-    PRIVMX_DEBUG_TIME_START(PlatformStore, storeFileDelete)
     server::StoreFileDeleteModel model;
     model.fileId = fileId;
-    PRIVMX_DEBUG_TIME_CHECKPOINT(PlatformStore, storeFileWrite)
     _serverApi->storeFileDelete(model);
-    PRIVMX_DEBUG_TIME_STOP(PlatformStore, storeFileDelete, data send)
 }
 
 int64_t StoreApiImpl::createFile(
@@ -522,7 +380,9 @@ void StoreApiImpl::syncFile(const int64_t handle) {
         handlePtr->sync(encryptionParams.fileDecryptionParams);
     } catch (const store::FileCorruptedException& e) {
         _fileHandleManager.removeHandle(handle);
-        throw FileSyncFailedHandleCloseException("in file read handle");
+        FileSyncFailedHandleCloseException ex("in file read handle");
+        ex.setCause(e);
+        throw ex;
     }
 }
 
@@ -539,7 +399,9 @@ std::string StoreApiImpl::closeFile(const int64_t handle) {
         try {
             return storeFileFinalizeWrite(std::dynamic_pointer_cast<FileWriteHandle>(handlePtr));
         } catch (const core::DataDifferentThanDeclaredException& e) {
-            throw WritingToFileInteruptedWrittenDataSmallerThenDeclaredException();
+            WritingToFileInteruptedWrittenDataSmallerThenDeclaredException ex;
+            ex.setCause(e);
+            throw ex;
         }
     }
     return handlePtr->getFileId();
@@ -547,34 +409,24 @@ std::string StoreApiImpl::closeFile(const int64_t handle) {
 
 std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle) {
     auto data = handle->finalize();
-    try {
-        privmx::endpoint::core::ModuleKeys storeKey;
-        if (handle->getFileId().empty()) {
-            storeKey = getModuleKeys(handle->getStoreId());
-        } else {
-            server::StoreFileGetModel storeFileGetModel;
-            storeFileGetModel.fileId = handle->getFileId();
-            auto store = _serverApi->storeFileGet(storeFileGetModel).store;
-            storeKey = core::ModuleKeys{
-                .keys = store.keys,
-                .currentKeyId = store.keyId,
-                .moduleSchemaVersion = _storeDataSchemaMapper.getDataStructureVersion(store.data.back()),
-                .moduleResourceId = store.resourceId.value_or(""),
-                .contextId = store.contextId
-            };
-            setNewModuleKeysInCache(store.id, storeKey, store.version);
-        }
-        return storeFileFinalizeWriteRequest(handle, data, storeKey);
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-                privmx::endpoint::server::InvalidKeyException().getCode() &&
-            handle->getFileId().empty()) {
-            privmx::endpoint::core::ModuleKeys storeKey = getNewModuleKeysAndUpdateCache(handle->getStoreId());
-
-            return storeFileFinalizeWriteRequest(handle, data, storeKey);
-        }
-        throw e;
+    if (handle->getFileId().empty()) {
+        return withKeyRefresh<std::string>(
+            handle->getStoreId(), privmx::endpoint::server::InvalidKeyException().getCode(),
+            [&](const core::ModuleKeys& keys) { return storeFileFinalizeWriteRequest(handle, data, keys); }
+        );
     }
+    server::StoreFileGetModel storeFileGetModel;
+    storeFileGetModel.fileId = handle->getFileId();
+    auto store = _serverApi->storeFileGet(storeFileGetModel).store;
+    auto storeKey = core::ModuleKeys{
+        .keys = store.keys,
+        .currentKeyId = store.keyId,
+        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
+        .moduleResourceId = store.resourceId.value_or(""),
+        .contextId = store.contextId
+    };
+    setNewModuleKeysInCache(store.id, storeKey, store.version);
+    return storeFileFinalizeWriteRequest(handle, data, storeKey);
 }
 
 std::string StoreApiImpl::storeFileFinalizeWriteRequest(
@@ -585,7 +437,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
     auto serverId = _host;
     auto key = getAndValidateModuleCurrentEncKey(storeKey);
     if (key.statusCode != 0) {
-        throw StoreEncryptionKeyValidationException(
+        throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
         );
     }
@@ -632,7 +484,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::Store::fromJSON(notification.data);
             if (raw.type.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, storeToModuleKeys(raw), raw.version);
-                auto data = _storeDataSchemaMapper.validateDecryptAndConvertStore(raw, _keyProvider);
+                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<StoreCreatedEvent>("store", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -640,7 +492,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::Store::fromJSON(notification.data);
             if (raw.type.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, storeToModuleKeys(raw), raw.version);
-                auto data = _storeDataSchemaMapper.validateDecryptAndConvertStore(raw, _keyProvider);
+                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(raw, _keyProvider);
                 auto event = core::EventBuilder::buildEvent<StoreUpdatedEvent>("store", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -743,9 +595,7 @@ FileEncryptionParams StoreApiImpl::getFileEncryptionParams(server::File file, se
 }
 
 core::ModuleKeys StoreApiImpl::getFileDecryptionKeys(server::File file) {
-    return getModuleKeys(
-        file.storeId, std::set<std::string>{file.keyId}, _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file)
-    );
+    return getModuleKeysForItem(file.storeId, file.keyId, _fileMetaDataSchemaMapper.getMinimumStoreSchemaVersion(file));
 }
 
 void StoreApiImpl::updateFileMeta(
@@ -762,11 +612,11 @@ void StoreApiImpl::updateFileMeta(
     server::File file = storeFileGetResult.file;
     auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or(""));
     if (statusCode != 0) {
-        throw FileDataIntegrityException();
+        throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }
     auto key = getAndValidateModuleCurrentEncKey(store);
     if (key.statusCode != 0) {
-        throw StoreEncryptionKeyValidationException(
+        throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
         );
     }
@@ -798,7 +648,7 @@ void StoreApiImpl::assertFileExist(const std::string& fileId) {
 std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     store::server::StoreGetModel params{.storeId = moduleId, .type = std::nullopt};
     auto store = _serverApi->storeGet(params).store;
-    _storeDataSchemaMapper.assertDataIntegrity(store);
+    _storeDataSchemaMapper->assertDataIntegrity(store);
     return std::make_pair(storeToModuleKeys(store), store.version);
 }
 
@@ -806,7 +656,7 @@ core::ModuleKeys StoreApiImpl::storeToModuleKeys(server::Store store) {
     return core::ModuleKeys{
         .keys = store.keys,
         .currentKeyId = store.keyId,
-        .moduleSchemaVersion = _storeDataSchemaMapper.getDataStructureVersion(store.data.back()),
+        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
         .moduleResourceId = store.resourceId.value_or(""),
         .contextId = store.contextId
     };

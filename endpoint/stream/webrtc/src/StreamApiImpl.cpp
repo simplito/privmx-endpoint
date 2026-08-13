@@ -16,11 +16,11 @@ limitations under the License.
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
-#include <privmx/utils/Debug.hpp>
 
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include <privmx/endpoint/core/CoreException.hpp>
 
 #include <base/portable.h>
 #include <libwebrtc.h>
@@ -39,7 +39,7 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
     _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
     _configuration = libwebrtc::RTCConfiguration();
     for (size_t i = 0; i < credentials.size(); i++) {
-        PRIVMX_DEBUG("STREAMS", "StreamApiImpl", "IceServer.uri: " + credentials[i].url)
+        LOG_TRACE("StreamApiImpl - IceServer.uri: " + credentials[i].url)
         libwebrtc::IceServer iceServer = {
             .uri = credentials[i].url,
             .username = portable::string(credentials[i].username),
@@ -69,20 +69,16 @@ std::vector<StreamInfo> StreamApiImpl::listStreams(const std::string& streamRoom
     return _api->listStreams(streamRoomId);
 }
 
+std::vector<StreamSubscriber> StreamApiImpl::listStreamRoomParticipants(const std::string& streamRoomId) {
+    return _api->listStreamRoomParticipants(streamRoomId);
+}
+
 void StreamApiImpl::joinStreamRoom(const std::string& streamRoomId) {
     _api->joinStreamRoom(streamRoomId, _webRTC);
 }
 
 void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _api->leaveStreamRoom(streamRoomId);
-}
-
-void StreamApiImpl::enableStreamRoomRecording(const std::string& streamRoomId) {
-    _api->enableStreamRoomRecording(streamRoomId);
-}
-
-std::vector<stream::RecordingEncKey> StreamApiImpl::getStreamRoomRecordingKeys(const std::string& streamRoomId) {
-    return _api->getStreamRoomRecordingKeys(streamRoomId);
 }
 
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {
@@ -308,15 +304,15 @@ MediaTrack StreamApiImpl::addTrack(
         if (streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
             throw ThereCanBeOnlyOneDataTrackException();
         }
-        auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(TrackStatus::ToAdd, [](std::string data) {
-            return;
-        });
+        auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(
+            TrackStatus::ToAdd, []([[maybe_unused]] std::string data) { return; }
+        );
 
         streamData->dataTrack = streamDataTrackInfo;
-        return MediaTrack{[](bool enabled) { return; }};
+        return MediaTrack{[]([[maybe_unused]] bool enabled) { return; }};
     }
     default:
-        throw NotImplementedException();
+        throw core::NotImplementedException();
     }
 }
 
@@ -387,7 +383,7 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
         }
     } break;
     default:
-        throw NotImplementedException();
+        throw core::NotImplementedException();
     }
 }
 
@@ -522,36 +518,32 @@ StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle
     return _api->updateStream(streamHandle);
 }
 
-void StreamApiImpl::unpublishStream(const StreamHandle& streamHandle) {
+void StreamApiImpl::removeStream(const StreamHandle& streamHandle) {
     auto streamDataOpt = _streamDataMap.get(streamHandle);
     if (!streamDataOpt.has_value()) {
         throw IncorrectStreamHandleException();
     }
     _streamDataMap.erase(streamHandle);
-    _api->unpublishStream(streamHandle);
-    _webRTC->closeSingleConnection(streamDataOpt.value()->streamRoomId, ConnectionType::Publisher);
+    _api->removeStream(streamHandle);
 }
 
-void StreamApiImpl::subscribeToRemoteStreams(
+SubscriberStreamHandle StreamApiImpl::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
-    _api->subscribeToRemoteStreams(streamRoomId, subscriptions);
+    return _api->createSubscriberStream(streamRoomId, subscriptions);
 }
 
-void StreamApiImpl::modifyRemoteStreamsSubscriptions(
-    const std::string& streamRoomId,
+void StreamApiImpl::updateSubscriberStream(
+    const SubscriberStreamHandle& subscriptionHandle,
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
-    _api->modifyRemoteStreamsSubscriptions(streamRoomId, subscriptionsToAdd, subscriptionsToRemove);
+    _api->updateSubscriberStream(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
 }
 
-void StreamApiImpl::unsubscribeFromRemoteStreams(
-    const std::string& streamRoomId,
-    const std::vector<StreamSubscription>& subscriptionsToRemove
-) {
-    _api->unsubscribeFromRemoteStreams(streamRoomId, subscriptionsToRemove);
+void StreamApiImpl::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
+    _api->removeSubscriberStream(subscriptionHandle);
 }
 
 std::string StreamApiImpl::createStreamRoom(
@@ -560,9 +552,10 @@ std::string StreamApiImpl::createStreamRoom(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::optional<int64_t>& emptyRoomTtl
 ) {
-    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies);
+    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
 }
 
 void StreamApiImpl::updateStreamRoom(

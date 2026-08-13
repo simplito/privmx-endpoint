@@ -53,7 +53,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::optional<int64_t>& emptyRoomTtl
     );
 
     void updateStreamRoom(
@@ -85,10 +86,9 @@ public:
 
     // Stream
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
+    std::vector<StreamSubscriber> listStreamRoomParticipants(const std::string& streamRoomId);
     void joinStreamRoom(const std::string& streamRoomId); // required before createStream and openStream
     void leaveStreamRoom(const std::string& streamRoomId);
-    void enableStreamRoomRecording(const std::string& streamRoomId);
-    std::vector<stream::RecordingEncKey> getStreamRoomRecordingKeys(const std::string& streamRoomId);
     StreamHandle createStream(const std::string& streamRoomId);
     std::vector<AudioDevice> getAudioDevices();
     std::vector<VideoDevice> getVideoDevices();
@@ -102,20 +102,17 @@ public:
     void removeTrack(const StreamHandle& streamHandle, const MediaDevice& mediaDevice);
     StreamPublishResult publishStream(const StreamHandle& streamHandle);
     StreamPublishResult updateStream(const StreamHandle& streamHandle);
-    void unpublishStream(const StreamHandle& streamHandle);
-    void subscribeToRemoteStreams(
+    void removeStream(const StreamHandle& streamHandle);
+    SubscriberStreamHandle createSubscriberStream(
         const std::string& streamRoomId,
         const std::vector<StreamSubscription>& subscriptions
     );
-    void modifyRemoteStreamsSubscriptions(
-        const std::string& streamRoomId,
+    void updateSubscriberStream(
+        const SubscriberStreamHandle& subscriptionHandle,
         const std::vector<StreamSubscription>& subscriptionsToAdd,
         const std::vector<StreamSubscription>& subscriptionsToRemove
     );
-    void unsubscribeFromRemoteStreams(
-        const std::string& streamRoomId,
-        const std::vector<StreamSubscription>& subscriptionsToRemove
-    );
+    void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
     void addRemoteStreamListener(
         const std::string& streamRoomId,
@@ -203,7 +200,7 @@ private:
         std::string label = "JanusDataChannel";
         TrackStatus status;
         std::function<void(std::string)> sendData;
-        std::atomic<uint32_t> seq{0};
+        std::atomic<uint32_t> seq{1};
     };
 
     struct StreamData {

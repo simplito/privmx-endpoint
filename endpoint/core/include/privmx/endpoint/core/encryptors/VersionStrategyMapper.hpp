@@ -37,6 +37,18 @@ public:
         return it->second;
     }
 
+    template<typename FOnUnknown>
+    TDomainObject dispatch(
+        int64_t version,
+        const TServerModel& item,
+        const DecryptedEncKey& encKey,
+        FOnUnknown onUnknown
+    ) const {
+        if (auto strategy = getStrategy(version))
+            return strategy->decryptAndConvert(item, encKey);
+        return onUnknown();
+    }
+
 private:
     std::unordered_map<int64_t, StrategyPtr> _strategies;
 };

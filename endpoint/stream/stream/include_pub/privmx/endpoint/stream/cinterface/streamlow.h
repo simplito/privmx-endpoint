@@ -25,20 +25,21 @@ struct privmx_endpoint_stream_Key
     const char* keyId;
     const unsigned char* key;
     size_t keySize;
-    privmx_endpoint_stream_KeyType type;
+    enum privmx_endpoint_stream_KeyType type;
 };
 typedef struct privmx_endpoint_stream_Key privmx_endpoint_stream_Key;
 
-int privmx_endpoint_stream_extractKey(const privmx_endpoint_stream_Key key[], size_t index, const char** keyId, const unsigned char** keyBuf, size_t* keySize, privmx_endpoint_stream_KeyType* type);
+int privmx_endpoint_stream_extractKey(const privmx_endpoint_stream_Key key[], size_t index, const char** keyId, const unsigned char** keyBuf, size_t* keySize, enum privmx_endpoint_stream_KeyType* type);
 
 struct privmx_endpoint_stream_WebRTCInterface
 {
     void* ctx;
-    const char* (*createOfferAndSetLocalDescriptionCallback)(void* ctx, const char* streamRoomId);
-    const char* (*createAnswerAndSetDescriptionsCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type);
-    void (*setAnswerAndSetRemoteDescriptionCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type);
+    const char* (*createOfferAndSetLocalDescriptionCallback)(void* ctx, const char* streamRoomId, const char* connectionType);
+    const char* (*createAnswerAndSetDescriptionsCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type, const char* connectionType);
+    void (*setAnswerAndSetRemoteDescriptionCallback)(void* ctx, const char* streamRoomId, const char* sdp, const char* type, const char* connectionType);
     void (*updateSessionIdCallback)(void* ctx, const char* streamRoomId, const int64_t sessionId, const char* connectionType);
-    void (*closeCallback)(void* ctx, const char* streamRoomId);
+    void (*closeCallback)(void* ctx, const char* streamRoomId, const char* connectionType);
+    void (*closeAllCallback)(void* ctx, const char* streamRoomId);
     void (*updateKeysCallback)(void* ctx, const char* streamRoomId, const privmx_endpoint_stream_Key keys[], const size_t keysSize);
 };
 typedef struct privmx_endpoint_stream_WebRTCInterface privmx_endpoint_stream_WebRTCInterface;

@@ -16,7 +16,7 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
-#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
+#include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyDIO.hpp>
 
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
@@ -28,10 +28,10 @@ namespace endpoint {
 namespace store {
 
 // clang-format off
-class FileDataSchemaStrategyV4 : public core::TypedDataSchemaStrategy<
+class FileDataSchemaStrategyV4 : public core::TypedDataSchemaStrategyDIO<
     server::File,
     DecryptedFileMetaV4,
-    std::tuple<File, core::DataIntegrityObject>
+    File
 > {
     // clang-format on
 public:
@@ -48,10 +48,7 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
-    std::tuple<File, core::DataIntegrityObject> makeErrorResult(
-        const server::File& file,
-        int64_t errorCode
-    ) const override;
+    File toLibError(const server::File& file, int64_t errorCode) const override;
 
 private:
     mutable FileMetaEncryptorV4 _encryptor;

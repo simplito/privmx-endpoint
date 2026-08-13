@@ -79,7 +79,6 @@ private:
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<DataChannelImpl>> _dataChannels;
-    privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::AudioLevelAnalyzer>> _audioLevelAnalyzers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
 
     std::optional<std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)>> _onIceCandidate;

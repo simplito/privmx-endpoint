@@ -25,9 +25,6 @@ namespace endpoint {
 namespace core {
 
 template<>
-stream::Settings VarDeserializer::deserialize<stream::Settings>(const Poco::Dynamic::Var& val, const std::string& name);
-
-template<>
 stream::EventType VarDeserializer::deserialize<stream::EventType>(
     const Poco::Dynamic::Var& val,
     const std::string& name
@@ -58,24 +55,6 @@ stream::SdpWithTypeModel VarDeserializer::deserialize<stream::SdpWithTypeModel>(
 );
 
 template<>
-stream::NewStreams VarDeserializer::deserialize<stream::NewStreams>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-);
-
-template<>
-stream::StreamsUpdatedDataInternal VarDeserializer::deserialize<stream::StreamsUpdatedDataInternal>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-);
-
-template<>
-stream::StreamsUpdatedData VarDeserializer::deserialize<stream::StreamsUpdatedData>(
-    const Poco::Dynamic::Var& val,
-    const std::string& name
-);
-
-template<>
 stream::StreamSubscription VarDeserializer::deserialize<stream::StreamSubscription>(
     const Poco::Dynamic::Var& val,
     const std::string& name
@@ -100,7 +79,7 @@ stream::StreamTrackModificationPair VarDeserializer::deserialize<stream::StreamT
 );
 
 template<>
-stream::StreamTrackModification VarDeserializer::deserialize<stream::StreamTrackModification>(
+stream::DataChannelMessage VarDeserializer::deserialize<stream::DataChannelMessage>(
     const Poco::Dynamic::Var& val,
     const std::string& name
 );

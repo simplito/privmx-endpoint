@@ -8,7 +8,7 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include <privmx/utils/Debug.hpp>
+
 #include <privmx/utils/Utils.hpp>
 #include <type_traits>
 
@@ -35,6 +35,22 @@ ModuleBaseApi::ModuleBaseApi(
 )
     : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()), _userPrivKey(userPrivKey),
       _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware), _connection(connection) {}
+
+ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
+    const std::string& contextId,
+    const std::vector<UserWithPubKey>& users,
+    const std::vector<UserWithPubKey>& managers
+) {
+    auto key = _keyProvider->generateKey();
+    std::string resourceId = EndpointUtils::generateId();
+    auto dio = _connection.getImpl()->createDIO(contextId, resourceId);
+    auto secret = _keyProvider->generateSecret();
+    auto allUsers = EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    auto keyEntries = _keyProvider->prepareKeysList(
+        allUsers, key, dio, {.contextId = contextId, .resourceId = resourceId}, secret
+    );
+    return {key, resourceId, dio, secret, keyEntries};
+}
 
 DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
     std::unordered_map<std::string, DecryptedEncKeyV2> keys,
@@ -83,7 +99,7 @@ void ModuleBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>
 
 ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
     // get newest module
-    PRIVMX_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
+    LOG_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
     auto moduleKeys = getModuleKeysAndVersionFromServer(moduleId);
     auto keys = convertModuleKeysToContainerKeyCacheFormat(moduleKeys.first, moduleKeys.second);
     _keyCache.set(moduleId, keys);

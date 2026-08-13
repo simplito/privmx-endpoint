@@ -253,60 +253,53 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamRoomDeleted) {
     EXPECT_EQ(stream::Events::extractStreamRoomDeletedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
 }
 
-TEST_F(StreamEventsTest, waitEvent_getEvent_streamJoined) {
-    auto trigger = [&]() {
-        auto user1 = fixtureClient();
-        auto user2 = user2Client();
-        auto streamRoomId = createStreamRoomFor(user1, user2);
-        ScopeExit cleanup([&user2]() { user2.disconnect(); });
-        auto joinQuery = user1.streamApi->buildSubscriptionQuery(
-            stream::EventType::STREAM_JOIN,
-            stream::EventSelectorType::STREAMROOM_ID,
-            streamRoomId
-        );
-        user1.streamApi->subscribeFor({joinQuery});
-        user2.streamApi->subscribeFor({joinQuery});
-        drainEventQueue();
+TEST_F(StreamEventsTest, waitEvent_getEvent_streamRoomJoined) {
+    eventQueue.waitEvent();
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+    auto joinQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAMROOM_JOIN,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({joinQuery});
+    user2.streamApi->subscribeFor({joinQuery});
+    drainEventQueue();
 
-        user2.streamApi->joinStreamRoom(streamRoomId);
-        auto eventHolder = waitForEvent("streamJoined", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
-        ASSERT_TRUE(eventHolder.has_value());
-        assertEventBasics(eventHolder.value(), "streamJoined");
-        ASSERT_TRUE(stream::Events::isStreamJoinedEvent(eventHolder.value()));
-        EXPECT_EQ(stream::Events::extractStreamJoinedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
-    };
-    (void)trigger;
-
-    GTEST_SKIP() << "Unresolved: privmx-bridge defines sendStreamJoinedEvent(), but no server call-site emits streamJoined.";
+    user2.streamApi->joinStreamRoom(streamRoomId);
+    auto eventHolder = waitForEvent("streamRoomJoined", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
+    ASSERT_TRUE(eventHolder.has_value());
+    assertEventBasics(eventHolder.value(), "streamRoomJoined");
+    ASSERT_TRUE(stream::Events::isStreamRoomJoinedEvent(eventHolder.value()));
+    EXPECT_EQ(stream::Events::extractStreamRoomJoinedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
+    EXPECT_EQ(stream::Events::extractStreamRoomJoinedEvent(eventHolder.value()).data.userId, user2.userId);
 }
 
-TEST_F(StreamEventsTest, waitEvent_getEvent_streamLeft) {
-    auto trigger = [&]() {
-        auto user1 = fixtureClient();
-        auto user2 = user2Client();
-        auto streamRoomId = createStreamRoomFor(user1, user2);
-        ScopeExit cleanup([&user2]() { user2.disconnect(); });
-        auto leaveQuery = user1.streamApi->buildSubscriptionQuery(
-            stream::EventType::STREAM_LEAVE,
-            stream::EventSelectorType::STREAMROOM_ID,
-            streamRoomId
-        );
-        user1.streamApi->subscribeFor({leaveQuery});
-        user2.streamApi->subscribeFor({leaveQuery});
-        auto handle = publishVideoStream(user1, streamRoomId);
-        (void)handle;
-        drainEventQueue();
+TEST_F(StreamEventsTest, waitEvent_getEvent_streamRoomLeft) {
+    eventQueue.waitEvent();
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+    auto leaveQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAMROOM_LEAVE,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({leaveQuery});
+    user2.streamApi->subscribeFor({leaveQuery});
+    user2.streamApi->joinStreamRoom(streamRoomId);
+    drainEventQueue();
 
-        user1.streamApi->leaveStreamRoom(streamRoomId);
-        auto eventHolder = waitForEvent("streamLeft", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
-        ASSERT_TRUE(eventHolder.has_value());
-        assertEventBasics(eventHolder.value(), "streamLeft");
-        ASSERT_TRUE(stream::Events::isStreamLeftEvent(eventHolder.value()));
-        EXPECT_EQ(stream::Events::extractStreamLeftEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
-    };
-    (void)trigger;
-
-    GTEST_SKIP() << "Unresolved after 3 attempts: bridge emits streamLeft from Janus leaving publisher event, but the endpoint test did not receive it reliably on the event queue.";
+    user2.streamApi->leaveStreamRoom(streamRoomId);
+    auto eventHolder = waitForEvent("streamRoomLeft", {user1.connection->getConnectionId()});
+    ASSERT_TRUE(eventHolder.has_value());
+    assertEventBasics(eventHolder.value(), "streamRoomLeft");
+    ASSERT_TRUE(stream::Events::isStreamRoomLeftEvent(eventHolder.value()));
+    EXPECT_EQ(stream::Events::extractStreamRoomLeftEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
+    EXPECT_EQ(stream::Events::extractStreamRoomLeftEvent(eventHolder.value()).data.userId, user2.userId);
 }
 
 TEST_F(StreamEventsTest, waitEvent_getEvent_streamPublished) {
@@ -339,6 +332,13 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamUpdated) {
     auto user2 = user2Client();
     auto streamRoomId = createStreamRoomFor(user1, user2);
     ScopeExit cleanup([&user2]() { user2.disconnect(); });
+    auto updateQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAM_UPDATE,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({updateQuery});
+    user2.streamApi->subscribeFor({updateQuery});
     auto handle = publishVideoStream(user1, streamRoomId);
     drainEventQueue();
 
@@ -348,81 +348,102 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamUpdated) {
     ASSERT_TRUE(eventHolder.has_value());
     assertEventBasics(eventHolder.value(), "streamUpdated");
     ASSERT_TRUE(stream::Events::isStreamUpdatedEvent(eventHolder.value()));
-    EXPECT_EQ(stream::Events::extractStreamUpdatedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
+    auto updated = stream::Events::extractStreamUpdatedEvent(eventHolder.value());
+    EXPECT_EQ(updated.data.streamRoomId, streamRoomId);
+    EXPECT_GT(updated.data.streamId, 0);
+    EXPECT_FALSE(updated.data.userId.empty());
 }
 
 TEST_F(StreamEventsTest, waitEvent_getEvent_streamUnpublished) {
-    auto trigger = [&]() {
-        auto user1 = fixtureClient();
-        auto user2 = user2Client();
-        auto streamRoomId = createStreamRoomFor(user1, user2);
-        ScopeExit cleanup([&user2]() { user2.disconnect(); });
-        auto unpublishQuery = user1.streamApi->buildSubscriptionQuery(
-            stream::EventType::STREAM_UNPUBLISH,
-            stream::EventSelectorType::STREAMROOM_ID,
-            streamRoomId
-        );
-        user1.streamApi->subscribeFor({unpublishQuery});
-        auto handle = publishVideoStream(user1, streamRoomId);
-        drainEventQueue();
-
-        user1.streamApi->unpublishStream(handle);
-        auto eventHolder = waitForEvent("streamUnpublished", {user1.connection->getConnectionId()});
-        ASSERT_TRUE(eventHolder.has_value());
-        assertEventBasics(eventHolder.value(), "streamUnpublished");
-        ASSERT_TRUE(stream::Events::isStreamUnpublishedEvent(eventHolder.value()));
-        EXPECT_EQ(stream::Events::extractStreamUnpublishedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
-    };
-    (void)trigger;
-
-    GTEST_SKIP() << "Unresolved after 3 attempts: bridge emits streamUnpublished from Janus unpublished event as a single-session notification, but the endpoint test did not receive it reliably on the event queue.";
-}
-
-TEST_F(StreamEventsTest, waitEvent_getEvent_remoteStreamsChanged) {
     eventQueue.waitEvent();
     auto user1 = fixtureClient();
     auto user2 = user2Client();
     auto streamRoomId = createStreamRoomFor(user1, user2);
     ScopeExit cleanup([&user2]() { user2.disconnect(); });
-    user2.streamApi->joinStreamRoom(streamRoomId);
+    auto unpublishQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAM_UNPUBLISH,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({unpublishQuery});
+    user2.streamApi->subscribeFor({unpublishQuery});
+    auto handle = publishVideoStream(user1, streamRoomId);
     drainEventQueue();
 
-    auto handle = publishVideoStream(user1, streamRoomId);
-    (void)handle;
-    auto eventHolder = waitForEvent("remoteStreamsChanged", {user2.connection->getConnectionId()});
+    user1.streamApi->removeStream(handle);
+    auto eventHolder = waitForEvent("streamUnpublished", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
     ASSERT_TRUE(eventHolder.has_value());
-    assertEventBasics(eventHolder.value(), "remoteStreamsChanged");
-    ASSERT_TRUE(stream::Events::isRemoteStreamsChangedEvent(eventHolder.value()));
-    EXPECT_EQ(stream::Events::extractRemoteStreamsChangedEvent(eventHolder.value()).data.room, streamRoomId);
+    assertEventBasics(eventHolder.value(), "streamUnpublished");
+    ASSERT_TRUE(stream::Events::isStreamUnpublishedEvent(eventHolder.value()));
+    EXPECT_EQ(stream::Events::extractStreamUnpublishedEvent(eventHolder.value()).data.streamRoomId, streamRoomId);
+    EXPECT_GT(stream::Events::extractStreamUnpublishedEvent(eventHolder.value()).data.streamId, 0);
 }
 
-TEST_F(StreamEventsTest, waitEvent_getEvent_streamsUpdated) {
-    auto trigger = [&]() {
-        auto user1 = fixtureClient();
-        auto user2 = user2Client();
-        auto streamRoomId = createStreamRoomFor(user1, user2);
-        ScopeExit cleanup([&user2]() { user2.disconnect(); });
-        auto handle = publishVideoStream(user1, streamRoomId);
-        user2.streamApi->joinStreamRoom(streamRoomId);
-        auto subscriptions = streamSubscriptionsForPublishedStreams(user2, streamRoomId);
-        ASSERT_FALSE(subscriptions.empty());
-        drainEventQueue();
+TEST_F(StreamEventsTest, waitEvent_getEvent_streamSubscribed) {
+    eventQueue.waitEvent();
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+    auto subscribeQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAM_SUBSCRIBE,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({subscribeQuery});
+    user2.streamApi->subscribeFor({subscribeQuery});
+    auto handle = publishVideoStream(user1, streamRoomId);
+    user2.streamApi->joinStreamRoom(streamRoomId);
+    auto feedSubscriptions = streamSubscriptionsForPublishedStreams(user2, streamRoomId);
+    ASSERT_FALSE(feedSubscriptions.empty());
+    drainEventQueue();
+    user2.streamApi->createSubscriberStream(streamRoomId, feedSubscriptions);
+    auto eventHolder = waitForEvent("streamSubscribed", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
+    ASSERT_TRUE(eventHolder.has_value());
+    assertEventBasics(eventHolder.value(), "streamSubscribed");
+    ASSERT_TRUE(stream::Events::isStreamSubscribedEvent(eventHolder.value()));
+    auto subscribed = stream::Events::extractStreamSubscribedEvent(eventHolder.value());
+    EXPECT_EQ(subscribed.data.streamRoomId, streamRoomId);
+    EXPECT_EQ(subscribed.data.userId, user2.userId);
+    EXPECT_FALSE(subscribed.data.subscriptions.empty());
 
-        user2.streamApi->subscribeToRemoteStreams(streamRoomId, subscriptions);
-        drainEventQueue();
+    EXPECT_NO_THROW({ user1.streamApi->leaveStreamRoom(streamRoomId); });
+    (void)handle;
+}
 
-        user1.streamApi->getImpl()->addFakeVideoTrack(handle);
-        user1.streamApi->updateStream(handle);
-        auto eventHolder = waitForEvent("streamsUpdated", {user2.connection->getConnectionId()});
-        ASSERT_TRUE(eventHolder.has_value());
-        assertEventBasics(eventHolder.value(), "streamsUpdated");
-        ASSERT_TRUE(stream::Events::isStreamsUpdatedEvent(eventHolder.value()));
-        EXPECT_EQ(stream::Events::extractStreamsUpdatedEvent(eventHolder.value()).data.room, streamRoomId);
-    };
-    // EXPECT_NO_THROW({ trigger(); });
-    (void)trigger;
+TEST_F(StreamEventsTest, waitEvent_getEvent_streamUnsubscribed) {
+    eventQueue.waitEvent();
+    auto user1 = fixtureClient();
+    auto user2 = user2Client();
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+    auto handle = publishVideoStream(user1, streamRoomId);
+    user2.streamApi->joinStreamRoom(streamRoomId);
+    auto feedSubscriptions = streamSubscriptionsForPublishedStreams(user2, streamRoomId);
+    ASSERT_FALSE(feedSubscriptions.empty());
+    auto subscriberHandle = user2.streamApi->createSubscriberStream(streamRoomId, feedSubscriptions);
 
-    GTEST_SKIP() << "Unresolved: bridge emits streamsUpdated on subscriber internal channel after Janus updated event, but StreamApi consumes this flow internally and the test did not receive a stable public queue event.";
+    auto unsubscribeQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAM_UNSUBSCRIBE,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({unsubscribeQuery});
+    user2.streamApi->subscribeFor({unsubscribeQuery});
+    drainEventQueue();
+
+    user2.streamApi->removeSubscriberStream(subscriberHandle);
+    auto eventHolder = waitForEvent("streamUnsubscribed", {user1.connection->getConnectionId(), user2.connection->getConnectionId()});
+    ASSERT_TRUE(eventHolder.has_value());
+    assertEventBasics(eventHolder.value(), "streamUnsubscribed");
+    ASSERT_TRUE(stream::Events::isStreamUnsubscribedEvent(eventHolder.value()));
+    auto unsubscribed = stream::Events::extractStreamUnsubscribedEvent(eventHolder.value());
+    EXPECT_EQ(unsubscribed.data.streamRoomId, streamRoomId);
+    EXPECT_EQ(unsubscribed.data.userId, user2.userId);
+    EXPECT_FALSE(unsubscribed.data.subscriptions.empty());
+
+    EXPECT_NO_THROW({ user1.streamApi->leaveStreamRoom(streamRoomId); });
+    (void)handle;
 }
 
 TEST_F(StreamEventsTest, waitEvent_getEvent_streamRoomCreated_disabled) {
@@ -524,4 +545,53 @@ TEST_F(StreamEventsTest, waitEvent_getEvent_streamPublished_disabled) {
     EXPECT_NO_THROW({
         user1.streamApi->leaveStreamRoom(streamRoomId);
     });
+}
+
+TEST_F(StreamEventsTest, streamPublished_emitted_again_after_republish) {
+    eventQueue.waitEvent();
+    auto user1 = fixtureClient();   
+    auto user2 = user2Client();     
+    auto streamRoomId = createStreamRoomFor(user1, user2);
+    ScopeExit cleanup([&user2]() { user2.disconnect(); });
+
+    auto publishQuery = user1.streamApi->buildSubscriptionQuery(
+        stream::EventType::STREAM_PUBLISH,
+        stream::EventSelectorType::STREAMROOM_ID,
+        streamRoomId
+    );
+    user1.streamApi->subscribeFor({publishQuery});
+    drainEventQueue();
+
+    auto countPublished = [&](std::chrono::milliseconds window) {
+        int count = 0;
+        const auto deadline = std::chrono::steady_clock::now() + window;
+        while(std::chrono::steady_clock::now() < deadline) {
+            auto holder = waitForNextEvent(std::chrono::milliseconds(300));
+            if(!holder.has_value()) continue;
+            auto event = holder.value().get();
+            if(event != nullptr && event->type == "streamPublished" &&
+               stream::Events::isStreamPublishedEvent(holder.value()) &&
+               stream::Events::extractStreamPublishedEvent(holder.value()).data.streamRoomId == streamRoomId) {
+                ++count;
+            }
+        }
+        return count;
+    };
+
+    user2.streamApi->joinStreamRoom(streamRoomId);
+    auto handle1 = user2.streamApi->createStream(streamRoomId);
+    user2.streamApi->getImpl()->addFakeVideoTrack(handle1);
+    user2.streamApi->publishStream(handle1);
+    EXPECT_EQ(countPublished(std::chrono::seconds(8)), 1);
+
+    user2.streamApi->removeStream(handle1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    drainEventQueue();
+    EXPECT_NO_THROW({
+        auto handle2 = user2.streamApi->createStream(streamRoomId);
+        user2.streamApi->getImpl()->addFakeVideoTrack(handle2);
+        user2.streamApi->publishStream(handle2);
+    });
+    EXPECT_EQ(countPublished(std::chrono::seconds(8)), 1);
+    EXPECT_NO_THROW({ user2.streamApi->leaveStreamRoom(streamRoomId); });
 }

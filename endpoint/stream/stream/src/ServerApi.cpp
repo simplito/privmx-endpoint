@@ -67,18 +67,10 @@ void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {
     requestWS("streamUnpublish", model.toJSON());
 }
 
-server::StreamsSubscribeResult ServerApi::streamsSubscribeToRemote(server::StreamsSubscribeModel model) {
-    return requestWS<server::StreamsSubscribeResult>("streamsSubscribeToRemote", model.toJSON());
-}
-
-server::StreamsSubscribeResult ServerApi::streamsModifyRemoteSubscriptions(
-    server::StreamsModifySubscriptionsModel model
+server::StreamsSubscribeResult ServerApi::streamsUpdateRemoteSubscriptions(
+    server::StreamUpdateRemoteSubscriptionsModel model
 ) {
-    return requestWS<server::StreamsSubscribeResult>("streamsModifyRemoteSubscriptions", model.toJSON());
-}
-
-server::StreamsSubscribeResult ServerApi::streamsUnsubscribeFromRemote(server::StreamsUnsubscribeModel model) {
-    return requestWS<server::StreamsSubscribeResult>("streamsUnsubscribeFromRemote", model.toJSON());
+    return requestWS<server::StreamsSubscribeResult>("streamsUpdateRemoteSubscriptions", model.toJSON());
 }
 
 void ServerApi::streamRoomJoin(server::StreamRoomJoinModel model) {
@@ -89,8 +81,10 @@ void ServerApi::streamRoomLeave(server::StreamRoomLeaveModel model) {
     requestWS("streamRoomLeave", model.toJSON());
 }
 
-void ServerApi::streamRoomEnableRecording(server::StreamRoomRecordingModel model) {
-    requestWS("streamRoomEnableRecording", model.toJSON());
+server::StreamRoomListParticipantsResult ServerApi::streamRoomListParticipants(
+    server::StreamRoomListParticipantsModel model
+) {
+    return requestWS<server::StreamRoomListParticipantsResult>("streamRoomListParticipants", model.toJSON());
 }
 
 void ServerApi::trickle(server::StreamTrickleModel model) {

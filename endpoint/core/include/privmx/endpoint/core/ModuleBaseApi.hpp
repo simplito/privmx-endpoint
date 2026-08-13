@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_MODULEBASEAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_MODULEBASEAPI_HPP_
 
+#include <Poco/Dynamic/Var.h>
 #include <functional>
 #include <map>
 #include <memory>
@@ -20,8 +21,11 @@ limitations under the License.
 #include <type_traits>
 #include <vector>
 
+#include "privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
+#include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp"
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -31,8 +35,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp>
 #include <privmx/utils/GuardedExecutor.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
@@ -53,17 +55,9 @@ public:
     virtual ~ModuleBaseApi() = default;
 
 protected:
-    template<typename ModuleStruct>
-    auto decryptModuleDataV4(ModuleStruct moduleObj, const core::DecryptedEncKey& encKey)
-        -> decltype(moduleObj.keyId, moduleObj.data, core::DecryptedModuleDataV4());
-
-    template<typename ModuleStruct>
-    auto decryptModuleDataV5(ModuleStruct moduleObj, const core::DecryptedEncKey& encKey)
-        -> decltype(moduleObj.keyId, moduleObj.data, core::DecryptedModuleDataV5());
-
-    template<typename ModuleStruct>
-    auto extractAndDecryptModuleInternalMeta(ModuleStruct moduleObj, const core::DecryptedEncKey& encKey)
-        -> decltype(moduleObj.keyId, moduleObj.data, core::ModuleInternalMetaV5());
+    void initModuleDataSchemaMapper(std::shared_ptr<core::BaseModuleDataSchemaMapper> mapper) {
+        _moduleDataSchemaMapper = std::move(mapper);
+    }
 
     template<typename ModuleStruct>
     auto getAndValidateModuleCurrentEncKey(
@@ -72,10 +66,7 @@ protected:
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
 
     template<typename ModuleStruct>
-    auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::string& resourceId)
-        -> decltype(moduleObj.contextId, core::EncKeyLocation());
-    template<typename ModuleStruct>
-    auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceIdOpt)
+    auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId = std::nullopt)
         -> decltype(moduleObj.contextId, core::EncKeyLocation());
 
     template<typename ModuleStruct>
@@ -83,6 +74,117 @@ protected:
         ModuleStruct moduleObj,
         const std::string& resourceId
     ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
+
+    ContainerCreateContext prepareContainerCreate(
+        const std::string& contextId,
+        const std::vector<UserWithPubKey>& users,
+        const std::vector<UserWithPubKey>& managers
+    );
+
+    template<typename TCreateModel>
+    static void fillContainerCreateModel(
+        TCreateModel& model,
+        const std::string& contextId,
+        const std::vector<UserWithPubKey>& users,
+        const std::vector<UserWithPubKey>& managers,
+        const ContainerCreateContext& ctx,
+        Poco::Dynamic::Var encryptedData
+    ) {
+        static_assert(
+            std::is_base_of_v<server::ContainerCreateModelBase, TCreateModel>,
+            "TCreateModel must inherit from ContainerCreateModelBase"
+        );
+        model.resourceId = ctx.resourceId;
+        model.contextId = contextId;
+        model.keyId = ctx.key.id;
+        model.data = std::move(encryptedData);
+        model.keys = ctx.keyEntries;
+        model.users = EndpointUtils::usersWithPubKeyToIds(users);
+        model.managers = EndpointUtils::usersWithPubKeyToIds(managers);
+    }
+
+    template<typename TUpdateModel>
+    static void fillContainerUpdateModel(
+        TUpdateModel& model,
+        const std::string& id,
+        const std::string& resourceId,
+        const std::vector<UserWithPubKey>& users,
+        const std::vector<UserWithPubKey>& managers,
+        const ContainerUpdateContext& ctx,
+        int64_t version,
+        bool force
+    ) {
+        static_assert(
+            std::is_base_of_v<server::ContainerUpdateModelBase, TUpdateModel>,
+            "TUpdateModel must inherit from ContainerUpdateModelBase"
+        );
+        model.id = id;
+        model.resourceId = resourceId;
+        model.keyId = ctx.key.id;
+        model.keys = ctx.keyEntries;
+        model.users = EndpointUtils::usersWithPubKeyToIds(users);
+        model.managers = EndpointUtils::usersWithPubKeyToIds(managers);
+        model.version = version;
+        model.force = force;
+    }
+
+    template<typename TContainer, typename TEntry>
+    ContainerUpdateContext prepareContainerUpdate(
+        const TContainer& container,
+        const TEntry& entry,
+        const std::string& resourceId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        bool forceGenerateNewKey
+    ) {
+        auto location{getModuleEncKeyLocation(container, resourceId)};
+        auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
+        auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
+        std::string secret;
+        if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
+            secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data, currentKey).secret;
+        } else {
+            // Inbox special Case
+            secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
+        }
+        auto usersKeysResolver{
+            core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)
+        };
+        if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
+            throw core::EncryptionKeyValidationException();
+        }
+        core::EncKey key = currentKey;
+        core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);
+        std::vector<core::server::KeyEntrySet> keyEntries;
+        if (usersKeysResolver->doNeedNewKey()) {
+            key = _keyProvider->generateKey();
+            keyEntries = _keyProvider->prepareKeysList(usersKeysResolver->getNewUsers(), key, dio, location, secret);
+        }
+        auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
+        if (!usersToAddMissingKey.empty()) {
+            auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
+                containerKeys, usersToAddMissingKey, dio, location, secret
+            );
+            keyEntries.insert(keyEntries.end(), tmp.begin(), tmp.end());
+        }
+        return {location, key, dio, secret, keyEntries};
+    }
+
+    template<typename TReturn>
+    TReturn withKeyRefresh(
+        const std::string& moduleId,
+        int64_t invalidKeyCode,
+        std::function<TReturn(const core::ModuleKeys&)> op
+    ) {
+        try {
+            return op(getModuleKeys(moduleId));
+        } catch (const privmx::utils::PrivmxException& e) {
+            if (core::ExceptionConverter::convert(e).getCode() == invalidKeyCode) {
+                return op(getNewModuleKeysAndUpdateCache(moduleId));
+            }
+            throw;
+        }
+    }
 
     DecryptedEncKeyV2 findEncKeyByKeyId(
         std::unordered_map<std::string, DecryptedEncKeyV2> keys,
@@ -94,6 +196,13 @@ protected:
         const std::optional<std::set<std::string>>& keyIds = std::nullopt,
         const std::optional<int64_t>& minimumSchemaVersion = std::nullopt
     );
+    ModuleKeys getModuleKeysForItem(
+        const std::string& moduleId,
+        const std::string& keyId,
+        std::optional<int64_t> minimumSchemaVersion = std::nullopt
+    ) {
+        return getModuleKeys(moduleId, std::set<std::string>{keyId}, minimumSchemaVersion);
+    }
     virtual std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) = 0;
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
@@ -115,104 +224,9 @@ private:
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
-    core::ModuleDataEncryptorV4 _moduleDataEncryptorV4;
-    core::ModuleDataEncryptorV5 _moduleDataEncryptorV5;
+    std::shared_ptr<core::BaseModuleDataSchemaMapper> _moduleDataSchemaMapper;
     core::ContainerKeyCache _keyCache;
 };
-
-template<typename ModuleStruct>
-auto ModuleBaseApi::decryptModuleDataV4(ModuleStruct moduleObj, const core::DecryptedEncKey& encKey)
-    -> decltype(moduleObj.keyId, moduleObj.data, core::DecryptedModuleDataV4()) {
-    try {
-        auto encryptedData = core::dynamic::EncryptedModuleDataV4::fromJSON(moduleObj.data);
-        return _moduleDataEncryptorV4.decrypt(encryptedData, encKey.key);
-    } catch (const core::Exception& e) {
-        return core::DecryptedModuleDataV4{
-            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4, .statusCode = e.getCode()},
-            {},
-            {},
-            {},
-            {}
-        };
-    } catch (const privmx::utils::PrivmxException& e) {
-        return core::DecryptedModuleDataV4{
-            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4,
-             .statusCode = core::ExceptionConverter::convert(e).getCode()},
-            {},
-            {},
-            {},
-            {}
-        };
-    } catch (...) {
-        return core::DecryptedModuleDataV4{
-            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_4,
-             .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},
-            {},
-            {},
-            {},
-            {}
-        };
-    }
-}
-
-template<typename ModuleStruct>
-auto ModuleBaseApi::decryptModuleDataV5(ModuleStruct moduleObj, const core::DecryptedEncKey& encKey)
-    -> decltype(moduleObj.keyId, moduleObj.data, core::DecryptedModuleDataV5()) {
-    try {
-        auto encryptedData = core::dynamic::EncryptedModuleDataV5::fromJSON(moduleObj.data);
-        if (encKey.statusCode != 0) {
-            auto tmp = _moduleDataEncryptorV5.extractPublic(encryptedData);
-            tmp.statusCode = encKey.statusCode;
-            return tmp;
-        }
-        return _moduleDataEncryptorV5.decrypt(encryptedData, encKey.key);
-    } catch (const core::Exception& e) {
-        return core::DecryptedModuleDataV5{
-            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5, .statusCode = e.getCode()},
-            {},
-            {},
-            {},
-            {},
-            {}
-        };
-    } catch (const privmx::utils::PrivmxException& e) {
-        return core::DecryptedModuleDataV5{
-            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5,
-             .statusCode = core::ExceptionConverter::convert(e).getCode()},
-            {},
-            {},
-            {},
-            {},
-            {}
-        };
-    } catch (...) {
-        return core::DecryptedModuleDataV5{
-            {.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5,
-             .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},
-            {},
-            {},
-            {},
-            {},
-            {}
-        };
-    }
-}
-
-template<typename ModuleStruct>
-auto ModuleBaseApi::extractAndDecryptModuleInternalMeta(ModuleStruct moduleObj, const core::DecryptedEncKey& encKey)
-    -> decltype(moduleObj.keyId, moduleObj.data, core::ModuleInternalMetaV5()) {
-    auto versioned = core::dynamic::VersionedData::fromJSON(moduleObj.data);
-    switch (versioned.version) {
-    case core::ModuleDataSchema::Version::UNKNOWN:
-        return core::ModuleInternalMetaV5();
-    case core::ModuleDataSchema::Version::VERSION_4:
-        return core::ModuleInternalMetaV5();
-    case core::ModuleDataSchema::Version::VERSION_5:
-        return decryptModuleDataV5(moduleObj, encKey).internalMeta;
-    default:
-        return core::ModuleInternalMetaV5();
-    }
-}
 
 template<typename ModuleStruct>
 auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
@@ -226,16 +240,9 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
 }
 
 template<typename ModuleStruct>
-auto ModuleBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std::string& resourceId)
+auto ModuleBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId)
     -> decltype(moduleObj.contextId, core::EncKeyLocation()) {
-    core::EncKeyLocation location{.contextId = moduleObj.contextId, .resourceId = resourceId};
-    return location;
-}
-
-template<typename ModuleStruct>
-auto ModuleBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceIdOpt)
-    -> decltype(moduleObj.contextId, core::EncKeyLocation()) {
-    core::EncKeyLocation location{.contextId = moduleObj.contextId, .resourceId = resourceIdOpt.value_or("")};
+    core::EncKeyLocation location{.contextId = moduleObj.contextId, .resourceId = resourceId.value_or("")};
     return location;
 }
 

@@ -51,12 +51,6 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV4::conver
     };
 }
 
-std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV4::makeErrorResult(
-    const server::ThreadInfo& thread,
-    int64_t errorCode
-) const {
-    return {
-        ThreadDataSchemaMapper::toLibThread(thread, {}, {}, errorCode, ThreadDataSchema::Version::VERSION_4),
-        core::DataIntegrityObject{}
-    };
+Thread ThreadDataSchemaStrategyV4::toLibError(const server::ThreadInfo& thread, int64_t errorCode) const {
+    return ThreadDataSchemaMapper::toLibThread(thread, {}, {}, errorCode, ThreadDataSchema::Version::VERSION_4);
 }
