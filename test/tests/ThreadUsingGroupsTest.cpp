@@ -67,7 +67,27 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
-    std::string createThreadWithGroupGrant(
+    std::string createThreadWithGroup(
+        const std::string& contextId,
+        const std::string& userId,
+        const std::string& userPubKey,
+        const group::Group& group
+    ) {
+        return threadApi->createThread(
+            contextId,
+            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
+            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
+            core::Buffer::from("group_thread_public"),
+            core::Buffer::from("group_thread_private"),
+            core::ContainerPolicy(),
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = group.groupId,
+                .role = "user",
+                .groupPubKey = group.groupPubKey
+            }}
+        );
+    }
+    std::string createThreadWithGroupPolicyReadAll(
         const std::string& contextId,
         const std::string& userId,
         const std::string& userPubKey,
@@ -526,7 +546,7 @@ TEST_F(ThreadUsingGroupsTest, getMessage_via_group_grant) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -563,7 +583,7 @@ TEST_F(ThreadUsingGroupsTest, listMessages_via_group_grant) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -600,7 +620,7 @@ TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroupPolicyReadAll(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -679,7 +699,7 @@ TEST_F(ThreadUsingGroupsTest, messages_accessible_by_all_group_members) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -726,7 +746,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroupPolicyReadAll(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -825,7 +845,7 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
     // wrap would let KeyProvider's flat-key path succeed and mask whatever the group-epoch path does.
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
