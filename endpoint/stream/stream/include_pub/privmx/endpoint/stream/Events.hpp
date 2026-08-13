@@ -20,24 +20,34 @@ namespace privmx {
 namespace endpoint {
 namespace stream {
 
+/**
+ * Holds data of an event informing about a deleted Stream Room.
+ */
 struct StreamRoomDeletedEventData {
     /**
-     * StreamRoom ID
+     * ID of the deleted StreamRoom
      */
     std::string streamRoomId;
 };
 
+/**
+ * Holds data of an event informing about a Stream which is no longer published.
+ */
 struct StreamUnpublishedEventData {
     /**
-     * StreamRoom ID
+     * ID of the StreamRoom the Stream was published in
      */
     std::string streamRoomId;
 
     /**
-     * Stream ID
+     * ID of the publisher Stream which stopped being published
      */
     int64_t streamId;
 };
+
+/**
+ * Holds data of an event informing about a newly published Stream.
+ */
 using StreamPublishedEventData = PublishedStreamData;
 
 /**
@@ -63,7 +73,7 @@ struct StreamRoomCreatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * all available StreamRoom information
+     * information about the StreamRoom which has just been created
      */
     StreamRoom data;
 };
@@ -91,7 +101,7 @@ struct StreamRoomUpdatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * all available StreamRoom information
+     * information about the StreamRoom after the update
      */
     StreamRoom data;
 };
@@ -119,7 +129,7 @@ struct StreamRoomDeletedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the deleted StreamRoom
      */
     StreamRoomDeletedEventData data;
 };
@@ -147,13 +157,13 @@ struct StreamPublishedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the published Stream
      */
     StreamPublishedEventData data;
 };
 
 /**
- * Holds data of event that arrives when Stream is updated.
+ * Holds data of event that arrives when someone modifies the list of published tracks.
  */
 struct StreamUpdatedEvent : public core::Event {
 
@@ -175,7 +185,7 @@ struct StreamUpdatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the changes in the Publisher Stream's tracks
      */
     StreamUpdatedEventData data;
 };
@@ -203,13 +213,13 @@ struct StreamRoomJoinedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the user who joined the StreamRoom
      */
     StreamRoomParticipantEventData data;
 };
 
 /**
- * Holds data of event that arrives when Stream is published.
+ * Holds data of event that arrives when Stream stops being published.
  */
 struct StreamUnpublishedEvent : public core::Event {
 
@@ -231,7 +241,7 @@ struct StreamUnpublishedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the Stream which stopped being published
      */
     StreamUnpublishedEventData data;
 };
@@ -259,13 +269,13 @@ struct StreamRoomLeftEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the user who left the StreamRoom
      */
     StreamRoomParticipantEventData data;
 };
 
 /**
- * Holds data of event that arrives when a viewer subscribes to feeds.
+ * Holds data of event that arrives when a participant subscribes to feeds.
  */
 struct StreamSubscribedEvent : public core::Event {
 
@@ -287,13 +297,13 @@ struct StreamSubscribedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the created subscriptions
      */
     StreamSubscriptionEventData data;
 };
 
 /**
- * Holds data of event that arrives when a viewer unsubscribes from feeds.
+ * Holds data of event that arrives when a participant unsubscribes from feeds.
  */
 struct StreamUnsubscribedEvent : public core::Event {
 
@@ -315,7 +325,7 @@ struct StreamUnsubscribedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * event data
+     * information about the removed subscriptions
      */
     StreamSubscriptionEventData data;
 };
