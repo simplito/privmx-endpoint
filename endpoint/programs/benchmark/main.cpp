@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <chrono>
 #include <thread>
 #include <functional>
@@ -10,11 +11,14 @@
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
+#include <privmx/endpoint/kvdb/KvdbApi.hpp>
+#include <privmx/endpoint/event/EventApi.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
+#include <privmx/utils/Logger.hpp>
 #include "privmx/endpoint/programs/benchmark/Types.hpp"
 #include "privmx/endpoint/programs/benchmark/GetTestFunction.hpp"
 #include "privmx/endpoint/programs/benchmark/PrepereInitData.hpp"
-#include <privmx/utils/Debug.hpp>
+
 
 using namespace std::chrono_literals;
 using namespace privmx::endpoint;
@@ -22,6 +26,14 @@ using namespace privmx::endpoint;
 static std::vector<std::string_view> getParamsList(int argc, char* argv[]) {
     std::vector<std::string_view> args(argv + 1, argv + argc);
     return args;
+}
+
+static uint64_t parseUintArg(const std::string& str) {
+    int base = 10;
+    if (str.size() > 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
+        base = 16;
+    }
+    return std::stoull(str, nullptr, base);
 }
 
 int main(int argc, char** argv) {
@@ -45,7 +57,13 @@ int main(int argc, char** argv) {
         return -1;
     }
     const Module benchmark_module = (*benchmark_module_it).second;;
-    const uint64_t benchmark_grup = std::stoull(std::string(params[3]));
+    uint64_t benchmark_grup;
+    try {
+        benchmark_grup = parseUintArg(std::string(params[3]));
+    } catch (const std::exception&) {
+        std::cout << "invalid group \"" << std::string(params[3]) << "\" (use a decimal like 65541 or hex like 0x10005)" << std::endl;
+        return -1;
+    }
 
     //form INI
     auto iniFile = std::getenv("INI_FILE_PATH");
@@ -61,7 +79,9 @@ int main(int argc, char** argv) {
     std::shared_ptr<thread::ThreadApi> threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection));
     std::shared_ptr<store::StoreApi> storeApi = std::make_shared<store::StoreApi>(store::StoreApi::create(*connection));
     std::shared_ptr<inbox::InboxApi> inboxApi = std::make_shared<inbox::InboxApi>(inbox::InboxApi::create(*connection, *threadApi, *storeApi));
-    PRIVMX_DEBUG("Benchmark", "init", "Connected")
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi = std::make_shared<kvdb::KvdbApi>(kvdb::KvdbApi::create(*connection));
+    std::shared_ptr<event::EventApi> eventApi = std::make_shared<event::EventApi>(event::EventApi::create(*connection));
+    LOG_TRACE("Benchmark - init Connected")
     //contextId
     auto contextsList = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"});
     if(contextsList.totalAvailable == 0) {
@@ -73,8 +93,8 @@ int main(int argc, char** argv) {
     // get function
     auto exec = GetTestFunction(benchmark_module, benchmark_grup);
     // prepare init data
-    auto initLoopData = PrepareInitData(connection, threadApi, storeApi, inboxApi, userId, userPubKey, benchmark_module, benchmark_grup);
-    PRIVMX_DEBUG("Benchmark", "init", "PrepareInitData")
+    auto initLoopData = PrepareInitData(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, benchmark_module, benchmark_grup);
+    LOG_TRACE("Benchmark - init PrepareInitData")
     // Main
 
     uint64_t N = 0;
@@ -85,7 +105,7 @@ int main(int argc, char** argv) {
     std::thread t([&]() {
         run_timestamps.push_back(std::chrono::system_clock::now());
         while (benchmark_mode == Mode::Timeout ? !stop : N < benchmark_duration) {
-            exec(connection, threadApi, storeApi, inboxApi, initLoopData);
+            exec(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, initLoopData);
             if(!stop) {
                 N++;
                 run_timestamps.push_back(std::chrono::system_clock::now());

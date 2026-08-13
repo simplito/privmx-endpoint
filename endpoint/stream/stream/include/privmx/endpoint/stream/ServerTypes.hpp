@@ -141,11 +141,6 @@ JSON_STRUCT(StreamPublishedEventData, STREAM_PUBLISHED_EVENT_DATA_FIELDS);
     F(after, std::optional<StreamTrackInfo>)
 JSON_STRUCT(StreamTrackModificationPair, STREAM_TRACK_MODIFICATION_PAIR_FIELDS);
 
-#define STREAM_TRACK_MODIFICATION_FIELDS(F)                                                                            \
-    F(streamId, int64_t)                                                                                               \
-    F(tracks, std::vector<StreamTrackModificationPair>)
-JSON_STRUCT(StreamTrackModification, STREAM_TRACK_MODIFICATION_FIELDS);
-
 #define STREAM_UPDATED_EVENT_DATA_FIELDS(F)                                                                            \
     F(streamRoomId, std::string)                                                                                       \
     F(streamId, int64_t)                                                                                               \
@@ -165,19 +160,6 @@ JSON_STRUCT(StreamSetNewOfferModel, STREAM_SET_NEW_OFFER_MODEL_FIELDS);
     F(sessionId, int64_t)
 JSON_STRUCT(StreamAcceptOfferModel, STREAM_ACCEPT_OFFER_MODEL_FIELDS);
 
-#define STREAM_SEND_EVENT_MODEL_FIELDS(F)                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(data, std::string)
-JSON_STRUCT(StreamSendEventModel, STREAM_SEND_EVENT_MODEL_FIELDS);
-
-#define STREAM_ROOM_SEND_CUSTOM_EVENT_MODEL_FIELDS(F)                                                                  \
-    F(streamRoomId, std::string)                                                                                       \
-    F(channel, std::string)                                                                                            \
-    F(keyId, std::string)                                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(users, std::vector<std::string>)
-JSON_STRUCT(StreamRoomSendCustomEventModel, STREAM_ROOM_SEND_CUSTOM_EVENT_MODEL_FIELDS);
-
 #define STREAM_UNPUBLISH_MODEL_FIELDS(F) F(sessionId, int64_t)
 JSON_STRUCT(StreamUnpublishModel, STREAM_UNPUBLISH_MODEL_FIELDS);
 
@@ -185,12 +167,6 @@ JSON_STRUCT(StreamUnpublishModel, STREAM_UNPUBLISH_MODEL_FIELDS);
     F(rtcCandidate, Poco::Dynamic::Var)                                                                                \
     F(sessionId, int64_t)
 JSON_STRUCT(StreamTrickleModel, STREAM_TRICKLE_MODEL_FIELDS);
-
-#define CONTEXT_GET_USERS_MODEL_FIELDS(F) F(contextId, std::string)
-JSON_STRUCT(ContextGetUsersModel, CONTEXT_GET_USERS_MODEL_FIELDS);
-
-#define CONTEXT_GET_USER_RESULT_FIELDS(F) F(users, std::vector<core::server::UserIdentity>)
-JSON_STRUCT(ContextGetUserResult, CONTEXT_GET_USER_RESULT_FIELDS);
 
 #define PUBLISHED_STREAM_DATA_FIELDS(F)                                                                                \
     F(streamRoomId, std::string)                                                                                       \
@@ -227,43 +203,10 @@ JSON_STRUCT(StreamUnpublishedEventData, STREAM_UNPUBLISHED_EVENT_DATA_FIELDS);
     F(subscriptions, std::vector<StreamSubscription>)
 JSON_STRUCT(StreamSubscriptionEventData, STREAM_SUBSCRIPTION_EVENT_DATA_FIELDS);
 
-#define JANUS_EVENT_DATA_FIELDS(F)                                                                                     \
-    F(janus, std::string)                                                                                              \
-    F(sender, int64_t)                                                                                                 \
-    F(session_id, int64_t)
-JSON_STRUCT(JanusEventData, JANUS_EVENT_DATA_FIELDS);
-
 #define JANUS_JSEP_FIELDS(F)                                                                                           \
     F(sdp, std::string)                                                                                                \
     F(type, std::string)
 JSON_STRUCT(JanusJSEP, JANUS_JSEP_FIELDS);
-
-#define JANUS_VIDEO_ROOM_STREAM_FIELDS(F)                                                                              \
-    F(active, bool)                                                                                                    \
-    F(mid, int64_t)                                                                                                    \
-    F(mindex, int64_t)                                                                                                 \
-    F(ready, bool)                                                                                                     \
-    F(send, bool)                                                                                                      \
-    F(type, std::string)
-JSON_STRUCT(JanusVideoRoomStream, JANUS_VIDEO_ROOM_STREAM_FIELDS);
-
-#define JANUS_VIDEO_ROOM_FIELDS(F) F(videoroom, std::string)
-JSON_STRUCT(JanusVideoRoom, JANUS_VIDEO_ROOM_FIELDS);
-
-#define JANUS_VIDEO_ROOM_UPDATED_FIELDS(F)                                                                             \
-    F(room, std::string)                                                                                               \
-    F(streams, std::vector<JanusVideoRoomStream>)
-JSON_STRUCT_EXT(JanusVideoRoomUpdated, JanusVideoRoom, JANUS_VIDEO_ROOM_UPDATED_FIELDS);
-
-#define JANUS_PLUGIN_DATA_EVENT_FIELDS(F)                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(plugin, std::string)
-JSON_STRUCT(JanusPluginDataEvent, JANUS_PLUGIN_DATA_EVENT_FIELDS);
-
-#define JANUS_PLUGIN_EVENT_FIELDS(F)                                                                                   \
-    F(jsep, JanusJSEP)                                                                                                 \
-    F(plugindata, JanusPluginDataEvent)
-JSON_STRUCT_EXT(JanusPluginEvent, JanusEventData, JANUS_PLUGIN_EVENT_FIELDS);
 
 #define STREAM_LIST_RESULT_FIELDS(F) F(list, std::vector<StreamInfo>)
 JSON_STRUCT(StreamListResult, STREAM_LIST_RESULT_FIELDS);

@@ -329,26 +329,17 @@ void WebRTCImpl::AddAudioTrack(
         audioTrack,
         libwebrtc::vector<libwebrtc::string>{std::vector<libwebrtc::string>{jc->peerConnection->mediaStream->id()}}
     );
-    auto audioLevelAnalyzer = privmx::webrtc::FrameCryptorFactory::audioLevelAnalyzer();
     std::shared_ptr<privmx::webrtc::FrameCryptor> frameCryptor;
     {
         std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
         frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-            _peerConnectionFactory, sender, jc->peerConnection->keys, audioLevelAnalyzer, _frameCryptorOptions
+            _peerConnectionFactory, sender, jc->peerConnection->keys, _frameCryptorOptions
         );
     }
     {
         std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
         jc->peerConnection->audioTracks.insert(
-            std::make_pair(
-                id,
-                AudioTrackInfo{
-                    .track = audioTrack,
-                    .sender = sender,
-                    .audioLevelAnalyzer = audioLevelAnalyzer,
-                    .frameCryptor = frameCryptor
-                }
-            )
+            std::make_pair(id, AudioTrackInfo{.track = audioTrack, .sender = sender, .frameCryptor = frameCryptor})
         );
     }
 }
@@ -367,7 +358,7 @@ void WebRTCImpl::AddVideoTrack(
     {
         std::shared_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
         frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpSender(
-            _peerConnectionFactory, sender, jc->peerConnection->keys, nullptr, _frameCryptorOptions
+            _peerConnectionFactory, sender, jc->peerConnection->keys, _frameCryptorOptions
         );
     }
     {

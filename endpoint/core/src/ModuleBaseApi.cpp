@@ -8,7 +8,7 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include <privmx/utils/Debug.hpp>
+
 #include <privmx/utils/Utils.hpp>
 #include <type_traits>
 
@@ -68,11 +68,15 @@ DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
     throw UnknownModuleEncryptionKeyException();
 }
 
-core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys) {
+core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
+    ModuleKeys moduleKeys,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(moduleKeys.currentKeyId);
+    keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(moduleKeys.currentKeyId);
 }
 
 ModuleKeys ModuleBaseApi::getModuleKeys(
@@ -103,7 +107,7 @@ void ModuleBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>
 
 ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
     // get newest module
-    PRIVMX_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
+    LOG_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
     auto moduleKeys = getModuleKeysAndVersionFromServer(moduleId);
     auto keys = convertModuleKeysToContainerKeyCacheFormat(moduleKeys.first, moduleKeys.second);
     _keyCache.set(moduleId, keys);
@@ -116,6 +120,7 @@ core::ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToCont
 ) {
     return core::ContainerKeyCache::CachedModuleKeys{
         .keys = moduleKeys.keys,
+        .groupKeys = moduleKeys.groupKeys,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
@@ -129,6 +134,7 @@ ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
 ) {
     return ModuleKeys{
         .keys = moduleKeys.keys,
+        .groupKeys = moduleKeys.groupKeys,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,

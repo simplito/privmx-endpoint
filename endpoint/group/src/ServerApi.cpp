@@ -31,8 +31,24 @@ server::GroupListResult ServerApi::groupList(server::GroupListModel model) {
     return request<server::GroupListResult>("groupList", model.toJSON());
 }
 
-void ServerApi::generateNewGroupKey(server::GenerateNewGroupKeyModel model) {
-    request("groupGenerateNewKey", model.toJSON());
+void ServerApi::groupAddMember(server::GroupAddMemberModel model) {
+    request("groupAddMember", model.toJSON());
+}
+
+void ServerApi::groupRemoveMember(server::GroupRemoveMemberModel model) {
+    request("groupRemoveMember", model.toJSON());
+}
+
+void ServerApi::groupCutEra(server::GroupCutEraModel model) {
+    request("groupCutEra", model.toJSON());
+}
+
+void ServerApi::groupPruneArchive(server::GroupPruneArchiveModel model) {
+    request("groupPruneArchive", model.toJSON());
+}
+
+server::GroupGetKeyArchiveResult ServerApi::groupGetKeyArchive(server::GroupGetKeyArchiveModel model) {
+    return request<server::GroupGetKeyArchiveResult>("groupGetKeyArchive", model.toJSON());
 }
 
 template<class T>

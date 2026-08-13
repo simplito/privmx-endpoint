@@ -7,7 +7,7 @@ if [[ ! -f "$INI_FILE_PATH" ]]; then
 fi
 if [ $# -ne 1 ]; then
     echo "Poszę podać nazwę testu"
-    echo "lista testów: CoreTest, CoreModuleEventsTest, ThreadTest, ThreadModuleEventsTest, StoreTest, StoreModuleEventsTest, InboxTest, InboxModuleEventsTest, KvdbModule, KvdbModuleEventsTest, EventsTest, CryptoTest, UtilsTest"
+    echo "lista testów: CoreTest, CoreModuleEventsTest, ThreadTest, ThreadModuleEventsTest, StoreTest, StoreModuleEventsTest, InboxTest, InboxModuleEventsTest, KvdbModule, KvdbModuleEventsTest, EventsTest, CryptoTest, UtilsTest, GroupKeyTreeTest"
     exit -1
 else
     first_arg="$1"
@@ -27,6 +27,8 @@ elif [ "${first_arg}" == "StoreTest" ]; then
     ./test_e2e_StoreTest $@
 elif [ "${first_arg}" == "StoreModuleEventsTest" ]; then
     ./test_e2e_StoreModuleEventsTest $@
+elif [ "${first_arg}" == "GroupKeyTreeTest" ]; then
+    ./test_e2e_GroupKeyTreeTest $@
 elif [ "${first_arg}" == "InboxTest" ]; then
     ./test_e2e_InboxTest $@
 elif [ "${first_arg}" == "InboxModuleEventsTest" ]; then

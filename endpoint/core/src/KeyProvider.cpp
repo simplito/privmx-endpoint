@@ -102,6 +102,15 @@ void KeyDecryptionAndVerificationRequest::addAll(
     }
 }
 void KeyDecryptionAndVerificationRequest::addGroupKeys(
+    const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
+    const EncKeyLocation& location
+) {
+    if (groupKeys.has_value()) {
+        addGroupKeys(groupKeys.value(), location);
+    }
+}
+
+void KeyDecryptionAndVerificationRequest::addGroupKeys(
     const std::vector<server::GroupKeysEntry>& groupKeys,
     const EncKeyLocation& location
 ) {
@@ -109,9 +118,10 @@ void KeyDecryptionAndVerificationRequest::addGroupKeys(
         throw KeyProviderRequestCompletedException();
     }
     for (const auto& groupEntry : groupKeys) {
-        int64_t epoch = groupEntry.groupEpoch.value_or(0);
         for (const auto& keyEntry : groupEntry.keys) {
-            auto entry = std::make_tuple(keyEntry, groupEntry.group, epoch);
+            int64_t epoch = keyEntry.groupEpoch.value_or(0);
+            server::KeyEntry plainKeyEntry{.keyId = keyEntry.keyId, .data = keyEntry.data};
+            auto entry = std::make_tuple(plainKeyEntry, groupEntry.group, epoch);
             if (auto it = groupRequestData.find(location); it != groupRequestData.end()) {
                 it->second.insert_or_assign(keyEntry.keyId, entry);
             } else {
@@ -144,16 +154,9 @@ std::string KeyProvider::generateSecret() {
     return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
 }
 
-void KeyProvider::registerGroupPrivKey(
-    const std::string& groupId,
-    int64_t epoch,
-    const privmx::crypto::PrivateKey& groupPrivKey
-) {
-    _groupPrivKeys[groupId][epoch] = groupPrivKey;
-}
-
 std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> KeyProvider::getKeysAndVerify(
-    const KeyDecryptionAndVerificationRequest& request
+    const KeyDecryptionAndVerificationRequest& request,
+    const GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> result;
     for (auto locationKeyMap : request.requestData) {
@@ -162,7 +165,7 @@ std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncK
     }
     for (const auto& groupLocEntry : request.groupRequestData) {
         const auto& location = groupLocEntry.first;
-        auto groupResult = decryptAndVerifyGroupKeys(groupLocEntry.second, location);
+        auto groupResult = decryptAndVerifyGroupKeys(groupLocEntry.second, location, groupPrivKeyResolver);
         auto& locationResult = result[location];
         for (auto& kv : groupResult) {
             auto it = locationResult.find(kv.first);
@@ -314,28 +317,22 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
 
 std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerifyGroupKeys(
     const std::unordered_map<std::string, std::tuple<server::KeyEntry, std::string, int64_t>>& groupKeyMap,
-    const EncKeyLocation& location
+    const EncKeyLocation& location,
+    const GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     std::unordered_map<std::string, DecryptedEncKeyV2> result;
     for (const auto& entry : groupKeyMap) {
         const auto& keyEntry = std::get<0>(entry.second);
         const auto& groupId = std::get<1>(entry.second);
         int64_t epoch = std::get<2>(entry.second);
-        auto groupIt = _groupPrivKeys.find(groupId);
-        if (groupIt == _groupPrivKeys.end()) {
+        auto groupPrivKey = groupPrivKeyResolver ? groupPrivKeyResolver(groupId, epoch) : std::nullopt;
+        if (!groupPrivKey.has_value()) {
             DecryptedEncKeyV2 failed;
             failed.statusCode = UnknownEncryptionKeyVersionException().getCode();
             result.insert(std::make_pair(entry.first, failed));
             continue;
         }
-        auto epochIt = groupIt->second.find(epoch);
-        if (epochIt == groupIt->second.end()) {
-            DecryptedEncKeyV2 failed;
-            failed.statusCode = UnknownEncryptionKeyVersionException().getCode();
-            result.insert(std::make_pair(entry.first, failed));
-            continue;
-        }
-        result.insert(std::make_pair(entry.first, decryptKeyEntry(keyEntry, epochIt->second)));
+        result.insert(std::make_pair(entry.first, decryptKeyEntry(keyEntry, groupPrivKey.value())));
     }
     verifyData(result, location);
     if (result.size() > 1) {

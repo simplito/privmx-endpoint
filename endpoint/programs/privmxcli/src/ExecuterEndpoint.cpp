@@ -20,6 +20,8 @@ limitations under the License.
 #include "privmx/endpoint/thread/VarSerializer.hpp"
 #include "privmx/endpoint/store/VarSerializer.hpp"
 #include "privmx/endpoint/inbox/VarSerializer.hpp"
+#include "privmx/endpoint/kvdb/VarSerializer.hpp"
+#include "privmx/endpoint/event/VarSerializer.hpp"
 
 using namespace std;
 using namespace privmx::endpoint::privmxcli;
@@ -31,12 +33,16 @@ ExecuterEndpoint::ExecuterEndpoint(std::thread::id main_thread_id, std::shared_p
     std::shared_ptr<core::EventQueueVarInterface> event = std::make_shared<core::EventQueueVarInterface>(core::EventQueue::getInstance(), serializer);
     std::shared_ptr<core::ConnectionVarInterface> connection = std::make_shared<core::ConnectionVarInterface>(serializer);
     std::shared_ptr<core::BackendRequesterVarInterface> backendRequester = std::make_shared<core::BackendRequesterVarInterface>(serializer);
+    std::shared_ptr<core::UtilsVarInterface> utils = std::make_shared<core::UtilsVarInterface>(serializer);
     std::shared_ptr<crypto::CryptoApiVarInterface> crypto = std::make_shared<crypto::CryptoApiVarInterface>(serializer);
+    std::shared_ptr<crypto::ExtKeyVarInterface> extKey = std::make_shared<crypto::ExtKeyVarInterface>(serializer);
     std::shared_ptr<thread::ThreadApiVarInterface> thread = std::make_shared<thread::ThreadApiVarInterface>(connection->getApi(),serializer);
     std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(connection->getApi(),serializer);
     std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(connection->getApi(),thread->getApi(), store->getApi(),serializer);
-    _endpoint = std::make_shared<ApiVar>(serializer, event, connection, backendRequester, crypto, thread, store, inbox);
-    
+    std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(connection->getApi(),serializer);
+    std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(connection->getApi(),serializer);
+    _endpoint = std::make_shared<ApiVar>(serializer, event, connection, backendRequester, utils, crypto, extKey, thread, store, inbox, kvdb, eventApi);
+
 }
 bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {
     std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;

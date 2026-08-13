@@ -144,7 +144,11 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         // EP-9: epoch (keyVersion) monotonicity — backward compat: absent keyVersion treated as 0
         int64_t thisKeyVersion = membership.keyVersion.value_or(0);
         if (i == 0) {
-            if (thisKeyVersion != 0) throw GroupDataIntegrityException();
+            // The genesis epoch is 0 for a flat group and 1 for a tree-backed one, whose grant key exists from
+            // the moment of creation and whose Epoch Ladder counts from 1. Which of the two it is cannot be
+            // chosen freely: the head check below pins the committed value to the bridge's own `keyVersion`, and
+            // only the tree-backed creation path makes the bridge record 1. Anything above 1 is a fabrication.
+            if (thisKeyVersion > 1) throw GroupDataIntegrityException();
         } else {
             // Non-decreasing and increments by at most 1
             if (thisKeyVersion < prevKeyVersion || thisKeyVersion - prevKeyVersion > 1) {
@@ -209,7 +213,8 @@ Group GroupDataSchemaMapper::toLibGroup(
 
 std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const std::vector<server::GroupInfo>& groups,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Group>(
         groups, keyProvider, _connection,
@@ -220,7 +225,8 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
         [&](const server::GroupInfo& g, const core::DecryptedEncKey& key) { return decrypt(g, key); },
         [](const server::GroupInfo& g, uint32_t code) {
             return toLibGroup(g, {}, {}, code, core::ModuleDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
@@ -240,9 +246,10 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
 
 Group GroupDataSchemaMapper::validateDecryptAndConvertGroup(
     const server::GroupInfo& groupInfo,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertGroups({groupInfo}, keyProvider)[0];
+    return validateDecryptAndConvertGroups({groupInfo}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 std::string GroupDataSchemaMapper::getGroupPrivKey(

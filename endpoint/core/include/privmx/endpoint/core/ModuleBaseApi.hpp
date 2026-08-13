@@ -42,6 +42,16 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+/**
+ * Whether a served module struct carries key entries addressed to a group.
+ *
+ * Spelled as a trait rather than a `requires` expression because this header is compiled as C++17.
+ */
+template<typename T, typename = void>
+struct module_has_group_keys : std::false_type {};
+template<typename T>
+struct module_has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys)>> : std::true_type {};
+
 class ModuleBaseApi {
 public:
     ModuleBaseApi(
@@ -61,9 +71,13 @@ protected:
 
     template<typename ModuleStruct>
     auto getAndValidateModuleCurrentEncKey(
-        ModuleStruct moduleObj
+        ModuleStruct moduleObj,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2());
-    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
+    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(
+        ModuleKeys moduleKeys,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+    );
 
     template<typename ModuleStruct>
     auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId = std::nullopt)
@@ -72,7 +86,8 @@ protected:
     template<typename ModuleStruct>
     auto getAndValidateModuleKeys(
         ModuleStruct moduleObj,
-        const std::string& resourceId
+        const std::string& resourceId,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
     ContainerCreateContext prepareContainerCreate(
@@ -128,6 +143,13 @@ protected:
         model.force = force;
     }
 
+    /**
+     * @param distributeToUsers when false, a new key is still generated but **no per-user entries are built**.
+     *
+     * For a module that distributes its key some other way — a group that wraps it once to its own identity key
+     * rather than once per member — building those entries is not merely redundant, it is the `O(n)` cost that
+     * mechanism exists to avoid, and it would be paid in client CPU even after the entries are discarded.
+     */
     template<typename TContainer, typename TEntry>
     ContainerUpdateContext prepareContainerUpdate(
         const TContainer& container,
@@ -135,10 +157,12 @@ protected:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey
+        bool forceGenerateNewKey,
+        bool distributeToUsers = true,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) {
         auto location{getModuleEncKeyLocation(container, resourceId)};
-        auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
+        auto containerKeys{getAndValidateModuleKeys(container, resourceId, groupPrivKeyResolver)};
         auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
         std::string secret;
         if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
@@ -159,10 +183,13 @@ protected:
         std::vector<core::server::KeyEntrySet> keyEntries;
         if (usersKeysResolver->doNeedNewKey()) {
             key = _keyProvider->generateKey();
-            keyEntries = _keyProvider->prepareKeysList(usersKeysResolver->getNewUsers(), key, dio, location, secret);
+            if (distributeToUsers) {
+                keyEntries =
+                    _keyProvider->prepareKeysList(usersKeysResolver->getNewUsers(), key, dio, location, secret);
+            }
         }
         auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
-        if (!usersToAddMissingKey.empty()) {
+        if (distributeToUsers && !usersToAddMissingKey.empty()) {
             auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
                 containerKeys, usersToAddMissingKey, dio, location, secret
             );
@@ -239,13 +266,22 @@ private:
 };
 
 template<typename ModuleStruct>
-auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
-    -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
+auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
+    ModuleStruct moduleObj,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
     auto data_entry = moduleObj.data.back();
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
     keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
-    core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(data_entry.keyId);
+    if constexpr (module_has_group_keys<ModuleStruct>::value) {
+        // A module may distribute its key to a *group* rather than to each member — a group wrapping its own
+        // metadata key to itself does exactly that. Without this the current key is simply not found, and the
+        // failure surfaces as "enc key with given keyId does not exist" rather than as anything informative.
+        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
+    }
+    core::DecryptedEncKeyV2 ret =
+        _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(data_entry.keyId);
     return ret;
 }
 
@@ -259,12 +295,16 @@ auto ModuleBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std::o
 template<typename ModuleStruct>
 auto ModuleBaseApi::getAndValidateModuleKeys(
     ModuleStruct moduleObj,
-    const std::string& resourceId
+    const std::string& resourceId,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, resourceId)};
     keyProviderRequest.addAll(moduleObj.keys, location);
-    auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
+    if constexpr (module_has_group_keys<ModuleStruct>::value) {
+        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
+    }
+    auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location)};
     return moduleKeys;
 }
 
