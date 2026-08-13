@@ -88,8 +88,8 @@ public:
             return JsonHelper::deserializeMap<typename T::mapped_type>(element);
         } else {
             if(element.type() != typeid(Poco::JSON::Object::Ptr)) {
-                LOG_WARN("Failed to Parse JSON Object, received '" + std::string(element.type().name()) + "'")
-                throw JSONParseException("Failed to Parse JSON Object, received '" + std::string(element.type().name()) + "'");
+                LOG_WARN("Failed to Parse JSON Object, received '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+                throw JSONParseException("Failed to Parse JSON Object, received '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
             }
             return T::fromJSON(element.extract<Poco::JSON::Object::Ptr>());
         }
@@ -98,8 +98,8 @@ public:
     static std::vector<T> deserializeArray(const Poco::Dynamic::Var& array) {
         std::vector<T> result;
         if(array.type() != typeid(Poco::JSON::Array::Ptr)) {
-            LOG_WARN("Failed to Parse JSON array, received '" + std::string(array.type().name()) + "'")
-            throw JSONParseException("Failed to Parse JSON array, recived '" + std::string(array.type().name()) + "'");
+            LOG_WARN("Failed to Parse JSON array, received '" + (array.isEmpty() ? "NULL" : std::string(array.type().name())) + "'")
+            throw JSONParseException("Failed to Parse JSON array, recived '" + (array.isEmpty() ? "NULL" : std::string(array.type().name())) + "'");
         }
         for(const Poco::Dynamic::Var& element : *(array.extract<Poco::JSON::Array::Ptr>())) result.push_back(JsonHelper::deserialize<T>(element));
         return result;
@@ -118,8 +118,8 @@ public:
     static std::unordered_map<std::string, V> deserializeUnorderedMap(const Poco::Dynamic::Var& element) {
         std::unordered_map<std::string, V> result;
         if(element.type() != typeid(Poco::JSON::Object::Ptr)) {
-            LOG_WARN("Failed to Parse JSON map, received '" + std::string(element.type().name()) + "'")
-            throw JSONParseException("Failed to Parse JSON map, received '" + std::string(element.type().name()) + "'");
+            LOG_WARN("Failed to Parse JSON map, received '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+            throw JSONParseException("Failed to Parse JSON map, received '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
         }
         for(const auto& kv : *element.extract<Poco::JSON::Object::Ptr>())
             result[kv.first] = JsonHelper::deserialize<V>(kv.second);
@@ -128,8 +128,8 @@ public:
     static std::map<std::string, V> deserializeMap(const Poco::Dynamic::Var& element) {
         std::map<std::string, V> result;
         if(element.type() != typeid(Poco::JSON::Object::Ptr)) {
-            LOG_WARN("Failed to Parse JSON map, received '" + std::string(element.type().name()) + "'")
-            throw JSONParseException("Failed to Parse JSON map, received '" + std::string(element.type().name()) + "'");
+            LOG_WARN("Failed to Parse JSON map, received '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+            throw JSONParseException("Failed to Parse JSON map, received '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
         }
         for(const auto& kv : *element.extract<Poco::JSON::Object::Ptr>())
             result[kv.first] = JsonHelper::deserialize<V>(kv.second);
@@ -169,40 +169,40 @@ inline Poco::Dynamic::Var JsonHelper::deserialize<Poco::Dynamic::Var>(const Poco
 template<>
 inline Poco::JSON::Object::Ptr JsonHelper::deserialize<Poco::JSON::Object::Ptr>(const Poco::Dynamic::Var& element) {
     if(element.type() != typeid(Poco::JSON::Object::Ptr)) {
-        LOG_WARN("Failed to Parse JSON Object value, recived '" + std::string(element.type().name()) + "'")
-        throw JSONParseException("Failed to Parse JSON Object value, recived '" + std::string(element.type().name()) + "'");
+        LOG_WARN("Failed to Parse JSON Object value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+        throw JSONParseException("Failed to Parse JSON Object value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
     }
     return element.extract<Poco::JSON::Object::Ptr>();
 };
 template<>
 inline Pson::BinaryString JsonHelper::deserialize<Pson::BinaryString>(const Poco::Dynamic::Var& element) {
     if(!element.isString()) {
-        LOG_WARN("Failed to Parse JSON BinaryString value, recived '" + std::string(element.type().name()) + "'")
-        throw JSONParseException("Failed to Parse JSON BinaryString value, recived '" + std::string(element.type().name()) + "'");
+        LOG_WARN("Failed to Parse JSON BinaryString value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+        throw JSONParseException("Failed to Parse JSON BinaryString value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
     }
     return Pson::BinaryString(element.convert<std::string>());
 };
 template<>
 inline std::string JsonHelper::deserialize<std::string>(const Poco::Dynamic::Var& element) {
     if(!element.isString()) {
-        LOG_WARN("Failed to Parse JSON String value, recived '" + std::string(element.type().name()) + "'")
-        throw JSONParseException("Failed to Parse JSON String value, recived '" + std::string(element.type().name()) + "'");
+        LOG_WARN("Failed to Parse JSON String value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+        throw JSONParseException("Failed to Parse JSON String value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
     }
     return element.convert<std::string>();
 };
 template<>
 inline int64_t JsonHelper::deserialize<int64_t>(const Poco::Dynamic::Var& element) {
     if(!element.isInteger()) {
-        LOG_WARN("Failed to Parse JSON Integer value, recived '" + std::string(element.type().name()) + "'")
-        throw JSONParseException("Failed to Parse JSON Integer value, recived '" + std::string(element.type().name()) + "'");
+        LOG_WARN("Failed to Parse JSON Integer value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+        throw JSONParseException("Failed to Parse JSON Integer value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
     }
     return element.convert<int64_t>();
 };
 template<>
 inline bool JsonHelper::deserialize<bool>(const Poco::Dynamic::Var& element) {
     if(!element.isBoolean()) {
-        LOG_WARN("Failed to Parse JSON boolean value, recived '" + std::string(element.type().name()) + "'")
-        throw JSONParseException("Failed to Parse JSON boolean value, recived '" + std::string(element.type().name()) + "'");
+        LOG_WARN("Failed to Parse JSON boolean value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'")
+        throw JSONParseException("Failed to Parse JSON boolean value, recived '" + (element.isEmpty() ? "NULL" : std::string(element.type().name())) + "'");
     }
     return element.convert<bool>();
 };
@@ -252,7 +252,7 @@ inline Poco::Dynamic::Var JsonHelper::serialize<bool>(const bool& element) {
 struct STRUCT_NAME { \
     FIELDS(_JSON_DECL) \
     static STRUCT_NAME fromJSON(Poco::Dynamic::Var JSON_Var) { \
-        if(JSON_Var.type() != typeid(Poco::JSON::Object::Ptr)) throw privmx::utils::JSONParseException("Failed to Parse JSON Object value, recived '" + std::string(JSON_Var.type().name()) + "'"); \
+        if(JSON_Var.type() != typeid(Poco::JSON::Object::Ptr)) throw privmx::utils::JSONParseException("Failed to Parse JSON Object value, recived '" + (JSON_Var.isEmpty() ? "NULL" : std::string(JSON_Var.type().name())) + "'"); \
         STRUCT_NAME obj; \
         obj._parseFields(JSON_Var.extract<Poco::JSON::Object::Ptr>()); \
         return obj; \
@@ -286,7 +286,7 @@ protected: \
 struct STRUCT_NAME : public BASE_NAME { \
     FIELDS(_JSON_DECL) \
     static STRUCT_NAME fromJSON(Poco::Dynamic::Var JSON_Var) { \
-        if(JSON_Var.type() != typeid(Poco::JSON::Object::Ptr)) throw privmx::utils::JSONParseException("Failed to Parse JSON Object value, recived '" + std::string(JSON_Var.type().name()) + "'"); \
+        if(JSON_Var.type() != typeid(Poco::JSON::Object::Ptr)) throw privmx::utils::JSONParseException("Failed to Parse JSON Object value, recived '" + (JSON_Var.isEmpty() ? "NULL" : std::string(JSON_Var.type().name())) + "'"); \
         STRUCT_NAME obj; \
         obj._parseFields(JSON_Var.extract<Poco::JSON::Object::Ptr>()); \
         return obj; \
