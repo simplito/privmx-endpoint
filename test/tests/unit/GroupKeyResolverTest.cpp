@@ -74,7 +74,7 @@ server::GroupTreeEdge toWire(const TreeEdge& edge) {
     return wire;
 }
 
-/** Builds a tree-backed group exactly as the bridge would serve it after `createGroup`. */
+/** Builds a tree-backed group exactly as the bridge would serve it after `createGroupWithKeyTree`. */
 struct Fixture {
     std::vector<TestMember> members;
     server::GroupInfo group;

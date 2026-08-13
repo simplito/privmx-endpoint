@@ -68,11 +68,15 @@ DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
     throw UnknownModuleEncryptionKeyException();
 }
 
-core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys) {
+core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
+    ModuleKeys moduleKeys,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(moduleKeys.currentKeyId);
+    keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(moduleKeys.currentKeyId);
 }
 
 ModuleKeys ModuleBaseApi::getModuleKeys(
@@ -116,6 +120,7 @@ core::ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToCont
 ) {
     return core::ContainerKeyCache::CachedModuleKeys{
         .keys = moduleKeys.keys,
+        .groupKeys = moduleKeys.groupKeys,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
@@ -129,6 +134,7 @@ ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
 ) {
     return ModuleKeys{
         .keys = moduleKeys.keys,
+        .groupKeys = moduleKeys.groupKeys,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,

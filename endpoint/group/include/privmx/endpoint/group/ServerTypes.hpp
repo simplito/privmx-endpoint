@@ -31,8 +31,8 @@ JSON_STRUCT(GroupHistoryEntryInfo, GROUP_HISTORY_ENTRY_INFO_FIELDS);
 JSON_STRUCT(GroupKeyHistoryEntry, GROUP_KEY_HISTORY_ENTRY_FIELDS);
 
 // ── Hidden key tree (documents/nested_groups/09-hidden-key-tree.md) ─────────────────────────────────────────
-// Everything below is optional. A group served without these fields is a flat group and behaves exactly as it
-// did before the tree existed, which is what keeps the change additive.
+// Everything below is optional at the wire level. A group served without these fields predates this client's
+// tree-only creation path — this endpoint no longer creates such groups.
 
 // Public state of one tree node. Nodes are never deleted, only refreshed into a new generation.
 #define GROUP_TREE_NODE_FIELDS(F)                                                                                      \
@@ -142,17 +142,6 @@ JSON_STRUCT(GroupListResult, GROUP_LIST_RESULT_FIELDS);
     F(groupId, std::string)                                                                                            \
     F(contextId, std::string)
 JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
-
-// generateNewGroupKey RPC (BR-2) — explicit forced group key rotation
-#define GENERATE_NEW_GROUP_KEY_MODEL_FIELDS(F)                                                                         \
-    F(id, std::string)                                                                                                 \
-    F(keyId, std::string)                                                                                              \
-    F(expectedKeyVersion, int64_t)                                                                                     \
-    F(groupPubKey, std::string)                                                                                        \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(confirmationTag, std::string)
-JSON_STRUCT(GenerateNewGroupKeyModel, GENERATE_NEW_GROUP_KEY_MODEL_FIELDS);
 
 // ── Tree-backed membership + Epoch Ladder RPCs ──────────────────────────────────────────────────────────────
 // The tree fields on GroupCreateModel/AddMember/RemoveMember are sent as one nested object, which is how the

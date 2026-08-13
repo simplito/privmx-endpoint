@@ -121,7 +121,6 @@ private:
     void processDisconnectedEvent();
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
-    void registerGroupKeys(const server::ThreadInfo& thread);
 
     core::ModuleKeys getMessageDecryptionKeys(server::Message message);
     Poco::Dynamic::Var encryptMessageData(
@@ -168,6 +167,7 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
     std::shared_ptr<group::GroupApiImpl> _groupApiImpl;
+    core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 

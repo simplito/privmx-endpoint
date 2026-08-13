@@ -40,32 +40,10 @@ public:
     ~GroupApi();
 
     /**
-     * Creates a new Group in given Context.
-     *
-     * @param contextId ID of the Context to create the Group in
-     * @param users vector of UserWithPubKey structs which indicates who will have access to the created Group
-     * @param managers vector of UserWithPubKey structs which indicates who will have access (and management rights) to
-     * the created Group
-     * @param publicMeta public (unencrypted) metadata
-     * @param privateMeta private (encrypted) metadata
-     * @param policies Group's policies
-     * @return ID of the created Group
-     */
-    std::string createGroup(
-        const std::string& contextId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
-    );
-
-    /**
      * Creates a new Group whose key distribution is backed by a hidden key tree.
      *
-     * Behaves like `createGroup` for the caller, and differs in what later operations cost: removing a member is
-     * proportional to the logarithm of the group size instead of to the group size, and adding one does not
-     * advance the group's key epoch, so no container the group can read has to be re-keyed.
+     * Removing a member is proportional to the logarithm of the group size instead of to the group size, and
+     * adding one does not advance the group's key epoch, so no container the group can read has to be re-keyed.
      *
      * The group's own metadata key is wrapped once to the group itself rather than once per member, which is what
      * keeps a removal off the linear path entirely.
@@ -160,21 +138,6 @@ public:
         const bool force,
         const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
-    );
-
-    /**
-     * Forces a group key rotation (EP-10) without changing the member list.
-     * Mints a fresh epoch keypair; removed members (if any were removed via updateGroup) cannot
-     * read content written after this rotation.
-     *
-     * @param groupId ID of the Group to rotate
-     * @param users current member list with public keys
-     * @param managers current manager list with public keys
-     */
-    void generateNewGroupKey(
-        const std::string& groupId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers
     );
 
     /**

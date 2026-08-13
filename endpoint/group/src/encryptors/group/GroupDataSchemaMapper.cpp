@@ -213,7 +213,8 @@ Group GroupDataSchemaMapper::toLibGroup(
 
 std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const std::vector<server::GroupInfo>& groups,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Group>(
         groups, keyProvider, _connection,
@@ -224,7 +225,8 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
         [&](const server::GroupInfo& g, const core::DecryptedEncKey& key) { return decrypt(g, key); },
         [](const server::GroupInfo& g, uint32_t code) {
             return toLibGroup(g, {}, {}, code, core::ModuleDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
@@ -244,9 +246,10 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
 
 Group GroupDataSchemaMapper::validateDecryptAndConvertGroup(
     const server::GroupInfo& groupInfo,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertGroups({groupInfo}, keyProvider)[0];
+    return validateDecryptAndConvertGroups({groupInfo}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 std::string GroupDataSchemaMapper::getGroupPrivKey(

@@ -71,9 +71,13 @@ protected:
 
     template<typename ModuleStruct>
     auto getAndValidateModuleCurrentEncKey(
-        ModuleStruct moduleObj
+        ModuleStruct moduleObj,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2());
-    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
+    core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(
+        ModuleKeys moduleKeys,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+    );
 
     template<typename ModuleStruct>
     auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId = std::nullopt)
@@ -82,7 +86,8 @@ protected:
     template<typename ModuleStruct>
     auto getAndValidateModuleKeys(
         ModuleStruct moduleObj,
-        const std::string& resourceId
+        const std::string& resourceId,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
     ContainerCreateContext prepareContainerCreate(
@@ -153,10 +158,11 @@ protected:
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
         bool forceGenerateNewKey,
-        bool distributeToUsers = true
+        bool distributeToUsers = true,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) {
         auto location{getModuleEncKeyLocation(container, resourceId)};
-        auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
+        auto containerKeys{getAndValidateModuleKeys(container, resourceId, groupPrivKeyResolver)};
         auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
         std::string secret;
         if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
@@ -260,8 +266,10 @@ private:
 };
 
 template<typename ModuleStruct>
-auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
-    -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
+auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
+    ModuleStruct moduleObj,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
     auto data_entry = moduleObj.data.back();
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
@@ -272,7 +280,8 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
         // failure surfaces as "enc key with given keyId does not exist" rather than as anything informative.
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(data_entry.keyId);
+    core::DecryptedEncKeyV2 ret =
+        _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(data_entry.keyId);
     return ret;
 }
 
@@ -286,7 +295,8 @@ auto ModuleBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std::o
 template<typename ModuleStruct>
 auto ModuleBaseApi::getAndValidateModuleKeys(
     ModuleStruct moduleObj,
-    const std::string& resourceId
+    const std::string& resourceId,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, resourceId)};
@@ -294,7 +304,7 @@ auto ModuleBaseApi::getAndValidateModuleKeys(
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest).at(location)};
+    auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location)};
     return moduleKeys;
 }
 

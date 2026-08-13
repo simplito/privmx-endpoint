@@ -31,10 +31,6 @@ server::GroupListResult ServerApi::groupList(server::GroupListModel model) {
     return request<server::GroupListResult>("groupList", model.toJSON());
 }
 
-void ServerApi::generateNewGroupKey(server::GenerateNewGroupKeyModel model) {
-    request("groupGenerateNewKey", model.toJSON());
-}
-
 void ServerApi::groupAddMember(server::GroupAddMemberModel model) {
     request("groupAddMember", model.toJSON());
 }

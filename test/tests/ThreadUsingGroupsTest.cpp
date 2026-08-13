@@ -67,7 +67,27 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
-    std::string createThreadWithGroupGrant(
+    std::string createThreadWithGroup(
+        const std::string& contextId,
+        const std::string& userId,
+        const std::string& userPubKey,
+        const group::Group& group
+    ) {
+        return threadApi->createThread(
+            contextId,
+            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
+            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
+            core::Buffer::from("group_thread_public"),
+            core::Buffer::from("group_thread_private"),
+            core::ContainerPolicy(),
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = group.groupId,
+                .role = "user",
+                .groupPubKey = group.groupPubKey
+            }}
+        );
+    }
+    std::string createThreadWithGroupPolicyReadAll(
         const std::string& contextId,
         const std::string& userId,
         const std::string& userPubKey,
@@ -526,7 +546,7 @@ TEST_F(ThreadUsingGroupsTest, getMessage_via_group_grant) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -563,7 +583,7 @@ TEST_F(ThreadUsingGroupsTest, listMessages_via_group_grant) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -600,7 +620,7 @@ TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroupPolicyReadAll(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -679,7 +699,7 @@ TEST_F(ThreadUsingGroupsTest, messages_accessible_by_all_group_members) {
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -726,7 +746,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
 
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroupPolicyReadAll(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
@@ -757,12 +777,17 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     EXPECT_NO_THROW({ mBefore = threadApi->getMessage(messageId); });
     EXPECT_NE(mBefore.statusCode, 0);
 
-    // user_1 adds user_3 to Group_2 (no key rotation needed when adding)
+    // user_1 adds user_3 to Group_2 via the tree-aware path, seating user_3's leaf in the key tree
+    // (updateGroup would only re-wrap the group's own metadata key — it never touches tree leaf state)
     disconnect();
     connectAs(TUGConnectionType::TUGUser1);
     EXPECT_NO_THROW({
-        groupApi->updateGroup(
+        groupApi->addGroupMember(
             reader->getString("Group_2.groupId"),
+            core::UserWithPubKey{
+                .userId = reader->getString("Login.user_3_id"), .pubKey = reader->getString("Login.user_3_pubKey")
+            },
+            false, // asManager
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
                 {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")},
@@ -772,10 +797,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
             },
             group_2.publicMeta,
-            group_2.privateMeta,
-            group_2.version,
-            false,
-            false  // no key rotation: adding user re-encrypts existing private key, pub key stays the same
+            group_2.privateMeta
         );
     });
 
@@ -793,11 +815,11 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     EXPECT_EQ(mAfter.data.stdString(), "msg_data");
 }
 
-TEST_F(ThreadUsingGroupsTest, user_removed_from_group_loses_all_access) {
-    // Create a dynamic group with user_1, user_2, user_3
+TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_thread_rekey) {
+    // Group G: user_1 (manager) + user_2 + user_3, at epoch 1.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroup(
+        groupId = groupApi->createGroupWithKeyTree(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
@@ -807,56 +829,48 @@ TEST_F(ThreadUsingGroupsTest, user_removed_from_group_loses_all_access) {
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
             },
-            core::Buffer::from("dyn_group_pub"),
-            core::Buffer::from("dyn_group_priv")
+            core::Buffer::from("grp_pub"),
+            core::Buffer::from("grp_priv")
         );
     });
     ASSERT_FALSE(groupId.empty());
 
-    group::Group dynGroup;
-    ASSERT_NO_THROW({ dynGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(dynGroup.statusCode, 0);
+    group::Group group;
+    ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
+    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(group.keyVersion, 1);
 
+    // Thread T grants G access; user_1 is the only direct member — user_2's access to it is
+    // exclusively through the group grant (no personal key wrap), which matters below: a direct
+    // wrap would let KeyProvider's flat-key path succeed and mask whatever the group-epoch path does.
     std::string threadId;
     ASSERT_NO_THROW({
-        threadId = createThreadWithGroupGrant(
+        threadId = createThreadWithGroup(
             reader->getString("Context_1.contextId"),
             reader->getString("Login.user_1_id"),
             reader->getString("Login.user_1_pubKey"),
-            dynGroup
+            group
         );
     });
     ASSERT_FALSE(threadId.empty());
 
-    std::string messageId;
+    // Sent while G is still at epoch 1 — its keyId is wrapped for G's epoch-1 grant key only.
+    std::string oldEpochMessageId;
     ASSERT_NO_THROW({
-        messageId = threadApi->sendMessage(
+        oldEpochMessageId = threadApi->sendMessage(
             threadId,
-            core::Buffer::from("msg_pub"),
-            core::Buffer::from("secret_priv"),
-            core::Buffer::from("secret_data")
+            core::Buffer::from("old_epoch_pub"),
+            core::Buffer::from("old_epoch_priv"),
+            core::Buffer::from("old_epoch_data")
         );
     });
-    ASSERT_FALSE(messageId.empty());
+    ASSERT_FALSE(oldEpochMessageId.empty());
 
-    // user_3 currently has full access via group membership
-    disconnect();
-    connectAs(TUGConnectionType::TUGUser3);
-    thread::Thread tBefore;
-    EXPECT_NO_THROW({ tBefore = threadApi->getThread(threadId); });
-    EXPECT_EQ(tBefore.statusCode, 0);
-
-    thread::Message mBefore;
-    EXPECT_NO_THROW({ mBefore = threadApi->getMessage(messageId); });
-    EXPECT_EQ(mBefore.statusCode, 0);
-    EXPECT_EQ(mBefore.privateMeta.stdString(), "secret_priv");
-
-    // user_1 removes user_3 from the group; this MUST rotate the group key pair
-    disconnect();
-    connectAs(TUGConnectionType::TUGUser1);
-    EXPECT_NO_THROW({
-        groupApi->updateGroup(
+    // Remove user_3 from G — advances G's epoch from 1 to 2. Thread T itself is untouched by this.
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMember(
             groupId,
+            reader->getString("Login.user_3_id"),
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
                 {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
@@ -864,224 +878,76 @@ TEST_F(ThreadUsingGroupsTest, user_removed_from_group_loses_all_access) {
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
             },
-            dynGroup.publicMeta,
-            dynGroup.privateMeta,
-            dynGroup.version,
-            false,
-            true  // force new key: removing user_3 requires a new group key pair
+            core::Buffer::from("grp_removed_pub"),
+            core::Buffer::from("grp_removed_priv")
         );
     });
 
-    // Fetch updated group to get the new public key
-    group::Group updatedGroup;
-    ASSERT_NO_THROW({ updatedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(updatedGroup.statusCode, 0);
+    group::Group rotatedGroup;
+    ASSERT_NO_THROW({ rotatedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(rotatedGroup.statusCode, 0);
+    ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
-    // Update thread: re-encrypt the thread key with the new group pub key and rotate the thread key
-    // so that user_3's old group private key can no longer decrypt new thread content.
-    EXPECT_NO_THROW({
+    // Force T's own container key to rotate while re-granting G at its now-current epoch (2).
+    // T's stored groupKeys[G] entry must keep the epoch-1 wrap resolvable at epoch 1 for
+    // oldEpochMessageId, alongside the new epoch-2 wrap — this is exactly the case the Epoch
+    // Ladder exists to cover ("historical group key entries stay reachable across a group's own
+    // epoch advances"). If groupKeys[G]'s epoch is instead tracked as one scalar for the whole
+    // entry and gets overwritten to 2 here, decrypting oldEpochMessageId below fails (statusCode
+    // 65553, UnknownEncryptionKeyVersionException) because the wrong grant key gets requested for it.
+    ASSERT_NO_THROW({
         threadApi->updateThread(
             threadId,
-            std::vector<core::UserWithPubKey>{{.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}},
-            std::vector<core::UserWithPubKey>{{.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}},
-            core::Buffer::from("after_removal_pub"),
-            core::Buffer::from("after_removal_priv"),
-            1, false, true,  // forceGenerateNewKey=true: new thread key encrypted with new group pub key
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("rekeyed_public"),
+            core::Buffer::from("rekeyed_private"),
+            1,     // version
+            false, // force
+            true,  // forceGenerateNewKey
             std::nullopt,
             std::vector<core::GroupGrantWithKey>{{
                 .groupId = groupId,
                 .role = "user",
-                .groupPubKey = updatedGroup.groupPubKey
+                .groupPubKey = rotatedGroup.groupPubKey,
+                .groupEpoch = rotatedGroup.keyVersion
             }}
         );
     });
 
-    // user_1 sends a new message with the new thread key
-    std::string newMessageId;
+    // Positive control: a message sent after the rekey, under the new epoch, must also be readable.
+    std::string newEpochMessageId;
     ASSERT_NO_THROW({
-        newMessageId = threadApi->sendMessage(
+        newEpochMessageId = threadApi->sendMessage(
             threadId,
-            core::Buffer::from("new_msg_pub"),
-            core::Buffer::from("new_msg_priv"),
-            core::Buffer::from("new_msg_data")
+            core::Buffer::from("new_epoch_pub"),
+            core::Buffer::from("new_epoch_priv"),
+            core::Buffer::from("new_epoch_data")
         );
     });
-    ASSERT_FALSE(newMessageId.empty());
+    ASSERT_FALSE(newEpochMessageId.empty());
 
-    // user_3 cannot resolve the group private key anymore (removed from group) —
-    // this blocks decryption of thread, old messages, and new messages.
-    disconnect();
-    connectAs(TUGConnectionType::TUGUser3);
-
-    thread::Thread tAfter;
-    EXPECT_NO_THROW({ tAfter = threadApi->getThread(threadId); });
-    EXPECT_NE(tAfter.statusCode, 0);
-
-    thread::Message mAfter;
-    EXPECT_NO_THROW({ mAfter = threadApi->getMessage(messageId); });
-    EXPECT_NE(mAfter.statusCode, 0);
-    EXPECT_TRUE(mAfter.privateMeta.stdString().empty());
-
-    thread::Message newMsg;
-    EXPECT_NO_THROW({ newMsg = threadApi->getMessage(newMessageId); });
-    EXPECT_NE(newMsg.statusCode, 0);
-    EXPECT_TRUE(newMsg.privateMeta.stdString().empty());
-}
-
-TEST_F(ThreadUsingGroupsTest, non_manager_user_rotates_thread_key_after_group_removal) {
-    // Group: user_1=manager, user_2=user, user_3=user
-    std::string groupId;
-    ASSERT_NO_THROW({
-        groupId = groupApi->createGroup(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")},
-                {.userId = reader->getString("Login.user_3_id"), .pubKey = reader->getString("Login.user_3_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            core::Buffer::from("dyn_group_pub"),
-            core::Buffer::from("dyn_group_priv")
-        );
-    });
-    ASSERT_FALSE(groupId.empty());
-
-    group::Group dynGroup;
-    ASSERT_NO_THROW({ dynGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(dynGroup.statusCode, 0);
-
-    // Thread: user_1=manager, user_2=user (NOT manager); group has user-role grant.
-    // rotateKeys default policy is "user" so user_2 can call rotateThreadKeys without being a manager.
-    core::ContainerPolicy policy;
-    policy.get = "all";
-    policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
-    std::string threadId;
-    ASSERT_NO_THROW({
-        threadId = threadApi->createThread(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            core::Buffer::from("thread_pub"),
-            core::Buffer::from("thread_priv"),
-            policy,
-            std::vector<core::GroupGrantWithKey>{{
-                .groupId = groupId,
-                .role = "user",
-                .groupPubKey = dynGroup.groupPubKey
-            }}
-        );
-    });
-    ASSERT_FALSE(threadId.empty());
-
-    // user_1 sends a message while user_3 still has group access
-    std::string messageId;
-    ASSERT_NO_THROW({
-        messageId = threadApi->sendMessage(
-            threadId,
-            core::Buffer::from("msg_pub"),
-            core::Buffer::from("secret_priv"),
-            core::Buffer::from("secret_data")
-        );
-    });
-    ASSERT_FALSE(messageId.empty());
-
-    // user_3 can decrypt the message via group membership
-    disconnect();
-    connectAs(TUGConnectionType::TUGUser3);
-    thread::Message mBefore;
-    EXPECT_NO_THROW({ mBefore = threadApi->getMessage(messageId); });
-    EXPECT_EQ(mBefore.statusCode, 0);
-    EXPECT_EQ(mBefore.privateMeta.stdString(), "secret_priv");
-
-    // user_1 (group manager) removes user_3 and rotates the group key
-    disconnect();
-    connectAs(TUGConnectionType::TUGUser1);
-    EXPECT_NO_THROW({
-        groupApi->updateGroup(
-            groupId,
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            dynGroup.publicMeta,
-            dynGroup.privateMeta,
-            dynGroup.version,
-            false,
-            true  // forceGenerateNewKey: removing user_3 requires a new group key pair
-        );
-    });
-
-    // user_2 (thread USER, NOT manager, NOT group manager) fetches the updated group pub key
-    // and re-keys the thread via rotateThreadKeys — allowed because the default rotateKeys policy is "user"
+    // user_2 has never been a direct member of T, so this read cannot be served by a personal key
+    // wrap, and this is a freshly connected client, so ContainerKeyCache is empty — the very first
+    // cache-touching call below must resolve everything straight from the server's current state.
     disconnect();
     connectAs(TUGConnectionType::TUGUser2);
-    group::Group updatedGroup;
-    ASSERT_NO_THROW({ updatedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(updatedGroup.statusCode, 0);
 
-    thread::Thread threadInfo;
-    ASSERT_NO_THROW({ threadInfo = threadApi->getThread(threadId); });
-    ASSERT_EQ(threadInfo.statusCode, 0);
+    thread::Message oldEpochMessage;
+    EXPECT_NO_THROW({ oldEpochMessage = threadApi->getMessage(oldEpochMessageId); });
+    EXPECT_EQ(oldEpochMessage.statusCode, 0);
+    EXPECT_EQ(oldEpochMessage.privateMeta.stdString(), "old_epoch_priv");
+    EXPECT_EQ(oldEpochMessage.data.stdString(), "old_epoch_data");
 
-    EXPECT_NO_THROW({
-        threadApi->rotateThreadKeys(
-            threadId,
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            threadInfo.version, false,
-            std::vector<core::GroupGrantWithKey>{{
-                .groupId = groupId,
-                .role = "user",
-                .groupPubKey = updatedGroup.groupPubKey
-            }}
-        );
-    });
-
-    // user_2 sends a new message encrypted with the rotated thread key
-    std::string newMessageId;
-    ASSERT_NO_THROW({
-        newMessageId = threadApi->sendMessage(
-            threadId,
-            core::Buffer::from("new_msg_pub"),
-            core::Buffer::from("new_secret_priv"),
-            core::Buffer::from("new_msg_data")
-        );
-    });
-    ASSERT_FALSE(newMessageId.empty());
-
-    // user_3 was removed from the group — cannot resolve the group private key —
-    // blocking decryption of the thread, old messages, and new messages.
-    disconnect();
-    connectAs(TUGConnectionType::TUGUser3);
-
-    thread::Thread tAfter;
-    EXPECT_NO_THROW({ tAfter = threadApi->getThread(threadId); });
-    EXPECT_NE(tAfter.statusCode, 0);
-
-    thread::Message mAfter;
-    EXPECT_NO_THROW({ mAfter = threadApi->getMessage(messageId); });
-    EXPECT_NE(mAfter.statusCode, 0);
-    EXPECT_TRUE(mAfter.privateMeta.stdString().empty());
-
-    thread::Message newMsg;
-    EXPECT_NO_THROW({ newMsg = threadApi->getMessage(newMessageId); });
-    EXPECT_NE(newMsg.statusCode, 0);
-    EXPECT_TRUE(newMsg.privateMeta.stdString().empty());
+    thread::Message newEpochMessage;
+    EXPECT_NO_THROW({ newEpochMessage = threadApi->getMessage(newEpochMessageId); });
+    EXPECT_EQ(newEpochMessage.statusCode, 0);
+    EXPECT_EQ(newEpochMessage.privateMeta.stdString(), "new_epoch_priv");
+    EXPECT_EQ(newEpochMessage.data.stdString(), "new_epoch_data");
 }
 
 TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_thread_rotation) {
@@ -1093,7 +959,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
     // Create a dynamic group containing user_1 and user_2.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroup(
+        groupId = groupApi->createGroupWithKeyTree(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
@@ -1196,123 +1062,4 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
     EXPECT_FALSE(msgId.empty());
 
     conn2->disconnect();
-}
-
-TEST_F(ThreadUsingGroupsTest, sendMessage_blocked_when_group_epoch_is_stale) {
-    // Scenario: after generateNewGroupKey the group's keyVersion advances. The thread's
-    // grant still carries the old epoch, so the bridge returns THREAD_GROUP_EPOCH_OUTDATED
-    // on sendMessage. After rotateThreadKeys (which re-wraps to the new epoch pubkey) the
-    // send succeeds.
-
-    // Create a group with user_1 + user_2.
-    std::string groupId;
-    ASSERT_NO_THROW({
-        groupId = groupApi->createGroup(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            core::Buffer::from("grp_pub"),
-            core::Buffer::from("grp_priv")
-        );
-    });
-    ASSERT_FALSE(groupId.empty());
-
-    group::Group grp;
-    ASSERT_NO_THROW({ grp = groupApi->getGroup(groupId); });
-    ASSERT_EQ(grp.statusCode, 0);
-
-    // Create thread with user_1=manager, user_2=user, plus group grant.
-    core::ContainerPolicy policy;
-    policy.get = "all";
-    policy.forwardSecrecy = "yes";
-    policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
-    std::string threadId;
-    ASSERT_NO_THROW({
-        threadId = threadApi->createThread(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            core::Buffer::from("thread_pub"),
-            core::Buffer::from("thread_priv"),
-            policy,
-            std::vector<core::GroupGrantWithKey>{{
-                .groupId = groupId,
-                .role = "user",
-                .groupPubKey = grp.groupPubKey
-            }}
-        );
-    });
-    ASSERT_FALSE(threadId.empty());
-
-    // Rotate the group identity key → epoch advances, new groupPubKey issued.
-    ASSERT_NO_THROW({
-        groupApi->generateNewGroupKey(
-            groupId,
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            }
-        );
-    });
-
-    // sendMessage must now be blocked: thread grant still carries the pre-rotation epoch.
-    EXPECT_THROW(
-        { threadApi->sendMessage(threadId, core::Buffer::from("a"), core::Buffer::from("b"), core::Buffer::from("c")); },
-        core::Exception
-    );
-
-    // Fetch updated group to get the new groupPubKey and the current thread version.
-    group::Group updatedGrp;
-    ASSERT_NO_THROW({ updatedGrp = groupApi->getGroup(groupId); });
-    ASSERT_EQ(updatedGrp.statusCode, 0);
-
-    thread::Thread threadInfo;
-    ASSERT_NO_THROW({ threadInfo = threadApi->getThread(threadId); });
-    ASSERT_EQ(threadInfo.statusCode, 0);
-
-    // Re-key the thread to the new group epoch.
-    EXPECT_NO_THROW({
-        threadApi->rotateThreadKeys(
-            threadId,
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            threadInfo.version,
-            false,
-            std::vector<core::GroupGrantWithKey>{{
-                .groupId = groupId,
-                .role = "user",
-                .groupPubKey = updatedGrp.groupPubKey
-            }}
-        );
-    });
-
-    // sendMessage must now succeed — thread grant epoch matches current group keyVersion.
-    std::string msgId;
-    EXPECT_NO_THROW({
-        msgId = threadApi->sendMessage(
-            threadId,
-            core::Buffer::from("msg_pub"),
-            core::Buffer::from("msg_priv"),
-            core::Buffer::from("msg_data")
-        );
-    });
-    EXPECT_FALSE(msgId.empty());
 }

@@ -37,26 +37,6 @@ GroupApi GroupApi::create(core::Connection& connection) {
 
 GroupApi::GroupApi(const std::shared_ptr<GroupApiImpl>& impl) : ExtendedPointer(impl) {}
 
-std::string GroupApi::createGroup(
-    const std::string& contextId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
-) {
-    auto impl = getImpl();
-    core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
-    try {
-        return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, policies);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
 std::string GroupApi::createGroupWithKeyTree(
     const std::string& contextId,
     const std::vector<core::UserWithPubKey>& users,
@@ -139,23 +119,6 @@ void GroupApi::updateGroup(
         impl->updateGroup(
             groupId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
         );
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void GroupApi::generateNewGroupKey(
-    const std::string& groupId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers
-) {
-    auto impl = getImpl();
-    core::Validator::validateId(groupId, "field:groupId ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
-    try {
-        impl->generateNewGroupKey(groupId, users, managers);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
