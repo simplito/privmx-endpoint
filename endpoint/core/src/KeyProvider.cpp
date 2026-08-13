@@ -118,9 +118,10 @@ void KeyDecryptionAndVerificationRequest::addGroupKeys(
         throw KeyProviderRequestCompletedException();
     }
     for (const auto& groupEntry : groupKeys) {
-        int64_t epoch = groupEntry.groupEpoch.value_or(0);
         for (const auto& keyEntry : groupEntry.keys) {
-            auto entry = std::make_tuple(keyEntry, groupEntry.group, epoch);
+            int64_t epoch = keyEntry.groupEpoch.value_or(0);
+            server::KeyEntry plainKeyEntry{.keyId = keyEntry.keyId, .data = keyEntry.data};
+            auto entry = std::make_tuple(plainKeyEntry, groupEntry.group, epoch);
             if (auto it = groupRequestData.find(location); it != groupRequestData.end()) {
                 it->second.insert_or_assign(keyEntry.keyId, entry);
             } else {

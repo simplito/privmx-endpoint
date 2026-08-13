@@ -580,7 +580,10 @@ bool ThreadApiImpl::isRekeyNeeded(
                 continue;
             }
         }
-        int64_t storedEpoch = entry.groupEpoch.value_or(0);
+        int64_t storedEpoch = 0;
+        for (const auto& keyEntry : entry.keys) {
+            storedEpoch = std::max(storedEpoch, keyEntry.groupEpoch.value_or(0));
+        }
         int64_t currentEpoch = groupCache[entry.group].keyVersion;
         if (storedEpoch < currentEpoch) {
             stale = true;

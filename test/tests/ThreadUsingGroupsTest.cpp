@@ -795,6 +795,141 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     EXPECT_EQ(mAfter.data.stdString(), "msg_data");
 }
 
+TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_thread_rekey) {
+    // Group G: user_1 (manager) + user_2 + user_3, at epoch 1.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroupWithKeyTree(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")},
+                {.userId = reader->getString("Login.user_3_id"), .pubKey = reader->getString("Login.user_3_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("grp_pub"),
+            core::Buffer::from("grp_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group group;
+    ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
+    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(group.keyVersion, 1);
+
+    // Thread T grants G access; user_1 is the only direct member — user_2's access to it is
+    // exclusively through the group grant (no personal key wrap), which matters below: a direct
+    // wrap would let KeyProvider's flat-key path succeed and mask whatever the group-epoch path does.
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = createThreadWithGroupGrant(
+            reader->getString("Context_1.contextId"),
+            reader->getString("Login.user_1_id"),
+            reader->getString("Login.user_1_pubKey"),
+            group
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    // Sent while G is still at epoch 1 — its keyId is wrapped for G's epoch-1 grant key only.
+    std::string oldEpochMessageId;
+    ASSERT_NO_THROW({
+        oldEpochMessageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("old_epoch_pub"),
+            core::Buffer::from("old_epoch_priv"),
+            core::Buffer::from("old_epoch_data")
+        );
+    });
+    ASSERT_FALSE(oldEpochMessageId.empty());
+
+    // Remove user_3 from G — advances G's epoch from 1 to 2. Thread T itself is untouched by this.
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMember(
+            groupId,
+            reader->getString("Login.user_3_id"),
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
+                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("grp_removed_pub"),
+            core::Buffer::from("grp_removed_priv")
+        );
+    });
+
+    group::Group rotatedGroup;
+    ASSERT_NO_THROW({ rotatedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(rotatedGroup.statusCode, 0);
+    ASSERT_EQ(rotatedGroup.keyVersion, 2);
+
+    // Force T's own container key to rotate while re-granting G at its now-current epoch (2).
+    // T's stored groupKeys[G] entry must keep the epoch-1 wrap resolvable at epoch 1 for
+    // oldEpochMessageId, alongside the new epoch-2 wrap — this is exactly the case the Epoch
+    // Ladder exists to cover ("historical group key entries stay reachable across a group's own
+    // epoch advances"). If groupKeys[G]'s epoch is instead tracked as one scalar for the whole
+    // entry and gets overwritten to 2 here, decrypting oldEpochMessageId below fails (statusCode
+    // 65553, UnknownEncryptionKeyVersionException) because the wrong grant key gets requested for it.
+    ASSERT_NO_THROW({
+        threadApi->updateThread(
+            threadId,
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            std::vector<core::UserWithPubKey>{
+                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
+            },
+            core::Buffer::from("rekeyed_public"),
+            core::Buffer::from("rekeyed_private"),
+            1,     // version
+            false, // force
+            true,  // forceGenerateNewKey
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = groupId,
+                .role = "user",
+                .groupPubKey = rotatedGroup.groupPubKey,
+                .groupEpoch = rotatedGroup.keyVersion
+            }}
+        );
+    });
+
+    // Positive control: a message sent after the rekey, under the new epoch, must also be readable.
+    std::string newEpochMessageId;
+    ASSERT_NO_THROW({
+        newEpochMessageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("new_epoch_pub"),
+            core::Buffer::from("new_epoch_priv"),
+            core::Buffer::from("new_epoch_data")
+        );
+    });
+    ASSERT_FALSE(newEpochMessageId.empty());
+
+    // user_2 has never been a direct member of T, so this read cannot be served by a personal key
+    // wrap, and this is a freshly connected client, so ContainerKeyCache is empty — the very first
+    // cache-touching call below must resolve everything straight from the server's current state.
+    disconnect();
+    connectAs(TUGConnectionType::TUGUser2);
+
+    thread::Message oldEpochMessage;
+    EXPECT_NO_THROW({ oldEpochMessage = threadApi->getMessage(oldEpochMessageId); });
+    EXPECT_EQ(oldEpochMessage.statusCode, 0);
+    EXPECT_EQ(oldEpochMessage.privateMeta.stdString(), "old_epoch_priv");
+    EXPECT_EQ(oldEpochMessage.data.stdString(), "old_epoch_data");
+
+    thread::Message newEpochMessage;
+    EXPECT_NO_THROW({ newEpochMessage = threadApi->getMessage(newEpochMessageId); });
+    EXPECT_EQ(newEpochMessage.statusCode, 0);
+    EXPECT_EQ(newEpochMessage.privateMeta.stdString(), "new_epoch_priv");
+    EXPECT_EQ(newEpochMessage.data.stdString(), "new_epoch_data");
+}
+
 TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_thread_rotation) {
     // Scenario: user_2 caches thread keyId K1 via getThread. user_1 then calls
     // rotateThreadKeys → server advances to keyId K2. user_2's sendMessage sends
