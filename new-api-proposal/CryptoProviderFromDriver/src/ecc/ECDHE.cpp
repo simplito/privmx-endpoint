@@ -15,9 +15,6 @@ limitations under the License.
 // #include <openssl/bn.h>
 // #include <Poco/SharedPtr.h>
 
-// #include "ECC.hpp"
-// #include "PublicKey.hpp"
-// #include "Base58.hpp"
 #include "Utils.hpp"
 #include "ECDHE.hpp"
 

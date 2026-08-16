@@ -86,7 +86,25 @@ std::string PrivateKey::toWIF() const {
     return Base58::encodeWithChecksum(buffer);
 }
 
+Bytes PrivateKey::sign(BytesView data, SigScheme) const {
+    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+}
 
+std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
+    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+}
+
+Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
+    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+}
+
+Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
+    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+}
+
+Bytes PrivateKey::export_(KeyFormat) const {
+    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+}
 
 } // ecc
 } // cryptoservice

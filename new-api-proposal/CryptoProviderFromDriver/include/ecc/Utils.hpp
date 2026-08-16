@@ -37,6 +37,7 @@ struct SymParamsString {
     // Bytes tag;       // not used, for AEAD tag is appended to ciphertext
 };
 
+// To be replaced by the injected providers in the next commit
 class NewCrypto
 {
 public:

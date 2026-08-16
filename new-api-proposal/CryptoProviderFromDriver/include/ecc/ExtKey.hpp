@@ -21,6 +21,9 @@ limitations under the License.
 #include <gmpxx.h>
 #include <Poco/ByteOrder.h>
 
+#include "CoreTypes.hpp"
+#include "CoreInterfaces.hpp"
+
 #include "ECC.hpp"
 #include "PublicKey.hpp"
 #include "PrivateKey.hpp"
@@ -30,8 +33,7 @@ namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-
-class ExtKey
+class ExtKey : public IExtKey
 {
 public:
     static ExtKey fromSeed(const std::string& seed);
@@ -59,6 +61,11 @@ public:
     bool isPrivate() const;
     const ECC& getECC() const;
 
+    virtual std::shared_ptr<IExtKey> deriveChild(uint32_t index, bool hardened) const override;
+    virtual std::shared_ptr<IPrivateKey> privateKey() const override;
+    virtual std::shared_ptr<IPublicKey>  publicKey()  const override;
+    virtual Bytes chainCode() const override;
+
 private:
     static const Poco::UInt32 HIGHEST_BIT = 0x80000000;
     static const std::string MASTER_SECRET;
@@ -73,6 +80,8 @@ private:
     Poco::UInt8 _depth = 0;
     Poco::UInt32 _parent_fingerprint = 0x00000000;
     Poco::UInt32 _index = 0;
+
+    std::shared_ptr<ISymCryptoProvider> _provider;
 };
 
 inline ExtKey::operator bool() const {
@@ -131,6 +140,21 @@ inline const ECC& ExtKey::getECC() const {
     return _ec;
 }
 
+inline std::shared_ptr<IExtKey> ExtKey::deriveChild(uint32_t index, bool hardened) const {
+    throw PrivmxDriverCryptoException("ExtKey::deriveChild: NOT IMPLEMENTED");
+}
+
+inline std::shared_ptr<IPrivateKey> ExtKey::privateKey() const {
+    throw PrivmxDriverCryptoException("ExtKey::privateKey: NOT IMPLEMENTED");
+}
+
+inline std::shared_ptr<IPublicKey> ExtKey::publicKey() const {
+    throw PrivmxDriverCryptoException("ExtKey::publicKey: NOT IMPLEMENTED");
+}
+
+inline Bytes ExtKey::chainCode() const {
+    throw PrivmxDriverCryptoException("ExtKey::chainCode: NOT IMPLEMENTED");
+}
 
 } // ecc
 } // cryptoservice

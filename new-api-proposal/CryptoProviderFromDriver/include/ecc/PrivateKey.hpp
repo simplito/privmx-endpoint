@@ -17,6 +17,8 @@ limitations under the License.
 #include <string>
 #include <openssl/ec.h>
 
+#include "CoreTypes.hpp"
+#include "CoreInterfaces.hpp"
 #include "ECC.hpp"
 #include "PrivateKey.hpp"
 
@@ -24,23 +26,32 @@ namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-class PrivateKey
+class PrivateKey : public IPrivateKey
 {
 public:
-    static PrivateKey fromWIF(const std::string& wif);
-    static PrivateKey generateRandom();
     PrivateKey() {}
     PrivateKey(const ECC& key);
     PublicKey getPublicKey() const;
     std::string getPrivateEncKey() const;
-    std::string signToCompactSignature(const std::string& message) const;
-    std::string signToCompactSignatureWithHash(const std::string& message) const;
     std::string derive(const PublicKey& public_key) const;
     ECC getEccKey() const;
+
+    virtual Bytes sign(BytesView data, SigScheme) const override;
+    virtual std::shared_ptr<IPublicKey> publicKey() const override;
+    virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const override;  
+    virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const override;  
+    virtual Bytes export_(KeyFormat) const override; 
+
+protected:
+    static PrivateKey generateRandom();
+    static PrivateKey fromWIF(const std::string& wif);
+    std::string signToCompactSignature(const std::string& message) const;
+    std::string signToCompactSignatureWithHash(const std::string& message) const;
     std::string toWIF() const;
 
 private:
     ECC _key;
+    std::shared_ptr<ISymCryptoProvider> _provider;
 };
 
 inline PublicKey PrivateKey::getPublicKey() const {

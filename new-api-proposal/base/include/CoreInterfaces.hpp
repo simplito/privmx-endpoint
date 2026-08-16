@@ -59,14 +59,16 @@ public:
 };
 
 // ---- 6. Keys in asymmetric cryptography ----
+
 class IPrivateKey;
+
 class IPublicKey {
 public:
     virtual ~IPublicKey() = default;
-    virtual bool  verify(BytesView data, BytesView sig, SigScheme) const = 0;
+    virtual bool verify(BytesView data, BytesView sig, SigScheme) const = 0;
 
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
-    virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) = 0;
+    virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                 // np. Der/Base58Der
 };
@@ -81,12 +83,13 @@ public:
     virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const = 0;  
 
     // previously EciesEncryptor::decrypt(*this,sealed,expectedSender)
-    virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) = 0;
+    virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                     // Raw / Wif
 };
 
 class IExtKey {
+public:
     virtual ~IExtKey() = default;
     virtual std::shared_ptr<IExtKey> deriveChild(uint32_t index, bool hardened) const = 0;
     virtual std::shared_ptr<IPrivateKey> privateKey() const = 0;
@@ -105,6 +108,7 @@ public:
     virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) = 0;
 };
 
+// Probably to be removed (used by code not included in the repository)
 class IAsymAlgImpl {
 public:
     virtual ~IAsymAlgImpl() = default;
@@ -114,15 +118,11 @@ public:
     virtual void setSymmetricCipher(std::shared_ptr<ISymmetricCipher>) = 0;  
 };
 
+// ---- Basic roles provider (to be injected into an asymmetric cryptography role) ----
+ class ISymCryptoProvider : public IRandom, public IDigest, public IHmac, public ISymmetricCipher {};
+
 // ---- Provider facade (role aggregate) ----
-class ICryptoProvider : public IRandom
-            , public IDigest
-            , public IHmac
-            , public ISymmetricCipher 
-            , public IKdf
-            , public IKeyProvider
-            // , public IHybridSeal
-            // // ...
+class ICryptoProvider : public ISymCryptoProvider, public IKdf, public IKeyProvider
 {
 public:
     virtual std::string name() const = 0;         
