@@ -17,6 +17,9 @@ limitations under the License.
 
 #include <memory>
 #include <string>
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
+#include <Poco/Types.h>
 
 #include "CoreTypes.hpp"
 
@@ -53,10 +56,21 @@ class Utils
 {
 public:
     static std::string fillTo32(const std::string& data);
+    static std::string removeEscape(const std::string& data);
+    static std::string stringify(const Poco::JSON::Array::Ptr& arr, bool pretty = false);
+    static std::string stringify(const Poco::JSON::Object::Ptr& obj, bool pretty = false);
+    static Poco::Dynamic::Var parseJson(const std::string& json);
+    static Poco::JSON::Object::Ptr parseJsonObject(const std::string& json);
+private:
 };
 
-
-
+class Base64
+{
+public:
+    static std::string from(const std::string& data, int line_length = 0);
+    static std::string toString(const std::string& base64_data);
+    static bool is(const std::string& data);
+};
 
 
 } // ecc
