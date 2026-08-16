@@ -136,10 +136,10 @@ Bytes CryptoProviderFromDriver::hmac(Hash alg, BytesView key, BytesView data)
         return hmacConfStr("SHA256", key, data);
     case Hash::Sha512:
         return hmacConfStr("SHA512", key, data);
-    // case Hash::Ripemd160:
-    //     return hmacConfStr("RIPEMD160", key, data);
-    // case Hash::Hash160:
-    //     return hmacConfStr("RIPEMD160", key, hmacConfStr("SHA256", key, data));
+    case Hash::Ripemd160:
+        return hmacConfStr("RIPEMD160", key, data);
+    case Hash::Hash160:
+        return hmacConfStr("RIPEMD160", key, hmacConfStr("SHA256", key, data));
     default:
         throw PrivmxDriverCryptoException("HMAC: Unknown protocol");
         break;

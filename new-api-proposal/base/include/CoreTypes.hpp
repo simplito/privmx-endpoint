@@ -30,8 +30,8 @@ enum class Hash  {
     Sha1,      // probably used directly only in HMAC
     Sha256,
     Sha512     // probably used directly only in HMAC
-//    ,Ripemd160 // probably not used
-//    ,Hash160   // probably not used
+   ,Ripemd160 // probably not used
+   ,Hash160   // probably not used
 };
 
 // types of implemented symmetric algorithms
