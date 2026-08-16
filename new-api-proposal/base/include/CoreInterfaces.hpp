@@ -59,15 +59,16 @@ public:
 };
 
 // ---- 6. Keys in asymmetric cryptography ----
-
+class IPrivateKey;
 class IPublicKey {
 public:
     virtual ~IPublicKey() = default;
     virtual bool  verify(BytesView data, BytesView sig, SigScheme) const = 0;
+
+    // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
+    virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) = 0;
+
     virtual Bytes export_(KeyFormat) const = 0;                 // np. Der/Base58Der
-
-
-
 };
 
 class IPrivateKey {
@@ -75,32 +76,43 @@ public:
     virtual ~IPrivateKey() = default;
     virtual Bytes sign(BytesView data, SigScheme) const = 0;
     virtual std::shared_ptr<IPublicKey> publicKey() const = 0;
-    virtual Bytes deriveSharedSecret(const IPublicKey&) const = 0;  // ECDH — zamiast ECDHE
+
+    // previously ECDHE(*this, publicKey).getSecret()
+    virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const = 0;  
+
+    // previously EciesEncryptor::decrypt(*this,sealed,expectedSender)
+    virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) = 0;
+
     virtual Bytes export_(KeyFormat) const = 0;                     // Raw / Wif
-
-
-
 };
 
 class IExtKey {
-
-
-
+    virtual ~IExtKey() = default;
+    virtual std::shared_ptr<IExtKey> deriveChild(uint32_t index, bool hardened) const = 0;
+    virtual std::shared_ptr<IPrivateKey> privateKey() const = 0;
+    virtual std::shared_ptr<IPublicKey>  publicKey()  const = 0;
+    virtual Bytes chainCode() const = 0;
 };
-
 
 // ---- 7. Key provider ----
 
 class IKeyProvider {
 public:
     virtual ~IKeyProvider() = default;
-    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::Secp256k1) = 0;
-    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat) = 0;
-    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat) = 0;
-//    virtual std::shared_ptr<IExtKey>      hdFromSeed(BytesView seed) = 0;
+    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::EccSecp256k1) = 0;
+    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
+    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
+    virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) = 0;
 };
 
-
+class IAsymAlgImpl {
+public:
+    virtual ~IAsymAlgImpl() = default;
+    virtual void setRandom(std::shared_ptr<IRandom>) = 0;  
+    virtual void setDigest(std::shared_ptr<IDigest>) = 0;  
+    virtual void setHmac(std::shared_ptr<IHmac>) = 0;  
+    virtual void setSymmetricCipher(std::shared_ptr<ISymmetricCipher>) = 0;  
+};
 
 // ---- Provider facade (role aggregate) ----
 class ICryptoProvider : public IRandom

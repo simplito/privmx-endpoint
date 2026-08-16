@@ -65,7 +65,7 @@ enum class SigScheme {
 
 // types of implemented asymmetric algorithms
 enum class AsymAlg {
-    Secp256k1    
+    EccSecp256k1    
 };
 
 

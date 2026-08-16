@@ -593,14 +593,18 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAl
     // }
 }
 
-std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView, KeyFormat)
+std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView, KeyFormat, AsymAlg)
 {
     throw PrivmxDriverCryptoException("importPrivateKey: NOT IMPLEMENTED");
 }
 
-std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView, KeyFormat)
+std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView, KeyFormat, AsymAlg)
 {
     throw PrivmxDriverCryptoException("importPublicKey: NOT IMPLEMENTED");
+}
+
+std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed, AsymAlg) {
+    throw PrivmxDriverCryptoException("extKeyFromSeed: NOT IMPLEMENTED");
 }
 
 } // cryptoservice
