@@ -171,7 +171,12 @@ BNImpl::bn_unique_ptr BNImpl::copyBignum(const bn_unique_ptr& bn) {
 //     return bn;
 // }
 
-
+void BNImpl::validate() const {
+    if (!_bn) {
+        // throw EmptyBNException();
+        throw std::runtime_error("BNImpl::EmptyBNException");
+    }
+}
 
 } // ecc
 } // cryptoservice

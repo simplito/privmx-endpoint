@@ -58,9 +58,30 @@ add_executable(${PROJECT_NAME}-exec src/main.cpp)
 target_include_directories(${PROJECT_NAME}-exec 
     PUBLIC 
 #        ${INCLUDE_LIBOPENSSL}
-#        ${INCLUDE_LIBDRIVER}
+        ${INCLUDE_LIBDRIVER}
         ${PROJECT_INCLUDE}
+    PRIVATE
+        openssl::openssl
+        Poco::Poco
+        gmp::gmp
         )
 target_link_libraries(${PROJECT_NAME}-exec
     PRIVATE         
+        openssl::openssl
+        Poco::Poco
+        gmp::gmp
         ${PROJECT_NAME})
+
+
+# tests
+
+    include(FindGTest)
+    include(GoogleTest)
+    enable_testing()
+    find_package(GTest REQUIRED)
+    file(GLOB_RECURSE TESTS_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test/*.cpp)
+    add_executable(privmxcryptoservice_test ${TESTS_SOURCES})
+    target_include_directories(privmxcryptoservice_test PUBLIC ${INCLUDE_LIBDRIVER})
+#    target_link_libraries(privmxcryptoservice_test PUBLIC Poco::Foundation Poco::JSON Pson privmx GTest::GTest GTest::Main)
+    target_link_libraries(privmxcryptoservice_test PUBLIC libraryFromDriver Poco::Poco openssl::openssl GTest::gtest_main)
+    gtest_add_tests(TARGET privmxcryptoservice_test)

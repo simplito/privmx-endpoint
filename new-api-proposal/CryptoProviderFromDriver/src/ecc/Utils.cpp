@@ -101,6 +101,8 @@ Poco::JSON::Object::Ptr Utils::parseJsonObject(const std::string& json) {
     return parser.parse(json).extract<Poco::JSON::Object::Ptr>();
 }
 
+// NewCrypto::_provider;
+
 ICryptoProvider& NewCrypto::get() { 
     return _provider;
 }

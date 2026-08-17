@@ -20,6 +20,7 @@ limitations under the License.
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
 #include "ECC.hpp"
+#include "PublicKey.hpp"
 #include "PrivateKey.hpp"
 
 namespace privmx {
@@ -42,7 +43,7 @@ public:
     virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const override;  
     virtual Bytes export_(KeyFormat) const override; 
 
-protected:
+// protected:
     static PrivateKey generateRandom();
     static PrivateKey fromWIF(const std::string& wif);
     std::string signToCompactSignature(const std::string& message) const;

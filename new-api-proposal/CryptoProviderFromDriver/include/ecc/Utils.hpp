@@ -50,7 +50,7 @@ public:
 
 private:
     // static std::shared_ptr<ICryptoProvider> _provider = std::make_shared<CryptoProviderFromDriver>();
-    static CryptoProviderFromDriver _provider;
+    static inline CryptoProviderFromDriver _provider;
 };
 
 class Utils

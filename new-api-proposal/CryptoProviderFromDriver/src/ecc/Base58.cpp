@@ -63,7 +63,7 @@ std::string Base58::decode(const std::string& s) {
 
 std::string Base58::encodeWithChecksum(const std::string& s) {
     // std::string checksum = Crypto::sha256(Crypto::sha256(s)).substr(0, 4);
-    std::string checksum = NewCrypto::digest(Hash::Sha256,s).substr(0, 4);
+    std::string checksum = NewCrypto::digest(Hash::Sha256,NewCrypto::digest(Hash::Sha256,s)).substr(0, 4);
     return encode(s + checksum);
 }
 
