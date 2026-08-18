@@ -80,6 +80,7 @@ target_link_libraries(test_unit_LadderMathTest GTest::GTest GTest::Main)
 # server, no docker and no network: it builds trees, climbs them and removes members entirely in-process.
 add_executable(test_unit_TreeKeysTest
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeyCache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeMath.cpp
 )
@@ -90,6 +91,7 @@ add_executable(test_unit_LadderKeysTest
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LadderKeysTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderMath.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeyCache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeMath.cpp
 )
@@ -103,6 +105,7 @@ add_executable(test_unit_GroupKeyResolverTest
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/GroupKeyResolver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderMath.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeyCache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeMath.cpp
 )
@@ -114,6 +117,7 @@ target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore P
 # one it rejects.
 add_executable(test_unit_TreeWireTest
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeWireTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeyCache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeMath.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeWire.cpp
@@ -126,6 +130,7 @@ add_executable(keytree_state_dump
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/keytree_state_dump.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/LadderMath.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeyCache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeMath.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeWire.cpp

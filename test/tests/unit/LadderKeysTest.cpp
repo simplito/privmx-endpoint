@@ -27,6 +27,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 #include <privmx/endpoint/group/keytree/LadderKeys.hpp>
+#include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group::keytree;
@@ -50,7 +51,7 @@ struct EpochHistory {
  */
 EpochHistory runEpochs(std::uint32_t upTo, std::uint32_t eraFloor, bool withSkips = true) {
     EpochHistory history;
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const PrivateKey signer = PrivateKey::generateRandom();
 
@@ -84,7 +85,7 @@ const PrivateKey& keyOf(const EpochHistory& history, std::uint32_t epoch, std::u
 // ─────────────────────────────────────────────────────────────────────────────
 
 TEST(LadderKeysBuild, EmitsNothingAtTheEraFloor) {
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const PrivateKey key = PrivateKey::generateRandom();
     EXPECT_TRUE(ladder.buildRungs(1, key.getPublicKey(), std::nullopt, 1, AUTHOR, key).empty())
@@ -94,7 +95,7 @@ TEST(LadderKeysBuild, EmitsNothingAtTheEraFloor) {
 
 /** SECURITY — a missing unit rung would be an unrepairable hole, so it must fail loudly. */
 TEST(LadderKeysBuild, SECURITY_RefusesToBuildWithoutThePreviousEpochKey) {
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const PrivateKey key = PrivateKey::generateRandom();
     EXPECT_THROW(ladder.buildRungs(8, key.getPublicKey(), std::nullopt, 1, AUTHOR, key), std::invalid_argument);
@@ -127,7 +128,7 @@ TEST(LadderKeysBuild, EmitsAlignedSkipRungsWhenTheKeysAreHeld) {
 
 TEST(LadderKeysBuild, SkipsUnavailableTargetsSilently) {
     // A publisher that holds only the previous epoch key still produces a valid, if slower, ladder.
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const PrivateKey previous = PrivateKey::generateRandom();
     const PrivateKey current = PrivateKey::generateRandom();
@@ -158,7 +159,7 @@ TEST(LadderKeysBuild, CostsAboutTwoRungsPerEpoch) {
 TEST(LadderKeysDescend, RecoversEveryOlderEpochKey) {
     const EpochHistory history = runEpochs(16, 1);
     for (std::uint32_t target = 1; target <= 16; ++target) {
-        TreeKeyStore store;
+        TreeKeyCache store;
         LadderKeys ladder(store);
         store.putGrantKey(16, keyOf(history, 16, 1));
         const DescentResult result = ladder.descend(16, target, history.rungs, history.registry);
@@ -170,7 +171,7 @@ TEST(LadderKeysDescend, RecoversEveryOlderEpochKey) {
 
 TEST(LadderKeysDescend, ReturnsTheHeldKeyWhenAlreadyAtTheTarget) {
     const EpochHistory history = runEpochs(4, 1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(4, keyOf(history, 4, 1));
     const DescentResult result = ladder.descend(4, 4, history.rungs, history.registry);
@@ -180,7 +181,7 @@ TEST(LadderKeysDescend, ReturnsTheHeldKeyWhenAlreadyAtTheTarget) {
 
 TEST(LadderKeysDescend, CachesEveryKeyRecoveredOnTheWay) {
     const EpochHistory history = runEpochs(16, 1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(16, keyOf(history, 16, 1));
     ASSERT_EQ(ladder.descend(16, 1, history.rungs, history.registry).failure, DescentFailure::None);
@@ -198,12 +199,12 @@ TEST(LadderKeysDescend, WithSkipRungsIsLogarithmicNotLinear) {
     // Count how many rungs are addressed to each epoch: with skips there are more, so the walk is shorter.
     EXPECT_GT(withSkips.rungs.size(), unitOnly.rungs.size());
 
-    TreeKeyStore storeA;
+    TreeKeyCache storeA;
     LadderKeys ladderA(storeA);
     storeA.putGrantKey(256, keyOf(withSkips, 256, 1));
     ASSERT_EQ(ladderA.descend(256, 1, withSkips.rungs, withSkips.registry).failure, DescentFailure::None);
 
-    TreeKeyStore storeB;
+    TreeKeyCache storeB;
     LadderKeys ladderB(storeB);
     storeB.putGrantKey(256, keyOf(unitOnly, 256, 1));
     ASSERT_EQ(ladderB.descend(256, 1, unitOnly.rungs, unitOnly.registry).failure, DescentFailure::None);
@@ -225,7 +226,7 @@ TEST(LadderKeysDescend, WithSkipRungsIsLogarithmicNotLinear) {
 
 TEST(LadderKeysDescend, FailsWithoutAStartingKey) {
     const EpochHistory history = runEpochs(8, 1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const DescentResult result = ladder.descend(8, 1, history.rungs, history.registry);
     EXPECT_EQ(result.failure, DescentFailure::NotEntitled);
@@ -240,7 +241,7 @@ TEST(LadderKeysDescend, ReportsAMissingRungDistinctly) {
             gapped.push_back(rung);
         }
     }
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(5, keyOf(history, 5, 1));
     const DescentResult result = ladder.descend(5, 1, gapped, history.registry);
@@ -250,7 +251,7 @@ TEST(LadderKeysDescend, ReportsAMissingRungDistinctly) {
 
 TEST(LadderKeysDescend, RefusesToDescendUpwards) {
     const EpochHistory history = runEpochs(4, 1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(2, keyOf(history, 2, 1));
     EXPECT_THROW(ladder.descend(2, 4, history.rungs, history.registry), std::invalid_argument);
@@ -258,7 +259,7 @@ TEST(LadderKeysDescend, RefusesToDescendUpwards) {
 
 TEST(LadderKeysDescend, StopsAtAnEraFloorAndSaysSo) {
     const EpochHistory history = runEpochs(20, 1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(20, keyOf(history, 20, 1));
     const DescentResult result = ladder.descend(20, 1, history.rungs, history.registry, /*eraFloor*/ 12);
@@ -270,7 +271,7 @@ TEST(LadderKeysDescend, StopsAtAnEraFloorAndSaysSo) {
 
 TEST(LadderKeysDescend, ReportsPruningInPreferenceToTheEraFloor) {
     const EpochHistory history = runEpochs(20, 1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(20, keyOf(history, 20, 1));
     const DescentResult result = ladder.descend(
@@ -282,7 +283,7 @@ TEST(LadderKeysDescend, ReportsPruningInPreferenceToTheEraFloor) {
 
 TEST(LadderKeysDescend, EnforcesTheWalkBound) {
     const EpochHistory history = runEpochs(64, 1, false);
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(64, keyOf(history, 64, 1));
     const DescentResult result = ladder.descend(64, 1, history.rungs, history.registry, 1, std::nullopt, /*maxWalk*/ 5);
@@ -303,7 +304,7 @@ TEST(LadderKeysDescend, SECURITY_DetectsASubstitutedRung) {
         }
     }
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(8, keyOf(history, 8, 1));
     const DescentResult result = ladder.descend(8, 7, history.rungs, history.registry);
@@ -322,7 +323,7 @@ TEST(LadderKeysDescend, SECURITY_RoutesAroundACorruptedUnitRungViaASkip) {
             rung.blob = "corrupted";
         }
     }
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(8, keyOf(history, 8, 1));
 
@@ -347,7 +348,7 @@ TEST(LadderKeysDescend, SECURITY_IgnoresAnUpwardRung) {
     history.rungs.push_back(upward);
     history.registry.push_back(EpochRegistryEntry{9, future.getPublicKey()});
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(5, keyOf(history, 5, 1));
     ASSERT_EQ(ladder.descend(5, 4, history.rungs, history.registry).failure, DescentFailure::None);
@@ -375,7 +376,7 @@ TEST(LadderKeysDescend, SECURITY_RemovedMemberCannotWalkForward) {
     }
 
     // And a descent cannot be started from an epoch they do not hold.
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     for (std::uint32_t held = 1; held <= removedAfter; ++held) {
         store.putGrantKey(held, keyOf(history, held, 1));
@@ -391,7 +392,7 @@ TEST(LadderKeysDescend, ANewcomerReachesOldEpochsWithNothingWrappedToThem) {
     const EpochHistory history = runEpochs(12, 1);
 
     // The newcomer is handed exactly one thing: the current epoch key, through the tree.
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(12, keyOf(history, 12, 1));
 
@@ -415,7 +416,7 @@ TEST(LadderKeysEras, ALinkAddressedToAUserUnlocksTheClosedEra) {
     const PrivateKey member = PrivateKey::generateRandom();
     const PrivateKey signer = PrivateKey::generateRandom();
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const std::vector<ArchiveRung> links = ladder.buildEraLinks(
         10, keyOf(closed, 10, 1), {EraLinkRecipient{RungRecipientKind::User, "bob", member.getPublicKey()}}, AUTHOR,
@@ -441,7 +442,7 @@ TEST(LadderKeysEras, ALinkAddressedToAGroupCostsOneCiphertextForEveryone) {
     const PrivateKey entitlementGroupKey = PrivateKey::generateRandom();
     const PrivateKey signer = PrivateKey::generateRandom();
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const std::vector<ArchiveRung> links = ladder.buildEraLinks(
         6, keyOf(closed, 6, 1),
@@ -462,7 +463,7 @@ TEST(LadderKeysEras, WithoutALinkTheBoundaryHolds) {
     const PrivateKey signer = PrivateKey::generateRandom();
     const PrivateKey entitled = PrivateKey::generateRandom();
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const std::vector<ArchiveRung> links = ladder.buildEraLinks(
         6, keyOf(closed, 6, 1), {EraLinkRecipient{RungRecipientKind::User, "bob", entitled.getPublicKey()}}, AUTHOR,
@@ -478,7 +479,7 @@ TEST(LadderKeysEras, WithoutALinkTheBoundaryHolds) {
 }
 
 TEST(LadderKeysEras, RejectsAnEraLinkAddressedToAnEpoch) {
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const PrivateKey key = PrivateKey::generateRandom();
     EXPECT_THROW(
@@ -501,7 +502,7 @@ TEST(LadderKeysEras, SECURITY_DetectsATamperedEraLink) {
     forged.blob = TreeKeys::wrapKey(impostor, member.getPublicKey(), signer);
     forged.author = "mallory";
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     const DescentResult result = ladder.crossEraBoundary({forged}, "bob", member, {}, closed.registry);
     EXPECT_EQ(result.failure, DescentFailure::Tampered);
@@ -531,7 +532,7 @@ TEST(LadderKeysRegistry, SECURITY_RefusesAKeyForAnUnknownEpoch) {
             pruned.push_back(entry);
         }
     }
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(8, keyOf(history, 8, 1));
     const DescentResult result = ladder.descend(8, 7, history.rungs, pruned);

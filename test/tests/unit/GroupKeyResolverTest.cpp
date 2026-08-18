@@ -85,7 +85,7 @@ Fixture buildFixture(std::uint32_t memberCount) {
     Fixture fixture;
     fixture.members = makeMembers(memberCount);
 
-    TreeKeyStore buildStore;
+    TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
     const BuildPlan plan = builder.build(publicOf(fixture.members), fixture.members[0].priv);
     fixture.grantKey = plan.grantKey;
@@ -138,7 +138,7 @@ TEST(ResolverDetection, AGroupWithoutTreeFieldsIsFlat) {
     flat.keyVersion = 1;
     EXPECT_FALSE(GroupKeyResolver::hasTree(flat));
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(flat, 0, PrivateKey::generateRandom());
     EXPECT_EQ(result.failure, ResolveFailure::NoTree)
@@ -242,7 +242,7 @@ TEST(ResolverCurrentEpoch, EveryMemberResolvesTheGrantKey) {
         Fixture fixture = buildFixture(count);
         for (std::uint32_t position = 0; position < count; ++position) {
             asCaller(fixture.group, position);
-            TreeKeyStore store;
+            TreeKeyCache store;
             GroupKeyResolver resolver(store);
             const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[position].priv);
             ASSERT_EQ(result.failure, ResolveFailure::None) << "count=" << count << " pos=" << position;
@@ -255,7 +255,7 @@ TEST(ResolverCurrentEpoch, EveryMemberResolvesTheGrantKey) {
 TEST(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
     Fixture fixture = buildFixture(4);
     asCaller(fixture.group, 1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult byZero = resolver.resolve(fixture.group, 0, fixture.members[1].priv);
     const ResolveResult byOne = resolver.resolve(fixture.group, 1, fixture.members[1].priv);
@@ -267,7 +267,7 @@ TEST(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
 TEST(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
     const Fixture fixture = buildFixture(4);
     // ownLeafPosition deliberately unset: the bridge did not point at a leaf for this caller.
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
     EXPECT_EQ(result.failure, ResolveFailure::ClimbFailed);
@@ -277,7 +277,7 @@ TEST(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
 TEST(ResolverCurrentEpoch, AnOutOfRangeLeafPositionIsRejected) {
     Fixture fixture = buildFixture(4);
     asCaller(fixture.group, 99);
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     EXPECT_EQ(resolver.resolve(fixture.group, 0, fixture.members[0].priv).climb, ClimbFailure::NotAMember);
 }
@@ -285,7 +285,7 @@ TEST(ResolverCurrentEpoch, AnOutOfRangeLeafPositionIsRejected) {
 TEST(ResolverCurrentEpoch, AWrongKeyForTheGivenLeafFails) {
     Fixture fixture = buildFixture(4);
     asCaller(fixture.group, 0);
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     // Pointed at member 0's leaf but holding member 1's key.
     const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[1].priv);
@@ -309,7 +309,7 @@ TEST(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
     }
     fixture.group.treeEdges = edges;
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
     EXPECT_EQ(result.failure, ResolveFailure::ClimbFailed);
@@ -328,7 +328,7 @@ std::vector<PrivateKey> advanceEpochs(Fixture& fixture, std::uint32_t upTo) {
     std::vector<server::GroupArchiveRung> wireRungs;
     std::vector<server::GroupKeyHistoryEntry> history;
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(1, fixture.grantKey);
     const PrivateKey signer = fixture.members[0].priv;
@@ -382,7 +382,7 @@ TEST(ResolverOldEpoch, ClimbsThenDescendsToReachAnOlderEpoch) {
     asCaller(fixture.group, 2);
 
     for (const std::uint32_t target : {1u, 5u, 8u, 11u, 12u}) {
-        TreeKeyStore store;
+        TreeKeyCache store;
         GroupKeyResolver resolver(store);
         const ResolveResult result =
             resolver.resolve(fixture.group, static_cast<std::int64_t>(target), fixture.members[2].priv);
@@ -417,7 +417,7 @@ TEST(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
             parentGeneration = node.generation;
         }
     }
-    TreeKeyStore adderStore;
+    TreeKeyCache adderStore;
     TreeKeys adder(adderStore);
     ASSERT_EQ(
         adder.climbToGrantKey(state, fixture.members[2].userId, fixture.members[2].priv).failure,
@@ -436,7 +436,7 @@ TEST(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
     fixture.group.treeEdges = edges;
     asCaller(fixture.group, 3);
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 1, newcomer.priv);
     ASSERT_EQ(result.failure, ResolveFailure::None);
@@ -454,7 +454,7 @@ TEST(ResolverOldEpoch, StopsAtAnEraFloorAndReportsIt) {
     fixture.group.eraFloor = 8;
     asCaller(fixture.group, 1);
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[1].priv);
     EXPECT_EQ(result.failure, ResolveFailure::DescentFailed);
@@ -469,7 +469,7 @@ TEST(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
     fixture.group.archivePrunedBelow = 9;
     asCaller(fixture.group, 1);
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[1].priv);
     EXPECT_EQ(result.descent, DescentFailure::Pruned)
@@ -492,11 +492,43 @@ TEST(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     }
     fixture.group.archiveRungs = rungs;
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 7, fixture.members[1].priv);
     EXPECT_EQ(result.failure, ResolveFailure::DescentFailed);
     EXPECT_EQ(result.descent, DescentFailure::Tampered);
     ASSERT_TRUE(result.blame.has_value());
     EXPECT_EQ(result.blame.value(), "mallory");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// caching — the seam GroupApiImpl::resolveGroupPrivKey actually calls on every read
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) {
+    // GroupApiImpl keeps one TreeKeyCache alive per group for the whole connection and passes it into every
+    // resolve() call. Every other test in this file hands resolve() a fresh cache, which proves resolve() is
+    // correct but never proves it is cache-backed. This reuses one cache across two calls, then makes a real
+    // second climb impossible (no edges left), so a pass can only mean the cached grant key answered it.
+    Fixture fixture = buildFixture(8);
+    asCaller(fixture.group, 0);
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+
+    const ResolveResult first = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
+    ASSERT_EQ(first.failure, ResolveFailure::None);
+    ASSERT_TRUE(first.key.has_value());
+    ASSERT_EQ(store.nodeKeyCount(), 3u) << "depth(8) == 3 nodes on the direct path, cached by the first climb";
+
+    // Drop the node keys and strip the tree edges: a real second climb is now impossible.
+    store.clearNodeKeys();
+    fixture.group.treeEdges = std::vector<server::GroupTreeEdge>{};
+
+    const ResolveResult second = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
+    EXPECT_EQ(second.failure, ResolveFailure::None)
+        << "resolve() tried to re-climb instead of using the cached grant key, and there was nothing left to "
+           "climb with";
+    ASSERT_TRUE(second.key.has_value());
+    EXPECT_EQ(second.key->toWIF(), first.key->toWIF());
+    EXPECT_EQ(store.nodeKeyCount(), 0u) << "a real cache hit recovers no node key";
 }

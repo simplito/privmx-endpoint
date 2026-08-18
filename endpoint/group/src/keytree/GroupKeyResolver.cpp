@@ -15,7 +15,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::group::keytree;
 
-GroupKeyResolver::GroupKeyResolver(TreeKeyStore& store) : _store(store) {}
+GroupKeyResolver::GroupKeyResolver(TreeKeyCache& cache) : _cache(cache) {}
 
 bool GroupKeyResolver::hasTree(const server::GroupInfo& group) {
     return group.numLeaves.has_value() && group.numLeaves.value() > 0 && group.treeNodes.has_value()
@@ -216,7 +216,7 @@ ResolveResult GroupKeyResolver::resolveWith(
 
     // Step 1: climb to the current epoch's grant key. Every recovered node key is verified against the public
     // key the server published for that node, so a corrupted edge fails loudly instead of yielding a wrong key.
-    TreeKeys tree(_store);
+    TreeKeys tree(_cache);
     const ClimbResult climb = tree.climbToGrantKey(state, identity.value(), ownUserKey);
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
@@ -229,7 +229,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     }
 
     // Step 2: descend the ladder. Verification against the epoch registry happens at every hop.
-    LadderKeys ladder(_store);
+    LadderKeys ladder(_cache);
     const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor, prunedBelow);
     if (descent.failure != DescentFailure::None || !descent.key.has_value()) {
         result.failure = ResolveFailure::DescentFailed;

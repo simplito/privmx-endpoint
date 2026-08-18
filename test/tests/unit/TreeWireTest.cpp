@@ -69,7 +69,7 @@ std::vector<TreeMember> publicOf(const std::vector<Member>& members) {
 /** A tree-backed group, with the store that holds the builder's node keys. */
 struct Fixture {
     std::vector<Member> members;
-    TreeKeyStore store;
+    TreeKeyCache store;
     server::GroupTreeState tree;
     TreeGroupState state;
     PrivateKey grantKey;
@@ -97,7 +97,7 @@ std::shared_ptr<Fixture> build(std::uint32_t count, std::uint32_t epoch = 1) {
 /** Whether the given member can climb the state to the grant key, from a store holding nothing. */
 bool canClimb(const server::GroupTreeState& tree, std::uint32_t epoch, const privmx::crypto::PublicKey& grantPub,
               const Member& member) {
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys tree_keys(store);
     const TreeGroupState state = TreeWire::toRuntime(tree, epoch, grantPub);
     const ClimbResult climb = tree_keys.climbToGrantKey(state, member.userId, member.priv, false);

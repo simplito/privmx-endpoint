@@ -23,10 +23,12 @@ limitations under the License.
 #include <gtest/gtest.h>
 
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
+#include <privmx/endpoint/group/keytree/TreeKeyCache.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 
@@ -148,7 +150,7 @@ TEST(TreeKeysPrimitives, GarbageBlobIsRejectedNotCrashed) {
 TEST(TreeKeysBuild, CostsTwoTimesLeavesMinusOnePlusGrantEdge) {
     for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 8u}) {
         const std::vector<TestMember> members = makeMembers(count);
-        TreeKeyStore store;
+        TreeKeyCache store;
         TreeKeys keys(store);
         const BuildPlan plan = keys.build(publicOf(members), members[0].priv);
         const std::uint32_t expected = count == 1 ? 1 : 2 * (count - 1) + 1;
@@ -158,7 +160,7 @@ TEST(TreeKeysBuild, CostsTwoTimesLeavesMinusOnePlusGrantEdge) {
 }
 
 TEST(TreeKeysBuild, RejectsAnEmptyMemberList) {
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     EXPECT_THROW(keys.build({}, PrivateKey::generateRandom()), std::invalid_argument);
 }
@@ -166,13 +168,13 @@ TEST(TreeKeysBuild, RejectsAnEmptyMemberList) {
 TEST(TreeKeysClimb, EveryMemberReachesTheGrantKey) {
     for (const std::uint32_t count : {2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u}) {
         const std::vector<TestMember> members = makeMembers(count);
-        TreeKeyStore buildStore;
+        TreeKeyCache buildStore;
         TreeKeys builder(buildStore);
         const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
         const TreeGroupState state = stateFromBuild(plan, members);
 
         for (const TestMember& member : members) {
-            TreeKeyStore store;
+            TreeKeyCache store;
             TreeKeys keys(store);
             const ClimbResult result = keys.climbToGrantKey(state, member.userId, member.priv);
             ASSERT_EQ(result.failure, ClimbFailure::None) << "count=" << count << " member=" << member.userId;
@@ -185,12 +187,12 @@ TEST(TreeKeysClimb, EveryMemberReachesTheGrantKey) {
 
 TEST(TreeKeysClimb, CachesEveryIntermediateKeySoASecondClimbIsFree) {
     const std::vector<TestMember> members = makeMembers(8);
-    TreeKeyStore buildStore;
+    TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
     const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
     const TreeGroupState state = stateFromBuild(plan, members);
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     ASSERT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
     // depth(8) == 3 nodes on the direct path, all cached on the way up.
@@ -205,11 +207,11 @@ TEST(TreeKeysClimb, CachesEveryIntermediateKeySoASecondClimbIsFree) {
 
 TEST(TreeKeysClimb, ANonMemberCannotClimb) {
     const std::vector<TestMember> members = makeMembers(4);
-    TreeKeyStore buildStore;
+    TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
     const TreeGroupState state = stateFromBuild(builder.build(publicOf(members), members[0].priv), members);
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const PrivateKey outsider = PrivateKey::generateRandom();
     const ClimbResult result = keys.climbToGrantKey(state, "stranger", outsider);
@@ -219,12 +221,12 @@ TEST(TreeKeysClimb, ANonMemberCannotClimb) {
 
 TEST(TreeKeysClimb, SingleMemberGroupClimbsStraightToTheGrantKey) {
     const std::vector<TestMember> members = makeMembers(1);
-    TreeKeyStore buildStore;
+    TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
     const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
     const TreeGroupState state = stateFromBuild(plan, members);
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const ClimbResult result = keys.climbToGrantKey(state, members[0].userId, members[0].priv);
     ASSERT_EQ(result.failure, ClimbFailure::None);
@@ -234,7 +236,7 @@ TEST(TreeKeysClimb, SingleMemberGroupClimbsStraightToTheGrantKey) {
 /** SECURITY — a corrupted edge must be detected, never allowed to yield a wrong key silently. */
 TEST(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
     const std::vector<TestMember> members = makeMembers(4);
-    TreeKeyStore buildStore;
+    TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
     TreeGroupState state = stateFromBuild(builder.build(publicOf(members), members[0].priv), members);
 
@@ -246,7 +248,7 @@ TEST(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
         }
     }
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const ClimbResult result = keys.climbToGrantKey(state, members[0].userId, members[0].priv);
     EXPECT_EQ(result.failure, ClimbFailure::Tampered);
@@ -257,7 +259,7 @@ TEST(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
 
 TEST(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     const std::vector<TestMember> members = makeMembers(4);
-    TreeKeyStore buildStore;
+    TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
     TreeGroupState state = stateFromBuild(builder.build(publicOf(members), members[0].priv), members);
 
@@ -271,7 +273,7 @@ TEST(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     }
     state.edges = pruned;
 
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     EXPECT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::MissingEdge);
 }
@@ -282,7 +284,7 @@ TEST(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
 
 TEST(TreeKeysRemoval, CostsTwoTimesDepthMinusOnePlusGrantEdge) {
     const std::vector<TestMember> members = makeMembers(8);
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const BuildPlan plan = keys.build(publicOf(members), members[0].priv);
     const TreeGroupState state = stateFromBuild(plan, members);
@@ -298,7 +300,7 @@ TEST(TreeKeysRemoval, CostsTwoTimesDepthMinusOnePlusGrantEdge) {
 
 TEST(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
     const std::vector<TestMember> members = makeMembers(8);
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
     keys.setMemberKeys(publicOf(members));
@@ -313,7 +315,7 @@ TEST(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
 
 TEST(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
     const std::vector<TestMember> members = makeMembers(4);
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const BuildPlan plan = keys.build(publicOf(members), members[0].priv);
     const TreeGroupState state = stateFromBuild(plan, members);
@@ -332,7 +334,7 @@ TEST(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
 
 TEST(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
     const std::vector<TestMember> members = makeMembers(1);
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
     keys.setMemberKeys(publicOf(members));
@@ -341,7 +343,7 @@ TEST(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
 
 TEST(TreeKeysRemoval, RejectsANonMember) {
     const std::vector<TestMember> members = makeMembers(4);
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
     keys.setMemberKeys(publicOf(members));
@@ -356,7 +358,7 @@ TEST(TreeKeysRemoval, RejectsANonMember) {
 TEST(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesNot) {
     for (const std::uint32_t count : {2u, 4u, 5u, 8u}) {
         const std::vector<TestMember> members = makeMembers(count);
-        TreeKeyStore ownerStore;
+        TreeKeyCache ownerStore;
         TreeKeys owner(ownerStore);
         const BuildPlan plan = owner.build(publicOf(members), members[0].priv);
         TreeGroupState state = stateFromBuild(plan, members);
@@ -370,7 +372,7 @@ TEST(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesNot
         applyRemoval(state, removal, leaving);
 
         for (const TestMember& member : members) {
-            TreeKeyStore store;
+            TreeKeyCache store;
             TreeKeys keys(store);
             const ClimbResult result = keys.climbToGrantKey(state, member.userId, member.priv);
             if (member.userId == leaving) {
@@ -389,7 +391,7 @@ TEST(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesNot
 /** SECURITY — the removed member's old keys must not open anything in the new epoch. */
 TEST(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
     const std::vector<TestMember> members = makeMembers(8);
-    TreeKeyStore ownerStore;
+    TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
     const BuildPlan plan = owner.build(publicOf(members), members[0].priv);
     TreeGroupState state = stateFromBuild(plan, members);
@@ -397,7 +399,7 @@ TEST(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
     owner.setMemberKeys(publicOf(members));
 
     // Capture what the leaving member held before the removal.
-    TreeKeyStore leaverStore;
+    TreeKeyCache leaverStore;
     TreeKeys leaver(leaverStore);
     ASSERT_EQ(leaver.climbToGrantKey(state, members[7].userId, members[7].priv).failure, ClimbFailure::None);
     const std::vector<std::uint32_t> hadPath = TreeMath::directPath(7, 8);
@@ -427,7 +429,7 @@ TEST(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
 /** SECURITY — collusion: two members removed at different times must not pool their way in. */
 TEST(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing) {
     const std::vector<TestMember> members = makeMembers(8);
-    TreeKeyStore ownerStore;
+    TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
     TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
     ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
@@ -443,7 +445,7 @@ TEST(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing) {
 
     // Neither alone nor together can they climb in the current epoch.
     for (const std::uint32_t idx : {6u, 7u}) {
-        TreeKeyStore store;
+        TreeKeyCache store;
         TreeKeys keys(store);
         EXPECT_NE(keys.climbToGrantKey(state, members[idx].userId, members[idx].priv).failure, ClimbFailure::None)
             << "member " << idx;
@@ -466,7 +468,7 @@ TEST(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing) {
 
 TEST(TreeKeysAddition, FillingABlankCostsOneWrapAndDoesNotRotate) {
     const std::vector<TestMember> members = makeMembers(4);
-    TreeKeyStore ownerStore;
+    TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
     const BuildPlan plan = owner.build(publicOf(members), members[0].priv);
     TreeGroupState state = stateFromBuild(plan, members);
@@ -492,7 +494,7 @@ TEST(TreeKeysAddition, FillingABlankCostsOneWrapAndDoesNotRotate) {
     // The newcomer can now climb: the epoch and grant key are untouched by the addition.
     state.leafAssignment[1] = newcomer.userId;
     state.edges.insert(state.edges.end(), addition.edges.begin(), addition.edges.end());
-    TreeKeyStore store;
+    TreeKeyCache store;
     TreeKeys keys(store);
     const ClimbResult result = keys.climbToGrantKey(state, newcomer.userId, newcomer.priv);
     ASSERT_EQ(result.failure, ClimbFailure::None);
@@ -512,17 +514,294 @@ TEST(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
 
 TEST(TreeKeysAddition, RequiresTheParentKeyAndSaysSo) {
     const std::vector<TestMember> members = makeMembers(4);
-    TreeKeyStore ownerStore;
+    TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
     TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
     state.leafAssignment[1] = std::nullopt;
 
     // A fresh store holds no node keys, so the addition cannot be prepared without climbing first.
-    TreeKeyStore emptyStore;
+    TreeKeyCache emptyStore;
     TreeKeys keys(emptyStore);
     const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
     EXPECT_THROW(
         keys.planAddition(state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv),
         std::invalid_argument
     );
+}
+
+TEST(TreeKeysAddition, SECURITY_RejectsANodeKeyThatDoesNotMatchThePublishedOne) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    state.leafAssignment[1] = std::nullopt;
+
+    // A key for the right (node, generation) slot, but not the key the state publishes for that node — the shape
+    // a cross-group collision used to produce. Wrapping it would seat the newcomer on an edge nobody can open,
+    // and their failure would surface much later as `Tampered`.
+    const std::uint32_t parentIndex = TreeMath::parent(TreeMath::leafNode(1), state.numLeaves);
+    TreeKeyCache poisoned;
+    for (const TreeNodeState& node : state.nodes) {
+        if (node.nodeIndex == parentIndex) {
+            poisoned.putNodeKey(parentIndex, node.generation, PrivateKey::generateRandom());
+        }
+    }
+
+    TreeKeys keys(poisoned);
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    EXPECT_THROW(
+        keys.planAddition(state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv),
+        std::invalid_argument
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TreeKeyCache — the cache itself
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(TreeKeyCacheBasics, PutOverwritesInPlace) {
+    const PrivateKey first = PrivateKey::generateRandom();
+    const PrivateKey second = PrivateKey::generateRandom();
+
+    TreeKeyCache store;
+    store.putNodeKey(1, 0, first);
+    store.putNodeKey(1, 0, second);
+    ASSERT_TRUE(store.getNodeKey(1, 0).has_value());
+    EXPECT_EQ(store.getNodeKey(1, 0)->toWIF(), second.toWIF());
+    EXPECT_EQ(store.nodeKeyCount(), 1u) << "same slot, not a second entry";
+
+    store.putGrantKey(1, first);
+    store.putGrantKey(1, second);
+    ASSERT_TRUE(store.getGrantKey(1).has_value());
+    EXPECT_EQ(store.getGrantKey(1)->toWIF(), second.toWIF());
+}
+
+TEST(TreeKeyCacheBasics, GenerationIsPartOfTheNodeKeyIdentity) {
+    const PrivateKey oldKey = PrivateKey::generateRandom();
+    const PrivateKey refreshed = PrivateKey::generateRandom();
+
+    TreeKeyCache store;
+    store.putNodeKey(1, 0, oldKey);
+    store.putNodeKey(1, 1, refreshed);
+    EXPECT_EQ(store.nodeKeyCount(), 2u) << "a refresh makes the old key a different key";
+    EXPECT_EQ(store.getNodeKey(1, 0)->toWIF(), oldKey.toWIF());
+    EXPECT_EQ(store.getNodeKey(1, 1)->toWIF(), refreshed.toWIF());
+}
+
+TEST(TreeKeyCacheBasics, HighestGrantEpochReportsTheLargestCached) {
+    TreeKeyCache store;
+    EXPECT_FALSE(store.highestGrantEpoch().has_value());
+
+    store.putGrantKey(1, PrivateKey::generateRandom());
+    store.putGrantKey(7, PrivateKey::generateRandom());
+    store.putGrantKey(3, PrivateKey::generateRandom());
+    ASSERT_TRUE(store.highestGrantEpoch().has_value());
+    EXPECT_EQ(store.highestGrantEpoch().value(), 7u) << "largest, not last written";
+}
+
+TEST(TreeKeyCacheBasics, ClearNodeKeysKeepsGrantKeys) {
+    TreeKeyCache store;
+    store.putNodeKey(1, 0, PrivateKey::generateRandom());
+    store.putGrantKey(4, PrivateKey::generateRandom());
+
+    store.clearNodeKeys();
+    EXPECT_EQ(store.nodeKeyCount(), 0u);
+    // A removal kills the node generations but not the epoch keys: `buildRungs` still needs the older ones.
+    EXPECT_TRUE(store.getGrantKey(4).has_value());
+}
+
+TEST(TreeKeyCacheBasics, ForgetGrantKeyRemovesOnlyThatEpoch) {
+    TreeKeyCache store;
+    store.putGrantKey(1, PrivateKey::generateRandom());
+    store.putGrantKey(2, PrivateKey::generateRandom());
+    store.putNodeKey(1, 0, PrivateKey::generateRandom());
+
+    store.forgetGrantKey(1);
+    EXPECT_FALSE(store.getGrantKey(1).has_value());
+    EXPECT_TRUE(store.getGrantKey(2).has_value());
+    EXPECT_EQ(store.nodeKeyCount(), 1u);
+}
+
+TEST(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
+    // Worth most under TSan; without a sanitiser this is a smoke test that the locking does not deadlock.
+    TreeKeyCache store;
+    const PrivateKey anchor = PrivateKey::generateRandom();
+    store.putGrantKey(99, anchor);
+
+    std::vector<std::thread> threads;
+    for (std::uint32_t t = 0; t < 4; ++t) {
+        threads.emplace_back([&store, t]() {
+            for (std::uint32_t i = 0; i < 200; ++i) {
+                store.putNodeKey(t, i, PrivateKey::generateRandom());
+                (void)store.getNodeKey(t, i);
+                (void)store.getGrantKey(99);
+                (void)store.highestGrantEpoch();
+                if (i % 50 == 0) {
+                    store.clearNodeKeys();
+                }
+            }
+        });
+    }
+    for (std::thread& thread : threads) {
+        thread.join();
+    }
+    ASSERT_TRUE(store.getGrantKey(99).has_value()) << "clearNodeKeys must never touch the grant keys";
+    EXPECT_EQ(store.getGrantKey(99)->toWIF(), anchor.toWIF());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TreeKeyCacheRegistry — one store per group
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(TreeKeyCacheRegistryTest, SECURITY_GivesEachGroupItsOwnStore) {
+    // The whole bug in one assertion: two groups both at epoch 1, sharing one registry, must not see each other's
+    // grant key. Node indices and epochs are small integers that every group reuses from 1.
+    const PrivateKey keyA = PrivateKey::generateRandom();
+    const PrivateKey keyB = PrivateKey::generateRandom();
+
+    TreeKeyCacheRegistry registry;
+    registry.get("groupA")->putGrantKey(1, keyA);
+    registry.get("groupB")->putGrantKey(1, keyB);
+
+    EXPECT_EQ(registry.get("groupA")->getGrantKey(1)->toWIF(), keyA.toWIF());
+    EXPECT_EQ(registry.get("groupB")->getGrantKey(1)->toWIF(), keyB.toWIF());
+    EXPECT_NE(registry.get("groupA")->getGrantKey(1)->toWIF(), keyB.toWIF());
+
+    registry.get("groupA")->putNodeKey(1, 0, keyA);
+    registry.get("groupB")->putNodeKey(1, 0, keyB);
+    EXPECT_EQ(registry.get("groupA")->getNodeKey(1, 0)->toWIF(), keyA.toWIF());
+    EXPECT_EQ(registry.get("groupB")->getNodeKey(1, 0)->toWIF(), keyB.toWIF());
+}
+
+TEST(TreeKeyCacheRegistryTest, ReturnsTheSameStoreForTheSameGroup) {
+    TreeKeyCacheRegistry registry;
+    EXPECT_EQ(registry.get("g").get(), registry.get("g").get());
+    EXPECT_EQ(registry.groupCount(), 1u);
+}
+
+TEST(TreeKeyCacheRegistryTest, DropDetachesWithoutInvalidatingAHeldHandle) {
+    TreeKeyCacheRegistry registry;
+    const auto held = registry.get("g");
+    held->putGrantKey(1, PrivateKey::generateRandom());
+
+    registry.drop("g");
+    // The handle a mid-flight climb is holding stays alive and writable — it is simply nobody else's any more.
+    EXPECT_NO_THROW(held->putGrantKey(2, PrivateKey::generateRandom()));
+    EXPECT_TRUE(held->getGrantKey(1).has_value());
+
+    const auto fresh = registry.get("g");
+    EXPECT_NE(fresh.get(), held.get()) << "the group starts over with an empty store";
+    EXPECT_FALSE(fresh->getGrantKey(1).has_value());
+}
+
+TEST(TreeKeyCacheRegistryTest, DropIsScopedToOneGroup) {
+    TreeKeyCacheRegistry registry;
+    const auto storeB = registry.get("groupB");
+    storeB->putGrantKey(1, PrivateKey::generateRandom());
+    registry.get("groupA")->putGrantKey(1, PrivateKey::generateRandom());
+
+    registry.drop("groupA");
+    EXPECT_EQ(registry.get("groupB").get(), storeB.get()) << "same store, untouched";
+    EXPECT_TRUE(registry.get("groupB")->getGrantKey(1).has_value());
+}
+
+TEST(TreeKeyCacheRegistryTest, DropAllClearsEveryGroup) {
+    TreeKeyCacheRegistry registry;
+    registry.get("a")->putGrantKey(1, PrivateKey::generateRandom());
+    registry.get("b")->putGrantKey(1, PrivateKey::generateRandom());
+    ASSERT_EQ(registry.groupCount(), 2u);
+
+    registry.dropAll();
+    EXPECT_EQ(registry.groupCount(), 0u);
+    EXPECT_FALSE(registry.get("a")->getGrantKey(1).has_value());
+}
+
+TEST(TreeKeyCacheRegistryTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
+    // Get-or-create has to be atomic: two stores for one group means one of them silently absorbs climbs nobody
+    // ever reads back.
+    TreeKeyCacheRegistry registry;
+    std::vector<std::thread> threads;
+    std::vector<TreeKeyCache*> seen(8, nullptr);
+    for (std::size_t t = 0; t < seen.size(); ++t) {
+        threads.emplace_back([&registry, &seen, t]() { seen[t] = registry.get("g").get(); });
+    }
+    for (std::thread& thread : threads) {
+        thread.join();
+    }
+    for (const TreeKeyCache* store : seen) {
+        EXPECT_EQ(store, seen.front());
+    }
+    EXPECT_EQ(registry.groupCount(), 1u);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The cache-hit path must verify, not just hit
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(TreeKeysClimb, SECURITY_ACachedGrantKeyThatDoesNotMatchThePublishedOneIsNotServed) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache buildStore;
+    TreeKeys builder(buildStore);
+    const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
+    const TreeGroupState state = stateFromBuild(plan, members);
+
+    // Exactly what a cross-group collision looked like: some other group's epoch-1 key sitting in this slot.
+    TreeKeyCache store;
+    store.putGrantKey(state.epoch, PrivateKey::generateRandom());
+
+    TreeKeys keys(store);
+    const ClimbResult result = keys.climbToGrantKey(state, members[0].userId, members[0].priv);
+
+    ASSERT_EQ(result.failure, ClimbFailure::None) << "a stale cache entry self-heals; it is not an attack";
+    ASSERT_TRUE(result.grantKey.has_value());
+    EXPECT_EQ(result.grantKey->getPublicKey(), plan.grantKey.getPublicKey())
+        << "the impostor must be ignored and the real key recovered by climbing";
+    ASSERT_TRUE(store.getGrantKey(state.epoch).has_value());
+    EXPECT_EQ(store.getGrantKey(state.epoch)->toWIF(), plan.grantKey.toWIF())
+        << "the impostor must be evicted, not merely bypassed";
+}
+
+TEST(TreeKeysClimb, AMatchingCachedGrantKeyStillShortCircuitsTheWalk) {
+    const std::vector<TestMember> members = makeMembers(8);
+    TreeKeyCache buildStore;
+    TreeKeys builder(buildStore);
+    const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
+    const TreeGroupState state = stateFromBuild(plan, members);
+
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    ASSERT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    // Drop the node keys but keep the grant key: if the second climb really short-circuits, it recovers no node
+    // key on the way and the count stays at zero. Counting equality alone would also pass if it re-walked.
+    store.clearNodeKeys();
+    const ClimbResult again = keys.climbToGrantKey(state, members[0].userId, members[0].priv);
+    EXPECT_EQ(again.failure, ClimbFailure::None);
+    EXPECT_EQ(store.nodeKeyCount(), 0u) << "verification must not cost the short-circuit";
+}
+
+TEST(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
+    // The unscoped-cache bug, reproduced at the climb level: two independent groups, both epoch 1. Even sharing a
+    // store, the verification on the hit path keeps each climb honest.
+    const std::vector<TestMember> membersA = makeMembers(4);
+    const std::vector<TestMember> membersB = makeMembers(4);
+    TreeKeyCache buildStoreA, buildStoreB;
+    TreeKeys builderA(buildStoreA), builderB(buildStoreB);
+    const BuildPlan planA = builderA.build(publicOf(membersA), membersA[0].priv);
+    const BuildPlan planB = builderB.build(publicOf(membersB), membersB[0].priv);
+    const TreeGroupState stateA = stateFromBuild(planA, membersA);
+    const TreeGroupState stateB = stateFromBuild(planB, membersB);
+    ASSERT_EQ(stateA.epoch, stateB.epoch);
+    ASSERT_NE(planA.grantKey.toWIF(), planB.grantKey.toWIF());
+
+    TreeKeyCache shared;
+    TreeKeys keys(shared);
+    const ClimbResult a = keys.climbToGrantKey(stateA, membersA[0].userId, membersA[0].priv);
+    ASSERT_EQ(a.failure, ClimbFailure::None);
+    EXPECT_EQ(a.grantKey->getPublicKey(), planA.grantKey.getPublicKey());
+
+    const ClimbResult b = keys.climbToGrantKey(stateB, membersB[0].userId, membersB[0].priv);
+    ASSERT_EQ(b.failure, ClimbFailure::None);
+    EXPECT_EQ(b.grantKey->getPublicKey(), planB.grantKey.getPublicKey())
+        << "group B must not be handed group A's grant key";
 }

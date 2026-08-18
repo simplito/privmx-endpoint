@@ -22,52 +22,10 @@ limitations under the License.
 using namespace privmx::endpoint::group::keytree;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TreeKeyStore
-// ─────────────────────────────────────────────────────────────────────────────
-
-void TreeKeyStore::putNodeKey(
-    std::uint32_t nodeIndex,
-    std::uint32_t generation,
-    const privmx::crypto::PrivateKey& key
-) {
-    _nodeKeys[std::make_pair(nodeIndex, generation)] = key;
-}
-
-std::optional<privmx::crypto::PrivateKey> TreeKeyStore::getNodeKey(std::uint32_t nodeIndex, std::uint32_t generation)
-    const {
-    const auto it = _nodeKeys.find(std::make_pair(nodeIndex, generation));
-    if (it == _nodeKeys.end()) {
-        return std::nullopt;
-    }
-    return it->second;
-}
-
-void TreeKeyStore::putGrantKey(std::uint32_t epoch, const privmx::crypto::PrivateKey& key) {
-    _grantKeys[epoch] = key;
-}
-
-std::optional<privmx::crypto::PrivateKey> TreeKeyStore::getGrantKey(std::uint32_t epoch) const {
-    const auto it = _grantKeys.find(epoch);
-    if (it == _grantKeys.end()) {
-        return std::nullopt;
-    }
-    return it->second;
-}
-
-std::size_t TreeKeyStore::nodeKeyCount() const {
-    return _nodeKeys.size();
-}
-
-void TreeKeyStore::clear() {
-    _nodeKeys.clear();
-    _grantKeys.clear();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // TreeKeys — primitives
 // ─────────────────────────────────────────────────────────────────────────────
 
-TreeKeys::TreeKeys(TreeKeyStore& store) : _store(store) {}
+TreeKeys::TreeKeys(TreeKeyCache& cache) : _cache(cache) {}
 
 std::string TreeKeys::wrapKey(
     const privmx::crypto::PrivateKey& keyToWrap,
@@ -173,10 +131,18 @@ ClimbResult TreeKeys::climbToGrantKey(
 ) {
     ClimbResult result;
 
-    if (const auto cached = useCache ? _store.getGrantKey(state.epoch) : std::nullopt; cached.has_value()) {
-        result.grantKey = cached;
-        result.reachedNode = TreeMath::root(state.numLeaves);
-        return result;
+    if (const auto cached = useCache ? _cache.getGrantKey(state.epoch) : std::nullopt; cached.has_value()) {
+        if (state.grantPublicKey == cached.value().getPublicKey()) {
+            result.grantKey = cached;
+            result.reachedNode = TreeMath::root(state.numLeaves);
+            return result;
+        }
+        // Not the key the server publishes for this epoch. Two things look like this: our own staleness, or a
+        // server equivocating about an epoch we already verified. Do not decide here — evict and walk. The full
+        // climb ends at the same check against `state.grantPublicKey` below, but on a key just recovered from the
+        // server's own edges, so it reports `Tampered` on real evidence. Failing here instead would wedge the
+        // group for good, because nothing else ever evicts a grant key.
+        _cache.forgetGrantKey(state.epoch);
     }
 
     const auto position = positionOf(state, ownUserId);
@@ -212,7 +178,7 @@ ClimbResult TreeKeys::climbToGrantKey(
         }
         currentNode = edge->parentIndex;
         currentKey = recovered.value();
-        _store.putNodeKey(currentNode, node->generation, currentKey);
+        _cache.putNodeKey(currentNode, node->generation, currentKey);
         result.reachedNode = currentNode;
     }
 
@@ -241,7 +207,7 @@ ClimbResult TreeKeys::climbToGrantKey(
         }
         currentNode = edge->parentIndex;
         currentKey = recovered.value();
-        _store.putNodeKey(currentNode, parentState->generation, currentKey);
+        _cache.putNodeKey(currentNode, parentState->generation, currentKey);
         result.reachedNode = currentNode;
     }
 
@@ -260,7 +226,7 @@ ClimbResult TreeKeys::climbToGrantKey(
         result.failure = ClimbFailure::Tampered;
         return result;
     }
-    _store.putGrantKey(state.epoch, grantKey.value());
+    _cache.putGrantKey(state.epoch, grantKey.value());
     result.grantKey = grantKey;
     return result;
 }
@@ -356,8 +322,11 @@ AdditionPlan TreeKeys::planAddition(
         if (parentState == nullptr) {
             throw std::invalid_argument("tree state is missing node " + std::to_string(parentIndex));
         }
-        const auto parentKey = _store.getNodeKey(parentIndex, parentState->generation);
-        if (!parentKey.has_value()) {
+        const auto parentKey = _cache.getNodeKey(parentIndex, parentState->generation);
+        // A cached key that does not match the node's published key is not this node's key. Treating it as absent
+        // is the safe reading: the alternative is wrapping it to the newcomer, who then cannot climb, and whose
+        // failure surfaces as `Tampered` far from the cause.
+        if (!parentKey.has_value() || !(parentState->publicKey == parentKey.value().getPublicKey())) {
             throw std::invalid_argument(
                 "adding a member needs the key of node " + std::to_string(parentIndex) + "; climb the tree first"
             );
@@ -395,8 +364,10 @@ AdditionPlan TreeKeys::planAddition(
         } else {
             const TreeNodeState* existing = findNode(state, node);
             nodeGeneration = existing->generation;
-            const auto held = _store.getNodeKey(node, nodeGeneration);
-            if (!held.has_value()) {
+            const auto held = _cache.getNodeKey(node, nodeGeneration);
+            // Same reasoning as the blank-fill branch: a key that does not match what the server publishes for
+            // this node is not this node's key, so it counts as a miss rather than as material to wrap.
+            if (!held.has_value() || !(existing->publicKey == held.value().getPublicKey())) {
                 throw std::invalid_argument(
                     "growing the tree needs the key of existing node " + std::to_string(node) + "; climb the tree first"
                 );
@@ -469,7 +440,7 @@ AdditionPlan TreeKeys::planAddition(
 
         // Re-link the grant edge to the new root. The grant keypair itself is UNCHANGED, so `grantPublicKey`
         // stays the same and no container becomes stale.
-        const auto grantKey = _store.getGrantKey(state.epoch);
+        const auto grantKey = _cache.getGrantKey(state.epoch);
         if (!grantKey.has_value()) {
             throw std::invalid_argument("re-linking the grant edge needs the grant key; climb the tree first");
         }

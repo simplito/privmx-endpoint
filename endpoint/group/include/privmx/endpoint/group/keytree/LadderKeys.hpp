@@ -18,7 +18,7 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/group/keytree/LadderTypes.hpp"
-#include "privmx/endpoint/group/keytree/TreeKeys.hpp"
+#include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -35,12 +35,12 @@ namespace keytree {
  * It is orthogonal to the key tree. A rung is wrapped to the group's **own** grant key, never to a member or a
  * tree node, so its cost does not change whether the current key is distributed flat, by tree, or by TreeKEM.
  *
- * Epoch grant keys are cached in the shared `TreeKeyStore`, so a climb and a descent feed the same cache: the
+ * Epoch grant keys are cached in the shared `TreeKeyCache`, so a climb and a descent feed the same cache: the
  * climb supplies the current epoch, the descent walks back from it.
  */
 class LadderKeys {
 public:
-    LadderKeys(TreeKeyStore& store);
+    LadderKeys(TreeKeyCache& cache);
 
     // ── Publishing ──────────────────────────────────────────────────────────
 
@@ -136,7 +136,7 @@ private:
         const std::vector<EpochRegistryEntry>& registry
     ) const;
 
-    TreeKeyStore& _store;
+    TreeKeyCache& _cache;
 };
 
 } // namespace keytree

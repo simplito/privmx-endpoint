@@ -63,7 +63,7 @@ struct ResolveResult {
  */
 class GroupKeyResolver {
 public:
-    GroupKeyResolver(TreeKeyStore& store);
+    GroupKeyResolver(TreeKeyCache& cache);
 
     /**
      * @param group       the group as served by the bridge
@@ -148,7 +148,7 @@ private:
         const std::optional<std::uint32_t>& prunedBelow
     );
 
-    TreeKeyStore& _store;
+    TreeKeyCache& _cache;
 };
 
 } // namespace keytree

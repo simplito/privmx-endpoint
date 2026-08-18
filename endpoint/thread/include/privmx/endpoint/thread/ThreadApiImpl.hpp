@@ -24,6 +24,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ServerApi.hpp"

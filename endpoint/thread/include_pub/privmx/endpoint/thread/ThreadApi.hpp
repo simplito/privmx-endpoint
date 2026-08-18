@@ -8,6 +8,7 @@
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include "privmx/endpoint/thread/Types.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 
