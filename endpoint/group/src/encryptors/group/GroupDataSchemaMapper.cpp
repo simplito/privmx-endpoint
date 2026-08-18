@@ -13,6 +13,7 @@
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/checkpoint/ChainCheckpoint.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
@@ -55,13 +56,35 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         throw GroupDataIntegrityException();
     }
 
+    // EP-10: resume from the last successfully-verified point instead of re-proving the whole chain from
+    // genesis on every call. `startIndex` stays 0 (a full from-genesis verify) whenever there is no checkpoint
+    // yet, or the server sent *fewer* entries than the checkpoint already trusted — a length regression (e.g. a
+    // rollback attempt) is never served from a checkpoint that's ahead of what's on hand; it just falls back to
+    // today's full verification of the shorter array. Rejecting a rollback outright is EP-09's job, not this
+    // one — this only guarantees the checkpoint itself never moves backward (see ChainCheckpoint::advance).
+    auto checkpointStore = _chainCheckpoints.get(groupInfo.id);
+    auto checkpoint = checkpointStore->get();
+
+    size_t startIndex = 0;
     std::set<std::string> verifiedManagers;
-    std::string prevDioStr;
+    std::set<std::string> verifiedUsers;
+    std::string runningPrevDioHashHex;
     int64_t prevKeyVersion = 0;
     std::string prevGroupPubKey;
-    int64_t finalKeyVersion = 0;
 
-    for (size_t i = 0; i < groupInfo.data.size(); ++i) {
+    if (checkpoint.has_value() && static_cast<size_t>(checkpoint->verifiedVersion) <= groupInfo.data.size()) {
+        startIndex = static_cast<size_t>(checkpoint->verifiedVersion);
+        verifiedManagers = checkpoint->verifiedManagers;
+        verifiedUsers = checkpoint->verifiedUsers;
+        runningPrevDioHashHex = checkpoint->lastEntryDioHashHex;
+        prevKeyVersion = checkpoint->keyVersionAtCheckpoint;
+        prevGroupPubKey = checkpoint->groupPubKeyAtCheckpoint;
+    }
+
+    // `i == 0` below only ever means true genesis: a resumed run's first new entry has `i == startIndex >= 1`
+    // (a checkpoint can't exist for an empty chain), so it always takes the `else` branch of every check below —
+    // no new branching needed, the existing genesis/non-genesis split already does the right thing.
+    for (size_t i = startIndex; i < groupInfo.data.size(); ++i) {
         const auto& entry = groupInfo.data[i];
         const auto& histEntry = groupInfo.history[i];
 
@@ -104,18 +127,18 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             throw GroupMembershipMismatchException();
         }
 
-        // G1: chain link
+        // G1: chain link — for a resumed run, `runningPrevDioHashHex` is the checkpoint's own anchor, so the
+        // first new entry must chain directly into it, exactly as if it were the next entry in an uninterrupted
+        // full verification.
         if (i == 0) {
             if (membership.prevEntryHash.has_value()) {
                 throw GroupChainBrokenException();
             }
         } else {
-            if (!membership.prevEntryHash.has_value() ||
-                membership.prevEntryHash.value() != privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(prevDioStr))) {
+            if (!membership.prevEntryHash.has_value() || membership.prevEntryHash.value() != runningPrevDioHashHex) {
                 throw GroupChainBrokenException();
             }
         }
-        prevDioStr = encData.dio;
 
         // G2: manager authorization
         if (i == 0) {
@@ -129,14 +152,13 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             }
         }
         verifiedManagers = std::set<std::string>(membership.managers.begin(), membership.managers.end());
+        verifiedUsers = std::set<std::string>(membership.users.begin(), membership.users.end());
 
         // Member-set cross-check vs bridge plaintext
-        auto membershipUsers = std::set<std::string>(membership.users.begin(), membership.users.end());
         auto histUsers = std::set<std::string>(histEntry.users.begin(), histEntry.users.end());
-        auto membershipMgrs = std::set<std::string>(membership.managers.begin(), membership.managers.end());
         auto histMgrs = std::set<std::string>(histEntry.managers.begin(), histEntry.managers.end());
 
-        if (membershipUsers != histUsers || membershipMgrs != histMgrs ||
+        if (verifiedUsers != histUsers || verifiedManagers != histMgrs ||
             membership.groupPubKey != histEntry.groupPubKey || membership.keyId != histEntry.keyId) {
             throw GroupMembershipMismatchException();
         }
@@ -150,7 +172,8 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             // only the tree-backed creation path makes the bridge record 1. Anything above 1 is a fabrication.
             if (thisKeyVersion > 1) throw GroupDataIntegrityException();
         } else {
-            // Non-decreasing and increments by at most 1
+            // Non-decreasing and increments by at most 1 — `prevKeyVersion` is either the previous entry visited
+            // in this call, or (for the first entry above a checkpoint) the checkpoint's own committed value.
             if (thisKeyVersion < prevKeyVersion || thisKeyVersion - prevKeyVersion > 1) {
                 throw GroupDataIntegrityException();
             }
@@ -161,22 +184,50 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         }
         prevKeyVersion = thisKeyVersion;
         prevGroupPubKey = membership.groupPubKey;
-        finalKeyVersion = thisKeyVersion;
+        runningPrevDioHashHex = privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(encData.dio));
     }
 
-    // Head consistency checks
-    const auto& lastHist = groupInfo.history.back();
-    auto finalUsers = std::set<std::string>(lastHist.users.begin(), lastHist.users.end());
+    // Head consistency checks — unconditional, always run, and always O(1): `verifiedUsers`/`verifiedManagers`/
+    // `prevGroupPubKey`/`prevKeyVersion` are either freshly computed above or (when nothing new was visited,
+    // i.e. a full checkpoint hit) exactly the checkpoint's own remembered values. They are deliberately never
+    // re-derived from `groupInfo.history.back()`: once the loop can skip already-verified entries, that field is
+    // bridge-supplied plaintext that may not have been touched by this call at all, so anchoring the head check
+    // to it instead of to verified state would let a bridge tamper it (and the matching top-level fields)
+    // consistently, with nothing here to catch it.
     auto headUsers = std::set<std::string>(groupInfo.users.begin(), groupInfo.users.end());
     auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
 
     // EP-9: cross-check bridge's top-level keyVersion == head membership's committed keyVersion
     bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() &&
-                               groupInfo.keyVersion.value() != finalKeyVersion;
-    if (finalUsers != headUsers || verifiedManagers != headManagers ||
-        groupInfo.groupPubKey != lastHist.groupPubKey || bridgeEpochMismatch) {
+                               groupInfo.keyVersion.value() != prevKeyVersion;
+    if (verifiedUsers != headUsers || verifiedManagers != headManagers ||
+        groupInfo.groupPubKey != prevGroupPubKey || bridgeEpochMismatch) {
         throw GroupDataIntegrityException();
     }
+
+    checkpointStore->advance(checkpoint::ChainCheckpoint::Snapshot{
+        .verifiedVersion = static_cast<int64_t>(groupInfo.data.size()),
+        .lastEntryDioHashHex = runningPrevDioHashHex,
+        .verifiedManagers = verifiedManagers,
+        .verifiedUsers = verifiedUsers,
+        .keyVersionAtCheckpoint = prevKeyVersion,
+        .groupPubKeyAtCheckpoint = prevGroupPubKey
+    });
+}
+
+void GroupDataSchemaMapper::dropChainCheckpoint(const std::string& groupId) {
+    _chainCheckpoints.drop(groupId);
+}
+
+void GroupDataSchemaMapper::dropAllChainCheckpoints() {
+    _chainCheckpoints.dropAll();
+}
+
+std::optional<checkpoint::ChainCheckpoint::Snapshot> GroupDataSchemaMapper::peekChainCheckpoint(
+    const std::string& groupId
+) const {
+    auto store = _chainCheckpoints.tryGet(groupId);
+    return store ? store->get() : std::nullopt;
 }
 
 uint32_t GroupDataSchemaMapper::validateDataIntegrity(const server::GroupInfo& groupInfo) {

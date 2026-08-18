@@ -624,6 +624,7 @@ void GroupApiImpl::processNotificationEvent(
         } else if (type == "groupDeleted") {
             auto raw = server::GroupDeletedEventData::fromJSON(notification.data);
             _treeKeyCaches.drop(raw.groupId);
+            _groupDataSchemaMapper->dropChainCheckpoint(raw.groupId);
             invalidateModuleKeysInCache(raw.groupId);
             auto data = Mapper::mapToGroupDeletedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupDeletedEvent>("context", data, notification);
@@ -636,6 +637,7 @@ void GroupApiImpl::processNotificationEvent(
 
 void GroupApiImpl::processConnectedEvent() {
     _treeKeyCaches.dropAll();
+    _groupDataSchemaMapper->dropAllChainCheckpoints();
     invalidateModuleKeysInCache();
 }
 
@@ -643,6 +645,7 @@ void GroupApiImpl::processDisconnectedEvent() {
     // Not redundant with the destructor: `cleanup()` only drops this object's self-reference, and `ThreadApiImpl`
     // holds a `shared_ptr` to it, so the group keys would otherwise outlive the session that earned them.
     _treeKeyCaches.dropAll();
+    _groupDataSchemaMapper->dropAllChainCheckpoints();
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<GroupApiImpl>::cleanup();
 }
