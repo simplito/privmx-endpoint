@@ -62,9 +62,14 @@ public:
     static std::string stringify(const Poco::JSON::Object::Ptr& obj, bool pretty = false);
     static Poco::Dynamic::Var parseJson(const std::string& json);
     static Poco::JSON::Object::Ptr parseJsonObject(const std::string& json);
+
+    static std::string b2s(BytesView data);
+    static Bytes s2b(const std::string& data);
+    static Bytes fillTo32b(Bytes& data);
 private:
 };
 
+/* methods decoding Base64 strings (with use of POCO lib) - to rewrite later  */
 class Base64
 {
 public:

@@ -26,6 +26,9 @@ namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
+// std::shared_ptr<ISymCryptoProvider> CryptoProviderRegistry::_provider(nullptr);
+std::shared_ptr<ISymCryptoProvider> PrivateKey::_provider(std::make_shared<CryptoProviderFromDriver>());
+
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     std::string payload = Base58::decodeWithChecksum(wif);
     if (payload.front() != Networks::BITCOIN.WIF) {
@@ -45,6 +48,28 @@ PrivateKey PrivateKey::fromWIF(const std::string& wif) {
         throw std::runtime_error("PrivateKey: InvalidWIFPayloadLengthException");
     }
     ECC key = ECC::fromPrivateKey(payload);
+    return PrivateKey(std::move(key));
+}
+
+PrivateKey PrivateKey::fromWIFb(BytesView wif) {
+    Bytes payload = Base58::decodeWithChecksumB(_provider, wif);
+    if (payload.front() != (uint8_t) Networks::BITCOIN.WIF) {
+        // throw InvalidNetworkException();
+        throw std::runtime_error("PrivateKey: InvalidNetworkException");
+    }
+    payload.erase(payload.begin());
+    if (payload.size() == 33) {
+        if (payload.back() != '\x01') {
+            // throw InvalidCompressionFlagException();
+            throw std::runtime_error("PrivateKey: InvalidCompressionFlagException");
+        }
+        payload.erase(payload.end() - 1);
+    }
+    if (payload.size() != 32) {
+        // throw InvalidWIFPayloadLengthException();
+        throw std::runtime_error("PrivateKey: InvalidWIFPayloadLengthException");
+    }
+    ECC key = ECC::fromPrivateKey(Utils::b2s(payload));
     return PrivateKey(std::move(key));
 }
 
@@ -86,26 +111,44 @@ std::string PrivateKey::toWIF() const {
     return Base58::encodeWithChecksum(buffer);
 }
 
+Bytes PrivateKey::toWIFb() const {
+    Bytes buffer = Utils::s2b(_key.getPrivateKey());
+    Utils::fillTo32b(buffer);
+    buffer.insert(buffer.begin(), 1, (uint8_t) Networks::BITCOIN.WIF);
+    buffer.insert(buffer.end(), 1, 0x01);
+    return Base58::encodeWithChecksumB(_provider, buffer);
+}
+
 Bytes PrivateKey::sign(BytesView data, SigScheme) const {
     throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
 }
 
 std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
-    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+    PublicKey key = getPublicKey();
+    return std::make_shared<PublicKey>(std::move(key));
+    // throw PrivmxDriverCryptoException("PrivateKey::publicKey: NOT IMPLEMENTED");
 }
 
 Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
-    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+    throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: NOT IMPLEMENTED");
 }
 
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
     throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
 }
 
-Bytes PrivateKey::export_(KeyFormat) const {
-    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+Bytes PrivateKey::export_(KeyFormat format) const {
+    if (format == KeyFormat::Wif) {
+        // PrivateKey key = toWIFb();
+        // return std::make_shared<PrivateKey>(std::move(key));
+        return toWIFb();
+    } else {
+        // other formats ...
+        throw PrivmxDriverCryptoException("PrivateKey::export_:: Unknown data format");    
+    }
+    throw PrivmxDriverCryptoException("PrivateKey::export_: NOT IMPLEMENTED");
 }
 
-} // ecc
+} // namespace ecc
 } // cryptoservice
 } // privmx

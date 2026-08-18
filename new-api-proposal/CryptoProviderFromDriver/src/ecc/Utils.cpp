@@ -13,6 +13,10 @@ limitations under the License.
     from an old implementation to a new one   */
 
 
+#include <iterator>
+#include <string_view>
+#include <vector>
+
 #include <string>
 #include <regex>
 #include <sstream>
@@ -28,6 +32,7 @@ namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
+/* methods decoding Base64 strings (with use of POCO lib) - begin  */
 
 template<typename Decoder>
 inline std::string decodeInline(const std::string& encoded_data) {
@@ -60,6 +65,8 @@ bool Base64::is(const std::string& data) {
     std::regex base64Regex("^(?=(.{4})*$)[A-Za-z0-9+/]*={0,2}$");
     return std::regex_match(data, base64Regex);
 }
+
+/* methods decoding Base64 strings (with use of POCO lib) - end  */
 
 
 std::string Utils::fillTo32(const std::string& data) {
@@ -101,8 +108,8 @@ Poco::JSON::Object::Ptr Utils::parseJsonObject(const std::string& json) {
     return parser.parse(json).extract<Poco::JSON::Object::Ptr>();
 }
 
-// NewCrypto::_provider;
-
+// NewCrypto class is to be removed in the next commit
+// --- to be removed (NewCrypto) - begin ---
 ICryptoProvider& NewCrypto::get() { 
     return _provider;
 }
@@ -137,7 +144,26 @@ std::string NewCrypto::decrypt(const SymParamsString& o, std::string ciphertext)
             Bytes(ciphertext.begin(), ciphertext.end()));
     return std::string(plaintext.begin(),plaintext.end());
 }
+// --- to be removed (NewCrypto) - end ---
 
-} // ecc
+std::string Utils::b2s(BytesView data) {
+    return std::string(reinterpret_cast<const char*>(data.data()), data.size());
+}
+
+Bytes Utils::s2b(const std::string& data) {
+    const unsigned char* d = reinterpret_cast<const unsigned char*>(data.data());
+    return Bytes(d, d+data.size());
+}
+
+Bytes Utils::fillTo32b(Bytes& data) {
+    if(data.size() < 32) {
+        const uint8_t zero = 0;
+        // data.reserve(32);
+        data.insert(data.begin(), 32 - data.size(), zero);
+    }
+    return data;
+}
+
+} // namespace ecc
 } // cryptoservice
 } // privmx

@@ -32,10 +32,21 @@ public:
     static std::string encodeWithChecksum(const std::string& s);
     static std::string decodeWithChecksum(const std::string& s);
     static bool is(const std::string& s);
+
+    static Bytes encodeB(BytesView s);
+    static Bytes decodeB(BytesView s);
+    static Bytes encodeWithChecksumB(std::shared_ptr<IDigest> p, BytesView data);
+    static Bytes decodeWithChecksumB(std::shared_ptr<IDigest> p, BytesView encodedData);
+    static bool isB(BytesView s);
 private:
     static std::string gmp2bitcoin(std::string s);
     static std::string bitcoin2gmp(std::string s);
+
+    // static std::string gmp2bitcoinB(std::string s);
+    // static std::string bitcoin2gmpB(std::string s);
 };
+
+// inline bool Base58::isB(BytesView s) { return is(Utils::b2s(s)); }
 
 } // ecc
 } // cryptoservice

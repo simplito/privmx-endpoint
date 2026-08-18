@@ -107,6 +107,62 @@ std::string Base58::bitcoin2gmp(std::string s) {
     return s;
 }
 
+inline int count_first_b(uint8_t c, BytesView s) {
+    unsigned int i = 0;
+    while (i < s.size() && s[i] == c)
+        ++i;
+    return i;
+}
+
+
+Bytes Base58::encodeB(BytesView s) {
+    mpz_class x;
+    mpz_import(x.get_mpz_t(), s.size(), 1, 1, 0, 0, s.data());
+    Bytes result = Utils::s2b(gmp2bitcoin( x.get_str(58)));
+    if (unsigned int pad_size = count_first_b(0, s)) {
+        result.insert(result.begin(), pad_size, (uint8_t) '1');        
+    } 
+    return result;
+}
+
+Bytes Base58::decodeB(BytesView s) {
+    mpz_class x(bitcoin2gmp(Utils::b2s(s)), 58);
+    size_t count = (mpz_sizeinbase(x.get_mpz_t(), 2) + 7) / 8;
+    uint8_t data[count];
+    mpz_export(data, &count, 1, 1, 0, 0, x.get_mpz_t());
+    Bytes result(data, data+count);
+    if (int pad_size = count_first_b((uint8_t) '1', s)) {
+        result.insert(result.begin(), pad_size, (uint8_t) 0);        
+    } 
+    return result;
+}
+
+Bytes Base58::encodeWithChecksumB(std::shared_ptr<IDigest> p, BytesView data) {
+    Bytes checksum = p.get()->digest(Hash::Sha256,p.get()->digest(Hash::Sha256,data));
+    if (checksum.size() > 4) checksum.resize(4);
+    Bytes dataWithChecksum(data.begin(),data.end());
+    dataWithChecksum.reserve(dataWithChecksum.size() + checksum.size());
+    dataWithChecksum.insert(dataWithChecksum.end(),checksum.begin(),checksum.end());
+    return encodeB(dataWithChecksum);
+}
+
+Bytes Base58::decodeWithChecksumB(std::shared_ptr<IDigest> p, BytesView encodedData) {
+    Bytes data = decodeB(encodedData);
+    Bytes payload(data.begin(), data.begin() + (data.size() - 4));
+    Bytes checksum(data.begin() + (data.size() - 4), data.end());
+    Bytes newchecksum = p.get()->digest(Hash::Sha256,p.get()->digest(Hash::Sha256,payload));
+    if (newchecksum.size() > 4) newchecksum.resize(4);
+    if (checksum != newchecksum) {
+        // throw PrivmxException("Invalid base58 checksum");
+        throw std::runtime_error("Base58: Invalid base58 checksum:"
+            " [" + Utils::b2s(checksum) + "] vs [" + Utils::b2s(newchecksum) + "]"
+        );
+    }
+    return payload;
+}
+
+inline bool Base58::isB(BytesView s) { return is(Utils::b2s(s)); }
+
 
 } // ecc
 } // cryptoservice

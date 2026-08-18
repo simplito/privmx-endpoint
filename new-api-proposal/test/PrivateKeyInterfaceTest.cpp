@@ -6,13 +6,16 @@
 #include "PrivateKey.hpp"
 #include "Utils.hpp"
 
+using privmx::cryptoservice::AsymAlg;
+using privmx::cryptoservice::KeyFormat;
+
 using namespace std;
 
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-TEST(PrivateKeyTest, FromWifAndToWif) {
+TEST(PrivateKeyTest, FromWifAndToWifInterface) {
     const string wif1("L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a5");
     const string wif2("KwDzTrBejZw91hSpkoauVYnjgkm64DAb3UX1QBCRjf5BryiVK6jk");
     const string wif3("KwDiK7diMWJYFDV6pPbQ8BzgWznPa4evLqKwLncDpeMrEZA5E2Xp");
@@ -36,6 +39,36 @@ TEST(PrivateKeyTest, FromWifAndToWif) {
     EXPECT_EQ(priv3.toWIF(), wif3);
     EXPECT_EQ(priv4.getPrivateEncKey(), expected_priv4);
     EXPECT_EQ(priv4.toWIF(), wif4);
+
+    Bytes wif1b(Utils::s2b(wif1));
+    Bytes wif2b(Utils::s2b(wif2));
+    Bytes wif3b(Utils::s2b(wif3));
+    Bytes wif4b(Utils::s2b(wif4));
+
+    // PrivateKey priv1b = PrivateKey::fromWIFb(Utils::s2b(wif1));
+    // PrivateKey priv2b = PrivateKey::fromWIFb(Utils::s2b(wif2));
+    // PrivateKey priv3b = PrivateKey::fromWIFb(Utils::s2b(wif3));
+    // PrivateKey priv4b = PrivateKey::fromWIFb(Utils::s2b(wif4));
+
+    PrivateKey priv1b = PrivateKey::fromWIFb(wif1b);
+    PrivateKey priv2b = PrivateKey::fromWIFb(wif2b);
+    PrivateKey priv3b = PrivateKey::fromWIFb(wif3b);
+    PrivateKey priv4b = PrivateKey::fromWIFb(wif4b);
+
+    EXPECT_EQ(priv1b.getPrivateEncKey(), expected_priv1);
+    EXPECT_EQ(priv2b.getPrivateEncKey(), expected_priv2);
+    EXPECT_EQ(priv3b.getPrivateEncKey(), expected_priv3);
+    EXPECT_EQ(priv4b.getPrivateEncKey(), expected_priv4);
+
+    EXPECT_EQ(Utils::b2s(priv1b.toWIFb()), wif1);
+    EXPECT_EQ(Utils::b2s(priv2b.toWIFb()), wif2);
+    EXPECT_EQ(Utils::b2s(priv3b.toWIFb()), wif3);
+    EXPECT_EQ(Utils::b2s(priv4b.toWIFb()), wif4);
+
+    EXPECT_EQ(Utils::b2s(priv1b.export_(KeyFormat::Wif)), wif1);
+    EXPECT_EQ(Utils::b2s(priv2b.export_(KeyFormat::Wif)), wif2);
+    EXPECT_EQ(Utils::b2s(priv3b.export_(KeyFormat::Wif)), wif3);
+    EXPECT_EQ(Utils::b2s(priv4b.export_(KeyFormat::Wif)), wif4);
 }
 
 } // namespace ecc

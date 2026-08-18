@@ -50,9 +50,13 @@ public:
     std::string signToCompactSignatureWithHash(const std::string& message) const;
     std::string toWIF() const;
 
+    static PrivateKey fromWIFb(BytesView wif);
+    Bytes toWIFb() const;
+
 private:
     ECC _key;
-    std::shared_ptr<ISymCryptoProvider> _provider;
+    // std::shared_ptr<ISymCryptoProvider> _provider;
+    static std::shared_ptr<ISymCryptoProvider> _provider;
 };
 
 inline PublicKey PrivateKey::getPublicKey() const {

@@ -20,6 +20,9 @@ limitations under the License.
 #include "CoreInterfaces.hpp"
 #include "CryptoProviderFromDriver.hpp"
 
+#include "PublicKey.hpp"
+#include "PrivateKey.hpp"
+
 
 #include <openssl/rand.h>
 #include <openssl/evp.h>
@@ -579,22 +582,32 @@ unsigned char* CryptoProviderFromDriver::store_u32_be(unsigned char* out, uint32
 
 std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAlg alg)
 {
+    if (alg ==  AsymAlg::EccSecp256k1) {
+        ecc::PrivateKey key = ecc::PrivateKey::generateRandom();
+        return std::make_shared<ecc::PrivateKey>(std::move(key));
+    } else {
+        // other algoritms ...
+        throw PrivmxDriverCryptoException("generatePrivateKey: Unknown protocol");    
+    }
+
     throw PrivmxDriverCryptoException("generatePrivateKey: NOT IMPLEMENTED");
-    // std::shared_ptr<IPrivateKey> key;
-    // switch (alg)
-    // {
-    // case AsymAlg::Secp256k1:
-    //     key = EccPrivateKey::createKeyPair();
-    //     return key;
-    // // other algoritms ...
-    // default:
-    //     throw PrivmxDriverCryptoException("generatePrivateKey: Unknown protocol");
-    //     break;
-    // }
 }
 
-std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView, KeyFormat, AsymAlg)
+std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
+    if (alg ==  AsymAlg::EccSecp256k1) {
+        if (format ==  KeyFormat::Wif) {
+            ecc::PrivateKey key = ecc::PrivateKey::fromWIFb(data);
+            return std::make_shared<ecc::PrivateKey>(std::move(key));
+        } else {
+            // other formats ...
+            throw PrivmxDriverCryptoException("importPrivateKey: Unknown data format");    
+        }
+    } else {
+        // other algoritms ...
+        throw PrivmxDriverCryptoException("importPrivateKey: Unknown protocol");    
+    }
+
     throw PrivmxDriverCryptoException("importPrivateKey: NOT IMPLEMENTED");
 }
 
