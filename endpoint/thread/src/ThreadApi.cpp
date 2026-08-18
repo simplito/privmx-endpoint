@@ -32,7 +32,7 @@ ThreadApi& ThreadApi::operator=(const ThreadApi& obj) {
 ThreadApi::ThreadApi(ThreadApi&& obj) : ExtendedPointer(std::move(obj)) {};
 ThreadApi::~ThreadApi() {}
 
-ThreadApi ThreadApi::create(core::Connection& connection, const group::GroupApi& groupApi) {
+ThreadApi ThreadApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<ThreadApiImpl> impl(new ThreadApiImpl(

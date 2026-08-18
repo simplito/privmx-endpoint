@@ -47,7 +47,7 @@ public:
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const core::Connection& connection,
-        const group::GroupApi& groupApi = group::GroupApi()
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
     ~ThreadApiImpl();
     std::string createThread(

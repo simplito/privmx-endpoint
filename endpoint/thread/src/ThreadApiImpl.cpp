@@ -43,7 +43,7 @@ ThreadApiImpl::ThreadApiImpl(
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection,
-    const group::GroupApi& groupApi
+    const std::optional<group::GroupApi>& groupApi
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
@@ -51,9 +51,9 @@ ThreadApiImpl::ThreadApiImpl(
       _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
       _messageDataSchemaMapper(userPrivKey, connection), _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
-    try {
-        _groupApiImpl = groupApi.getImpl();
-    } catch (const core::NotConnectedException&) {
+    if (groupApi.has_value()) {
+        _groupApiImpl = groupApi->getImpl();
+    } else {
         _groupApiImpl = nullptr;
     }
     if (_groupApiImpl) {

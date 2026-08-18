@@ -30,7 +30,7 @@ public:
      * 
      * @return ThreadApi object
      */
-    static ThreadApi create(core::Connection& connection, const group::GroupApi& groupApi = group::GroupApi());
+    static ThreadApi create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi = std::nullopt);
 
     /**
      * //doc-gen:ignore
