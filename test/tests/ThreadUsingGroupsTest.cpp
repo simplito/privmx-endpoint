@@ -40,7 +40,7 @@ protected:
             )
         );
         groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
-        threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, groupApi.get()));
+        threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
     }
     void disconnect() {
         connection->disconnect();
@@ -58,7 +58,7 @@ protected:
             )
         );
         groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
-        threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, groupApi.get()));
+        threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
     }
     void customTearDown() override {
         connection.reset();
@@ -1017,7 +1017,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
     );
     auto grpApi2 = std::make_shared<group::GroupApi>(group::GroupApi::create(*conn2));
     auto threadApi2 = std::make_shared<thread::ThreadApi>(
-        thread::ThreadApi::create(*conn2, grpApi2.get())
+        thread::ThreadApi::create(*conn2, *grpApi2)
     );
     thread::Thread cachedThread;
     ASSERT_NO_THROW({ cachedThread = threadApi2->getThread(threadId); });

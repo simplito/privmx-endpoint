@@ -53,7 +53,7 @@ protected:
             )
         );
         groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
-        threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, groupApi.get()));
+        threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
     }
 
     void disconnect() {

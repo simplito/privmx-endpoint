@@ -34,8 +34,6 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 
-namespace privmx { namespace endpoint { namespace group { class GroupApiImpl; } } }
-
 namespace privmx {
 namespace endpoint {
 namespace thread {
@@ -49,7 +47,7 @@ public:
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const core::Connection& connection,
-        std::shared_ptr<group::GroupApiImpl> groupApiImpl = nullptr
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
     ~ThreadApiImpl();
     std::string createThread(

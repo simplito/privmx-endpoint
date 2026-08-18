@@ -43,14 +43,19 @@ ThreadApiImpl::ThreadApiImpl(
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection,
-    std::shared_ptr<group::GroupApiImpl> groupApiImpl
+    const std::optional<group::GroupApi>& groupApi
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
-      _connection(connection), _groupApiImpl(std::move(groupApiImpl)), _serverApi(ServerApi(gateway)),
+      _connection(connection), _serverApi(ServerApi(gateway)),
       _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
       _messageDataSchemaMapper(userPrivKey, connection), _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
+    if (groupApi.has_value()) {
+        _groupApiImpl = groupApi->getImpl();
+    } else {
+        _groupApiImpl = nullptr;
+    }
     if (_groupApiImpl) {
         auto groupApiImpl = _groupApiImpl;
         _groupPrivKeyResolver =
