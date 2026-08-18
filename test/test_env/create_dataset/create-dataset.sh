@@ -41,6 +41,10 @@ docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=inbox --db=priv
 docker cp $DOCKER_MONGO_NAME:/mongo_collections $DATASET_DIR
 # Group
 docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=group --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/group.json"
+docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=groupArchiveRung --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/groupArchiveRung.json"
+docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=groupHistoryEntry --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/groupHistoryEntry.json"
+docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=groupTreeEdge --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/groupTreeEdge.json"
+docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=groupTreeNode --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/groupTreeNode.json"
 docker cp $DOCKER_MONGO_NAME:/mongo_collections $DATASET_DIR
 
 # Migration Status
