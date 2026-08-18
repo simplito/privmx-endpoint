@@ -57,13 +57,22 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     }
 
     // EP-10: resume from the last successfully-verified point instead of re-proving the whole chain from
-    // genesis on every call. `startIndex` stays 0 (a full from-genesis verify) whenever there is no checkpoint
-    // yet, or the server sent *fewer* entries than the checkpoint already trusted — a length regression (e.g. a
-    // rollback attempt) is never served from a checkpoint that's ahead of what's on hand; it just falls back to
-    // today's full verification of the shorter array. Rejecting a rollback outright is EP-09's job, not this
-    // one — this only guarantees the checkpoint itself never moves backward (see ChainCheckpoint::advance).
+    // genesis on every call.
     auto checkpointStore = _chainCheckpoints.get(groupInfo.id);
     auto checkpoint = checkpointStore->get();
+
+    // EP-9: trust-on-first-use version/epoch pinning. A shorter response than what we've already confirmed can
+    // still be a perfectly validly-signed *past* state of this same group — chain-link/manager checks alone
+    // can't see anything wrong with it, because they only look inside the response they're given, never at what
+    // was seen before. That is exactly the gap a malicious bridge would use to hide a since-revoked member: keep
+    // replaying an old, genuinely-once-valid state from before the removal. So this has to be checked before
+    // any per-entry verification even starts — a fresh from-genesis verify of the shorter array would happily
+    // succeed on its own terms and never notice it is stale. Reported as a distinct fork/rollback exception
+    // rather than the generic integrity failure, since it signals a diverging server, not malformed data. First
+    // sighting of a group is exempt by construction (no checkpoint to regress behind), same as with public keys.
+    if (checkpoint.has_value() && groupInfo.data.size() < static_cast<size_t>(checkpoint->verifiedVersion)) {
+        throw GroupHistoryForkException();
+    }
 
     size_t startIndex = 0;
     std::set<std::string> verifiedManagers;
@@ -72,7 +81,8 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     int64_t prevKeyVersion = 0;
     std::string prevGroupPubKey;
 
-    if (checkpoint.has_value() && static_cast<size_t>(checkpoint->verifiedVersion) <= groupInfo.data.size()) {
+    if (checkpoint.has_value()) {
+        // The version gate above guarantees `checkpoint->verifiedVersion <= groupInfo.data.size()` here.
         startIndex = static_cast<size_t>(checkpoint->verifiedVersion);
         verifiedManagers = checkpoint->verifiedManagers;
         verifiedUsers = checkpoint->verifiedUsers;
@@ -203,6 +213,17 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     if (verifiedUsers != headUsers || verifiedManagers != headManagers ||
         groupInfo.groupPubKey != prevGroupPubKey || bridgeEpochMismatch) {
         throw GroupDataIntegrityException();
+    }
+
+    // EP-9: keyVersion pinning, checked against the freshly-*verified* epoch rather than any bridge-supplied
+    // claim. In this chain model a version regression (caught above) is the only way keyVersion could regress
+    // without version regressing too — resuming from a checkpoint seeds `prevKeyVersion` from
+    // `keyVersionAtCheckpoint`, and the per-entry monotonicity check above already forbids it from decreasing
+    // from there — so this can't actually fire given today's checks. It stays as an explicit, literal assertion
+    // of the pinning guarantee rather than an implicit consequence of it, so a future change to those checks
+    // can't silently reopen the gap without also breaking this one.
+    if (checkpoint.has_value() && prevKeyVersion < checkpoint->keyVersionAtCheckpoint) {
+        throw GroupHistoryForkException();
     }
 
     checkpointStore->advance(checkpoint::ChainCheckpoint::Snapshot{

@@ -10,7 +10,8 @@ limitations under the License.
 */
 
 /**
- * Unit tests for EP-10: `GroupDataSchemaMapper::assertDataIntegrity`'s warm-read chain checkpoint.
+ * Unit tests for EP-10 (`GroupDataSchemaMapper::assertDataIntegrity`'s warm-read chain checkpoint) and EP-9
+ * (version/keyVersion trust-on-first-use pinning, built on the same checkpoint storage).
  *
  * No server is involved, same as GroupKeyResolverTest.cpp: each history entry is authored through the real
  * `GroupDataSchemaMapper::encrypt` (one throwaway mapper per signing identity, since the mapper signs with
@@ -221,16 +222,18 @@ TEST(GroupChainCheckpoint, RewrittenPrefixIsRejected) {
     EXPECT_EQ(checkpoint->lastEntryDioHashHex, hashOf(fx.e2Dio));
 }
 
-TEST(GroupChainCheckpoint, LengthRegressionFallsBackWithoutCorruptingCheckpoint) {
+TEST(GroupChainCheckpoint, VersionRegressionRejectedAsFork) {
+    // EP-9: a genuinely valid (if stale) shorter prefix of the same chain — e.g. a malicious bridge replaying
+    // the state from before a member removal, or an honest replica that hasn't caught up — is indistinguishable
+    // from "fine" by chain-link/manager checks alone, since those only look inside the response they're given.
+    // Once a longer state has been confirmed, a shorter one must be rejected outright, not silently re-verified
+    // and accepted.
     ChainFixture fx = buildThreeEntryChain("grp-regression");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
 
     ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
     ASSERT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
 
-    // A genuinely valid (if stale) 2-entry prefix of the same chain — e.g. the server answering from a replica
-    // that hasn't caught up. The checkpoint is ahead of it, so it must be verified via the full from-genesis
-    // fallback rather than served (incorrectly) from the checkpoint.
     server::GroupInfo shorter;
     shorter.id = fx.group.id;
     shorter.contextId = fx.group.contextId;
@@ -239,14 +242,35 @@ TEST(GroupChainCheckpoint, LengthRegressionFallsBackWithoutCorruptingCheckpoint)
     shorter.history = {fx.group.history[0], fx.group.history[1]};
     finalizeHead(shorter, 0);
 
-    ASSERT_NO_THROW(verifier.assertDataIntegrity(shorter));
+    EXPECT_THROW(verifier.assertDataIntegrity(shorter), GroupHistoryForkException)
+        << "a shorter response than what's already confirmed must be reported as a fork, not silently accepted";
+
+    // The rejected attempt must not have disturbed the existing checkpoint.
     auto checkpointAfterShorter = verifier.peekChainCheckpoint(fx.group.id);
     ASSERT_TRUE(checkpointAfterShorter.has_value());
-    EXPECT_EQ(checkpointAfterShorter->verifiedVersion, 3) << "advance() must never move the checkpoint backward";
+    EXPECT_EQ(checkpointAfterShorter->verifiedVersion, 3);
 
     // The original, longer chain must still verify correctly afterward.
     ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
     EXPECT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
+}
+
+TEST(GroupChainCheckpoint, FirstSightingIsExemptFromPinning) {
+    // Trust-on-first-use: with no checkpoint yet, there is nothing to regress behind, so any version verifies
+    // (this is the same "first verification can't be avoided" property EP-10 relies on).
+    ChainFixture fx = buildThreeEntryChain("grp-first-sighting");
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+
+    server::GroupInfo firstEntryOnly;
+    firstEntryOnly.id = fx.group.id;
+    firstEntryOnly.contextId = fx.group.contextId;
+    firstEntryOnly.resourceId = fx.group.resourceId;
+    firstEntryOnly.data = {fx.group.data[0]};
+    firstEntryOnly.history = {fx.group.history[0]};
+    finalizeHead(firstEntryOnly, 0);
+
+    EXPECT_NO_THROW(verifier.assertDataIntegrity(firstEntryOnly));
+    EXPECT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 1);
 }
 
 TEST(GroupChainCheckpoint, DeltaZeroTamperedUsersEchoIsRejected) {

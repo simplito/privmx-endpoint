@@ -112,6 +112,23 @@ add_executable(test_unit_GroupKeyResolverTest
 target_include_directories(test_unit_GroupKeyResolverTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/include)
 target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
 
+# EP-10: chain-verification checkpoint. Builds signed `server::GroupInfo` chains by hand via
+# `GroupDataSchemaMapper::encrypt` (no live bridge) and exercises `assertDataIntegrity`'s warm-read path directly.
+# Needs `include_pub` too, unlike the other group unit tests above: GroupDataSchemaMapper.cpp pulls in
+# GroupException.hpp from there.
+add_executable(test_unit_GroupChainCheckpointTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupChainCheckpointTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/checkpoint/ChainCheckpoint.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/encryptors/group/GroupDataSchemaMapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/encryptors/group/GroupDataSchemaStrategyV5.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/encryptors/group/GroupDataEncryptorV5.cpp
+)
+target_include_directories(test_unit_GroupChainCheckpointTest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/include_pub
+)
+target_link_libraries(test_unit_GroupChainCheckpointTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+
 # The merge from plans to a complete submitted state. Real EC keys, and each state is climbed to prove that the
 # members who should still have access do — a state the server would accept but nobody can climb is worse than
 # one it rejects.
