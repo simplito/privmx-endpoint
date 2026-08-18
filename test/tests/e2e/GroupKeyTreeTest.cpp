@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../utils/BaseTest.hpp"
+#include "../../utils/BaseTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>

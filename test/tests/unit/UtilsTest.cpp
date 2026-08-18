@@ -1,25 +1,13 @@
 
 #include <gtest/gtest.h>
-#include "../utils/BaseTest.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
-#include <privmx/endpoint/core/Exception.hpp>
-#include <Poco/Util/IniFileConfiguration.h>
+#include <string>
+#include <vector>
 #include <privmx/endpoint/core/Utils.hpp>
 #include <privmx/crypto/Crypto.hpp>
 
 using namespace privmx::endpoint;
 
-class UtilsTest : public privmx::test::BaseTest {
-protected:
-    UtilsTest() : BaseTest(privmx::test::BaseTestMode::offline) {}
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-    }
-    void customTearDown() override { // tmp segfault fix
-    }
-    Poco::Util::IniFileConfiguration::Ptr reader;
-};
+class UtilsTest : public testing::Test {};
 
 TEST_F(UtilsTest, Hex) {
     core::Buffer text = core::Buffer::from("Test Hex");

@@ -5,8 +5,8 @@
 #include <sstream>
 #include <thread>
 #include <gtest/gtest.h>
-#include "../utils/BaseTest.hpp"
-#include "../utils/FalseUserVerifierInterface.hpp"
+#include "../../utils/BaseTest.hpp"
+#include "../../utils/FalseUserVerifierInterface.hpp"
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>

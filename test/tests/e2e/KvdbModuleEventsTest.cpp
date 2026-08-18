@@ -1,5 +1,5 @@
 
-#include "../utils/BaseEndpointEventTest.hpp"
+#include "../../utils/BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/Events.hpp>
 #include <privmx/endpoint/kvdb/KvdbException.hpp>

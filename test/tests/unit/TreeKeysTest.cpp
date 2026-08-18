@@ -9,16 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/**
- * Unit tests for the hidden key tree with **real EC keys and real ECIES**.
- *
- * No server, no docker, no network — but no crypto stubs either: every wrap is a genuine ECIES encryption and
- * every climb a genuine decryption. That matters, because the properties under test are cryptographic ones:
- * that a removed member cannot reach a refreshed key, and that a corrupted edge is detected rather than
- * silently producing the wrong key.
- *
- * Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses.
- */
+/** Unit tests for the hidden key tree with real EC keys and real ECIES; no server, no docker, no network, but no crypto stubs either — every wrap is a genuine ECIES encryption and every climb a genuine decryption, because the properties under test are cryptographic ones: that a removed member cannot reach a refreshed key, and that a corrupted edge is detected rather than silently producing the wrong key. Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
 
 #include <gtest/gtest.h>
 
@@ -29,93 +20,94 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 #include <privmx/endpoint/group/keytree/TreeKeyCache.hpp>
+#include <privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group::keytree;
 
-namespace {
+/** Shared fixture base: a member together with the private half, and helpers to assemble tree state from a plan. */
+class TreeKeysTestBase : public testing::Test {
+protected:
+    /** A member together with the private half, which only the test holds. */
+    struct TestMember {
+        std::string userId;
+        PrivateKey priv;
+    };
 
-/** A member together with the private half, which only the test holds. */
-struct TestMember {
-    std::string userId;
-    PrivateKey priv;
+    std::vector<TestMember> makeMembers(std::uint32_t count) {
+        std::vector<TestMember> members;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            members.push_back(TestMember{"user" + std::to_string(i), PrivateKey::generateRandom()});
+        }
+        return members;
+    }
+
+    std::vector<TreeMember> publicOf(const std::vector<TestMember>& members) {
+        std::vector<TreeMember> result;
+        for (const TestMember& member : members) {
+            result.push_back(TreeMember{member.userId, member.priv.getPublicKey()});
+        }
+        return result;
+    }
+
+    /** Assembles the state a bridge would serve after a build. */
+    TreeGroupState stateFromBuild(const BuildPlan& plan, const std::vector<TestMember>& members) {
+        TreeGroupState state;
+        state.numLeaves = plan.numLeaves;
+        for (const TestMember& member : members) {
+            state.leafAssignment.push_back(member.userId);
+        }
+        state.nodes = plan.nodes;
+        state.edges = plan.edges;
+        state.epoch = 1;
+        state.grantPublicKey = plan.grantKey.getPublicKey();
+        return state;
+    }
+
+    /** Applies a removal plan to the state, the way the bridge would after accepting it. */
+    void applyRemoval(TreeGroupState& state, const RemovalPlan& plan, const std::string& leavingUserId) {
+        for (std::size_t i = 0; i < state.leafAssignment.size(); ++i) {
+            if (state.leafAssignment[i].has_value() && state.leafAssignment[i].value() == leavingUserId) {
+                state.leafAssignment[i] = std::nullopt;
+            }
+        }
+        for (const NodeRefresh& refresh : plan.pathRefresh) {
+            for (TreeNodeState& node : state.nodes) {
+                if (node.nodeIndex == refresh.nodeIndex) {
+                    node.generation = refresh.newGeneration;
+                    node.publicKey = refresh.newKey.getPublicKey();
+                }
+            }
+            // Replace this node's edges with the refreshed ones.
+            std::vector<TreeEdge> kept;
+            for (const TreeEdge& edge : state.edges) {
+                if (edge.isGrantEdge || edge.parentIndex != refresh.nodeIndex) {
+                    kept.push_back(edge);
+                }
+            }
+            kept.insert(kept.end(), refresh.edges.begin(), refresh.edges.end());
+            state.edges = kept;
+        }
+        std::vector<TreeEdge> withoutGrant;
+        for (const TreeEdge& edge : state.edges) {
+            if (!edge.isGrantEdge) {
+                withoutGrant.push_back(edge);
+            }
+        }
+        withoutGrant.push_back(plan.grantEdge);
+        state.edges = withoutGrant;
+        state.epoch = plan.newEpoch;
+        state.grantPublicKey = plan.newGrantKey.getPublicKey();
+    }
 };
 
-std::vector<TestMember> makeMembers(std::uint32_t count) {
-    std::vector<TestMember> members;
-    for (std::uint32_t i = 0; i < count; ++i) {
-        members.push_back(TestMember{"user" + std::to_string(i), PrivateKey::generateRandom()});
-    }
-    return members;
-}
-
-std::vector<TreeMember> publicOf(const std::vector<TestMember>& members) {
-    std::vector<TreeMember> result;
-    for (const TestMember& member : members) {
-        result.push_back(TreeMember{member.userId, member.priv.getPublicKey()});
-    }
-    return result;
-}
-
-/** Assembles the state a bridge would serve after a build. */
-TreeGroupState stateFromBuild(const BuildPlan& plan, const std::vector<TestMember>& members) {
-    TreeGroupState state;
-    state.numLeaves = plan.numLeaves;
-    for (const TestMember& member : members) {
-        state.leafAssignment.push_back(member.userId);
-    }
-    state.nodes = plan.nodes;
-    state.edges = plan.edges;
-    state.epoch = 1;
-    state.grantPublicKey = plan.grantKey.getPublicKey();
-    return state;
-}
-
-/** Applies a removal plan to the state, the way the bridge would after accepting it. */
-void applyRemoval(TreeGroupState& state, const RemovalPlan& plan, const std::string& leavingUserId) {
-    for (std::size_t i = 0; i < state.leafAssignment.size(); ++i) {
-        if (state.leafAssignment[i].has_value() && state.leafAssignment[i].value() == leavingUserId) {
-            state.leafAssignment[i] = std::nullopt;
-        }
-    }
-    for (const NodeRefresh& refresh : plan.pathRefresh) {
-        for (TreeNodeState& node : state.nodes) {
-            if (node.nodeIndex == refresh.nodeIndex) {
-                node.generation = refresh.newGeneration;
-                node.publicKey = refresh.newKey.getPublicKey();
-            }
-        }
-        // Replace this node's edges with the refreshed ones.
-        std::vector<TreeEdge> kept;
-        for (const TreeEdge& edge : state.edges) {
-            if (edge.isGrantEdge || edge.parentIndex != refresh.nodeIndex) {
-                kept.push_back(edge);
-            }
-        }
-        kept.insert(kept.end(), refresh.edges.begin(), refresh.edges.end());
-        state.edges = kept;
-    }
-    std::vector<TreeEdge> withoutGrant;
-    for (const TreeEdge& edge : state.edges) {
-        if (!edge.isGrantEdge) {
-            withoutGrant.push_back(edge);
-        }
-    }
-    withoutGrant.push_back(plan.grantEdge);
-    state.edges = withoutGrant;
-    state.epoch = plan.newEpoch;
-    state.grantPublicKey = plan.newGrantKey.getPublicKey();
-}
-
-} // namespace
-
-// ─────────────────────────────────────────────────────────────────────────────
 // wrap / unwrap primitives
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeKeysPrimitives, WrapRoundTripsThroughRealEcies) {
+class TreeKeysPrimitives : public TreeKeysTestBase {};
+
+TEST_F(TreeKeysPrimitives, WrapRoundTripsThroughRealEcies) {
     const PrivateKey secret = PrivateKey::generateRandom();
     const PrivateKey recipient = PrivateKey::generateRandom();
     const PrivateKey signer = PrivateKey::generateRandom();
@@ -128,7 +120,7 @@ TEST(TreeKeysPrimitives, WrapRoundTripsThroughRealEcies) {
     EXPECT_EQ(recovered->toWIF(), secret.toWIF());
 }
 
-TEST(TreeKeysPrimitives, WrapDoesNotOpenWithTheWrongKey) {
+TEST_F(TreeKeysPrimitives, WrapDoesNotOpenWithTheWrongKey) {
     const PrivateKey secret = PrivateKey::generateRandom();
     const PrivateKey recipient = PrivateKey::generateRandom();
     const PrivateKey stranger = PrivateKey::generateRandom();
@@ -137,17 +129,17 @@ TEST(TreeKeysPrimitives, WrapDoesNotOpenWithTheWrongKey) {
     EXPECT_FALSE(TreeKeys::unwrapKey(blob, stranger).has_value());
 }
 
-TEST(TreeKeysPrimitives, GarbageBlobIsRejectedNotCrashed) {
+TEST_F(TreeKeysPrimitives, GarbageBlobIsRejectedNotCrashed) {
     const PrivateKey key = PrivateKey::generateRandom();
     EXPECT_FALSE(TreeKeys::unwrapKey("not-a-blob", key).has_value());
     EXPECT_FALSE(TreeKeys::unwrapKey("", key).has_value());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // build + climb
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeKeysBuild, CostsTwoTimesLeavesMinusOnePlusGrantEdge) {
+class TreeKeysBuild : public TreeKeysTestBase {};
+
+TEST_F(TreeKeysBuild, CostsTwoTimesLeavesMinusOnePlusGrantEdge) {
     for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 8u}) {
         const std::vector<TestMember> members = makeMembers(count);
         TreeKeyCache store;
@@ -159,13 +151,15 @@ TEST(TreeKeysBuild, CostsTwoTimesLeavesMinusOnePlusGrantEdge) {
     }
 }
 
-TEST(TreeKeysBuild, RejectsAnEmptyMemberList) {
+TEST_F(TreeKeysBuild, RejectsAnEmptyMemberList) {
     TreeKeyCache store;
     TreeKeys keys(store);
     EXPECT_THROW(keys.build({}, PrivateKey::generateRandom()), std::invalid_argument);
 }
 
-TEST(TreeKeysClimb, EveryMemberReachesTheGrantKey) {
+class TreeKeysClimb : public TreeKeysTestBase {};
+
+TEST_F(TreeKeysClimb, EveryMemberReachesTheGrantKey) {
     for (const std::uint32_t count : {2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u}) {
         const std::vector<TestMember> members = makeMembers(count);
         TreeKeyCache buildStore;
@@ -185,7 +179,7 @@ TEST(TreeKeysClimb, EveryMemberReachesTheGrantKey) {
     }
 }
 
-TEST(TreeKeysClimb, CachesEveryIntermediateKeySoASecondClimbIsFree) {
+TEST_F(TreeKeysClimb, CachesEveryIntermediateKeySoASecondClimbIsFree) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
@@ -205,7 +199,7 @@ TEST(TreeKeysClimb, CachesEveryIntermediateKeySoASecondClimbIsFree) {
     EXPECT_EQ(store.nodeKeyCount(), before);
 }
 
-TEST(TreeKeysClimb, ANonMemberCannotClimb) {
+TEST_F(TreeKeysClimb, ANonMemberCannotClimb) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
@@ -219,7 +213,7 @@ TEST(TreeKeysClimb, ANonMemberCannotClimb) {
     EXPECT_FALSE(result.grantKey.has_value());
 }
 
-TEST(TreeKeysClimb, SingleMemberGroupClimbsStraightToTheGrantKey) {
+TEST_F(TreeKeysClimb, SingleMemberGroupClimbsStraightToTheGrantKey) {
     const std::vector<TestMember> members = makeMembers(1);
     TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
@@ -234,7 +228,7 @@ TEST(TreeKeysClimb, SingleMemberGroupClimbsStraightToTheGrantKey) {
 }
 
 /** SECURITY — a corrupted edge must be detected, never allowed to yield a wrong key silently. */
-TEST(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
+TEST_F(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
@@ -257,7 +251,7 @@ TEST(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
     EXPECT_EQ(store.nodeKeyCount(), 0u) << "a key failing verification must never be cached";
 }
 
-TEST(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
+TEST_F(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
@@ -278,11 +272,11 @@ TEST(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     EXPECT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::MissingEdge);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // removal — the property that matters
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeKeysRemoval, CostsTwoTimesDepthMinusOnePlusGrantEdge) {
+class TreeKeysRemoval : public TreeKeysTestBase {};
+
+TEST_F(TreeKeysRemoval, CostsTwoTimesDepthMinusOnePlusGrantEdge) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -298,7 +292,7 @@ TEST(TreeKeysRemoval, CostsTwoTimesDepthMinusOnePlusGrantEdge) {
     EXPECT_EQ(removal.newEpoch, 2u);
 }
 
-TEST(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
+TEST_F(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -313,7 +307,7 @@ TEST(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
     EXPECT_EQ(refreshed, TreeMath::directPath(2, 8));
 }
 
-TEST(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
+TEST_F(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -332,7 +326,7 @@ TEST(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
     EXPECT_NE(removal.newGrantKey.toWIF(), plan.grantKey.toWIF());
 }
 
-TEST(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
+TEST_F(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
     const std::vector<TestMember> members = makeMembers(1);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -341,7 +335,7 @@ TEST(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
     EXPECT_THROW(keys.planRemoval(state, members[0].userId, members[0].priv), std::invalid_argument);
 }
 
-TEST(TreeKeysRemoval, RejectsANonMember) {
+TEST_F(TreeKeysRemoval, RejectsANonMember) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -350,12 +344,8 @@ TEST(TreeKeysRemoval, RejectsANonMember) {
     EXPECT_THROW(keys.planRemoval(state, "stranger", members[0].priv), std::invalid_argument);
 }
 
-/**
- * SECURITY — the whole point of the construction.
- *
- * After a removal every surviving member must reach the new grant key, and the removed member must not.
- */
-TEST(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesNot) {
+/** SECURITY — the whole point of the construction: after a removal every surviving member must reach the new grant key, and the removed member must not. */
+TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesNot) {
     for (const std::uint32_t count : {2u, 4u, 5u, 8u}) {
         const std::vector<TestMember> members = makeMembers(count);
         TreeKeyCache ownerStore;
@@ -389,7 +379,7 @@ TEST(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesNot
 }
 
 /** SECURITY — the removed member's old keys must not open anything in the new epoch. */
-TEST(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
+TEST_F(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
@@ -427,7 +417,7 @@ TEST(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
 }
 
 /** SECURITY — collusion: two members removed at different times must not pool their way in. */
-TEST(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing) {
+TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
@@ -462,11 +452,11 @@ TEST(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // addition
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeKeysAddition, FillingABlankCostsOneWrapAndDoesNotRotate) {
+class TreeKeysAddition : public TreeKeysTestBase {};
+
+TEST_F(TreeKeysAddition, FillingABlankCostsOneWrapAndDoesNotRotate) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
@@ -502,7 +492,7 @@ TEST(TreeKeysAddition, FillingABlankCostsOneWrapAndDoesNotRotate) {
         << "an addition must not change the grant key";
 }
 
-TEST(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
+TEST_F(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
     TreeGroupState state;
     state.numLeaves = 4;
     state.leafAssignment = {std::string("a"), std::nullopt, std::string("c"), std::nullopt};
@@ -512,7 +502,7 @@ TEST(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
     EXPECT_EQ(TreeKeys::choosePosition(state), 4u) << "no blanks: append";
 }
 
-TEST(TreeKeysAddition, RequiresTheParentKeyAndSaysSo) {
+TEST_F(TreeKeysAddition, RequiresTheParentKeyAndSaysSo) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
@@ -529,16 +519,14 @@ TEST(TreeKeysAddition, RequiresTheParentKeyAndSaysSo) {
     );
 }
 
-TEST(TreeKeysAddition, SECURITY_RejectsANodeKeyThatDoesNotMatchThePublishedOne) {
+TEST_F(TreeKeysAddition, SECURITY_RejectsANodeKeyThatDoesNotMatchThePublishedOne) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
     TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
     state.leafAssignment[1] = std::nullopt;
 
-    // A key for the right (node, generation) slot, but not the key the state publishes for that node — the shape
-    // a cross-group collision used to produce. Wrapping it would seat the newcomer on an edge nobody can open,
-    // and their failure would surface much later as `Tampered`.
+    // A key for the right (node, generation) slot, but not the key the state publishes for that node — the shape a cross-group collision used to produce. Wrapping it would seat the newcomer on an edge nobody can open, and their failure would surface much later as `Tampered`.
     const std::uint32_t parentIndex = TreeMath::parent(TreeMath::leafNode(1), state.numLeaves);
     TreeKeyCache poisoned;
     for (const TreeNodeState& node : state.nodes) {
@@ -555,11 +543,11 @@ TEST(TreeKeysAddition, SECURITY_RejectsANodeKeyThatDoesNotMatchThePublishedOne) 
     );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // TreeKeyCache — the cache itself
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeKeyCacheBasics, PutOverwritesInPlace) {
+class TreeKeyCacheBasics : public testing::Test {};
+
+TEST_F(TreeKeyCacheBasics, PutOverwritesInPlace) {
     const PrivateKey first = PrivateKey::generateRandom();
     const PrivateKey second = PrivateKey::generateRandom();
 
@@ -576,7 +564,7 @@ TEST(TreeKeyCacheBasics, PutOverwritesInPlace) {
     EXPECT_EQ(store.getGrantKey(1)->toWIF(), second.toWIF());
 }
 
-TEST(TreeKeyCacheBasics, GenerationIsPartOfTheNodeKeyIdentity) {
+TEST_F(TreeKeyCacheBasics, GenerationIsPartOfTheNodeKeyIdentity) {
     const PrivateKey oldKey = PrivateKey::generateRandom();
     const PrivateKey refreshed = PrivateKey::generateRandom();
 
@@ -588,7 +576,7 @@ TEST(TreeKeyCacheBasics, GenerationIsPartOfTheNodeKeyIdentity) {
     EXPECT_EQ(store.getNodeKey(1, 1)->toWIF(), refreshed.toWIF());
 }
 
-TEST(TreeKeyCacheBasics, HighestGrantEpochReportsTheLargestCached) {
+TEST_F(TreeKeyCacheBasics, HighestGrantEpochReportsTheLargestCached) {
     TreeKeyCache store;
     EXPECT_FALSE(store.highestGrantEpoch().has_value());
 
@@ -599,7 +587,7 @@ TEST(TreeKeyCacheBasics, HighestGrantEpochReportsTheLargestCached) {
     EXPECT_EQ(store.highestGrantEpoch().value(), 7u) << "largest, not last written";
 }
 
-TEST(TreeKeyCacheBasics, ClearNodeKeysKeepsGrantKeys) {
+TEST_F(TreeKeyCacheBasics, ClearNodeKeysKeepsGrantKeys) {
     TreeKeyCache store;
     store.putNodeKey(1, 0, PrivateKey::generateRandom());
     store.putGrantKey(4, PrivateKey::generateRandom());
@@ -610,7 +598,7 @@ TEST(TreeKeyCacheBasics, ClearNodeKeysKeepsGrantKeys) {
     EXPECT_TRUE(store.getGrantKey(4).has_value());
 }
 
-TEST(TreeKeyCacheBasics, ForgetGrantKeyRemovesOnlyThatEpoch) {
+TEST_F(TreeKeyCacheBasics, ForgetGrantKeyRemovesOnlyThatEpoch) {
     TreeKeyCache store;
     store.putGrantKey(1, PrivateKey::generateRandom());
     store.putGrantKey(2, PrivateKey::generateRandom());
@@ -622,7 +610,7 @@ TEST(TreeKeyCacheBasics, ForgetGrantKeyRemovesOnlyThatEpoch) {
     EXPECT_EQ(store.nodeKeyCount(), 1u);
 }
 
-TEST(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
+TEST_F(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
     // Worth most under TSan; without a sanitiser this is a smoke test that the locking does not deadlock.
     TreeKeyCache store;
     const PrivateKey anchor = PrivateKey::generateRandom();
@@ -649,13 +637,12 @@ TEST(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
     EXPECT_EQ(store.getGrantKey(99)->toWIF(), anchor.toWIF());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // TreeKeyCacheRegistry — one store per group
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeKeyCacheRegistryTest, SECURITY_GivesEachGroupItsOwnStore) {
-    // The whole bug in one assertion: two groups both at epoch 1, sharing one registry, must not see each other's
-    // grant key. Node indices and epochs are small integers that every group reuses from 1.
+class TreeKeyCacheRegistryTest : public testing::Test {};
+
+TEST_F(TreeKeyCacheRegistryTest, SECURITY_GivesEachGroupItsOwnStore) {
+    // The whole bug in one assertion: two groups both at epoch 1, sharing one registry, must not see each other's grant key. Node indices and epochs are small integers that every group reuses from 1.
     const PrivateKey keyA = PrivateKey::generateRandom();
     const PrivateKey keyB = PrivateKey::generateRandom();
 
@@ -673,13 +660,13 @@ TEST(TreeKeyCacheRegistryTest, SECURITY_GivesEachGroupItsOwnStore) {
     EXPECT_EQ(registry.get("groupB")->getNodeKey(1, 0)->toWIF(), keyB.toWIF());
 }
 
-TEST(TreeKeyCacheRegistryTest, ReturnsTheSameStoreForTheSameGroup) {
+TEST_F(TreeKeyCacheRegistryTest, ReturnsTheSameStoreForTheSameGroup) {
     TreeKeyCacheRegistry registry;
     EXPECT_EQ(registry.get("g").get(), registry.get("g").get());
     EXPECT_EQ(registry.groupCount(), 1u);
 }
 
-TEST(TreeKeyCacheRegistryTest, DropDetachesWithoutInvalidatingAHeldHandle) {
+TEST_F(TreeKeyCacheRegistryTest, DropDetachesWithoutInvalidatingAHeldHandle) {
     TreeKeyCacheRegistry registry;
     const auto held = registry.get("g");
     held->putGrantKey(1, PrivateKey::generateRandom());
@@ -694,7 +681,7 @@ TEST(TreeKeyCacheRegistryTest, DropDetachesWithoutInvalidatingAHeldHandle) {
     EXPECT_FALSE(fresh->getGrantKey(1).has_value());
 }
 
-TEST(TreeKeyCacheRegistryTest, DropIsScopedToOneGroup) {
+TEST_F(TreeKeyCacheRegistryTest, DropIsScopedToOneGroup) {
     TreeKeyCacheRegistry registry;
     const auto storeB = registry.get("groupB");
     storeB->putGrantKey(1, PrivateKey::generateRandom());
@@ -705,7 +692,7 @@ TEST(TreeKeyCacheRegistryTest, DropIsScopedToOneGroup) {
     EXPECT_TRUE(registry.get("groupB")->getGrantKey(1).has_value());
 }
 
-TEST(TreeKeyCacheRegistryTest, DropAllClearsEveryGroup) {
+TEST_F(TreeKeyCacheRegistryTest, DropAllClearsEveryGroup) {
     TreeKeyCacheRegistry registry;
     registry.get("a")->putGrantKey(1, PrivateKey::generateRandom());
     registry.get("b")->putGrantKey(1, PrivateKey::generateRandom());
@@ -716,9 +703,8 @@ TEST(TreeKeyCacheRegistryTest, DropAllClearsEveryGroup) {
     EXPECT_FALSE(registry.get("a")->getGrantKey(1).has_value());
 }
 
-TEST(TreeKeyCacheRegistryTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
-    // Get-or-create has to be atomic: two stores for one group means one of them silently absorbs climbs nobody
-    // ever reads back.
+TEST_F(TreeKeyCacheRegistryTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
+    // Get-or-create has to be atomic: two stores for one group means one of them silently absorbs climbs nobody ever reads back.
     TreeKeyCacheRegistry registry;
     std::vector<std::thread> threads;
     std::vector<TreeKeyCache*> seen(8, nullptr);
@@ -734,11 +720,9 @@ TEST(TreeKeyCacheRegistryTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
     EXPECT_EQ(registry.groupCount(), 1u);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // The cache-hit path must verify, not just hit
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeKeysClimb, SECURITY_ACachedGrantKeyThatDoesNotMatchThePublishedOneIsNotServed) {
+TEST_F(TreeKeysClimb, SECURITY_ACachedGrantKeyThatDoesNotMatchThePublishedOneIsNotServed) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
@@ -761,7 +745,7 @@ TEST(TreeKeysClimb, SECURITY_ACachedGrantKeyThatDoesNotMatchThePublishedOneIsNot
         << "the impostor must be evicted, not merely bypassed";
 }
 
-TEST(TreeKeysClimb, AMatchingCachedGrantKeyStillShortCircuitsTheWalk) {
+TEST_F(TreeKeysClimb, AMatchingCachedGrantKeyStillShortCircuitsTheWalk) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache buildStore;
     TreeKeys builder(buildStore);
@@ -772,17 +756,15 @@ TEST(TreeKeysClimb, AMatchingCachedGrantKeyStillShortCircuitsTheWalk) {
     TreeKeys keys(store);
     ASSERT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
 
-    // Drop the node keys but keep the grant key: if the second climb really short-circuits, it recovers no node
-    // key on the way and the count stays at zero. Counting equality alone would also pass if it re-walked.
+    // Drop the node keys but keep the grant key: if the second climb really short-circuits, it recovers no node key on the way and the count stays at zero. Counting equality alone would also pass if it re-walked.
     store.clearNodeKeys();
     const ClimbResult again = keys.climbToGrantKey(state, members[0].userId, members[0].priv);
     EXPECT_EQ(again.failure, ClimbFailure::None);
     EXPECT_EQ(store.nodeKeyCount(), 0u) << "verification must not cost the short-circuit";
 }
 
-TEST(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
-    // The unscoped-cache bug, reproduced at the climb level: two independent groups, both epoch 1. Even sharing a
-    // store, the verification on the hit path keeps each climb honest.
+TEST_F(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
+    // The unscoped-cache bug, reproduced at the climb level: two independent groups, both epoch 1. Even sharing a store, the verification on the hit path keeps each climb honest.
     const std::vector<TestMember> membersA = makeMembers(4);
     const std::vector<TestMember> membersB = makeMembers(4);
     TreeKeyCache buildStoreA, buildStoreB;

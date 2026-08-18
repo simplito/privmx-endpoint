@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "../utils/BaseTest.hpp"
-#include "../utils/FalseUserVerifierInterface.hpp"
+#include "../../utils/BaseTest.hpp"
+#include "../../utils/FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>

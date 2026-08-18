@@ -1,32 +1,26 @@
 
 #include <gtest/gtest.h>
-#include "../utils/BaseTest.hpp"
+#include <memory>
+#include <string>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <Poco/Util/IniFileConfiguration.h>
-#include <privmx/endpoint/core/VarSerializer.hpp>
-#include <privmx/endpoint/core/EventQueueImpl.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint;
 
-class CryptoTest : public privmx::test::BaseTest {
+class CryptoTest : public testing::Test {
 protected:
-    CryptoTest() : BaseTest(privmx::test::BaseTestMode::offline) {}
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
+    void SetUp() override {
         cryptoApi = std::make_shared<crypto::CryptoApi>(
             crypto::CryptoApi::create()
         );
     }
-    void customTearDown() override { // tmp segfault fix
+    void TearDown() override { // tmp segfault fix
         cryptoApi.reset();
     }
     std::shared_ptr<crypto::CryptoApi> cryptoApi;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
-    // Consts
     // Keys
     std::string _PGPkey =
     "-----BEGIN PGP PUBLIC KEY BLOCK-----\n"

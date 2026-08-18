@@ -1,5 +1,5 @@
 
-#include "../utils/BaseEndpointEventTest.hpp"
+#include "../../utils/BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>

@@ -9,16 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/**
- * Unit tests for EP-10 (`GroupDataSchemaMapper::assertDataIntegrity`'s warm-read chain checkpoint) and EP-9
- * (version/keyVersion trust-on-first-use pinning, built on the same checkpoint storage).
- *
- * No server is involved, same as GroupKeyResolverTest.cpp: each history entry is authored through the real
- * `GroupDataSchemaMapper::encrypt` (one throwaway mapper per signing identity, since the mapper signs with
- * whatever key it was constructed with), then assembled into a `server::GroupInfo` by hand, the way the bridge
- * would serve it. `core::Connection()` — its public default constructor — stands in for a live connection:
- * `assertDataIntegrity`/`encrypt` never touch it.
- */
+/** Unit tests for `GroupDataSchemaMapper::assertDataIntegrity`'s warm-read chain checkpoint and version/keyVersion trust-on-first-use pinning; no server is involved, each history entry is authored through the real `encrypt` path and assembled into a `server::GroupInfo` by hand, the way the bridge would serve it. */
 
 #include <gtest/gtest.h>
 
@@ -41,116 +32,106 @@ using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-namespace {
-
-std::string hashOf(const std::string& dioStr) {
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(dioStr));
-}
-
-/** Signs and appends one history entry to `group`, mirroring the wire shape a real create/update call produces. */
-std::string appendEntry(
-    server::GroupInfo& group,
-    const PrivateKey& authorPriv,
-    const std::string& authorUserId,
-    const std::vector<std::string>& users,
-    const std::vector<std::string>& managers,
-    const std::string& groupPubKey,
-    int64_t keyVersion,
-    const std::optional<std::string>& prevEntryHash,
-    int64_t timestamp
-) {
-    GroupDataSchemaMapper authorMapper(authorPriv, core::Connection());
-
-    dynamic::MembershipBlock membership{
-        .users = users,
-        .managers = managers,
-        .groupPubKey = groupPubKey,
-        .keyId = "key1",
-        .keyVersion = keyVersion,
-        .prevEntryHash = prevEntryHash
+// assertDataIntegrity — warm-read checkpoint behaviour
+class GroupChainCheckpoint : public testing::Test {
+protected:
+    struct ChainFixture {
+        server::GroupInfo group;
+        std::string e0Dio, e1Dio, e2Dio;
+        PrivateKey alice = PrivateKey::generateRandom();
     };
 
-    core::DataIntegrityObject dio;
-    dio.creatorUserId = authorUserId;
-    dio.creatorPubKey = authorPriv.getPublicKey().toBase58DER();
-    dio.contextId = group.contextId;
-    dio.resourceId = group.resourceId.value_or("");
-    dio.timestamp = timestamp;
-    dio.randomId = "rnd-" + std::to_string(group.data.size());
-    // A real Connection always stamps this (ConnectionImpl::_bridgeIdentity), so DIOEncryptorV1::decodeAndVerify
-    // never has to handle it being absent — it unconditionally dereferences dio.bridgeIdentity, so leaving this
-    // unset here would be undefined behavior, not a "missing field" that gets validated away.
-    dio.bridgeIdentity = core::BridgeIdentity{.url = "https://bridge.test", .pubKey = std::nullopt, .instanceId = std::nullopt};
+    std::string hashOf(const std::string& dioStr) {
+        return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(dioStr));
+    }
 
-    GroupDataToEncryptV5 dataToEncrypt{
-        .publicMeta = core::Buffer::from(std::string("pub-") + std::to_string(group.data.size())),
-        .privateMeta = core::Buffer::from(std::string("priv")),
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = "secret", .resourceId = dio.resourceId, .randomId = dio.randomId
-        },
-        .dio = dio,
-        .groupPrivKey = "placeholder-group-priv-key",
-        .membership = membership
-    };
+    std::string appendNewHistoryEntry(
+        server::GroupInfo& group,
+        const PrivateKey& authorPriv,
+        const std::string& authorUserId,
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers,
+        const std::string& groupPubKey,
+        int64_t keyVersion,
+        const std::optional<std::string>& prevEntryHash,
+        int64_t timestamp
+    ) {
+        GroupDataSchemaMapper authorMapper(authorPriv, core::Connection());
 
-    // Never decrypted by these tests (assertDataIntegrity only checks signatures/checksums on the encrypted
-    // fields, not their plaintext), but it still has to be a real AES-256 key or signAndEncryptAndEncode throws.
-    Poco::Dynamic::Var blob = authorMapper.encrypt(dataToEncrypt, privmx::crypto::Crypto::randomBytes(32));
+        dynamic::MembershipBlock membership{
+            .users = users,
+            .managers = managers,
+            .groupPubKey = groupPubKey,
+            .keyId = "key1",
+            .keyVersion = keyVersion,
+            .prevEntryHash = prevEntryHash
+        };
 
-    server::GroupDataEntry entry;
-    entry.keyId = "key1";
-    entry.data = blob;
-    group.data.push_back(entry);
+        core::DataIntegrityObject dio;
+        dio.creatorUserId = authorUserId;
+        dio.creatorPubKey = authorPriv.getPublicKey().toBase58DER();
+        dio.contextId = group.contextId;
+        dio.resourceId = group.resourceId.value_or("");
+        dio.timestamp = timestamp;
+        dio.randomId = "rnd-" + std::to_string(group.data.size());
+        // A real Connection always stamps this, and DIOEncryptorV1::decodeAndVerify unconditionally dereferences it, so leaving it unset here would be undefined behavior, not a validated-away missing field.
+        dio.bridgeIdentity = core::BridgeIdentity{.url = "https://bridge.test", .pubKey = std::nullopt, .instanceId = std::nullopt};
 
-    server::GroupHistoryEntryInfo hist;
-    hist.keyId = "key1";
-    hist.groupPubKey = groupPubKey;
-    hist.users = users;
-    hist.managers = managers;
-    hist.created = timestamp;
-    hist.author = authorUserId;
-    group.history.push_back(hist);
+        GroupDataToEncryptV5 dataToEncrypt{
+            .publicMeta = core::Buffer::from(std::string("pub-") + std::to_string(group.data.size())),
+            .privateMeta = core::Buffer::from(std::string("priv")),
+            .internalMeta = core::ModuleInternalMetaV5{
+                .secret = "secret", .resourceId = dio.resourceId, .randomId = dio.randomId
+            },
+            .dio = dio,
+            .groupPrivKey = "placeholder-group-priv-key",
+            .membership = membership
+        };
 
-    return dynamic::EncryptedGroupDataV5::fromJSON(blob).dio;
-}
+        // Never decrypted by these tests, but it still has to be a real AES-256 key or signAndEncryptAndEncode throws.
+        Poco::Dynamic::Var blob = authorMapper.encrypt(dataToEncrypt, privmx::crypto::Crypto::randomBytes(32));
 
-/** Sets the bridge-plaintext head fields from the last appended entry, the way a real `groupGet` response would. */
-void finalizeHead(server::GroupInfo& group, int64_t keyVersion) {
-    const auto& last = group.history.back();
-    group.version = static_cast<int64_t>(group.data.size());
-    group.users = last.users;
-    group.managers = last.managers;
-    group.groupPubKey = last.groupPubKey;
-    group.keyVersion = keyVersion;
-}
+        server::GroupDataEntry entry;
+        entry.keyId = "key1";
+        entry.data = blob;
+        group.data.push_back(entry);
 
-struct ChainFixture {
-    server::GroupInfo group;
-    std::string e0Dio, e1Dio, e2Dio;
-    PrivateKey alice = PrivateKey::generateRandom();
+        server::GroupHistoryEntryInfo hist;
+        hist.keyId = "key1";
+        hist.groupPubKey = groupPubKey;
+        hist.users = users;
+        hist.managers = managers;
+        hist.created = timestamp;
+        hist.author = authorUserId;
+        group.history.push_back(hist);
+
+        return dynamic::EncryptedGroupDataV5::fromJSON(blob).dio;
+    }
+
+    void populateHeadFromLastEntry(server::GroupInfo& group, int64_t keyVersion) {
+        const auto& last = group.history.back();
+        group.version = static_cast<int64_t>(group.data.size());
+        group.users = last.users;
+        group.managers = last.managers;
+        group.groupPubKey = last.groupPubKey;
+        group.keyVersion = keyVersion;
+    }
+
+    ChainFixture buildThreeEntryChain(const std::string& groupId) {
+        ChainFixture fx;
+        fx.group.id = groupId;
+        fx.group.contextId = "ctx1";
+        fx.group.resourceId = "res1";
+
+        fx.e0Dio = appendNewHistoryEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, std::nullopt, 1000);
+        fx.e1Dio = appendNewHistoryEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(fx.e0Dio), 2000);
+        fx.e2Dio = appendNewHistoryEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(fx.e1Dio), 3000);
+        populateHeadFromLastEntry(fx.group, 0);
+        return fx;
+    }
 };
 
-/** A 3-entry chain, all authored by "alice", managers=users={"alice"}, keyVersion 0 throughout. */
-ChainFixture buildThreeEntryChain(const std::string& groupId) {
-    ChainFixture fx;
-    fx.group.id = groupId;
-    fx.group.contextId = "ctx1";
-    fx.group.resourceId = "res1";
-
-    fx.e0Dio = appendEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, std::nullopt, 1000);
-    fx.e1Dio = appendEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(fx.e0Dio), 2000);
-    fx.e2Dio = appendEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(fx.e1Dio), 3000);
-    finalizeHead(fx.group, 0);
-    return fx;
-}
-
-} // namespace
-
-// ─────────────────────────────────────────────────────────────────────────────
-// assertDataIntegrity — warm-read checkpoint behaviour
-// ─────────────────────────────────────────────────────────────────────────────
-
-TEST(GroupChainCheckpoint, ColdThenWarmBaselineDeltaZero) {
+TEST_F(GroupChainCheckpoint, ColdThenWarmBaselineDeltaZero) {
     ChainFixture fx = buildThreeEntryChain("grp-baseline");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
 
@@ -160,8 +141,7 @@ TEST(GroupChainCheckpoint, ColdThenWarmBaselineDeltaZero) {
     EXPECT_EQ(checkpoint->verifiedVersion, 3);
     EXPECT_EQ(checkpoint->lastEntryDioHashHex, hashOf(fx.e2Dio));
 
-    // Second call, identical response: nothing new to verify (Δ=0), but it must still succeed and leave the
-    // checkpoint exactly where it was.
+    // Second call, identical response: nothing new to verify (Δ=0), but it must still succeed and leave the checkpoint exactly where it was.
     ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
     auto checkpointAfter = verifier.peekChainCheckpoint(fx.group.id);
     ASSERT_TRUE(checkpointAfter.has_value());
@@ -169,7 +149,7 @@ TEST(GroupChainCheckpoint, ColdThenWarmBaselineDeltaZero) {
     EXPECT_EQ(checkpointAfter->lastEntryDioHashHex, hashOf(fx.e2Dio));
 }
 
-TEST(GroupChainCheckpoint, DeltaCorrectnessExtendsPastCheckpoint) {
+TEST_F(GroupChainCheckpoint, DeltaCorrectnessExtendsPastCheckpoint) {
     ChainFixture fx = buildThreeEntryChain("grp-delta");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
 
@@ -177,9 +157,9 @@ TEST(GroupChainCheckpoint, DeltaCorrectnessExtendsPastCheckpoint) {
     ASSERT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
 
     // Two more entries, still authored by alice (already an authorized manager per the checkpoint).
-    std::string e3Dio = appendEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(fx.e2Dio), 4000);
-    appendEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(e3Dio), 5000);
-    finalizeHead(fx.group, 0);
+    std::string e3Dio = appendNewHistoryEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(fx.e2Dio), 4000);
+    appendNewHistoryEntry(fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(e3Dio), 5000);
+    populateHeadFromLastEntry(fx.group, 0);
 
     ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
     auto checkpoint = verifier.peekChainCheckpoint(fx.group.id);
@@ -187,16 +167,14 @@ TEST(GroupChainCheckpoint, DeltaCorrectnessExtendsPastCheckpoint) {
     EXPECT_EQ(checkpoint->verifiedVersion, 5) << "the resumed run must validate the new entries, not just no-op";
 }
 
-TEST(GroupChainCheckpoint, RewrittenPrefixIsRejected) {
+TEST_F(GroupChainCheckpoint, RewrittenPrefixIsRejected) {
     ChainFixture fx = buildThreeEntryChain("grp-rewrite");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
 
     ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
     ASSERT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
 
-    // A bridge that quietly swapped what occupies the already-verified slot 2 for a different (but otherwise
-    // independently valid, validly-signed) entry — e.g. one that secretly promotes "mallory" to manager — and
-    // then continues the chain from *that* alternate entry instead of the one this client actually verified.
+    // A bridge that quietly swapped the already-verified slot 2 for a different, validly-signed entry that secretly promotes "mallory" to manager, then continues the chain from that alternate entry instead of the one this client actually verified.
     PrivateKey mallory = PrivateKey::generateRandom();
     server::GroupInfo alternate;
     alternate.id = fx.group.id;
@@ -205,13 +183,13 @@ TEST(GroupChainCheckpoint, RewrittenPrefixIsRejected) {
     alternate.data = {fx.group.data[0], fx.group.data[1]};
     alternate.history = {fx.group.history[0], fx.group.history[1]};
 
-    std::string e2AltDio = appendEntry(
+    std::string e2AltDio = appendNewHistoryEntry(
         alternate, fx.alice, "alice", {"alice", "mallory"}, {"alice", "mallory"}, "pub0", 0, hashOf(fx.e1Dio), 3000
     );
-    appendEntry(
+    appendNewHistoryEntry(
         alternate, mallory, "mallory", {"alice", "mallory"}, {"alice", "mallory"}, "pub0", 0, hashOf(e2AltDio), 4000
     );
-    finalizeHead(alternate, 0);
+    populateHeadFromLastEntry(alternate, 0);
 
     EXPECT_THROW(verifier.assertDataIntegrity(alternate), GroupChainBrokenException)
         << "the new entry chains from the alternate slot-2, not from the checkpoint's remembered anchor";
@@ -223,12 +201,8 @@ TEST(GroupChainCheckpoint, RewrittenPrefixIsRejected) {
     EXPECT_EQ(checkpoint->lastEntryDioHashHex, hashOf(fx.e2Dio));
 }
 
-TEST(GroupChainCheckpoint, VersionRegressionRejectedAsFork) {
-    // EP-9: a genuinely valid (if stale) shorter prefix of the same chain — e.g. a malicious bridge replaying
-    // the state from before a member removal, or an honest replica that hasn't caught up — is indistinguishable
-    // from "fine" by chain-link/manager checks alone, since those only look inside the response they're given.
-    // Once a longer state has been confirmed, a shorter one must be rejected outright, not silently re-verified
-    // and accepted.
+TEST_F(GroupChainCheckpoint, VersionRegressionRejectedAsFork) {
+    // A genuinely valid but stale shorter prefix of the same chain is indistinguishable from "fine" by chain-link/manager checks alone; once a longer state has been confirmed, a shorter one must be rejected outright, not silently re-verified and accepted.
     ChainFixture fx = buildThreeEntryChain("grp-regression");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
 
@@ -241,7 +215,7 @@ TEST(GroupChainCheckpoint, VersionRegressionRejectedAsFork) {
     shorter.resourceId = fx.group.resourceId;
     shorter.data = {fx.group.data[0], fx.group.data[1]};
     shorter.history = {fx.group.history[0], fx.group.history[1]};
-    finalizeHead(shorter, 0);
+    populateHeadFromLastEntry(shorter, 0);
 
     EXPECT_THROW(verifier.assertDataIntegrity(shorter), GroupHistoryForkException)
         << "a shorter response than what's already confirmed must be reported as a fork, not silently accepted";
@@ -256,9 +230,8 @@ TEST(GroupChainCheckpoint, VersionRegressionRejectedAsFork) {
     EXPECT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
 }
 
-TEST(GroupChainCheckpoint, FirstSightingIsExemptFromPinning) {
-    // Trust-on-first-use: with no checkpoint yet, there is nothing to regress behind, so any version verifies
-    // (this is the same "first verification can't be avoided" property EP-10 relies on).
+TEST_F(GroupChainCheckpoint, FirstSightingIsExemptFromPinning) {
+    // Trust-on-first-use: with no checkpoint yet, there is nothing to regress behind, so any version verifies.
     ChainFixture fx = buildThreeEntryChain("grp-first-sighting");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
 
@@ -268,16 +241,14 @@ TEST(GroupChainCheckpoint, FirstSightingIsExemptFromPinning) {
     firstEntryOnly.resourceId = fx.group.resourceId;
     firstEntryOnly.data = {fx.group.data[0]};
     firstEntryOnly.history = {fx.group.history[0]};
-    finalizeHead(firstEntryOnly, 0);
+    populateHeadFromLastEntry(firstEntryOnly, 0);
 
     EXPECT_NO_THROW(verifier.assertDataIntegrity(firstEntryOnly));
     EXPECT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 1);
 }
 
-TEST(GroupChainCheckpoint, DeltaZeroTamperedUsersEchoIsRejected) {
-    // Regression test for the head-check anchoring fix: on a Δ=0 read, `groupInfo.history.back()` is never
-    // touched by the loop, so the head check must compare against the checkpoint-anchored `verifiedUsers`, not
-    // against that (bridge-supplied, unverified-this-round) field.
+TEST_F(GroupChainCheckpoint, DeltaZeroTamperedUsersEchoIsRejected) {
+    // Regression test for the head-check anchoring fix: on a Δ=0 read, the head check must compare against the checkpoint-anchored `verifiedUsers`, not the bridge-supplied, unverified-this-round field.
     ChainFixture fx = buildThreeEntryChain("grp-tamper-users");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
@@ -290,7 +261,7 @@ TEST(GroupChainCheckpoint, DeltaZeroTamperedUsersEchoIsRejected) {
     EXPECT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
 }
 
-TEST(GroupChainCheckpoint, DeltaZeroTamperedGroupPubKeyEchoIsRejected) {
+TEST_F(GroupChainCheckpoint, DeltaZeroTamperedGroupPubKeyEchoIsRejected) {
     ChainFixture fx = buildThreeEntryChain("grp-tamper-pubkey");
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
@@ -303,11 +274,10 @@ TEST(GroupChainCheckpoint, DeltaZeroTamperedGroupPubKeyEchoIsRejected) {
     EXPECT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // checkpoint::ChainCheckpoint / ChainCheckpointRegistry — no crypto involved
-// ─────────────────────────────────────────────────────────────────────────────
+class ChainCheckpointCache : public testing::Test {};
 
-TEST(ChainCheckpointCache, AdvanceIsMonotonic) {
+TEST_F(ChainCheckpointCache, AdvanceIsMonotonic) {
     checkpoint::ChainCheckpoint cache;
     EXPECT_FALSE(cache.get().has_value());
 
@@ -331,7 +301,7 @@ TEST(ChainCheckpointCache, AdvanceIsMonotonic) {
     EXPECT_EQ(cache.get()->lastEntryDioHashHex, "hash-5");
 }
 
-TEST(ChainCheckpointCache, RegistryGetOrCreateAndDrop) {
+TEST_F(ChainCheckpointCache, RegistryGetOrCreateAndDrop) {
     checkpoint::ChainCheckpointRegistry registry;
     EXPECT_EQ(registry.groupCount(), 0u);
     EXPECT_EQ(registry.tryGet("grp1"), nullptr);

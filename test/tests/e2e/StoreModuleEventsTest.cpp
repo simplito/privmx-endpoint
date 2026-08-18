@@ -1,5 +1,5 @@
 
-#include "../utils/BaseEndpointEventTest.hpp"
+#include "../../utils/BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/store/Events.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>

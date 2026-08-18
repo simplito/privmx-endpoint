@@ -1,5 +1,5 @@
 
-#include "../utils/BaseEndpointEventTest.hpp"
+#include "../../utils/BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/Events.hpp>
 #include <privmx/endpoint/thread/ThreadException.hpp>

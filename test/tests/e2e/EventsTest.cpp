@@ -3,7 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
-#include "../utils/BaseTest.hpp"
+#include "../../utils/BaseTest.hpp"
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
 #include <privmx/endpoint/event/Events.hpp>

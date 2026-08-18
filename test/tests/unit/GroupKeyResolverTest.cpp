@@ -9,15 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/**
- * Unit tests for resolving a group's grant key through the wire types, with real EC keys.
- *
- * This is the seam where the key tree and the Epoch Ladder meet the server API, so the tests go through
- * `server::GroupInfo` rather than the runtime structs — the conversion is exactly where a field mismatch would
- * hide. No server is involved: the group info is assembled here the way the bridge would serve it.
- *
- * Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses.
- */
+/** Unit tests for resolving a group's grant key through the wire types with real EC keys, going through `server::GroupInfo` rather than the runtime structs since that conversion is exactly where a field mismatch would hide; no server is involved, the group info is assembled here the way the bridge would serve it, and tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
 
 #include <gtest/gtest.h>
 
@@ -33,106 +25,170 @@ using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
 
-namespace {
+class GroupKeyResolverTestBase : public testing::Test {
+protected:
+    struct TestMember {
+        std::string userId;
+        PrivateKey priv;
+    };
 
-struct TestMember {
-    std::string userId;
-    PrivateKey priv;
+    /** Builds a tree-backed group exactly as the bridge would serve it after `createGroupWithKeyTree`. */
+    struct Fixture {
+        std::vector<TestMember> members;
+        server::GroupInfo group;
+        PrivateKey grantKey;
+    };
+
+    std::vector<TestMember> makeMembers(std::uint32_t count) {
+        std::vector<TestMember> members;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            members.push_back(TestMember{"user" + std::to_string(i), PrivateKey::generateRandom()});
+        }
+        return members;
+    }
+
+    std::vector<TreeMember> publicOf(const std::vector<TestMember>& members) {
+        std::vector<TreeMember> result;
+        for (const TestMember& member : members) {
+            result.push_back(TreeMember{member.userId, member.priv.getPublicKey()});
+        }
+        return result;
+    }
+
+    /** Serialises a runtime edge into the wire shape the bridge would send. */
+    server::GroupTreeEdge toWire(const TreeEdge& edge) {
+        server::GroupTreeEdge wire;
+        wire.isGrantEdge = edge.isGrantEdge;
+        wire.parentIndex = static_cast<std::int64_t>(edge.parentIndex);
+        wire.parentGeneration = static_cast<std::int64_t>(edge.parentGeneration);
+        if (edge.childKind == EdgeChildKind::User) {
+            wire.childKind = "user";
+            wire.childUserId = edge.childUserId;
+        } else {
+            wire.childKind = "node";
+            wire.childIndex = static_cast<std::int64_t>(edge.childIndex);
+            wire.childGeneration = static_cast<std::int64_t>(edge.childGeneration);
+        }
+        wire.data = edge.blob;
+        return wire;
+    }
+
+    Fixture buildFixture(std::uint32_t memberCount) {
+        Fixture fixture;
+        fixture.members = makeMembers(memberCount);
+
+        TreeKeyCache buildStore;
+        TreeKeys builder(buildStore);
+        const BuildPlan plan = builder.build(publicOf(fixture.members), fixture.members[0].priv);
+        fixture.grantKey = plan.grantKey;
+
+        server::GroupInfo& group = fixture.group;
+        group.id = "grp1";
+        group.contextId = "ctx1";
+        group.groupPubKey = plan.grantKey.getPublicKey().toBase58DER();
+        group.keyVersion = 1;
+        group.numLeaves = static_cast<std::int64_t>(plan.numLeaves);
+
+        std::vector<std::string> leaves;
+        for (const TestMember& member : fixture.members) {
+            leaves.push_back(member.userId);
+        }
+        group.leafAssignment = leaves;
+
+        std::vector<server::GroupTreeNode> nodes;
+        for (const TreeNodeState& node : plan.nodes) {
+            nodes.push_back(server::GroupTreeNode{
+                static_cast<std::int64_t>(node.nodeIndex),
+                static_cast<std::int64_t>(node.generation),
+                node.publicKey.toBase58DER(),
+            });
+        }
+        group.treeNodes = nodes;
+
+        std::vector<server::GroupTreeEdge> edges;
+        for (const TreeEdge& edge : plan.edges) {
+            edges.push_back(toWire(edge));
+        }
+        group.treeEdges = edges;
+        return fixture;
+    }
+
+    void setOwnLeafPosition(server::GroupInfo& group, std::uint32_t position) {
+        group.ownLeafPosition = static_cast<std::int64_t>(position);
+    }
 };
 
-std::vector<TestMember> makeMembers(std::uint32_t count) {
-    std::vector<TestMember> members;
-    for (std::uint32_t i = 0; i < count; ++i) {
-        members.push_back(TestMember{"user" + std::to_string(i), PrivateKey::generateRandom()});
-    }
-    return members;
-}
-
-std::vector<TreeMember> publicOf(const std::vector<TestMember>& members) {
-    std::vector<TreeMember> result;
-    for (const TestMember& member : members) {
-        result.push_back(TreeMember{member.userId, member.priv.getPublicKey()});
-    }
-    return result;
-}
-
-/** Serialises a runtime edge into the wire shape the bridge would send. */
-server::GroupTreeEdge toWire(const TreeEdge& edge) {
-    server::GroupTreeEdge wire;
-    wire.isGrantEdge = edge.isGrantEdge;
-    wire.parentIndex = static_cast<std::int64_t>(edge.parentIndex);
-    wire.parentGeneration = static_cast<std::int64_t>(edge.parentGeneration);
-    if (edge.childKind == EdgeChildKind::User) {
-        wire.childKind = "user";
-        wire.childUserId = edge.childUserId;
-    } else {
-        wire.childKind = "node";
-        wire.childIndex = static_cast<std::int64_t>(edge.childIndex);
-        wire.childGeneration = static_cast<std::int64_t>(edge.childGeneration);
-    }
-    wire.data = edge.blob;
-    return wire;
-}
-
-/** Builds a tree-backed group exactly as the bridge would serve it after `createGroupWithKeyTree`. */
-struct Fixture {
-    std::vector<TestMember> members;
-    server::GroupInfo group;
-    PrivateKey grantKey;
-};
-
-Fixture buildFixture(std::uint32_t memberCount) {
-    Fixture fixture;
-    fixture.members = makeMembers(memberCount);
-
-    TreeKeyCache buildStore;
-    TreeKeys builder(buildStore);
-    const BuildPlan plan = builder.build(publicOf(fixture.members), fixture.members[0].priv);
-    fixture.grantKey = plan.grantKey;
-
-    server::GroupInfo& group = fixture.group;
-    group.id = "grp1";
-    group.contextId = "ctx1";
-    group.groupPubKey = plan.grantKey.getPublicKey().toBase58DER();
-    group.keyVersion = 1;
-    group.numLeaves = static_cast<std::int64_t>(plan.numLeaves);
-
-    std::vector<std::string> leaves;
-    for (const TestMember& member : fixture.members) {
-        leaves.push_back(member.userId);
-    }
-    group.leafAssignment = leaves;
-
-    std::vector<server::GroupTreeNode> nodes;
-    for (const TreeNodeState& node : plan.nodes) {
-        nodes.push_back(server::GroupTreeNode{
-            static_cast<std::int64_t>(node.nodeIndex),
-            static_cast<std::int64_t>(node.generation),
-            node.publicKey.toBase58DER(),
-        });
-    }
-    group.treeNodes = nodes;
-
-    std::vector<server::GroupTreeEdge> edges;
-    for (const TreeEdge& edge : plan.edges) {
-        edges.push_back(toWire(edge));
-    }
-    group.treeEdges = edges;
-    return fixture;
-}
-
-/** Points the group at a member's leaf, the way the bridge does for whoever is asking. */
-void asCaller(server::GroupInfo& group, std::uint32_t position) {
-    group.ownLeafPosition = static_cast<std::int64_t>(position);
-}
-
-} // namespace
-
-// ─────────────────────────────────────────────────────────────────────────────
 // tree detection — the switch that keeps flat groups untouched
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(ResolverDetection, AGroupWithoutTreeFieldsIsFlat) {
+class ResolverDetection : public GroupKeyResolverTestBase {};
+
+// conversions — where a field mismatch would hide
+
+class ResolverConversion : public GroupKeyResolverTestBase {};
+
+// resolving the current epoch
+
+class ResolverCurrentEpoch : public GroupKeyResolverTestBase {};
+
+// resolving an older epoch — tree then ladder
+
+class ResolverOldEpoch : public GroupKeyResolverTestBase {
+protected:
+    /** Advances a tree-backed group through epochs, publishing rungs, and returns the epoch keys. */
+    std::vector<PrivateKey> advanceEpochs(Fixture& fixture, std::uint32_t upTo) {
+        std::vector<PrivateKey> epochKeys{fixture.grantKey};
+        std::vector<server::GroupArchiveRung> wireRungs;
+        std::vector<server::GroupKeyHistoryEntry> history;
+
+        TreeKeyCache store;
+        LadderKeys ladder(store);
+        store.putGrantKey(1, fixture.grantKey);
+        const PrivateKey signer = fixture.members[0].priv;
+
+        for (std::uint32_t epoch = 2; epoch <= upTo; ++epoch) {
+            history.push_back(server::GroupKeyHistoryEntry{
+                static_cast<std::int64_t>(epoch - 1), epochKeys.back().getPublicKey().toBase58DER()
+            });
+            const PrivateKey next = PrivateKey::generateRandom();
+            for (const ArchiveRung& rung :
+                 ladder.buildRungs(epoch, next.getPublicKey(), epochKeys.back(), 1, "alice", signer)) {
+                wireRungs.push_back(server::GroupArchiveRung{
+                    static_cast<std::int64_t>(rung.span.at),
+                    static_cast<std::int64_t>(rung.span.target),
+                    std::nullopt, std::nullopt, rung.blob, rung.author,
+                });
+            }
+            epochKeys.push_back(next);
+            store.putGrantKey(epoch, next);
+        }
+
+        // The tree still hands out epoch 1's grant key, so re-link it: the grant edge is what the climb ends on, and the newest epoch key must be what it yields.
+        auto edges = fixture.group.treeEdges.value();
+        for (server::GroupTreeEdge& edge : edges) {
+            if (edge.isGrantEdge.value_or(false)) {
+                const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
+                const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
+                for (const TreeNodeState& node : state.nodes) {
+                    if (node.nodeIndex == rootIndex) {
+                        edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey, signer);
+                    }
+                }
+                edge.parentGeneration = static_cast<std::int64_t>(upTo);
+            }
+        }
+        fixture.group.treeEdges = edges;
+        fixture.group.keyVersion = static_cast<std::int64_t>(upTo);
+        fixture.group.groupPubKey = epochKeys.back().getPublicKey().toBase58DER();
+        fixture.group.keyHistory = history;
+        fixture.group.archiveRungs = wireRungs;
+        fixture.group.eraFloor = 1;
+        return epochKeys;
+    }
+};
+
+// tree detection — the switch that keeps flat groups untouched
+
+TEST_F(ResolverDetection, AGroupWithoutTreeFieldsIsFlat) {
     server::GroupInfo flat;
     flat.groupPubKey = PrivateKey::generateRandom().getPublicKey().toBase58DER();
     flat.keyVersion = 1;
@@ -146,22 +202,20 @@ TEST(ResolverDetection, AGroupWithoutTreeFieldsIsFlat) {
     EXPECT_FALSE(result.key.has_value());
 }
 
-TEST(ResolverDetection, APartiallyPopulatedTreeIsNotTreatedAsATree) {
+TEST_F(ResolverDetection, APartiallyPopulatedTreeIsNotTreatedAsATree) {
     Fixture fixture = buildFixture(4);
     fixture.group.treeEdges = std::nullopt; // nodes present, edges missing
     EXPECT_FALSE(GroupKeyResolver::hasTree(fixture.group));
 }
 
-TEST(ResolverDetection, AFullyPopulatedTreeIsRecognised) {
+TEST_F(ResolverDetection, AFullyPopulatedTreeIsRecognised) {
     const Fixture fixture = buildFixture(4);
     EXPECT_TRUE(GroupKeyResolver::hasTree(fixture.group));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // conversions — where a field mismatch would hide
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(ResolverConversion, RoundTripsTheTreeState) {
+TEST_F(ResolverConversion, RoundTripsTheTreeState) {
     const Fixture fixture = buildFixture(8);
     const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
 
@@ -176,7 +230,7 @@ TEST(ResolverConversion, RoundTripsTheTreeState) {
     }
 }
 
-TEST(ResolverConversion, AnEmptyStringInLeafAssignmentBecomesABlank) {
+TEST_F(ResolverConversion, AnEmptyStringInLeafAssignmentBecomesABlank) {
     Fixture fixture = buildFixture(4);
     auto leaves = fixture.group.leafAssignment.value();
     leaves[2] = ""; // the wire representation of a blank left by a removal
@@ -187,7 +241,7 @@ TEST(ResolverConversion, AnEmptyStringInLeafAssignmentBecomesABlank) {
     EXPECT_TRUE(state.leafAssignment[1].has_value());
 }
 
-TEST(ResolverConversion, DistinguishesTheGrantEdgeFromOrdinaryEdges) {
+TEST_F(ResolverConversion, DistinguishesTheGrantEdgeFromOrdinaryEdges) {
     const Fixture fixture = buildFixture(4);
     const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
     std::uint32_t grantEdges = 0;
@@ -199,7 +253,7 @@ TEST(ResolverConversion, DistinguishesTheGrantEdgeFromOrdinaryEdges) {
     EXPECT_EQ(grantEdges, 1u) << "exactly one edge joins the grant keypair to the root";
 }
 
-TEST(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
+TEST_F(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
     Fixture fixture = buildFixture(2);
     const PrivateKey older = PrivateKey::generateRandom();
     fixture.group.keyVersion = 5;
@@ -209,8 +263,7 @@ TEST(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
 
     const std::vector<EpochRegistryEntry> registry = GroupKeyResolver::toRegistry(fixture.group);
     ASSERT_EQ(registry.size(), 2u);
-    // The newest epoch lives in `groupPubKey`, not in `keyHistory`. Missing that would leave it unverifiable,
-    // and an unverifiable key is one the client refuses.
+    // The newest epoch lives in `groupPubKey`, not in `keyHistory`; missing that would leave it unverifiable, and an unverifiable key is one the client refuses.
     const auto current = LadderKeys::publicKeyOfEpoch(5, registry);
     ASSERT_TRUE(current.has_value());
     EXPECT_EQ(current.value(), fixture.grantKey.getPublicKey());
@@ -220,7 +273,7 @@ TEST(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
 }
 
 /** SECURITY — the client must not take the server's word on rung direction. */
-TEST(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
+TEST_F(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
     Fixture fixture = buildFixture(2);
     fixture.group.archiveRungs = std::vector<server::GroupArchiveRung>{
         server::GroupArchiveRung{8, 7, std::nullopt, std::nullopt, "ok", std::nullopt},
@@ -233,15 +286,13 @@ TEST(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
     EXPECT_EQ(rungs[0].span.target, 7u);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // resolving the current epoch
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(ResolverCurrentEpoch, EveryMemberResolvesTheGrantKey) {
+TEST_F(ResolverCurrentEpoch, EveryMemberResolvesTheGrantKey) {
     for (const std::uint32_t count : {2u, 3u, 4u, 5u, 8u}) {
         Fixture fixture = buildFixture(count);
         for (std::uint32_t position = 0; position < count; ++position) {
-            asCaller(fixture.group, position);
+            setOwnLeafPosition(fixture.group, position);
             TreeKeyCache store;
             GroupKeyResolver resolver(store);
             const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[position].priv);
@@ -252,9 +303,9 @@ TEST(ResolverCurrentEpoch, EveryMemberResolvesTheGrantKey) {
     }
 }
 
-TEST(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
+TEST_F(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
     Fixture fixture = buildFixture(4);
-    asCaller(fixture.group, 1);
+    setOwnLeafPosition(fixture.group, 1);
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult byZero = resolver.resolve(fixture.group, 0, fixture.members[1].priv);
@@ -264,7 +315,7 @@ TEST(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
     EXPECT_EQ(byZero.key->toWIF(), byOne.key->toWIF());
 }
 
-TEST(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
+TEST_F(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
     const Fixture fixture = buildFixture(4);
     // ownLeafPosition deliberately unset: the bridge did not point at a leaf for this caller.
     TreeKeyCache store;
@@ -274,17 +325,17 @@ TEST(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
     EXPECT_EQ(result.climb, ClimbFailure::NotAMember);
 }
 
-TEST(ResolverCurrentEpoch, AnOutOfRangeLeafPositionIsRejected) {
+TEST_F(ResolverCurrentEpoch, AnOutOfRangeLeafPositionIsRejected) {
     Fixture fixture = buildFixture(4);
-    asCaller(fixture.group, 99);
+    setOwnLeafPosition(fixture.group, 99);
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
     EXPECT_EQ(resolver.resolve(fixture.group, 0, fixture.members[0].priv).climb, ClimbFailure::NotAMember);
 }
 
-TEST(ResolverCurrentEpoch, AWrongKeyForTheGivenLeafFails) {
+TEST_F(ResolverCurrentEpoch, AWrongKeyForTheGivenLeafFails) {
     Fixture fixture = buildFixture(4);
-    asCaller(fixture.group, 0);
+    setOwnLeafPosition(fixture.group, 0);
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
     // Pointed at member 0's leaf but holding member 1's key.
@@ -294,9 +345,9 @@ TEST(ResolverCurrentEpoch, AWrongKeyForTheGivenLeafFails) {
 }
 
 /** SECURITY — a corrupted edge on the caller's path must be detected, not silently mis-decrypted. */
-TEST(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
+TEST_F(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
     Fixture fixture = buildFixture(4);
-    asCaller(fixture.group, 0);
+    setOwnLeafPosition(fixture.group, 0);
 
     const PrivateKey impostor = PrivateKey::generateRandom();
     auto edges = fixture.group.treeEdges.value();
@@ -316,70 +367,12 @@ TEST(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
     EXPECT_EQ(result.climb, ClimbFailure::Tampered) << "tampering must be reported distinctly from a plain miss";
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // resolving an older epoch — tree then ladder
-// ─────────────────────────────────────────────────────────────────────────────
 
-namespace {
-
-/** Advances a tree-backed group through epochs, publishing rungs, and returns the epoch keys. */
-std::vector<PrivateKey> advanceEpochs(Fixture& fixture, std::uint32_t upTo) {
-    std::vector<PrivateKey> epochKeys{fixture.grantKey};
-    std::vector<server::GroupArchiveRung> wireRungs;
-    std::vector<server::GroupKeyHistoryEntry> history;
-
-    TreeKeyCache store;
-    LadderKeys ladder(store);
-    store.putGrantKey(1, fixture.grantKey);
-    const PrivateKey signer = fixture.members[0].priv;
-
-    for (std::uint32_t epoch = 2; epoch <= upTo; ++epoch) {
-        history.push_back(server::GroupKeyHistoryEntry{
-            static_cast<std::int64_t>(epoch - 1), epochKeys.back().getPublicKey().toBase58DER()
-        });
-        const PrivateKey next = PrivateKey::generateRandom();
-        for (const ArchiveRung& rung :
-             ladder.buildRungs(epoch, next.getPublicKey(), epochKeys.back(), 1, "alice", signer)) {
-            wireRungs.push_back(server::GroupArchiveRung{
-                static_cast<std::int64_t>(rung.span.at),
-                static_cast<std::int64_t>(rung.span.target),
-                std::nullopt, std::nullopt, rung.blob, rung.author,
-            });
-        }
-        epochKeys.push_back(next);
-        store.putGrantKey(epoch, next);
-    }
-
-    // The tree still hands out epoch 1's grant key, so re-link it: the grant edge is what the climb ends on, and
-    // the newest epoch key must be what it yields.
-    auto edges = fixture.group.treeEdges.value();
-    for (server::GroupTreeEdge& edge : edges) {
-        if (edge.isGrantEdge.value_or(false)) {
-            const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
-            const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
-            for (const TreeNodeState& node : state.nodes) {
-                if (node.nodeIndex == rootIndex) {
-                    edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey, signer);
-                }
-            }
-            edge.parentGeneration = static_cast<std::int64_t>(upTo);
-        }
-    }
-    fixture.group.treeEdges = edges;
-    fixture.group.keyVersion = static_cast<std::int64_t>(upTo);
-    fixture.group.groupPubKey = epochKeys.back().getPublicKey().toBase58DER();
-    fixture.group.keyHistory = history;
-    fixture.group.archiveRungs = wireRungs;
-    fixture.group.eraFloor = 1;
-    return epochKeys;
-}
-
-} // namespace
-
-TEST(ResolverOldEpoch, ClimbsThenDescendsToReachAnOlderEpoch) {
+TEST_F(ResolverOldEpoch, ClimbsThenDescendsToReachAnOlderEpoch) {
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 12);
-    asCaller(fixture.group, 2);
+    setOwnLeafPosition(fixture.group, 2);
 
     for (const std::uint32_t target : {1u, 5u, 8u, 11u, 12u}) {
         TreeKeyCache store;
@@ -392,11 +385,8 @@ TEST(ResolverOldEpoch, ClimbsThenDescendsToReachAnOlderEpoch) {
     }
 }
 
-/**
- * The payoff of the whole design, end to end through the wire types: a newcomer holding nothing but a leaf
- * reaches content from epoch 1, and **no ciphertext in the archive is addressed to them**.
- */
-TEST(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
+/** The payoff of the whole design, end to end through the wire types: a newcomer holding nothing but a leaf reaches content from epoch 1, and no ciphertext in the archive is addressed to them. */
+TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 12);
 
@@ -406,9 +396,7 @@ TEST(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
     leaves[3] = newcomer.userId;
     fixture.group.leafAssignment = leaves;
 
-    // The seat's parent is on leaf 2's direct path but not on leaf 0's, so the one wrap is authored by the member
-    // sharing the blank's parent — the cheap case the design aims for: seating into a blank whose parent key the
-    // adder already holds costs exactly one wrap and refreshes nothing.
+    // The seat's parent is on leaf 2's direct path but not on leaf 0's, so the one wrap is authored by the member sharing the blank's parent — the cheap case the design aims for: seating into a blank whose parent key the adder already holds costs exactly one wrap and refreshes nothing.
     const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
     const std::uint32_t parentIndex = TreeMath::parent(TreeMath::leafNode(3), state.numLeaves);
     std::uint32_t parentGeneration = 0;
@@ -434,7 +422,7 @@ TEST(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
         }
     }
     fixture.group.treeEdges = edges;
-    asCaller(fixture.group, 3);
+    setOwnLeafPosition(fixture.group, 3);
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
@@ -448,11 +436,11 @@ TEST(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
     }
 }
 
-TEST(ResolverOldEpoch, StopsAtAnEraFloorAndReportsIt) {
+TEST_F(ResolverOldEpoch, StopsAtAnEraFloorAndReportsIt) {
     Fixture fixture = buildFixture(4);
     advanceEpochs(fixture, 12);
     fixture.group.eraFloor = 8;
-    asCaller(fixture.group, 1);
+    setOwnLeafPosition(fixture.group, 1);
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
@@ -462,12 +450,12 @@ TEST(ResolverOldEpoch, StopsAtAnEraFloorAndReportsIt) {
     EXPECT_FALSE(result.key.has_value());
 }
 
-TEST(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
+TEST_F(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
     Fixture fixture = buildFixture(4);
     advanceEpochs(fixture, 12);
     fixture.group.eraFloor = 2;
     fixture.group.archivePrunedBelow = 9;
-    asCaller(fixture.group, 1);
+    setOwnLeafPosition(fixture.group, 1);
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
@@ -477,10 +465,10 @@ TEST(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
 }
 
 /** SECURITY — a substituted rung is detected during resolution and attributed. */
-TEST(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
+TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
-    asCaller(fixture.group, 1);
+    setOwnLeafPosition(fixture.group, 1);
 
     const PrivateKey impostor = PrivateKey::generateRandom();
     auto rungs = fixture.group.archiveRungs.value();
@@ -501,17 +489,12 @@ TEST(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     EXPECT_EQ(result.blame.value(), "mallory");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // caching — the seam GroupApiImpl::resolveGroupPrivKey actually calls on every read
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) {
-    // GroupApiImpl keeps one TreeKeyCache alive per group for the whole connection and passes it into every
-    // resolve() call. Every other test in this file hands resolve() a fresh cache, which proves resolve() is
-    // correct but never proves it is cache-backed. This reuses one cache across two calls, then makes a real
-    // second climb impossible (no edges left), so a pass can only mean the cached grant key answered it.
+TEST_F(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) {
+    // GroupApiImpl keeps one TreeKeyCache alive per group for the whole connection and passes it into every resolve() call; every other test in this file hands resolve() a fresh cache, which proves resolve() is correct but never proves it is cache-backed, so this reuses one cache across two calls, then makes a real second climb impossible (no edges left), so a pass can only mean the cached grant key answered it.
     Fixture fixture = buildFixture(8);
-    asCaller(fixture.group, 0);
+    setOwnLeafPosition(fixture.group, 0);
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
 
