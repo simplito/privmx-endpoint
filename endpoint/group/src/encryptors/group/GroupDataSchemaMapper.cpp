@@ -14,6 +14,7 @@
 
 #include "privmx/endpoint/group/GroupException.hpp"
 #include "privmx/endpoint/group/checkpoint/ChainCheckpoint.hpp"
+#include "privmx/endpoint/group/checkpoint/ChainCheckpointRegistry.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
@@ -57,12 +58,12 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         throw GroupDataIntegrityException();
     }
 
-    // EP-10: resume from the last successfully-verified point instead of re-proving the whole chain from
-    // genesis on every call.
+    // Resume from the last successfully-verified point instead of re-proving the whole chain from genesis on
+    // every call.
     auto checkpointStore = _chainCheckpoints.get(groupInfo.id);
     auto checkpoint = checkpointStore->get();
 
-    // EP-9: trust-on-first-use version/epoch pinning. A shorter response than what we've already confirmed can
+    // Trust-on-first-use version/epoch pinning. A shorter response than what we've already confirmed can
     // still be a perfectly validly-signed *past* state of this same group — chain-link/manager checks alone
     // can't see anything wrong with it, because they only look inside the response they're given, never at what
     // was seen before. That is exactly the gap a malicious bridge would use to hide a since-revoked member: keep
@@ -168,7 +169,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             throw GroupMembershipMismatchException();
         }
 
-        // EP-9: epoch (keyVersion) monotonicity — backward compat: absent keyVersion treated as 0
+        // Epoch (keyVersion) monotonicity — backward compat: absent keyVersion treated as 0
         int64_t thisKeyVersion = membership.keyVersion.value_or(0);
         if (i == 0) {
             // The genesis epoch is 0 for a flat group and 1 for a tree-backed one, whose grant key exists from
@@ -204,7 +205,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     auto headUsers = std::set<std::string>(groupInfo.users.begin(), groupInfo.users.end());
     auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
 
-    // EP-9: cross-check bridge's top-level keyVersion == head membership's committed keyVersion
+    // Cross-check bridge's top-level keyVersion == head membership's committed keyVersion
     bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() && groupInfo.keyVersion.value() != prevKeyVersion;
     if (verifiedUsers != headUsers ||
         verifiedManagers != headManagers ||
@@ -213,7 +214,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         throw GroupDataIntegrityException();
     }
 
-    // EP-9: keyVersion pinning, checked against the freshly-*verified* epoch rather than any bridge-supplied
+    // keyVersion pinning, checked against the freshly-*verified* epoch rather than any bridge-supplied
     // claim. In this chain model a version regression (caught above) is the only way keyVersion could regress
     // without version regressing too — resuming from a checkpoint seeds `prevKeyVersion` from
     // `keyVersionAtCheckpoint`, and the per-entry monotonicity check above already forbids it from decreasing

@@ -21,6 +21,7 @@
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
+#include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -147,7 +148,7 @@ public:
     );
 
 private:
-    // EP-11: verify winner's rotation payload, decrypt+register their epoch key, invalidate cache
+    // Verify winner's rotation payload, decrypt+register their epoch key, invalidate cache
     void adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();

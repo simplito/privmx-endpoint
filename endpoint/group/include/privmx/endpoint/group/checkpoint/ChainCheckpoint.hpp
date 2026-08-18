@@ -13,8 +13,6 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_GROUP_CHECKPOINT_CHAINCHECKPOINT_HPP_
 
 #include <cstdint>
-#include <map>
-#include <memory>
 #include <optional>
 #include <set>
 #include <shared_mutex>
@@ -38,9 +36,9 @@ namespace checkpoint {
  *
  * Unlike `TreeKeyCache`, losing this is not free: it is a security anchor, not a bandwidth optimisation — a
  * server that reads it can't retroactively rewrite an already-verified prefix without the rewrite's hash
- * cascading up to break the very entry that anchors here (see the module's "Uwagi" in EP-10). Advancing it is
- * therefore one-directional: `advance()` only accepts a candidate that reaches *further* than what's already
- * stored, so a shorter, still-validly-signed response (e.g. a rollback attempt) can never move it backward.
+ * cascading up to break the very entry that anchors here. Advancing it is therefore one-directional:
+ * `advance()` only accepts a candidate that reaches *further* than what's already stored, so a shorter,
+ * still-validly-signed response (e.g. a rollback attempt) can never move it backward.
  *
  * Reachable from the app thread and from event-executor threads at once, hence the lock — same shape as
  * `TreeKeyCache`. The mutex is not recursive: every public method takes it and touches the state directly.
@@ -77,40 +75,6 @@ public:
 private:
     mutable std::shared_mutex _mutex;
     std::optional<Snapshot> _snapshot;
-};
-
-/**
- * The per-group checkpoints for one connection.
- *
- * Scoping lives here rather than inside `ChainCheckpoint` for the same reason as `TreeKeyCacheRegistry`: the id
- * is known at the schema-mapper boundary and nowhere deeper, and nothing inside a single checkpoint is keyed by
- * group.
- *
- * Invalidation **detaches** a store instead of clearing it, so it's safe to drop a group's checkpoint while
- * another thread is mid-verification of it: the verifier holds a `shared_ptr` and finishes writing into what is
- * now a private orphan, which dies with the call. Clearing a shared store in place could instead let an
- * in-flight verification write a stale-but-still-monotonic snapshot back in right after the drop.
- */
-class ChainCheckpointRegistry {
-public:
-    /** The checkpoint for one group, created on first use. Never null. */
-    std::shared_ptr<ChainCheckpoint> get(const std::string& groupId);
-
-    /** The checkpoint for one group if it already exists, without creating one. For tests and diagnostics. */
-    std::shared_ptr<ChainCheckpoint> tryGet(const std::string& groupId) const;
-
-    /** Detaches one group's checkpoint. Handles already taken stay valid; they just stop being shared. */
-    void drop(const std::string& groupId);
-
-    /** Detaches every checkpoint. */
-    void dropAll();
-
-    /** Number of groups with a live checkpoint. For tests and diagnostics. */
-    std::size_t groupCount() const;
-
-private:
-    mutable std::shared_mutex _mutex;
-    std::map<std::string, std::shared_ptr<ChainCheckpoint>> _stores;
 };
 
 } // namespace checkpoint

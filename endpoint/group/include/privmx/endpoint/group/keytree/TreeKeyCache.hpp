@@ -14,10 +14,8 @@ limitations under the License.
 
 #include <cstdint>
 #include <map>
-#include <memory>
 #include <optional>
 #include <shared_mutex>
-#include <string>
 #include <utility>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -43,7 +41,7 @@ namespace keytree {
  * method from another.
  *
  * Unbounded by design for now: entries accumulate for the lifetime of the connection. Bounding it (LRU, or a cap
- * on epochs per group) is the open half of EP-20.
+ * on epochs per group) is a known future improvement, not yet implemented.
  */
 class TreeKeyCache {
 public:
@@ -78,42 +76,6 @@ private:
     /** Keyed by (nodeIndex, generation) — never by node alone: a refresh makes the old key a different key. */
     std::map<std::pair<std::uint32_t, std::uint32_t>, privmx::crypto::PrivateKey> _nodeKeys;
     std::map<std::uint32_t, privmx::crypto::PrivateKey> _grantKeys;
-};
-
-/**
- * The per-group stores for one connection.
- *
- * Scoping lives here rather than inside `TreeKeyCache` so that `TreeKeys`, `LadderKeys` and `GroupKeyResolver` —
- * none of which has any use for a group id — keep working on a plain store. The id is known at the `GroupApiImpl`
- * boundary and nowhere deeper, which is exactly where this sits.
- *
- * Invalidation **detaches** a store instead of emptying it. That is what makes it safe to drop a group's keys
- * while another thread is mid-climb: the climber holds a `shared_ptr` and keeps writing into what is now a
- * private orphan, which dies with the operation. Emptying a shared store would instead let an in-flight climb
- * write stale keys back in after the drop.
- */
-class TreeKeyCacheRegistry {
-public:
-    /**
-     * The store for one group, created on first use. Never null.
-     *
-     * **Bind the result to a named local** before taking a reference into it. `TreeKeys tree(*registry.get(id))`
-     * leaves `tree` holding a reference into a store whose last owner died at the end of the full expression.
-     */
-    std::shared_ptr<TreeKeyCache> get(const std::string& groupId);
-
-    /** Detaches one group's store. Handles already taken stay valid; they just stop being shared. */
-    void drop(const std::string& groupId);
-
-    /** Detaches every store. */
-    void dropAll();
-
-    /** Number of groups with a live store. For tests and diagnostics. */
-    std::size_t groupCount() const;
-
-private:
-    mutable std::shared_mutex _mutex;
-    std::map<std::string, std::shared_ptr<TreeKeyCache>> _stores;
 };
 
 } // namespace keytree

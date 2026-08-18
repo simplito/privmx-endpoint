@@ -21,6 +21,7 @@
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
 #include "privmx/endpoint/group/checkpoint/ChainCheckpoint.hpp"
+#include "privmx/endpoint/group/checkpoint/ChainCheckpointRegistry.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaStrategyV5.hpp"
 
@@ -43,10 +44,10 @@ public:
 
     uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
 
-    /** Drops one group's chain checkpoint (EP-10). Call when the group is gone or the session was reset. */
+    /** Drops one group's chain checkpoint. Call when the group is gone or the session was reset. */
     void dropChainCheckpoint(const std::string& groupId);
 
-    /** Drops every group's chain checkpoint (EP-10). Call on connect/disconnect, mirroring the tree-key cache. */
+    /** Drops every group's chain checkpoint. Call on connect/disconnect, mirroring the tree-key cache. */
     void dropAllChainCheckpoints();
 
     /** The stored checkpoint for one group, if any. For tests and diagnostics. */
@@ -87,7 +88,7 @@ private:
     std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;
     core::DataEncryptorV4 _dataEncryptor;
     GroupDataEncryptorV5 _groupEncryptor;
-    /** EP-10: per-group chain-verification checkpoints, so a warm `assertDataIntegrity` skips already-verified
+    /** Per-group chain-verification checkpoints, so a warm `assertDataIntegrity` skips already-verified
      *  entries instead of re-proving the whole history from genesis on every call. */
     checkpoint::ChainCheckpointRegistry _chainCheckpoints;
 };

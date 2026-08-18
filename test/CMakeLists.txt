@@ -81,6 +81,7 @@ target_link_libraries(test_unit_LadderMathTest GTest::GTest GTest::Main)
 add_executable(test_unit_TreeKeysTest
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeyCache.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeyCacheRegistry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeKeys.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/keytree/TreeMath.cpp
 )
@@ -119,6 +120,7 @@ target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore P
 add_executable(test_unit_GroupChainCheckpointTest
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupChainCheckpointTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/checkpoint/ChainCheckpoint.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/checkpoint/ChainCheckpointRegistry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/encryptors/group/GroupDataSchemaMapper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/encryptors/group/GroupDataSchemaStrategyV5.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../endpoint/group/src/encryptors/group/GroupDataEncryptorV5.cpp

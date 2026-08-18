@@ -34,6 +34,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/checkpoint/ChainCheckpoint.hpp>
+#include <privmx/endpoint/group/checkpoint/ChainCheckpointRegistry.hpp>
 #include <privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp>
 
 using privmx::crypto::PrivateKey;

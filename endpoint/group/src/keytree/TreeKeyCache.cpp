@@ -16,10 +16,6 @@ limitations under the License.
 
 using namespace privmx::endpoint::group::keytree;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeyCache
-// ─────────────────────────────────────────────────────────────────────────────
-
 void TreeKeyCache::putNodeKey(
     std::uint32_t nodeIndex,
     std::uint32_t generation,
@@ -87,36 +83,4 @@ void TreeKeyCache::clear() {
     // Both containers cleared here rather than by calling clearNodeKeys(): the mutex is not recursive.
     _nodeKeys.clear();
     _grantKeys.clear();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeyCacheRegistry
-// ─────────────────────────────────────────────────────────────────────────────
-
-std::shared_ptr<TreeKeyCache> TreeKeyCacheRegistry::get(const std::string& groupId) {
-    // A unique_lock throughout, so get-or-create is atomic. A shared_lock fast path would let two threads racing
-    // on the same group each build a store, and one of them would then keep filling an orphan nobody reads.
-    std::unique_lock lock(_mutex);
-    const auto it = _stores.find(groupId);
-    if (it != _stores.end()) {
-        return it->second;
-    }
-    auto store = std::make_shared<TreeKeyCache>();
-    _stores.emplace(groupId, store);
-    return store;
-}
-
-void TreeKeyCacheRegistry::drop(const std::string& groupId) {
-    std::unique_lock lock(_mutex);
-    _stores.erase(groupId);
-}
-
-void TreeKeyCacheRegistry::dropAll() {
-    std::unique_lock lock(_mutex);
-    _stores.clear();
-}
-
-std::size_t TreeKeyCacheRegistry::groupCount() const {
-    std::shared_lock lock(_mutex);
-    return _stores.size();
 }
