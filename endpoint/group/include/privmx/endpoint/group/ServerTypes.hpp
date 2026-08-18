@@ -112,8 +112,7 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(tree, std::optional<GroupTreeState>)
 JSON_STRUCT_EXT(GroupCreateModel, core::server::ContainerCreateModelBase, GROUP_CREATE_MODEL_EXTRA_FIELDS);
 
-#define GROUP_UPDATE_MODEL_EXTRA_FIELDS(F)                                                                             \
-    F(groupPubKey, std::string)
+#define GROUP_UPDATE_MODEL_EXTRA_FIELDS(F) F(groupPubKey, std::string)
 JSON_STRUCT_EXT(GroupUpdateModel, core::server::ContainerUpdateModelBase, GROUP_UPDATE_MODEL_EXTRA_FIELDS);
 
 #define GROUP_CREATE_RESULT_FIELDS(F) F(groupId, std::string)

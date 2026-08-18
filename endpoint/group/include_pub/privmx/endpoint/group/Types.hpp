@@ -112,7 +112,7 @@ enum EventType : int64_t {
 
 enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
-    GROUP_ID   = 1,
+    GROUP_ID = 1,
 };
 
 } // namespace group

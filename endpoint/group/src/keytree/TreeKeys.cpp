@@ -61,7 +61,8 @@ const TreeEdge* TreeKeys::findEdgeFromNode(
         if (edge.isGrantEdge) {
             continue;
         }
-        if (edge.childKind == EdgeChildKind::Node && edge.childIndex == childIndex &&
+        if (edge.childKind == EdgeChildKind::Node &&
+            edge.childIndex == childIndex &&
             edge.childGeneration == childGeneration) {
             return &edge;
         }
@@ -396,8 +397,10 @@ AdditionPlan TreeKeys::planAddition(
                     const auto memberPub = _memberKeys.find(state.leafAssignment[position].value());
                     if (memberPub == _memberKeys.end()) {
                         throw std::invalid_argument(
-                            "growing the tree re-parents existing leaf " + std::to_string(position) +
-                            " (member " + state.leafAssignment[position].value() +
+                            "growing the tree re-parents existing leaf " +
+                            std::to_string(position) +
+                            " (member " +
+                            state.leafAssignment[position].value() +
                             "); call setMemberKeys with the full roster first"
                         );
                     }
@@ -512,7 +515,8 @@ RemovalPlan TreeKeys::planRemoval(
                 const auto memberPub = _memberKeys.find(state.leafAssignment[childPosition].value());
                 if (memberPub == _memberKeys.end()) {
                     throw std::invalid_argument(
-                        "removal needs the public key of member " + state.leafAssignment[childPosition].value() +
+                        "removal needs the public key of member " +
+                        state.leafAssignment[childPosition].value() +
                         "; call setMemberKeys first"
                     );
                 }

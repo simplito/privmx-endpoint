@@ -47,9 +47,9 @@ ThreadApiImpl::ThreadApiImpl(
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
-      _connection(connection), _serverApi(ServerApi(gateway)),
-      _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
-      _messageDataSchemaMapper(userPrivKey, connection), _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
+      _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, THREAD_TYPE_FILTER_FLAG),
+      _messageDataSchemaMapper(userPrivKey, connection),
+      _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
     if (groupApi.has_value()) {
         _groupApiImpl = groupApi->getImpl();
@@ -439,7 +439,9 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             auto raw = server::ThreadInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, threadToModuleKeys(raw), raw.version);
-                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(raw, _keyProvider, _groupPrivKeyResolver);
+                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<ThreadCreatedEvent>("thread", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -447,7 +449,9 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             auto raw = server::ThreadInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, threadToModuleKeys(raw), raw.version);
-                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(raw, _keyProvider, _groupPrivKeyResolver);
+                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<ThreadUpdatedEvent>("thread", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -567,23 +571,19 @@ core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
     };
 }
 
-
 bool ThreadApiImpl::isRekeyNeeded(
     const server::ThreadInfo& thread,
     std::unordered_map<std::string, GroupEpochInfo>& groupCache
 ) {
-    if (!_groupApiImpl || thread.groupKeys.empty()) return false;
+    if (!_groupApiImpl || thread.groupKeys.empty())
+        return false;
     bool stale = false;
     for (const auto& entry : thread.groupKeys) {
         if (groupCache.find(entry.group) == groupCache.end()) {
             try {
                 auto grp = _groupApiImpl->getGroup(entry.group);
-                groupCache[entry.group] = GroupEpochInfo{
-                    .keyVersion = grp.keyVersion, .groupPubKey = grp.groupPubKey
-                };
-            } catch (...) {
-                continue;
-            }
+                groupCache[entry.group] = GroupEpochInfo{.keyVersion = grp.keyVersion, .groupPubKey = grp.groupPubKey};
+            } catch (...) { continue; }
         }
         int64_t storedEpoch = 0;
         for (const auto& keyEntry : entry.keys) {
@@ -600,7 +600,8 @@ bool ThreadApiImpl::isRekeyNeeded(
 
 void ThreadApiImpl::applyRekeyIfNeeded(const std::string& threadId, const server::ThreadInfo& thread) {
     std::unordered_map<std::string, GroupEpochInfo> groupCache;
-    if (!isRekeyNeeded(thread, groupCache)) return;
+    if (!isRekeyNeeded(thread, groupCache))
+        return;
     // Rekey: rebuild GroupGrantWithKey list with current epoch public keys, then force updateThread.
     // The caller of updateThread must provide users/managers with public keys; since we don't have
     // them here, we skip the rekey and let the next explicit updateThread call perform it.

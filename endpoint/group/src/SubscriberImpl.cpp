@@ -79,9 +79,7 @@ std::string SubscriberImpl::buildQuery(
     );
 }
 
-std::vector<std::string> SubscriberImpl::transform(
-    const std::vector<core::SubscriptionQueryObj>& subscriptionQueries
-) {
+std::vector<std::string> SubscriberImpl::transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries) {
     std::vector<std::string> result;
     for (auto s : subscriptionQueries) {
         result.push_back(s.toSubscriptionQueryString());

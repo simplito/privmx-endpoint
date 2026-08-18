@@ -32,8 +32,10 @@ void TreeKeyCache::putNodeKey(
     _nodeKeys.insert_or_assign(std::make_pair(nodeIndex, generation), key);
 }
 
-std::optional<privmx::crypto::PrivateKey> TreeKeyCache::getNodeKey(std::uint32_t nodeIndex, std::uint32_t generation)
-    const {
+std::optional<privmx::crypto::PrivateKey> TreeKeyCache::getNodeKey(
+    std::uint32_t nodeIndex,
+    std::uint32_t generation
+) const {
     std::shared_lock lock(_mutex);
     const auto it = _nodeKeys.find(std::make_pair(nodeIndex, generation));
     if (it == _nodeKeys.end()) {

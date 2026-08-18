@@ -70,7 +70,8 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
     // correct behaviour — a rotation that proceeds without it silently truncates history forever.
     if (!previousEpochKey.has_value()) {
         throw std::invalid_argument(
-            "cannot build the mandatory unit rung for epoch " + std::to_string(newEpoch) +
+            "cannot build the mandatory unit rung for epoch " +
+            std::to_string(newEpoch) +
             ": the previous epoch key is unavailable"
         );
     }

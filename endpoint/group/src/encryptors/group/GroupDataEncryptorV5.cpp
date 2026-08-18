@@ -1,7 +1,7 @@
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/encryptors/module/DynamicTypes.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
+#include "privmx/endpoint/core/encryptors/module/DynamicTypes.hpp"
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>

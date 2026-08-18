@@ -140,7 +140,11 @@ public:
      * Only a descent needs it, so only a descent pays for it: the request is proportional to the hop rather
      * than to how long the group has existed.
      */
-    server::GroupGetKeyArchiveResult fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, int64_t currentEpoch);
+    server::GroupGetKeyArchiveResult fetchKeyArchive(
+        const std::string& groupId,
+        int64_t targetEpoch,
+        int64_t currentEpoch
+    );
 
 private:
     // EP-11: verify winner's rotation payload, decrypt+register their epoch key, invalidate cache

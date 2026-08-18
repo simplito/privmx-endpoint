@@ -39,8 +39,9 @@ std::tuple<Group, core::DataIntegrityObject> GroupDataSchemaMapper::decrypt(
         static_cast<int64_t>(getDataStructureVersion(groupInfo.data.back())), groupInfo, encKey,
         [&]() -> std::tuple<Group, core::DataIntegrityObject> {
             return {
-                toLibGroup(groupInfo, {}, {}, UnknownGroupFormatException().getCode(),
-                           core::ModuleDataSchema::Version::UNKNOWN),
+                toLibGroup(
+                    groupInfo, {}, {}, UnknownGroupFormatException().getCode(), core::ModuleDataSchema::Version::UNKNOWN
+                ),
                 {}
             };
         }
@@ -104,9 +105,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         core::DataIntegrityObject dio;
         try {
             dio = _strategyV5->getDIOAndAssertIntegrity(encData);
-        } catch (...) {
-            throw GroupDataIntegrityException();
-        }
+        } catch (...) { throw GroupDataIntegrityException(); }
 
         // A2: DIO metadata vs server plaintext
         if (dio.contextId != groupInfo.contextId ||
@@ -116,26 +115,20 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         }
         try {
             core::TimestampValidator::validate(dio.timestamp, histEntry.created);
-        } catch (...) {
-            throw GroupDataIntegrityException();
-        }
+        } catch (...) { throw GroupDataIntegrityException(); }
 
         // Decode membership (signed plaintext — no decryption key needed)
         auto authorPublicKey = privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey);
         core::Buffer membershipRaw;
         try {
             membershipRaw = _dataEncryptor.decodeAndVerify(encData.membership, authorPublicKey);
-        } catch (...) {
-            throw GroupMembershipMismatchException();
-        }
+        } catch (...) { throw GroupMembershipMismatchException(); }
         dynamic::MembershipBlock membership;
         try {
             membership = dynamic::MembershipBlock::fromJSON(
                 privmx::utils::Utils::parseJsonObject(membershipRaw.stdString())
             );
-        } catch (...) {
-            throw GroupMembershipMismatchException();
-        }
+        } catch (...) { throw GroupMembershipMismatchException(); }
 
         // G1: chain link — for a resumed run, `runningPrevDioHashHex` is the checkpoint's own anchor, so the
         // first new entry must chain directly into it, exactly as if it were the next entry in an uninterrupted
@@ -168,8 +161,10 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         auto histUsers = std::set<std::string>(histEntry.users.begin(), histEntry.users.end());
         auto histMgrs = std::set<std::string>(histEntry.managers.begin(), histEntry.managers.end());
 
-        if (verifiedUsers != histUsers || verifiedManagers != histMgrs ||
-            membership.groupPubKey != histEntry.groupPubKey || membership.keyId != histEntry.keyId) {
+        if (verifiedUsers != histUsers ||
+            verifiedManagers != histMgrs ||
+            membership.groupPubKey != histEntry.groupPubKey ||
+            membership.keyId != histEntry.keyId) {
             throw GroupMembershipMismatchException();
         }
 
@@ -180,7 +175,8 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             // the moment of creation and whose Epoch Ladder counts from 1. Which of the two it is cannot be
             // chosen freely: the head check below pins the committed value to the bridge's own `keyVersion`, and
             // only the tree-backed creation path makes the bridge record 1. Anything above 1 is a fabrication.
-            if (thisKeyVersion > 1) throw GroupDataIntegrityException();
+            if (thisKeyVersion > 1)
+                throw GroupDataIntegrityException();
         } else {
             // Non-decreasing and increments by at most 1 — `prevKeyVersion` is either the previous entry visited
             // in this call, or (for the first entry above a checkpoint) the checkpoint's own committed value.
@@ -190,7 +186,8 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             // groupPubKey changes if and only if keyVersion increments
             bool pubKeyChanged = (membership.groupPubKey != prevGroupPubKey);
             bool epochBumped = (thisKeyVersion > prevKeyVersion);
-            if (pubKeyChanged != epochBumped) throw GroupDataIntegrityException();
+            if (pubKeyChanged != epochBumped)
+                throw GroupDataIntegrityException();
         }
         prevKeyVersion = thisKeyVersion;
         prevGroupPubKey = membership.groupPubKey;
@@ -208,10 +205,11 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
 
     // EP-9: cross-check bridge's top-level keyVersion == head membership's committed keyVersion
-    bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() &&
-                               groupInfo.keyVersion.value() != prevKeyVersion;
-    if (verifiedUsers != headUsers || verifiedManagers != headManagers ||
-        groupInfo.groupPubKey != prevGroupPubKey || bridgeEpochMismatch) {
+    bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() && groupInfo.keyVersion.value() != prevKeyVersion;
+    if (verifiedUsers != headUsers ||
+        verifiedManagers != headManagers ||
+        groupInfo.groupPubKey != prevGroupPubKey ||
+        bridgeEpochMismatch) {
         throw GroupDataIntegrityException();
     }
 
@@ -226,14 +224,16 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         throw GroupHistoryForkException();
     }
 
-    checkpointStore->advance(checkpoint::ChainCheckpoint::Snapshot{
-        .verifiedVersion = static_cast<int64_t>(groupInfo.data.size()),
-        .lastEntryDioHashHex = runningPrevDioHashHex,
-        .verifiedManagers = verifiedManagers,
-        .verifiedUsers = verifiedUsers,
-        .keyVersionAtCheckpoint = prevKeyVersion,
-        .groupPubKeyAtCheckpoint = prevGroupPubKey
-    });
+    checkpointStore->advance(
+        checkpoint::ChainCheckpoint::Snapshot{
+            .verifiedVersion = static_cast<int64_t>(groupInfo.data.size()),
+            .lastEntryDioHashHex = runningPrevDioHashHex,
+            .verifiedManagers = verifiedManagers,
+            .verifiedUsers = verifiedUsers,
+            .keyVersionAtCheckpoint = prevKeyVersion,
+            .groupPubKeyAtCheckpoint = prevGroupPubKey
+        }
+    );
 }
 
 void GroupDataSchemaMapper::dropChainCheckpoint(const std::string& groupId) {
@@ -289,8 +289,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Group>(
-        groups, keyProvider, _connection,
-        [&](const server::GroupInfo& g) { return validateDataIntegrity(g); },
+        groups, keyProvider, _connection, [&](const server::GroupInfo& g) { return validateDataIntegrity(g); },
         [](const server::GroupInfo& g) -> core::EncKeyLocation {
             return {.contextId = g.contextId, .resourceId = g.resourceId.value_or("")};
         },
@@ -306,12 +305,15 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
     const Poco::Dynamic::Var& data,
     const core::DecryptedEncKey& encKey
 ) {
-    if (encKey.statusCode != 0) return {};
+    if (encKey.statusCode != 0)
+        return {};
     try {
         auto encData = dynamic::EncryptedGroupDataV5::fromJSON(data);
-        if (encData.version != core::ModuleDataSchema::Version::VERSION_5) return {};
+        if (encData.version != core::ModuleDataSchema::Version::VERSION_5)
+            return {};
         auto decrypted = _groupEncryptor.decrypt(encData, encKey.key);
-        if (decrypted.statusCode != 0) return {};
+        if (decrypted.statusCode != 0)
+            return {};
         return decrypted.internalMeta;
     } catch (...) { return {}; }
 }

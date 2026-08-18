@@ -90,9 +90,7 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
         if (!seen.insert(user.userId).second) {
             continue; // a manager listed as a user too gets one leaf, not two
         }
-        members.push_back(keytree::TreeMember{
-            user.userId, privmx::crypto::PublicKey::fromBase58DER(user.pubKey)
-        });
+        members.push_back(keytree::TreeMember{user.userId, privmx::crypto::PublicKey::fromBase58DER(user.pubKey)});
     }
     return members;
 }
@@ -174,9 +172,8 @@ std::string GroupApiImpl::createGroupWithKeyTree(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         // Empty on purpose: the grant private key is reached by climbing. Carrying it here would deliver it to
         // every member through the metadata key, and that key would then need re-wrapping for everyone on each
@@ -187,8 +184,7 @@ std::string GroupApiImpl::createGroupWithKeyTree(
 
     server::GroupCreateModel model;
     fillContainerCreateModel(
-        model, contextId, users, managers, ctx,
-        _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key)
+        model, contextId, users, managers, ctx, _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key)
     );
     model.groupPubKey = groupPubKeyStr;
     model.type = GROUP_TYPE_FILTER_FLAG;
@@ -233,8 +229,7 @@ void GroupApiImpl::addGroupMember(
     tree.setMemberKeys(toTreeMembers(users, managers));
     const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
         return tree.planAddition(
-            state,
-            keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
+            state, keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
             _userPrivKey
         );
     });
@@ -263,9 +258,8 @@ void GroupApiImpl::addGroupMember(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         .groupPrivKey = std::string(),
         .membership = membership
@@ -330,12 +324,9 @@ void GroupApiImpl::removeGroupMember(
     // and are a shortcut for future descents rather than a correctness requirement.
     keytree::LadderKeys ladder(*cache);
     const std::vector<keytree::ArchiveRung> rungs = ladder.buildRungs(
-        static_cast<std::uint32_t>(newEpoch),
-        plan.newGrantKey.getPublicKey(),
-        currentGrantKey,
+        static_cast<std::uint32_t>(newEpoch), plan.newGrantKey.getPublicKey(), currentGrantKey,
         static_cast<std::uint32_t>(currentGroup.eraFloor.value_or(1)),
-        keytree::GroupKeyResolver::ownUserId(currentGroup).value_or(std::string()),
-        _userPrivKey
+        keytree::GroupKeyResolver::ownUserId(currentGroup).value_or(std::string()), _userPrivKey
     );
 
     // A removal DOES rotate the metadata key: otherwise the departing member keeps reading the group's name and
@@ -381,9 +372,8 @@ void GroupApiImpl::removeGroupMember(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         .groupPrivKey = std::string(),
         .membership = membership
@@ -447,23 +437,31 @@ void GroupApiImpl::updateGroup(
     int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
 
     std::set<std::string> newMemberIds;
-    for (const auto& u : users) newMemberIds.insert(u.userId);
-    for (const auto& m : managers) newMemberIds.insert(m.userId);
+    for (const auto& u : users)
+        newMemberIds.insert(u.userId);
+    for (const auto& m : managers)
+        newMemberIds.insert(m.userId);
     bool removalDetected = false;
     for (const auto& u : currentGroup.users) {
-        if (!newMemberIds.count(u)) { removalDetected = true; break; }
+        if (!newMemberIds.count(u)) {
+            removalDetected = true;
+            break;
+        }
     }
     if (!removalDetected) {
         for (const auto& m : currentGroup.managers) {
-            if (!newMemberIds.count(m)) { removalDetected = true; break; }
+            if (!newMemberIds.count(m)) {
+                removalDetected = true;
+                break;
+            }
         }
     }
 
     auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup, _groupPrivKeyResolver);
 
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected,
-        true, _groupPrivKeyResolver
+        currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected, true,
+        _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
@@ -492,9 +490,8 @@ void GroupApiImpl::updateGroup(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         .groupPrivKey = newGroupPrivKeyStr,
         .membership = membership
@@ -512,12 +509,11 @@ void GroupApiImpl::updateGroup(
         _serverApi.groupUpdate(model);
     } catch (const privmx::utils::PrivmxException& e) {
         if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
-            auto payload = server::RotatedAlreadyPayload::fromJSON(
-                privmx::utils::Utils::parseJsonObject(e.getData())
-            );
+            auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
-            updateGroup(groupId, users, managers, publicMeta, privateMeta, version, force,
-                        forceGenerateNewKey, policies, false);
+            updateGroup(
+                groupId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, false
+            );
             return;
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -536,10 +532,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
     invalidateModuleKeysInCache(groupId);
 }
 
-void GroupApiImpl::adoptRotatedAlready(
-    const std::string& groupId,
-    const server::RotatedAlreadyPayload& payload
-) {
+void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
@@ -553,11 +546,11 @@ void GroupApiImpl::adoptRotatedAlready(
         throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification");
     }
 
-    auto confInput = std::string("confirm") + groupId +
-                     std::to_string(payload.keyVersion) + payload.winnerKeyEntry.keyId;
-    auto expectedTag = privmx::utils::Hex::from(
-        privmx::crypto::Crypto::hmacSha256(winnerGk.key, confInput)
-    );
+    auto confInput = std::string("confirm") +
+        groupId +
+        std::to_string(payload.keyVersion) +
+        payload.winnerKeyEntry.keyId;
+    auto expectedTag = privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(winnerGk.key, confInput));
     if (expectedTag != payload.confirmationTag) {
         throw GroupDataIntegrityException("RotatedAlready: confirmation tag mismatch");
     }
@@ -573,10 +566,7 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, _groupPrivKeyResolver);
 }
 
-core::PagingList<Group> GroupApiImpl::listGroups(
-    const std::string& contextId,
-    const core::PagingQuery& pagingQuery
-) {
+core::PagingList<Group> GroupApiImpl::listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     server::GroupListModel model;
     model.contextId = contextId;
     core::ListQueryMapper::map(model, pagingQuery);
@@ -590,10 +580,7 @@ core::PagingList<Group> GroupApiImpl::listGroups(
     return core::PagingList<Group>({.totalAvailable = groupsList.count, .readItems = groups});
 }
 
-void GroupApiImpl::processNotificationEvent(
-    const std::string& type,
-    const core::NotificationEvent& notification
-) {
+void GroupApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
     if (!subscriptionQuery.has_value()) {
         return;
@@ -602,15 +589,16 @@ void GroupApiImpl::processNotificationEvent(
         if (type == "groupCreated") {
             auto raw = server::GroupInfo::fromJSON(notification.data);
             setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider, _groupPrivKeyResolver);
+            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
+                raw, _keyProvider, _groupPrivKeyResolver
+            );
             auto event = core::EventBuilder::buildEvent<GroupCreatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupUpdated") {
             auto raw = server::GroupInfo::fromJSON(notification.data);
             setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
             invalidateModuleKeysInCache(raw.id);
-            if (keytree::GroupKeyResolver::hasTree(raw)
-                && !keytree::GroupKeyResolver::ownUserId(raw).has_value()) {
+            if (keytree::GroupKeyResolver::hasTree(raw) && !keytree::GroupKeyResolver::ownUserId(raw).has_value()) {
                 // The server no longer seats us: `ownUserId` returns empty when our leaf is gone or blanked.
                 // Whether a removed member still receives this event is the bridge's call, so this is an
                 // optimisation over the `NotAMember` backstop in `resolveGroupPrivKey`, not a guarantee.
@@ -618,7 +606,9 @@ void GroupApiImpl::processNotificationEvent(
             } else {
                 noteGroupEpoch(raw.id, static_cast<std::uint32_t>(raw.keyVersion.value_or(0)));
             }
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider, _groupPrivKeyResolver);
+            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
+                raw, _keyProvider, _groupPrivKeyResolver
+            );
             auto event = core::EventBuilder::buildEvent<GroupUpdatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupDeleted") {
@@ -703,13 +693,14 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     const keytree::ResolveResult resolved = (epoch > 0 && epoch < currentEpoch)
         // Only a descent needs the ladder, so only a descent pays for fetching it. The window is bounded by the
         // two epochs involved, which keeps the request proportional to the hop rather than to the group's age.
-        ? resolver.resolve(group, epoch, _userPrivKey, fetchKeyArchive(groupId, epoch, currentEpoch))
-        : resolver.resolve(group, epoch, _userPrivKey);
+        ?
+        resolver.resolve(group, epoch, _userPrivKey, fetchKeyArchive(groupId, epoch, currentEpoch)) :
+        resolver.resolve(group, epoch, _userPrivKey);
     if (resolved.key.has_value()) {
         return resolved.key.value();
     }
-    if (resolved.failure == keytree::ResolveFailure::ClimbFailed
-        && resolved.climb == keytree::ClimbFailure::NotAMember) {
+    if (resolved.failure == keytree::ResolveFailure::ClimbFailed &&
+        resolved.climb == keytree::ClimbFailure::NotAMember) {
         // The server no longer seats us in this group. This is the backstop for a client that never saw the
         // `groupUpdated` — unsubscribed, or offline when it fired. Dropping a local cache is hygiene, not a
         // revocation control: revocation is enforced by the refreshed tree and by the bridge.
@@ -733,8 +724,11 @@ void GroupApiImpl::noteGroupEpoch(const std::string& groupId, std::uint32_t epoc
  * The bridge serves the archive separately from the group because it grows with the group's entire history. The
  * window here is the descent's own range: every rung used along the way is addressed to an epoch inside it.
  */
-privmx::endpoint::group::server::GroupGetKeyArchiveResult
-GroupApiImpl::fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, int64_t currentEpoch) {
+privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKeyArchive(
+    const std::string& groupId,
+    int64_t targetEpoch,
+    int64_t currentEpoch
+) {
     server::GroupGetKeyArchiveModel params;
     params.id = groupId;
     params.fromKeyVersion = targetEpoch;
@@ -745,32 +739,31 @@ GroupApiImpl::fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, i
 /** Turns a resolver failure into a message that distinguishes policy from attack. */
 std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& resolved) {
     switch (resolved.failure) {
-        case keytree::ResolveFailure::NoTree:
-            return "Group key unavailable: group has no key tree";
-        case keytree::ResolveFailure::ClimbFailed:
-            if (resolved.climb == keytree::ClimbFailure::Tampered) {
-                // A security event, not a transient failure. Deterministic and adversarial — do not retry.
-                return "Group key tree verification failed: a node key does not match the published public key";
-            }
-            if (resolved.climb == keytree::ClimbFailure::NotAMember) {
-                return "Group key unavailable: caller holds no leaf in the key tree";
-            }
-            return "Group key unavailable: the key tree could not be climbed";
-        case keytree::ResolveFailure::DescentFailed:
-            switch (resolved.descent) {
-                case keytree::DescentFailure::EraBoundary:
-                    // Normal policy: history before the caller's era is simply not theirs to read.
-                    return "History before this era is not available to you";
-                case keytree::DescentFailure::Pruned:
-                    return "History this old has been pruned and is no longer recoverable";
-                case keytree::DescentFailure::Tampered:
-                    return "Epoch ladder verification failed"
-                        + (resolved.blame.has_value() ? " (rung published by " + resolved.blame.value() + ")" : "");
-                default:
-                    return "Group key unavailable: the epoch ladder could not be descended";
-            }
+    case keytree::ResolveFailure::NoTree:
+        return "Group key unavailable: group has no key tree";
+    case keytree::ResolveFailure::ClimbFailed:
+        if (resolved.climb == keytree::ClimbFailure::Tampered) {
+            // A security event, not a transient failure. Deterministic and adversarial — do not retry.
+            return "Group key tree verification failed: a node key does not match the published public key";
+        }
+        if (resolved.climb == keytree::ClimbFailure::NotAMember) {
+            return "Group key unavailable: caller holds no leaf in the key tree";
+        }
+        return "Group key unavailable: the key tree could not be climbed";
+    case keytree::ResolveFailure::DescentFailed:
+        switch (resolved.descent) {
+        case keytree::DescentFailure::EraBoundary:
+            // Normal policy: history before the caller's era is simply not theirs to read.
+            return "History before this era is not available to you";
+        case keytree::DescentFailure::Pruned:
+            return "History this old has been pruned and is no longer recoverable";
+        case keytree::DescentFailure::Tampered:
+            return "Epoch ladder verification failed" +
+                (resolved.blame.has_value() ? " (rung published by " + resolved.blame.value() + ")" : "");
         default:
-            return "Group key unavailable";
+            return "Group key unavailable: the epoch ladder could not be descended";
+        }
+    default:
+        return "Group key unavailable";
     }
 }
-

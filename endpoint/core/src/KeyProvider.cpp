@@ -281,9 +281,7 @@ DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
             return decryptedEncKey;
         }
         if (versioned.version == EncryptionKeyDataSchema::Version::VERSION_2) {
-            return _encKeyEncryptorV2.decrypt(
-                server::EncryptedKeyEntryDataV2::fromJSON(keyEntry.data), privKey
-            );
+            return _encKeyEncryptorV2.decrypt(server::EncryptedKeyEntryDataV2::fromJSON(keyEntry.data), privKey);
         } else {
             decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
             return decryptedEncKey;

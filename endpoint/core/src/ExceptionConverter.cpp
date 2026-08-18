@@ -176,9 +176,13 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0x0011:
             throw crypto::EncryptInvalidKeyLengthException(std::string(e.what()) + "\n" + e.getData());
         case 0x0012:
-            throw crypto::OnlyHmacSHA256WithIvIsSupportedForAES256CBCException(std::string(e.what()) + "\n" + e.getData());
+            throw crypto::OnlyHmacSHA256WithIvIsSupportedForAES256CBCException(
+                std::string(e.what()) + "\n" + e.getData()
+            );
         case 0x0013:
-            throw crypto::CannotPassIvToDeterministicAES256CBCHmacSHA256Exception(std::string(e.what()) + "\n" + e.getData());
+            throw crypto::CannotPassIvToDeterministicAES256CBCHmacSHA256Exception(
+                std::string(e.what()) + "\n" + e.getData()
+            );
         case 0x0014:
             throw crypto::XTEAECBEncryptionDoesntSupportHmacAndIvException(std::string(e.what()) + "\n" + e.getData());
         case 0x0015:
@@ -265,9 +269,13 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0x0012:
             throw crypto::ExpectedDocumentsPacketExportClassException(std::string(e.what()) + "\n" + e.getData());
         case 0x0013:
-            throw crypto::CannotGetPropertiesFromNonSrpKeySessionConnectionException(std::string(e.what()) + "\n" + e.getData());
+            throw crypto::CannotGetPropertiesFromNonSrpKeySessionConnectionException(
+                std::string(e.what()) + "\n" + e.getData()
+            );
         case 0x0014:
-            throw crypto::CannotGetUsernameFromNonSrpKeySessionConnectionException(std::string(e.what()) + "\n" + e.getData());
+            throw crypto::CannotGetUsernameFromNonSrpKeySessionConnectionException(
+                std::string(e.what()) + "\n" + e.getData()
+            );
         case 0x0015:
             throw crypto::CannotReloginUserMismatchException(std::string(e.what()) + "\n" + e.getData());
         case 0x0016:
@@ -323,7 +331,9 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         case 0x0013:
             throw network::InvalidHostException(std::string(e.what()) + "\n" + e.getData());
         case 0x0014:
-            throw network::WebsocketCannotBeMainChannelWhenItIsDisabledException(std::string(e.what()) + "\n" + e.getData());
+            throw network::WebsocketCannotBeMainChannelWhenItIsDisabledException(
+                std::string(e.what()) + "\n" + e.getData()
+            );
         case 0x0015:
             throw network::RejectedException(std::string(e.what()) + "\n" + e.getData());
         case 0x0016:

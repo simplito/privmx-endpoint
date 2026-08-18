@@ -34,9 +34,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::Group>>(
-    const core::PagingList<group::Group>& val
-) {
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::Group>>(const core::PagingList<group::Group>& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "core$PagingList<group$Group>");
@@ -47,9 +45,7 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::Group>>(
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<group::GroupDeletedEventData>(
-    const group::GroupDeletedEventData& val
-) {
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupDeletedEventData>(const group::GroupDeletedEventData& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "group$GroupDeletedEventData");

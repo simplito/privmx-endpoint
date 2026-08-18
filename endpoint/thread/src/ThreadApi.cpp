@@ -14,11 +14,11 @@ limitations under the License.
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
-#include <privmx/endpoint/group/GroupApi.hpp>
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/endpoint/thread/ThreadValidator.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;

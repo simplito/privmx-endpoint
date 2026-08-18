@@ -10,8 +10,7 @@ namespace group {
 
 class SubscriberImpl : public privmx::endpoint::core::Subscriber {
 public:
-    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway)
-        : Subscriber(gateway) {}
+    SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
 
 private:

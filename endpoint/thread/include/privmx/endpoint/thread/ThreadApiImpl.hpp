@@ -24,7 +24,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
-#include <privmx/endpoint/group/GroupApi.hpp>
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ServerApi.hpp"
@@ -32,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/encryptors/message/MessageDataSchemaMapper.hpp"
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -151,11 +151,11 @@ private:
 
     // EP-13: lazy re-key check. Returns true if any grantee group's epoch has advanced.
     // Also caches resolved current-epoch group info in groupCache (groupId → {keyVersion, groupPubKey}).
-    struct GroupEpochInfo { int64_t keyVersion; std::string groupPubKey; };
-    bool isRekeyNeeded(
-        const server::ThreadInfo& thread,
-        std::unordered_map<std::string, GroupEpochInfo>& groupCache
-    );
+    struct GroupEpochInfo {
+        int64_t keyVersion;
+        std::string groupPubKey;
+    };
+    bool isRekeyNeeded(const server::ThreadInfo& thread, std::unordered_map<std::string, GroupEpochInfo>& groupCache);
     // If rekey is needed, performs updateThread with new keys only. Caller re-fetches thread after.
     void applyRekeyIfNeeded(const std::string& threadId, const server::ThreadInfo& thread);
 
