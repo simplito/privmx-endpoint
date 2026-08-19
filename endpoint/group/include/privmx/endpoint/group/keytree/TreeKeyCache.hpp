@@ -59,7 +59,8 @@ public:
      *
      * What a removal invalidates: it refreshes every node on the departing leaf's path, so those generations are
      * dead. Grant keys are not touched, because within one group `epoch -> key` is immutable — and
-     * `LadderKeys::buildRungs` reads the older ones to publish skip rungs at the *next* removal.
+     * `LadderKeys::buildRungs` reads the older ones to publish skip rungs at the *next* removal. Keeping them is
+     * an optimisation there too: `LadderKeys::gatherRungKeys` recovers any the cache has lost.
      */
     void clearNodeKeys();
 

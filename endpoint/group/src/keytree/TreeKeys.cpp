@@ -11,8 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
-#include <algorithm>
-#include <set>
 #include <stdexcept>
 
 #include <privmx/crypto/EciesEncryptor.hpp>
@@ -565,6 +563,6 @@ RemovalPlan TreeKeys::planRemoval(
 void TreeKeys::setMemberKeys(const std::vector<TreeMember>& members) {
     _memberKeys.clear();
     for (const TreeMember& member : members) {
-        _memberKeys[member.userId] = member.publicKey;
+        _memberKeys.insert_or_assign(member.userId, member.publicKey);
     }
 }

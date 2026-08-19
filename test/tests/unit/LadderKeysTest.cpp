@@ -67,6 +67,7 @@ protected:
 };
 
 class LadderKeysBuild : public LadderKeysTestBase {};
+class LadderKeysGather : public LadderKeysTestBase {};
 class LadderKeysDescend : public LadderKeysTestBase {};
 class LadderKeysEras : public LadderKeysTestBase {};
 class LadderKeysRegistry : public LadderKeysTestBase {};
@@ -115,15 +116,50 @@ TEST_F(LadderKeysBuild, EmitsAlignedSkipRungsWhenTheKeysAreHeld) {
     EXPECT_EQ(targetsAtEight, std::vector<std::uint32_t>({4, 6, 7}));
 }
 
-TEST_F(LadderKeysBuild, SkipsUnavailableTargetsSilently) {
-    // A publisher that holds only the previous epoch key still produces a valid, if slower, ladder.
+/**
+ * SECURITY — a skip rung can only ever be published at the moment its own epoch is created, so a set committed
+ * without one is a hole no later rotation can fill. Enough holes and the ladder is a chain of unit rungs, which
+ * puts history further back than `descend`'s bound out of reach for everyone. Refusing is the only safe answer.
+ */
+TEST_F(LadderKeysBuild, SECURITY_RefusesToBuildAnIncompleteSkipSet) {
     TreeKeyCache store;
     LadderKeys ladder(store);
     const PrivateKey previous = PrivateKey::generateRandom();
     const PrivateKey current = PrivateKey::generateRandom();
-    const std::vector<ArchiveRung> rungs = ladder.buildRungs(8, current.getPublicKey(), previous, 1, AUTHOR, current);
-    ASSERT_EQ(rungs.size(), 1u) << "no older keys held, so only the unit rung";
+    // Epoch 8 owes skip rungs to 4 and 6; a publisher holding only epoch 7's key can build neither.
+    EXPECT_THROW(
+        ladder.buildRungs(8, current.getPublicKey(), previous, 1, AUTHOR, current), std::invalid_argument
+    );
+}
+
+TEST_F(LadderKeysBuild, EmitsTheUnitRungAloneOnlyWhenAskedTo) {
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    const PrivateKey previous = PrivateKey::generateRandom();
+    const PrivateKey current = PrivateKey::generateRandom();
+    const std::vector<ArchiveRung> rungs =
+        ladder.buildRungs(8, current.getPublicKey(), previous, 1, AUTHOR, current, /*includeSkipRungs*/ false);
+    ASSERT_EQ(rungs.size(), 1u);
     EXPECT_EQ(rungs[0].span.target, 7u);
+}
+
+TEST_F(LadderKeysBuild, DoesNotDemandTargetsBelowThePruneWatermark) {
+    // Pruning is retention policy: those keys are gone for every member alike, and the bridge rejects rungs
+    // pointing below the watermark. Demanding them would block every future rotation on a pruned group.
+    EXPECT_EQ(LadderKeys::requiredSkipTargets(8, 1), std::vector<std::uint32_t>({6, 4}));
+    EXPECT_EQ(LadderKeys::requiredSkipTargets(8, 1, /*prunedBelow*/ 5), std::vector<std::uint32_t>({6}));
+
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    const PrivateKey atSix = PrivateKey::generateRandom();
+    const PrivateKey previous = PrivateKey::generateRandom();
+    const PrivateKey current = PrivateKey::generateRandom();
+    store.putGrantKey(6, atSix);
+    const std::vector<ArchiveRung> rungs =
+        ladder.buildRungs(8, current.getPublicKey(), previous, 1, AUTHOR, current, true, /*prunedBelow*/ 5);
+    ASSERT_EQ(rungs.size(), 2u) << "the unit rung and the one surviving skip target";
+    EXPECT_EQ(rungs[0].span.target, 7u);
+    EXPECT_EQ(rungs[1].span.target, 6u);
 }
 
 TEST_F(LadderKeysBuild, EverySpanPointsDownwards) {
@@ -139,6 +175,143 @@ TEST_F(LadderKeysBuild, CostsAboutTwoRungsPerEpoch) {
     const double perEpoch = static_cast<double>(history.rungs.size()) / 199.0;
     EXPECT_LT(perEpoch, 2.0) << "got " << perEpoch;
     EXPECT_GT(perEpoch, 1.5) << "got " << perEpoch;
+}
+
+// gathering the older keys a rotation owes rungs to
+
+/**
+ * The case the gather exists for: a manager whose client started a moment ago holds one grant key. Without the
+ * gather it would publish one rung; with it, the same full set a long-running client would.
+ */
+TEST_F(LadderKeysGather, ColdCacheStillPublishesTheFullSet) {
+    const EpochHistory history = simulateEpochHistory(7, 1);
+
+    TreeKeyCache cold;
+    LadderKeys ladder(cold);
+    cold.putGrantKey(7, keyOf(history, 7, 1)); // all a fresh client has, straight off the climb
+
+    const RungKeyGathering gathered = ladder.gatherRungKeys(8, history.rungs, history.registry);
+    ASSERT_TRUE(gathered.complete) << "static_cast<int>(failure)=" << static_cast<int>(gathered.failure);
+    EXPECT_TRUE(gathered.missingTargets.empty());
+
+    const PrivateKey next = PrivateKey::generateRandom();
+    const std::vector<ArchiveRung> rungs =
+        ladder.buildRungs(8, next.getPublicKey(), keyOf(history, 7, 1), 1, AUTHOR, next);
+    std::vector<std::uint32_t> targets;
+    for (const ArchiveRung& rung : rungs) {
+        targets.push_back(rung.span.target);
+    }
+    std::sort(targets.begin(), targets.end());
+    EXPECT_EQ(targets, std::vector<std::uint32_t>({4, 6, 7}));
+}
+
+/**
+ * The cost claim: one unwrap per skip target, not one walk per target. It holds because the targets are
+ * `newEpoch - 2^j` and each of those is divisible by `2^j`, so it published a skip rung landing exactly on the
+ * next target down — the gather chains through them instead of restarting at `newEpoch-1` each time.
+ */
+TEST_F(LadderKeysGather, CostsOneUnwrapPerSkipTarget) {
+    const EpochHistory history = simulateEpochHistory(255, 1);
+
+    TreeKeyCache cold;
+    LadderKeys ladder(cold);
+    cold.putGrantKey(255, keyOf(history, 255, 1));
+
+    const RungKeyGathering gathered = ladder.gatherRungKeys(256, history.rungs, history.registry);
+    ASSERT_TRUE(gathered.complete);
+    const std::size_t targetCount = LadderKeys::requiredSkipTargets(256, 1).size();
+    EXPECT_EQ(gathered.unwraps, targetCount) << "one hop per target, so logarithmic in the epoch";
+    EXPECT_LE(gathered.unwraps, 8u) << "log2(256)";
+}
+
+TEST_F(LadderKeysGather, SkipsTargetsAlreadyInTheCache) {
+    const EpochHistory history = simulateEpochHistory(7, 1);
+
+    TreeKeyCache warm;
+    LadderKeys ladder(warm);
+    for (std::uint32_t epoch = 1; epoch <= 7; ++epoch) {
+        warm.putGrantKey(epoch, keyOf(history, epoch, 1));
+    }
+    const RungKeyGathering gathered = ladder.gatherRungKeys(8, history.rungs, history.registry);
+    EXPECT_TRUE(gathered.complete);
+    EXPECT_EQ(gathered.unwraps, 0u) << "nothing to recover, so nothing to unwrap";
+}
+
+/**
+ * A ladder that already lost its skip rungs is exactly what the old behaviour produced, and it is still walkable
+ * one rung at a time. The gather pays that cost once so the set it then publishes restores the fast path.
+ */
+TEST_F(LadderKeysGather, WalksALinearLadderRatherThanGivingUpOnIt) {
+    const EpochHistory history = simulateEpochHistory(63, 1, /*withSkips*/ false);
+
+    TreeKeyCache cold;
+    LadderKeys ladder(cold);
+    cold.putGrantKey(63, keyOf(history, 63, 1));
+
+    const RungKeyGathering gathered = ladder.gatherRungKeys(64, history.rungs, history.registry);
+    ASSERT_TRUE(gathered.complete) << "a unit-only ladder is slower to walk, not unwalkable";
+    EXPECT_GT(gathered.unwraps, LadderKeys::requiredSkipTargets(64, 1).size()) << "no skip rungs to ride";
+
+    const PrivateKey next = PrivateKey::generateRandom();
+    EXPECT_NO_THROW(ladder.buildRungs(64, next.getPublicKey(), keyOf(history, 63, 1), 1, AUTHOR, next));
+}
+
+TEST_F(LadderKeysGather, ReportsEveryTargetCutOffByABreakInTheLadder) {
+    const EpochHistory history = simulateEpochHistory(7, 1);
+
+    // Drop every rung landing on epoch 4 — the 6->4 skip and the 5->4 unit rung alike. Epoch 6 is still one hop
+    // away, so the walk gets there and then finds nothing leading on.
+    std::vector<ArchiveRung> broken;
+    for (const ArchiveRung& rung : history.rungs) {
+        if (rung.span.target != 4) {
+            broken.push_back(rung);
+        }
+    }
+
+    TreeKeyCache cold;
+    LadderKeys ladder(cold);
+    cold.putGrantKey(7, keyOf(history, 7, 1));
+
+    const RungKeyGathering gathered = ladder.gatherRungKeys(8, broken, history.registry);
+    EXPECT_FALSE(gathered.complete);
+    EXPECT_EQ(gathered.failure, DescentFailure::MissingRung);
+    EXPECT_EQ(gathered.missingTargets, std::vector<std::uint32_t>({4})) << "6 is still reachable, 4 is not";
+}
+
+TEST_F(LadderKeysGather, ReportsNoStartingKeyAsSuch) {
+    const EpochHistory history = simulateEpochHistory(7, 1);
+    TreeKeyCache empty;
+    LadderKeys ladder(empty);
+    const RungKeyGathering gathered = ladder.gatherRungKeys(8, history.rungs, history.registry);
+    EXPECT_FALSE(gathered.complete);
+    EXPECT_EQ(gathered.failure, DescentFailure::NotEntitled);
+    EXPECT_EQ(gathered.missingTargets, std::vector<std::uint32_t>({6, 4}));
+}
+
+/** SECURITY — the gather verifies at every hop, exactly as a reader's descent does, and names the publisher. */
+TEST_F(LadderKeysGather, SECURITY_DetectsASubstitutedRungAndRefusesToCacheIt) {
+    const EpochHistory history = simulateEpochHistory(7, 1);
+    const PrivateKey attacker = PrivateKey::generateRandom();
+
+    std::vector<ArchiveRung> tampered = history.rungs;
+    for (ArchiveRung& rung : tampered) {
+        if (rung.span.at == 7 && rung.span.target == 6) {
+            // A key that decrypts fine but is not epoch 6's, published under a name the blame can land on.
+            rung.blob = TreeKeys::wrapKey(attacker, keyOf(history, 7, 1).getPublicKey(), attacker);
+            rung.author = "mallory";
+        }
+    }
+
+    TreeKeyCache cold;
+    LadderKeys ladder(cold);
+    cold.putGrantKey(7, keyOf(history, 7, 1));
+
+    const RungKeyGathering gathered = ladder.gatherRungKeys(8, tampered, history.registry);
+    EXPECT_FALSE(gathered.complete);
+    EXPECT_EQ(gathered.failure, DescentFailure::Tampered);
+    ASSERT_TRUE(gathered.blame.has_value());
+    EXPECT_EQ(gathered.blame.value(), "mallory");
+    EXPECT_FALSE(cold.getGrantKey(6).has_value()) << "a key that failed verification is never cached";
 }
 
 // descending
