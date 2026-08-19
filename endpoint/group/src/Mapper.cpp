@@ -8,3 +8,13 @@ GroupDeletedEventData Mapper::mapToGroupDeletedEventData(const server::GroupDele
         .contextId = data.contextId
     };
 }
+
+GroupChangedEventData Mapper::mapToGroupChangedEventData(const server::GroupChangedEventData& data) {
+    return GroupChangedEventData{
+        .groupId = data.groupId,
+        .contextId = data.contextId,
+        .version = data.version,
+        .keyVersion = data.keyVersion,
+        .changeKind = data.changeKind
+    };
+}

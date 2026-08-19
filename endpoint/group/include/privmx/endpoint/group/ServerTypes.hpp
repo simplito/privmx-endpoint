@@ -143,6 +143,17 @@ JSON_STRUCT(GroupListResult, GROUP_LIST_RESULT_FIELDS);
     F(contextId, std::string)
 JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
 
+// What a groupCreated/groupUpdated notification carries (BR-03). Deliberately not a GroupInfo: the state used to
+// travel in the event, converted once per recipient, which is why a group of a thousand shipped hundreds of
+// megabytes for one membership change. Whoever needs the state calls getGroup.
+#define GROUP_CHANGED_EVENT_DATA_FIELDS(F)                                                                             \
+    F(groupId, std::string)                                                                                            \
+    F(contextId, std::string)                                                                                          \
+    F(version, int64_t)                                                                                                \
+    F(keyVersion, int64_t)                                                                                             \
+    F(changeKind, std::string)
+JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
+
 // ── Tree-backed membership + Epoch Ladder RPCs ──────────────────────────────────────────────────────────────
 // The tree fields on GroupCreateModel/AddMember/RemoveMember are sent as one nested object, which is how the
 // bridge validates them: a partially-submitted tree is not a thing the protocol allows.
