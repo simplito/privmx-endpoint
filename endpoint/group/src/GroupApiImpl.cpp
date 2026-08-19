@@ -236,8 +236,14 @@ void GroupApiImpl::addGroupMember(
 
     // No new epoch: `forceGenerateNewKey` stays false so the metadata key is untouched and every container the
     // group can read stays valid. The newcomer simply gets an entry for the key that already exists.
+    //
+    // `distributeToUsers = false`, and the one entry is built below instead: the shared path would wrap *every*
+    // metadata key this client can open — the whole history — to the newcomer, and a tree-backed group holds at
+    // most one key entry per member. Older epochs are not wrapped on purpose. They are reached by descending the
+    // ladder, which is what the tree exists for; handing them over per member would put `members × epochs`
+    // wraps back on the group document, and the bridge refuses the request outright.
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, users, managers, false, true, _groupPrivKeyResolver
+        currentGroup, currentEntry, resourceId, users, managers, false, false, _groupPrivKeyResolver
     );
 
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
@@ -275,7 +281,9 @@ void GroupApiImpl::addGroupMember(
     model.tree = keytree::TreeWire::afterAddition(
         keytree::TreeWire::fromGroupInfo(currentGroup), plan, newMember.userId
     );
-    model.keys = ctx.keyEntries;
+    // Exactly one entry, at the key that already exists: no rotation was requested, so `ctx.key` is the group's
+    // current metadata key.
+    model.keys = _keyProvider->prepareKeysList({newMember}, ctx.key, ctx.dio, ctx.location, ctx.secret);
     model.expectedKeyVersion = currentEpoch;
 
     try {
@@ -566,18 +574,23 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, _groupPrivKeyResolver);
 }
 
-core::PagingList<Group> GroupApiImpl::listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+core::PagingList<GroupSummary> GroupApiImpl::listGroups(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery
+) {
     server::GroupListModel model;
     model.contextId = contextId;
     core::ListQueryMapper::map(model, pagingQuery);
     auto groupsList = _serverApi.groupList(model);
+    // A straight mapping, and no cache warming: the listing carries no key entries, so there is nothing to put
+    // in the module-key cache. Any later per-group operation fetches full state through
+    // `getModuleKeysAndVersionFromServer` on the cache miss.
+    std::vector<GroupSummary> groups;
+    groups.reserve(groupsList.groups.size());
     for (const auto& group : groupsList.groups) {
-        setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
+        groups.push_back(GroupDataSchemaMapper::toLibGroupSummary(group));
     }
-    std::vector<Group> groups = _groupDataSchemaMapper->validateDecryptAndConvertGroups(
-        groupsList.groups, _keyProvider, _groupPrivKeyResolver
-    );
-    return core::PagingList<Group>({.totalAvailable = groupsList.count, .readItems = groups});
+    return core::PagingList<GroupSummary>({.totalAvailable = groupsList.count, .readItems = groups});
 }
 
 void GroupApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
@@ -690,12 +703,9 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     // temporary shared_ptr would release the last owner at the end of this statement.
     const auto cache = _treeKeyCaches.get(groupId);
     keytree::GroupKeyResolver resolver(*cache);
-    const keytree::ResolveResult resolved = (epoch > 0 && epoch < currentEpoch)
-        // Only a descent needs the ladder, so only a descent pays for fetching it. The window is bounded by the
-        // two epochs involved, which keeps the request proportional to the hop rather than to the group's age.
-        ?
-        resolver.resolve(group, epoch, _userPrivKey, fetchKeyArchive(groupId, epoch, currentEpoch)) :
-        resolver.resolve(group, epoch, _userPrivKey);
+    const keytree::ResolveResult resolved = resolver.resolve(
+        group, epoch, _userPrivKey, fetchKeyArchive(groupId, epoch, currentEpoch)
+    );
     if (resolved.key.has_value()) {
         return resolved.key.value();
     }

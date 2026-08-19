@@ -17,7 +17,12 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::Group>>(const core::PagingList<group::Group>& val);
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupSummary>(const group::GroupSummary& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::GroupSummary>>(
+    const core::PagingList<group::GroupSummary>& val
+);
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::GroupDeletedEventData>(const group::GroupDeletedEventData& val);

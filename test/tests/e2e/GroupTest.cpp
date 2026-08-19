@@ -120,7 +120,7 @@ TEST_F(GroupTest, listGroups_incorrect_input_data) {
 }
 
 TEST_F(GroupTest, listGroups_correct_input_data) {
-    core::PagingList<group::Group> groupsList;
+    core::PagingList<group::GroupSummary> groupsList;
     EXPECT_NO_THROW({
         groupsList = groupApi->listGroups(
             reader->getString("Context_1.contextId"),
@@ -131,11 +131,13 @@ TEST_F(GroupTest, listGroups_correct_input_data) {
     EXPECT_GE(groupsList.totalAvailable, 2);
     EXPECT_GE(groupsList.readItems.size(), 2);
     for (const auto& g : groupsList.readItems) {
-        EXPECT_EQ(g.statusCode, 0);
         EXPECT_EQ(g.contextId, reader->getString("Context_1.contextId"));
+        EXPECT_FALSE(g.groupId.empty());
+        EXPECT_FALSE(g.groupPubKey.empty());
+        EXPECT_GE(g.keyVersion, 0);
     }
     // limit=1
-    core::PagingList<group::Group> groupsPage;
+    core::PagingList<group::GroupSummary> groupsPage;
     EXPECT_NO_THROW({
         groupsPage = groupApi->listGroups(
             reader->getString("Context_1.contextId"),

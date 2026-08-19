@@ -284,6 +284,24 @@ Group GroupDataSchemaMapper::toLibGroup(
     };
 }
 
+GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary& info) {
+    return GroupSummary{
+        .contextId = info.contextId,
+        .groupId = info.id,
+        .groupPubKey = info.groupPubKey,
+        .createDate = info.createDate,
+        .creator = info.creator,
+        .lastModificationDate = info.lastModificationDate,
+        .lastModifier = info.lastModifier,
+        .users = info.users,
+        .managers = info.managers,
+        .version = info.version,
+        .policy = core::Factory::parsePolicyServerObject(info.policy),
+        .type = info.type,
+        .keyVersion = info.keyVersion
+    };
+}
+
 std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const std::vector<server::GroupInfo>& groups,
     const std::shared_ptr<core::KeyProvider>& keyProvider,

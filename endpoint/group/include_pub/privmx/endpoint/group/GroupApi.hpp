@@ -158,11 +158,14 @@ public:
     /**
      * Gets a list of Groups in given Context.
      *
+     * The listing carries no per-Group metadata: a page holds identity, roster, epoch and policies only.
+     * Call `getGroup` for a Group's `publicMeta`/`privateMeta` and for its verified status.
+     *
      * @param contextId ID of the Context to get the Groups from
      * @param pagingQuery struct with list query parameters
-     * @return struct containing a list of Groups
+     * @return struct containing a list of Group summaries
      */
-    core::PagingList<Group> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
+    core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     /**
      * Subscribe for the Group events on the given subscription query.

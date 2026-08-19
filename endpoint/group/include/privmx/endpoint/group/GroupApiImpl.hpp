@@ -113,7 +113,7 @@ public:
     void deleteGroup(const std::string& groupId);
 
     Group getGroup(const std::string& groupId);
-    core::PagingList<Group> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
+    core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);

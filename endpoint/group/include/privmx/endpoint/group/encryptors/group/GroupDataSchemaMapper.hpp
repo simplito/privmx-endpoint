@@ -73,6 +73,13 @@ public:
         int64_t schemaVersion
     );
 
+    /**
+     * A listed group, straight across. Nothing to decrypt and nothing to verify: a summary carries no
+     * encrypted data, no key entries and no history, so there is no key request, no integrity check and no
+     * chain checkpoint to advance here.
+     */
+    static GroupSummary toLibGroupSummary(const server::GroupSummary& info);
+
     // Returns the decrypted group private key from the head data entry.
     // Caller must hold the group data key (encKey.key).
     std::string getGroupPrivKey(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& encKey);

@@ -34,10 +34,36 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::Group>>(const core::PagingList<group::Group>& val) {
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupSummary>(const group::GroupSummary& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
-        obj->set("__type", "core$PagingList<group$Group>");
+        obj->set("__type", "group$GroupSummary");
+    }
+    obj->set("contextId", serialize(val.contextId));
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("groupPubKey", serialize(val.groupPubKey));
+    obj->set("createDate", serialize(val.createDate));
+    obj->set("creator", serialize(val.creator));
+    obj->set("lastModificationDate", serialize(val.lastModificationDate));
+    obj->set("lastModifier", serialize(val.lastModifier));
+    obj->set("users", serialize(val.users));
+    obj->set("managers", serialize(val.managers));
+    obj->set("version", serialize(val.version));
+    obj->set("policy", serialize(val.policy));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    if (val.type.has_value()) {
+        obj->set("type", serialize(val.type.value()));
+    }
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::GroupSummary>>(
+    const core::PagingList<group::GroupSummary>& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$PagingList<group$GroupSummary>");
     }
     obj->set("totalAvailable", serialize(val.totalAvailable));
     obj->set("readItems", serialize(val.readItems));

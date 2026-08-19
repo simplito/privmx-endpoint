@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/** Unit tests for resolving a group's grant key through the wire types with real EC keys, going through `server::GroupInfo` rather than the runtime structs since that conversion is exactly where a field mismatch would hide; no server is involved, the group info is assembled here the way the bridge would serve it, and tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
+/** Unit tests for resolving a group's grant key through the wire types with real EC keys, going through `server::GroupInfo` rather than the runtime structs since that conversion is exactly where a field mismatch would hide; no server is involved, the group info is assembled here the way the bridge would serve it — with the Epoch Ladder in a separate `server::GroupGetKeyArchiveResult`, because `groupGet` does not carry it — and tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
 
 #include <gtest/gtest.h>
 
@@ -32,12 +32,27 @@ protected:
         PrivateKey priv;
     };
 
-    /** Builds a tree-backed group exactly as the bridge would serve it after `createGroupWithKeyTree`. */
+    /**
+     * Builds a tree-backed group exactly as the bridge would serve it after `createGroupWithKeyTree`.
+     *
+     * `archive` mirrors the split in the real API: `groupGet` serves the tree, `groupGetKeyArchive` serves the
+     * ladder, and the caller hands both to `resolve()`.
+     */
     struct Fixture {
         std::vector<TestMember> members;
         server::GroupInfo group;
+        server::GroupGetKeyArchiveResult archive;
         PrivateKey grantKey;
     };
+
+    /** The archive as the bridge serves it for a group that has never rotated: no rungs, no history. */
+    server::GroupGetKeyArchiveResult emptyArchive(std::int64_t keyVersion = 1) {
+        server::GroupGetKeyArchiveResult archive;
+        archive.keyVersion = keyVersion;
+        archive.eraFloor = 1;
+        archive.archivePrunedBelow = std::nullopt;
+        return archive;
+    }
 
     std::vector<TestMember> makeMembers(std::uint32_t count) {
         std::vector<TestMember> members;
@@ -110,6 +125,7 @@ protected:
             edges.push_back(toWire(edge));
         }
         group.treeEdges = edges;
+        fixture.archive = emptyArchive(1);
         return fixture;
     }
 
@@ -180,8 +196,12 @@ protected:
         fixture.group.keyVersion = static_cast<std::int64_t>(upTo);
         fixture.group.groupPubKey = epochKeys.back().getPublicKey().toBase58DER();
         fixture.group.keyHistory = history;
-        fixture.group.archiveRungs = wireRungs;
-        fixture.group.eraFloor = 1;
+        // The ladder travels in the archive, not on the group: `resolve()` reads the registry and the rungs from
+        // what `groupGetKeyArchive` returned, so publishing them anywhere else would not be seen.
+        fixture.archive.keyVersion = static_cast<std::int64_t>(upTo);
+        fixture.archive.keyHistory = history;
+        fixture.archive.rungs = wireRungs;
+        fixture.archive.eraFloor = 1;
         return epochKeys;
     }
 };
@@ -196,7 +216,7 @@ TEST_F(ResolverDetection, AGroupWithoutTreeFieldsIsFlat) {
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(flat, 0, PrivateKey::generateRandom());
+    const ResolveResult result = resolver.resolve(flat, 0, PrivateKey::generateRandom(), emptyArchive());
     EXPECT_EQ(result.failure, ResolveFailure::NoTree)
         << "a flat group must be reported as such, so the caller keeps using the per-member key entry";
     EXPECT_FALSE(result.key.has_value());
@@ -272,15 +292,37 @@ TEST_F(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
     EXPECT_EQ(past.value(), older.getPublicKey());
 }
 
+/** The overload `resolve()` actually calls: history from the archive, current epoch from the group. */
+TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup) {
+    Fixture fixture = buildFixture(2);
+    const PrivateKey older = PrivateKey::generateRandom();
+    fixture.group.keyVersion = 5;
+    fixture.archive.keyVersion = 5;
+    fixture.archive.keyHistory = std::vector<server::GroupKeyHistoryEntry>{
+        server::GroupKeyHistoryEntry{4, older.getPublicKey().toBase58DER()},
+    };
+
+    const std::vector<EpochRegistryEntry> registry =
+        GroupKeyResolver::toRegistry(fixture.group, fixture.archive);
+    ASSERT_EQ(registry.size(), 2u);
+    // The archive carries past epochs only, so an archive-built registry that did not reach into the group would leave the newest epoch unverifiable — and the client accepts no key it cannot verify.
+    const auto current = LadderKeys::publicKeyOfEpoch(5, registry);
+    ASSERT_TRUE(current.has_value());
+    EXPECT_EQ(current.value(), fixture.grantKey.getPublicKey());
+    const auto past = LadderKeys::publicKeyOfEpoch(4, registry);
+    ASSERT_TRUE(past.has_value());
+    EXPECT_EQ(past.value(), older.getPublicKey());
+}
+
 /** SECURITY — the client must not take the server's word on rung direction. */
 TEST_F(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
-    Fixture fixture = buildFixture(2);
-    fixture.group.archiveRungs = std::vector<server::GroupArchiveRung>{
+    server::GroupGetKeyArchiveResult archive = emptyArchive(8);
+    archive.rungs = std::vector<server::GroupArchiveRung>{
         server::GroupArchiveRung{8, 7, std::nullopt, std::nullopt, "ok", std::nullopt},
         server::GroupArchiveRung{8, 8, std::nullopt, std::nullopt, "self", std::nullopt},
         server::GroupArchiveRung{8, 9, std::nullopt, std::nullopt, "upward", std::nullopt},
     };
-    const std::vector<ArchiveRung> rungs = GroupKeyResolver::toRungs(fixture.group);
+    const std::vector<ArchiveRung> rungs = GroupKeyResolver::toRungs(archive);
     ASSERT_EQ(rungs.size(), 1u) << "only the downward rung may survive conversion";
     EXPECT_EQ(rungs[0].span.at, 8u);
     EXPECT_EQ(rungs[0].span.target, 7u);
@@ -295,7 +337,8 @@ TEST_F(ResolverCurrentEpoch, EveryMemberResolvesTheGrantKey) {
             setOwnLeafPosition(fixture.group, position);
             TreeKeyCache store;
             GroupKeyResolver resolver(store);
-            const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[position].priv);
+            const ResolveResult result =
+                resolver.resolve(fixture.group, 0, fixture.members[position].priv, fixture.archive);
             ASSERT_EQ(result.failure, ResolveFailure::None) << "count=" << count << " pos=" << position;
             ASSERT_TRUE(result.key.has_value());
             EXPECT_EQ(result.key->getPublicKey(), fixture.grantKey.getPublicKey());
@@ -308,8 +351,8 @@ TEST_F(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
     setOwnLeafPosition(fixture.group, 1);
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult byZero = resolver.resolve(fixture.group, 0, fixture.members[1].priv);
-    const ResolveResult byOne = resolver.resolve(fixture.group, 1, fixture.members[1].priv);
+    const ResolveResult byZero = resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive);
+    const ResolveResult byOne = resolver.resolve(fixture.group, 1, fixture.members[1].priv, fixture.archive);
     ASSERT_TRUE(byZero.key.has_value());
     ASSERT_TRUE(byOne.key.has_value());
     EXPECT_EQ(byZero.key->toWIF(), byOne.key->toWIF());
@@ -320,7 +363,7 @@ TEST_F(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
     // ownLeafPosition deliberately unset: the bridge did not point at a leaf for this caller.
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     EXPECT_EQ(result.failure, ResolveFailure::ClimbFailed);
     EXPECT_EQ(result.climb, ClimbFailure::NotAMember);
 }
@@ -330,7 +373,10 @@ TEST_F(ResolverCurrentEpoch, AnOutOfRangeLeafPositionIsRejected) {
     setOwnLeafPosition(fixture.group, 99);
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    EXPECT_EQ(resolver.resolve(fixture.group, 0, fixture.members[0].priv).climb, ClimbFailure::NotAMember);
+    EXPECT_EQ(
+        resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive).climb,
+        ClimbFailure::NotAMember
+    );
 }
 
 TEST_F(ResolverCurrentEpoch, AWrongKeyForTheGivenLeafFails) {
@@ -339,7 +385,7 @@ TEST_F(ResolverCurrentEpoch, AWrongKeyForTheGivenLeafFails) {
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
     // Pointed at member 0's leaf but holding member 1's key.
-    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[1].priv);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive);
     EXPECT_EQ(result.failure, ResolveFailure::ClimbFailed);
     EXPECT_FALSE(result.key.has_value());
 }
@@ -362,7 +408,7 @@ TEST_F(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     EXPECT_EQ(result.failure, ResolveFailure::ClimbFailed);
     EXPECT_EQ(result.climb, ClimbFailure::Tampered) << "tampering must be reported distinctly from a plain miss";
 }
@@ -377,12 +423,28 @@ TEST_F(ResolverOldEpoch, ClimbsThenDescendsToReachAnOlderEpoch) {
     for (const std::uint32_t target : {1u, 5u, 8u, 11u, 12u}) {
         TreeKeyCache store;
         GroupKeyResolver resolver(store);
-        const ResolveResult result =
-            resolver.resolve(fixture.group, static_cast<std::int64_t>(target), fixture.members[2].priv);
+        const ResolveResult result = resolver.resolve(
+            fixture.group, static_cast<std::int64_t>(target), fixture.members[2].priv, fixture.archive
+        );
         ASSERT_EQ(result.failure, ResolveFailure::None) << "target epoch " << target;
         ASSERT_TRUE(result.key.has_value());
         EXPECT_EQ(result.key->toWIF(), epochKeys[target - 1].toWIF()) << "target epoch " << target;
     }
+}
+
+/** The ladder rides in the archive, not on the group, so an archive that does not cover the target is a broken chain rather than a silent fall back to the current epoch. */
+TEST_F(ResolverOldEpoch, AnArchiveWithoutTheNeededRungsReportsABrokenChain) {
+    Fixture fixture = buildFixture(4);
+    advanceEpochs(fixture, 12);
+    fixture.archive.rungs.clear(); // the window the caller asked `groupGetKeyArchive` for held nothing useful
+    setOwnLeafPosition(fixture.group, 2);
+
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[2].priv, fixture.archive);
+    EXPECT_EQ(result.failure, ResolveFailure::DescentFailed);
+    EXPECT_EQ(result.descent, DescentFailure::MissingRung);
+    EXPECT_FALSE(result.key.has_value()) << "an unreachable epoch must yield no key at all, not the current one";
 }
 
 /** The payoff of the whole design, end to end through the wire types: a newcomer holding nothing but a leaf reaches content from epoch 1, and no ciphertext in the archive is addressed to them. */
@@ -426,12 +488,12 @@ TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem)
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(fixture.group, 1, newcomer.priv);
+    const ResolveResult result = resolver.resolve(fixture.group, 1, newcomer.priv, fixture.archive);
     ASSERT_EQ(result.failure, ResolveFailure::None);
     EXPECT_EQ(result.key->toWIF(), epochKeys[0].toWIF()) << "the newcomer reads epoch 1";
 
     // Nothing in the archive is addressed to an individual — every rung targets an epoch.
-    for (const server::GroupArchiveRung& rung : fixture.group.archiveRungs.value()) {
+    for (const server::GroupArchiveRung& rung : fixture.archive.rungs) {
         EXPECT_FALSE(rung.recipient.has_value() && !rung.recipient.value().empty());
     }
 }
@@ -439,12 +501,12 @@ TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem)
 TEST_F(ResolverOldEpoch, StopsAtAnEraFloorAndReportsIt) {
     Fixture fixture = buildFixture(4);
     advanceEpochs(fixture, 12);
-    fixture.group.eraFloor = 8;
+    fixture.archive.eraFloor = 8;
     setOwnLeafPosition(fixture.group, 1);
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[1].priv);
+    const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[1].priv, fixture.archive);
     EXPECT_EQ(result.failure, ResolveFailure::DescentFailed);
     EXPECT_EQ(result.descent, DescentFailure::EraBoundary) << "policy, not an error";
     EXPECT_FALSE(result.key.has_value());
@@ -453,13 +515,13 @@ TEST_F(ResolverOldEpoch, StopsAtAnEraFloorAndReportsIt) {
 TEST_F(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
     Fixture fixture = buildFixture(4);
     advanceEpochs(fixture, 12);
-    fixture.group.eraFloor = 2;
-    fixture.group.archivePrunedBelow = 9;
+    fixture.archive.eraFloor = 2;
+    fixture.archive.archivePrunedBelow = 9;
     setOwnLeafPosition(fixture.group, 1);
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[1].priv);
+    const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[1].priv, fixture.archive);
     EXPECT_EQ(result.descent, DescentFailure::Pruned)
         << "retention and entitlement must read differently to the user";
 }
@@ -471,18 +533,18 @@ TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     setOwnLeafPosition(fixture.group, 1);
 
     const PrivateKey impostor = PrivateKey::generateRandom();
-    auto rungs = fixture.group.archiveRungs.value();
+    auto rungs = fixture.archive.rungs;
     for (server::GroupArchiveRung& rung : rungs) {
         if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
             rung.data = TreeKeys::wrapKey(impostor, epochKeys[7].getPublicKey(), fixture.members[0].priv);
             rung.author = "mallory";
         }
     }
-    fixture.group.archiveRungs = rungs;
+    fixture.archive.rungs = rungs;
 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(fixture.group, 7, fixture.members[1].priv);
+    const ResolveResult result = resolver.resolve(fixture.group, 7, fixture.members[1].priv, fixture.archive);
     EXPECT_EQ(result.failure, ResolveFailure::DescentFailed);
     EXPECT_EQ(result.descent, DescentFailure::Tampered);
     ASSERT_TRUE(result.blame.has_value());
@@ -498,7 +560,7 @@ TEST_F(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) 
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
 
-    const ResolveResult first = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
+    const ResolveResult first = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     ASSERT_EQ(first.failure, ResolveFailure::None);
     ASSERT_TRUE(first.key.has_value());
     ASSERT_EQ(store.nodeKeyCount(), 3u) << "depth(8) == 3 nodes on the direct path, cached by the first climb";
@@ -507,7 +569,7 @@ TEST_F(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) 
     store.clearNodeKeys();
     fixture.group.treeEdges = std::vector<server::GroupTreeEdge>{};
 
-    const ResolveResult second = resolver.resolve(fixture.group, 0, fixture.members[0].priv);
+    const ResolveResult second = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     EXPECT_EQ(second.failure, ResolveFailure::None)
         << "resolve() tried to re-climb instead of using the cached grant key, and there was nothing left to "
            "climb with";

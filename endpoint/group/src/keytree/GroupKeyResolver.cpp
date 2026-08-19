@@ -143,20 +143,6 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(
     return registry;
 }
 
-std::vector<ArchiveRung> GroupKeyResolver::toRungs(const server::GroupInfo& group) {
-    std::vector<ArchiveRung> rungs;
-    if (!group.archiveRungs.has_value()) {
-        return rungs;
-    }
-    for (const server::GroupArchiveRung& rung : group.archiveRungs.value()) {
-        const auto converted = convertRung(rung);
-        if (converted.has_value()) {
-            rungs.push_back(converted.value());
-        }
-    }
-    return rungs;
-}
-
 std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(const server::GroupInfo& group) {
     std::vector<EpochRegistryEntry> registry;
     // `keyHistory` holds the PAST epochs only; the current one lives in `groupPubKey`. Missing that distinction
@@ -198,9 +184,9 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
 /**
  * Resolves through the tree, then through the ladder if an older epoch was asked for.
  *
- * `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group so that both
- * public overloads — archive inline, archive fetched separately — share one code path, and so that the
- * verification at each hop is written once.
+ * `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group because the
+ * group no longer carries them: the bridge serves the ladder from `groupGetKeyArchive`, and keeping the walk
+ * ignorant of where they came from is what lets the verification at each hop be written once.
  */
 ResolveResult GroupKeyResolver::resolveWith(
     const server::GroupInfo& group,
@@ -252,20 +238,6 @@ ResolveResult GroupKeyResolver::resolveWith(
     }
     result.key = descent.key;
     return result;
-}
-
-ResolveResult GroupKeyResolver::resolve(
-    const server::GroupInfo& group,
-    std::int64_t epoch,
-    const privmx::crypto::PrivateKey& ownUserKey
-) {
-    const std::optional<std::uint32_t> prunedBelow = group.archivePrunedBelow.has_value() ?
-        std::optional<std::uint32_t>(static_cast<std::uint32_t>(group.archivePrunedBelow.value())) :
-        std::nullopt;
-    return resolveWith(
-        group, epoch, ownUserKey, toRungs(group), toRegistry(group),
-        static_cast<std::uint32_t>(group.eraFloor.value_or(1)), prunedBelow
-    );
 }
 
 ResolveResult GroupKeyResolver::resolve(
