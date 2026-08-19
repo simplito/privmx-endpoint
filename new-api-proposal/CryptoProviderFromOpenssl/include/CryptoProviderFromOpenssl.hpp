@@ -34,6 +34,7 @@ public:
     virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
     virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
     virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) override;
+    virtual std::shared_ptr<IExtKey>     importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
 // protected:
 //     virtual Bytes digestConfStr(const char *config, BytesView data); 
 //     virtual Bytes hmacConfStr(const char *config,  BytesView key, BytesView data);

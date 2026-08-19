@@ -30,8 +30,8 @@ enum class Hash  {
     Sha1,      // probably used directly only in HMAC
     Sha256,
     Sha512     // probably used directly only in HMAC
-   ,Ripemd160 // probably not used
-   ,Hash160   // probably not used
+   ,Ripemd160 // probably not used (to be precise: used only to compute Hash160)
+   ,Hash160   // probably not used (correction: used in PublicKey::toBase58Address)
 };
 
 // types of implemented symmetric algorithms
@@ -52,9 +52,12 @@ enum class Kdf {
 // formats of keys used in asymmetric cryptography
 enum class KeyFormat { 
     Raw, 
-    Der, 
-    Wif, 
-    Base58Der 
+    Wif,          // only for IPrivateKey
+    Der,          // only for IPublicKey
+    Base58Der,    // only for IPublicKey
+    Base58DerAddr,// only for IPublicKey (probably not used)
+    Base58        // only for IExtKey (probably not used)
+//    ,Seed          // only for IExtKey 
 };
 
 // signing schemes

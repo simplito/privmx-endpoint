@@ -31,6 +31,7 @@ class PublicKey : public IPublicKey
 {
 public:
     static PublicKey fromDER(const std::string& der);
+    static PublicKey fromBase58DER(const std::string& base58);
     PublicKey() = default;
     PublicKey(const ECC& key);
     bool operator==(const PublicKey& obj) const;
@@ -40,14 +41,19 @@ public:
     std::string toBase58Address() const;
     bool verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const;
     const ECC& getEcc() const;
+    bool verifyCompactSignature(const std::string& message, const std::string& signature) const;
 
-    virtual bool  verify(BytesView data, BytesView sig, SigScheme) const override;
-    virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const override;
+    // static PublicKey fromDERb(BytesViewder der);
+    // static PublicKey fromBase58DERb(BytesViewder base58);
+    // std::string toDERb() const;
+    // std::string toBase58DERb() const;
+    // std::string toBase58AddressB() const;
+    
+    virtual bool verify(BytesView data, BytesView sig, SigScheme) const override;
+    // virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const override;
+    virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const override;
     virtual Bytes export_(KeyFormat) const override;
 
-protected:
-    static PublicKey fromBase58DER(const std::string& base58);
-    bool verifyCompactSignature(const std::string& message, const std::string& signature) const;
 
 private:
     ECC _key;
@@ -56,18 +62,6 @@ private:
 
 inline const ECC& PublicKey::getEcc() const {
     return _key;
-}
-
-inline bool PublicKey::verify(BytesView data, BytesView sig, SigScheme) const {
-    throw PrivmxDriverCryptoException("PublicKey::verify: NOT IMPLEMENTED");
-}
-
-inline Bytes PublicKey::seal(BytesView data, const IPrivateKey* senderForSignature) const {
-    throw PrivmxDriverCryptoException("PublicKey::seal: NOT IMPLEMENTED");
-}
-
-inline Bytes PublicKey::export_(KeyFormat) const {
-    throw PrivmxDriverCryptoException("PrivateKey::export_: NOT IMPLEMENTED");
 }
 
 } // ecc

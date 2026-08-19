@@ -12,6 +12,8 @@ limitations under the License.
 #include <functional>
 #include <memory>
 #include <string>
+#include <typeinfo>
+
 #include <openssl/bn.h>
 #include <Poco/SharedPtr.h>
 
@@ -21,6 +23,8 @@ limitations under the License.
 #include "Networks.hpp"
 #include "Base58.hpp"
 #include "Utils.hpp"
+#include "ECDHE.hpp"
+#include "EciesEncryptor.hpp"
 
 namespace privmx {
 namespace cryptoservice {
@@ -130,11 +134,23 @@ std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
 }
 
 Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
-    throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: NOT IMPLEMENTED");
+    // throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: NOT IMPLEMENTED");
+    if (typeid(publicKey) != typeid(PublicKey)) {
+        throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+    }
+    return Utils::s2b(ECDHE(*this, (const PublicKey&) publicKey).getSecret());
 }
 
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
-    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+    // Bytes open(BytesView sealed, const std::optional<IPublicKey>& pubOfSignature = std::nullopt) const {
+    // throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+    if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
+        throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+    } else if (expectedSender != nullptr) {
+        return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed)));
+    } else {
+        return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
+    }
 }
 
 Bytes PrivateKey::export_(KeyFormat format) const {
@@ -149,6 +165,6 @@ Bytes PrivateKey::export_(KeyFormat format) const {
     throw PrivmxDriverCryptoException("PrivateKey::export_: NOT IMPLEMENTED");
 }
 
-} // namespace ecc
+} // ecc
 } // cryptoservice
 } // privmx

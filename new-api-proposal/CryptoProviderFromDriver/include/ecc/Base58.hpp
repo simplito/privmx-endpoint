@@ -42,8 +42,8 @@ private:
     static std::string gmp2bitcoin(std::string s);
     static std::string bitcoin2gmp(std::string s);
 
-    // static std::string gmp2bitcoinB(std::string s);
-    // static std::string bitcoin2gmpB(std::string s);
+    static Bytes gmp2bitcoinB(Bytes s);
+    static Bytes bitcoin2gmpB(Bytes s);
 };
 
 // inline bool Base58::isB(BytesView s) { return is(Utils::b2s(s)); }

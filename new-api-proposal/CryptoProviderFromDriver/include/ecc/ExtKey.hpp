@@ -140,22 +140,6 @@ inline const ECC& ExtKey::getECC() const {
     return _ec;
 }
 
-inline std::shared_ptr<IExtKey> ExtKey::deriveChild(uint32_t index, bool hardened) const {
-    throw PrivmxDriverCryptoException("ExtKey::deriveChild: NOT IMPLEMENTED");
-}
-
-inline std::shared_ptr<IPrivateKey> ExtKey::privateKey() const {
-    throw PrivmxDriverCryptoException("ExtKey::privateKey: NOT IMPLEMENTED");
-}
-
-inline std::shared_ptr<IPublicKey> ExtKey::publicKey() const {
-    throw PrivmxDriverCryptoException("ExtKey::publicKey: NOT IMPLEMENTED");
-}
-
-inline Bytes ExtKey::chainCode() const {
-    throw PrivmxDriverCryptoException("ExtKey::chainCode: NOT IMPLEMENTED");
-}
-
 } // ecc
 } // cryptoservice
 } // privmx

@@ -18,6 +18,9 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 #include <Poco/JSON/Object.h>
 
+#include "PublicKey.hpp"
+#include "PrivateKey.hpp"
+
 
 namespace privmx {
 namespace cryptoservice {

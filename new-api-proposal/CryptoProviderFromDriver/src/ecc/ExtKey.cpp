@@ -232,6 +232,30 @@ Poco::UInt32 ExtKey::read_u32_be(const std::string& raw_key, size_t offset) {
     return Poco::ByteOrder::fromBigEndian(v);
 }
 
+inline std::shared_ptr<IExtKey> ExtKey::deriveChild(uint32_t index, bool hardened) const {
+    // throw PrivmxDriverCryptoException("ExtKey::deriveChild: NOT IMPLEMENTED");
+    if (hardened) {
+        return std::make_shared<ExtKey>(std::move(deriveHardened(index)));
+    } else {
+        return std::make_shared<ExtKey>(std::move(derive(index)));
+    }
+}
+
+inline std::shared_ptr<IPrivateKey> ExtKey::privateKey() const {
+    // throw PrivmxDriverCryptoException("ExtKey::privateKey: NOT IMPLEMENTED");
+    return std::make_shared<PrivateKey>(std::move(getPrivateKey()));
+}
+
+inline std::shared_ptr<IPublicKey> ExtKey::publicKey() const {
+    // throw PrivmxDriverCryptoException("ExtKey::publicKey: NOT IMPLEMENTED");
+    return std::make_shared<PublicKey>(std::move(getPublicKey()));
+}
+
+inline Bytes ExtKey::chainCode() const {
+    // throw PrivmxDriverCryptoException("ExtKey::chainCode: NOT IMPLEMENTED");
+    return Utils::s2b(getChainCode());
+}
+
 } // ecc
 } // cryptoservice
 } // privmx

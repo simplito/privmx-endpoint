@@ -15,6 +15,8 @@ limitations under the License.
 // #include <functional>
 #include <memory>
 #include <string>
+#include <optional>
+
 #include <openssl/ec.h>
 
 #include "CoreTypes.hpp"
@@ -41,6 +43,7 @@ public:
     virtual std::shared_ptr<IPublicKey> publicKey() const override;
     virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const override;  
     virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const override;  
+    // virtual Bytes open(BytesView sealed, const std::optional<IPublicKey>& pubOfSignature = std::nullopt) const override;
     virtual Bytes export_(KeyFormat) const override; 
 
 // protected:

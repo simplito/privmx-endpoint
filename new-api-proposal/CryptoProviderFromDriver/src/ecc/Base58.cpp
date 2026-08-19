@@ -118,7 +118,8 @@ inline int count_first_b(uint8_t c, BytesView s) {
 Bytes Base58::encodeB(BytesView s) {
     mpz_class x;
     mpz_import(x.get_mpz_t(), s.size(), 1, 1, 0, 0, s.data());
-    Bytes result = Utils::s2b(gmp2bitcoin( x.get_str(58)));
+    // Bytes result = Utils::s2b(gmp2bitcoin( x.get_str(58)));
+    Bytes result = gmp2bitcoinB(Utils::s2b(x.get_str(58)));
     if (unsigned int pad_size = count_first_b(0, s)) {
         result.insert(result.begin(), pad_size, (uint8_t) '1');        
     } 
@@ -126,7 +127,8 @@ Bytes Base58::encodeB(BytesView s) {
 }
 
 Bytes Base58::decodeB(BytesView s) {
-    mpz_class x(bitcoin2gmp(Utils::b2s(s)), 58);
+    // mpz_class x(bitcoin2gmp(Utils::b2s(s)), 58);
+    mpz_class x(Utils::b2s(bitcoin2gmpB(Bytes(s.begin(),s.end()))), 58);
     size_t count = (mpz_sizeinbase(x.get_mpz_t(), 2) + 7) / 8;
     uint8_t data[count];
     mpz_export(data, &count, 1, 1, 0, 0, x.get_mpz_t());
@@ -155,14 +157,35 @@ Bytes Base58::decodeWithChecksumB(std::shared_ptr<IDigest> p, BytesView encodedD
     if (checksum != newchecksum) {
         // throw PrivmxException("Invalid base58 checksum");
         throw std::runtime_error("Base58: Invalid base58 checksum:"
-            " [" + Utils::b2s(checksum) + "] vs [" + Utils::b2s(newchecksum) + "]"
+        //     " [" + Utils::b2s(checksum) + "] vs [" + Utils::b2s(newchecksum) + "]"
         );
     }
     return payload;
 }
 
-inline bool Base58::isB(BytesView s) { return is(Utils::b2s(s)); }
+Bytes Base58::gmp2bitcoinB(Bytes s) {
+    static const uint8_t map[] = {
+        0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF, 0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,
+        0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF, '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A',  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,
+        0xFF, 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c',  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,
+        0xFF, 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF 
+    };
+    for_each(s.begin(), s.end(), [](uint8_t& c) { c = map[c]; });
+    return s;
+}
 
+Bytes Base58::bitcoin2gmpB(Bytes s) {
+    static const uint8_t map[] = {
+        0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF, 0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,
+        0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF, 0xFF, '0', '1', '2', '3', '4', '5', '6', '7', '8',  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,
+        0xFF, '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G',  0xFF, 'H', 'I', 'J', 'K', 'L',  0xFF, 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',  0xFF,  0xFF,  0xFF,  0xFF,  0xFF,
+        0xFF, 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',  0xFF, 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',  0xFF,  0xFF,  0xFF,  0xFF,  0xFF
+    };
+    for_each(s.begin(), s.end(), [](uint8_t& c) { c = map[c]; });
+    return s;
+}
+
+inline bool Base58::isB(BytesView s) { return is(Utils::b2s(s)); }
 
 } // ecc
 } // cryptoservice

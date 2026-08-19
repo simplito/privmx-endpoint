@@ -22,6 +22,7 @@ limitations under the License.
 
 #include "PublicKey.hpp"
 #include "PrivateKey.hpp"
+#include "ExtKey.hpp"
 
 
 #include <openssl/rand.h>
@@ -29,6 +30,8 @@ limitations under the License.
 #include <openssl/ripemd.h>
 
 // #include <Poco/ByteOrder.h>
+
+#include "Utils.hpp" // temporary - used only to data translation for test
 
 
 namespace privmx {
@@ -86,10 +89,10 @@ Bytes CryptoProviderFromDriver::digest(Hash alg, BytesView data)
         return digestConfStr("SHA256", data);
     case Hash::Sha512:
         return digestConfStr("SHA512", data);
-    // case Hash::Ripemd160:
-    //     return digestConfStr("RIPEMD160", data);
-    // case Hash::Hash160:
-    //     return digestConfStr("RIPEMD160", digestConfStr("SHA256", data));
+    case Hash::Ripemd160:
+        return digestConfStr("RIPEMD160", data);
+    case Hash::Hash160:
+        return digestConfStr("RIPEMD160", digestConfStr("SHA256", data));
     default:
         throw PrivmxDriverCryptoException("Digest: Unknown protocol");
         break;
@@ -516,10 +519,10 @@ const char* CryptoProviderFromDriver::getHashAlgName(Hash alg) {
         return "SHA256";
     case Hash::Sha512:
         return "SHA512";
-    // case Hash::Ripemd160:
-    //     return "RIPEMD160";
-    // case Hash::Hash160:
-    //     return "HASH160";
+    case Hash::Ripemd160:
+        return "RIPEMD160";
+    case Hash::Hash160:
+        return "HASH160";
     default:
         throw PrivmxDriverCryptoException("hashAlgName: Unknown algorithm");
         break;
@@ -611,12 +614,59 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesVie
     throw PrivmxDriverCryptoException("importPrivateKey: NOT IMPLEMENTED");
 }
 
-std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView, KeyFormat, AsymAlg)
+std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
+    if (alg ==  AsymAlg::EccSecp256k1) {
+        if (format ==  KeyFormat::Wif) {
+            // ecc::PrivateKey key = ecc::PrivateKey::fromWIFb(data);
+            // return std::make_shared<ecc::PrivateKey>(std::move(key));
+            throw PrivmxDriverCryptoException("importPrivateKey: Format WIF is used only for private keys");    
+        } else if (format ==  KeyFormat::Der) {
+            // ecc::PublicKey key = ecc::PublicKey::fromDERb(data);
+            ecc::PublicKey key = ecc::PublicKey::fromDER(ecc::Utils::b2s(data)); // TO BE REPLACED
+            return std::make_shared<ecc::PublicKey>(std::move(key));
+        } else if (format ==  KeyFormat::Base58Der) {
+            // ecc::PublicKey key = ecc::PublicKey::fromBase58DERb(data);
+            ecc::PublicKey key = ecc::PublicKey::fromBase58DER(ecc::Utils::b2s(data)); // TO BE REPLACED
+            return std::make_shared<ecc::PublicKey>(std::move(key));
+        } else {
+            // other formats ...
+            throw PrivmxDriverCryptoException("importPrivateKey: Unknown data format");    
+        }
+    } else {
+        // other algoritms ...
+        throw PrivmxDriverCryptoException("importPrivateKey: Unknown protocol");    
+    }
+
     throw PrivmxDriverCryptoException("importPublicKey: NOT IMPLEMENTED");
 }
 
-std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed, AsymAlg) {
+std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, KeyFormat format, AsymAlg alg)
+{
+    if (alg ==  AsymAlg::EccSecp256k1) {
+        if (format ==  KeyFormat::Base58) {
+            ecc::ExtKey key = ecc::ExtKey::fromBase58(ecc::Utils::b2s(data));
+            return std::make_shared<ecc::ExtKey>(std::move(key));
+        } else {
+            // other formats ...
+            throw PrivmxDriverCryptoException("importExtKey: Unknown data format");    
+        }
+    } else {
+        // other algoritms ...
+        throw PrivmxDriverCryptoException("importExtKey: Unknown protocol");    
+    }
+
+    throw PrivmxDriverCryptoException("importExtKey: NOT IMPLEMENTED");
+}
+
+std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed, AsymAlg alg) {
+    if (alg == AsymAlg::EccSecp256k1) {
+        ecc::ExtKey key = ecc::ExtKey::fromSeed(ecc::Utils::b2s(seed));
+        return std::make_shared<ecc::ExtKey>(std::move(key));
+    } else {
+        // other algoritms ...
+        throw PrivmxDriverCryptoException("extKeyFromSeed: Unknown protocol");    
+    }
     throw PrivmxDriverCryptoException("extKeyFromSeed: NOT IMPLEMENTED");
 }
 

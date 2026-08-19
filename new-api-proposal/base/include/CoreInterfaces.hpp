@@ -16,6 +16,7 @@ limitations under the License.
 #include <string>
 #include <memory>
 #include <span>
+#include <optional>
 
 #include "CoreTypes.hpp"
 
@@ -68,7 +69,8 @@ public:
     virtual bool verify(BytesView data, BytesView sig, SigScheme) const = 0;
 
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
-    virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const = 0;
+    // virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const = 0;
+    virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                 // np. Der/Base58Der
 };
@@ -106,6 +108,8 @@ public:
     virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
     virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
     virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) = 0;
+// or below:
+    virtual std::shared_ptr<IExtKey>  importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
 };
 
 // Probably to be removed (used by code not included in the repository)
