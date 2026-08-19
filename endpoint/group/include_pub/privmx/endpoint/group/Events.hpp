@@ -23,6 +23,42 @@ struct GroupDeletedEventData {
 };
 
 /**
+ * Holds what changed about a Group, and nothing that grows with it.
+ *
+ * A Group event no longer carries the Group: the state was serialized once per recipient, so a Group of a
+ * thousand members shipped its tree and history a thousand times for one membership change. `version` and
+ * `keyVersion` are enough to decide whether the change matters; call `getGroup` when it does.
+ */
+struct GroupChangedEventData {
+
+    /**
+     * Group ID
+     */
+    std::string groupId;
+
+    /**
+     * Context ID
+     */
+    std::string contextId;
+
+    /**
+     * Group version after the change (= number of history entries)
+     */
+    int64_t version;
+
+    /**
+     * Group key epoch after the change
+     */
+    int64_t keyVersion;
+
+    /**
+     * Which operation changed the Group: "created", "updated", "keyRotated", "memberAdded", "memberRemoved",
+     * "eraCut" or "archivePruned"
+     */
+    std::string changeKind;
+};
+
+/**
  * Holds data of event that arrives when a Group is created.
  */
 struct GroupCreatedEvent : public core::Event {
@@ -45,9 +81,9 @@ struct GroupCreatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * all available Group information
+     * what changed about the Group
      */
-    Group data;
+    GroupChangedEventData data;
 };
 
 /**
@@ -73,9 +109,9 @@ struct GroupUpdatedEvent : public core::Event {
     std::shared_ptr<core::SerializedEvent> serialize() const override;
 
     /**
-     * all available Group information
+     * what changed about the Group
      */
-    Group data;
+    GroupChangedEventData data;
 };
 
 /**

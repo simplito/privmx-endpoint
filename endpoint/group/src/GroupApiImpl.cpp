@@ -567,16 +567,14 @@ void GroupApiImpl::processNotificationEvent(
     }
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "groupCreated") {
-            auto raw = server::GroupInfo::fromJSON(notification.data);
-            setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider, _groupPrivKeyResolver);
+            auto raw = server::GroupChangedEventData::fromJSON(notification.data);
+            auto data = Mapper::mapToGroupChangedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupCreatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupUpdated") {
-            auto raw = server::GroupInfo::fromJSON(notification.data);
-            setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
-            invalidateModuleKeysInCache(raw.id);
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(raw, _keyProvider, _groupPrivKeyResolver);
+            auto raw = server::GroupChangedEventData::fromJSON(notification.data);
+            invalidateModuleKeysInCache(raw.groupId);
+            auto data = Mapper::mapToGroupChangedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupUpdatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupDeleted") {
