@@ -23,12 +23,14 @@ private:
         const std::string& selectorId
     );
     static constexpr std::string_view _moduleName = "context";
+    static constexpr std::string_view _collectionName = "groups";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
     static const std::map<EventType, std::string> _eventTypeNames;
     static const std::map<EventType, std::set<EventSelectorType>> _eventTypeAllowedSelectorTypes;
     static const std::map<EventSelectorType, std::string> _readableSelectorType;
     static const std::map<EventType, std::string> _readableEventType;
     constexpr static size_t MODULE_NAME_IN_QUERY_PATH = 0;
+    constexpr static size_t COLLECTION_NAME_IN_QUERY_PATH = 1;
 };
 
 } // namespace group

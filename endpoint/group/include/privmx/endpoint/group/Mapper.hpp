@@ -11,6 +11,7 @@ namespace group {
 class Mapper {
 public:
     static GroupDeletedEventData mapToGroupDeletedEventData(const server::GroupDeletedEventData& data);
+    static GroupChangedEventData mapToGroupChangedEventData(const server::GroupChangedEventData& data);
 };
 
 } // namespace group

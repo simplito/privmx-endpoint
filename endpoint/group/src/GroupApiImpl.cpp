@@ -600,28 +600,14 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
     }
     _guardedExecutor->exec([&, type, notification]() {
         if (type == "groupCreated") {
-            auto raw = server::GroupInfo::fromJSON(notification.data);
-            setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
-                raw, _keyProvider, _groupPrivKeyResolver
-            );
+            auto raw = server::GroupChangedEventData::fromJSON(notification.data);
+            auto data = Mapper::mapToGroupChangedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupCreatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupUpdated") {
-            auto raw = server::GroupInfo::fromJSON(notification.data);
-            setNewModuleKeysInCache(raw.id, groupToModuleKeys(raw), raw.version);
-            invalidateModuleKeysInCache(raw.id);
-            if (keytree::GroupKeyResolver::hasTree(raw) && !keytree::GroupKeyResolver::ownUserId(raw).has_value()) {
-                // The server no longer seats us: `ownUserId` returns empty when our leaf is gone or blanked.
-                // Whether a removed member still receives this event is the bridge's call, so this is an
-                // optimisation over the `NotAMember` backstop in `resolveGroupPrivKey`, not a guarantee.
-                _treeKeyCaches.drop(raw.id);
-            } else {
-                noteGroupEpoch(raw.id, static_cast<std::uint32_t>(raw.keyVersion.value_or(0)));
-            }
-            auto data = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
-                raw, _keyProvider, _groupPrivKeyResolver
-            );
+            auto raw = server::GroupChangedEventData::fromJSON(notification.data);
+            invalidateModuleKeysInCache(raw.groupId);
+            auto data = Mapper::mapToGroupChangedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupUpdatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupDeleted") {
