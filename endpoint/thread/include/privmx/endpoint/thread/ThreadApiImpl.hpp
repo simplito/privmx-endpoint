@@ -24,6 +24,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ServerApi.hpp"
@@ -32,8 +33,6 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/message/MessageDataSchemaMapper.hpp"
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
-
-namespace privmx { namespace endpoint { namespace group { class GroupApiImpl; } } }
 
 namespace privmx {
 namespace endpoint {
@@ -48,7 +47,7 @@ public:
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const core::Connection& connection,
-        std::shared_ptr<group::GroupApiImpl> groupApiImpl = nullptr
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
     ~ThreadApiImpl();
     std::string createThread(

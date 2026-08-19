@@ -8,10 +8,9 @@
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/thread/Types.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
-
-namespace privmx { namespace endpoint { namespace group { class GroupApi; } } }
 
 namespace privmx {
 namespace endpoint {
@@ -31,7 +30,7 @@ public:
      * 
      * @return ThreadApi object
      */
-    static ThreadApi create(core::Connection& connection, group::GroupApi* groupApi = nullptr);
+    static ThreadApi create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi = std::nullopt);
 
     /**
      * //doc-gen:ignore
