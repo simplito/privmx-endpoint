@@ -15,9 +15,11 @@ limitations under the License.
 #include <stdexcept>
 #include <string>
 
+#include "privmx/endpoint/group/keytree/TreeKeys.hpp" // for the wrap/unwrap primitives
+
 using namespace privmx::endpoint::group::keytree;
 
-LadderKeys::LadderKeys(TreeKeyStore& store) : _store(store) {}
+LadderKeys::LadderKeys(TreeKeyCache& cache) : _cache(cache) {}
 
 std::optional<privmx::crypto::PublicKey> LadderKeys::publicKeyOfEpoch(
     std::uint32_t epoch,
@@ -68,7 +70,8 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
     // correct behaviour — a rotation that proceeds without it silently truncates history forever.
     if (!previousEpochKey.has_value()) {
         throw std::invalid_argument(
-            "cannot build the mandatory unit rung for epoch " + std::to_string(newEpoch) +
+            "cannot build the mandatory unit rung for epoch " +
+            std::to_string(newEpoch) +
             ": the previous epoch key is unavailable"
         );
     }
@@ -88,7 +91,7 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
         if (target == newEpoch - 1) {
             continue; // already covered by the unit rung
         }
-        const auto targetKey = _store.getGrantKey(target);
+        const auto targetKey = _cache.getGrantKey(target);
         if (!targetKey.has_value()) {
             continue;
         }
@@ -150,7 +153,7 @@ DescentResult LadderKeys::descend(
         );
     }
 
-    const auto startKey = _store.getGrantKey(from);
+    const auto startKey = _cache.getGrantKey(from);
     if (!startKey.has_value()) {
         result.failure = DescentFailure::NotEntitled;
         return result;
@@ -222,7 +225,7 @@ DescentResult LadderKeys::descend(
 
         current = best->span.target;
         currentKey = recovered.value();
-        _store.putGrantKey(current, currentKey);
+        _cache.putGrantKey(current, currentKey);
         result.reachedEpoch = current;
 
         if (visited.count(current) > 0) {
@@ -277,7 +280,7 @@ DescentResult LadderKeys::crossEraBoundary(
             result.blame = link.author;
             return result;
         }
-        _store.putGrantKey(link.span.target, recovered.value());
+        _cache.putGrantKey(link.span.target, recovered.value());
         result.key = recovered.value();
         result.reachedEpoch = link.span.target;
         result.failure = DescentFailure::None;

@@ -10,6 +10,8 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/thread/ServerApi.hpp"
+#include "privmx/utils/Logger.hpp"
+#include "privmx/utils/Utils.hpp"
 #include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::thread;

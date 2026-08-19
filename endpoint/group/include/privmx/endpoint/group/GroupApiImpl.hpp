@@ -2,6 +2,7 @@
 #define _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -19,6 +20,8 @@
 #include "privmx/endpoint/group/SubscriberImpl.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
+#include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
+#include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -110,7 +113,7 @@ public:
     void deleteGroup(const std::string& groupId);
 
     Group getGroup(const std::string& groupId);
-    core::PagingList<Group> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
+    core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -138,10 +141,14 @@ public:
      * Only a descent needs it, so only a descent pays for it: the request is proportional to the hop rather
      * than to how long the group has existed.
      */
-    server::GroupGetKeyArchiveResult fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, int64_t currentEpoch);
+    server::GroupGetKeyArchiveResult fetchKeyArchive(
+        const std::string& groupId,
+        int64_t targetEpoch,
+        int64_t currentEpoch
+    );
 
 private:
-    // EP-11: verify winner's rotation payload, decrypt+register their epoch key, invalidate cache
+    // Verify winner's rotation payload, decrypt+register their epoch key, invalidate cache
     void adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
@@ -160,8 +167,25 @@ private:
      *
      * Both membership changes need this first: an addition needs the seat's parent key, a removal needs every key
      * on the departing leaf's path plus the current grant key to wrap the first ladder rung.
+     *
+     * @param cache the group's own cache — passed in rather than looked up, so that the climb and the plan that
+     *              follows it are guaranteed to use the same one even if the group is invalidated in between.
+     *              Shared ownership, not a reference: it keeps the cache alive for the whole operation even if
+     *              another thread drops the group from the registry mid-climb.
      */
-    keytree::TreeGroupState climbForPlanning(const server::GroupInfo& group);
+    keytree::TreeGroupState climbForPlanning(
+        const server::GroupInfo& group,
+        const std::shared_ptr<keytree::TreeKeyCache>& cache
+    );
+
+    /**
+     * Drops a group's node keys once the server reports an epoch newer than any grant key held for it.
+     *
+     * A removal refreshes the generations along the departing leaf's path; those node keys are dead, while the
+     * grant keys stay valid and are still needed to publish ladder rungs later. Called from every path that
+     * learns a group's current epoch, so a client that missed the event still converges on its next read.
+     */
+    void noteGroupEpoch(const std::string& groupId, std::uint32_t epoch);
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -177,11 +201,14 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
     /**
-     * Cache of tree node keys and per-epoch grant keys, shared by the climb and the descent: the climb supplies
-     * the current epoch, the descent walks back from it. Purely an optimisation — losing it costs bandwidth, not
-     * access, because everything is rebuildable from what the bridge stores.
+     * Per-group caches of tree node keys and epoch grant keys, shared by the climb and the descent: the climb
+     * supplies the current epoch, the descent walks back from it. Purely an optimisation — losing one costs
+     * bandwidth, not access, because everything is rebuildable from what the bridge stores.
+     *
+     * One cache per group, never one for all of them: nothing inside a cache is keyed by group, and epochs start
+     * at 1 everywhere, so a shared cache aliases two groups on their first entries.
      */
-    keytree::TreeKeyStore _treeKeyStore;
+    keytree::TreeKeyCacheRegistry _treeKeyCaches;
 };
 
 } // namespace group

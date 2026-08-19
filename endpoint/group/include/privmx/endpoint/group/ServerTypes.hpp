@@ -76,7 +76,6 @@ JSON_STRUCT(GroupTreeState, GROUP_TREE_STATE_FIELDS);
     F(author, std::optional<std::string>)
 JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
 
-// GroupInfo — does NOT extend ContainerInfoBase because it has no top-level keyId
 #define GROUP_INFO_FIELDS(F)                                                                                           \
     F(id, std::string)                                                                                                 \
     F(groupPubKey, std::string)                                                                                        \
@@ -100,20 +99,35 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(ownLeafPosition, std::optional<int64_t>)                                                                         \
     F(treeNodes, std::optional<std::vector<GroupTreeNode>>)                                                            \
     F(treeEdges, std::optional<std::vector<GroupTreeEdge>>)                                                            \
-    F(archiveRungs, std::optional<std::vector<GroupArchiveRung>>)                                                      \
     F(eraFloor, std::optional<int64_t>)                                                                                \
     F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
     F(history, std::vector<GroupHistoryEntryInfo>)
 JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
 
+#define GROUP_SUMMARY_FIELDS(F)                                                                                        \
+    F(id, std::string)                                                                                                 \
+    F(groupPubKey, std::string)                                                                                        \
+    F(contextId, std::string)                                                                                          \
+    F(resourceId, std::optional<std::string>)                                                                          \
+    F(type, std::optional<std::string>)                                                                                \
+    F(createDate, int64_t)                                                                                             \
+    F(creator, std::string)                                                                                            \
+    F(lastModificationDate, int64_t)                                                                                   \
+    F(lastModifier, std::string)                                                                                       \
+    F(users, std::vector<std::string>)                                                                                 \
+    F(managers, std::vector<std::string>)                                                                              \
+    F(version, int64_t)                                                                                                \
+    F(keyVersion, int64_t)                                                                                             \
+    F(policy, Poco::Dynamic::Var)
+JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
+
 #define GROUP_CREATE_MODEL_EXTRA_FIELDS(F)                                                                             \
     F(groupPubKey, std::string)                                                                                        \
     F(tree, std::optional<GroupTreeState>)
 JSON_STRUCT_EXT(GroupCreateModel, core::server::ContainerCreateModelBase, GROUP_CREATE_MODEL_EXTRA_FIELDS);
 
-#define GROUP_UPDATE_MODEL_EXTRA_FIELDS(F)                                                                             \
-    F(groupPubKey, std::string)
+#define GROUP_UPDATE_MODEL_EXTRA_FIELDS(F) F(groupPubKey, std::string)
 JSON_STRUCT_EXT(GroupUpdateModel, core::server::ContainerUpdateModelBase, GROUP_UPDATE_MODEL_EXTRA_FIELDS);
 
 #define GROUP_CREATE_RESULT_FIELDS(F) F(groupId, std::string)
@@ -134,7 +148,7 @@ JSON_STRUCT_EXT(GroupListModel, core::server::ContainerListModel, GROUP_LIST_MOD
 JSON_STRUCT(GroupGetResult, GROUP_GET_RESULT_FIELDS);
 
 #define GROUP_LIST_RESULT_FIELDS(F)                                                                                    \
-    F(groups, std::vector<GroupInfo>)                                                                                  \
+    F(groups, std::vector<GroupSummary>)                                                                               \
     F(count, int64_t)
 JSON_STRUCT(GroupListResult, GROUP_LIST_RESULT_FIELDS);
 

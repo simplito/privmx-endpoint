@@ -12,6 +12,7 @@ DIRS=(
     endpoint/event
     endpoint/kvdb
     endpoint/stream
+    endpoint/group
 )
 
 FILES=$(find "${DIRS[@]}" \( -name "*.cpp" -o -name "*.hpp" \))

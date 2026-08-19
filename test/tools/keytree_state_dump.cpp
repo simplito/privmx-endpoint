@@ -154,7 +154,7 @@ struct Group {
     PrivateKey grantKey;
 };
 
-Group buildGroup(TreeKeyStore& store, std::uint32_t memberCount, std::uint32_t epoch) {
+Group buildGroup(TreeKeyCache& store, std::uint32_t memberCount, std::uint32_t epoch) {
     Group group;
     group.members = makeMembers(memberCount);
     TreeKeys builder(store);
@@ -184,7 +184,7 @@ int main() {
 
     // ── creation, across sizes including the truncated ones ──
     for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 12u, 16u, 17u}) {
-        TreeKeyStore store;
+        TreeKeyCache store;
         const Group group = buildGroup(store, count, 1);
         cases.push_back(
             "{\"kind\":\"create\",\"epoch\":1,\"members\":" + membersToJson(idsOf(group.members))
@@ -195,7 +195,7 @@ int main() {
     // ── removals, at every position of a few sizes ──
     for (const std::uint32_t count : {2u, 3u, 4u, 5u, 8u}) {
         for (std::uint32_t position = 0; position < count; ++position) {
-            TreeKeyStore store;
+            TreeKeyCache store;
             Group group = buildGroup(store, count, 5);
             if (count == 1) {
                 continue;
@@ -246,7 +246,7 @@ int main() {
     for (const std::uint32_t count : {2u, 3u, 4u, 5u, 8u}) {
         // (a) append
         {
-            TreeKeyStore store;
+            TreeKeyCache store;
             Group group = buildGroup(store, count, 5);
             TreeKeys tree(store);
             tree.setMemberKeys(publicOf(group.members));
@@ -268,7 +268,7 @@ int main() {
         }
         // (b) remove someone, then seat a newcomer in the blank — the cheap case the design aims for
         if (count >= 4) {
-            TreeKeyStore store;
+            TreeKeyCache store;
             Group group = buildGroup(store, count, 5);
             TreeKeys tree(store);
             tree.setMemberKeys(publicOf(group.members));

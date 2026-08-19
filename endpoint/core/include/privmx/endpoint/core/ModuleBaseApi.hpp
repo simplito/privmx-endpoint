@@ -171,7 +171,7 @@ protected:
             // Inbox special Case
             secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
         }
-        LOG_DEBUG("secret - ",secret)
+        LOG_DEBUG("secret - ", secret)
         auto usersKeysResolver{
             core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)
         };
@@ -184,8 +184,9 @@ protected:
         if (usersKeysResolver->doNeedNewKey()) {
             key = _keyProvider->generateKey();
             if (distributeToUsers) {
-                keyEntries =
-                    _keyProvider->prepareKeysList(usersKeysResolver->getNewUsers(), key, dio, location, secret);
+                keyEntries = _keyProvider->prepareKeysList(
+                    usersKeysResolver->getNewUsers(), key, dio, location, secret
+                );
             }
         }
         auto usersToAddMissingKey{usersKeysResolver->getUsersToAddKey()};
@@ -280,8 +281,9 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
         // failure surfaces as "enc key with given keyId does not exist" rather than as anything informative.
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    core::DecryptedEncKeyV2 ret =
-        _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(data_entry.keyId);
+    core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
+                                      .at(location)
+                                      .at(data_entry.keyId);
     return ret;
 }
 

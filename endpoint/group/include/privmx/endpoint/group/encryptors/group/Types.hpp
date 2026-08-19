@@ -18,7 +18,7 @@ struct GroupDataToEncryptV5 {
     core::Buffer privateMeta;
     core::ModuleInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
-    std::string groupPrivKey;        // WIF private key string — will be encrypted
+    std::string groupPrivKey; // WIF private key string — will be encrypted
     dynamic::MembershipBlock membership;
 };
 
@@ -28,7 +28,7 @@ struct DecryptedGroupDataV5 : public core::DecryptedVersionedData {
     core::ModuleInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
-    std::string groupPrivKey;        // decrypted WIF private key (empty if only public extracted)
+    std::string groupPrivKey; // decrypted WIF private key (empty if only public extracted)
     dynamic::MembershipBlock membership;
 };
 

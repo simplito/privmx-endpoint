@@ -16,9 +16,7 @@ dynamic::EncryptedGroupDataV5 GroupDataSchemaStrategyV5::encrypt(
     return _encryptor.encrypt(data, userPrivKey, key);
 }
 
-dynamic::EncryptedGroupDataV5 GroupDataSchemaStrategyV5::getEncryptedData(
-    const server::GroupInfo& model
-) const {
+dynamic::EncryptedGroupDataV5 GroupDataSchemaStrategyV5::getEncryptedData(const server::GroupInfo& model) const {
     return dynamic::EncryptedGroupDataV5::fromJSON(model.data.back().data);
 }
 
@@ -35,7 +33,5 @@ std::tuple<Group, core::DataIntegrityObject> GroupDataSchemaStrategyV5::convert(
 }
 
 Group GroupDataSchemaStrategyV5::toLibError(const server::GroupInfo& groupInfo, int64_t errorCode) const {
-    return GroupDataSchemaMapper::toLibGroup(
-        groupInfo, {}, {}, errorCode, core::ModuleDataSchema::Version::VERSION_5
-    );
+    return GroupDataSchemaMapper::toLibGroup(groupInfo, {}, {}, errorCode, core::ModuleDataSchema::Version::VERSION_5);
 }

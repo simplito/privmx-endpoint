@@ -20,10 +20,7 @@ public:
         const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedGroupDataV5 decrypt(
-        const dynamic::EncryptedGroupDataV5& encryptedData,
-        const std::string& encryptionKey
-    );
+    DecryptedGroupDataV5 decrypt(const dynamic::EncryptedGroupDataV5& encryptedData, const std::string& encryptionKey);
     DecryptedGroupDataV5 extractPublic(const dynamic::EncryptedGroupDataV5& encryptedData);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const dynamic::EncryptedGroupDataV5& encryptedData);
 

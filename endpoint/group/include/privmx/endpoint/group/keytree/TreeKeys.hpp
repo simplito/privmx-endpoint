@@ -18,38 +18,13 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 #include "privmx/endpoint/group/keytree/TreeTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace group {
 namespace keytree {
-
-/**
- * Local cache of tree node keys and per-epoch grant keys.
- *
- * Caching is an **optimisation, not a correctness requirement**. Losing it costs bandwidth, not access: the
- * client re-fetches the tree and climbs again. That is the property the whole design protects, and it is why
- * this store has no persistence contract.
- */
-class TreeKeyStore {
-public:
-    void putNodeKey(std::uint32_t nodeIndex, std::uint32_t generation, const privmx::crypto::PrivateKey& key);
-    std::optional<privmx::crypto::PrivateKey> getNodeKey(std::uint32_t nodeIndex, std::uint32_t generation) const;
-
-    void putGrantKey(std::uint32_t epoch, const privmx::crypto::PrivateKey& key);
-    std::optional<privmx::crypto::PrivateKey> getGrantKey(std::uint32_t epoch) const;
-
-    /** Number of cached node keys. For tests and diagnostics. */
-    std::size_t nodeKeyCount() const;
-
-    void clear();
-
-private:
-    /** Keyed by (nodeIndex, generation) — never by node alone: a refresh makes the old key a different key. */
-    std::map<std::pair<std::uint32_t, std::uint32_t>, privmx::crypto::PrivateKey> _nodeKeys;
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> _grantKeys;
-};
 
 /**
  * Building and traversing the hidden key tree with real EC keys.
@@ -65,7 +40,7 @@ private:
  */
 class TreeKeys {
 public:
-    explicit TreeKeys(TreeKeyStore& store);
+    explicit TreeKeys(TreeKeyCache& cache);
 
     // ── Traversal ───────────────────────────────────────────────────────────
 
@@ -176,7 +151,7 @@ private:
     static const TreeEdge* findGrantEdge(const TreeGroupState& state);
     static const TreeNodeState* findNode(const TreeGroupState& state, std::uint32_t nodeIndex);
 
-    TreeKeyStore& _store;
+    TreeKeyCache& _cache;
     /** Member public keys supplied by `setMemberKeys`, needed to wrap to surviving sibling leaves. */
     std::map<std::string, privmx::crypto::PublicKey> _memberKeys;
 };

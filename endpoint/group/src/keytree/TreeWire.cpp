@@ -52,15 +52,15 @@ server::GroupArchiveRung TreeWire::toWire(const ArchiveRung& rung) {
     wire.atKeyVersion = static_cast<std::int64_t>(rung.span.at);
     wire.targetKeyVersion = static_cast<std::int64_t>(rung.span.target);
     switch (rung.recipientKind) {
-        case RungRecipientKind::User:
-            wire.recipientKind = "user";
-            break;
-        case RungRecipientKind::Group:
-            wire.recipientKind = "group";
-            break;
-        default:
-            wire.recipientKind = "epoch";
-            break;
+    case RungRecipientKind::User:
+        wire.recipientKind = "user";
+        break;
+    case RungRecipientKind::Group:
+        wire.recipientKind = "group";
+        break;
+    default:
+        wire.recipientKind = "epoch";
+        break;
     }
     if (!rung.recipientId.empty()) {
         wire.recipient = rung.recipientId;
@@ -125,11 +125,13 @@ TreeGroupState TreeWire::toRuntime(
         }
     }
     for (const server::GroupTreeNode& node : tree.nodes) {
-        state.nodes.push_back(TreeNodeState{
-            static_cast<std::uint32_t>(node.nodeIndex),
-            static_cast<std::uint32_t>(node.generation),
-            privmx::crypto::PublicKey::fromBase58DER(node.publicKey),
-        });
+        state.nodes.push_back(
+            TreeNodeState{
+                static_cast<std::uint32_t>(node.nodeIndex),
+                static_cast<std::uint32_t>(node.generation),
+                privmx::crypto::PublicKey::fromBase58DER(node.publicKey),
+            }
+        );
     }
     for (const server::GroupTreeEdge& edge : tree.edges) {
         TreeEdge converted;
@@ -158,7 +160,8 @@ server::GroupTreeState TreeWire::afterRemoval(
     server::GroupTreeState after;
     after.numLeaves = before.numLeaves;
     after.leafAssignment = before.leafAssignment;
-    const std::string departing = position < after.leafAssignment.size() ? after.leafAssignment[position] : std::string();
+    const std::string departing = position < after.leafAssignment.size() ? after.leafAssignment[position] :
+                                                                           std::string();
     if (position < after.leafAssignment.size()) {
         after.leafAssignment[position] = std::string();
     }
@@ -175,9 +178,9 @@ server::GroupTreeState TreeWire::afterRemoval(
         }
     }
     for (const NodeRefresh& refresh : plan.pathRefresh) {
-        after.nodes.push_back(toWire(TreeNodeState{
-            refresh.nodeIndex, refresh.newGeneration, refresh.newKey.getPublicKey()
-        }));
+        after.nodes.push_back(
+            toWire(TreeNodeState{refresh.nodeIndex, refresh.newGeneration, refresh.newKey.getPublicKey()})
+        );
     }
 
     for (const server::GroupTreeEdge& edge : before.edges) {
@@ -251,9 +254,8 @@ server::GroupTreeState TreeWire::afterAddition(
         if (edge.isGrantEdge.value_or(false)) {
             return std::string("grant");
         }
-        const std::string child = edge.childKind == "user"
-            ? "user:" + edge.childUserId.value_or("")
-            : "node:" + std::to_string(edge.childIndex.value_or(0));
+        const std::string child = edge.childKind == "user" ? "user:" + edge.childUserId.value_or("") :
+                                                             "node:" + std::to_string(edge.childIndex.value_or(0));
         return std::to_string(edge.parentIndex.value_or(0)) + ">" + child;
     };
     std::vector<server::GroupTreeEdge> added;

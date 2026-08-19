@@ -1,0 +1,22 @@
+[{
+	"_id": "6a84632f5944bd5a24145546|1",
+	"groupId": "6a84632f5944bd5a24145546",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "6E1QoGpGRXoMYNYs4BuTNkGW1fpvjLN1W6S4eouttQuYsj5pdX"
+},
+{
+	"_id": "6a84632f5944bd5a24145547|1",
+	"groupId": "6a84632f5944bd5a24145547",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "7ZdL2eQW47Kh6cHcwy5kcrcuVX6vTdKCUTmb8JNBkT8SSWSvbd"
+},
+{
+	"_id": "6a84632f5944bd5a24145547|3",
+	"groupId": "6a84632f5944bd5a24145547",
+	"nodeIndex": 3,
+	"generation": 0,
+	"publicKey": "75Z8mpFkvyRF8XNTB2sC7RLQcHm7M1bBTCG2CRtxxt8cp1evEt"
+}]
+

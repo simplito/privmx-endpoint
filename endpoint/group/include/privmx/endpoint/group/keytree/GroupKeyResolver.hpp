@@ -63,29 +63,21 @@ struct ResolveResult {
  */
 class GroupKeyResolver {
 public:
-    GroupKeyResolver(TreeKeyStore& store);
+    GroupKeyResolver(TreeKeyCache& cache);
 
     /**
      * @param group       the group as served by the bridge
      * @param epoch       requested epoch; `0` means "current"
      * @param ownUserKey  the caller's long-term private key
-     *
-     * The caller's own identity comes from `group.ownLeafPosition`, which the bridge fills in because it knows
-     * who is asking — the same reason it already filters `keys` to the caller. That keeps the endpoint from
-     * having to know its own user id here, which it otherwise does not.
-     */
-    ResolveResult resolve(
-        const server::GroupInfo& group,
-        std::int64_t epoch,
-        const privmx::crypto::PrivateKey& ownUserKey
-    );
-
-    /**
-     * As above, but with the Epoch Ladder supplied separately.
+     * @param archive     the Epoch Ladder, fetched separately
      *
      * The bridge does not put the archive in `groupGet`: it grows with the group's whole history, while a client
      * needs it only when it is actually reaching for an older epoch. The caller fetches it with
      * `groupGetKeyArchive` at that point and hands it in here.
+     *
+     * The caller's own identity comes from `group.ownLeafPosition`, which the bridge fills in because it knows
+     * who is asking — the same reason it already filters `keys` to the caller. That keeps the endpoint from
+     * having to know its own user id here, which it otherwise does not.
      */
     ResolveResult resolve(
         const server::GroupInfo& group,
@@ -111,15 +103,12 @@ public:
     static TreeGroupState toTreeState(const server::GroupInfo& group);
 
     /**
-     * Converts the served rungs.
+     * Converts the rungs of a fetched archive.
      *
      * **Rungs violating the direction invariant are dropped here**, before anything can traverse them. The
      * bridge already rejects them, but a client that trusted the server on this would be trusting the one party
      * the design assumes may be hostile.
      */
-    static std::vector<ArchiveRung> toRungs(const server::GroupInfo& group);
-
-    /** Same, for an archive fetched separately. The direction invariant is re-checked here too. */
     static std::vector<ArchiveRung> toRungs(const server::GroupGetKeyArchiveResult& archive);
 
     /** The epoch registry, assembled from `groupPubKey` (current epoch) plus `keyHistory` (past ones). */
@@ -137,7 +126,7 @@ public:
     );
 
 private:
-    /** Shared implementation of both `resolve` overloads: climb, then descend with the given ladder. */
+    /** Climb, then descend with the given ladder. */
     ResolveResult resolveWith(
         const server::GroupInfo& group,
         std::int64_t epoch,
@@ -148,7 +137,7 @@ private:
         const std::optional<std::uint32_t>& prunedBelow
     );
 
-    TreeKeyStore& _store;
+    TreeKeyCache& _cache;
 };
 
 } // namespace keytree

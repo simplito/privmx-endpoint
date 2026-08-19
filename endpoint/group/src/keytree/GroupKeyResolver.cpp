@@ -15,11 +15,14 @@ limitations under the License.
 
 using namespace privmx::endpoint::group::keytree;
 
-GroupKeyResolver::GroupKeyResolver(TreeKeyStore& store) : _store(store) {}
+GroupKeyResolver::GroupKeyResolver(TreeKeyCache& cache) : _cache(cache) {}
 
 bool GroupKeyResolver::hasTree(const server::GroupInfo& group) {
-    return group.numLeaves.has_value() && group.numLeaves.value() > 0 && group.treeNodes.has_value()
-        && group.treeEdges.has_value() && group.leafAssignment.has_value();
+    return group.numLeaves.has_value() &&
+        group.numLeaves.value() > 0 &&
+        group.treeNodes.has_value() &&
+        group.treeEdges.has_value() &&
+        group.leafAssignment.has_value();
 }
 
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
@@ -42,11 +45,13 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
 
     if (group.treeNodes.has_value()) {
         for (const server::GroupTreeNode& node : group.treeNodes.value()) {
-            state.nodes.push_back(TreeNodeState{
-                static_cast<std::uint32_t>(node.nodeIndex),
-                static_cast<std::uint32_t>(node.generation),
-                privmx::crypto::PublicKey::fromBase58DER(node.publicKey),
-            });
+            state.nodes.push_back(
+                TreeNodeState{
+                    static_cast<std::uint32_t>(node.nodeIndex),
+                    static_cast<std::uint32_t>(node.generation),
+                    privmx::crypto::PublicKey::fromBase58DER(node.publicKey),
+                }
+            );
         }
     }
 
@@ -122,30 +127,20 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(
 ) {
     std::vector<EpochRegistryEntry> registry;
     for (const server::GroupKeyHistoryEntry& entry : archive.keyHistory) {
-        registry.push_back(EpochRegistryEntry{
-            static_cast<std::uint32_t>(entry.keyVersion),
-            privmx::crypto::PublicKey::fromBase58DER(entry.groupPubKey),
-        });
+        registry.push_back(
+            EpochRegistryEntry{
+                static_cast<std::uint32_t>(entry.keyVersion),
+                privmx::crypto::PublicKey::fromBase58DER(entry.groupPubKey),
+            }
+        );
     }
-    registry.push_back(EpochRegistryEntry{
-        static_cast<std::uint32_t>(group.keyVersion.value_or(1)),
-        privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey),
-    });
-    return registry;
-}
-
-std::vector<ArchiveRung> GroupKeyResolver::toRungs(const server::GroupInfo& group) {
-    std::vector<ArchiveRung> rungs;
-    if (!group.archiveRungs.has_value()) {
-        return rungs;
-    }
-    for (const server::GroupArchiveRung& rung : group.archiveRungs.value()) {
-        const auto converted = convertRung(rung);
-        if (converted.has_value()) {
-            rungs.push_back(converted.value());
+    registry.push_back(
+        EpochRegistryEntry{
+            static_cast<std::uint32_t>(group.keyVersion.value_or(1)),
+            privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey),
         }
-    }
-    return rungs;
+    );
+    return registry;
 }
 
 std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(const server::GroupInfo& group) {
@@ -154,16 +149,20 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(const server::Group
     // would leave the newest epoch unverifiable, and an unverifiable key is one this client refuses to accept.
     if (group.keyHistory.has_value()) {
         for (const server::GroupKeyHistoryEntry& entry : group.keyHistory.value()) {
-            registry.push_back(EpochRegistryEntry{
-                static_cast<std::uint32_t>(entry.keyVersion),
-                privmx::crypto::PublicKey::fromBase58DER(entry.groupPubKey),
-            });
+            registry.push_back(
+                EpochRegistryEntry{
+                    static_cast<std::uint32_t>(entry.keyVersion),
+                    privmx::crypto::PublicKey::fromBase58DER(entry.groupPubKey),
+                }
+            );
         }
     }
-    registry.push_back(EpochRegistryEntry{
-        static_cast<std::uint32_t>(group.keyVersion.value_or(1)),
-        privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey),
-    });
+    registry.push_back(
+        EpochRegistryEntry{
+            static_cast<std::uint32_t>(group.keyVersion.value_or(1)),
+            privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey),
+        }
+    );
     return registry;
 }
 
@@ -185,9 +184,9 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
 /**
  * Resolves through the tree, then through the ladder if an older epoch was asked for.
  *
- * `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group so that both
- * public overloads — archive inline, archive fetched separately — share one code path, and so that the
- * verification at each hop is written once.
+ * `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group because the
+ * group no longer carries them: the bridge serves the ladder from `groupGetKeyArchive`, and keeping the walk
+ * ignorant of where they came from is what lets the verification at each hop be written once.
  */
 ResolveResult GroupKeyResolver::resolveWith(
     const server::GroupInfo& group,
@@ -216,7 +215,7 @@ ResolveResult GroupKeyResolver::resolveWith(
 
     // Step 1: climb to the current epoch's grant key. Every recovered node key is verified against the public
     // key the server published for that node, so a corrupted edge fails loudly instead of yielding a wrong key.
-    TreeKeys tree(_store);
+    TreeKeys tree(_cache);
     const ClimbResult climb = tree.climbToGrantKey(state, identity.value(), ownUserKey);
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
@@ -229,7 +228,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     }
 
     // Step 2: descend the ladder. Verification against the epoch registry happens at every hop.
-    LadderKeys ladder(_store);
+    LadderKeys ladder(_cache);
     const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor, prunedBelow);
     if (descent.failure != DescentFailure::None || !descent.key.has_value()) {
         result.failure = ResolveFailure::DescentFailed;
@@ -244,26 +243,12 @@ ResolveResult GroupKeyResolver::resolveWith(
 ResolveResult GroupKeyResolver::resolve(
     const server::GroupInfo& group,
     std::int64_t epoch,
-    const privmx::crypto::PrivateKey& ownUserKey
-) {
-    const std::optional<std::uint32_t> prunedBelow = group.archivePrunedBelow.has_value()
-        ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(group.archivePrunedBelow.value()))
-        : std::nullopt;
-    return resolveWith(
-        group, epoch, ownUserKey, toRungs(group), toRegistry(group),
-        static_cast<std::uint32_t>(group.eraFloor.value_or(1)), prunedBelow
-    );
-}
-
-ResolveResult GroupKeyResolver::resolve(
-    const server::GroupInfo& group,
-    std::int64_t epoch,
     const privmx::crypto::PrivateKey& ownUserKey,
     const server::GroupGetKeyArchiveResult& archive
 ) {
-    const std::optional<std::uint32_t> prunedBelow = archive.archivePrunedBelow.has_value()
-        ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(archive.archivePrunedBelow.value()))
-        : std::nullopt;
+    const std::optional<std::uint32_t> prunedBelow = archive.archivePrunedBelow.has_value() ?
+        std::optional<std::uint32_t>(static_cast<std::uint32_t>(archive.archivePrunedBelow.value())) :
+        std::nullopt;
     return resolveWith(
         group, epoch, ownUserKey, toRungs(archive), toRegistry(group, archive),
         static_cast<std::uint32_t>(archive.eraFloor), prunedBelow

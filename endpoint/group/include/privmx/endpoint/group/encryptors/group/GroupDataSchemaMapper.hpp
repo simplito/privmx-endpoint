@@ -9,17 +9,19 @@
 
 #include <Poco/Dynamic/Var.h>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
-#include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
-#include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
+#include "privmx/endpoint/group/checkpoint/ChainCheckpoint.hpp"
+#include "privmx/endpoint/group/checkpoint/ChainCheckpointRegistry.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaStrategyV5.hpp"
 
@@ -42,6 +44,15 @@ public:
 
     uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
 
+    /** Drops one group's chain checkpoint. Call when the group is gone or the session was reset. */
+    void dropChainCheckpoint(const std::string& groupId);
+
+    /** Drops every group's chain checkpoint. Call on connect/disconnect, mirroring the tree-key cache. */
+    void dropAllChainCheckpoints();
+
+    /** The stored checkpoint for one group, if any. For tests and diagnostics. */
+    std::optional<checkpoint::ChainCheckpoint::Snapshot> peekChainCheckpoint(const std::string& groupId) const;
+
     std::vector<Group> validateDecryptAndConvertGroups(
         const std::vector<server::GroupInfo>& groups,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -62,6 +73,13 @@ public:
         int64_t schemaVersion
     );
 
+    /**
+     * A listed group, straight across. Nothing to decrypt and nothing to verify: a summary carries no
+     * encrypted data, no key entries and no history, so there is no key request, no integrity check and no
+     * chain checkpoint to advance here.
+     */
+    static GroupSummary toLibGroupSummary(const server::GroupSummary& info);
+
     // Returns the decrypted group private key from the head data entry.
     // Caller must hold the group data key (encKey.key).
     std::string getGroupPrivKey(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& encKey);
@@ -77,6 +95,9 @@ private:
     std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;
     core::DataEncryptorV4 _dataEncryptor;
     GroupDataEncryptorV5 _groupEncryptor;
+    /** Per-group chain-verification checkpoints, so a warm `assertDataIntegrity` skips already-verified
+     *  entries instead of re-proving the whole history from genesis on every call. */
+    checkpoint::ChainCheckpointRegistry _chainCheckpoints;
 };
 
 } // namespace group

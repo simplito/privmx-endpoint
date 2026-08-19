@@ -90,9 +90,7 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
         if (!seen.insert(user.userId).second) {
             continue; // a manager listed as a user too gets one leaf, not two
         }
-        members.push_back(keytree::TreeMember{
-            user.userId, privmx::crypto::PublicKey::fromBase58DER(user.pubKey)
-        });
+        members.push_back(keytree::TreeMember{user.userId, privmx::crypto::PublicKey::fromBase58DER(user.pubKey)});
     }
     return members;
 }
@@ -114,7 +112,10 @@ static TPlan planOrThrow(const std::function<TPlan()>& build) {
     }
 }
 
-keytree::TreeGroupState GroupApiImpl::climbForPlanning(const server::GroupInfo& group) {
+keytree::TreeGroupState GroupApiImpl::climbForPlanning(
+    const server::GroupInfo& group,
+    const std::shared_ptr<keytree::TreeKeyCache>& cache
+) {
     if (!keytree::GroupKeyResolver::hasTree(group)) {
         throw core::EncryptionKeyValidationException("this group is not backed by a key tree");
     }
@@ -123,7 +124,7 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(const server::GroupInfo& 
         throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
     }
     const keytree::TreeGroupState state = keytree::GroupKeyResolver::toTreeState(group);
-    keytree::TreeKeys tree(_treeKeyStore);
+    keytree::TreeKeys tree(*cache);
     // Walk even when the grant key is already cached: a plan needs the node keys along the path, and the cache
     // would otherwise satisfy the request without ever recovering them.
     const keytree::ClimbResult climb = tree.climbToGrantKey(state, identity.value(), _userPrivKey, false);
@@ -147,7 +148,10 @@ std::string GroupApiImpl::createGroupWithKeyTree(
     auto ctx = prepareContainerCreate(contextId, users, managers);
 
     const std::vector<keytree::TreeMember> members = toTreeMembers(users, managers);
-    keytree::TreeKeys builder(_treeKeyStore);
+    // A scratch cache: the group has no id yet, so it has no cache in the registry to write to. `build()` writes
+    // nothing anyway — the keys it mints come back in the plan, and are seeded below once the id exists.
+    keytree::TreeKeyCache scratch;
+    keytree::TreeKeys builder(scratch);
     const keytree::BuildPlan plan = builder.build(members, _userPrivKey);
     const std::string groupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
 
@@ -168,9 +172,8 @@ std::string GroupApiImpl::createGroupWithKeyTree(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         // Empty on purpose: the grant private key is reached by climbing. Carrying it here would deliver it to
         // every member through the metadata key, and that key would then need re-wrapping for everyone on each
@@ -181,8 +184,7 @@ std::string GroupApiImpl::createGroupWithKeyTree(
 
     server::GroupCreateModel model;
     fillContainerCreateModel(
-        model, contextId, users, managers, ctx,
-        _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key)
+        model, contextId, users, managers, ctx, _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key)
     );
     model.groupPubKey = groupPubKeyStr;
     model.type = GROUP_TYPE_FILTER_FLAG;
@@ -192,6 +194,14 @@ std::string GroupApiImpl::createGroupWithKeyTree(
     }
 
     auto result = _serverApi.groupCreate(model);
+    // The creator already holds everything a climb would recover, so seeding saves it a log2(N) walk on its very
+    // next read. Safe only because a cached grant key is now re-checked against the tree the server serves back:
+    // if the bridge committed anything other than what we submitted, the next read evicts this and re-climbs.
+    const auto cache = _treeKeyCaches.get(result.groupId);
+    cache->putGrantKey(1, plan.grantKey); // a new group starts at epoch 1
+    for (const auto& minted : plan.nodeKeys) {
+        cache->putNodeKey(minted.first, 0, minted.second); // every node in a fresh build is at generation 0
+    }
     return result.groupId;
 }
 
@@ -210,22 +220,30 @@ void GroupApiImpl::addGroupMember(
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
 
-    const keytree::TreeGroupState state = climbForPlanning(currentGroup);
+    // One handle for the whole operation: the climb populates the node keys the plan then reads, so re-looking it
+    // up in between would let a concurrent invalidation leave `planAddition` with nothing to work from.
+    const auto cache = _treeKeyCaches.get(groupId);
+    const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
 
-    keytree::TreeKeys tree(_treeKeyStore);
+    keytree::TreeKeys tree(*cache);
     tree.setMemberKeys(toTreeMembers(users, managers));
     const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
         return tree.planAddition(
-            state,
-            keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
+            state, keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
             _userPrivKey
         );
     });
 
     // No new epoch: `forceGenerateNewKey` stays false so the metadata key is untouched and every container the
     // group can read stays valid. The newcomer simply gets an entry for the key that already exists.
+    //
+    // `distributeToUsers = false`, and the one entry is built below instead: the shared path would wrap *every*
+    // metadata key this client can open — the whole history — to the newcomer, and a tree-backed group holds at
+    // most one key entry per member. Older epochs are not wrapped on purpose. They are reached by descending the
+    // ladder, which is what the tree exists for; handing them over per member would put `members × epochs`
+    // wraps back on the group document, and the bridge refuses the request outright.
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, users, managers, false, true, _groupPrivKeyResolver
+        currentGroup, currentEntry, resourceId, users, managers, false, false, _groupPrivKeyResolver
     );
 
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
@@ -246,9 +264,8 @@ void GroupApiImpl::addGroupMember(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         .groupPrivKey = std::string(),
         .membership = membership
@@ -264,7 +281,9 @@ void GroupApiImpl::addGroupMember(
     model.tree = keytree::TreeWire::afterAddition(
         keytree::TreeWire::fromGroupInfo(currentGroup), plan, newMember.userId
     );
-    model.keys = ctx.keyEntries;
+    // Exactly one entry, at the key that already exists: no rotation was requested, so `ctx.key` is the group's
+    // current metadata key.
+    model.keys = _keyProvider->prepareKeysList({newMember}, ctx.key, ctx.dio, ctx.location, ctx.secret);
     model.expectedKeyVersion = currentEpoch;
 
     try {
@@ -273,6 +292,9 @@ void GroupApiImpl::addGroupMember(
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
+    // Deliberately no tree-key invalidation: an addition rotates nothing and refreshes no node. Growing the tree
+    // mints new node *indices* and leaves every existing index's key at its current generation, so what is cached
+    // stays correct.
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -291,10 +313,13 @@ void GroupApiImpl::removeGroupMember(
     const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
     const int64_t newEpoch = currentEpoch + 1;
 
-    const keytree::TreeGroupState state = climbForPlanning(currentGroup);
-    const auto currentGrantKey = _treeKeyStore.getGrantKey(static_cast<std::uint32_t>(currentEpoch));
+    // One handle for the whole removal — the climb, the plan, the rungs and the post-commit seed all have to see
+    // the same cache, or the plan reads node keys the climb never wrote.
+    const auto cache = _treeKeyCaches.get(groupId);
+    const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
+    const auto currentGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(currentEpoch));
 
-    keytree::TreeKeys tree(_treeKeyStore);
+    keytree::TreeKeys tree(*cache);
     // The surviving siblings' public keys come from the roster: they are not part of the tree state, and a
     // refresh that skipped one would silently lock that member out.
     tree.setMemberKeys(toTreeMembers(users, managers));
@@ -305,14 +330,11 @@ void GroupApiImpl::removeGroupMember(
     // Rungs for the new epoch. The unit rung is mandatory — without it the group's own history is orphaned at
     // the moment of the removal. Skip rungs are added when this client happens to hold the older epoch keys,
     // and are a shortcut for future descents rather than a correctness requirement.
-    keytree::LadderKeys ladder(_treeKeyStore);
+    keytree::LadderKeys ladder(*cache);
     const std::vector<keytree::ArchiveRung> rungs = ladder.buildRungs(
-        static_cast<std::uint32_t>(newEpoch),
-        plan.newGrantKey.getPublicKey(),
-        currentGrantKey,
+        static_cast<std::uint32_t>(newEpoch), plan.newGrantKey.getPublicKey(), currentGrantKey,
         static_cast<std::uint32_t>(currentGroup.eraFloor.value_or(1)),
-        keytree::GroupKeyResolver::ownUserId(currentGroup).value_or(std::string()),
-        _userPrivKey
+        keytree::GroupKeyResolver::ownUserId(currentGroup).value_or(std::string()), _userPrivKey
     );
 
     // A removal DOES rotate the metadata key: otherwise the departing member keeps reading the group's name and
@@ -358,9 +380,8 @@ void GroupApiImpl::removeGroupMember(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         .groupPrivKey = std::string(),
         .membership = membership
@@ -394,7 +415,12 @@ void GroupApiImpl::removeGroupMember(
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
-    _treeKeyStore.putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.newGrantKey);
+    // Node keys only. The removal refreshed every generation on the departing leaf's path, so those are dead —
+    // but the grant keys are not: within one group `epoch -> key` is immutable, and `buildRungs` reads the older
+    // ones to publish skip rungs at the next removal. Dropping them would quietly degrade future descents to
+    // walking one rung at a time.
+    cache->clearNodeKeys();
+    cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.newGrantKey);
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -419,23 +445,31 @@ void GroupApiImpl::updateGroup(
     int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
 
     std::set<std::string> newMemberIds;
-    for (const auto& u : users) newMemberIds.insert(u.userId);
-    for (const auto& m : managers) newMemberIds.insert(m.userId);
+    for (const auto& u : users)
+        newMemberIds.insert(u.userId);
+    for (const auto& m : managers)
+        newMemberIds.insert(m.userId);
     bool removalDetected = false;
     for (const auto& u : currentGroup.users) {
-        if (!newMemberIds.count(u)) { removalDetected = true; break; }
+        if (!newMemberIds.count(u)) {
+            removalDetected = true;
+            break;
+        }
     }
     if (!removalDetected) {
         for (const auto& m : currentGroup.managers) {
-            if (!newMemberIds.count(m)) { removalDetected = true; break; }
+            if (!newMemberIds.count(m)) {
+                removalDetected = true;
+                break;
+            }
         }
     }
 
     auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup, _groupPrivKeyResolver);
 
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected,
-        true, _groupPrivKeyResolver
+        currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected, true,
+        _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
@@ -464,9 +498,8 @@ void GroupApiImpl::updateGroup(
     GroupDataToEncryptV5 dataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::ModuleInternalMetaV5{
-            .secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId
-        },
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
         .groupPrivKey = newGroupPrivKeyStr,
         .membership = membership
@@ -484,30 +517,30 @@ void GroupApiImpl::updateGroup(
         _serverApi.groupUpdate(model);
     } catch (const privmx::utils::PrivmxException& e) {
         if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
-            auto payload = server::RotatedAlreadyPayload::fromJSON(
-                privmx::utils::Utils::parseJsonObject(e.getData())
-            );
+            auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
-            updateGroup(groupId, users, managers, publicMeta, privateMeta, version, force,
-                        forceGenerateNewKey, policies, false);
+            updateGroup(
+                groupId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, false
+            );
             return;
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
+    // Deliberately no tree-key invalidation: `newEpoch == currentEpoch` here — this path rotates the metadata key
+    // but never the grant key, and never touches the tree. The `groupUpdated` event and `resolveGroupPrivKey`
+    // both re-check the epoch anyway, so a rotation that did advance it is still caught.
     invalidateModuleKeysInCache(groupId);
 }
 
 void GroupApiImpl::deleteGroup(const std::string& groupId) {
     server::GroupDeleteModel model{.groupId = groupId};
     _serverApi.groupDelete(model);
+    _treeKeyCaches.drop(groupId);
     invalidateModuleKeysInCache(groupId);
 }
 
-void GroupApiImpl::adoptRotatedAlready(
-    const std::string& groupId,
-    const server::RotatedAlreadyPayload& payload
-) {
+void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
@@ -521,15 +554,16 @@ void GroupApiImpl::adoptRotatedAlready(
         throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification");
     }
 
-    auto confInput = std::string("confirm") + groupId +
-                     std::to_string(payload.keyVersion) + payload.winnerKeyEntry.keyId;
-    auto expectedTag = privmx::utils::Hex::from(
-        privmx::crypto::Crypto::hmacSha256(winnerGk.key, confInput)
-    );
+    auto confInput = std::string("confirm") +
+        groupId +
+        std::to_string(payload.keyVersion) +
+        payload.winnerKeyEntry.keyId;
+    auto expectedTag = privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(winnerGk.key, confInput));
     if (expectedTag != payload.confirmationTag) {
         throw GroupDataIntegrityException("RotatedAlready: confirmation tag mismatch");
     }
 
+    noteGroupEpoch(groupId, static_cast<std::uint32_t>(payload.keyVersion));
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -540,7 +574,7 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, _groupPrivKeyResolver);
 }
 
-core::PagingList<Group> GroupApiImpl::listGroups(
+core::PagingList<GroupSummary> GroupApiImpl::listGroups(
     const std::string& contextId,
     const core::PagingQuery& pagingQuery
 ) {
@@ -548,19 +582,18 @@ core::PagingList<Group> GroupApiImpl::listGroups(
     model.contextId = contextId;
     core::ListQueryMapper::map(model, pagingQuery);
     auto groupsList = _serverApi.groupList(model);
+    // A straight mapping, and no cache warming: the listing carries no key entries, so there is nothing to put
+    // in the module-key cache. Any later per-group operation fetches full state through
+    // `getModuleKeysAndVersionFromServer` on the cache miss.
+    std::vector<GroupSummary> groups;
+    groups.reserve(groupsList.groups.size());
     for (const auto& group : groupsList.groups) {
-        setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
+        groups.push_back(GroupDataSchemaMapper::toLibGroupSummary(group));
     }
-    std::vector<Group> groups = _groupDataSchemaMapper->validateDecryptAndConvertGroups(
-        groupsList.groups, _keyProvider, _groupPrivKeyResolver
-    );
-    return core::PagingList<Group>({.totalAvailable = groupsList.count, .readItems = groups});
+    return core::PagingList<GroupSummary>({.totalAvailable = groupsList.count, .readItems = groups});
 }
 
-void GroupApiImpl::processNotificationEvent(
-    const std::string& type,
-    const core::NotificationEvent& notification
-) {
+void GroupApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
     if (!subscriptionQuery.has_value()) {
         return;
@@ -579,6 +612,8 @@ void GroupApiImpl::processNotificationEvent(
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupDeleted") {
             auto raw = server::GroupDeletedEventData::fromJSON(notification.data);
+            _treeKeyCaches.drop(raw.groupId);
+            _groupDataSchemaMapper->dropChainCheckpoint(raw.groupId);
             invalidateModuleKeysInCache(raw.groupId);
             auto data = Mapper::mapToGroupDeletedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupDeletedEvent>("context", data, notification);
@@ -590,10 +625,16 @@ void GroupApiImpl::processNotificationEvent(
 }
 
 void GroupApiImpl::processConnectedEvent() {
+    _treeKeyCaches.dropAll();
+    _groupDataSchemaMapper->dropAllChainCheckpoints();
     invalidateModuleKeysInCache();
 }
 
 void GroupApiImpl::processDisconnectedEvent() {
+    // Not redundant with the destructor: `cleanup()` only drops this object's self-reference, and `ThreadApiImpl`
+    // holds a `shared_ptr` to it, so the group keys would otherwise outlive the session that earned them.
+    _treeKeyCaches.dropAll();
+    _groupDataSchemaMapper->dropAllChainCheckpoints();
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<GroupApiImpl>::cleanup();
 }
@@ -639,17 +680,38 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     server::GroupGetModel params{.groupId = groupId, .type = {}};
     auto group = _serverApi.groupGet(params).group;
 
-    keytree::GroupKeyResolver resolver(_treeKeyStore);
     const int64_t currentEpoch = group.keyVersion.value_or(1);
-    const keytree::ResolveResult resolved = (epoch > 0 && epoch < currentEpoch)
-        // Only a descent needs the ladder, so only a descent pays for fetching it. The window is bounded by the
-        // two epochs involved, which keeps the request proportional to the hop rather than to the group's age.
-        ? resolver.resolve(group, epoch, _userPrivKey, fetchKeyArchive(groupId, epoch, currentEpoch))
-        : resolver.resolve(group, epoch, _userPrivKey);
+    // The invalidation hook that needs no event and no subscription: every read learns the group's current epoch
+    // from the server, so a client that missed `groupUpdated` still drops its stale node keys here.
+    noteGroupEpoch(groupId, static_cast<std::uint32_t>(currentEpoch));
+
+    // Named local, not `*_treeKeyCaches.get(groupId)`: the resolver holds a reference into the cache, and a
+    // temporary shared_ptr would release the last owner at the end of this statement.
+    const auto cache = _treeKeyCaches.get(groupId);
+    keytree::GroupKeyResolver resolver(*cache);
+    const keytree::ResolveResult resolved = resolver.resolve(
+        group, epoch, _userPrivKey, fetchKeyArchive(groupId, epoch, currentEpoch)
+    );
     if (resolved.key.has_value()) {
         return resolved.key.value();
     }
+    if (resolved.failure == keytree::ResolveFailure::ClimbFailed &&
+        resolved.climb == keytree::ClimbFailure::NotAMember) {
+        // The server no longer seats us in this group. This is the backstop for a client that never saw the
+        // `groupUpdated` — unsubscribed, or offline when it fired. Dropping a local cache is hygiene, not a
+        // revocation control: revocation is enforced by the refreshed tree and by the bridge.
+        _treeKeyCaches.drop(groupId);
+    }
     throw core::EncryptionKeyValidationException(describeResolveFailure(resolved));
+}
+
+void GroupApiImpl::noteGroupEpoch(const std::string& groupId, std::uint32_t epoch) {
+    const auto cache = _treeKeyCaches.get(groupId);
+    const auto known = cache->highestGrantEpoch();
+    if (!known.has_value() || epoch > known.value()) {
+        // Two threads can both decide to clear here. Harmless: clearing twice costs one re-climb at worst.
+        cache->clearNodeKeys();
+    }
 }
 
 /**
@@ -658,8 +720,11 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
  * The bridge serves the archive separately from the group because it grows with the group's entire history. The
  * window here is the descent's own range: every rung used along the way is addressed to an epoch inside it.
  */
-privmx::endpoint::group::server::GroupGetKeyArchiveResult
-GroupApiImpl::fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, int64_t currentEpoch) {
+privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKeyArchive(
+    const std::string& groupId,
+    int64_t targetEpoch,
+    int64_t currentEpoch
+) {
     server::GroupGetKeyArchiveModel params;
     params.id = groupId;
     params.fromKeyVersion = targetEpoch;
@@ -670,32 +735,31 @@ GroupApiImpl::fetchKeyArchive(const std::string& groupId, int64_t targetEpoch, i
 /** Turns a resolver failure into a message that distinguishes policy from attack. */
 std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& resolved) {
     switch (resolved.failure) {
-        case keytree::ResolveFailure::NoTree:
-            return "Group key unavailable: group has no key tree";
-        case keytree::ResolveFailure::ClimbFailed:
-            if (resolved.climb == keytree::ClimbFailure::Tampered) {
-                // A security event, not a transient failure. Deterministic and adversarial — do not retry.
-                return "Group key tree verification failed: a node key does not match the published public key";
-            }
-            if (resolved.climb == keytree::ClimbFailure::NotAMember) {
-                return "Group key unavailable: caller holds no leaf in the key tree";
-            }
-            return "Group key unavailable: the key tree could not be climbed";
-        case keytree::ResolveFailure::DescentFailed:
-            switch (resolved.descent) {
-                case keytree::DescentFailure::EraBoundary:
-                    // Normal policy: history before the caller's era is simply not theirs to read.
-                    return "History before this era is not available to you";
-                case keytree::DescentFailure::Pruned:
-                    return "History this old has been pruned and is no longer recoverable";
-                case keytree::DescentFailure::Tampered:
-                    return "Epoch ladder verification failed"
-                        + (resolved.blame.has_value() ? " (rung published by " + resolved.blame.value() + ")" : "");
-                default:
-                    return "Group key unavailable: the epoch ladder could not be descended";
-            }
+    case keytree::ResolveFailure::NoTree:
+        return "Group key unavailable: group has no key tree";
+    case keytree::ResolveFailure::ClimbFailed:
+        if (resolved.climb == keytree::ClimbFailure::Tampered) {
+            // A security event, not a transient failure. Deterministic and adversarial — do not retry.
+            return "Group key tree verification failed: a node key does not match the published public key";
+        }
+        if (resolved.climb == keytree::ClimbFailure::NotAMember) {
+            return "Group key unavailable: caller holds no leaf in the key tree";
+        }
+        return "Group key unavailable: the key tree could not be climbed";
+    case keytree::ResolveFailure::DescentFailed:
+        switch (resolved.descent) {
+        case keytree::DescentFailure::EraBoundary:
+            // Normal policy: history before the caller's era is simply not theirs to read.
+            return "History before this era is not available to you";
+        case keytree::DescentFailure::Pruned:
+            return "History this old has been pruned and is no longer recoverable";
+        case keytree::DescentFailure::Tampered:
+            return "Epoch ladder verification failed" +
+                (resolved.blame.has_value() ? " (rung published by " + resolved.blame.value() + ")" : "");
         default:
-            return "Group key unavailable";
+            return "Group key unavailable: the epoch ladder could not be descended";
+        }
+    default:
+        return "Group key unavailable";
     }
 }
-

@@ -76,7 +76,9 @@ core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(moduleKeys.currentKeyId);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
+        .at(location)
+        .at(moduleKeys.currentKeyId);
 }
 
 ModuleKeys ModuleBaseApi::getModuleKeys(
@@ -157,20 +159,17 @@ std::vector<server::GroupKeyEntrySet> ModuleBaseApi::buildGroupKeyEntries(
         auto keySecret = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
         auto encData = encryptor.encrypt(
             EncKeyV2ToEncrypt{
-                EncKey{.id = key.id, .key = key.key},
-                .dio = dio,
-                .location = {.contextId = contextId, .resourceId = resourceId},
-                .keySecret = keySecret,
-                .secretHash = privmx::crypto::Crypto::hmacSha256(
-                    containerSecret, keySecret + contextId + resourceId
-                )
+                EncKey{.id = key.id, .key = key.key}, .dio = dio,
+                .location = {.contextId = contextId, .resourceId = resourceId}, .keySecret = keySecret,
+                .secretHash = privmx::crypto::Crypto::hmacSha256(containerSecret, keySecret + contextId + resourceId)
             },
-            groupPubKey,
-            _userPrivKey
+            groupPubKey, _userPrivKey
         );
-        result.push_back(server::GroupKeyEntrySet{
-            .group = g.groupId, .keyId = key.id, .groupEpoch = g.groupEpoch, .data = encData.toJSON()
-        });
+        result.push_back(
+            server::GroupKeyEntrySet{
+                .group = g.groupId, .keyId = key.id, .groupEpoch = g.groupEpoch, .data = encData.toJSON()
+            }
+        );
     }
     return result;
 }

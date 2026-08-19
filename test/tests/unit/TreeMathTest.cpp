@@ -9,16 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/**
- * Unit tests for the hidden key tree arithmetic.
- *
- * Needs no server, no docker and no network — pure arithmetic. Reference tables are the same ones used by the
- * bridge's TreeMath tests, deliberately: the two implementations must agree exactly, or the server will either
- * reject valid removals or accept ones that leave a removed member holding a current node key.
- *
- * The truncated cases (leaf count not a power of two) are what break naive implementations, so they carry the
- * most coverage.
- */
+/** Unit tests for the hidden key tree arithmetic; needs no server, no docker and no network — pure arithmetic. Reference tables are the same ones used by the bridge's TreeMath tests, deliberately: the two implementations must agree exactly, or the server will either reject valid removals or accept ones that leave a removed member holding a current node key. The truncated cases (leaf count not a power of two) are what break naive implementations, so they carry the most coverage. */
 
 #include <gtest/gtest.h>
 
@@ -32,11 +23,11 @@ limitations under the License.
 using privmx::endpoint::group::keytree::TreeMath;
 using Nodes = std::vector<std::uint32_t>;
 
-// ─────────────────────────────────────────────────────────────────────────────
 // level
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathLevel, MatchesReferenceTableForEightLeaves) {
+class TreeMathLevel : public testing::Test {};
+
+TEST_F(TreeMathLevel, MatchesReferenceTableForEightLeaves) {
     // level(x) = number of trailing 1-bits. Table for the N=8 tree from the spec.
     const std::vector<std::pair<std::uint32_t, std::uint32_t>> table = {
         {0, 0}, {1, 1}, {2, 0},  {3, 2},  {4, 0},  {5, 1},  {6, 0},  {7, 3},
@@ -47,17 +38,17 @@ TEST(TreeMathLevel, MatchesReferenceTableForEightLeaves) {
     }
 }
 
-TEST(TreeMathLevel, LeavesAreAlwaysLevelZero) {
+TEST_F(TreeMathLevel, LeavesAreAlwaysLevelZero) {
     for (std::uint32_t position = 0; position < 64; ++position) {
         EXPECT_EQ(TreeMath::level(TreeMath::leafNode(position)), 0u) << "position " << position;
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // leaf indexing
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathLeaves, LeafSitsAtTwiceItsPositionAndRoundTrips) {
+class TreeMathLeaves : public testing::Test {};
+
+TEST_F(TreeMathLeaves, LeafSitsAtTwiceItsPositionAndRoundTrips) {
     for (std::uint32_t position = 0; position < 32; ++position) {
         const std::uint32_t node = TreeMath::leafNode(position);
         EXPECT_EQ(node, 2 * position);
@@ -66,21 +57,21 @@ TEST(TreeMathLeaves, LeafSitsAtTwiceItsPositionAndRoundTrips) {
     }
 }
 
-TEST(TreeMathLeaves, OddIndicesAreInternal) {
+TEST_F(TreeMathLeaves, OddIndicesAreInternal) {
     for (const std::uint32_t node : {1u, 3u, 5u, 7u, 9u, 11u, 13u}) {
         EXPECT_FALSE(TreeMath::isLeaf(node)) << "node " << node;
     }
 }
 
-TEST(TreeMathLeaves, LeafPositionRejectsInternalNode) {
+TEST_F(TreeMathLeaves, LeafPositionRejectsInternalNode) {
     EXPECT_THROW(TreeMath::leafPosition(3), std::invalid_argument);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // root / depth / nodeCount
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathShape, MatchesReferenceTable) {
+class TreeMathShape : public testing::Test {};
+
+TEST_F(TreeMathShape, MatchesReferenceTable) {
     struct Row {
         std::uint32_t numLeaves;
         std::uint32_t root;
@@ -98,17 +89,17 @@ TEST(TreeMathShape, MatchesReferenceTable) {
     }
 }
 
-TEST(TreeMathShape, RejectsZeroLeaves) {
+TEST_F(TreeMathShape, RejectsZeroLeaves) {
     EXPECT_THROW(TreeMath::root(0), std::invalid_argument);
     EXPECT_THROW(TreeMath::depth(0), std::invalid_argument);
     EXPECT_THROW(TreeMath::nodeCount(0), std::invalid_argument);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // parent — complete and truncated
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathParent, CompleteTreeOfFour) {
+class TreeMathParent : public testing::Test {};
+
+TEST_F(TreeMathParent, CompleteTreeOfFour) {
     // N=4: leaves 0,2,4,6; node 1 = parent(0,2); node 5 = parent(4,6); node 3 = root.
     const std::vector<std::pair<std::uint32_t, std::uint32_t>> table = {
         {0, 1}, {2, 1}, {1, 3}, {5, 3}, {4, 5}, {6, 5},
@@ -118,32 +109,31 @@ TEST(TreeMathParent, CompleteTreeOfFour) {
     }
 }
 
-TEST(TreeMathParent, RootHasNoParent) {
+TEST_F(TreeMathParent, RootHasNoParent) {
     EXPECT_THROW(TreeMath::parent(3, 4), std::logic_error);
     EXPECT_THROW(TreeMath::parent(0, 1), std::logic_error);
 }
 
-TEST(TreeMathParent, WalksPastNonExistentParentWhenRightEdgeIsTruncated) {
-    // N=3: nodes 0..4, root=3. Node 5 does not exist, so node 4's naive parent must be walked past.
-    // This is the case that breaks implementations using the bare formula.
+TEST_F(TreeMathParent, WalksPastNonExistentParentWhenRightEdgeIsTruncated) {
+    // N=3: nodes 0..4, root=3. Node 5 does not exist, so node 4's naive parent must be walked past; this is the case that breaks implementations using the bare formula.
     EXPECT_EQ(TreeMath::parentStep(4), 5u) << "naive parent is out of range";
     EXPECT_FALSE(TreeMath::exists(5, 3));
     EXPECT_EQ(TreeMath::parent(4, 3), 3u);
 }
 
-TEST(TreeMathParent, LoneLeafAttachesDirectlyToRoot) {
+TEST_F(TreeMathParent, LoneLeafAttachesDirectlyToRoot) {
     // N=5: nodes 0..8, root=7. Leaf 4 sits at node 8 whose ancestors 9, 11 are absent.
     EXPECT_FALSE(TreeMath::exists(9, 5));
     EXPECT_EQ(TreeMath::parent(8, 5), 7u);
 }
 
-TEST(TreeMathParent, SixLeavesFormAFullRightSubtree) {
+TEST_F(TreeMathParent, SixLeavesFormAFullRightSubtree) {
     EXPECT_EQ(TreeMath::parent(8, 6), 9u);
     EXPECT_EQ(TreeMath::parent(10, 6), 9u);
     EXPECT_EQ(TreeMath::parent(9, 6), 7u);
 }
 
-TEST(TreeMathParent, EveryNonRootNodeHasAnExistingParent) {
+TEST_F(TreeMathParent, EveryNonRootNodeHasAnExistingParent) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         const std::uint32_t rootIndex = TreeMath::root(numLeaves);
         for (std::uint32_t node = 0; node < TreeMath::nodeCount(numLeaves); ++node) {
@@ -157,21 +147,21 @@ TEST(TreeMathParent, EveryNonRootNodeHasAnExistingParent) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // right / children — truncated
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathChildren, WalksDownToTruncatedRightSubtree) {
+class TreeMathChildren : public testing::Test {};
+
+TEST_F(TreeMathChildren, WalksDownToTruncatedRightSubtree) {
     EXPECT_EQ(TreeMath::rightStep(3), 5u) << "naive right child is out of range";
     EXPECT_EQ(TreeMath::right(3, 3), 4u);
     EXPECT_EQ(TreeMath::left(3, 3), 1u);
 }
 
-TEST(TreeMathChildren, RootsRightChildIsTheLoneLeaf) {
+TEST_F(TreeMathChildren, RootsRightChildIsTheLoneLeaf) {
     EXPECT_EQ(TreeMath::right(7, 5), 8u);
 }
 
-TEST(TreeMathChildren, AreMutualWithParent) {
+TEST_F(TreeMathChildren, AreMutualWithParent) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         for (std::uint32_t node = 1; node < TreeMath::nodeCount(numLeaves); node += 2) {
             for (const std::uint32_t child : TreeMath::children(node, numLeaves)) {
@@ -182,17 +172,17 @@ TEST(TreeMathChildren, AreMutualWithParent) {
     }
 }
 
-TEST(TreeMathChildren, LeavesHaveNone) {
+TEST_F(TreeMathChildren, LeavesHaveNone) {
     EXPECT_TRUE(TreeMath::children(0, 4).empty());
     EXPECT_THROW(TreeMath::leftStep(0), std::invalid_argument);
     EXPECT_THROW(TreeMath::rightStep(2), std::invalid_argument);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // sibling
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathSibling, CompleteTreeOfFour) {
+class TreeMathSibling : public testing::Test {};
+
+TEST_F(TreeMathSibling, CompleteTreeOfFour) {
     const std::vector<std::pair<std::uint32_t, std::uint32_t>> table = {
         {0, 2}, {2, 0}, {1, 5}, {5, 1}, {4, 6}, {6, 4},
     };
@@ -201,12 +191,12 @@ TEST(TreeMathSibling, CompleteTreeOfFour) {
     }
 }
 
-TEST(TreeMathSibling, TruncatedSiblingIsTheWholeSubtree) {
+TEST_F(TreeMathSibling, TruncatedSiblingIsTheWholeSubtree) {
     EXPECT_EQ(TreeMath::sibling(4, 3), 1u);
     EXPECT_EQ(TreeMath::sibling(1, 3), 4u);
 }
 
-TEST(TreeMathSibling, IsSymmetric) {
+TEST_F(TreeMathSibling, IsSymmetric) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         const std::uint32_t rootIndex = TreeMath::root(numLeaves);
         for (std::uint32_t node = 0; node < TreeMath::nodeCount(numLeaves); ++node) {
@@ -219,15 +209,15 @@ TEST(TreeMathSibling, IsSymmetric) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // directPath — the set a removal must refresh
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathDirectPath, MatchesSpecTableForEightLeaves) {
+class TreeMathDirectPath : public testing::Test {};
+
+TEST_F(TreeMathDirectPath, MatchesSpecTableForEightLeaves) {
     EXPECT_EQ(TreeMath::directPath(0, 8), Nodes({1, 3, 7}));
 }
 
-TEST(TreeMathDirectPath, MatchesReferenceTable) {
+TEST_F(TreeMathDirectPath, MatchesReferenceTable) {
     EXPECT_EQ(TreeMath::directPath(0, 4), Nodes({1, 3}));
     EXPECT_EQ(TreeMath::directPath(1, 4), Nodes({1, 3}));
     EXPECT_EQ(TreeMath::directPath(2, 4), Nodes({5, 3}));
@@ -236,18 +226,18 @@ TEST(TreeMathDirectPath, MatchesReferenceTable) {
     EXPECT_EQ(TreeMath::directPath(0, 2), Nodes({1}));
 }
 
-TEST(TreeMathDirectPath, IsEmptyForSingleLeafTree) {
+TEST_F(TreeMathDirectPath, IsEmptyForSingleLeafTree) {
     EXPECT_TRUE(TreeMath::directPath(0, 1).empty());
 }
 
-TEST(TreeMathDirectPath, TruncatedTreeGivesUnequalPathLengths) {
+TEST_F(TreeMathDirectPath, TruncatedTreeGivesUnequalPathLengths) {
     // N=3: leaf 0 climbs two levels, leaf 2 only one. Left-balanced asymmetry, expected.
     EXPECT_EQ(TreeMath::directPath(0, 3), Nodes({1, 3}));
     EXPECT_EQ(TreeMath::directPath(1, 3), Nodes({1, 3}));
     EXPECT_EQ(TreeMath::directPath(2, 3), Nodes({3}));
 }
 
-TEST(TreeMathDirectPath, AlwaysEndsAtRootAndNeverExceedsDepth) {
+TEST_F(TreeMathDirectPath, AlwaysEndsAtRootAndNeverExceedsDepth) {
     for (std::uint32_t numLeaves = 1; numLeaves <= 64; ++numLeaves) {
         const std::uint32_t rootIndex = TreeMath::root(numLeaves);
         for (std::uint32_t position = 0; position < numLeaves; ++position) {
@@ -262,7 +252,7 @@ TEST(TreeMathDirectPath, AlwaysEndsAtRootAndNeverExceedsDepth) {
     }
 }
 
-TEST(TreeMathDirectPath, ContainsOnlyInternalNodes) {
+TEST_F(TreeMathDirectPath, ContainsOnlyInternalNodes) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         for (std::uint32_t position = 0; position < numLeaves; ++position) {
             for (const std::uint32_t node : TreeMath::directPath(position, numLeaves)) {
@@ -272,19 +262,19 @@ TEST(TreeMathDirectPath, ContainsOnlyInternalNodes) {
     }
 }
 
-TEST(TreeMathDirectPath, RejectsPositionOutsideTree) {
+TEST_F(TreeMathDirectPath, RejectsPositionOutsideTree) {
     EXPECT_THROW(TreeMath::directPath(4, 4), std::invalid_argument);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // copath — the set a refresh wraps to
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathCopath, MatchesSpecTableForEightLeaves) {
+class TreeMathCopath : public testing::Test {};
+
+TEST_F(TreeMathCopath, MatchesSpecTableForEightLeaves) {
     EXPECT_EQ(TreeMath::copath(0, 8), Nodes({2, 5, 11}));
 }
 
-TEST(TreeMathCopath, IsIndexAlignedWithDirectPath) {
+TEST_F(TreeMathCopath, IsIndexAlignedWithDirectPath) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         for (std::uint32_t position = 0; position < numLeaves; ++position) {
             const Nodes path = TreeMath::directPath(position, numLeaves);
@@ -303,7 +293,7 @@ TEST(TreeMathCopath, IsIndexAlignedWithDirectPath) {
     }
 }
 
-TEST(TreeMathCopath, NeverContainsANodeOnTheDirectPath) {
+TEST_F(TreeMathCopath, NeverContainsANodeOnTheDirectPath) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         for (std::uint32_t position = 0; position < numLeaves; ++position) {
             const Nodes path = TreeMath::directPath(position, numLeaves);
@@ -315,7 +305,7 @@ TEST(TreeMathCopath, NeverContainsANodeOnTheDirectPath) {
     }
 }
 
-TEST(TreeMathCopath, NeverContainsOwnLeaf) {
+TEST_F(TreeMathCopath, NeverContainsOwnLeaf) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         for (std::uint32_t position = 0; position < numLeaves; ++position) {
             const std::uint32_t own = TreeMath::leafNode(position);
@@ -325,11 +315,11 @@ TEST(TreeMathCopath, NeverContainsOwnLeaf) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // leavesUnder
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathLeavesUnder, RootCoversEveryLeaf) {
+class TreeMathLeavesUnder : public testing::Test {};
+
+TEST_F(TreeMathLeavesUnder, RootCoversEveryLeaf) {
     for (std::uint32_t numLeaves = 1; numLeaves <= 40; ++numLeaves) {
         Nodes expected;
         for (std::uint32_t i = 0; i < numLeaves; ++i) {
@@ -339,11 +329,11 @@ TEST(TreeMathLeavesUnder, RootCoversEveryLeaf) {
     }
 }
 
-TEST(TreeMathLeavesUnder, ALeafCoversOnlyItself) {
+TEST_F(TreeMathLeavesUnder, ALeafCoversOnlyItself) {
     EXPECT_EQ(TreeMath::leavesUnder(4, 4), Nodes({2}));
 }
 
-TEST(TreeMathLeavesUnder, ChildrenPartitionTheirParent) {
+TEST_F(TreeMathLeavesUnder, ChildrenPartitionTheirParent) {
     for (std::uint32_t numLeaves = 2; numLeaves <= 40; ++numLeaves) {
         for (std::uint32_t node = 1; node < TreeMath::nodeCount(numLeaves); node += 2) {
             const Nodes kids = TreeMath::children(node, numLeaves);
@@ -355,11 +345,11 @@ TEST(TreeMathLeavesUnder, ChildrenPartitionTheirParent) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // cost properties claimed by the whitepaper
-// ─────────────────────────────────────────────────────────────────────────────
 
-TEST(TreeMathCost, BalancedRemovalCostsTwoTimesDepthMinusOneWraps) {
+class TreeMathCost : public testing::Test {};
+
+TEST_F(TreeMathCost, BalancedRemovalCostsTwoTimesDepthMinusOneWraps) {
     // A removal refreshes directPath and wraps to two children per node, minus the blanked leaf.
     const std::vector<std::pair<std::uint32_t, std::uint32_t>> table = {
         {8, 5},
@@ -379,11 +369,11 @@ TEST(TreeMathCost, BalancedRemovalCostsTwoTimesDepthMinusOneWraps) {
     }
 }
 
-TEST(TreeMathCost, LargeGroupRemovalTouchesLogarithmicallyManyNodes) {
+TEST_F(TreeMathCost, LargeGroupRemovalTouchesLogarithmicallyManyNodes) {
     EXPECT_EQ(TreeMath::directPath(0, 32768).size(), 15u);
 }
 
-TEST(TreeMathCost, GrowthChangesRootOnlyAtPowersOfTwo) {
+TEST_F(TreeMathCost, GrowthChangesRootOnlyAtPowersOfTwo) {
     EXPECT_TRUE(TreeMath::growthChangesRoot(4, 4)) << "seating a 5th member grows the tree";
     EXPECT_FALSE(TreeMath::growthChangesRoot(2, 4)) << "filling a blank does not";
     EXPECT_FALSE(TreeMath::growthChangesRoot(4, 8)) << "room already exists";

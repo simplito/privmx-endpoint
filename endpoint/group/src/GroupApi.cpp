@@ -147,12 +147,13 @@ Group GroupApi::getGroup(const std::string& groupId) {
     }
 }
 
-core::PagingList<Group> GroupApi::listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+core::PagingList<GroupSummary> GroupApi::listGroups(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery
+) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validatePagingQuery(
-        pagingQuery, {"createDate", "lastModificationDate"}, "field:pagingQuery "
-    );
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "lastModificationDate"}, "field:pagingQuery ");
     try {
         return impl->listGroups(contextId, pagingQuery);
     } catch (const privmx::utils::PrivmxException& e) {
