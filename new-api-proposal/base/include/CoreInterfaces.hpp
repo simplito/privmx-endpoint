@@ -118,8 +118,6 @@ public:
     virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) = 0;
 // or below:
     virtual std::shared_ptr<IExtKey>  importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
-
-    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) = 0;  
 };
 
 // Probably to be removed (used by code not included in the repository)

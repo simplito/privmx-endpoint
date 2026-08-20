@@ -35,7 +35,6 @@ public:
     virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
     virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) override;
     virtual std::shared_ptr<IExtKey>     importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
-    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
     
 // protected:
 //     virtual Bytes digestConfStr(const char *config, BytesView data); 

@@ -25,10 +25,6 @@ std::shared_ptr<ICryptoProvider> CryptoProviderRegistry::_provider(nullptr);
 
 void CryptoProviderRegistry::set(std::shared_ptr<ICryptoProvider> provider)
 {
-    if (_provider != nullptr)  { 
-        _provider -> setSymProvider(nullptr);
-    }
-    provider -> setSymProvider(provider);
     _provider = provider;          
 }
 

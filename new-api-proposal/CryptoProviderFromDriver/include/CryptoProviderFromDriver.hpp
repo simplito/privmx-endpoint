@@ -20,7 +20,7 @@ limitations under the License.
 namespace privmx {
 namespace cryptoservice {
 
-class CryptoProviderFromDriver : public privmx::cryptoservice::ICryptoProvider
+class CryptoProviderFromDriver : public privmx::cryptoservice::ICryptoProvider, public std::enable_shared_from_this<CryptoProviderFromDriver>
 {
 public:
     virtual uint32_t version() const override; 
@@ -36,7 +36,6 @@ public:
     virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
     virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) override;
     virtual std::shared_ptr<IExtKey>     importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
-    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 protected:
     class EccPublicKey;
@@ -51,8 +50,6 @@ protected:
                         BytesView key, BytesView iv, BytesView ciphertext);
     virtual Bytes decryptAeadConfStr(const char *alg, BytesView aad, 
                         BytesView key, BytesView iv, BytesView ciphertext);
-
-    std::shared_ptr<ISymCryptoProvider> _symProvider = nullptr;
 
 private:
     virtual Bytes pbkdf2(BytesView pass, BytesView salt, int rounds, 
