@@ -82,9 +82,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupDeletedEventData>(const 
 }
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<group::GroupChangedEventData>(
-    const group::GroupChangedEventData& val
-) {
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupChangedEventData>(const group::GroupChangedEventData& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "group$GroupChangedEventData");

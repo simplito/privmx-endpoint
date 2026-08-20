@@ -111,8 +111,7 @@ RungKeyGathering LadderKeys::gatherRungKeys(
         // pathological rung set; here the point is to gather keys even across a stretch that only ever published
         // unit rungs, since refusing to walk it is exactly what would leave that stretch permanently linear.
         // Termination does not rest on this bound anyway — `descend` keeps a visited set.
-        const DescentResult step =
-            descend(from, target, available, registry, eraFloor, prunedBelow, from - target + 1);
+        const DescentResult step = descend(from, target, available, registry, eraFloor, prunedBelow, from - target + 1);
         gathering.unwraps += step.hops;
         if (!step.key.has_value()) {
             gathering.complete = false;
@@ -173,8 +172,11 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
             // epoch — so committing the set without it orphans everything below it from the fast path forever.
             throw std::invalid_argument(
                 "cannot build the aligned skip rung " +
-                std::to_string(newEpoch) + "->" + std::to_string(*target) +
-                ": the grant key for epoch " + std::to_string(*target) +
+                std::to_string(newEpoch) +
+                "->" +
+                std::to_string(*target) +
+                ": the grant key for epoch " +
+                std::to_string(*target) +
                 " is not held. Call gatherRungKeys before rotating; a rung missing from this set is unrepairable"
             );
         }

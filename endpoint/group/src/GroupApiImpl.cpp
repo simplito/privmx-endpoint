@@ -322,9 +322,8 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
         // supplied its key. Nothing to fetch and nothing to walk.
         return planOrThrow<std::vector<keytree::ArchiveRung>>([&] {
             return ladder.buildRungs(
-                newEpoch, newGrantPublicKey, previousEpochKey,
-                static_cast<std::uint32_t>(group.eraFloor.value_or(1)), author, _userPrivKey, true,
-                asEpoch(group.archivePrunedBelow)
+                newEpoch, newGrantPublicKey, previousEpochKey, static_cast<std::uint32_t>(group.eraFloor.value_or(1)),
+                author, _userPrivKey, true, asEpoch(group.archivePrunedBelow)
             );
         });
     }
@@ -341,8 +340,15 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
         newEpoch, keytree::GroupKeyResolver::toRungs(archive), keytree::GroupKeyResolver::toRegistry(group, archive),
         eraFloor, prunedBelow
     );
-    LOG_DEBUG("ladder gather for epoch ", std::to_string(newEpoch) + ": " + std::to_string(gathered.unwraps) +
-        " unwraps for " + std::to_string(targets.size()) + " skip target(s)")
+    LOG_DEBUG(
+        "ladder gather for epoch ",
+        std::to_string(newEpoch) +
+            ": " +
+            std::to_string(gathered.unwraps) +
+            " unwraps for " +
+            std::to_string(targets.size()) +
+            " skip target(s)"
+    )
     if (!gathered.complete) {
         throw IncompleteEpochLadderException();
     }

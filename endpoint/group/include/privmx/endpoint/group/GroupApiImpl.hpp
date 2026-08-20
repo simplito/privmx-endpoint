@@ -199,7 +199,7 @@ private:
         const std::string& author,
         keytree::TreeKeyCache& cache
     );
-    
+
     /**
      * Drops a group's node keys once the server reports an epoch newer than any grant key held for it.
      *
