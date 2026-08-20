@@ -53,7 +53,7 @@ public:
     // virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const override;
     virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const override;
     virtual Bytes export_(KeyFormat) const override;
-
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 private:
     ECC _key;

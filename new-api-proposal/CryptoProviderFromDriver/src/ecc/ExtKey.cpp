@@ -256,6 +256,10 @@ inline Bytes ExtKey::chainCode() const {
     return Utils::s2b(getChainCode());
 }
 
+void ExtKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
+    _provider = provider;
+}
+
 } // ecc
 } // cryptoservice
 } // privmx

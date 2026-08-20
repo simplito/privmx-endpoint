@@ -25,17 +25,19 @@ std::shared_ptr<ICryptoProvider> CryptoProviderRegistry::_provider(nullptr);
 
 void CryptoProviderRegistry::set(std::shared_ptr<ICryptoProvider> provider)
 {
-    _provider = provider; // wstrzyknięcie backendu
+    if (_provider != nullptr)  { 
+        _provider -> setSymProvider(nullptr);
+    }
+    provider -> setSymProvider(provider);
+    _provider = provider;          
 }
 
-std::shared_ptr<ICryptoProvider> CryptoProviderRegistry::getptr() { // domyślny provider
+std::shared_ptr<ICryptoProvider> CryptoProviderRegistry::getptr() {  
     return CryptoProviderRegistry::_provider;
-    // opcjonalnie: rejestracja wielu po nazwie
 }
 
-ICryptoProvider& CryptoProviderRegistry::get() { // domyślny provider
+ICryptoProvider& CryptoProviderRegistry::get() { 
     return *(CryptoProviderRegistry::_provider);
-    // opcjonalnie: rejestracja wielu po nazwie
 }
 
 } // cryptoservice

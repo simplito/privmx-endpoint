@@ -59,6 +59,10 @@ public:
     virtual Bytes derive(const KdfParams& opt, BytesView secretData) = 0;  
 };
 
+// ---- Basic roles provider (to be injected into an asymmetric cryptography role) ----
+ class ISymCryptoProvider : public IRandom, public IDigest, public IHmac, public ISymmetricCipher {};
+
+
 // ---- 6. Keys in asymmetric cryptography ----
 
 class IPrivateKey;
@@ -69,10 +73,11 @@ public:
     virtual bool verify(BytesView data, BytesView sig, SigScheme) const = 0;
 
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
-    // virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const = 0;
     virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                 // np. Der/Base58Der
+
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) = 0;  
 };
 
 class IPrivateKey {
@@ -88,6 +93,8 @@ public:
     virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                     // Raw / Wif
+
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) = 0;  
 };
 
 class IExtKey {
@@ -97,10 +104,11 @@ public:
     virtual std::shared_ptr<IPrivateKey> privateKey() const = 0;
     virtual std::shared_ptr<IPublicKey>  publicKey()  const = 0;
     virtual Bytes chainCode() const = 0;
+
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) = 0;  
 };
 
-// ---- 7. Key provider ----
-
+ // ---- 7. Key provider ----
 class IKeyProvider {
 public:
     virtual ~IKeyProvider() = default;
@@ -110,6 +118,8 @@ public:
     virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) = 0;
 // or below:
     virtual std::shared_ptr<IExtKey>  importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
+
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) = 0;  
 };
 
 // Probably to be removed (used by code not included in the repository)
@@ -121,9 +131,6 @@ public:
     virtual void setHmac(std::shared_ptr<IHmac>) = 0;  
     virtual void setSymmetricCipher(std::shared_ptr<ISymmetricCipher>) = 0;  
 };
-
-// ---- Basic roles provider (to be injected into an asymmetric cryptography role) ----
- class ISymCryptoProvider : public IRandom, public IDigest, public IHmac, public ISymmetricCipher {};
 
 // ---- Provider facade (role aggregate) ----
 class ICryptoProvider : public ISymCryptoProvider, public IKdf, public IKeyProvider

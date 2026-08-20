@@ -65,6 +65,7 @@ public:
     virtual std::shared_ptr<IPrivateKey> privateKey() const override;
     virtual std::shared_ptr<IPublicKey>  publicKey()  const override;
     virtual Bytes chainCode() const override;
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 private:
     static const Poco::UInt32 HIGHEST_BIT = 0x80000000;

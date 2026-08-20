@@ -309,6 +309,9 @@ std::shared_ptr<IExtKey> CryptoProviderFromOpenssl::importExtKey(BytesView data,
 {
     throw PrivmxDriverCryptoException("importExtKey: NOT IMPLEMENTED");
 }
+void CryptoProviderFromOpenssl::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
+    _symProvider = provider;
+}
 
 } // namespace cryptoservice
 } // privmx

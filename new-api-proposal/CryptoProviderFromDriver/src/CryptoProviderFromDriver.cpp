@@ -622,12 +622,24 @@ std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView 
             // return std::make_shared<ecc::PrivateKey>(std::move(key));
             throw PrivmxDriverCryptoException("importPrivateKey: Format WIF is used only for private keys");    
         } else if (format ==  KeyFormat::Der) {
+            std::shared_ptr<ISymCryptoProvider> localProvider = _symProvider;
             // ecc::PublicKey key = ecc::PublicKey::fromDERb(data);
             ecc::PublicKey key = ecc::PublicKey::fromDER(ecc::Utils::b2s(data)); // TO BE REPLACED
+            if (localProvider == nullptr) {
+                key.setSymProvider(std::make_shared<CryptoProviderFromDriver>());
+            } else {
+                key.setSymProvider(std::move(localProvider));
+            }
             return std::make_shared<ecc::PublicKey>(std::move(key));
         } else if (format ==  KeyFormat::Base58Der) {
+            std::shared_ptr<ISymCryptoProvider> localProvider = _symProvider;
             // ecc::PublicKey key = ecc::PublicKey::fromBase58DERb(data);
             ecc::PublicKey key = ecc::PublicKey::fromBase58DER(ecc::Utils::b2s(data)); // TO BE REPLACED
+            if (localProvider == nullptr) {
+                key.setSymProvider(std::make_shared<CryptoProviderFromDriver>());
+            } else {
+                key.setSymProvider(std::move(localProvider));
+            }
             return std::make_shared<ecc::PublicKey>(std::move(key));
         } else {
             // other formats ...
@@ -645,7 +657,13 @@ std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, 
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
         if (format ==  KeyFormat::Base58) {
+            std::shared_ptr<ISymCryptoProvider> localProvider = _symProvider;
             ecc::ExtKey key = ecc::ExtKey::fromBase58(ecc::Utils::b2s(data));
+            if (localProvider == nullptr) {
+                key.setSymProvider(std::make_shared<CryptoProviderFromDriver>());
+            } else {
+                key.setSymProvider(std::move(localProvider));
+            }
             return std::make_shared<ecc::ExtKey>(std::move(key));
         } else {
             // other formats ...
@@ -659,9 +677,16 @@ std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, 
     throw PrivmxDriverCryptoException("importExtKey: NOT IMPLEMENTED");
 }
 
+
 std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed, AsymAlg alg) {
     if (alg == AsymAlg::EccSecp256k1) {
+        std::shared_ptr<ISymCryptoProvider> localProvider = _symProvider;
         ecc::ExtKey key = ecc::ExtKey::fromSeed(ecc::Utils::b2s(seed));
+        if (localProvider == nullptr) {
+            key.setSymProvider(std::make_shared<CryptoProviderFromDriver>());
+        } else {
+            key.setSymProvider(std::move(localProvider));
+        }
         return std::make_shared<ecc::ExtKey>(std::move(key));
     } else {
         // other algoritms ...
@@ -669,6 +694,11 @@ std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed
     }
     throw PrivmxDriverCryptoException("extKeyFromSeed: NOT IMPLEMENTED");
 }
+
+inline void CryptoProviderFromDriver::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
+    _symProvider = provider;
+}
+
 
 } // cryptoservice
 } // privmx

@@ -118,6 +118,10 @@ Bytes PublicKey::export_(KeyFormat format) const {
     throw PrivmxDriverCryptoException("PrivateKey::export_: NOT IMPLEMENTED");
 }
 
+void PublicKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
+    _provider = provider;
+}
+
 } // ecc
 } // cryptoservice
 } // privmx

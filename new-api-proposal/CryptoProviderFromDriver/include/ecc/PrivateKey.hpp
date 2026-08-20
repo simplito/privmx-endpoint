@@ -55,6 +55,7 @@ public:
 
     static PrivateKey fromWIFb(BytesView wif);
     Bytes toWIFb() const;
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 private:
     ECC _key;
