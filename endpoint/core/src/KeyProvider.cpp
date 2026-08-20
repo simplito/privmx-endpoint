@@ -165,8 +165,21 @@ std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncK
     }
     for (const auto& groupLocEntry : request.groupRequestData) {
         const auto& location = groupLocEntry.first;
-        auto groupResult = decryptAndVerifyGroupKeys(groupLocEntry.second, location, groupPrivKeyResolver);
         auto& locationResult = result[location];
+        // Only the entries that can still change the outcome. The merge below keeps a good user-addressed key over
+        // any group-addressed one, so resolving an entry whose keyId already opened costs two round trips
+        // (group.groupGet + group.groupGetKeyArchive, inside the resolver) for a result discarded on arrival.
+        std::unordered_map<std::string, std::tuple<server::KeyEntry, std::string, int64_t>> unresolved;
+        for (const auto& kv : groupLocEntry.second) {
+            auto it = locationResult.find(kv.first);
+            if (it == locationResult.end() || it->second.statusCode != 0) {
+                unresolved.insert(kv);
+            }
+        }
+        if (unresolved.empty()) {
+            continue;
+        }
+        auto groupResult = decryptAndVerifyGroupKeys(unresolved, location, groupPrivKeyResolver);
         for (auto& kv : groupResult) {
             auto it = locationResult.find(kv.first);
             if (it == locationResult.end() || it->second.statusCode != 0) {
