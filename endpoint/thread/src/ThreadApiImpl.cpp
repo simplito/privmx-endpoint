@@ -577,9 +577,8 @@ bool ThreadApiImpl::isRekeyNeeded(
     const server::ThreadInfo& thread,
     std::unordered_map<std::string, GroupEpochInfo>& groupCache
 ) {
-    // `thread.groupKeys` is served narrowed to the groups we belong to, so empty means "no grant applies to us",
-    // not "this thread grants no groups". Nothing is lost by stopping there: a grantee group we are not in is one
-    // whose `getGroup` below would throw anyway, so its staleness was never detectable from here.
+    // `groupKeys` is narrowed to our own groups, so empty means "no grant applies to us". Nothing is lost: a
+    // grantee group we are not in is one whose `getGroup` below would throw anyway.
     if (!_groupApiImpl || thread.groupKeys.empty())
         return false;
     bool stale = false;

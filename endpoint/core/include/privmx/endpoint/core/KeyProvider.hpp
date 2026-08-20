@@ -29,6 +29,13 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+/** One group-addressed route to a container key: the entry, its group, and the grant epoch it was wrapped at. */
+struct GroupKeyCandidate {
+    server::KeyEntry keyEntry;
+    std::string groupId;
+    int64_t groupEpoch;
+};
+
 class KeyDecryptionAndVerificationRequest {
 public:
     KeyDecryptionAndVerificationRequest() = default;
@@ -40,22 +47,13 @@ public:
     );
     void addAll(const std::vector<server::KeyEntry>& keys, const EncKeyLocation& location);
     void addGroupKeys(const std::vector<server::GroupKeysEntry>& groupKeys, const EncKeyLocation& location);
-    /**
-     * Convenience for a module whose wire field is optional.
-     *
-     * It has to be optional on any field added to an existing struct: a missing JSON array is a parse *error*,
-     * not an empty list, so a non-optional field would make every read fail against a server that predates it.
-     */
     void addGroupKeys(
         const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
         const EncKeyLocation& location
     );
     void markAsCompleted();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, server::KeyEntry>> requestData;
-    // maps location -> keyId -> (KeyEntry, groupId, groupEpoch)
-    std::unordered_map<
-        EncKeyLocation,
-        std::unordered_map<std::string, std::tuple<server::KeyEntry, std::string, int64_t>>>
+    std::unordered_map<EncKeyLocation, std::unordered_map<std::string, std::vector<GroupKeyCandidate>>>
         groupRequestData;
 
 private:
@@ -107,7 +105,12 @@ private:
         const EncKeyLocation& location
     );
     std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyGroupKeys(
-        const std::unordered_map<std::string, std::tuple<server::KeyEntry, std::string, int64_t>>& groupKeyMap,
+        const std::unordered_map<std::string, std::vector<GroupKeyCandidate>>& groupKeyMap,
+        const EncKeyLocation& location,
+        const GroupPrivKeyResolver& groupPrivKeyResolver
+    );
+    DecryptedEncKeyV2 decryptGroupKeyCandidate(
+        const GroupKeyCandidate& candidate,
         const EncKeyLocation& location,
         const GroupPrivKeyResolver& groupPrivKeyResolver
     );
@@ -119,6 +122,8 @@ private:
         const std::string& containerSecret
     );
     void verifyForDuplication(std::unordered_map<std::string, DecryptedEncKeyV2>& keys);
+    /** The per-key half of `verifyData`, so candidate selection applies the same test it is later judged by. */
+    static void verifyKeyLocation(DecryptedEncKeyV2& key, const EncKeyLocation& location);
     void verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location);
     void verifyUserData(
         std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys

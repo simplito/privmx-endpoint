@@ -689,8 +689,12 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     // temporary shared_ptr would release the last owner at the end of this statement.
     const auto cache = _treeKeyCaches.get(groupId);
     keytree::GroupKeyResolver resolver(*cache);
+    // The archive feeds the ladder descent and nothing else, and `epoch <= 0` means "current". Same threshold
+    // `resolveWith` applies, off the same `keyVersion`, so the two cannot drift.
+    const bool needsDescent = epoch > 0 && epoch < currentEpoch;
     const keytree::ResolveResult resolved = resolver.resolve(
-        group, epoch, _userPrivKey, fetchKeyArchive(groupId, epoch, currentEpoch)
+        group, epoch, _userPrivKey,
+        needsDescent ? fetchKeyArchive(groupId, epoch, currentEpoch) : server::GroupGetKeyArchiveResult{}
     );
     if (resolved.key.has_value()) {
         return resolved.key.value();

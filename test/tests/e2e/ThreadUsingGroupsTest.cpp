@@ -1109,22 +1109,10 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
     conn2->disconnect();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-// EP-22 — `groupKeys` is served narrowed to the caller's own groups
-//
-// The endpoint change these guard is a cost one: `KeyProvider::getKeysAndVerify` no longer resolves a group
-// key entry whose keyId the caller's own `keys` already opened, because the merge that follows discarded that
-// result anyway. So none of these can observe the dropped round trips — what they cover is that the filter
-// short-circuits exactly the paths it is meant to and none of the ones it is not: a caller holding a direct
-// wrap, a caller holding none, a caller in several grantee groups at once.
-// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
 TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
-    // user_1 is both the only direct member of T and a member of granted Group_1, so every keyId opens from
-    // `keys` and the group branch is skipped for all of it. `updateThread` is the interesting half: it runs
-    // `verifyKeysSecret` over every key it decrypted, and that check fails on any entry with a non-zero status
-    // — so a group entry left unresolved there is the difference between an update and
-    // EncryptionKeyValidationException.
+    // user_1 is the only direct member of T *and* a member of granted Group_1, so every keyId opens from `keys`
+    // and the group branch is skipped. `updateThread` is the interesting half: `verifyKeysSecret` fails on any
+    // non-zero status, so an unresolved group entry there is the difference between an update and an exception.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -1368,25 +1356,6 @@ TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_reke
         EXPECT_FALSE(msg.data.stdString().empty());
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-// Grant role (`GroupGrantWithKey::role`) — what "user" vs "manager" actually buys
-//
-// The whole mechanism is one function on the bridge: `BaseContainerService.withGroupMembership` copies the
-// container with the caller spliced into `users` for any grant, and into `managers` only for a `"manager"` one,
-// then hands that copy to the unchanged policy engine. Two consequences these tests pin down:
-//
-//   1. The caller's role *inside* the group is irrelevant. `getCallerGroupIds` -> `getGroupsOfUser` matches
-//      `users` OR `managers`, so only the grant's role counts. Group_2 in the dataset is {users: user_1,
-//      user_2 / managers: user_1}, so user_2 is a plain *user* of it — every "manager grant" test below has it
-//      exercising container-manager rights it holds through the grant alone.
-//   2. `"manager"` is not uniform across operations. Paths guarded only by a policy atom (delete container,
-//      update someone else's item, rotate keys) accept it; `threadUpdate` additionally runs
-//      `makeUpdateContainerCheck`, which does not.
-//
-// Defaults these read against (`DefaultContextPolicy.thread`): get/item.get/item.listAll = "user",
-// item.create = "user", item.update = item.delete = "itemOwner&user,manager", update = delete = "manager".
-// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 TEST_F(ThreadUsingGroupsTest, user_role_grantee_can_send_message) {
     // `item.create` is "user" and every grant splices the caller into `users`, so the weaker of the two roles
