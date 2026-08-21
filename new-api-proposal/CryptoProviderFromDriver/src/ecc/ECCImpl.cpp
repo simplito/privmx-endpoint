@@ -22,6 +22,10 @@ limitations under the License.
 #include "Point.hpp"
 #include "ECCImpl.hpp"
 
+#include "CoreTypes.hpp"
+#include "CoreInterfaces.hpp"
+
+
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
@@ -125,27 +129,29 @@ BNImpl::Ptr ECCImpl::getPrivateKey2() const {
     return std::make_shared<BNImpl>(copyBignum(priv));
 }
 
-std::string ECCImpl::sign(const std::string& data) const {
-    EC_KEY* raw_key = checkIfInitializedKeyAndGet();
-    const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
-    int dgst_len = data.size();
-    ecdsa_sig_unique_ptr sig(ECDSA_do_sign(dgst, dgst_len, raw_key), ECDSA_SIG_free);
-    const ECDSA_SIG* raw_sig = sig.get();
-    if (raw_sig == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
-    }
-    std::string result(65, 0);
-    unsigned char* buf = reinterpret_cast<unsigned char*>(result.data());
-    result[0] = 27;
-    const BIGNUM* r;
-    const BIGNUM* s;
-    ECDSA_SIG_get0(raw_sig, &r, &s);
-    BN_bn2bin(r, &buf[1 + 32 - BN_num_bytes(r)]);
-    BN_bn2bin(s, &buf[33 + 32 - BN_num_bytes(s)]);
-    return result;
-}
+// // Possibly from wrong implementation
+// std::string ECCImpl::sign(const std::string& data) const {
+//     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
+//     const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
+//     int dgst_len = data.size();
+//     ecdsa_sig_unique_ptr sig(ECDSA_do_sign(dgst, dgst_len, raw_key), ECDSA_SIG_free);
+//     const ECDSA_SIG* raw_sig = sig.get();
+//     if (raw_sig == NULL) {
+//         // OpenSSLUtils::handleErrors();
+//         throw std::runtime_error("ECCImpl: ...");
+//     }
+//     std::string result(65, 0);
+//     unsigned char* buf = reinterpret_cast<unsigned char*>(result.data());
+//     result[0] = 27;
+//     const BIGNUM* r;
+//     const BIGNUM* s;
+//     ECDSA_SIG_get0(raw_sig, &r, &s);
+//     BN_bn2bin(r, &buf[1 + 32 - BN_num_bytes(r)]);
+//     BN_bn2bin(s, &buf[33 + 32 - BN_num_bytes(s)]);
+//     return result;
+// }
 
+// Possibly from wrong implementation
 ECCImpl::Signature ECCImpl::sign2(const std::string& data) const {
     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
@@ -162,6 +168,16 @@ ECCImpl::Signature ECCImpl::sign2(const std::string& data) const {
     // Signature signature{new BNImpl(copyBignum(r)), new BNImpl(copyBignum(s))};
     Signature signature{std::make_shared<BNImpl>(copyBignum(r)), std::make_shared<BNImpl>(copyBignum(s))};
     return signature;
+}
+
+// Possibly from wrong implementation
+std::string ECCImpl::sign(const std::string& data) const {
+    Signature sig = sign2(data);
+    std::string r = sig.r->toBuffer();
+    std::string s = sig.s->toBuffer();
+    return std::string(1, 27)
+        .append(32 - r.size(), 0).append(r)
+        .append(32 - s.size(), 0).append(s);
 }
 
 bool ECCImpl::verify(const std::string& data, const std::string& signature) const {
@@ -467,6 +483,13 @@ EC_KEY* ECCImpl::checkIfInitializedKeyAndGet() const {
     return _key.get();
 }
 
+// // Probably to be removed
+// void ECCImpl::validate() const {
+//     if (!_key) {
+//         // throw ECCIsNotInitializedException();
+//         throw std::runtime_error("ECCImpl::validate: ECCIsNotInitializedException");    
+//     }
+// }
 
 } // ecc
 } // cryptoservice

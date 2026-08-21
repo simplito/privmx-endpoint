@@ -50,7 +50,7 @@ string ECIES::decrypt(const string& enc_buf) const {
     }
     string E = getE();
     // return Crypto::aes256CbcPkcs7Decrypt(c.substr(16), E, c.substr(0, 16));
-    return NewCrypto::encrypt({SymAlg::Aes256Cbc, E, c.substr(0, 16)}, E);
+    return NewCrypto::decrypt({SymAlg::Aes256Cbc, E, c.substr(0, 16)}, c.substr(16));
 }
 
 } // ecc

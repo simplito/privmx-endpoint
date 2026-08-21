@@ -9,9 +9,16 @@
 #include "CryptoProviderRegistry.hpp"
 #include "CryptoProviderFromDriver.hpp"
 
+#include "BN.hpp"
+#include "Point.hpp"
+#include "ECCImpl.hpp"
+
 #include "PrivateKey.hpp"
 #include "PublicKey.hpp"
 #include "Utils.hpp"
+
+#include "ECC.hpp"
+#include "ECIES.hpp"
 
 
 using privmx::cryptoservice::CryptoProviderRegistry;
@@ -21,13 +28,16 @@ using privmx::cryptoservice::AsymAlg;
 using privmx::cryptoservice::KeyFormat;
 using privmx::cryptoservice::SigScheme;
 
+using privmx::cryptoservice::ecc::ECCImpl;
+
 using namespace std;
 
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-TEST(PublicKeyTest, SignatureVerificationBasicTests) {
+TEST(PrivateKeyTest, SigningVerifyingBasicTests) {
+
     const string messageToSign("Sample message");
     Bytes data(Utils::s2b(messageToSign));
 
@@ -64,7 +74,7 @@ TEST(PublicKeyTest, SignatureVerificationBasicTests) {
     EXPECT_TRUE(publ1.verifyCompactSignatureWithHash(messageToSign, sign1wh));
     EXPECT_TRUE(publ2.verifyCompactSignatureWithHash(messageToSign, sign2wh));
     EXPECT_TRUE(publ3.verifyCompactSignatureWithHash(messageToSign, sign3wh));
-    EXPECT_TRUE(publ4.verifyCompactSignatureWithHash(messageToSign, sign4wh));    
+    EXPECT_TRUE(publ4.verifyCompactSignatureWithHash(messageToSign, sign4wh));
 }
 
 } // namespace ecc
