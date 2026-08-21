@@ -24,7 +24,7 @@ message(STATUS "Enable emscripten build - PRIVMX_EMSCRIPTEN=${PRIVMX_EMSCRIPTEN}
 option(PRIVMX_CONAN "Conan build" ON)
 message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 
-option(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
+option(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
 
@@ -38,10 +38,6 @@ if(PRIVMX_EMSCRIPTEN)
     add_compile_options(-pthread -fexceptions)
     add_link_options(-lembind -lpthread -lwebsocket.js)
     set(PRIVMX_INSTALL_PRIVATE_HEADERS ON)
-endif()
-
-if(PRIVMX_CONAN)
-    set(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 endif()
 
 if(PRIVMX_CI_BUILD)
@@ -132,6 +128,7 @@ else(PRIVMX_IMPORTED_LIBRARIES)
     endif()
 endif(PRIVMX_IMPORTED_LIBRARIES)
 find_package(Threads REQUIRED)
+find_package(SQLite3)
 if(PRIVMX_CONAN)
     find_package(Pson REQUIRED)
     add_library(Pson ALIAS pson::Pson)

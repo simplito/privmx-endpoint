@@ -167,6 +167,7 @@ private:
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<core::HandleManager> _handleManager;
+    std::shared_ptr<store::CacheInterface> _chunksCache;
     InboxHandleManager _inboxHandleManager;
     MessageKeyIdFormatValidator _messageKeyIdFormatValidator;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;

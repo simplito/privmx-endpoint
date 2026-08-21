@@ -1,0 +1,213 @@
+/*
+PrivMX Endpoint.
+Copyright © 2024 Simplito sp. z o.o.
+
+This file is part of the PrivMX Platform (https://privmx.dev).
+This software is Licensed under the PrivMX Free License.
+
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+#include "privmx/endpoint/search/SearchApiImpl.hpp"
+#include "privmx/endpoint/search/PrivmxFS.hpp"
+#include "privmx/endpoint/search/SearchException.hpp"
+#include "privmx/utils/ThreadSaveMap.hpp"
+
+#include "privmx/endpoint/search/DynamicTypes.hpp"
+#include "privmx/utils/Utils.hpp"
+
+#include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
+#include "privmx/endpoint/store/StoreApiImpl.hpp"
+
+using namespace privmx::endpoint;
+using namespace privmx::endpoint::search;
+
+const std::string SearchApiImpl::SEARCH_TYPE_FILTER_FLAG = "search";
+
+core::Buffer serializeIndexData(const dynamic::IndexData& indexData) {
+    return core::Buffer::from(indexData.serialize());
+}
+
+dynamic::IndexData deserializeIndexData(const core::Buffer& buf) {
+    return dynamic::IndexData::deserialize(buf.stdString());
+}
+
+SearchApiImpl::SearchApiImpl(
+    const core::Connection& connection,
+    const store::StoreApi& storeApi,
+    const kvdb::KvdbApi& kvdbApi,
+    const lock::LockApi& lockApi
+) {
+    _connection = connection;
+    _storeApi = storeApi;
+    _kvdbApi = kvdbApi;
+    _lockApi = lockApi;
+}
+
+SearchApiImpl::~SearchApiImpl() {}
+
+std::string SearchApiImpl::createSearchIndex(
+    const std::string& contextId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const IndexMode mode,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    std::string indexId = _kvdbApi.getImpl()->createKvdb(
+        contextId, users, managers, publicMeta, privateMeta, policies, SEARCH_TYPE_FILTER_FLAG
+    );
+    std::string storeId = _storeApi.getImpl()->createStore(
+        contextId, users, managers, {}, {}, policies, SEARCH_TYPE_FILTER_FLAG
+    );
+    setIndexData(indexId, storeId, mode);
+    return indexId;
+}
+
+void SearchApiImpl::updateSearchIndex(
+    const std::string& indexId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const int64_t version,
+    const bool force,
+    const bool forceGenerateNewKey,
+    const std::optional<core::ContainerPolicy>& policies
+) {
+    auto data = getIndexData(indexId);
+    _kvdbApi.getImpl()->updateKvdb(
+        indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+    );
+    _storeApi.getImpl()->updateStore(
+        data.storeId, users, managers, {}, {}, version, force, forceGenerateNewKey, policies
+    );
+}
+
+void SearchApiImpl::deleteSearchIndex(const std::string& indexId) {
+    auto data = getIndexData(indexId);
+    _kvdbApi.getImpl()->deleteKvdb(indexId);
+    _storeApi.getImpl()->deleteStore(data.storeId);
+}
+
+SearchIndex SearchApiImpl::getSearchIndex(const std::string& indexId) {
+    auto kvdb = _kvdbApi.getImpl()->getKvdb(indexId, SEARCH_TYPE_FILTER_FLAG);
+    return mapSearchIndex(kvdb);
+}
+
+core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery
+) {
+    auto kvdbs = _kvdbApi.getImpl()->listKvdbs(contextId, pagingQuery, SEARCH_TYPE_FILTER_FLAG);
+    return {.totalAvailable = kvdbs.totalAvailable, mapSearchIndexes(kvdbs.readItems)};
+}
+
+int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {
+    auto data = getIndexData(indexId);
+    auto session = SessionManager::get()->addSession(_connection, _storeApi, _kvdbApi, _lockApi, indexId, data.storeId);
+    std::string filename = "/pmx/" + session->id + "/index.db";
+    auto fts = FullTextSearch::openDb(filename, (IndexMode)data.mode);
+    fts->ensureTableCreated();
+    return _fts.add(fts);
+}
+
+void SearchApiImpl::closeSearchIndex(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->close();
+    _fts.remove(indexHandle);
+}
+
+void SearchApiImpl::beginTransaction(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->beginTransaction();
+}
+
+void SearchApiImpl::commit(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->commit();
+}
+
+void SearchApiImpl::rollback(const int64_t indexHandle) {
+    auto fts = _fts.get(indexHandle);
+    fts->rollback();
+}
+
+int64_t SearchApiImpl::addDocument(const int64_t indexHandle, const std::string& name, const std::string& content) {
+    auto fts = _fts.get(indexHandle);
+    return fts->addDocument(name, content);
+}
+
+void SearchApiImpl::updateDocument(const int64_t indexHandle, const Document& document) {
+    auto fts = _fts.get(indexHandle);
+    fts->updateDocument(document);
+}
+
+void SearchApiImpl::deleteDocument(const int64_t indexHandle, int64_t documentId) {
+    auto fts = _fts.get(indexHandle);
+    fts->deleteDocument(documentId);
+}
+
+Document SearchApiImpl::getDocument(const int64_t indexHandle, const int64_t documentId) {
+    auto fts = _fts.get(indexHandle);
+    return fts->getDocument(documentId);
+}
+
+core::PagingList<Document> SearchApiImpl::listDocuments(
+    const int64_t indexHandle,
+    const core::PagingQuery& pagingQuery
+) {
+    auto fts = _fts.get(indexHandle);
+    return fts->listDocuments(pagingQuery);
+}
+
+core::PagingList<Document> SearchApiImpl::searchDocuments(
+    const int64_t indexHandle,
+    const std::string& searchQuery,
+    const core::PagingQuery& pagingQuery
+) {
+    auto fts = _fts.get(indexHandle);
+    core::PagingList<Document> result;
+    return fts->search(searchQuery, pagingQuery);
+}
+
+dynamic::IndexData SearchApiImpl::getIndexData(const std::string& indexId) {
+    auto data = _kvdbApi.getImpl()->getEntry(indexId, "data");
+    return deserializeIndexData(data.data);
+}
+
+void SearchApiImpl::setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode) {
+    dynamic::IndexData indexData{.storeId = storeId, .mode = mode};
+    _kvdbApi.getImpl()->setEntry(indexId, "data", {}, {}, serializeIndexData(indexData), 0);
+}
+
+SearchIndex SearchApiImpl::mapSearchIndex(const kvdb::Kvdb& kvdb) {
+    return SearchIndex{
+        .contextId = kvdb.contextId,
+        .indexId = kvdb.kvdbId,
+        .createDate = kvdb.createDate,
+        .creator = kvdb.creator,
+        .lastModificationDate = kvdb.lastModificationDate,
+        .lastModifier = kvdb.lastModifier,
+        .users = kvdb.users,
+        .managers = kvdb.managers,
+        .version = kvdb.version,
+        .publicMeta = kvdb.publicMeta,
+        .privateMeta = kvdb.privateMeta,
+        .policy = kvdb.policy,
+        .mode = (kvdb.statusCode == 0) ? (IndexMode)getIndexData(kvdb.kvdbId).mode : IndexMode::UNKNOWN,
+        .statusCode = kvdb.statusCode,
+        .schemaVersion = kvdb.schemaVersion
+    };
+}
+
+std::vector<SearchIndex> SearchApiImpl::mapSearchIndexes(const std::vector<kvdb::Kvdb>& kvdbs) {
+    std::vector<SearchIndex> results;
+    results.resize(kvdbs.size());
+    for (std::size_t i = 0; i < kvdbs.size(); ++i) {
+        results[i] = mapSearchIndex(kvdbs[i]);
+    }
+    return results;
+}

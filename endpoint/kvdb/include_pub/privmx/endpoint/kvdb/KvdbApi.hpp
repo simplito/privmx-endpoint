@@ -120,6 +120,15 @@ public:
     KvdbEntry getEntry(const std::string& kvdbId, const std::string& key);
 
     /**
+     * Finds a KVDB entry by given KVDB entry key and KVDB ID, returning nullopt if not found.
+     *
+     * @param kvdbId KVDB ID of the KVDB entry to find
+     * @param key key of the KVDB entry to find
+     * @return optional struct containing the KVDB entry, or nullopt if not found
+     */
+    std::optional<KvdbEntry> findEntry(const std::string& kvdbId, const std::string& key);
+
+    /**
      * Check whether the KVDB entry exists.
      *
      * @param kvdbId KVDB ID of the KVDB entry to check
